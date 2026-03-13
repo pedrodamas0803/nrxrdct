@@ -25,6 +25,7 @@ def read_sinogram_from_file(input_file:Path, slicing:tuple|None=None):
             sinogram = hin['sinogram'][tthmin:tthmax, xmin, xmax, ymin, ymax].astype(np.float32)
         else:
             sinogram = hin['sinogram'][:].astype(np.float32)
+            
 
     return sinogram
 
@@ -40,26 +41,20 @@ def read_volume_from_file(input_file:Path, slicing:tuple|None=None):
 
 def save_xy_file(x:np.array, y:np.array, err:np.array, output_file:Path=Path('integrated_data.xy'), unit:str='2th_deg'):
 
+    if not isinstance(err, np.ndarray):
+        err = np.zeros_like(y)
     header = (
         f"# pyFAI multi-geometry azimuthal integration\n"
         f"# Unit: {unit}\n"
         f"# Columns: {unit}  Intensity  Sigma\n"
     )
     np.savetxt(str(output_file),
-            np.column_stack([x, y, err]),
-            header=header, fmt="%.6f")
+            np.column_stack([x, y]), fmt="%.4f")
     print(f"Integrated pattern saved to:\n  {str(output_file)}")
 
 def read_xy_file(input_file:Path="integrated_data.xy"):
 
-    err = None
-    xy = np.loadtxt(input_file)
-
-    if len(xy)>2:
-        x, y, err = xy
-    else:
-        x, y = xy
-    return x, y, err
+    return np.loadtxt(str(input_file), unpack=True)
 
 def write_starting_instrument_pars(output_file:Path=Path("instrument_init.instprm"), polarization:float=0.99, wavelength:float=1.5418):
     
@@ -78,7 +73,7 @@ def write_starting_instrument_pars(output_file:Path=Path("instrument_init.instpr
         "V:0.0\n",
         "W:1.0\n",
         "X:0.0\n",
-        "Y:0.0\n",
+        "Y:5.0\n",
         "Z:0.0\n",
         "SH/L:0.0001\n",
     ]

@@ -110,9 +110,9 @@ def reconstruct_slice(data:np.ndarray, dty_step:float=1.0, angles_rad:np.array=n
         angles_rad = np.linspace(0, np.pi, N)
     if HAS_GPU:
         print("Reconstructing data using GPU.")
-        vol = reconstruct_astra_gpu(data, dty_step, angles_rad, algo, num_iter)
+        slc = reconstruct_astra_gpu(data, dty_step, angles_rad, algo, num_iter)
     else:
         print("Reconstructing data using CPU.")
-        vol = reconstruct_astra_cpu(data, dty_step, angles_rad, algo, num_iter)
+        slc = reconstruct_astra_cpu(data, dty_step, angles_rad, algo, num_iter)
 
-    return vol
+    return slc

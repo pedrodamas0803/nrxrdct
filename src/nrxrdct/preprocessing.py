@@ -31,7 +31,7 @@ def dezinger(image, medsize:int=3, nsigma:int=5):
     t0 = time.time()
     N = image.shape[0]
     def dezing(im):
-        return zinger_remove(image, medsize, nsigma)
+        return zinger_remove(im, medsize, nsigma)
     print(f"Will dezinger {N} images. Might take few seconds.")
     out_image = np.zeros_like(image)
     with concurrent.futures.ThreadPoolExecutor(NTHREAD) as pool:

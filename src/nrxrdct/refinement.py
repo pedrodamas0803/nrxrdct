@@ -1,9 +1,10 @@
+import os
 from pathlib import Path
 
-from matplotlib import gridspec
-import matplotlib.pyplot as plt
-import GSASIIscriptable as G2sc
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
+import GSASIIscriptable as G2sc
 
 from .parameters import Scan
 from .io import read_xy_file, write_starting_instrument_pars
@@ -13,13 +14,12 @@ class InstrumentCalibration(Scan):
     def __init__(self, acquisition_file, sample_name, scan_type = "half-turn", translation_motor = "dty", rotation_motor = "rot", outer_loop_motor = "translation", beam_size = 0.0001, beam_energy = 44, tth_lims:tuple=(None, None), xy_file:Path=Path("integrated_data.xy"), param_file:Path=Path('calibrated_instrument.instprm'), polarization:float=0.99):
         super().__init__(acquisition_file, sample_name, scan_type, translation_motor, rotation_motor, outer_loop_motor, beam_size, beam_energy)
         
+        os.makedirs("calibration", exist_ok=True)
+
         self.xy_file = xy_file
         self.param_file = param_file
         self.low_lim, self.high_lim = tth_lims
-        data = read_xy_file(str(self.xy_file))
-        self.tth = data[0]
-        self.intensity = data[1]
-        self.error = data[2]
+        self.tth, self.intensity = read_xy_file(str(self.xy_file))
         self.phases = []
 
         if self.low_lim == None:
@@ -31,7 +31,7 @@ class InstrumentCalibration(Scan):
 
     def create_model(self, gpx_file:Path=Path("model.gpx")):
 
-        self.gpx = G2sc.G2Project(newgpx=gpx_file)
+        self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
         self.hist = self.gpx.add_powder_histogram(
             datafile=self.xy_file,
@@ -44,14 +44,14 @@ class InstrumentCalibration(Scan):
     
     def add_phase(self, cif_file:Path=Path("cif_file"), phase_name:str="LaB6", block_cell:bool=True):
         self.calibrant_composition = phase_name
-        phase = self.gpx.add_phase(str(cif_file), phasename=phase_name,                     histograms=[self.hist])
+        self.phase = self.gpx.add_phase(str(cif_file), phasename=phase_name,                     histograms=[self.hist])
         if block_cell:
-            for atom in phase.atoms():
+            for atom in self.phase.atoms():
                 atom.refinement_flags = ""
-            phase.set_refinements({"Cell": False})
-        self.phases.append(phase)
+            self.phase.set_refinements({"Cell": False})
+        self.phases.append(self.phase)
         self.gpx.save()
-        return phase
+        return self.phase
     
     def refine_background(self, number_coeff:int=12, do_refine:bool=True):
         # Step 6.1: Background
@@ -72,9 +72,9 @@ class InstrumentCalibration(Scan):
         self.gpx.do_refinements([{}])
         print("Step 6.3 done - zero shift")
 
-    def refine_gaussian_broadening(self, refine:list=["U", "V", "W"]):
+    def refine_gaussian_broadening(self, refine:list=["U", "V", "W", "SH/L"]):
         """
-        Possible parameters are U, V, W
+        Possible parameters are U, V, W, SH/L
         For synchrotron light with 2D detectors, go only for W. 
         """
         for param in refine:
@@ -92,6 +92,25 @@ class InstrumentCalibration(Scan):
             self.gpx.save()
             self.gpx.do_refinements([{}])
             print(f"Refined {param} (Lorentzian broadening)")
+
+    def _refine_cell(self):
+        self.phase.set_refinements({"Cell": True})
+        self.gpx.save()
+        self.gpx.do_refinements([{}])
+
+    def _refine_texture_broadening(self):
+        
+        self.phase.set_HAP_refinements({"Pref.ori":True, "Model":"MD", "Axis":[1,1,1], "Ratio":1.0, "Ref":True})
+        self.gpx.save()
+        self.gpx.do_refinements([{}])
+
+    def _refine_atomic_positions(self, flags:list=["X", "XU"]):
+        for flag in flags:
+            for atom in self.phase.atoms():
+                atom.refinement_flags = flag
+            self.gpx.save()
+            self.gpx.do_refinements([{}])
+
 
     def print_refinement_results(self,):
         print("\n" + "=" * 60)
@@ -125,6 +144,8 @@ class InstrumentCalibration(Scan):
 
     def write_calibrated_intrument_pars(self, output_file:Path=Path("calibrated_instrument.instprm")):
         
+        save_path = Path("calibration") / output_file
+
         print("\n" + "=" * 60)
         print("EXPORTING CALIBRATED INSTPRM")
         print("=" * 60)
@@ -142,21 +163,23 @@ class InstrumentCalibration(Scan):
                 val = ip[p][1] if isinstance(ip[p], list) else ip[p]
                 lines.append(f"{p}:{val}\n")
 
-        with open(str(output_file), "w") as f:
+        with open(str(save_path), "w") as f:
             f.writelines(lines)
 
-        print(f"Calibrated instprm saved to:\n  {str(output_file)}")
+        print(f"Calibrated instprm saved to:\n  {str(save_path)}")
         print("\nFinal calibrated parameters:")
         for line in lines[1:]:   # skip the header comment
             print(f"  {line.rstrip()}")
 
-        print(f"Calibrated instprm saved to:\n  {str(output_file)}")
+        print(f"Calibrated instprm saved to:\n  {str(save_path)}")
         print("\nIn your sample refinements:")
         print("  - Use this file as INST_PARAMS")
         print("  - Fix Zero, W, X, Y (carry from calibration)")
         print("  - U, V, SH/L remain fixed at 0 / 0.0001 for synchrotron and 2D detectors")
 
     def plot_results(self, image_path:Path="calibration_plot.png"):
+
+        save_path = Path("calibration") / image_path 
 
         ip = self.hist["Instrument Parameters"][0]
         params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
@@ -239,7 +262,7 @@ class InstrumentCalibration(Scan):
             W_v = calibrated.get('W', 0)
             X_v = calibrated.get('X', 0)
             Y_v = calibrated.get('Y', 0)
-            tth_range = np.linspace(20, 88, 300)
+            tth_range = np.linspace(self.low_lim, self.high_lim, 300)
             tan_th    = np.tan(np.radians(tth_range / 2))
             cos_th    = np.cos(np.radians(tth_range / 2))
             fwhm_G    = np.sqrt(np.abs(W_v)) * np.ones_like(tth_range)
@@ -272,9 +295,9 @@ class InstrumentCalibration(Scan):
                         '(U=V=0, SH/L=0.0001 fixed — not meaningful for 2D detector)',
                         pad=4, fontsize=9)
 
-        plt.suptitle('GSAS-II Instrument Calibration — Xeuss WAXS',
+        plt.suptitle('GSAS-II Instrument Calibration',
                     fontsize=12, fontweight='bold', y=1.01)
-        plt.savefig(str(image_path), dpi=150, bbox_inches='tight')
+        plt.savefig(str(save_path), dpi=150, bbox_inches='tight')
         plt.show()
 
 

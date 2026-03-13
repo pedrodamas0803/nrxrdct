@@ -56,21 +56,21 @@ class Scan:
 
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    try:
-        os.remove("xrdct_scan.h5")
-    except:
-        pass
-    scan = Scan("foo.h5", "sample")
+#     try:
+#         os.remove("xrdct_scan.h5")
+#     except:
+#         pass
+#     scan = Scan("foo.h5", "sample")
 
-    print(scan)
+#     print(scan)
 
-    scan.save_parameter_file()
+#     scan.save_parameter_file()
 
-    scan2 = Scan.get_scan_from_parameters()
+#     scan2 = Scan.get_scan_from_parameters()
 
-    print("SCAN 2: ", scan2)
+#     print("SCAN 2: ", scan2)
 
 
 

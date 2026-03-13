@@ -147,4 +147,3 @@ def integrate_multigeo(images, poni_files, n_bins=2000, unit = "2th_deg", polari
                         else np.zeros_like(intensity_integrated)
 
     return tth_integrated, intensity_integrated, sigma_integrated
-

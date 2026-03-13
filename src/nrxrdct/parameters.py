@@ -24,6 +24,7 @@ class Scan:
         self.beam_size = beam_size
         self.beam_energy = beam_energy
         self.scan_type = scan_type
+        self.wavelength = 12.398 / self.beam_energy
 
     def __str__(self):
         msg = f"""

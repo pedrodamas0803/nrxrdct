@@ -37,3 +37,93 @@ def read_volume_from_file(input_file:Path, slicing:tuple|None=None):
             volume = hin['volume'][:].astype(np.float32)
 
     return volume
+
+def save_xy_file(x:np.array, y:np.array, err:np.array, output_file:Path=Path('integrated_data.xy'), unit:str='2th_deg'):
+
+    header = (
+        f"# pyFAI multi-geometry azimuthal integration\n"
+        f"# Unit: {unit}\n"
+        f"# Columns: {unit}  Intensity  Sigma\n"
+    )
+    np.savetxt(str(output_file),
+            np.column_stack([x, y, err]),
+            header=header, fmt="%.6f")
+    print(f"Integrated pattern saved to:\n  {str(output_file)}")
+
+def read_xy_file(input_file:Path="integrated_data.xy"):
+
+    err = None
+    xy = np.loadtxt(input_file)
+
+    if len(xy)>2:
+        x, y, err = xy
+    else:
+        x, y = xy
+    return x, y, err
+
+def write_starting_instrument_pars(output_file:Path=Path("instrument_init.instprm"), polarization:float=0.99, wavelength:float=1.5418):
+    
+    """
+    Wavelength must be in angstrom.
+    """
+    lines = [
+        "#GSAS-II instrument parameter file\n",
+        "Type:PXC\n",
+        "Bank:1\n",
+        f"Lam:{wavelength}\n",
+        "Zero:0.0\n",
+        f"Polariz.:{polarization}\n",
+        "Azimuth:0.0\n",
+        "U:0.0\n",
+        "V:0.0\n",
+        "W:1.0\n",
+        "X:0.0\n",
+        "Y:0.0\n",
+        "Z:0.0\n",
+        "SH/L:0.0001\n",
+    ]
+    with open(str(output_file), "w") as f:
+        f.writelines(lines)
+    print(f"Starting instprm written to:\n  {str(output_file)}")
+
+    return output_file
+
+
+def write_calibrated_intrument_pars(hist, wavelength:float=1.5418, output_file:Path=Path("calibrated_instrument.instprm")):
+    
+    """
+    Wavelength must be in angstrom.
+    """
+    
+    print("\n" + "=" * 60)
+    print("Exporting calibrated instprm")
+    print("=" * 60)
+
+    ip = hist["Instrument Parameters"][0]
+    lines = ["#GSAS-II instrument parameter file\n"]
+
+    # Dual-wavelength keys written manually — values are physical constants,
+    # not refined, so we hardcode them rather than reading from ip
+    key_order_single = ["Type", "Bank", "Zero", "Polariz.", "Azimuth",
+                        "U", "V", "W", "X", "Y", "Z", "SH/L"]
+
+    lines.append(f"Lam:{wavelength}\n")
+
+    for p in key_order_single:
+        if p in ip:
+            val = ip[p][1] if isinstance(ip[p], list) else ip[p]
+            lines.append(f"{p}:{val}\n")
+
+    with open(output_file, "w") as f:
+        f.writelines(lines)
+
+    print(f"Calibrated instprm saved to:\n  {output_file}")
+    print("\nFinal calibrated parameters:")
+    for line in lines[1:]:   # skip the header comment
+        print(f"  {line.rstrip()}")
+
+    print(f"Calibrated instprm saved to:\n  {output_file}")
+    print("\nIn your sample refinements:")
+    print("  - Use this file as INST_PARAMS")
+    print("  - Fix Zero, W, X, Y (carry from calibration)")
+    print("  - U, V, SH/L remain fixed at 0 / 0.0001")

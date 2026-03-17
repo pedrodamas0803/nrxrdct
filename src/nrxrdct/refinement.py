@@ -704,8 +704,3 @@ class InstrumentCalibration(BaseRefinement):
         plt.savefig(str(self.calibration_image), dpi=150, bbox_inches="tight")
         if show:
             plt.show()
-
-
-# class RefineVolume(BaseRefinement):
-#     def __init__(self, acquisition_file, sample_name, scan_type="half-turn", translation_motor="dty", rotation_motor="rot", outer_loop_motor="translation", beam_size=0.0001, beam_energy=44, tth_lims = (None, None), xy_file = Path("integrated_data.xy"), param_file = Path("calibrated_instrument.instprm"), polarization = 0.99):
-#         super().__init__(acquisition_file, sample_name, scan_type, translation_motor, rotation_motor, outer_loop_motor, beam_size, beam_energy, tth_lims, xy_file, param_file, polarization)

@@ -4,7 +4,19 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "gsas-ii",
+    "h5py>=3.16.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "pandas>=3.0.1",
+    "pyfai>=2026.2.1",
+    "scikit-image>=0.26.0",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.1",
+    "xraylib>=4.2.1",
+    "xrayutilities>=1.7.12",
+]
 
 [project.scripts]
 nrxrdct = "nrxrdct:main"
@@ -12,3 +24,6 @@ nrxrdct = "nrxrdct:main"
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+gsas-ii = { git = "https://github.com/AdvancedPhotonSource/GSAS-II.git" }

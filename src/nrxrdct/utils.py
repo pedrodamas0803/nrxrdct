@@ -18,14 +18,19 @@ def generate_circular_mask(shape, center, diameter):
 
 
 def simulate_powder_xrd_monophase(
-    tth, cif_files, do_plot=True, en_eV=100000, do_save: bool = True
+    tth,
+    cif_files,
+    do_plot=True,
+    en_eV=100000,
+    crystallite_size: float = 100e-9,
+    do_save: bool = True,
 ):
     if not isinstance(cif_files, list):
         cif_files = [cif_files]
 
     for cif in cif_files:
         mat = xu.materials.Crystal.fromCIF(cif)
-        pwdr = xu.simpack.Powder(mat, 1, crystallite_size_gauss=50e-9)
+        pwdr = xu.simpack.Powder(mat, 1, crystallite_size_gauss=crystallite_size)
         model = xu.simpack.PowderModel(pwdr, I0=100, en=en_eV)
         intensity = model.simulate(tth)
         model.close()
@@ -110,3 +115,17 @@ def get_powder_xrd_peaks(
         results[phase_name] = df
 
     return results
+
+
+def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple):
+
+    y_in, x_in = input_shape
+    y_des, x_des = desired_shape
+
+    y_beg = (y_des - y_in) // 2
+    y_end = (y_des - y_in) // 2 + (y_des - y_in) % 2
+
+    x_beg = (x_des - x_in) // 2
+    x_end = (x_des - x_in) // 2 + (x_des - x_in) % 2
+
+    return ((y_beg, y_end), (x_beg, x_end))

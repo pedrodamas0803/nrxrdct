@@ -11,6 +11,8 @@ from .io import read_xy_file, write_starting_instrument_pars
 from .parameters import Scan
 from .refine_dict import *
 
+COLORS = ["magenta", "darkgreen", "blue", "red"]
+
 
 class BaseRefinement(Scan):
 
@@ -97,13 +99,13 @@ class BaseRefinement(Scan):
         self.hist.SampleParameters["Scale"][1] = True
         self.gpx.save()
         self.gpx.do_refinements([{}])
-        print("Step 6.2 done - scale")
+        print("Scale refinement done")
 
     def refine_zero_shift(self):
         self.hist.set_refinements({"Instrument Parameters": ["Zero"]})
         self.gpx.save()
         self.gpx.do_refinements([{}])
-        print("Step 6.3 done - zero shift")
+        print("Zero shift refinement done")
 
     def refine_gaussian_broadening(self, refine: list = ["U", "V", "W", "SH/L"]):
         """
@@ -141,6 +143,8 @@ class BaseRefinement(Scan):
         """
         Possible parameters are:
 
+        model: "MD", "SH"
+
         MD_DICT = {"Pref.ori":True, "Model":"MD", "Axis":[1,1,1], "Ratio":1.0, "Ref":True}
         SH_DICT = {
                 'Pref.Ori.': True,
@@ -164,9 +168,9 @@ class BaseRefinement(Scan):
         else:
             self.phase.set_HAP_refinements(parsSH)
             self.gpx.save()
-            self.pgx.do_refinements([{}])
+            self.gpx.do_refinements([{}])
 
-    def refine_atomic_positions(self, flags: list = ["X", "XU"]):
+    def refine_atomic_positions(self, flags: list = ["U", "XU"]):
         """
         Possible flags are:
         ""      # all fixed — safest starting point
@@ -197,7 +201,7 @@ class BaseRefinement(Scan):
             if hap.get("LeBail", False):
                 ph.set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.run_refinements([{}])
+            self.gpx.do_refinements([{}])
 
     def refine_crystallite_size(
         self, refine_type: str = "isotropic", refine_dict: dict | None = None
@@ -382,19 +386,19 @@ class BaseRefinement(Scan):
         ax_main.plot(tth, ybkg, "b--", lw=0.8, label="Background")
 
         # Reflection tick marks for both phases
-        colours_ticks = {"calibrant": "magenta", "Al_holder": "darkorange"}
+        # colours_ticks = {"calibrant": "magenta", "Al_holder": "darkorange"}
         yrange = yobs.max() - yobs.min()
         tick_y0 = yobs.min() - 0.02 * yrange
-        for ph in self.gpx.phases():
+        for ii, ph in enumerate(self.gpx.phases()):
             try:
                 reflist = self.hist.reflections()[ph.name]["RefList"]
                 ref_tth = reflist[:, 5]
-                colour = colours_ticks.get(ph.name, "green")
+                # colour = colours_ticks.get(ph.name, "green")
                 ax_main.vlines(
                     ref_tth,
                     tick_y0,
                     tick_y0 + 0.04 * yrange,
-                    color=colour,
+                    color=COLORS[ii],
                     lw=0.8,
                     label=f"{ph.name} reflections",
                 )
@@ -511,7 +515,7 @@ class InstrumentCalibration(BaseRefinement):
                 except Exception:
                     print(f"    {k} = {v}")
 
-    def write_calibrated_intrument_pars(self):
+    def write_calibrated_instrument_pars(self):
         print("\n" + "=" * 60)
         print("EXPORTING CALIBRATED INSTPRM")
         print("=" * 60)

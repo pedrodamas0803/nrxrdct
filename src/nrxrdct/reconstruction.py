@@ -5,11 +5,13 @@ from pathlib import Path
 
 import astra
 import GSASIIscriptable as G2sc
+import h5py
 import numpy as np
 from tqdm.auto import tqdm
 
-from .io import save_xy_file
+from .io import save_sinogram, save_xy_file
 from .refinement import BaseRefinement
+from .utils import calculate_padding_widths_2D
 
 HAS_GPU = True if "nvidia" in astra.get_gpu_info().lower() else False
 NTHREADS = os.cpu_count() - 2
@@ -159,6 +161,27 @@ def reconstruct_slice(
         slc = reconstruct_astra_cpu(data, dty_step, angles_rad, algo, num_iter)
 
     return slc
+
+
+def assemble_sinogram(integrated_file: Path, n_rot: int, n_tth_angles: int):
+
+    with h5py.File(integrated_file, "r") as hin:
+        keys = list(hin["integrated"].keys())
+        valid_keys = [key for key in keys if "scan" in key]
+        sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
+        for ii, scan in enumerate(valid_keys):
+            im = hin[f"integrated/{scan}"][:]
+            if ii % 2 == 1:
+                im = im[::-1, :]
+
+            padding_width = calculate_padding_widths_2D(im.shape, (n_rot, n_tth_angles))
+
+            im = np.pad(im, padding_width)
+
+            sino[ii] = im
+        sino = np.rollaxis(sino, 2, 0)
+
+    return np.rollaxis(sino, 1, 2)
 
 
 # def _write_xy_file_shared(args):

@@ -1,18 +1,20 @@
 MD_DICT = {
-    "Pref.ori": True,
-    "Model": "MD",
-    "Axis": [1, 1, 1],
-    "Ratio": 1.0,
-    "Ref": True,
+    "Pref.Ori.": {
+        "Model": "MD",
+        "Axis": [1, 1, 1],
+        "Ratio": 1.0,
+        "Ref": True,
+    }
 }
 SH_DICT = {
-    "Pref.Ori.": True,
-    "Model": "SH",
-    "SHord": 4,
-    "SHsym": "cylindrical",
-    "Axis": [0, 0, 1],
-    "SHcoef": {},
-    "Ref": True,
+    "Pref.Ori.": {
+        "Model": "SH",
+        "SHord": 4,
+        "SHsym": "cylindrical",
+        "Axis": [0, 0, 1],
+        "SHcoef": {},
+        "Ref": True,
+    }
 }
 
 SIZE_ISO_DICT = {"Size": {"type": "isotropic", "refine": True, "value": 1.0}}

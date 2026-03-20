@@ -16,6 +16,79 @@ from .utils import calculate_padding_widths_2D
 HAS_GPU = True if "nvidia" in astra.get_gpu_info().lower() else False
 NTHREADS = os.cpu_count() - 2
 
+def reconstruct_astra_gpu_3d(
+    data: np.ndarray,
+    dty_step: float = 1.0,
+    angles_rad: np.ndarray = np.empty((1,)),
+    algo: str = "SIRT3D_CUDA",
+    num_iter: int = 200,
+) -> np.ndarray:
+    """
+    3D GPU-accelerated reconstruction using the ASTRA Toolbox.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Sinogram stack of shape (num_detectors_x, num_angles, num_detectors_y).
+        - num_detectors_x: horizontal detector size (columns)
+        - num_angles:       number of projection angles
+        - num_detectors_y:  vertical detector size / number of slices (rows)
+    dty_step : float
+        Detector pixel spacing.
+    angles_rad : np.ndarray
+        1D array of projection angles in radians.
+    algo : str
+        ASTRA 3D CUDA algorithm. One of:
+        "SIRT3D_CUDA", "CGLS3D_CUDA".
+    num_iter : int
+        Number of iterations.
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed volume of shape (num_detectors_y, N, N).
+    """
+    # data is expected as (num_detectors_x, num_angles, num_detectors_y)
+    # ASTRA 3D expects projections as (num_detectors_y, num_angles, num_detectors_x)
+    if data.ndim != 3:
+        raise ValueError(f"Expected 3D input array, got shape {data.shape}")
+
+    data = np.transpose(data, (2, 1, 0))  # -> (num_detectors_y, num_angles, num_detectors_x)
+    num_slices, num_angles, num_det_x = data.shape
+
+    if num_angles != len(angles_rad):
+        raise ValueError(
+            f"Angle axis mismatch: data has {num_angles} angles "
+            f"but angles_rad has {len(angles_rad)} entries."
+        )
+
+    valid_algos = {"SIRT3D_CUDA", "CGLS3D_CUDA"}
+    if algo not in valid_algos:
+        raise ValueError(f"Unsupported algorithm '{algo}'. Choose from {valid_algos}.")
+
+    proj_geom = astra.create_proj_geom("parallel3d", dty_step, dty_step, num_slices, num_det_x, angles_rad)
+    vol_geom = astra.create_vol_geom(num_det_x, num_det_x, num_slices)
+
+    proj_id = astra.data3d.create("-proj3d", proj_geom, data)
+    recon_id = astra.data3d.create("-vol", vol_geom)
+
+    cfg = astra.astra_dict(algo)
+    cfg["ProjectionDataId"] = proj_id
+    cfg["ReconstructionDataId"] = recon_id
+    if algo == "SIRT3D_CUDA":
+        cfg["option"] = {"MinConstraint": 0.0}
+
+    algorithm_id = astra.algorithm.create(cfg)
+
+    try:
+        astra.algorithm.run(algorithm_id, num_iter)
+        reconstruction = astra.data3d.get(recon_id)
+    finally:
+        astra.algorithm.delete(algorithm_id)
+        astra.data3d.delete([proj_id, recon_id])
+
+    return reconstruction
+
 
 def reconstruct_astra_gpu(
     data: np.ndarray,

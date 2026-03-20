@@ -3,14 +3,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Tuple
-
-import fabio
-import h5py
-import matplotlib.pyplot as plt
+from scipy.ndimage import  median_filter
+import fabio # type: ignore
+import h5py # type: ignore
+import matplotlib.pyplot as plt # type: ignore
 import numpy as np
-import pyFAI
-from pyFAI.azimuthalIntegrator import AzimuthalIntegrator
-from tqdm import tqdm
+import pyFAI # type: ignore
+from pyFAI.azimuthalIntegrator import AzimuthalIntegrator # type: ignore
+from tqdm import tqdm # type: ignore
 
 
 def cake_integration(
@@ -18,13 +18,13 @@ def cake_integration(
     poni_file: str,
     npt_rad: int = 1000,
     npt_azim: int = 360,
-    unit: str = "q_A^-1",
+    unit: str = "2th_deg",
     mask: Optional[np.ndarray] = None,
     dark: Optional[np.ndarray] = None,
     flat: Optional[np.ndarray] = None,
     radial_range: Optional[Tuple[float, float]] = None,
     azimuth_range: Optional[Tuple[float, float]] = (-180, 180),
-    plot: bool = True,
+    plot: bool = False,
     log_scale: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -256,112 +256,144 @@ def integrate_multigeo(
 
     return tth_integrated, intensity_integrated, sigma_integrated
 
-
 def integrate_powder_parallel(
-    h5files: Path,
     master_file: Path,
     output_file: Path,
     poni_file: Path,
     mask_file: Path,
-    rot: np.array,
+    rot: np.ndarray,
     n_points: int = 1000,
     n_workers: int = 16,
     unit: str = "2th_deg",
+    remove_spots:bool = False, 
+    filter_size:int = 40
 ):
+    """
+    Perform parallel 1D azimuthal integration reading image stacks directly
+    from each entry in the HDF5 master file, with normalization by fpico6.
+
+    Parameters
+    ----------
+    master_file : Path
+        Path to the master HDF5 file containing all scan entries.
+    output_file : Path
+        Path to the output HDF5 file.
+    poni_file : Path
+        Path to the PONI calibration file.
+    mask_file : Path
+        Path to the mask file (fabio-readable).
+    rot : np.ndarray
+        Array of rotation angles.
+    n_points : int
+        Number of radial bins in the integrated pattern.
+    n_workers : int
+        Number of parallel integration threads.
+    unit : str
+        Radial unit for integration (e.g. "2th_deg", "q_A^-1").
+    """
     t0 = time.time()
     mask = fabio.open(mask_file).data
 
-    # ── Validate HDF5 files upfront ───────────────────────────────────────────────
-    def is_valid_h5(path: str) -> bool:
-        """Return True only if the file is a readable, non-empty HDF5 file."""
-        try:
-            with h5py.File(path, "r") as f:
-                return "entry_0000/measurement/data" in f
-        except (OSError, KeyError):
-            return False
+    # ── Read and validate entries from master file ────────────────────────────
+    print("Reading entries from master file...")
+    valid_entries, bad_entries, dty_values = [], [], []
 
-    print("Validating HDF5 files...")
-    valid_files, bad_files = [], []
-    for f in tqdm(h5files):
-        (valid_files if is_valid_h5(f) else bad_files).append(f)
-
-    if bad_files:
-        print(f"\n⚠  Skipping {len(bad_files)} corrupt/incomplete file(s):")
-        for bf in bad_files:
-            print(f"   {os.path.basename(bf)}")
-
-    print(f"\n✓  {len(valid_files)}/{len(h5files)} files OK\n")
-
-    # ── Read motors from master file ──────────────────────────────────────────────
-    DTY = []
     with h5py.File(master_file, "r") as hin:
-        for entry in sorted(hin.keys()):
+        all_entries = list(hin.keys())
+        for entry in tqdm(all_entries, desc="Validating entries"):
             try:
+                _ = hin[f"{entry}/measurement/eiger"].shape
+                _ = hin[f"{entry}/measurement/fpico6"].shape
                 dty = float(hin[f"{entry}/instrument/positioners/dty"][()])
-            except KeyError:
-                dty = float("nan")
-            DTY.append(dty)
+                valid_entries.append(entry)
+                dty_values.append(dty)
+            except KeyError as e:
+                print(f"  ⚠  Entry {entry} missing expected dataset ({e}) — skipping")
+                bad_entries.append(entry)
 
-    # ── Initialise output file ────────────────────────────────────────────────────
-    with h5py.File(output_file, "a") as hout:
+    print(f"\n✓  {len(valid_entries)}/{len(all_entries)} entries OK")
+    if bad_entries:
+        print(f"⚠  Skipping {len(bad_entries)} incomplete entries: {bad_entries}\n")
+
+    # ── Initialise output file ────────────────────────────────────────────────
+    with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
+
         if "integrated/radial" not in hout:
-            with h5py.File(valid_files[0], "r") as htmp:
-                first_image = htmp["entry_0000/measurement/data"][0].astype(np.float32)
+            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
             tt, _, _ = azimuthal_integration_1d(
-                image=first_image,
-                poni_file=poni_file,
-                npt=n_points,
-                mask=mask,
-                unit=unit,
+                image=first_image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
             )
+            mascake = cake_integration(np.ones_like(first_image)*10, poni_file, npt_rad=n_points, mask=mask)[0]>0
+            hout['integrated/cake_mask'] = mascake
             hout["integrated/radial"] = tt
-            hout["integrated/radial"].attrs["unit"] = f"{unit}"
+            hout["integrated/radial"].attrs["unit"] = unit
 
         if "motors/dty" not in hout:
-            hout["motors/dty"] = DTY
+            hout["motors/dty"] = dty_values
         if "motors/rot" not in hout:
             hout["motors/rot"] = rot
+        if bad_entries and "bad_entries" not in hout:
+            hout["bad_entries"] = bad_entries
 
-        # Log bad files so you can investigate later
-        if bad_files and "bad_files" not in hout:
-            hout["bad_files"] = [os.path.basename(b) for b in bad_files]
+    # ── Helper: integrate and normalise one frame ─────────────────────────────
+    def integrate_frame(args: tuple) -> tuple:
+        jj, image, monitor = args
+        if remove_spots:
+            cake, _, _ = cake_integration(image=image, poni_file=poni_file, npt_rad=n_points, mask = mask, unit=unit)
+            filt = median_filter(cake, (filter_size, 1))
+            spots=cake-filt
+            spots-=spots.min()
+            im = cake-spots
+            im-=im.min()
+            im*=mascake
+            itt = im.sum(axis=0)            
+        else:
+            _, itt, _ = azimuthal_integration_1d(
+                image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
+            )
+        if monitor <= 0:
+            print(f"  ⚠  Frame {jj}: fpico6 monitor value is {monitor:.4g}, skipping normalisation")
+            return jj, itt
+        return jj, itt / monitor
 
-    # ── Helper: integrate one frame ───────────────────────────────────────────────
-    def integrate_frame(args):
-        jj, image = args
-        _, itt, _ = azimuthal_integration_1d(
-            image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
-        )
-        return jj, itt
+    # ── Main loop over master file entries ────────────────────────────────────
+    for ii, entry in enumerate(valid_entries):
 
-    # ── Main loop (valid files only) ──────────────────────────────────────────────
-    for ii, f in enumerate(valid_files):
-
-        scan_name = f"scan_{ii:04d}"
+        scan_name  = f"scan_{ii:04d}"
         group_path = f"integrated/{scan_name}"
 
-        with h5py.File(output_file, "r") as hin:
-            if group_path in hin:
+        with h5py.File(output_file, "r") as hout:
+            if group_path in hout:
                 print(f"Skipping {scan_name} (already done)")
                 continue
 
-        print(
-            f"\n{'='*60}\nProcessing {scan_name}  [{ii+1}/{len(valid_files)}]\n{'='*60}"
-        )
+        print(f"\n{'='*60}\nProcessing {scan_name} — entry {entry}  [{ii+1}/{len(valid_entries)}]\n{'='*60}")
 
         try:
-            with h5py.File(f, "r") as hin:
-                images = hin["entry_0000/measurement/data"][:].astype(np.float32)
+            with h5py.File(master_file, "r") as hin:
+                images  = hin[f"{entry}/measurement/eiger"][:].astype(np.float32)
+                fpico6  = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
+                rot     = hin[f"{entry}/measurement/rot"][:]
         except OSError as e:
-            print(f"  ✗ Failed to read {f}: {e} — skipping")
+            print(f"  ✗ Failed to read entry {entry}: {e} — skipping")
+            continue
+
+        if rot[-1] < rot[0]:
+            images = images[::-1]
+            fpico6 = fpico6[::-1]
+            rot = rot[::-1]
+
+        # Sanity check lengths match
+        if len(fpico6) != len(images):
+            print(f"  ✗ Entry {entry}: fpico6 length {len(fpico6)} != images length {len(images)} — skipping")
             continue
 
         n_frames = len(images)
-        sinogram = np.empty((n_frames, n_points), dtype=np.float32)
+        sinogram  = np.empty((n_frames, n_points), dtype=np.float32)
 
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
             futures = {
-                pool.submit(integrate_frame, (jj, images[jj])): jj
+                pool.submit(integrate_frame, (jj, images[jj], fpico6[jj])): jj
                 for jj in range(n_frames)
             }
             for future in tqdm(as_completed(futures), total=n_frames, desc=scan_name):
@@ -380,8 +412,143 @@ def integrate_powder_parallel(
                 compression_opts=4,
                 chunks=(1, n_points),
             )
-            ds.attrs["dty"] = DTY[ii] if ii < len(DTY) else float("nan")
-            ds.attrs["source"] = os.path.basename(f)
-            ds.attrs["valid"] = True
+            ds.attrs["entry"]          = entry
+            ds.attrs["dty"]            = dty_values[ii]
+            ds.attrs["source"]         = str(master_file)
+            ds.attrs["fpico6_mean"]    = float(np.mean(fpico6))
+            ds.attrs["fpico6_min"]     = float(np.min(fpico6))
+            ds.attrs["fpico6_max"]     = float(np.max(fpico6))
+            ds.attrs["normalised_by"]  = "fpico6"
+            ds.attrs["valid"]          = True
 
-    print(f"\nDone in {(t0-time.time()):.2f} s.")
+    elapsed = time.time() - t0
+    print(f"\nDone in {elapsed:.1f} s  ({elapsed/len(valid_entries):.1f} s/scan).")
+
+# def integrate_powder_parallel(
+#     h5files: Path,
+#     master_file: Path,
+#     output_file: Path,
+#     poni_file: Path,
+#     mask_file: Path,
+#     rot: np.array,
+#     n_points: int = 1000,
+#     n_workers: int = 16,
+#     unit: str = "2th_deg",
+# ):
+#     t0 = time.time()
+#     mask = fabio.open(mask_file).data
+
+#     # ── Validate HDF5 files upfront ───────────────────────────────────────────────
+#     def is_valid_h5(path: str) -> bool:
+#         """Return True only if the file is a readable, non-empty HDF5 file."""
+#         try:
+#             with h5py.File(path, "r") as f:
+#                 return "entry_0000/measurement/data" in f
+#         except (OSError, KeyError):
+#             return False
+
+#     print("Validating HDF5 files...")
+#     valid_files, bad_files = [], []
+#     for f in tqdm(h5files):
+#         (valid_files if is_valid_h5(f) else bad_files).append(f)
+
+#     if bad_files:
+#         print(f"\n⚠  Skipping {len(bad_files)} corrupt/incomplete file(s):")
+#         for bf in bad_files:
+#             print(f"   {os.path.basename(bf)}")
+
+#     print(f"\n✓  {len(valid_files)}/{len(h5files)} files OK\n")
+
+#     # ── Read motors from master file ──────────────────────────────────────────────
+#     DTY = []
+#     with h5py.File(master_file, "r") as hin:
+#         for entry in sorted(hin.keys()):
+#             try:
+#                 dty = float(hin[f"{entry}/instrument/positioners/dty"][()])
+#             except KeyError:
+#                 dty = float("nan")
+#             DTY.append(dty)
+
+#     # ── Initialise output file ────────────────────────────────────────────────────
+#     with h5py.File(output_file, "a") as hout:
+#         if "integrated/radial" not in hout:
+#             with h5py.File(valid_files[0], "r") as htmp:
+#                 first_image = htmp["entry_0000/measurement/data"][0].astype(np.float32)
+#             tt, _, _ = azimuthal_integration_1d(
+#                 image=first_image,
+#                 poni_file=poni_file,
+#                 npt=n_points,
+#                 mask=mask,
+#                 unit=unit,
+#             )
+#             hout["integrated/radial"] = tt
+#             hout["integrated/radial"].attrs["unit"] = f"{unit}"
+
+#         if "motors/dty" not in hout:
+#             hout["motors/dty"] = DTY
+#         if "motors/rot" not in hout:
+#             hout["motors/rot"] = rot
+
+#         # Log bad files so you can investigate later
+#         if bad_files and "bad_files" not in hout:
+#             hout["bad_files"] = [os.path.basename(b) for b in bad_files]
+
+#     # ── Helper: integrate one frame ───────────────────────────────────────────────
+#     def integrate_frame(args):
+#         jj, image = args
+#         _, itt, _ = azimuthal_integration_1d(
+#             image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
+#         )
+#         return jj, itt
+
+#     # ── Main loop (valid files only) ──────────────────────────────────────────────
+#     for ii, f in enumerate(valid_files):
+
+#         scan_name = f"scan_{ii:04d}"
+#         group_path = f"integrated/{scan_name}"
+
+#         with h5py.File(output_file, "r") as hin:
+#             if group_path in hin:
+#                 print(f"Skipping {scan_name} (already done)")
+#                 continue
+
+#         print(
+#             f"\n{'='*60}\nProcessing {scan_name}  [{ii+1}/{len(valid_files)}]\n{'='*60}"
+#         )
+
+#         try:
+#             with h5py.File(f, "r") as hin:
+#                 images = hin["entry_0000/measurement/data"][:].astype(np.float32)
+#         except OSError as e:
+#             print(f"  ✗ Failed to read {f}: {e} — skipping")
+#             continue
+
+#         n_frames = len(images)
+#         sinogram = np.empty((n_frames, n_points), dtype=np.float32)
+
+#         with ThreadPoolExecutor(max_workers=n_workers) as pool:
+#             futures = {
+#                 pool.submit(integrate_frame, (jj, images[jj])): jj
+#                 for jj in range(n_frames)
+#             }
+#             for future in tqdm(as_completed(futures), total=n_frames, desc=scan_name):
+#                 try:
+#                     jj, itt = future.result()
+#                     sinogram[jj] = itt
+#                 except Exception as e:
+#                     print(f"  ✗ Frame {futures[future]} failed: {e}")
+#                     sinogram[futures[future]] = np.nan
+
+#         with h5py.File(output_file, "a") as hout:
+#             ds = hout.create_dataset(
+#                 group_path,
+#                 data=sinogram,
+#                 compression="gzip",
+#                 compression_opts=4,
+#                 chunks=(1, n_points),
+#             )
+#             ds.attrs["dty"] = DTY[ii] if ii < len(DTY) else float("nan")
+#             ds.attrs["source"] = os.path.basename(f)
+#             ds.attrs["valid"] = True
+
+#     print(f"\nDone in {(t0-time.time()):.2f} s.")

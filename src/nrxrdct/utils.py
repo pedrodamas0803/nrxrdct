@@ -13,7 +13,7 @@ def generate_circular_mask(shape, center, diameter):
     x, y = np.arange(0, shape[1]), np.arange(0, shape[2])
     X, Y = np.meshgrid(x, y)
     z = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
-    mask = z < diameter
+    mask = z < diameter //2
     return mask
 
 

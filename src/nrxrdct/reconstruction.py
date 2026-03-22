@@ -6,6 +6,7 @@ from pathlib import Path
 import astra
 import GSASIIscriptable as G2sc
 import h5py
+import hdf5plugin
 import numpy as np
 from tqdm.auto import tqdm
 
@@ -21,7 +22,7 @@ def reconstruct_astra_gpu_3d(
     dty_step: float = 1.0,
     angles_rad: np.ndarray = np.empty((1,)),
     algo: str = "SIRT3D_CUDA",
-    num_iter: int = 200,
+    num_iter: int = 40,
 ) -> np.ndarray:
     """
     3D GPU-accelerated reconstruction using the ASTRA Toolbox.
@@ -53,7 +54,7 @@ def reconstruct_astra_gpu_3d(
     if data.ndim != 3:
         raise ValueError(f"Expected 3D input array, got shape {data.shape}")
 
-    data = np.transpose(data, (2, 1, 0))  # -> (num_detectors_y, num_angles, num_detectors_x)
+    # data = np.transpose(data, (2, 1, 0))  # -> (num_detectors_y, num_angles, num_detectors_x)
     num_slices, num_angles, num_det_x = data.shape
 
     if num_angles != len(angles_rad):
@@ -75,7 +76,7 @@ def reconstruct_astra_gpu_3d(
     cfg = astra.astra_dict(algo)
     cfg["ProjectionDataId"] = proj_id
     cfg["ReconstructionDataId"] = recon_id
-    if algo == "SIRT3D_CUDA":
+    if algo in ["SIRT3D_CUDA", "CGLS3D_CUDA"]:
         cfg["option"] = {"MinConstraint": 0.0}
 
     algorithm_id = astra.algorithm.create(cfg)
@@ -244,13 +245,8 @@ def assemble_sinogram(integrated_file: Path, n_rot: int, n_tth_angles: int):
         sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
         for ii, scan in enumerate(valid_keys):
             im = hin[f"integrated/{scan}"][:]
-            if ii % 2 == 1:
-                im = im[::-1, :]
-
             padding_width = calculate_padding_widths_2D(im.shape, (n_rot, n_tth_angles))
-
             im = np.pad(im, padding_width)
-
             sino[ii] = im
         sino = np.rollaxis(sino, 2, 0)
 

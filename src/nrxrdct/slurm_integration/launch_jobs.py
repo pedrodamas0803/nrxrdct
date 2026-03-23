@@ -38,13 +38,12 @@ import sys
 import textwrap
 from pathlib import Path
 
+import fabio
 import h5py
 import numpy as np
-import fabio
 from tqdm import tqdm
 
 from nrxrdct.integration import azimuthal_integration_1d, cake_integration
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
@@ -131,9 +130,12 @@ def _submit_job(
     mask_file: Path,
     n_points: int,
     n_workers: int,
+    batch_size: int,
     unit: str,
-    remove_spots: bool,
+    method: str,
     percentile: str,
+    thres: float,
+    max_iter: int,
     partition: str,
     time: str,
     mem: str,
@@ -143,10 +145,10 @@ def _submit_job(
     conda_env: str | None,
     log_dir: Path,
 ) -> str:
-    indices_str = ",".join(str(i) for i in indices)
-    script_path = log_dir / f"job_{job_id:04d}.sh"
-    log_out     = log_dir / f"job_{job_id:04d}_%j.out"
-    log_err     = log_dir / f"job_{job_id:04d}_%j.err"
+    indices_str  = ",".join(str(i) for i in indices)
+    script_path  = log_dir / f"job_{job_id:04d}.sh"
+    log_out      = log_dir / f"job_{job_id:04d}_%j.out"
+    log_err      = log_dir / f"job_{job_id:04d}_%j.err"
 
     if env_activate:
         activate_cmd = f"source {env_activate}"
@@ -155,10 +157,8 @@ def _submit_job(
     else:
         activate_cmd = "# no environment activation"
 
-    gpu_line          = "#SBATCH --gres=gpu:1" if gpu else ""
-    remove_spots_flag = "--remove-spots" if remove_spots else ""
+    gpu_line = "#SBATCH --gres=gpu:1" if gpu else ""
 
-    # The worker is invoked as a module so it works regardless of install location
     script = textwrap.dedent(f"""\
         #!/bin/bash
         #SBATCH --job-name=nrxrdct_{job_id:04d}
@@ -169,6 +169,7 @@ def _submit_job(
         #SBATCH --mem={mem}
         #SBATCH --cpus-per-task={cpus}
         {gpu_line}
+
         conda init bash
         {activate_cmd}
 
@@ -183,9 +184,12 @@ def _submit_job(
             --entry-indices "{indices_str}"   \\
             --n-points      {n_points}        \\
             --n-workers     {n_workers}       \\
+            --batch-size    {batch_size}      \\
             --unit          "{unit}"          \\
+            --method        "{method}"        \\
             --percentile    "{percentile}"    \\
-            {remove_spots_flag}
+            --thres         {thres}           \\
+            --max-iter      {max_iter}
 
         echo "Job {job_id} finished at $(date)"
     """)
@@ -213,34 +217,52 @@ def launch(
     poni_file: Path,
     mask_file: Path,
     rot: np.ndarray | None = None,
-    n_jobs: int = 20,
+    n_jobs: int = 8,
     n_points: int = 1000,
-    n_workers: int = 20,
+    n_workers: int = 16,
+    batch_size: int = 32,
     unit: str = "2th_deg",
-    remove_spots: bool = False,
+    method: str = "standard",
     percentile: tuple = (10, 90),
+    thres: float = 3.0,
+    max_iter: int = 5,
     # SLURM
-    partition: str = "nice",
+    partition: str = "cpu",
     time: str = "04:00:00",
-    mem: str = "100G",
-    cpus: int = 40,
+    mem: str = "32G",
+    cpus: int = 16,
     gpu: bool = False,
     # Environment
     env_activate: Path | None = None,
-    conda_env: str | None = "xrdct",
+    conda_env: str | None = None,
 ) -> list[str]:
     """
     Validate, initialise output, and submit N SLURM jobs for powder integration.
+
+    Parameters
+    ----------
+    method : str
+        Integration method: 'standard', 'filter', or 'sigma_clip'.
+    percentile : tuple
+        (low, high) percentile bounds — only used when method='filter'.
+    thres : float
+        Sigma-clipping threshold — only used when method='sigma_clip'.
+    max_iter : int
+        Max sigma-clipping iterations — only used when method='sigma_clip'.
 
     Returns
     -------
     list[str]
         SLURM job IDs of the submitted jobs.
     """
-    master_file = Path(master_file)
-    output_file = Path(output_file)
-    poni_file   = Path(poni_file)
-    mask_file   = Path(mask_file)
+    from nrxrdct.slurm_integration.integrate_worker import INTEGRATION_METHODS
+    if method not in INTEGRATION_METHODS:
+        raise ValueError(f"method must be one of {INTEGRATION_METHODS}, got '{method}'")
+
+    master_file    = Path(master_file)
+    output_file    = Path(output_file)
+    poni_file      = Path(poni_file)
+    mask_file      = Path(mask_file)
     percentile_str = f"{percentile[0]},{percentile[1]}"
 
     # ── 1. Validate ───────────────────────────────────────────────────────────
@@ -287,23 +309,26 @@ def launch(
         sid = _submit_job(
             job_id,
             indices,
-            master_file   = master_file,
-            output_file   = output_file,
-            poni_file     = poni_file,
-            mask_file     = mask_file,
-            n_points      = n_points,
-            n_workers     = n_workers,
-            unit          = unit,
-            remove_spots  = remove_spots,
-            percentile    = percentile_str,
-            partition     = partition,
-            time          = time,
-            mem           = mem,
-            cpus          = cpus,
-            gpu           = gpu,
-            env_activate  = env_activate,
-            conda_env     = conda_env,
-            log_dir       = log_dir,
+            master_file  = master_file,
+            output_file  = output_file,
+            poni_file    = poni_file,
+            mask_file    = mask_file,
+            n_points     = n_points,
+            n_workers    = n_workers,
+            batch_size   = batch_size,
+            unit         = unit,
+            method       = method,
+            percentile   = percentile_str,
+            thres        = thres,
+            max_iter     = max_iter,
+            partition    = partition,
+            time         = time,
+            mem          = mem,
+            cpus         = cpus,
+            gpu          = gpu,
+            env_activate = env_activate,
+            conda_env    = conda_env,
+            log_dir      = log_dir,
         )
         slurm_ids.append(sid)
 
@@ -331,9 +356,18 @@ def _build_parser(sub=None):
     p.add_argument("--n-jobs",        type=int, default=8)
     p.add_argument("--n-points",      type=int, default=1000)
     p.add_argument("--n-workers",     type=int, default=16)
+    p.add_argument("--batch-size",    type=int, default=32,
+                   help="Frames streamed per batch in the worker (default: 32)")
     p.add_argument("--unit",          default="2th_deg")
-    p.add_argument("--remove-spots",  action="store_true")
-    p.add_argument("--percentile",    default="10,90")
+    p.add_argument("--method",        default="standard",
+                   choices=("standard", "filter", "sigma_clip"),
+                   help="Integration method (default: standard)")
+    p.add_argument("--percentile",    default="10,90",
+                   help="Low,high percentile for 'filter' method (default: 10,90)")
+    p.add_argument("--thres",         type=float, default=3.0,
+                   help="Sigma threshold for 'sigma_clip' method (default: 3.0)")
+    p.add_argument("--max-iter",      type=int,   default=5,
+                   help="Max iterations for 'sigma_clip' method (default: 5)")
     p.add_argument("--partition",     default="cpu")
     p.add_argument("--time",          default="04:00:00")
     p.add_argument("--mem",           default="32G")
@@ -354,9 +388,12 @@ def _cli_launch(args):
         n_jobs       = args.n_jobs,
         n_points     = args.n_points,
         n_workers    = args.n_workers,
+        batch_size   = args.batch_size,
         unit         = args.unit,
-        remove_spots = args.remove_spots,
+        method       = args.method,
         percentile   = pct,
+        thres        = args.thres,
+        max_iter     = args.max_iter,
         partition    = args.partition,
         time         = args.time,
         mem          = args.mem,

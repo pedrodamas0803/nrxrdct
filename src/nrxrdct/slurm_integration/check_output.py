@@ -40,7 +40,6 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,11 +62,13 @@ def _resubmit(
     poni_file: Path,
     mask_file: Path,
     n_points: int,
-    n_workers: int | None,   # None → let the worker auto-scale; pass cpus as fallback
+    n_workers: int | None,
     batch_size: int,
     unit: str,
-    remove_spots: bool,
+    method: str,
     percentile: str,
+    thres: float,
+    max_iter: int,
     partition: str,
     time: str,
     mem: str,
@@ -82,12 +83,8 @@ def _resubmit(
     log_dir = output_file.parent / "slurm_logs"
     log_dir.mkdir(exist_ok=True)
 
-    # Pick a job_id that doesn't collide with existing scripts
-    existing = sorted(log_dir.glob("job_*.sh"))
-    job_id   = len(existing)
-
-    # n_workers=None means auto-scale inside the worker; pass cpus as the
-    # upper bound so the sbatch script still gets a concrete integer.
+    existing            = sorted(log_dir.glob("job_*.sh"))
+    job_id              = len(existing)
     effective_n_workers = n_workers if n_workers is not None else cpus
 
     slurm_id = _submit_job(
@@ -99,10 +96,12 @@ def _resubmit(
         mask_file    = mask_file,
         n_points     = n_points,
         n_workers    = effective_n_workers,
-        # batch_size   = batch_size,
+        batch_size   = batch_size,
         unit         = unit,
-        remove_spots = remove_spots,
+        method       = method,
         percentile   = percentile,
+        thres        = thres,
+        max_iter     = max_iter,
         partition    = partition,
         time         = time,
         mem          = mem,
@@ -123,7 +122,6 @@ def check(
     output_file: Path,
     *,
     resubmit: bool = False,
-    # ── repair mode ───────────────────────────────────────────────────────────
     repair: bool = False,
     master_file: Path | None = None,
     poni_file: Path | None = None,
@@ -132,9 +130,10 @@ def check(
     n_workers: int | None = None,
     batch_size: int = 32,
     unit: str = "2th_deg",
-    remove_spots: bool = False,
+    method: str = "standard",
     percentile: tuple = (10, 90),
-    # SLURM (only used when repair=True)
+    thres: float = 3.0,
+    max_iter: int = 5,
     partition: str = "cpu",
     time: str = "04:00:00",
     mem: str = "32G",
@@ -286,8 +285,10 @@ def check(
             n_workers    = n_workers,
             batch_size   = batch_size,
             unit         = unit,
-            remove_spots = remove_spots,
+            method       = method,
             percentile   = f"{percentile[0]},{percentile[1]}",
+            thres        = thres,
+            max_iter     = max_iter,
             partition    = partition,
             time         = time,
             mem          = mem,
@@ -378,8 +379,15 @@ def _build_parser(sub=None):
     repair.add_argument("--n-workers",    type=int,  default=None)
     repair.add_argument("--batch-size",   type=int,  default=32)
     repair.add_argument("--unit",         default="2th_deg")
-    repair.add_argument("--remove-spots", action="store_true")
-    repair.add_argument("--percentile",   default="10,90")
+    repair.add_argument("--method",       default="standard",
+                        choices=("standard", "filter", "sigma_clip"),
+                        help="Integration method (default: standard)")
+    repair.add_argument("--percentile",   default="10,90",
+                        help="Low,high percentile for 'filter' method")
+    repair.add_argument("--thres",        type=float, default=3.0,
+                        help="Sigma threshold for 'sigma_clip' method")
+    repair.add_argument("--max-iter",     type=int,   default=5,
+                        help="Max iterations for 'sigma_clip' method")
     repair.add_argument("--partition",    default="cpu")
     repair.add_argument("--time",         default="04:00:00")
     repair.add_argument("--mem",          default="32G")
@@ -391,7 +399,7 @@ def _build_parser(sub=None):
 
 
 def _cli_check(args):
-    pct = tuple(int(x) for x in args.percentile.split(",")) if hasattr(args, "percentile") else (10, 90)
+    pct = tuple(int(x) for x in args.percentile.split(","))
     check(
         output_file  = args.output_file,
         resubmit     = args.resubmit,
@@ -403,8 +411,10 @@ def _cli_check(args):
         n_workers    = args.n_workers,
         batch_size   = args.batch_size,
         unit         = args.unit,
-        remove_spots = args.remove_spots,
+        method       = args.method,
         percentile   = pct,
+        thres        = args.thres,
+        max_iter     = args.max_iter,
         partition    = args.partition,
         time         = args.time,
         mem          = args.mem,

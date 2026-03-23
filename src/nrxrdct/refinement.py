@@ -2,9 +2,9 @@ import os
 import sys
 from pathlib import Path
 
-import GSASIIscriptable as G2sc
 import matplotlib.pyplot as plt
 import numpy as np
+from GSASII import GSASIIscriptable as G2sc
 from matplotlib import gridspec
 
 from .io import read_xy_file, write_starting_instrument_pars

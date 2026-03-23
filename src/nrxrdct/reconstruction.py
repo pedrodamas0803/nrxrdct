@@ -4,10 +4,10 @@ import time
 from pathlib import Path
 
 import astra
-import GSASIIscriptable as G2sc
 import h5py
 import hdf5plugin
 import numpy as np
+from GSASII import GSASIIscriptable as G2sc
 from tqdm.auto import tqdm
 
 from .io import save_sinogram, save_xy_file

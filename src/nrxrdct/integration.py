@@ -1,16 +1,16 @@
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Tuple
-from scipy.ndimage import  median_filter
-import fabio # type: ignore
-import h5py # type: ignore
-import matplotlib.pyplot as plt # type: ignore
+
+import fabio
+import h5py
+import matplotlib.pyplot as plt
 import numpy as np
-import pyFAI # type: ignore
-from pyFAI.azimuthalIntegrator import AzimuthalIntegrator # type: ignore
-from tqdm import tqdm # type: ignore
+from pyFAI.integrator.azimuthal import AzimuthalIntegrator
+from tqdm import tqdm
 
 
 def cake_integration(
@@ -89,25 +89,130 @@ def cake_integration(
     radial = result.radial  # shape (npt_rad,)
     azimuthal = result.azimuthal  # shape (npt_azim,)
 
-    if plot:
-        display_data = np.log1p(np.clip(cake, 0, None)) if log_scale else cake
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        im = ax.imshow(
-            display_data,
-            origin="lower",
-            aspect="auto",
-            extent=[radial.min(), radial.max(), azimuthal.min(), azimuthal.max()],
-            cmap="turbo",
-        )
-        cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label("log(1 + I)" if log_scale else "Intensity")
-        ax.set_xlabel(unit)
-        ax.set_ylabel("Azimuthal angle χ (°)")
-        ax.set_title("CAKE integration")
-        plt.tight_layout()
 
     return cake, radial, azimuthal
+
+
+
+@lru_cache(maxsize=8)
+def _get_integrator(poni_file: str) -> AzimuthalIntegrator:
+    """
+    Load and cache an AzimuthalIntegrator for a given PONI file.
+    Avoids reloading the geometry on every integration call.
+    """
+    ai = AzimuthalIntegrator()
+    ai.load(poni_file)
+    return ai
+
+
+def azimuthal_integration_1d_sigma_clip(
+    image: np.ndarray,
+    poni_file: str,
+    npt: int = 1000,
+    unit: str = "2th_deg",
+    mask: Optional[np.ndarray] = None,
+    dark: Optional[np.ndarray] = None,
+    flat: Optional[np.ndarray] = None,
+    error_model: Optional[str] = "hybrid",
+    radial_range: Optional[Tuple[float, float]] = None,
+    azimuth_range: Optional[Tuple[float, float]] = None,
+    thres: float = 3.0,
+    max_iter: int = 5,
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    """
+    Perform 1D azimuthal integration with sigma-clipping using pyFAI.
+
+    Sigma-clipping iteratively removes pixels whose intensity deviates
+    more than `thres` standard deviations from the bin mean, which is
+    useful for rejecting hot pixels, zingers, and diffraction spots
+    from a polycrystalline or single-crystal background.
+
+    The AzimuthalIntegrator is cached per PONI file so repeated calls
+    (e.g. looping over thousands of frames) do not reload the geometry.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D detector image as a numpy array.
+    poni_file : str
+        Path to the PONI (Point Of Normal Incidence) calibration file.
+    npt : int, optional
+        Number of radial bins in the output pattern (default: 1000).
+    unit : str, optional
+        Output radial unit:
+            "2th_deg" – two-theta in degrees (default)
+            "q_A^-1"  – scattering vector q in Å⁻¹
+            "q_nm^-1" – scattering vector q in nm⁻¹
+            "2th_rad" – two-theta in radians
+            "r_mm"    – radius on detector in mm
+    mask : np.ndarray, optional
+        2D mask array (1 = masked/ignored, 0 = valid).
+    dark : np.ndarray, optional
+        Dark-current image to subtract before integration.
+    flat : np.ndarray, optional
+        Flat-field image for pixel-efficiency correction.
+    error_model : str, optional
+        Error model for uncertainty propagation.
+        "hybrid"  – combines Poisson and readout noise (default).
+        "poisson" – pure photon-counting noise.
+    radial_range : tuple of (float, float), optional
+        (min, max) radial range in the chosen unit.
+    azimuth_range : tuple of (float, float), optional
+        (min, max) azimuthal range in degrees, e.g. (-180, 180).
+    thres : float, optional
+        Sigma-clipping threshold in units of standard deviations (default: 3.0).
+    max_iter : int, optional
+        Maximum number of sigma-clipping iterations (default: 5).
+
+    Returns
+    -------
+    radial : np.ndarray
+        Radial axis values in the requested unit, shape (npt,).
+    intensity : np.ndarray
+        Integrated intensity at each radial position, shape (npt,).
+    sigma : np.ndarray or None
+        Per-bin uncertainty (only when error_model is set).
+
+    Raises
+    ------
+    ValueError
+        If the image is not 2-dimensional.
+    """
+    if image.ndim != 2:
+        raise ValueError(f"image must be 2D, got shape {image.shape}")
+
+    ai = _get_integrator(poni_file)
+
+    result = ai.sigma_clip(
+        image,
+        npt=npt,
+        unit=unit,
+        mask=mask,
+        dark=dark,
+        flat=flat,
+        error_model=error_model,
+        radial_range=radial_range,
+        azimuth_range=azimuth_range,
+        thres=thres,
+        max_iter=max_iter,
+        method=("no", "csr", "cython"),
+    )
+
+    return result.radial, result.intensity, result.sigma
+
+
+
+
+@lru_cache(maxsize=8)
+def _get_integrator(poni_file: str) -> AzimuthalIntegrator:
+    """
+    Load and cache an AzimuthalIntegrator for a given PONI file.
+    Avoids reloading the geometry on every integration call.
+    """
+    ai = AzimuthalIntegrator()
+    ai.load(poni_file)
+    return ai
 
 
 def azimuthal_integration_1d(
@@ -132,59 +237,53 @@ def azimuthal_integration_1d(
     poni_file : str
         Path to the PONI (Point Of Normal Incidence) calibration file.
     npt : int, optional
-        Number of points in the output 1D pattern (default: 1000).
+        Number of radial bins in the output pattern (default: 1000).
     unit : str, optional
-        Output radial unit. Options:
-            "q_A^-1"  – scattering vector q in Å⁻¹  (default)
+        Output radial unit:
+            "2th_deg" – two-theta in degrees (default)
+            "q_A^-1"  – scattering vector q in Å⁻¹
             "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_deg" – two-theta in degrees
             "2th_rad" – two-theta in radians
             "r_mm"    – radius on detector in mm
     mask : np.ndarray, optional
-        2D boolean/integer mask array (1 = masked/ignored, 0 = valid).
+        2D mask array (1 = masked/ignored, 0 = valid).
     dark : np.ndarray, optional
         Dark-current image to subtract before integration.
     flat : np.ndarray, optional
         Flat-field image for pixel-efficiency correction.
     error_model : str, optional
         Error model for uncertainty propagation.
-        Use "poisson" for photon-counting detectors.
+        "poisson" for photon-counting detectors.
     radial_range : tuple of (float, float), optional
-        (min, max) radial range to integrate over, in the chosen unit.
+        (min, max) radial range in the chosen unit.
     azimuth_range : tuple of (float, float), optional
         (min, max) azimuthal range in degrees, e.g. (-180, 180).
 
     Returns
     -------
-    q : np.ndarray
-        Radial axis values (in the requested unit).
+    radial : np.ndarray
+        Radial axis values in the requested unit, shape (npt,).
     intensity : np.ndarray
-        Integrated intensity at each radial position.
+        Integrated intensity at each radial position, shape (npt,).
     sigma : np.ndarray or None
-        Uncertainty on the intensity (only when error_model is set).
+        Per-bin uncertainty (only when error_model is set).
 
     Raises
     ------
-    FileNotFoundError
-        If the PONI file does not exist.
     ValueError
         If the image is not 2-dimensional.
 
     Examples
     --------
-    >>> import numpy as np
     >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
     >>> q, I, sigma = azimuthal_integration_1d(image, "detector.poni", npt=500)
-    >>> print(q.shape, I.shape)   # (500,) (500,)
+    >>> print(q.shape, I.shape)  # (500,) (500,)
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
 
-    # Load the calibration geometry from the PONI file
-    ai = pyFAI.azimuthalIntegrator.AzimuthalIntegrator()
-    ai.load(poni_file)
+    ai = _get_integrator(poni_file)
 
-    # Run the integration
     result = ai.integrate1d(
         image,
         npt=npt,
@@ -195,15 +294,11 @@ def azimuthal_integration_1d(
         error_model=error_model,
         radial_range=radial_range,
         azimuth_range=azimuth_range,
-        # Return a named-tuple result object
-        method=("no", "histogram", "cython"),  # fast CPU method
+        method=("no", "histogram", "cython"),
     )
 
-    q = result.radial
-    intensity = result.intensity/result.intensity.max(  )
-    sigma = result.sigma  # None unless error_model was specified
+    return result.radial, result.intensity, result.sigma
 
-    return q, intensity, sigma
 
 def azimuthal_integration_1d_filter(
     image: np.ndarray,
@@ -216,10 +311,14 @@ def azimuthal_integration_1d_filter(
     error_model: Optional[str] = None,
     radial_range: Optional[Tuple[float, float]] = None,
     azimuth_range: Optional[Tuple[float, float]] = None,
-    percentile:tuple=(10, 90)
+    percentile: Tuple[float, float] = (10, 90),
 ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """
-    Perform 1D azimuthal integration of a detector image using pyFAI.
+    Perform 1D azimuthal integration with percentile filtering using pyFAI.
+
+    Pixels whose azimuthal intensity falls outside the given percentile
+    range within each radial bin are rejected before averaging, making
+    this robust against hot pixels and zingers without iterative clipping.
 
     Parameters
     ----------
@@ -228,59 +327,56 @@ def azimuthal_integration_1d_filter(
     poni_file : str
         Path to the PONI (Point Of Normal Incidence) calibration file.
     npt : int, optional
-        Number of points in the output 1D pattern (default: 1000).
+        Number of radial bins in the output pattern (default: 1000).
     unit : str, optional
-        Output radial unit. Options:
-            "q_A^-1"  – scattering vector q in Å⁻¹  (default)
+        Output radial unit:
+            "2th_deg" – two-theta in degrees (default)
+            "q_A^-1"  – scattering vector q in Å⁻¹
             "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_deg" – two-theta in degrees
             "2th_rad" – two-theta in radians
             "r_mm"    – radius on detector in mm
     mask : np.ndarray, optional
-        2D boolean/integer mask array (1 = masked/ignored, 0 = valid).
+        2D mask array (1 = masked/ignored, 0 = valid).
     dark : np.ndarray, optional
         Dark-current image to subtract before integration.
     flat : np.ndarray, optional
         Flat-field image for pixel-efficiency correction.
     error_model : str, optional
         Error model for uncertainty propagation.
-        Use "poisson" for photon-counting detectors.
+        "poisson" for photon-counting detectors.
     radial_range : tuple of (float, float), optional
-        (min, max) radial range to integrate over, in the chosen unit.
+        (min, max) radial range in the chosen unit.
     azimuth_range : tuple of (float, float), optional
         (min, max) azimuthal range in degrees, e.g. (-180, 180).
+    percentile : tuple of (float, float), optional
+        (low, high) percentile bounds for pixel rejection within each
+        radial bin (default: (10, 90)).
 
     Returns
     -------
-    q : np.ndarray
-        Radial axis values (in the requested unit).
+    radial : np.ndarray
+        Radial axis values in the requested unit, shape (npt,).
     intensity : np.ndarray
-        Integrated intensity at each radial position.
+        Filtered integrated intensity at each radial position, shape (npt,).
     sigma : np.ndarray or None
-        Uncertainty on the intensity (only when error_model is set).
+        Per-bin uncertainty (only when error_model is set).
 
     Raises
     ------
-    FileNotFoundError
-        If the PONI file does not exist.
     ValueError
         If the image is not 2-dimensional.
 
     Examples
     --------
-    >>> import numpy as np
     >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
-    >>> q, I, sigma = azimuthal_integration_1d(image, "detector.poni", npt=500)
-    >>> print(q.shape, I.shape)   # (500,) (500,)
+    >>> q, I, sigma = azimuthal_integration_1d_filter(image, "detector.poni", npt=500)
+    >>> print(q.shape, I.shape)  # (500,) (500,)
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
 
-    # Load the calibration geometry from the PONI file
-    ai = pyFAI.azimuthalIntegrator.AzimuthalIntegrator()
-    ai.load(poni_file)
+    ai = _get_integrator(poni_file)
 
-    # Run the integration
     result = ai.medfilt1d_ng(
         image,
         npt=npt,
@@ -292,63 +388,108 @@ def azimuthal_integration_1d_filter(
         radial_range=radial_range,
         azimuth_range=azimuth_range,
         percentile=percentile,
+        method=("full", "csr", "cython"),
     )
 
-    q = result.radial
-    intensity = result.intensity/result.intensity.max()
-    sigma = result.sigma  # None unless error_model was specified
+    return result.radial, result.intensity, result.sigma
 
-    return q, intensity, sigma
 
-def integrate_multigeo(
-    images, poni_files, n_bins=2000, unit="2th_deg", polarization=0.5, radial_range=None
-):
+def azimuthal_integration_1d_sigma_clip(
+    image: np.ndarray,
+    poni_file: str,
+    npt: int = 1000,
+    unit: str = "2th_deg",
+    mask: Optional[np.ndarray] = None,
+    dark: Optional[np.ndarray] = None,
+    flat: Optional[np.ndarray] = None,
+    error_model: Optional[str] = "hybrid",
+    radial_range: Optional[Tuple[float, float]] = None,
+    azimuth_range: Optional[Tuple[float, float]] = None,
+    thres: float = 3.0,
+    max_iter: int = 5,
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    """
+    Perform 1D azimuthal integration with sigma-clipping using pyFAI.
 
-    print("=" * 60)
-    print("STEP 1: pyFAI multi-geometry integration")
-    print("=" * 60)
+    Iteratively removes pixels whose intensity deviates more than `thres`
+    standard deviations from the bin mean. Useful for rejecting hot pixels,
+    zingers, and single-crystal spots from a polycrystalline background.
 
-    print("Loading images...")
-    imgs = []
-    masks = []
-    for img_path, poni_path in zip(images, poni_files):
-        img = fabio.open(img_path).data.astype(np.float32)
-        imgs.append(img)
-        print(f"  Loaded: {os.path.basename(img_path)}  shape={img.shape}")
+    Parameters
+    ----------
+    image : np.ndarray
+        2D detector image as a numpy array.
+    poni_file : str
+        Path to the PONI (Point Of Normal Incidence) calibration file.
+    npt : int, optional
+        Number of radial bins in the output pattern (default: 1000).
+    unit : str, optional
+        Output radial unit:
+            "2th_deg" – two-theta in degrees (default)
+            "q_A^-1"  – scattering vector q in Å⁻¹
+            "q_nm^-1" – scattering vector q in nm⁻¹
+            "2th_rad" – two-theta in radians
+            "r_mm"    – radius on detector in mm
+    mask : np.ndarray, optional
+        2D mask array (1 = masked/ignored, 0 = valid).
+    dark : np.ndarray, optional
+        Dark-current image to subtract before integration.
+    flat : np.ndarray, optional
+        Flat-field image for pixel-efficiency correction.
+    error_model : str, optional
+        Error model for uncertainty propagation.
+        "hybrid"  – combines Poisson and readout noise (default).
+        "poisson" – pure photon-counting noise.
+    radial_range : tuple of (float, float), optional
+        (min, max) radial range in the chosen unit.
+    azimuth_range : tuple of (float, float), optional
+        (min, max) azimuthal range in degrees, e.g. (-180, 180).
+    thres : float, optional
+        Clipping threshold in standard deviations (default: 3.0).
+    max_iter : int, optional
+        Maximum number of sigma-clipping iterations (default: 5).
 
-        # Use detector gap mask if available
-        ai = pyFAI.load(poni_path)
-        det_mask = ai.detector.mask
-        if det_mask is not None:
-            masks.append(det_mask.astype(bool))
-            print(f"    Detector mask applied: {det_mask.sum()} pixels masked")
-        else:
-            masks.append(np.zeros(img.shape, dtype=bool))
-            print(f"    No detector mask found")
+    Returns
+    -------
+    radial : np.ndarray
+        Radial axis values in the requested unit, shape (npt,).
+    intensity : np.ndarray
+        Clipped integrated intensity at each radial position, shape (npt,).
+    sigma : np.ndarray or None
+        Per-bin uncertainty (only when error_model is set).
 
-    print("\nBuilding MultiGeometry...")
-    mg = pyFAI.multi_geometry.MultiGeometry(
-        ais=poni_files, unit=unit, radial_range=radial_range, empty=0.0
+    Raises
+    ------
+    ValueError
+        If the image is not 2-dimensional.
+
+    Examples
+    --------
+    >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
+    >>> q, I, sigma = azimuthal_integration_1d_sigma_clip(image, "detector.poni", npt=500)
+    >>> print(q.shape, I.shape)  # (500,) (500,)
+    """
+    if image.ndim != 2:
+        raise ValueError(f"image must be 2D, got shape {image.shape}")
+
+    ai = _get_integrator(poni_file)
+
+    result = ai.sigma_clip(
+        image,
+        npt=npt,
+        unit=unit,
+        mask=mask,
+        dark=dark,
+        flat=flat,
+        error_model=error_model,
+        radial_range=radial_range,
+        azimuth_range=azimuth_range,
+        thres=thres,
+        max_iter=max_iter,
+        method=("no", "csr", "cython"),
     )
 
-    print("Integrating...")
-    result = mg.integrate1d(
-        lst_data=imgs,
-        npt=n_bins,
-        lst_mask=masks,
-        polarization_factor=polarization,
-        error_model="poisson",
-    )
-
-    tth_integrated = result.radial
-    intensity_integrated = result.intensity
-    sigma_integrated = (
-        result.sigma
-        if result.sigma is not None
-        else np.zeros_like(intensity_integrated)
-    )
-
-    return tth_integrated, intensity_integrated, sigma_integrated
+    return result.radial, result.intensity, result.sigma
 
 def integrate_powder_parallel(
     master_file: Path,
@@ -513,131 +654,3 @@ def integrate_powder_parallel(
     elapsed = time.time() - t0
     print(f"\nDone in {elapsed:.1f} s  ({elapsed/len(valid_entries):.1f} s/scan).")
 
-# def integrate_powder_parallel(
-#     h5files: Path,
-#     master_file: Path,
-#     output_file: Path,
-#     poni_file: Path,
-#     mask_file: Path,
-#     rot: np.array,
-#     n_points: int = 1000,
-#     n_workers: int = 16,
-#     unit: str = "2th_deg",
-# ):
-#     t0 = time.time()
-#     mask = fabio.open(mask_file).data
-
-#     # ── Validate HDF5 files upfront ───────────────────────────────────────────────
-#     def is_valid_h5(path: str) -> bool:
-#         """Return True only if the file is a readable, non-empty HDF5 file."""
-#         try:
-#             with h5py.File(path, "r") as f:
-#                 return "entry_0000/measurement/data" in f
-#         except (OSError, KeyError):
-#             return False
-
-#     print("Validating HDF5 files...")
-#     valid_files, bad_files = [], []
-#     for f in tqdm(h5files):
-#         (valid_files if is_valid_h5(f) else bad_files).append(f)
-
-#     if bad_files:
-#         print(f"\n⚠  Skipping {len(bad_files)} corrupt/incomplete file(s):")
-#         for bf in bad_files:
-#             print(f"   {os.path.basename(bf)}")
-
-#     print(f"\n✓  {len(valid_files)}/{len(h5files)} files OK\n")
-
-#     # ── Read motors from master file ──────────────────────────────────────────────
-#     DTY = []
-#     with h5py.File(master_file, "r") as hin:
-#         for entry in sorted(hin.keys()):
-#             try:
-#                 dty = float(hin[f"{entry}/instrument/positioners/dty"][()])
-#             except KeyError:
-#                 dty = float("nan")
-#             DTY.append(dty)
-
-#     # ── Initialise output file ────────────────────────────────────────────────────
-#     with h5py.File(output_file, "a") as hout:
-#         if "integrated/radial" not in hout:
-#             with h5py.File(valid_files[0], "r") as htmp:
-#                 first_image = htmp["entry_0000/measurement/data"][0].astype(np.float32)
-#             tt, _, _ = azimuthal_integration_1d(
-#                 image=first_image,
-#                 poni_file=poni_file,
-#                 npt=n_points,
-#                 mask=mask,
-#                 unit=unit,
-#             )
-#             hout["integrated/radial"] = tt
-#             hout["integrated/radial"].attrs["unit"] = f"{unit}"
-
-#         if "motors/dty" not in hout:
-#             hout["motors/dty"] = DTY
-#         if "motors/rot" not in hout:
-#             hout["motors/rot"] = rot
-
-#         # Log bad files so you can investigate later
-#         if bad_files and "bad_files" not in hout:
-#             hout["bad_files"] = [os.path.basename(b) for b in bad_files]
-
-#     # ── Helper: integrate one frame ───────────────────────────────────────────────
-#     def integrate_frame(args):
-#         jj, image = args
-#         _, itt, _ = azimuthal_integration_1d(
-#             image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
-#         )
-#         return jj, itt
-
-#     # ── Main loop (valid files only) ──────────────────────────────────────────────
-#     for ii, f in enumerate(valid_files):
-
-#         scan_name = f"scan_{ii:04d}"
-#         group_path = f"integrated/{scan_name}"
-
-#         with h5py.File(output_file, "r") as hin:
-#             if group_path in hin:
-#                 print(f"Skipping {scan_name} (already done)")
-#                 continue
-
-#         print(
-#             f"\n{'='*60}\nProcessing {scan_name}  [{ii+1}/{len(valid_files)}]\n{'='*60}"
-#         )
-
-#         try:
-#             with h5py.File(f, "r") as hin:
-#                 images = hin["entry_0000/measurement/data"][:].astype(np.float32)
-#         except OSError as e:
-#             print(f"  ✗ Failed to read {f}: {e} — skipping")
-#             continue
-
-#         n_frames = len(images)
-#         sinogram = np.empty((n_frames, n_points), dtype=np.float32)
-
-#         with ThreadPoolExecutor(max_workers=n_workers) as pool:
-#             futures = {
-#                 pool.submit(integrate_frame, (jj, images[jj])): jj
-#                 for jj in range(n_frames)
-#             }
-#             for future in tqdm(as_completed(futures), total=n_frames, desc=scan_name):
-#                 try:
-#                     jj, itt = future.result()
-#                     sinogram[jj] = itt
-#                 except Exception as e:
-#                     print(f"  ✗ Frame {futures[future]} failed: {e}")
-#                     sinogram[futures[future]] = np.nan
-
-#         with h5py.File(output_file, "a") as hout:
-#             ds = hout.create_dataset(
-#                 group_path,
-#                 data=sinogram,
-#                 compression="gzip",
-#                 compression_opts=4,
-#                 chunks=(1, n_points),
-#             )
-#             ds.attrs["dty"] = DTY[ii] if ii < len(DTY) else float("nan")
-#             ds.attrs["source"] = os.path.basename(f)
-#             ds.attrs["valid"] = True
-
-#     print(f"\nDone in {(t0-time.time()):.2f} s.")

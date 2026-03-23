@@ -45,13 +45,38 @@ import numpy as np
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _delete_datasets(output_file: Path, indices: list[int]) -> None:
-    """Delete the HDF5 datasets for the given scan indices (in-place)."""
+    """
+    Delete HDF5 datasets for the given scan indices.
+
+    Uses ``h5py.h5g.unlink`` (low-level C API, available in all h5py versions)
+    instead of ``del h[path]`` or ``path in h``, both of which crash when the
+    HDF5 link/B-tree table is corrupted ("bad symbol table node signature",
+    "incorrect cache entry type", etc.).
+    """
     with h5py.File(output_file, "a") as h:
         for i in indices:
-            path = f"integrated/scan_{i:04d}"
-            if path in h:
-                del h[path]
+            scan_name = f"scan_{i:04d}"
+            path      = f"integrated/{scan_name}"
+
+            # ── Try via parent group (most reliable) ──────────────────────────
+            try:
+                parent_id = h["integrated"].id
+                h5py.h5g.unlink(parent_id, scan_name.encode())
                 print(f"  🗑  Deleted {path}")
+                continue
+            except KeyError:
+                pass   # link didn't exist — nothing to do
+            except Exception as e1:
+                pass   # parent group unreadable — fall through to root attempt
+
+            # ── Fallback: unlink from root using full path ────────────────────
+            try:
+                h5py.h5g.unlink(h["/"].id, path.encode())
+                print(f"  🗑  Deleted {path} (root fallback)")
+            except KeyError:
+                pass   # truly doesn't exist
+            except Exception as e2:
+                print(f"  ⚠  Could not delete {path}: {e2} — will be treated as missing")
 
 
 def _resubmit(
@@ -188,18 +213,29 @@ def check(
             scan_name  = f"scan_{ii:04d}"
             group_path = f"integrated/{scan_name}"
 
-            if group_path not in hout:
+            # Membership check — RuntimeError fires when the HDF5 link/cache
+            # table itself is damaged ("incorrect cache entry type").
+            try:
+                exists = group_path in hout
+            except (RuntimeError, OSError) as e:
+                print(f"  ✗ {scan_name} (index {ii}): corrupted link — {e}")
+                corrupted.append(ii)
+                continue
+
+            if not exists:
                 missing.append(ii)
                 continue
 
+            # Data read — OSError fires when gzip chunks are truncated
+            # (OOM-killed mid-write).
             try:
                 data     = hout[group_path][:]
                 nan_rows = int(np.all(np.isnan(data), axis=1).sum())
                 present.append((ii, scan_name, nan_rows, data.shape))
                 if nan_rows:
                     nan_scans.append((ii, scan_name, nan_rows, data.shape))
-            except OSError as e:
-                print(f"  ✗ {scan_name} (index {ii}): corrupted — {e}")
+            except (RuntimeError, OSError) as e:
+                print(f"  ✗ {scan_name} (index {ii}): corrupted dataset — {e}")
                 corrupted.append(ii)
 
         has_radial = "integrated/radial" in hout
@@ -355,6 +391,141 @@ def repair(
         **kwargs,
     )
 
+
+def rebuild(
+    output_file: Path,
+    master_file: Path,
+    poni_file: Path,
+    mask_file: Path,
+    *,
+    rebuilt_file: Path | None = None,
+    **kwargs,
+) -> dict:
+    """
+    Rebuild a deeply corrupted output HDF5 file.
+
+    When the B-tree/symbol table of the output file is damaged, even writing
+    new datasets fails.  This function:
+
+    1. Copies all *readable* scan datasets into a fresh HDF5 file.
+    2. Calls ``repair()`` on the new file to submit a SLURM job for the
+       remaining missing/corrupted scans.
+
+    The original file is renamed to ``<name>.bak`` and the rebuilt file
+    takes its place, so all downstream code can keep using the original path.
+
+    Parameters
+    ----------
+    output_file  : Path  — the corrupted output file
+    master_file  : Path  — original master HDF5
+    poni_file    : Path  — calibration file
+    mask_file    : Path  — mask file
+    rebuilt_file : Path  — destination for the rebuilt file (default:
+                           ``<output_file>.rebuilt`` while building, then
+                           swapped in place of ``output_file``)
+    **kwargs     : forwarded to ``repair()`` (partition, conda_env, etc.)
+
+    Returns
+    -------
+    dict — same as ``repair()`` called on the rebuilt file
+    """
+    output_file = Path(output_file)
+    tmp_file    = Path(rebuilt_file) if rebuilt_file else output_file.with_suffix(".rebuilt.h5")
+
+    print(f"\n{'='*60}")
+    print(f"Rebuilding {output_file.name} → {tmp_file.name}")
+    print(f"{'='*60}\n")
+
+    # ── 1. Read metadata from the (possibly corrupted) original ───────────────
+    with h5py.File(output_file, "r") as src:
+        valid_entries = [
+            e.decode() if isinstance(e, bytes) else e
+            for e in src["meta/valid_entries"][:]
+        ]
+        n_total = len(valid_entries)
+
+        # ── 2. Create fresh destination file ──────────────────────────────────
+        with h5py.File(tmp_file, "w") as dst:
+
+            # Copy all non-scan groups verbatim
+            for key in src.keys():
+                if key != "integrated":
+                    try:
+                        src.copy(key, dst)
+                    except Exception as e:
+                        print(f"  ⚠  Could not copy group '{key}': {e}")
+
+            dst.require_group("integrated")
+
+            # Copy integrated/radial and integrated/cake_mask explicitly —
+            # these live inside "integrated" which was skipped above.
+            for special in ("integrated/radial", "integrated/cake_mask"):
+                try:
+                    exists = special in src
+                except (RuntimeError, OSError):
+                    exists = False
+                if exists:
+                    try:
+                        # copy() needs the parent group as destination
+                        parent_dst = dst.require_group("integrated")
+                        name       = special.split("/")[-1]
+                        src.copy(special, parent_dst, name=name)
+                    except Exception as e:
+                        print(f"  ⚠  Could not copy '{special}': {e}")
+
+            # Copy readable scan datasets
+            n_copied = n_skipped = 0
+            for ii in range(n_total):
+                scan_name  = f"scan_{ii:04d}"
+                group_path = f"integrated/{scan_name}"
+
+                # Check existence safely
+                try:
+                    exists = group_path in src
+                except (RuntimeError, OSError):
+                    exists = False
+
+                if not exists:
+                    n_skipped += 1
+                    continue
+
+                # Try to read and copy
+                try:
+                    data = src[group_path][:]
+                    ds   = dst.create_dataset(
+                        group_path,
+                        data=data,
+                        compression="gzip",
+                        compression_opts=4,
+                        chunks=(1, data.shape[1]),
+                    )
+                    # Copy attributes
+                    for k, v in src[group_path].attrs.items():
+                        ds.attrs[k] = v
+                    n_copied += 1
+                except (RuntimeError, OSError, ValueError) as e:
+                    print(f"  ✗  {scan_name}: unreadable — {e}")
+                    n_skipped += 1
+
+    print(f"\n✓  Copied {n_copied}/{n_total} scans into {tmp_file.name}")
+    print(f"   Skipped {n_skipped} corrupted/missing scans (will be reintegrated)")
+
+    # ── 3. Swap files: original → .bak, rebuilt → original path ──────────────
+    bak_file = output_file.with_suffix(".bak.h5")
+    output_file.rename(bak_file)
+    tmp_file.rename(output_file)
+    print(f"\n  Original backed up → {bak_file.name}")
+    print(f"  Rebuilt file       → {output_file.name}")
+
+    # ── 4. Run repair on the clean rebuilt file ───────────────────────────────
+    print(f"\nRunning repair on rebuilt file...")
+    return repair(
+        output_file = output_file,
+        master_file = master_file,
+        poni_file   = poni_file,
+        mask_file   = mask_file,
+        **kwargs,
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI

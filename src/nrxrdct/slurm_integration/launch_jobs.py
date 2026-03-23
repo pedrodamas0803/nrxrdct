@@ -34,8 +34,6 @@ from __future__ import annotations
 
 import math
 import subprocess
-import sys
-import textwrap
 from pathlib import Path
 
 import fabio
@@ -145,54 +143,65 @@ def _submit_job(
     conda_env: str | None,
     log_dir: Path,
 ) -> str:
-    indices_str  = ",".join(str(i) for i in indices)
-    script_path  = log_dir / f"job_{job_id:04d}.sh"
-    log_out      = log_dir / f"job_{job_id:04d}_%j.out"
-    log_err      = log_dir / f"job_{job_id:04d}_%j.err"
-
-    if env_activate:
-        activate_cmd = f"source {env_activate}"
-    elif conda_env:
-        activate_cmd = f"conda activate {conda_env}"
-    else:
-        activate_cmd = "# no environment activation"
+    indices_str = ",".join(str(i) for i in indices)
+    script_path = log_dir / f"job_{job_id:04d}.sh"
+    log_out     = log_dir / f"job_{job_id:04d}_%j.out"
+    log_err     = log_dir / f"job_{job_id:04d}_%j.err"
 
     gpu_line = "#SBATCH --gres=gpu:1" if gpu else ""
 
-    script = textwrap.dedent(f"""\
-        #!/bin/bash
-        #SBATCH --job-name=nrxrdct_{job_id:04d}
-        #SBATCH --output={log_out}
-        #SBATCH --error={log_err}
-        #SBATCH --partition={partition}
-        #SBATCH --time={time}
-        #SBATCH --mem={mem}
-        #SBATCH --cpus-per-task={cpus}
-        {gpu_line}
+    # Build the python invocation line.
+    # `conda activate` requires an interactive shell and silently fails in
+    # non-interactive sbatch jobs.  `conda run` works without shell init.
+    worker_args = (
+        f'    --master-file   "{master_file}"   \\\n'
+        f'    --output-file   "{output_file}"   \\\n'
+        f'    --poni-file     "{poni_file}"     \\\n'
+        f'    --mask-file     "{mask_file}"     \\\n'
+        f'    --entry-indices "{indices_str}"   \\\n'
+        f'    --n-points      {n_points}        \\\n'
+        f'    --n-workers     {n_workers}       \\\n'
+        f'    --batch-size    {batch_size}      \\\n'
+        f'    --unit          "{unit}"          \\\n'
+        f'    --method        "{method}"        \\\n'
+        f'    --percentile    "{percentile}"    \\\n'
+        f'    --thres         {thres}           \\\n'
+        f'    --max-iter      {max_iter}'
+    )
 
-        conda init bash
-        {activate_cmd}
+    if env_activate:
+        env_block = f"source {env_activate}"
+        python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+    elif conda_env:
+        env_block = "# conda run used below — no separate activate needed"
+        python_line = (
+            f"conda run -n {conda_env} --no-capture-output "
+            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+        )
+    else:
+        env_block = "# no environment activation"
+        python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
 
-        echo "Job {job_id} started on $(hostname) at $(date)"
-        echo "Indices: {indices_str}"
-
-        python -m nrxrdct.slurm_integration.integrate_worker \\
-            --master-file   "{master_file}"   \\
-            --output-file   "{output_file}"   \\
-            --poni-file     "{poni_file}"     \\
-            --mask-file     "{mask_file}"     \\
-            --entry-indices "{indices_str}"   \\
-            --n-points      {n_points}        \\
-            --n-workers     {n_workers}       \\
-            --batch-size    {batch_size}      \\
-            --unit          "{unit}"          \\
-            --method        "{method}"        \\
-            --percentile    "{percentile}"    \\
-            --thres         {thres}           \\
-            --max-iter      {max_iter}
-
-        echo "Job {job_id} finished at $(date)"
-    """)
+    script = (
+        f"#!/bin/bash\n"
+        f"#SBATCH --job-name=nrxrdct_{job_id:04d}\n"
+        f"#SBATCH --output={log_out}\n"
+        f"#SBATCH --error={log_err}\n"
+        f"#SBATCH --partition={partition}\n"
+        f"#SBATCH --time={time}\n"
+        f"#SBATCH --mem={mem}\n"
+        f"#SBATCH --cpus-per-task={cpus}\n"
+        + (f"#SBATCH --gres=gpu:1\n" if gpu else "")
+        + f"\n"
+        f"{env_block}\n"
+        f"\n"
+        f'echo "Job {job_id} started on $(hostname) at $(date)"\n'
+        f'echo "Indices: {indices_str}"\n'
+        f"\n"
+        f"{python_line}\n"
+        f"\n"
+        f'echo "Job {job_id} finished at $(date)"\n'
+    )
 
     script_path.write_text(script)
     script_path.chmod(0o755)

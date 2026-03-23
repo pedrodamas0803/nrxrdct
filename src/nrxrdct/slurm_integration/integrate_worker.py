@@ -155,7 +155,13 @@ def _write_scan(
         fcntl.flock(lf, fcntl.LOCK_EX)
         try:
             with h5py.File(output_file, "a") as hout:
-                if group_path in hout:
+                # Use try/except — the plain `in` operator crashes on
+                # corrupted B-tree/cache entries ("bad symbol table node").
+                try:
+                    already_exists = group_path in hout
+                except (RuntimeError, OSError):
+                    already_exists = False   # corrupted entry: overwrite it
+                if already_exists:
                     return
                 ds = hout.create_dataset(
                     group_path,
@@ -203,7 +209,11 @@ def _process_scan(
     group_path = f"integrated/{scan_name}"
 
     with h5py.File(output_file, "r") as hout:
-        if group_path in hout:
+        try:
+            already_done = group_path in hout
+        except (RuntimeError, OSError):
+            already_done = False   # corrupted entry: reprocess it
+        if already_done:
             print(f"  → Skipping {scan_name} (already done)")
             return True
 
@@ -286,7 +296,7 @@ def _process_scan(
                 for future in as_completed(futures):
                     try:
                         jj, itt = future.result()
-                        sinogram[jj] = itt
+                        sinogram[jj] = itt / itt.max()
                     except Exception as e:
                         k  = futures[future]
                         jj = batch_start + k

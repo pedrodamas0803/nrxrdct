@@ -12,8 +12,12 @@ Sub-commands
 import argparse
 import sys
 
-from .launch_jobs  import _build_parser as _launch_parser, _cli_launch
-from .check_output import _build_parser as _check_parser,  _cli_check
+from .check_output import _build_parser as _check_parser
+from .check_output import _cli_check
+from .launch_jobs import _build_parser as _launch_parser
+from .launch_jobs import _cli_launch
+from .monitor import _build_parser as _monitor_parser
+from .monitor import _cli_monitor
 
 
 def main():
@@ -25,6 +29,7 @@ def main():
 
     _launch_parser(sub)
     _check_parser(sub)
+    _monitor_parser(sub)
 
     args = p.parse_args()
 
@@ -32,6 +37,8 @@ def main():
         _cli_launch(args)
     elif args.command == "check":
         _cli_check(args)
+    elif args.command == "monitor":
+        _cli_monitor(args)
     else:
         p.print_help()
         sys.exit(1)

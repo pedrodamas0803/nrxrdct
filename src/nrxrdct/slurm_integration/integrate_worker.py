@@ -40,6 +40,7 @@ from nrxrdct.integration import (
     azimuthal_integration_1d_filter,
     azimuthal_integration_1d_sigma_clip,
 )
+from nrxrdct.utils import calculate_xrd_baseline
 
 # Valid method names — checked at startup so failures are obvious
 INTEGRATION_METHODS = ("standard", "filter", "sigma_clip")
@@ -49,16 +50,17 @@ INTEGRATION_METHODS = ("standard", "filter", "sigma_clip")
 # Memory helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _available_ram_bytes() -> int:
     """Read MemAvailable from /proc/meminfo (Linux). Falls back to 32 GB."""
     try:
         with open("/proc/meminfo") as f:
             for line in f:
                 if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) * 1024   # kB → bytes
+                    return int(line.split()[1]) * 1024  # kB → bytes
     except Exception:
         pass
-    return 32 * 1024 ** 3
+    return 32 * 1024**3
 
 
 def _safe_n_workers(
@@ -79,12 +81,12 @@ def _safe_n_workers(
     if requested is not None:
         return requested
 
-    frame_bytes  = int(np.prod(frame_shape)) * 4   # float32
+    frame_bytes = int(np.prod(frame_shape)) * 4  # float32
     budget_bytes = _available_ram_bytes() * mem_fraction
     # Frames that fit in budget simultaneously (each worker holds ~1 frame)
-    max_frames   = max(1, int(budget_bytes / (frame_bytes * 2)))
-    n_cpus       = os.cpu_count() or 16
-    n            = max(1, min(max_frames, batch_size, n_cpus))
+    max_frames = max(1, int(budget_bytes / (frame_bytes * 2)))
+    n_cpus = os.cpu_count() or 16
+    n = max(1, min(max_frames, batch_size, n_cpus))
     print(
         f"  Auto thread count: {n}  "
         f"(frame={frame_bytes/1e6:.1f} MB, "
@@ -98,6 +100,7 @@ def _safe_n_workers(
 # Frame-level integration
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _integrate_frame(
     jj: int,
     image: np.ndarray,
@@ -108,36 +111,52 @@ def _integrate_frame(
     mask: np.ndarray,
     unit: str,
     method: str,
-    percentile: tuple,   # used by "filter"
-    thres: float,        # used by "sigma_clip"
-    max_iter: int,       # used by "sigma_clip"
+    percentile: tuple,  # used by "filter"
+    thres: float,  # used by "sigma_clip"
+    max_iter: int,  # used by "sigma_clip"
 ) -> tuple[int, np.ndarray]:
     """Dispatch to the requested integration method and normalise by monitor."""
     if method == "filter":
-        _, itt, _ = azimuthal_integration_1d_filter(
-            image=image, poni_file=str(poni_file), npt=n_points,
-            mask=mask, unit=unit, percentile=percentile,
+        tt, itt, _ = azimuthal_integration_1d_filter(
+            image=image,
+            poni_file=str(poni_file),
+            npt=n_points,
+            mask=mask,
+            unit=unit,
+            percentile=percentile,
         )
     elif method == "sigma_clip":
-        _, itt, _ = azimuthal_integration_1d_sigma_clip(
-            image=image, poni_file=str(poni_file), npt=n_points,
-            mask=mask, unit=unit, thres=thres, max_iter=max_iter,
+        tt, itt, _ = azimuthal_integration_1d_sigma_clip(
+            image=image,
+            poni_file=str(poni_file),
+            npt=n_points,
+            mask=mask,
+            unit=unit,
+            thres=thres,
+            max_iter=max_iter,
         )
     else:  # "standard"
-        _, itt, _ = azimuthal_integration_1d(
-            image=image, poni_file=str(poni_file), npt=n_points,
-            mask=mask, unit=unit,
+        tt, itt, _ = azimuthal_integration_1d(
+            image=image,
+            poni_file=str(poni_file),
+            npt=n_points,
+            mask=mask,
+            unit=unit,
         )
 
     if monitor <= 0:
         print(f"  ⚠  Frame {jj}: fpico6={monitor:.4g}, skipping normalisation")
         return jj, itt
+
+    # bkg, _ = calculate_xrd_baseline(itt, tt)
+    # itt -= bkg
     return jj, itt / monitor
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HDF5 write with POSIX advisory lock
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _write_scan(
     *,
@@ -160,7 +179,7 @@ def _write_scan(
                 try:
                     already_exists = group_path in hout
                 except (RuntimeError, OSError):
-                    already_exists = False   # corrupted entry: overwrite it
+                    already_exists = False  # corrupted entry: overwrite it
                 if already_exists:
                     return
                 ds = hout.create_dataset(
@@ -170,15 +189,15 @@ def _write_scan(
                     compression_opts=4,
                     chunks=(1, sinogram.shape[1]),
                 )
-                ds.attrs["entry"]              = entry
-                ds.attrs["dty"]               = dty_value
-                ds.attrs["source"]             = str(master_file)
-                ds.attrs["fpico6_mean"]        = float(np.mean(fpico6))
-                ds.attrs["fpico6_min"]         = float(np.min(fpico6))
-                ds.attrs["fpico6_max"]         = float(np.max(fpico6))
-                ds.attrs["normalised_by"]      = "fpico6"
+                ds.attrs["entry"] = entry
+                ds.attrs["dty"] = dty_value
+                ds.attrs["source"] = str(master_file)
+                ds.attrs["fpico6_mean"] = float(np.mean(fpico6))
+                ds.attrs["fpico6_min"] = float(np.min(fpico6))
+                ds.attrs["fpico6_max"] = float(np.max(fpico6))
+                ds.attrs["normalised_by"] = "fpico6"
                 ds.attrs["integration_method"] = method
-                ds.attrs["valid"]              = True
+                ds.attrs["valid"] = True
         finally:
             fcntl.flock(lf, fcntl.LOCK_UN)
 
@@ -186,6 +205,7 @@ def _write_scan(
 # ─────────────────────────────────────────────────────────────────────────────
 # Scan-level processing  (streaming + batched)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _process_scan(
     ii: int,
@@ -205,14 +225,14 @@ def _process_scan(
     thres: float,
     max_iter: int,
 ) -> bool:
-    scan_name  = f"scan_{ii:04d}"
+    scan_name = f"scan_{ii:04d}"
     group_path = f"integrated/{scan_name}"
 
     with h5py.File(output_file, "r") as hout:
         try:
             already_done = group_path in hout
         except (RuntimeError, OSError):
-            already_done = False   # corrupted entry: reprocess it
+            already_done = False  # corrupted entry: reprocess it
         if already_done:
             print(f"  → Skipping {scan_name} (already done)")
             return True
@@ -222,22 +242,26 @@ def _process_scan(
     # ── 1. Read only lightweight metadata — NOT the images ────────────────────
     try:
         with h5py.File(master_file, "r") as hin:
-            fpico6      = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
-            rot         = hin[f"{entry}/measurement/rot"][:]
-            n_frames    = hin[f"{entry}/measurement/eiger"].shape[0]
-            frame_shape = hin[f"{entry}/measurement/eiger"].shape[1:]   # (H, W)
+            fpico6 = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
+            rot = hin[f"{entry}/measurement/rot"][:]
+            n_frames = hin[f"{entry}/measurement/eiger"].shape[0]
+            frame_shape = hin[f"{entry}/measurement/eiger"].shape[1:]  # (H, W)
     except OSError as e:
         print(f"  ✗ Failed to read metadata for {entry}: {e} — skipping")
         return False
 
     if len(fpico6) != n_frames:
-        print(f"  ✗ Length mismatch: fpico6={len(fpico6)}, frames={n_frames} — skipping")
+        print(
+            f"  ✗ Length mismatch: fpico6={len(fpico6)}, frames={n_frames} — skipping"
+        )
         return False
 
     # Sort order (ascending rotation)
-    descending  = rot[-1] < rot[0]
-    frame_order = list(range(n_frames - 1, -1, -1)) if descending else list(range(n_frames))
-    fpico6      = fpico6[frame_order]
+    descending = rot[-1] < rot[0]
+    frame_order = (
+        list(range(n_frames - 1, -1, -1)) if descending else list(range(n_frames))
+    )
+    fpico6 = fpico6[frame_order]
 
     # ── 2. Decide thread count using frame size ───────────────────────────────
     workers = _safe_n_workers(
@@ -246,14 +270,14 @@ def _process_scan(
         requested=n_workers,
     )
 
-    sinogram  = np.empty((n_frames, n_points), dtype=np.float32)
+    sinogram = np.empty((n_frames, n_points), dtype=np.float32)
     n_batches = max(1, (n_frames + batch_size - 1) // batch_size)
 
     # ── 3. Process frame-by-frame in streaming batches ────────────────────────
     with tqdm(total=n_frames, desc=scan_name) as pbar:
         for b in range(n_batches):
             batch_start = b * batch_size
-            batch_end   = min(batch_start + batch_size, n_frames)
+            batch_end = min(batch_start + batch_size, n_frames)
             # Indices into the original (unsorted) HDF5 dataset
             batch_h5_idx = frame_order[batch_start:batch_end]
 
@@ -261,13 +285,15 @@ def _process_scan(
             # then select only the frames we actually want from that slice.
             try:
                 with h5py.File(master_file, "r") as hin:
-                    ds  = hin[f"{entry}/measurement/eiger"]
-                    lo  = min(batch_h5_idx)
-                    hi  = max(batch_h5_idx) + 1
-                    raw = ds[lo:hi].astype(np.float32)          # (≤B, H, W)
+                    ds = hin[f"{entry}/measurement/eiger"]
+                    lo = min(batch_h5_idx)
+                    hi = max(batch_h5_idx) + 1
+                    raw = ds[lo:hi].astype(np.float32)  # (≤B, H, W)
                     batch_images = raw[[j - lo for j in batch_h5_idx]]
             except OSError as e:
-                print(f"  ✗ Batch {b}: failed to read frames {batch_start}–{batch_end}: {e}")
+                print(
+                    f"  ✗ Batch {b}: failed to read frames {batch_start}–{batch_end}: {e}"
+                )
                 sinogram[batch_start:batch_end] = np.nan
                 pbar.update(batch_end - batch_start)
                 continue
@@ -278,11 +304,17 @@ def _process_scan(
             def _task(args):
                 local_jj, image, monitor = args
                 return _integrate_frame(
-                    local_jj, image, monitor,
-                    poni_file=poni_file, n_points=n_points,
-                    mask=mask, unit=unit,
-                    method=method, percentile=percentile,
-                    thres=thres, max_iter=max_iter,
+                    local_jj,
+                    image,
+                    monitor,
+                    poni_file=poni_file,
+                    n_points=n_points,
+                    mask=mask,
+                    unit=unit,
+                    method=method,
+                    percentile=percentile,
+                    thres=thres,
+                    max_iter=max_iter,
                 )
 
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -298,7 +330,7 @@ def _process_scan(
                         jj, itt = future.result()
                         sinogram[jj] = itt / itt.max()
                     except Exception as e:
-                        k  = futures[future]
+                        k = futures[future]
                         jj = batch_start + k
                         print(f"  ✗ Frame {jj} failed: {e}")
                         sinogram[jj] = np.nan
@@ -308,14 +340,14 @@ def _process_scan(
             del batch_images, raw
 
     _write_scan(
-        output_file = output_file,
-        group_path  = group_path,
-        sinogram    = sinogram,
-        entry       = entry,
-        dty_value   = dty_value,
-        master_file = master_file,
-        fpico6      = fpico6,
-        method      = method,
+        output_file=output_file,
+        group_path=group_path,
+        sinogram=sinogram,
+        entry=entry,
+        dty_value=dty_value,
+        master_file=master_file,
+        fpico6=fpico6,
+        method=method,
     )
     return True
 
@@ -324,45 +356,71 @@ def _process_scan(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _parse_args():
     p = argparse.ArgumentParser(
         description="nrxrdct powder integration worker (one SLURM job)"
     )
-    p.add_argument("--master-file",   required=True, type=Path)
-    p.add_argument("--output-file",   required=True, type=Path)
-    p.add_argument("--poni-file",     required=True, type=Path)
-    p.add_argument("--mask-file",     required=True, type=Path)
-    p.add_argument("--entry-indices", required=True,
-                   help="Comma-separated global scan indices for this job")
-    p.add_argument("--n-points",      type=int, default=1000)
-    p.add_argument("--n-workers",     type=int, default=None,
-                   help="Integration threads. Omit to auto-scale from available RAM.")
-    p.add_argument("--batch-size",    type=int, default=32,
-                   help="Frames streamed from HDF5 per batch (default: 32)")
-    p.add_argument("--unit",          default="2th_deg")
+    p.add_argument("--master-file", required=True, type=Path)
+    p.add_argument("--output-file", required=True, type=Path)
+    p.add_argument("--poni-file", required=True, type=Path)
+    p.add_argument("--mask-file", required=True, type=Path)
+    p.add_argument(
+        "--entry-indices",
+        required=True,
+        help="Comma-separated global scan indices for this job",
+    )
+    p.add_argument("--n-points", type=int, default=1000)
+    p.add_argument(
+        "--n-workers",
+        type=int,
+        default=None,
+        help="Integration threads. Omit to auto-scale from available RAM.",
+    )
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Frames streamed from HDF5 per batch (default: 32)",
+    )
+    p.add_argument("--unit", default="2th_deg")
     # ── Integration method ────────────────────────────────────────────────────
-    p.add_argument("--method",        default="standard",
-                   choices=INTEGRATION_METHODS,
-                   help=(
-                       "Integration method: "
-                       "'standard' – plain azimuthal average; "
-                       "'filter'   – percentile-based pixel rejection; "
-                       "'sigma_clip' – iterative sigma-clipping. "
-                       "(default: standard)"
-                   ))
-    p.add_argument("--percentile",    default="10,90",
-                   help="Low,high percentile for 'filter' method (default: 10,90)")
-    p.add_argument("--thres",         type=float, default=3.0,
-                   help="Sigma threshold for 'sigma_clip' method (default: 3.0)")
-    p.add_argument("--max-iter",      type=int,   default=5,
-                   help="Max iterations for 'sigma_clip' method (default: 5)")
+    p.add_argument(
+        "--method",
+        default="standard",
+        choices=INTEGRATION_METHODS,
+        help=(
+            "Integration method: "
+            "'standard' – plain azimuthal average; "
+            "'filter'   – percentile-based pixel rejection; "
+            "'sigma_clip' – iterative sigma-clipping. "
+            "(default: standard)"
+        ),
+    )
+    p.add_argument(
+        "--percentile",
+        default="10,90",
+        help="Low,high percentile for 'filter' method (default: 10,90)",
+    )
+    p.add_argument(
+        "--thres",
+        type=float,
+        default=3.0,
+        help="Sigma threshold for 'sigma_clip' method (default: 3.0)",
+    )
+    p.add_argument(
+        "--max-iter",
+        type=int,
+        default=5,
+        help="Max iterations for 'sigma_clip' method (default: 5)",
+    )
     return p.parse_args()
 
 
 def main():
-    args          = _parse_args()
+    args = _parse_args()
     entry_indices = [int(x) for x in args.entry_indices.split(",")]
-    percentile    = tuple(int(x) for x in args.percentile.split(","))
+    percentile = tuple(int(x) for x in args.percentile.split(","))
 
     print(
         f"Worker started — {len(entry_indices)} scans | "
@@ -385,21 +443,23 @@ def main():
 
     for ii in entry_indices:
         ok = _process_scan(
-            ii, valid_entries[ii], dty_values[ii],
-            master_file = args.master_file,
-            output_file = args.output_file,
-            poni_file   = args.poni_file,
-            mask        = mask,
-            n_points    = args.n_points,
-            n_workers   = args.n_workers,
-            batch_size  = args.batch_size,
-            unit        = args.unit,
-            method      = args.method,
-            percentile  = percentile,
-            thres       = args.thres,
-            max_iter    = args.max_iter,
+            ii,
+            valid_entries[ii],
+            dty_values[ii],
+            master_file=args.master_file,
+            output_file=args.output_file,
+            poni_file=args.poni_file,
+            mask=mask,
+            n_points=args.n_points,
+            n_workers=args.n_workers,
+            batch_size=args.batch_size,
+            unit=args.unit,
+            method=args.method,
+            percentile=percentile,
+            thres=args.thres,
+            max_iter=args.max_iter,
         )
-        n_ok   += ok
+        n_ok += ok
         n_fail += not ok
 
     elapsed = time.time() - t0

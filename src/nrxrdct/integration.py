@@ -13,6 +13,17 @@ from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 from tqdm import tqdm
 
 
+@lru_cache(maxsize=8)
+def _get_integrator(poni_file: str) -> AzimuthalIntegrator:
+    """
+    Load and cache an AzimuthalIntegrator for a given PONI file.
+    Avoids reloading the geometry on every integration call.
+    """
+    ai = AzimuthalIntegrator()
+    ai.load(poni_file)
+    return ai
+
+
 def cake_integration(
     image: np.ndarray,
     poni_file: str,
@@ -24,8 +35,6 @@ def cake_integration(
     flat: Optional[np.ndarray] = None,
     radial_range: Optional[Tuple[float, float]] = None,
     azimuth_range: Optional[Tuple[float, float]] = (-180, 180),
-    plot: bool = False,
-    log_scale: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Perform 2D azimuthal regrouping (CAKE) of a detector image using pyFAI.
@@ -69,8 +78,7 @@ def cake_integration(
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
 
-    ai = AzimuthalIntegrator()
-    ai.load(poni_file)
+    ai = _get_integrator(poni_file)
 
     result = ai.integrate2d(
         image,
@@ -89,21 +97,7 @@ def cake_integration(
     radial = result.radial  # shape (npt_rad,)
     azimuthal = result.azimuthal  # shape (npt_azim,)
 
-
-
     return cake, radial, azimuthal
-
-
-
-@lru_cache(maxsize=8)
-def _get_integrator(poni_file: str) -> AzimuthalIntegrator:
-    """
-    Load and cache an AzimuthalIntegrator for a given PONI file.
-    Avoids reloading the geometry on every integration call.
-    """
-    ai = AzimuthalIntegrator()
-    ai.load(poni_file)
-    return ai
 
 
 def azimuthal_integration_1d_sigma_clip(
@@ -202,19 +196,6 @@ def azimuthal_integration_1d_sigma_clip(
     return result.radial, result.intensity, result.sigma
 
 
-
-
-@lru_cache(maxsize=8)
-def _get_integrator(poni_file: str) -> AzimuthalIntegrator:
-    """
-    Load and cache an AzimuthalIntegrator for a given PONI file.
-    Avoids reloading the geometry on every integration call.
-    """
-    ai = AzimuthalIntegrator()
-    ai.load(poni_file)
-    return ai
-
-
 def azimuthal_integration_1d(
     image: np.ndarray,
     poni_file: str,
@@ -283,9 +264,9 @@ def azimuthal_integration_1d(
         raise ValueError(f"image must be 2D, got shape {image.shape}")
 
     ai = _get_integrator(poni_file)
-
+    _, low = ai.separate(image)
     result = ai.integrate1d(
-        image,
+        low,
         npt=npt,
         unit=unit,
         mask=mask,
@@ -311,7 +292,7 @@ def azimuthal_integration_1d_filter(
     error_model: Optional[str] = None,
     radial_range: Optional[Tuple[float, float]] = None,
     azimuth_range: Optional[Tuple[float, float]] = None,
-    percentile: Tuple[float, float] = (10, 90),
+    percentile: Tuple[float, float] = (0, 99),
 ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """
     Perform 1D azimuthal integration with percentile filtering using pyFAI.
@@ -394,103 +375,6 @@ def azimuthal_integration_1d_filter(
     return result.radial, result.intensity, result.sigma
 
 
-def azimuthal_integration_1d_sigma_clip(
-    image: np.ndarray,
-    poni_file: str,
-    npt: int = 1000,
-    unit: str = "2th_deg",
-    mask: Optional[np.ndarray] = None,
-    dark: Optional[np.ndarray] = None,
-    flat: Optional[np.ndarray] = None,
-    error_model: Optional[str] = "hybrid",
-    radial_range: Optional[Tuple[float, float]] = None,
-    azimuth_range: Optional[Tuple[float, float]] = None,
-    thres: float = 3.0,
-    max_iter: int = 5,
-) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
-    """
-    Perform 1D azimuthal integration with sigma-clipping using pyFAI.
-
-    Iteratively removes pixels whose intensity deviates more than `thres`
-    standard deviations from the bin mean. Useful for rejecting hot pixels,
-    zingers, and single-crystal spots from a polycrystalline background.
-
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image as a numpy array.
-    poni_file : str
-        Path to the PONI (Point Of Normal Incidence) calibration file.
-    npt : int, optional
-        Number of radial bins in the output pattern (default: 1000).
-    unit : str, optional
-        Output radial unit:
-            "2th_deg" – two-theta in degrees (default)
-            "q_A^-1"  – scattering vector q in Å⁻¹
-            "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_rad" – two-theta in radians
-            "r_mm"    – radius on detector in mm
-    mask : np.ndarray, optional
-        2D mask array (1 = masked/ignored, 0 = valid).
-    dark : np.ndarray, optional
-        Dark-current image to subtract before integration.
-    flat : np.ndarray, optional
-        Flat-field image for pixel-efficiency correction.
-    error_model : str, optional
-        Error model for uncertainty propagation.
-        "hybrid"  – combines Poisson and readout noise (default).
-        "poisson" – pure photon-counting noise.
-    radial_range : tuple of (float, float), optional
-        (min, max) radial range in the chosen unit.
-    azimuth_range : tuple of (float, float), optional
-        (min, max) azimuthal range in degrees, e.g. (-180, 180).
-    thres : float, optional
-        Clipping threshold in standard deviations (default: 3.0).
-    max_iter : int, optional
-        Maximum number of sigma-clipping iterations (default: 5).
-
-    Returns
-    -------
-    radial : np.ndarray
-        Radial axis values in the requested unit, shape (npt,).
-    intensity : np.ndarray
-        Clipped integrated intensity at each radial position, shape (npt,).
-    sigma : np.ndarray or None
-        Per-bin uncertainty (only when error_model is set).
-
-    Raises
-    ------
-    ValueError
-        If the image is not 2-dimensional.
-
-    Examples
-    --------
-    >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
-    >>> q, I, sigma = azimuthal_integration_1d_sigma_clip(image, "detector.poni", npt=500)
-    >>> print(q.shape, I.shape)  # (500,) (500,)
-    """
-    if image.ndim != 2:
-        raise ValueError(f"image must be 2D, got shape {image.shape}")
-
-    ai = _get_integrator(poni_file)
-
-    result = ai.sigma_clip(
-        image,
-        npt=npt,
-        unit=unit,
-        mask=mask,
-        dark=dark,
-        flat=flat,
-        error_model=error_model,
-        radial_range=radial_range,
-        azimuth_range=azimuth_range,
-        thres=thres,
-        max_iter=max_iter,
-        method=("no", "csr", "cython"),
-    )
-
-    return result.radial, result.intensity, result.sigma
-
 def integrate_powder_parallel(
     master_file: Path,
     output_file: Path,
@@ -500,8 +384,8 @@ def integrate_powder_parallel(
     n_points: int = 1000,
     n_workers: int = 16,
     unit: str = "2th_deg",
-    remove_spots:bool = False, 
-    percentile:tuple = (10, 90)
+    remove_spots: bool = False,
+    percentile: tuple = (10, 90),
 ):
     """
     Perform parallel 1D azimuthal integration reading image stacks directly
@@ -554,12 +438,26 @@ def integrate_powder_parallel(
     with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
 
         if "integrated/radial" not in hout:
-            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
-            tt, _, _ = azimuthal_integration_1d(
-                image=first_image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
+            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(
+                np.float32
             )
-            mascake = cake_integration(np.ones_like(first_image)*10, poni_file, npt_rad=n_points, mask=mask)[0]>0
-            hout['integrated/cake_mask'] = mascake
+            tt, _, _ = azimuthal_integration_1d(
+                image=first_image,
+                poni_file=poni_file,
+                npt=n_points,
+                mask=mask,
+                unit=unit,
+            )
+            mascake = (
+                cake_integration(
+                    np.ones_like(first_image) * 10,
+                    poni_file,
+                    npt_rad=n_points,
+                    mask=mask,
+                )[0]
+                > 0
+            )
+            hout["integrated/cake_mask"] = mascake
             hout["integrated/radial"] = tt
             hout["integrated/radial"].attrs["unit"] = unit
 
@@ -575,21 +473,30 @@ def integrate_powder_parallel(
         jj, image, monitor = args
         if remove_spots:
 
-            _, itt, _ = azimuthal_integration_1d_filter(image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit, percentile=percentile)
-                        
+            _, itt, _ = azimuthal_integration_1d_filter(
+                image=image,
+                poni_file=poni_file,
+                npt=n_points,
+                mask=mask,
+                unit=unit,
+                percentile=percentile,
+            )
+
         else:
             _, itt, _ = azimuthal_integration_1d(
                 image=image, poni_file=poni_file, npt=n_points, mask=mask, unit=unit
             )
         if monitor <= 0:
-            print(f"  ⚠  Frame {jj}: fpico6 monitor value is {monitor:.4g}, skipping normalisation")
+            print(
+                f"  ⚠  Frame {jj}: fpico6 monitor value is {monitor:.4g}, skipping normalisation"
+            )
             return jj, itt
         return jj, itt / monitor
 
     # ── Main loop over master file entries ────────────────────────────────────
     for ii, entry in enumerate(valid_entries):
 
-        scan_name  = f"scan_{ii:04d}"
+        scan_name = f"scan_{ii:04d}"
         group_path = f"integrated/{scan_name}"
 
         with h5py.File(output_file, "r") as hout:
@@ -597,13 +504,15 @@ def integrate_powder_parallel(
                 print(f"Skipping {scan_name} (already done)")
                 continue
 
-        print(f"\n{'='*60}\nProcessing {scan_name} — entry {entry}  [{ii+1}/{len(valid_entries)}]\n{'='*60}")
+        print(
+            f"\n{'='*60}\nProcessing {scan_name} — entry {entry}  [{ii+1}/{len(valid_entries)}]\n{'='*60}"
+        )
 
         try:
             with h5py.File(master_file, "r") as hin:
-                images  = hin[f"{entry}/measurement/eiger"][:].astype(np.float32)
-                fpico6  = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
-                rot     = hin[f"{entry}/measurement/rot"][:]
+                images = hin[f"{entry}/measurement/eiger"][:].astype(np.float32)
+                fpico6 = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
+                rot = hin[f"{entry}/measurement/rot"][:]
         except OSError as e:
             print(f"  ✗ Failed to read entry {entry}: {e} — skipping")
             continue
@@ -615,11 +524,13 @@ def integrate_powder_parallel(
 
         # Sanity check lengths match
         if len(fpico6) != len(images):
-            print(f"  ✗ Entry {entry}: fpico6 length {len(fpico6)} != images length {len(images)} — skipping")
+            print(
+                f"  ✗ Entry {entry}: fpico6 length {len(fpico6)} != images length {len(images)} — skipping"
+            )
             continue
 
         n_frames = len(images)
-        sinogram  = np.empty((n_frames, n_points), dtype=np.float32)
+        sinogram = np.empty((n_frames, n_points), dtype=np.float32)
 
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
             futures = {
@@ -642,15 +553,14 @@ def integrate_powder_parallel(
                 compression_opts=4,
                 chunks=(1, n_points),
             )
-            ds.attrs["entry"]          = entry
-            ds.attrs["dty"]            = dty_values[ii]
-            ds.attrs["source"]         = str(master_file)
-            ds.attrs["fpico6_mean"]    = float(np.mean(fpico6))
-            ds.attrs["fpico6_min"]     = float(np.min(fpico6))
-            ds.attrs["fpico6_max"]     = float(np.max(fpico6))
-            ds.attrs["normalised_by"]  = "fpico6"
-            ds.attrs["valid"]          = True
+            ds.attrs["entry"] = entry
+            ds.attrs["dty"] = dty_values[ii]
+            ds.attrs["source"] = str(master_file)
+            ds.attrs["fpico6_mean"] = float(np.mean(fpico6))
+            ds.attrs["fpico6_min"] = float(np.min(fpico6))
+            ds.attrs["fpico6_max"] = float(np.max(fpico6))
+            ds.attrs["normalised_by"] = "fpico6"
+            ds.attrs["valid"] = True
 
     elapsed = time.time() - t0
     print(f"\nDone in {elapsed:.1f} s  ({elapsed/len(valid_entries):.1f} s/scan).")
-

@@ -15,7 +15,6 @@ CLI
 
 from .check_output import check, rebuild, repair  # noqa: F401
 from .launch_jobs import launch  # noqa: F401
-
-# from .monitor import monitor  # noqa: F401
+from .monitor import monitor  # noqa: F401
 
 __all__ = ["launch", "check", "repair", "rebuild", "monitor"]

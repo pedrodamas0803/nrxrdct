@@ -86,6 +86,7 @@ def _resubmit(
     master_file: Path,
     poni_file: Path,
     mask_file: Path,
+    n_jobs: int,
     n_points: int,
     n_workers: int | None,
     batch_size: int,
@@ -101,42 +102,61 @@ def _resubmit(
     gpu: bool,
     env_activate: Path | None,
     conda_env: str | None,
-) -> str:
-    """Submit a single sbatch repair job covering all needs_rerun indices."""
-    from .launch_jobs import _submit_job
+) -> list[str]:
+    """
+    Submit one or more sbatch repair jobs covering all needs_rerun indices.
+
+    If n_jobs > 1, the indices are split into chunks (same logic as launch())
+    and one job is submitted per chunk. Returns a list of SLURM job IDs.
+    """
+    import math
+
+    from .launch_jobs import _split_indices, _submit_job
 
     log_dir = output_file.parent / "slurm_logs"
     log_dir.mkdir(exist_ok=True)
 
-    existing            = sorted(log_dir.glob("job_*.sh"))
-    job_id              = len(existing)
     effective_n_workers = n_workers if n_workers is not None else cpus
 
-    slurm_id = _submit_job(
-        job_id,
-        needs_rerun,
-        master_file  = master_file,
-        output_file  = output_file,
-        poni_file    = poni_file,
-        mask_file    = mask_file,
-        n_points     = n_points,
-        n_workers    = effective_n_workers,
-        batch_size   = batch_size,
-        unit         = unit,
-        method       = method,
-        percentile   = percentile,
-        thres        = thres,
-        max_iter     = max_iter,
-        partition    = partition,
-        time         = time,
-        mem          = mem,
-        cpus         = cpus,
-        gpu          = gpu,
-        env_activate = env_activate,
-        conda_env    = conda_env,
-        log_dir      = log_dir,
-    )
-    return slurm_id
+    # Split into at most n_jobs chunks (may be fewer if n_jobs > len(needs_rerun))
+    actual_n_jobs = min(n_jobs, len(needs_rerun))
+    chunks        = _split_indices(len(needs_rerun), actual_n_jobs)
+    # _split_indices works on range(n), remap to actual indices
+    chunks        = [[needs_rerun[i] for i in chunk] for chunk in chunks]
+
+    # Start job_id counter after existing scripts to avoid collisions
+    existing = sorted(log_dir.glob("job_*.sh"))
+    base_id  = len(existing)
+
+    slurm_ids = []
+    for offset, chunk in enumerate(chunks):
+        slurm_id = _submit_job(
+            base_id + offset,
+            chunk,
+            master_file  = master_file,
+            output_file  = output_file,
+            poni_file    = poni_file,
+            mask_file    = mask_file,
+            n_points     = n_points,
+            n_workers    = effective_n_workers,
+            batch_size   = batch_size,
+            unit         = unit,
+            method       = method,
+            percentile   = percentile,
+            thres        = thres,
+            max_iter     = max_iter,
+            partition    = partition,
+            time         = time,
+            mem          = mem,
+            cpus         = cpus,
+            gpu          = gpu,
+            env_activate = env_activate,
+            conda_env    = conda_env,
+            log_dir      = log_dir,
+        )
+        slurm_ids.append(slurm_id)
+
+    return slurm_ids
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +171,7 @@ def check(
     master_file: Path | None = None,
     poni_file: Path | None = None,
     mask_file: Path | None = None,
+    n_jobs: int = 1,
     n_points: int = 1000,
     n_workers: int | None = None,
     batch_size: int = 32,
@@ -166,6 +187,8 @@ def check(
     gpu: bool = False,
     env_activate: Path | None = None,
     conda_env: str | None = None,
+    watch: bool = False,
+    interval: int = 30,
 ) -> dict:
     """
     Verify completeness of the output HDF5 file.
@@ -177,14 +200,22 @@ def check(
         Print the ``--entry-indices`` hint needed to rerun missing/corrupted
         scans manually.
     repair      : bool
-        Automatically delete corrupted datasets and submit a new SLURM job
-        to reintegrate all missing and corrupted scans.
+        Automatically delete corrupted datasets and submit SLURM jobs to
+        reintegrate all missing and corrupted scans.
         Requires master_file, poni_file, and mask_file.
+    n_jobs      : int
+        Number of SLURM jobs to split the repair work across (default: 1).
+        Useful when many scans need reintegrating after a rebuild.
+    watch       : bool
+        If True, block after submitting repair jobs and poll until they all
+        finish (passed to ``monitor()``). Default: False.
+    interval    : int
+        Polling interval in seconds when watch=True (default: 30).
 
     Returns
     -------
     dict with keys 'n_expected', 'present', 'missing', 'corrupted',
-    'nan_scans', and (if repair=True) 'repair_job_id'.
+    'nan_scans', and (if repair=True) 'repair_job_ids'.
     """
     output_file = Path(output_file)
 
@@ -299,7 +330,7 @@ def check(
         )
 
     # ── 3b. Auto-repair ───────────────────────────────────────────────────────
-    repair_job_id = None
+    repair_job_ids = []
     if repair and needs_rerun:
         print(f"\n🔧  Repair mode: fixing {len(needs_rerun)} scans "
               f"(missing={len(missing)}, corrupted={len(corrupted)})")
@@ -309,14 +340,15 @@ def check(
             print("  Deleting corrupted datasets...")
             _delete_datasets(output_file, corrupted)
 
-        # Submit one repair job covering everything that needs rerunning
-        print(f"  Submitting repair job for indices: {needs_rerun}")
-        repair_job_id = _resubmit(
+        # Submit repair jobs — split across n_jobs if requested
+        print(f"  Submitting {n_jobs} repair job(s) for {len(needs_rerun)} scans...")
+        repair_job_ids = _resubmit(
             output_file  = output_file,
             needs_rerun  = needs_rerun,
             master_file  = Path(master_file),
             poni_file    = Path(poni_file),
             mask_file    = Path(mask_file),
+            n_jobs       = n_jobs,
             n_points     = n_points,
             n_workers    = n_workers,
             batch_size   = batch_size,
@@ -333,8 +365,18 @@ def check(
             env_activate = env_activate,
             conda_env    = conda_env,
         )
-        print(f"\n✓  Repair job submitted — SLURM ID: {repair_job_id}")
-        print(f"   Re-run check() after it completes to verify.")
+        print(f"\n✓  {len(repair_job_ids)} repair job(s) submitted — "
+              f"SLURM IDs: {', '.join(repair_job_ids)}")
+        print(f"   Re-run check() after they complete to verify.")
+
+        if watch:
+            from .monitor import monitor as _monitor
+            _monitor(
+                slurm_ids   = repair_job_ids,
+                output_file = output_file,
+                watch       = True,
+                interval    = interval,
+            )
 
     elif repair and not needs_rerun:
         print("\n✓  Nothing to repair.")
@@ -348,7 +390,7 @@ def check(
         "needs_rerun":   needs_rerun,
     }
     if repair:
-        result["repair_job_id"] = repair_job_id
+        result["repair_job_ids"] = repair_job_ids if needs_rerun else []
     return result
 
 
@@ -361,13 +403,26 @@ def repair(
     master_file: Path,
     poni_file: Path,
     mask_file: Path,
+    *,
+    n_jobs: int = 1,
+    watch: bool = False,
+    interval: int = 30,
     **kwargs,
 ) -> dict:
     """
     Shorthand for ``check(..., repair=True)``.
 
     Detects missing and corrupted scans, deletes the broken HDF5 datasets,
-    and submits a single SLURM repair job — all in one call.
+    and submits SLURM repair jobs — all in one call.
+
+    Parameters
+    ----------
+    n_jobs   : int
+        Number of SLURM jobs to split the repair work across (default: 1).
+    watch    : bool
+        If True, block until all repair jobs finish (default: False).
+    interval : int
+        Polling interval in seconds when watch=True (default: 30).
 
     Example
     -------
@@ -378,6 +433,8 @@ def repair(
             master_file = Path("master.h5"),
             poni_file   = Path("calib.poni"),
             mask_file   = Path("mask.edf"),
+            n_jobs      = 4,
+            watch       = True,
             partition   = "cpu",
             conda_env   = "nrxrdct",
         )
@@ -388,6 +445,9 @@ def repair(
         master_file = master_file,
         poni_file   = poni_file,
         mask_file   = mask_file,
+        n_jobs      = n_jobs,
+        watch       = watch,
+        interval    = interval,
         **kwargs,
     )
 
@@ -399,6 +459,9 @@ def rebuild(
     mask_file: Path,
     *,
     rebuilt_file: Path | None = None,
+    n_jobs: int = 1,
+    watch: bool = False,
+    interval: int = 30,
     **kwargs,
 ) -> dict:
     """
@@ -524,6 +587,9 @@ def rebuild(
         master_file = master_file,
         poni_file   = poni_file,
         mask_file   = mask_file,
+        n_jobs      = n_jobs,
+        watch       = watch,
+        interval    = interval,
         **kwargs,
     )
 
@@ -542,7 +608,9 @@ def _build_parser(sub=None):
 
     repair = p.add_argument_group("repair mode (auto-fix)")
     repair.add_argument("--repair",       action="store_true",
-                        help="Delete corrupted datasets and submit a repair SLURM job")
+                        help="Delete corrupted datasets and submit repair SLURM job(s)")
+    repair.add_argument("--n-jobs",       type=int, default=1,
+                        help="Number of SLURM jobs to split repair work across (default: 1)")
     repair.add_argument("--master-file",  type=Path, default=None)
     repair.add_argument("--poni-file",    type=Path, default=None)
     repair.add_argument("--mask-file",    type=Path, default=None)
@@ -566,6 +634,10 @@ def _build_parser(sub=None):
     repair.add_argument("--gpu",          action="store_true")
     repair.add_argument("--env-activate", type=Path, default=None)
     repair.add_argument("--conda-env",    default=None)
+    repair.add_argument("--watch",        action="store_true",
+                        help="Block until repair jobs finish (calls monitor internally)")
+    repair.add_argument("--interval",     type=int, default=30,
+                        help="Polling interval in seconds when --watch is set (default: 30)")
     return p
 
 
@@ -578,6 +650,7 @@ def _cli_check(args):
         master_file  = args.master_file,
         poni_file    = args.poni_file,
         mask_file    = args.mask_file,
+        n_jobs       = args.n_jobs,
         n_points     = args.n_points,
         n_workers    = args.n_workers,
         batch_size   = args.batch_size,
@@ -593,6 +666,8 @@ def _cli_check(args):
         gpu          = args.gpu,
         env_activate = args.env_activate,
         conda_env    = args.conda_env,
+        watch        = args.watch,
+        interval     = args.interval,
     )
 
 

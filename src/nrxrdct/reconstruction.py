@@ -8,6 +8,7 @@ import h5py
 import hdf5plugin
 import numpy as np
 from GSASII import GSASIIscriptable as G2sc
+from scipy.ndimage import gaussian_filter
 from tqdm.auto import tqdm
 
 from .io import save_sinogram, save_xy_file
@@ -16,6 +17,7 @@ from .utils import calculate_padding_widths_2D
 
 HAS_GPU = True if "nvidia" in astra.get_gpu_info().lower() else False
 NTHREADS = os.cpu_count() - 2
+
 
 def reconstruct_astra_gpu_3d(
     data: np.ndarray,
@@ -67,7 +69,9 @@ def reconstruct_astra_gpu_3d(
     if algo not in valid_algos:
         raise ValueError(f"Unsupported algorithm '{algo}'. Choose from {valid_algos}.")
 
-    proj_geom = astra.create_proj_geom("parallel3d", dty_step, dty_step, num_slices, num_det_x, angles_rad)
+    proj_geom = astra.create_proj_geom(
+        "parallel3d", dty_step, dty_step, num_slices, num_det_x, angles_rad
+    )
     vol_geom = astra.create_vol_geom(num_det_x, num_det_x, num_slices)
 
     proj_id = astra.data3d.create("-proj3d", proj_geom, data)
@@ -237,7 +241,9 @@ def reconstruct_slice(
     return slc
 
 
-def assemble_sinogram(integrated_file: Path, n_rot: int, n_tth_angles: int):
+def assemble_sinogram(
+    integrated_file: Path, n_rot: int, n_tth_angles: int, n_lines: int = 10
+):
 
     with h5py.File(integrated_file, "r") as hin:
         keys = list(hin["integrated"].keys())
@@ -245,6 +251,9 @@ def assemble_sinogram(integrated_file: Path, n_rot: int, n_tth_angles: int):
         sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
         for ii, scan in enumerate(valid_keys):
             im = hin[f"integrated/{scan}"][:]
+            bkg = gaussian_filter(im, (10, 100))
+            im -= bkg
+
             padding_width = calculate_padding_widths_2D(im.shape, (n_rot, n_tth_angles))
             im = np.pad(im, padding_width)
             sino[ii] = im

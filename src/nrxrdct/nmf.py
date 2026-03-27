@@ -13,7 +13,7 @@ def nmf_sklearn_hyperspectral(
     unit_name="Wavelength (nm)",
     loss="frobenius",  # "frobenius" or "kullback-leibler"
     solver=None,  # None -> pick default based on loss
-    init="nndsvda",
+    init="nndsvdar",
     max_iter=1000,
     random_state=0,
     l1_ratio=0.0,

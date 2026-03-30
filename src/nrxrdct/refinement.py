@@ -1,3 +1,12 @@
+"""
+GSAS-II Rietveld refinement wrappers for XRD-CT data.
+
+Provides :class:`BaseRefinement`, a :class:`~nrxrdct.parameters.Scan` subclass
+that drives sequential GSAS-II refinement steps (background, scale, zero shift,
+peak broadening, cell, preferred orientation, crystallite size, microstrain,
+extinction), and :class:`InstrumentCalibration`, a specialised subclass for
+calibrant-based instrument parameter calibration with dedicated plotting.
+"""
 import os
 import sys
 from pathlib import Path
@@ -15,6 +24,13 @@ COLORS = ["magenta", "darkgreen", "blue", "red"]
 
 
 class BaseRefinement(Scan):
+    """
+    Base class for GSAS-II Rietveld refinement of a single powder pattern.
+
+    Inherits scan geometry from :class:`~nrxrdct.parameters.Scan` and layers on
+    top a GSAS-II project (``self.gpx``) with methods for each common refinement
+    step.  Subclass or use directly for calibrant and sample refinements.
+    """
 
     def __init__(
         self,
@@ -31,6 +47,36 @@ class BaseRefinement(Scan):
         param_file: Path = Path("calibrated_instrument.instprm"),
         polarization: float = 0.99,
     ):
+        """
+        Parameters
+        ----------
+        acquisition_file : Path
+            Raw acquisition data file (passed to :class:`~nrxrdct.parameters.Scan`).
+        sample_name : str
+            Sample identifier used in output file names.
+        scan_type : str, optional
+            Scan geometry (default ``"half-turn"``).
+        translation_motor : str, optional
+            Inner-loop translation motor name (default ``"dty"``).
+        rotation_motor : str, optional
+            Rotation motor name (default ``"rot"``).
+        outer_loop_motor : str, optional
+            Outer-loop motor name (default ``"translation"``).
+        beam_size : float, optional
+            Beam size in metres (default 100 µm).
+        beam_energy : float, optional
+            Beam energy in keV (default 44).
+        tth_lims : tuple of (float or None, float or None), optional
+            ``(low, high)`` 2θ limits in degrees.  ``None`` means use the
+            pattern extent (default ``(None, None)``).
+        xy_file : Path, optional
+            Integrated pattern to fit (default ``"integrated_data.xy"``).
+        param_file : Path, optional
+            Calibrated ``.instprm`` file (default ``"calibrated_instrument.instprm"``).
+        polarization : float, optional
+            Beam polarization fraction used when writing the starting instrument
+            parameter file (default 0.99).
+        """
         super().__init__(
             acquisition_file,
             sample_name,
@@ -58,7 +104,19 @@ class BaseRefinement(Scan):
         )
 
     def create_model(self, gpx_file: Path = Path("model.gpx")):
+        """
+        Create a new GSAS-II project and add the powder histogram.
 
+        Parameters
+        ----------
+        gpx_file : Path, optional
+            Output ``.gpx`` file path (default ``"model.gpx"``).
+
+        Returns
+        -------
+        tuple
+            ``(gpx, hist)`` — the :class:`G2Project` and the added histogram object.
+        """
         self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
         self.hist = self.gpx.add_powder_histogram(
@@ -74,6 +132,24 @@ class BaseRefinement(Scan):
         phase_name: str = "LaB6",
         block_cell: bool = True,
     ):
+        """
+        Add a crystallographic phase from a CIF file to the GSAS-II project.
+
+        Parameters
+        ----------
+        cif_file : Path, optional
+            Path to the CIF file (default ``"cif_file"``).
+        phase_name : str, optional
+            Name to assign the phase in GSAS-II (default ``"LaB6"``).
+        block_cell : bool, optional
+            If ``True``, fixes all atom positions and the unit cell so only
+            instrumental parameters are refined in subsequent steps (default ``True``).
+
+        Returns
+        -------
+        G2Phase
+            The newly added GSAS-II phase object.
+        """
         self.calibrant_composition = phase_name
         self.phase = self.gpx.add_phase(
             str(cif_file), phasename=phase_name, histograms=[self.hist]
@@ -87,6 +163,16 @@ class BaseRefinement(Scan):
         return self.phase
 
     def refine_background(self, number_coeff: int = 12, do_refine: bool = True):
+        """
+        Refine the Chebyshev polynomial background.
+
+        Parameters
+        ----------
+        number_coeff : int, optional
+            Number of polynomial coefficients (default 12).
+        do_refine : bool, optional
+            Whether to activate the background refinement flag (default ``True``).
+        """
         # Step 6.1: Background
         self.hist.set_refinements(
             {"Background": {"no. coeffs": number_coeff, "refine": do_refine}}
@@ -96,12 +182,14 @@ class BaseRefinement(Scan):
         print("Background refinement performed")
 
     def refine_scale(self):
+        """Refine the overall histogram scale factor."""
         self.hist.SampleParameters["Scale"][1] = True
         self.gpx.save()
         self.gpx.do_refinements([{}])
         print("Scale refinement done")
 
     def refine_zero_shift(self):
+        """Refine the 2θ zero-shift instrument parameter."""
         self.hist.set_refinements({"Instrument Parameters": ["Zero"]})
         self.gpx.save()
         self.gpx.do_refinements([{}])
@@ -320,12 +408,14 @@ class BaseRefinement(Scan):
             self.gpx.do_refinements([{}])
 
     def refine_extinction(self):
+        """Refine the extinction parameter for all phases."""
         for ph in self.gpx.phases():
             ph.set_HAP_refinements({"Extinction": True}, histograms=[self.hist])
             self.gpx.save()
             self.gpx.do_refinements([{}])
 
     def print_refinement_results(self):
+        """Print a summary of calibrated instrument parameters and per-phase cell results to stdout."""
         print("\n" + "=" * 60)
         print("REFINEMENT RESULTS")
         print("=" * 60)
@@ -360,7 +450,16 @@ class BaseRefinement(Scan):
     def plot_results(
         self, image_path: Path = "calibration_plot.png", show: bool = True
     ):
+        """
+        Plot the Rietveld fit (observed / calculated / difference) and save to disk.
 
+        Parameters
+        ----------
+        image_path : Path, optional
+            Output image file (default ``"calibration_plot.png"``).
+        show : bool, optional
+            If ``True``, call ``plt.show()`` after saving (default ``True``).
+        """
         wR = self.hist.get_wR()
         print("\n" + "=" * 60)
         print("Generating calibration plot")
@@ -431,6 +530,13 @@ class BaseRefinement(Scan):
 
 
 class InstrumentCalibration(BaseRefinement):
+    """
+    Specialised refinement class for instrument calibration using a known calibrant.
+
+    Extends :class:`BaseRefinement` with output paths routed to a ``calibration/``
+    sub-folder, a dedicated method to export the calibrated ``.instprm`` file, and
+    a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).
+    """
 
     def __init__(
         self,
@@ -448,6 +554,38 @@ class InstrumentCalibration(BaseRefinement):
         polarization=0.99,
         image_file: Path = Path("calibration_results.png"),
     ):
+        """
+        Parameters
+        ----------
+        acquisition_file : Path
+            Raw acquisition data file.
+        sample_name : str
+            Sample / calibrant identifier.
+        scan_type : str, optional
+            Scan geometry (default ``"half-turn"``).
+        translation_motor : str, optional
+            Inner-loop translation motor name (default ``"dty"``).
+        rotation_motor : str, optional
+            Rotation motor name (default ``"rot"``).
+        outer_loop_motor : str, optional
+            Outer-loop motor name (default ``"translation"``).
+        beam_size : float, optional
+            Beam size in metres (default 100 µm).
+        beam_energy : float, optional
+            Beam energy in keV (default 44).
+        tth_lims : tuple, optional
+            ``(low, high)`` 2θ limits in degrees (default ``(None, None)``).
+        xy_file : Path, optional
+            Integrated calibrant pattern (default ``"integrated_data.xy"``).
+        param_file : Path, optional
+            Base name for the calibrated ``.instprm`` output inside ``calibration/``
+            (default ``"calibrated_instrument.instprm"``).
+        polarization : float, optional
+            Beam polarization fraction (default 0.99).
+        image_file : Path, optional
+            Base name for the calibration plot inside ``calibration/``
+            (default ``"calibration_results.png"``).
+        """
         super().__init__(
             acquisition_file,
             sample_name,
@@ -516,6 +654,12 @@ class InstrumentCalibration(BaseRefinement):
                     print(f"    {k} = {v}")
 
     def write_calibrated_instrument_pars(self):
+        """
+        Export the refined instrument parameters to a GSAS-II ``.instprm`` file.
+
+        The file is written to ``calibration/<param_file>`` and the calibrated
+        values are also printed to stdout for quick verification.
+        """
         print("\n" + "=" * 60)
         print("EXPORTING CALIBRATED INSTPRM")
         print("=" * 60)
@@ -562,7 +706,19 @@ class InstrumentCalibration(BaseRefinement):
         )
 
     def plot_calibration_results(self, show: bool = True):
+        """
+        Generate and save a multi-panel calibration diagnostic figure.
 
+        The figure contains: the Rietveld fit with reflection markers; an
+        observed-minus-calculated difference plot; a bar chart of the key
+        refined parameters; a FWHM-vs-2θ model plot; and a parameter table.
+        The image is saved to ``calibration/<image_file>``.
+
+        Parameters
+        ----------
+        show : bool, optional
+            If ``True``, call ``plt.show()`` after saving (default ``True``).
+        """
         ip = self.hist["Instrument Parameters"][0]
         params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
         calibrated = {}

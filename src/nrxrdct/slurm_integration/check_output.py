@@ -20,7 +20,7 @@ Python API
         master_file  = Path("master.h5"),
         poni_file    = Path("calib.poni"),
         mask_file    = Path("mask.edf"),
-        partition    = "cpu",
+        partition    = "nice",
         conda_env    = "nrxrdct",
     )
 
@@ -180,7 +180,7 @@ def check(
     percentile: tuple = (10, 90),
     thres: float = 3.0,
     max_iter: int = 5,
-    partition: str = "cpu",
+    partition: str = "nice",
     time: str = "04:00:00",
     mem: str = "32G",
     cpus: int = 16,
@@ -196,26 +196,66 @@ def check(
     Parameters
     ----------
     output_file : Path
-    resubmit    : bool
+        Path to the output HDF5 file produced by ``launch()``.
+    resubmit : bool, optional
         Print the ``--entry-indices`` hint needed to rerun missing/corrupted
-        scans manually.
-    repair      : bool
+        scans manually (default ``False``).
+    repair : bool, optional
         Automatically delete corrupted datasets and submit SLURM jobs to
-        reintegrate all missing and corrupted scans.
-        Requires master_file, poni_file, and mask_file.
-    n_jobs      : int
-        Number of SLURM jobs to split the repair work across (default: 1).
-        Useful when many scans need reintegrating after a rebuild.
-    watch       : bool
-        If True, block after submitting repair jobs and poll until they all
-        finish (passed to ``monitor()``). Default: False.
-    interval    : int
-        Polling interval in seconds when watch=True (default: 30).
+        reintegrate all missing and corrupted scans.  Requires *master_file*,
+        *poni_file*, and *mask_file* (default ``False``).
+    master_file : Path or None, optional
+        Original acquisition HDF5 master file; required when *repair* is ``True``.
+    poni_file : Path or None, optional
+        pyFAI ``.poni`` calibration file; required when *repair* is ``True``.
+    mask_file : Path or None, optional
+        Detector mask file; required when *repair* is ``True``.
+    n_jobs : int, optional
+        Number of SLURM jobs to split repair work across (default 1).
+    n_points : int, optional
+        Number of radial bins for repair integration (default 1000).
+    n_workers : int or None, optional
+        Integration threads per repair job; ``None`` auto-scales from RAM.
+    batch_size : int, optional
+        Frames streamed per batch in the repair worker (default 32).
+    unit : str, optional
+        Radial unit for repair integration (default ``"2th_deg"``).
+    method : str, optional
+        Integration method for repair: ``"standard"``, ``"filter"``, or
+        ``"sigma_clip"`` (default ``"standard"``).
+    percentile : tuple of (float, float), optional
+        Percentile bounds used when *method* is ``"filter"`` (default ``(10, 90)``).
+    thres : float, optional
+        Sigma threshold used when *method* is ``"sigma_clip"`` (default 3.0).
+    max_iter : int, optional
+        Maximum sigma-clipping iterations (default 5).
+    partition : str, optional
+        SLURM partition for repair jobs (default ``"nice"``).
+    time : str, optional
+        SLURM wall-time limit for repair jobs (default ``"04:00:00"``).
+    mem : str, optional
+        SLURM memory request for repair jobs (default ``"32G"``).
+    cpus : int, optional
+        CPUs per repair job (default 16).
+    gpu : bool, optional
+        Request a GPU node for repair jobs (default ``False``).
+    env_activate : Path or None, optional
+        Path to a shell activate script sourced before the worker command.
+    conda_env : str or None, optional
+        Conda environment name used via ``conda run`` (alternative to *env_activate*).
+    watch : bool, optional
+        If ``True``, block after submitting repair jobs and poll until they all
+        finish via :func:`~nrxrdct.slurm_integration.monitor.monitor`
+        (default ``False``).
+    interval : int, optional
+        Polling interval in seconds when *watch* is ``True`` (default 30).
 
     Returns
     -------
-    dict with keys 'n_expected', 'present', 'missing', 'corrupted',
-    'nan_scans', and (if repair=True) 'repair_job_ids'.
+    dict
+        Keys: ``"n_expected"``, ``"present"``, ``"missing"``, ``"corrupted"``,
+        ``"nan_scans"``, ``"needs_rerun"``, and (if *repair* is ``True``)
+        ``"repair_job_ids"``.
     """
     output_file = Path(output_file)
 
@@ -435,7 +475,7 @@ def repair(
             mask_file   = Path("mask.edf"),
             n_jobs      = 4,
             watch       = True,
-            partition   = "cpu",
+            partition   = "nice",
             conda_env   = "nrxrdct",
         )
     """
@@ -598,6 +638,7 @@ def rebuild(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_parser(sub=None):
+    """Build the ``check`` sub-command argument parser, attaching it to *sub* if provided."""
     import argparse
     desc = "Verify (and optionally repair) the output HDF5 file"
     p = sub.add_parser("check", help=desc, description=desc) if sub else argparse.ArgumentParser(description=desc)
@@ -627,7 +668,7 @@ def _build_parser(sub=None):
                         help="Sigma threshold for 'sigma_clip' method")
     repair.add_argument("--max-iter",     type=int,   default=5,
                         help="Max iterations for 'sigma_clip' method")
-    repair.add_argument("--partition",    default="cpu")
+    repair.add_argument("--partition",    default="nice")
     repair.add_argument("--time",         default="04:00:00")
     repair.add_argument("--mem",          default="32G")
     repair.add_argument("--cpus",         type=int, default=16)
@@ -642,6 +683,7 @@ def _build_parser(sub=None):
 
 
 def _cli_check(args):
+    """Parse CLI arguments and delegate to :func:`check`."""
     pct = tuple(int(x) for x in args.percentile.split(","))
     check(
         output_file  = args.output_file,

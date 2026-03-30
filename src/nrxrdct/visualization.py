@@ -236,6 +236,19 @@ class ZProfilePlot:
         z_values: Optional[np.ndarray] = None,
         z_label: str = "Z  (axis-0 index)",
     ):
+        """
+        Parameters
+        ----------
+        n_slices : int
+            Total number of slices along axis-0 of the volume.
+        volume_name : str, optional
+            Used as part of the matplotlib window title (default ``"Volume"``).
+        z_values : np.ndarray or None, optional
+            Physical values for the Z axis (e.g. depth in mm or 2θ in degrees).
+            Defaults to integer indices ``0 … n_slices-1``.
+        z_label : str, optional
+            X-axis label for the profile plot (default ``"Z  (axis-0 index)"``).
+        """
         self.n_slices = n_slices
         self.z_axis = np.asarray(z_values) if z_values is not None else np.arange(n_slices)
         self.z_label = z_label
@@ -277,6 +290,21 @@ class ZProfilePlot:
         plt.pause(0.05)
  
     def update(self, y: int, x: int, profile: np.ndarray, current_z_idx: int):
+        """
+        Redraw the profile for a newly selected pixel.
+
+        Parameters
+        ----------
+        y : int
+            Row index of the selected pixel.
+        x : int
+            Column index of the selected pixel.
+        profile : np.ndarray
+            1-D intensity profile along axis-0, length ``n_slices``.
+        current_z_idx : int
+            Current slider position (axis-0 index) used to place the vertical
+            marker line.
+        """
         self.line.set_xdata(self.z_axis)
         self.line.set_ydata(profile)
         self.ax.set_ylim(profile.min() * 0.95 - 1e-9, profile.max() * 1.05 + 1e-9)
@@ -286,6 +314,14 @@ class ZProfilePlot:
         plt.pause(0.01)
  
     def mark_current_z(self, z_idx: int):
+        """
+        Move the vertical slice-position marker without redrawing the profile.
+
+        Parameters
+        ----------
+        z_idx : int
+            Current axis-0 slice index.
+        """
         self.vline.set_xdata([self.z_axis[z_idx], self.z_axis[z_idx]])
         self.fig.canvas.draw_idle()
         plt.pause(0.005)

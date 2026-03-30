@@ -1,3 +1,10 @@
+"""
+Tomographic reconstruction and volume analysis for XRD-CT data.
+
+Provides GPU- and CPU-backed ASTRA Toolbox reconstruction routines, a helper to
+assemble sinograms from integrated HDF5 files, and the :class:`ReconstructedVolume`
+container that manages per-voxel .xy file I/O and parallelised GSAS-II refinement.
+"""
 import concurrent.futures
 import os
 import time
@@ -103,7 +110,29 @@ def reconstruct_astra_gpu(
     algo: str = "SART_CUDA",
     num_iter: int = 200,
 ):
+    """
+    Reconstruct a single 2-D slice using a GPU-accelerated ASTRA algorithm.
 
+    Parameters
+    ----------
+    data : np.ndarray
+        2-D sinogram of shape ``(num_detectors, num_angles)``.
+    dty_step : float, optional
+        Detector pixel spacing (default 1.0).
+    angles_rad : np.ndarray, optional
+        1-D array of projection angles in radians.
+    algo : str, optional
+        ASTRA 2D CUDA algorithm, e.g. ``"SART_CUDA"`` or ``"SIRT_CUDA"``
+        (default ``"SART_CUDA"``).
+    num_iter : int, optional
+        Number of iterations (default 200).
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed 2-D slice of shape ``(N, N)`` where ``N`` equals the
+        number of detectors.
+    """
     N = data.shape[0]
     data = data.T
     # Ensure correct sinogram shape:
@@ -143,7 +172,29 @@ def reconstruct_astra_cpu(
     algo: str = "FBP",
     num_iter: int = 200,
 ):
+    """
+    Reconstruct a single 2-D slice using a CPU ASTRA algorithm.
 
+    Parameters
+    ----------
+    data : np.ndarray
+        2-D sinogram of shape ``(num_detectors, num_angles)``.
+    dty_step : float, optional
+        Detector pixel spacing (default 1.0).
+    angles_rad : np.ndarray, optional
+        1-D array of projection angles in radians.
+    algo : str, optional
+        ASTRA 2D CPU algorithm, e.g. ``"FBP"``, ``"SIRT"``, or ``"SART"``
+        (default ``"FBP"``).
+    num_iter : int, optional
+        Number of iterations; for FBP only one pass is performed regardless
+        (default 200).
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed 2-D slice of shape ``(num_detectors, num_detectors)``.
+    """
     N = data.shape[0]
     data = data.T
     # Ensure correct sinogram shape:
@@ -196,6 +247,25 @@ def reconstruct_astra_cpu(
 def forward_project_gpu(
     volume, angles_rad, det_spacing: float = 1.0, algo: str = "FP_CUDA"
 ):
+    """
+    Compute the GPU forward projection (sinogram) of a 2-D volume.
+
+    Parameters
+    ----------
+    volume : np.ndarray
+        2-D image/slice to project, shape ``(N, N)``.
+    angles_rad : np.ndarray
+        1-D array of projection angles in radians.
+    det_spacing : float, optional
+        Detector pixel spacing (default 1.0).
+    algo : str, optional
+        ASTRA forward-projection algorithm (default ``"FP_CUDA"``).
+
+    Returns
+    -------
+    np.ndarray
+        Sinogram of shape ``(num_angles, N)``.
+    """
     # Create geometries
     N = volume.shape[1]
     proj_geom = astra.create_proj_geom("parallel", det_spacing, N, angles_rad)
@@ -229,6 +299,32 @@ def reconstruct_slice(
     algo: str = "SART_CUDA",
     num_iter: int = 200,
 ):
+    """
+    Reconstruct a single 2-D slice, dispatching to GPU or CPU automatically.
+
+    If an NVIDIA GPU is detected at import time (``HAS_GPU`` is ``True``),
+    :func:`reconstruct_astra_gpu` is called; otherwise falls back to
+    :func:`reconstruct_astra_cpu`.  If fewer than 10 angles are provided a
+    full 180° linspace is generated automatically.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2-D sinogram of shape ``(num_detectors, num_angles)``.
+    dty_step : float, optional
+        Detector pixel spacing (default 1.0).
+    angles_rad : np.ndarray, optional
+        1-D array of projection angles in radians.
+    algo : str, optional
+        ASTRA algorithm name passed to the backend (default ``"SART_CUDA"``).
+    num_iter : int, optional
+        Number of iterations (default 200).
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed 2-D slice.
+    """
     N = data.shape[0]
     if angles_rad.shape[0] < 10:
         angles_rad = np.linspace(0, np.pi, N)
@@ -245,7 +341,30 @@ def reconstruct_slice(
 def assemble_sinogram(
     integrated_file: Path, n_rot: int, n_tth_angles: int, n_lines: int = 10
 ):
+    """
+    Build a 3-D sinogram from an HDF5 file of integrated patterns.
 
+    Scans stored under ``integrated/scan*`` keys are background-subtracted
+    (using the mean of the first and last scans), zero-padded to
+    ``(n_rot, n_tth_angles)``, and stacked.  The resulting array is rolled so
+    that the 2θ axis comes first: shape ``(n_tth_angles, n_lines, n_rot)``.
+
+    Parameters
+    ----------
+    integrated_file : Path
+        HDF5 file containing integrated patterns under the ``"integrated"`` group.
+    n_rot : int
+        Number of rotation steps (sinogram angular dimension).
+    n_tth_angles : int
+        Number of 2θ bins (spectral dimension).
+    n_lines : int, optional
+        Expected number of translation lines; currently unused (default 10).
+
+    Returns
+    -------
+    np.ndarray
+        Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)`` as ``float32``.
+    """
     with h5py.File(integrated_file, "r") as hin:
         keys = list(hin["integrated"].keys())
         valid_keys = [key for key in keys if "scan" in key]
@@ -278,6 +397,16 @@ def assemble_sinogram(
 
 
 class ReconstructedVolume:
+    """
+    Container for a reconstructed XRD-CT volume with per-voxel analysis helpers.
+
+    Manages the reconstructed 4-D array (``tth × x × y``), the associated 2θ
+    axis, phase information, and the output folder layout.  Provides sequential
+    and parallelised methods to write per-voxel .xy files and run GSAS-II
+    refinements, as well as map extractors for Rwp, unit-cell parameters, and
+    crystallite sizes.
+    """
+
     def __init__(
         self,
         volume: np.ndarray,
@@ -286,6 +415,21 @@ class ReconstructedVolume:
         phases: list,
         processing_folder: Path = Path("volume"),
     ):
+        """
+        Parameters
+        ----------
+        volume : np.ndarray
+            Reconstructed volume of shape ``(n_tth, nx, ny)``.
+        tth_deg : np.ndarray
+            1-D array of 2θ values in degrees, length ``n_tth``.
+        sample_name : str
+            Base name used for output file naming.
+        phases : list
+            List of phase objects or identifiers (passed through; not used internally).
+        processing_folder : Path, optional
+            Root output directory; ``xy_files/`` and ``gpx_files/`` sub-folders
+            are created automatically (default ``"volume"``).
+        """
         self.volume = volume
         self.tth = tth_deg
         self.phases = phases
@@ -298,6 +442,7 @@ class ReconstructedVolume:
         os.makedirs(str(self.folder_models), exist_ok=True)
 
     def write_xy_files(self):
+        """Write one .xy file per voxel sequentially, with a tqdm progress bar."""
         t0 = time.time()
         assert self.volume.shape[0] == self.tth.shape[0], "Wrong shapes"
 
@@ -313,6 +458,7 @@ class ReconstructedVolume:
         print(60 * "=")
 
     def write_xy_files_parallel(self):
+        """Write one .xy file per voxel using a thread pool for faster I/O."""
         t0 = time.time()
 
         def write_ii_jj(index):
@@ -336,7 +482,15 @@ class ReconstructedVolume:
         print(f"Finished in {time.time() - t0:.2f} s")
 
     def refine_models(self, refining_function):
+        """
+        Run a GSAS-II refinement function on every voxel sequentially.
 
+        Parameters
+        ----------
+        refining_function : callable
+            Function with signature ``f(xy_file, gpx_file)`` that performs the
+            refinement and saves results to *gpx_file*.
+        """
         t0 = time.time()
 
         for ii in range(self.volume.shape[1]):
@@ -346,7 +500,15 @@ class ReconstructedVolume:
         print(f"Refined models in {time.time()-t0:.2f} s.")
 
     def refine_models_parallel(self, refining_function):
+        """
+        Run a GSAS-II refinement function on every voxel using a thread pool.
 
+        Parameters
+        ----------
+        refining_function : callable
+            Function with signature ``f(xy_file, gpx_file)`` that performs the
+            refinement and saves results to *gpx_file*.
+        """
         t0 = time.time()
 
         indexes = (
@@ -361,7 +523,15 @@ class ReconstructedVolume:
         print(f"Finished in {time.time() - t0:.2f} s")
 
     def get_Rwp_map(self):
+        """
+        Extract the weighted R-factor (Rwp) from each voxel's .gpx file.
 
+        Returns
+        -------
+        np.ndarray
+            2-D map of shape ``(nx, ny)`` with Rwp values; voxels whose .gpx
+            file is missing or failed return ``nan``.
+        """
         result = np.zeros_like(self.volume.sum(axis=0))
         t0 = time.time()
 
@@ -373,7 +543,15 @@ class ReconstructedVolume:
         return result
 
     def get_cell_map(self):
+        """
+        Extract unit-cell lengths a, b, c from each voxel's .gpx file.
 
+        Returns
+        -------
+        tuple of np.ndarray
+            Three 2-D maps ``(a_map, b_map, c_map)`` of shape ``(nx, ny)``;
+            voxels whose .gpx file is missing or failed return ``nan``.
+        """
         t0 = time.time()
         a_map = np.zeros_like(self.volume.sum(axis=0))
         b_map = np.zeros_like(self.volume.sum(axis=0))
@@ -390,7 +568,15 @@ class ReconstructedVolume:
         return a_map, b_map, c_map
 
     def get_crystallite_size_map(self):
+        """
+        Extract the refined isotropic crystallite size from each voxel's .gpx file.
 
+        Returns
+        -------
+        np.ndarray
+            2-D map of shape ``(nx, ny)`` with crystallite sizes; voxels whose
+            .gpx file is missing or failed return ``nan``.
+        """
         t0 = time.time()
         size_map = np.zeros_like(self.volume.sum(axis=0))
 
@@ -404,7 +590,7 @@ class ReconstructedVolume:
 
 
 def _get_Rwp_ii_jj(args):
-
+    """Return the Rwp for voxel ``(ii, jj)`` from its .gpx file, or ``nan`` on failure."""
     try:
         ii, jj, folder, name = args
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
@@ -416,6 +602,7 @@ def _get_Rwp_ii_jj(args):
 
 
 def _get_crystallite_sizes(args):
+    """Return the refined crystallite size for voxel ``(ii, jj)`` from its .gpx file, or ``nan`` on failure."""
     try:
         ii, jj, folder, name = args
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
@@ -429,7 +616,7 @@ def _get_crystallite_sizes(args):
 
 
 def _get_cell_params_ii_jj(args):
-
+    """Return ``(a, b, c)`` unit-cell lengths for voxel ``(ii, jj)`` from its .gpx file, or ``(nan, nan, nan)`` on failure."""
     try:
         ii, jj, folder, name = args
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
@@ -441,6 +628,7 @@ def _get_cell_params_ii_jj(args):
 
 
 def _load_data_from_gpx(filename: str):
+    """Open a GSAS-II project file and return ``(project, histograms, phases)``."""
     g = G2sc.G2Project(filename)
     hists = g.histograms()
     phases = g.phases()
@@ -448,6 +636,7 @@ def _load_data_from_gpx(filename: str):
 
 
 def _refine_ii_jj(args):
+    """Call *func(xy_file, gpx_file)* for voxel ``(ii, jj)``; silently skips on any exception."""
     try:
         ii, jj, func, folder, name = args
         xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"

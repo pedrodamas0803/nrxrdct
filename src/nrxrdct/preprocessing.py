@@ -1,3 +1,9 @@
+"""
+Preprocessing routines for XRD-CT detector images.
+
+Currently implements zinger (hot-pixel) removal using median filtering,
+with a parallelised wrapper for processing image stacks.
+"""
 import os, time, concurrent.futures
 import numpy as np
 import scipy.ndimage as ndi
@@ -7,7 +13,26 @@ NTHREAD = os.cpu_count() - 1
 
 def zinger_remove(dimg, medsize=3, nsigma=5):
     """
-    remove zingers. Anything which is >5 sigma after a 3x3 median filter is replaced by the filtered values
+    Remove zingers (hot pixels) from a single 2-D detector image.
+
+    Pixels whose deviation from the local median exceeds ``nsigma`` standard
+    deviations (computed over the whole residual image) are replaced by the
+    median-filtered value.  The replacement region is dilated by one pixel to
+    catch ringing artefacts around bright zingers.
+
+    Parameters
+    ----------
+    dimg : np.ndarray
+        2-D detector image.
+    medsize : int, optional
+        Side length of the square median-filter kernel (default 3).
+    nsigma : int or float, optional
+        Sigma threshold above which a pixel is considered a zinger (default 5).
+
+    Returns
+    -------
+    np.ndarray
+        Cleaned image with the same shape and dtype as *dimg*.
     """
     med = ndi.median_filter(dimg, medsize)
     err = dimg - med
@@ -17,16 +42,26 @@ def zinger_remove(dimg, medsize=3, nsigma=5):
     return np.where(gromsk, med, dimg)
 
 
-def dezinger(image, medsize:int=3, nsigma:int=5):
+def dezinger(image, medsize: int = 3, nsigma: int = 5):
     """
-    Performs parallelized zinger removal.
+    Apply zinger removal to a stack of detector images in parallel.
 
-    Inputs
-    image
-    medsize
-    nsigma
+    Each frame is processed independently via :func:`zinger_remove` using a
+    thread pool sized to ``os.cpu_count() - 1``.
 
-    Written this way to have only one argument. Could be improved, but it works.
+    Parameters
+    ----------
+    image : np.ndarray
+        3-D array of shape ``(N, rows, cols)`` containing *N* detector frames.
+    medsize : int, optional
+        Median-filter kernel size passed to :func:`zinger_remove` (default 3).
+    nsigma : int, optional
+        Sigma threshold passed to :func:`zinger_remove` (default 5).
+
+    Returns
+    -------
+    np.ndarray
+        Dezingered stack with the same shape and dtype as *image*.
     """
     t0 = time.time()
     N = image.shape[0]

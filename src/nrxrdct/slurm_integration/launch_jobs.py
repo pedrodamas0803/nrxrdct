@@ -15,7 +15,7 @@ Python API
         mask_file    = Path("mask.edf"),
         n_jobs       = 8,
         n_workers    = 16,
-        partition    = "cpu",
+        partition    = "nice",
         time         = "04:00:00",
         mem          = "64G",
         cpus         = 16,
@@ -48,6 +48,26 @@ from nrxrdct.integration import azimuthal_integration_1d, cake_integration
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _validate_entries(master_file: Path) -> tuple[list, list, list]:
+    """
+    Scan the master HDF5 file and separate valid from incomplete entries.
+
+    An entry is considered valid if it contains ``measurement/eiger``,
+    ``measurement/fpico6``, and ``instrument/positioners/dty``.
+
+    Parameters
+    ----------
+    master_file : Path
+        HDF5 master file to inspect.
+
+    Returns
+    -------
+    valid_entries : list of str
+        Entry keys with all required datasets present.
+    bad_entries : list of str
+        Entry keys that are missing one or more required datasets.
+    dty_values : list of float
+        Translation motor positions corresponding to *valid_entries*.
+    """
     valid_entries, bad_entries, dty_values = [], [], []
     with h5py.File(master_file, "r") as hin:
         all_entries = list(hin.keys())
@@ -80,6 +100,36 @@ def _init_output_file(
     n_points: int,
     unit: str,
 ) -> None:
+    """
+    Initialise the output HDF5 file with metadata and axis datasets (idempotent).
+
+    Writes the radial axis, CAKE validity mask, motor positions, valid/bad
+    entry lists, and rotation angles.  Skips any dataset that already exists,
+    so it is safe to call on a partially-filled output file.
+
+    Parameters
+    ----------
+    master_file : Path
+        Source HDF5 master file (used to read the first frame for axis setup).
+    output_file : Path
+        Destination HDF5 file (opened in append mode).
+    poni_file : Path
+        pyFAI ``.poni`` calibration file.
+    mask_file : Path
+        Detector mask file (fabio-readable).
+    valid_entries : list of str
+        Entry keys confirmed to contain all required datasets.
+    bad_entries : list of str
+        Entry keys that were skipped during validation.
+    dty_values : list of float
+        Translation motor positions for each valid entry.
+    rot : np.ndarray
+        Rotation angle array from the first valid entry.
+    n_points : int
+        Number of radial bins.
+    unit : str
+        Radial unit (e.g. ``"2th_deg"``).
+    """
     mask = fabio.open(mask_file).data
     with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
         if "integrated/radial" not in hout:
@@ -111,6 +161,21 @@ def _init_output_file(
 
 
 def _split_indices(n_scans: int, n_jobs: int) -> list[list[int]]:
+    """
+    Split ``range(n_scans)`` into *n_jobs* roughly equal chunks.
+
+    Parameters
+    ----------
+    n_scans : int
+        Total number of scans to distribute.
+    n_jobs : int
+        Number of chunks (SLURM jobs) to create.
+
+    Returns
+    -------
+    list of list of int
+        Chunk assignments; the last chunk may be shorter than the others.
+    """
     all_idx    = list(range(n_scans))
     chunk_size = math.ceil(n_scans / n_jobs)
     chunks = [all_idx[i : i + chunk_size] for i in range(0, n_scans, chunk_size)]
@@ -143,6 +208,48 @@ def _submit_job(
     conda_env: str | None,
     log_dir: Path,
 ) -> str:
+    """
+    Write an sbatch script for *indices* and submit it, returning the SLURM job ID.
+
+    The script is written to ``<log_dir>/job_<job_id:04d>.sh`` and invokes
+    :mod:`nrxrdct.slurm_integration.integrate_worker` as a Python module.
+    Environment activation uses ``source <env_activate>`` or
+    ``conda run -n <conda_env>`` depending on which argument is supplied.
+
+    Parameters
+    ----------
+    job_id : int
+        Sequential job identifier used for script and log file naming.
+    indices : list of int
+        Global scan indices assigned to this job.
+    master_file, output_file, poni_file, mask_file : Path
+        Files forwarded verbatim to the worker CLI.
+    n_points, n_workers, batch_size : int
+        Integration parameters forwarded to the worker.
+    unit, method, percentile : str
+        Integration settings forwarded to the worker.
+    thres : float
+        Sigma-clipping threshold forwarded to the worker.
+    max_iter : int
+        Maximum sigma-clipping iterations forwarded to the worker.
+    partition, time, mem : str
+        SLURM resource directives.
+    cpus : int
+        ``--cpus-per-task`` value.
+    gpu : bool
+        If ``True``, adds ``#SBATCH --gres=gpu:1``.
+    env_activate : Path or None
+        Shell script to ``source`` before the worker command.
+    conda_env : str or None
+        Conda environment for ``conda run``; used when *env_activate* is ``None``.
+    log_dir : Path
+        Directory where the script and log files are written.
+
+    Returns
+    -------
+    str
+        SLURM job ID string returned by ``sbatch``.
+    """
     indices_str = ",".join(str(i) for i in indices)
     script_path = log_dir / f"job_{job_id:04d}.sh"
     log_out     = log_dir / f"job_{job_id:04d}_%j.out"
@@ -236,7 +343,7 @@ def launch(
     thres: float = 3.0,
     max_iter: int = 5,
     # SLURM
-    partition: str = "cpu",
+    partition: str = "nice",
     time: str = "04:00:00",
     mem: str = "32G",
     cpus: int = 16,
@@ -250,18 +357,54 @@ def launch(
 
     Parameters
     ----------
-    method : str
-        Integration method: 'standard', 'filter', or 'sigma_clip'.
-    percentile : tuple
-        (low, high) percentile bounds — only used when method='filter'.
-    thres : float
-        Sigma-clipping threshold — only used when method='sigma_clip'.
-    max_iter : int
-        Max sigma-clipping iterations — only used when method='sigma_clip'.
+    master_file : Path
+        HDF5 master file containing all scan entries.
+    output_file : Path
+        Destination HDF5 file for integrated patterns.
+    poni_file : Path
+        pyFAI ``.poni`` calibration file.
+    mask_file : Path
+        Detector mask file (fabio-readable).
+    rot : np.ndarray or None, optional
+        Rotation angle array; read from the first valid entry when ``None``.
+    n_jobs : int, optional
+        Number of SLURM jobs to submit (default 8).
+    n_points : int, optional
+        Number of radial bins per integrated pattern (default 1000).
+    n_workers : int, optional
+        Integration threads per job (default 16).
+    batch_size : int, optional
+        Frames streamed from HDF5 per batch in the worker (default 32).
+    unit : str, optional
+        Radial unit (default ``"2th_deg"``).
+    method : str, optional
+        Integration method: ``"standard"``, ``"filter"``, or ``"sigma_clip"``
+        (default ``"standard"``).
+    percentile : tuple of (float, float), optional
+        Percentile bounds used when *method* is ``"filter"`` (default ``(10, 90)``).
+    thres : float, optional
+        Sigma-clipping threshold used when *method* is ``"sigma_clip"``
+        (default 3.0).
+    max_iter : int, optional
+        Maximum sigma-clipping iterations (default 5).
+    partition : str, optional
+        SLURM partition (default ``"nice"``).
+    time : str, optional
+        SLURM wall-time limit (default ``"04:00:00"``).
+    mem : str, optional
+        SLURM memory request (default ``"32G"``).
+    cpus : int, optional
+        CPUs per task (default 16).
+    gpu : bool, optional
+        Request a GPU node (default ``False``).
+    env_activate : Path or None, optional
+        Shell activate script sourced before the worker command.
+    conda_env : str or None, optional
+        Conda environment used via ``conda run`` (alternative to *env_activate*).
 
     Returns
     -------
-    list[str]
+    list of str
         SLURM job IDs of the submitted jobs.
     """
     from nrxrdct.slurm_integration.integrate_worker import INTEGRATION_METHODS
@@ -354,6 +497,7 @@ def launch(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_parser(sub=None):
+    """Build the ``launch`` sub-command argument parser, attaching it to *sub* if provided."""
     import argparse
     desc = "Submit powder integration across N SLURM jobs"
     p = sub.add_parser("launch", help=desc, description=desc) if sub else argparse.ArgumentParser(description=desc)
@@ -377,7 +521,7 @@ def _build_parser(sub=None):
                    help="Sigma threshold for 'sigma_clip' method (default: 3.0)")
     p.add_argument("--max-iter",      type=int,   default=5,
                    help="Max iterations for 'sigma_clip' method (default: 5)")
-    p.add_argument("--partition",     default="cpu")
+    p.add_argument("--partition",     default="nice")
     p.add_argument("--time",          default="04:00:00")
     p.add_argument("--mem",           default="32G")
     p.add_argument("--cpus",          type=int, default=16)
@@ -388,6 +532,7 @@ def _build_parser(sub=None):
 
 
 def _cli_launch(args):
+    """Parse CLI arguments and delegate to :func:`launch`."""
     pct = tuple(int(x) for x in args.percentile.split(","))
     launch(
         master_file  = args.master_file,

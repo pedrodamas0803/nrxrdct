@@ -21,6 +21,15 @@ from .monitor import _cli_monitor
 
 
 def main():
+    """
+    Entry point for the ``nrxrdct-slurm`` command registered in ``pyproject.toml``.
+
+    Dispatches to one of three sub-commands:
+
+    - ``launch``  — validate entries, initialise the output file, and submit SLURM jobs.
+    - ``check``   — verify output completeness and optionally trigger repair jobs.
+    - ``monitor`` — poll job and scan progress until completion.
+    """
     p = argparse.ArgumentParser(
         prog="nrxrdct-slurm",
         description="nrxrdct SLURM integration pipeline",

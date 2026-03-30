@@ -1,3 +1,12 @@
+"""
+Azimuthal integration routines for XRD-CT detector images.
+
+Wraps pyFAI's :class:`~pyFAI.integrator.azimuthal.AzimuthalIntegrator` to
+provide 1-D and 2-D (CAKE) integration with various outlier-rejection
+strategies (sigma-clipping, percentile filtering), and a parallelised
+pipeline for batch integration of full HDF5 master files with monitor
+normalisation.
+"""
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -408,7 +417,16 @@ def integrate_powder_parallel(
     n_workers : int
         Number of parallel integration threads.
     unit : str
-        Radial unit for integration (e.g. "2th_deg", "q_A^-1").
+        Radial unit for integration (e.g. ``"2th_deg"``, ``"q_A^-1"``).
+    remove_spots : bool, optional
+        If ``True``, use percentile-filtered integration
+        (:func:`azimuthal_integration_1d_filter`) to reject single-crystal
+        Bragg spots from each frame; otherwise plain integration is used
+        (default ``False``).
+    percentile : tuple of (float, float), optional
+        ``(low, high)`` percentile bounds passed to
+        :func:`azimuthal_integration_1d_filter` when *remove_spots* is ``True``
+        (default ``(10, 90)``).
     """
     t0 = time.time()
     mask = fabio.open(mask_file).data

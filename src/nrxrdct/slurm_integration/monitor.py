@@ -116,10 +116,12 @@ def _query_progress(output_file: Path) -> tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fmt_duration(seconds: float) -> str:
+    """Format *seconds* as a human-readable ``HH:MM:SS`` string."""
     return str(timedelta(seconds=int(seconds)))
 
 
 def _progress_bar(done: int, total: int, width: int = 30) -> str:
+    """Return a fixed-width ASCII progress bar string, e.g. ``[████████░░░░]``."""
     if total == 0:
         return f"[{'?' * width}]"
     filled = int(width * done / total)
@@ -133,6 +135,30 @@ def _render_snapshot(
     n_total: int,
     elapsed: float,
 ) -> str:
+    """
+    Render a status snapshot as a multi-line string.
+
+    Includes a per-job state table, an ASCII scan progress bar, throughput
+    rate, and ETA estimate.
+
+    Parameters
+    ----------
+    slurm_ids : list of str
+        Ordered list of SLURM job IDs being tracked.
+    states : dict
+        Mapping of job ID to SLURM state string (from :func:`_query_slurm`).
+    n_done : int
+        Number of scan datasets written to the output file so far.
+    n_total : int
+        Total expected number of scans.
+    elapsed : float
+        Wall-clock seconds since jobs were submitted.
+
+    Returns
+    -------
+    str
+        Formatted status block ready to print.
+    """
     lines = []
 
     # ── Job table ─────────────────────────────────────────────────────────────
@@ -278,6 +304,7 @@ def monitor(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_parser(sub=None):
+    """Build the ``monitor`` sub-command argument parser, attaching it to *sub* if provided."""
     import argparse
     desc = "Monitor SLURM powder integration jobs"
     p = (
@@ -297,6 +324,7 @@ def _build_parser(sub=None):
 
 
 def _cli_monitor(args):
+    """Parse CLI arguments and delegate to :func:`monitor`."""
     slurm_ids = [s.strip() for s in args.slurm_ids.split(",")]
     monitor(
         slurm_ids   = slurm_ids,

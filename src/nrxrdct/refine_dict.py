@@ -1,3 +1,26 @@
+"""
+Pre-built GSAS-II refinement dictionary templates for common microstructure models.
+
+These dictionaries can be passed directly to GSAS-II phase/histogram objects to
+enable specific refinement models without hand-crafting the parameter structure.
+
+Preferred orientation
+---------------------
+MD_DICT   : March–Dollase model along [1 1 1]
+SH_DICT   : Spherical-harmonics model with cylindrical symmetry along [0 0 1]
+
+Crystallite size
+----------------
+SIZE_ISO_DICT  : Isotropic size model
+SIZE_UNI_DICT  : Uniaxial size model along [0 0 1]
+SIZE_GEN_DICT  : Generalized (anisotropic) size model
+
+Microstrain (mustrain)
+----------------------
+MUSTRAIN_ISO_DICT  : Isotropic strain model (1000 µε)
+MUSTRAIN_UNI_DICT  : Uniaxial strain model along [0 0 1] (1000 µε)
+MUSTRAIN_GEN_DICT  : Generalized (Stephens) strain model
+"""
 MD_DICT = {
     "Pref.Ori.": {
         "Model": "MD",

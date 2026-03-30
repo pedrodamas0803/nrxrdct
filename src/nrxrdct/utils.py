@@ -1,3 +1,10 @@
+"""
+Miscellaneous utility functions for XRD-CT data processing.
+
+Covers percentile estimation for spot removal, XRD baseline fitting,
+circular mask generation, powder pattern simulation and peak listing via
+xrayutilities, and array padding helpers used by the reconstruction pipeline.
+"""
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -252,7 +259,25 @@ def calculate_xrd_baseline(
 
 
 def generate_circular_mask(shape, center, diameter):
+    """
+    Generate a 2-D boolean circular mask for a given volume shape.
 
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the volume ``(n_tth, ny, nx)``; the mask is built over the
+        last two dimensions.
+    center : tuple of (float, float)
+        ``(cx, cy)`` centre of the circle in pixel coordinates.
+    diameter : int or float
+        Diameter of the circular region in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        2-D boolean array of shape ``(ny, nx)`` where ``True`` marks pixels
+        inside the circle.
+    """
     x, y = np.arange(0, shape[1]), np.arange(0, shape[2])
     X, Y = np.meshgrid(x, y)
     z = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
@@ -268,6 +293,32 @@ def simulate_powder_xrd_monophase(
     crystallite_size: float = 100e-9,
     do_save: bool = True,
 ):
+    """
+    Simulate a powder XRD pattern for one or more phases using xrayutilities.
+
+    Parameters
+    ----------
+    tth : np.ndarray
+        2θ array in degrees at which to evaluate the pattern.
+    cif_files : str or list of str
+        Path(s) to CIF file(s); each phase is simulated independently.
+    do_plot : bool, optional
+        If ``True``, produce a matplotlib figure for each phase (default ``True``).
+    en_eV : float, optional
+        X-ray energy in eV (default 100 000 eV = 100 keV).
+    crystallite_size : float, optional
+        Gaussian crystallite size in metres used for peak broadening
+        (default 100 nm).
+    do_save : bool, optional
+        If ``True``, save each pattern to ``<phase_name>_simulated.xy``
+        (default ``True``).
+
+    Returns
+    -------
+    np.ndarray
+        Simulated intensity array for the *last* phase in *cif_files*,
+        evaluated at *tth*.
+    """
     if not isinstance(cif_files, list):
         cif_files = [cif_files]
 
@@ -361,7 +412,23 @@ def get_powder_xrd_peaks(
 
 
 def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple):
+    """
+    Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.
 
+    Parameters
+    ----------
+    input_shape : tuple of (int, int)
+        ``(height, width)`` of the array to be padded.
+    desired_shape : tuple of (int, int)
+        ``(height, width)`` of the target shape; must be >= *input_shape* in
+        both dimensions.
+
+    Returns
+    -------
+    tuple of ((int, int), (int, int))
+        Padding widths ``((top, bottom), (left, right))`` suitable for passing
+        directly to :func:`numpy.pad`.
+    """
     y_in, x_in = input_shape
     y_des, x_des = desired_shape
 

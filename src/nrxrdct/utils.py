@@ -8,6 +8,8 @@ import xrayutilities as xu
 from pybaselines import Baseline
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
+from nrxrdct.integration import _get_integrator, azimuthal_integration_1d
+
 from .io import save_xy_file
 
 

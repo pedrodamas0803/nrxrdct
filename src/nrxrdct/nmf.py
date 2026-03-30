@@ -5,7 +5,76 @@ import numpy as np
 from sklearn.decomposition import NMF
 
 
-def nmf_sklearn_hyperspectral(
+class HyperspectralNMF:
+
+    def __init__(self, volume:np.ndarray, n_components:int, spectral_axis:np.ndarray, unit_name="energy (keV)",
+        loss_function="frobenius",  # "frobenius" or "kullback-leibler"
+        solver=None,  # None -> pick default based on loss
+        init="nndsvdar",
+        max_iter=1000,
+        random_state=0,
+        l1_ratio=0.0,
+        alpha_W=0.0,
+        alpha_H=0.0,
+        clip_negative=True):
+
+        self.vol = volume
+        self.X = volume.reshape((volume.shape[0]**2, volume.shape[2]))
+        self.map_shape = (volume.shape[1], volume.shape[2])
+        self.n_comp = n_components
+        # self.comp_map = np.empty((self.n_comp, self.map_shape[0], self.map_shape[1]), dtype=float)
+        self.x_spectra = spectral_axis
+        self.unit = unit_name
+        self.loss_function = loss_function
+        self.solver = solver
+        self.init = init
+        self.iter_max = max_iter
+        self.rand_state = random_state
+        self.l1ratio = l1_ratio
+        self.alphaW = alpha_W
+        self.alphaH = alpha_H
+        self.clip_negative = clip_negative
+
+    def fit_data(self):
+
+        W_maps, H, X_rec, E_map, model = _nmf_sklearn_hyperspectral(X = self.X,  # (n_pixels, n_channels)
+            map_shape = self.map_shape,  # (nx, ny) with nx*ny == n_pixels
+            n_components=self.n_comp,
+            wavelength=self.x_spectra,  # (n_channels,)
+            unit_name=self.unit_name,
+            loss=self.loss_function,  # "frobenius" or "kullback-leibler"
+            solver=self.solver,  # None -> pick default based on loss
+            init=self.init,
+            max_iter=self.iter_max,
+            random_state=self.random_state,
+            l1_ratio=self.l1_ratio,
+            alpha_W=self.alphaW,
+            alpha_H=self.alphaH,
+            clip_negative=self.clip_negative,
+            show_progress=True)
+        
+        self.W_maps = W_maps
+        self.H = H
+        self.X_rec = X_rec
+        self.E_map = E_map
+        self.model = model
+
+    def plot(self, normalize_spectra:bool=False, titles=None, figsize=(14, 7), extent=None,  save=True):
+        _plot_nmf_panel(
+                        W_maps=self.W_maps,
+                        H=self.H,
+                        E_map = self.E_map,
+                        wavelength=self.x_spectra,
+                        unit_name=self.unit,
+                        normalize_spectra=normalize_spectra,
+                        titles=titles,
+                        figsize=figsize,
+                        extent=extent,
+                        save=save)
+
+
+
+def _nmf_sklearn_hyperspectral(
     X,  # (n_pixels, n_channels)
     map_shape,  # (nx, ny) with nx*ny == n_pixels
     n_components=4,
@@ -101,14 +170,14 @@ def nmf_sklearn_hyperspectral(
         E_map = rmse.reshape(nx, ny)
         W_maps = W.reshape(nx, ny, n_components)
 
-        return W_maps, H, X_rec, E_map, model, wavelength, unit_name
+        return W_maps, H, X_rec, E_map, model
 
     finally:
         if pbar is not None:
             pbar.close()
 
 
-def plot_nmf_panel(
+def _plot_nmf_panel(
     W_maps,
     H,
     E_map,

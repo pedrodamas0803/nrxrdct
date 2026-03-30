@@ -57,6 +57,7 @@ def reconstruct_astra_gpu_3d(
         raise ValueError(f"Expected 3D input array, got shape {data.shape}")
 
     # data = np.transpose(data, (2, 1, 0))  # -> (num_detectors_y, num_angles, num_detectors_x)
+    data = np.rollaxis(data, 2, 1)
     num_slices, num_angles, num_det_x = data.shape
 
     if num_angles != len(angles_rad):
@@ -248,11 +249,16 @@ def assemble_sinogram(
     with h5py.File(integrated_file, "r") as hin:
         keys = list(hin["integrated"].keys())
         valid_keys = [key for key in keys if "scan" in key]
+        bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][:]), axis=0)
+        bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][:]), axis=0)
+        bkg = (bkg1 + bkg2) / 2
         sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
         for ii, scan in enumerate(valid_keys):
             im = hin[f"integrated/{scan}"][:]
-            bkg = gaussian_filter(im, (10, 100))
-            im -= bkg
+            for jj, line in enumerate(im):
+                im[jj] = line - bkg
+            # bkg = gaussian_filter(im, (10, 100))
+            # im -= bkg
 
             padding_width = calculate_padding_widths_2D(im.shape, (n_rot, n_tth_angles))
             im = np.pad(im, padding_width)

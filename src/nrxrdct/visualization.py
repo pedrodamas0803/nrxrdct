@@ -1,14 +1,34 @@
 """
-Interactive 3D volume visualization using napari.
+Interactive 3D volume visualization using napari or matplotlib in jupyter.
+
+Everything runs inside a notebook cell using ipywidgets + matplotlib.
+No napari required.
+
+Setup (once per environment)
+-----------------------------
+    pip install ipywidgets matplotlib numpy
+    # Classic notebook:
+    jupyter nbextension enable --py widgetsnbextension
+    # JupyterLab:
+    pip install jupyterlab_widgets
+
+Usage in a notebook cell
+-------------------------
+    %matplotlib widget          # or 'inline' — see note in docstring
+    from visualize_slices_jupyter import visualize_slices_with_profile_jupyter
+    visualize_slices_with_profile_jupyter(volume)
 """
 
-import numpy as np
-import napari # type: ignore
 from typing import Optional
-import matplotlib.pyplot as plt
+
+import ipywidgets as widgets
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import napari  # type: ignore
+import numpy as np
+from IPython.display import display
 from matplotlib.lines import Line2D
-from typing import Optional
+from matplotlib.patches import Circle
 
 
 def visualize_volume(
@@ -112,6 +132,7 @@ def visualize_volume(
 
     return viewer
 
+
 def visualize_slices(
     volume: np.ndarray,
     name: str = "Volume",
@@ -180,9 +201,7 @@ def visualize_slices(
     >>> napari.run()
     """
     if volume.ndim != 3:
-        raise ValueError(
-            f"Expected a 3-D array, got shape {volume.shape}."
-        )
+        raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
 
     n_slices = volume.shape[0]
 
@@ -223,12 +242,13 @@ def visualize_slices(
 
     return viewer
 
+
 class ZProfilePlot:
     """
     A persistent matplotlib figure that displays the Z-profile of a
     selected pixel and updates in-place on every new click.
     """
- 
+
     def __init__(
         self,
         n_slices: int,
@@ -250,9 +270,11 @@ class ZProfilePlot:
             X-axis label for the profile plot (default ``"Z  (axis-0 index)"``).
         """
         self.n_slices = n_slices
-        self.z_axis = np.asarray(z_values) if z_values is not None else np.arange(n_slices)
+        self.z_axis = (
+            np.asarray(z_values) if z_values is not None else np.arange(n_slices)
+        )
         self.z_label = z_label
- 
+
         plt.ion()  # non-blocking mode
         self.fig = plt.figure(
             figsize=(6, 3.6),
@@ -260,7 +282,7 @@ class ZProfilePlot:
             num=f"Z-profile — {volume_name}",
         )
         self.fig.subplots_adjust(left=0.12, right=0.97, top=0.88, bottom=0.16)
- 
+
         ax = self.fig.add_subplot(111, facecolor="#161b22")
         ax.tick_params(colors="#8b949e", labelsize=8)
         for spine in ax.spines.values():
@@ -268,17 +290,20 @@ class ZProfilePlot:
         ax.set_xlabel(z_label, color="#8b949e", fontsize=9)
         ax.set_ylabel("Intensity", color="#8b949e", fontsize=9)
         ax.set_xlim(self.z_axis[0], self.z_axis[-1])
- 
+
         # Placeholder line
         (self.line,) = ax.plot(
-            [], [],
+            [],
+            [],
             color="#58a6ff",
             linewidth=1.4,
             solid_capstyle="round",
         )
         # Vertical marker for the current slice
-        self.vline = ax.axvline(x=0, color="#f0883e", linewidth=1.0, linestyle="--", alpha=0.8)
- 
+        self.vline = ax.axvline(
+            x=0, color="#f0883e", linewidth=1.0, linestyle="--", alpha=0.8
+        )
+
         self.title = self.fig.suptitle(
             "Click a pixel in napari to start",
             color="#e6edf3",
@@ -288,7 +313,7 @@ class ZProfilePlot:
         self.ax = ax
         self.fig.canvas.draw_idle()
         plt.pause(0.05)
- 
+
     def update(self, y: int, x: int, profile: np.ndarray, current_z_idx: int):
         """
         Redraw the profile for a newly selected pixel.
@@ -312,7 +337,7 @@ class ZProfilePlot:
         self.title.set_text(f"Z-profile  |  pixel  y={y},  x={x}")
         self.fig.canvas.draw_idle()
         plt.pause(0.01)
- 
+
     def mark_current_z(self, z_idx: int):
         """
         Move the vertical slice-position marker without redrawing the profile.
@@ -325,7 +350,8 @@ class ZProfilePlot:
         self.vline.set_xdata([self.z_axis[z_idx], self.z_axis[z_idx]])
         self.fig.canvas.draw_idle()
         plt.pause(0.005)
- 
+
+
 def visualize_slices_with_profile(
     volume: np.ndarray,
     name: str = "Volume",
@@ -340,12 +366,12 @@ def visualize_slices_with_profile(
 ) -> napari.Viewer:
     """
     Visualize 2-D slices of a 3-D volume (parallel to axis-0) in napari.
- 
+
     **Click any pixel** in the napari canvas to open / update a matplotlib
     window showing the intensity profile along axis-0 (Z) at that (y, x)
     location.  A dashed orange vertical line tracks the currently displayed
     slice as you move the slider.
- 
+
     Parameters
     ----------
     volume : np.ndarray
@@ -371,16 +397,16 @@ def visualize_slices_with_profile(
     z_label : str, optional
         Label for the X axis of the Z-profile plot.
         Default: "Z  (axis-0 index)".
- 
+
     Returns
     -------
     napari.Viewer
- 
+
     Notes
     -----
     * Works with matplotlib's interactive backend (Qt / Tk / Wx).
     * Call ``napari.run()`` at the end of a script to start the event loop.
- 
+
     Examples
     --------
     >>> import numpy as np
@@ -391,9 +417,9 @@ def visualize_slices_with_profile(
     """
     if volume.ndim != 3:
         raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
- 
+
     n_slices = volume.shape[0]
- 
+
     if z_values is not None:
         z_values = np.asarray(z_values, dtype=float)
         if z_values.shape != (n_slices,):
@@ -401,23 +427,23 @@ def visualize_slices_with_profile(
                 f"z_values must have length {n_slices} (= volume.shape[0]), "
                 f"got {z_values.shape}."
             )
- 
+
     if contrast_limits is None:
         contrast_limits = (float(volume.min()), float(volume.max()))
- 
+
     if initial_slice is None:
         initial_slice = n_slices // 2
     elif not (0 <= initial_slice < n_slices):
         raise ValueError(
             f"initial_slice={initial_slice} out of range [0, {n_slices - 1}]."
         )
- 
+
     # --- napari viewer (2-D slice mode) ------------------------------------
     viewer = napari.Viewer(
         title=f"napari — {name}  |  axis-0 slices  (click pixel → Z-profile)",
         ndisplay=2,
     )
- 
+
     image_layer = viewer.add_image(
         volume,
         name=name,
@@ -427,10 +453,10 @@ def visualize_slices_with_profile(
         opacity=opacity,
         scale=scale,
     )
- 
+
     viewer.dims.set_current_step(0, initial_slice)
     viewer.reset_view()
- 
+
     # --- Points layer to mark the selected pixel ---------------------------
     point_layer = viewer.add_points(
         data=np.empty((0, 2)),
@@ -439,7 +465,7 @@ def visualize_slices_with_profile(
         face_color="red",
         symbol="cross",
     )
- 
+
     # --- Z-profile plot -----------------------------------------------------
     profile_plot = ZProfilePlot(
         n_slices=n_slices,
@@ -447,24 +473,24 @@ def visualize_slices_with_profile(
         z_values=z_values,
         z_label=z_label,
     )
- 
+
     # Track last selected pixel so the vline keeps updating on slice changes
     last_pixel = {"y": None, "x": None}
- 
+
     # --- Callback: click in the napari canvas -------------------------------
     @image_layer.mouse_drag_callbacks.append
     def on_click(layer, event):
         # Only react on left-button press (not drag)
         if event.type != "mouse_press" or event.button != 1:
             return
- 
+
         # event.position is in *world* coordinates (respects scale).
         # For a 3-D array displayed in 2-D, position = (z_world, y_world, x_world).
         pos = event.position  # world coords
- 
+
         # Convert world → data (pixel) indices
         data_coords = layer.world_to_data(pos)
- 
+
         if len(data_coords) == 3:
             z_idx, y_idx, x_idx = (int(round(c)) for c in data_coords)
         elif len(data_coords) == 2:
@@ -473,35 +499,37 @@ def visualize_slices_with_profile(
             z_idx = int(viewer.dims.current_step[0])
         else:
             return
- 
+
         # Clamp to valid range
         z_idx = np.clip(z_idx, 0, volume.shape[0] - 1)
         y_idx = np.clip(y_idx, 0, volume.shape[1] - 1)
         x_idx = np.clip(x_idx, 0, volume.shape[2] - 1)
- 
+
         # Update marker on the slice
         point_layer.data = np.array([[y_idx, x_idx]], dtype=float)
- 
+
         # Extract Z-profile and update plot
         profile = volume[:, y_idx, x_idx]
         current_z = int(viewer.dims.current_step[0])
         profile_plot.update(y_idx, x_idx, profile, current_z)
- 
+
         last_pixel["y"] = y_idx
         last_pixel["x"] = x_idx
- 
-        print(f"[Z-profile] pixel (y={y_idx}, x={x_idx})  "
-              f"min={profile.min():.4f}  max={profile.max():.4f}  "
-              f"mean={profile.mean():.4f}")
- 
+
+        print(
+            f"[Z-profile] pixel (y={y_idx}, x={x_idx})  "
+            f"min={profile.min():.4f}  max={profile.max():.4f}  "
+            f"mean={profile.mean():.4f}"
+        )
+
     # --- Callback: slider moves → update vertical marker -------------------
     def on_slice_change(event):
         if last_pixel["y"] is not None:
             current_z = int(viewer.dims.current_step[0])
             profile_plot.mark_current_z(current_z)
- 
+
     viewer.dims.events.current_step.connect(on_slice_change)
- 
+
     print(
         f"\n[visualize_slices_with_profile] '{name}'\n"
         f"  Shape  : {volume.shape}\n"
@@ -510,8 +538,344 @@ def visualize_slices_with_profile(
         f"  → Click any pixel in the napari window to see its Z-profile.\n"
         f"  → Use the slider (or ← → arrow keys) to scroll through slices.\n"
     )
- 
+
     return viewer
 
 
+def visualize_slices_with_profile_jupyter(
+    volume: np.ndarray,
+    name: str = "Volume",
+    colormap: str = "gray",
+    contrast_limits: Optional[tuple] = None,
+    initial_slice: Optional[int] = None,
+    z_values: Optional[np.ndarray] = None,
+    z_label: str = "Z  (axis-0 index)",
+    figsize: tuple = (12, 5),
+) -> None:
+    """
+    Display an interactive 2-D slice viewer with a Z-profile panel inside
+    a Jupyter notebook.
 
+    Layout
+    ------
+    Left panel  : 2-D slice image (axis-0 = Z scrolled by a slider).
+                  Click any pixel → the right panel updates.
+    Right panel : Intensity profile along axis-0 at the selected (y, x).
+                  A dashed orange line marks the currently displayed slice.
+
+    Parameters
+    ----------
+    volume : np.ndarray
+        3-D array of shape (Z, Y, X).
+    name : str
+        Title shown above the figure.
+    colormap : str
+        Matplotlib colormap name (e.g. "gray", "turbo", "magma", "viridis").
+    contrast_limits : (float, float), optional
+        (vmin, vmax) for the image display.  Defaults to data min / max.
+    initial_slice : int, optional
+        Axis-0 index shown on first render.  Defaults to middle slice.
+    z_values : array-like, optional
+        Physical coordinates for the X axis of the Z-profile plot
+        (e.g. depths in µm, timestamps, wavelengths).
+        Must have exactly ``volume.shape[0]`` elements.
+        Defaults to integer slice indices [0, 1, 2, …].
+    z_label : str, optional
+        X-axis label of the Z-profile plot.
+        Default: ``"Z  (axis-0 index)"``.
+    figsize : (float, float), optional
+        Overall figure size in inches.  Default: (12, 5).
+
+    Notes
+    -----
+    **Recommended cell magic**: ``%matplotlib widget`` (ipympl backend).
+    This gives a truly live canvas — clicks and slider updates happen
+    without redrawing the full figure.
+
+    ``%matplotlib inline`` also works but redraws the whole figure on
+    every interaction, which is slower.
+
+    Examples
+    --------
+    In a notebook cell::
+
+        %matplotlib widget
+        import numpy as np
+        from visualize_slices_jupyter import visualize_slices_with_profile_jupyter
+
+        vol = np.random.rand(64, 128, 128).astype(np.float32)
+        visualize_slices_with_profile_jupyter(vol, colormap="turbo")
+
+    With physical axis::
+
+        depths = np.linspace(0, 31.5, 64)   # 64 slices × 0.5 µm
+        visualize_slices_with_profile_jupyter(
+            vol,
+            z_values=depths,
+            z_label="Depth (µm)",
+        )
+    """
+    # ------------------------------------------------------------------
+    # Input validation
+    # ------------------------------------------------------------------
+    if volume.ndim != 3:
+        raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
+
+    n_slices, n_y, n_x = volume.shape
+
+    z_axis = (
+        np.asarray(z_values, dtype=float)
+        if z_values is not None
+        else np.arange(n_slices, dtype=float)
+    )
+    if z_axis.shape != (n_slices,):
+        raise ValueError(
+            f"z_values must have length {n_slices} (= volume.shape[0]), "
+            f"got {z_axis.shape}."
+        )
+
+    vmin, vmax = (
+        contrast_limits
+        if contrast_limits
+        else (float(volume.min()), float(volume.max()))
+    )
+
+    if initial_slice is None:
+        initial_slice = n_slices // 2
+    elif not (0 <= initial_slice < n_slices):
+        raise ValueError(
+            f"initial_slice={initial_slice} out of range [0, {n_slices - 1}]."
+        )
+
+    # State shared between callbacks
+    state = {
+        "z_idx": initial_slice,
+        "y_sel": None,
+        "x_sel": None,
+    }
+
+    # ------------------------------------------------------------------
+    # Figure layout
+    # ------------------------------------------------------------------
+    fig = plt.figure(figsize=figsize, facecolor="#0e1117")
+    fig.suptitle(name, color="#e6edf3", fontsize=12, fontweight="bold", y=0.98)
+
+    gs = gridspec.GridSpec(
+        1,
+        2,
+        figure=fig,
+        left=0.06,
+        right=0.97,
+        bottom=0.12,
+        top=0.91,
+        wspace=0.35,
+    )
+
+    # --- Left: slice image ---
+    ax_img = fig.add_subplot(gs[0], facecolor="#161b22")
+    ax_img.set_title(
+        "Slice viewer  —  click to select pixel", color="#8b949e", fontsize=9, pad=6
+    )
+    ax_img.tick_params(colors="#8b949e", labelsize=7)
+    for sp in ax_img.spines.values():
+        sp.set_edgecolor("#30363d")
+    ax_img.set_xlabel("X", color="#8b949e", fontsize=8)
+    ax_img.set_ylabel("Y", color="#8b949e", fontsize=8)
+
+    img_display = ax_img.imshow(
+        volume[initial_slice],
+        cmap=colormap,
+        vmin=vmin,
+        vmax=vmax,
+        origin="upper",
+        interpolation="nearest",
+        aspect="auto",
+    )
+
+    # Crosshair marker (hidden until first click)
+    (hline,) = ax_img.plot([], [], color="#f0883e", linewidth=0.8, alpha=0.7)
+    (vline_img,) = ax_img.plot([], [], color="#f0883e", linewidth=0.8, alpha=0.7)
+    (dot,) = ax_img.plot(
+        [],
+        [],
+        "o",
+        color="#ff4444",
+        markersize=6,
+        markeredgecolor="white",
+        markeredgewidth=0.8,
+    )
+
+    slice_label = ax_img.set_title(
+        f"Slice viewer  —  click to select pixel",
+        color="#8b949e",
+        fontsize=9,
+        pad=6,
+    )
+
+    # --- Right: Z-profile ---
+    ax_prof = fig.add_subplot(gs[1], facecolor="#161b22")
+    ax_prof.set_title(
+        "Z-profile  —  select a pixel", color="#8b949e", fontsize=9, pad=6
+    )
+    ax_prof.tick_params(colors="#8b949e", labelsize=7)
+    for sp in ax_prof.spines.values():
+        sp.set_edgecolor("#30363d")
+    ax_prof.set_xlabel(z_label, color="#8b949e", fontsize=8)
+    ax_prof.set_ylabel("Intensity", color="#8b949e", fontsize=8)
+    ax_prof.set_xlim(z_axis[0], z_axis[-1])
+    ax_prof.set_ylim(vmin, vmax)
+
+    (profile_line,) = ax_prof.plot(
+        [], [], color="#58a6ff", linewidth=1.4, solid_capstyle="round"
+    )
+    vline_prof = ax_prof.axvline(
+        x=z_axis[initial_slice],
+        color="#f0883e",
+        linewidth=1.0,
+        linestyle="--",
+        alpha=0.85,
+    )
+    prof_title = ax_prof.set_title(
+        "Z-profile  —  select a pixel", color="#8b949e", fontsize=9, pad=6
+    )
+
+    # ------------------------------------------------------------------
+    # Slider widget
+    # ------------------------------------------------------------------
+    slider = widgets.IntSlider(
+        value=initial_slice,
+        min=0,
+        max=n_slices - 1,
+        step=1,
+        description=f"Slice (Z):",
+        continuous_update=True,
+        layout=widgets.Layout(width="90%"),
+        style={"description_width": "80px"},
+    )
+
+    slice_info = widgets.Label(
+        value=_slice_info_text(initial_slice, z_axis, z_label),
+        layout=widgets.Layout(width="auto"),
+    )
+
+    pixel_info = widgets.Label(
+        value="",
+        layout=widgets.Layout(width="auto"),
+    )
+
+    # ------------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------------
+    def _redraw_slice(z_idx: int):
+        img_display.set_data(volume[z_idx])
+        vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+        # Update crosshair title
+        ax_img.set_title(
+            f"Slice {z_idx}  |  {z_label} = {z_axis[z_idx]:.4g}",
+            color="#8b949e",
+            fontsize=9,
+            pad=6,
+        )
+        fig.canvas.draw_idle()
+
+    def _redraw_profile(y: int, x: int, z_idx: int):
+        profile = volume[:, y, x]
+        profile_line.set_xdata(z_axis)
+        profile_line.set_ydata(profile)
+        p_min, p_max = profile.min(), profile.max()
+        margin = max((p_max - p_min) * 0.05, 1e-9)
+        ax_prof.set_ylim(p_min - margin, p_max + margin)
+        vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+        prof_title.set_text(f"Z-profile  |  pixel  y={y},  x={x}")
+        # Crosshair on image
+        hline.set_xdata([0, n_x - 1])
+        hline.set_ydata([y, y])
+        vline_img.set_xdata([x, x])
+        vline_img.set_ydata([0, n_y - 1])
+        dot.set_xdata([x])
+        dot.set_ydata([y])
+        fig.canvas.draw_idle()
+
+    # ------------------------------------------------------------------
+    # Callbacks
+    # ------------------------------------------------------------------
+    def on_slider_change(change):
+        z_idx = change["new"]
+        state["z_idx"] = z_idx
+        slice_info.value = _slice_info_text(z_idx, z_axis, z_label)
+        _redraw_slice(z_idx)
+        if state["y_sel"] is not None:
+            # Just move the vline; profile data stays the same
+            vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+            fig.canvas.draw_idle()
+
+    slider.observe(on_slider_change, names="value")
+
+    def on_click(event):
+        # Only react to clicks inside the image axis
+        if event.inaxes is not ax_img:
+            return
+        if event.button != 1:
+            return
+
+        x = int(round(event.xdata))
+        y = int(round(event.ydata))
+        x = np.clip(x, 0, n_x - 1)
+        y = np.clip(y, 0, n_y - 1)
+
+        state["y_sel"] = y
+        state["x_sel"] = x
+
+        profile = volume[:, y, x]
+        pixel_info.value = (
+            f"pixel (y={y}, x={x})  "
+            f"min={profile.min():.4f}  "
+            f"max={profile.max():.4f}  "
+            f"mean={profile.mean():.4f}"
+        )
+        _redraw_profile(y, x, state["z_idx"])
+
+    fig.canvas.mpl_connect("button_press_event", on_click)
+
+    # ------------------------------------------------------------------
+    # Layout & display
+    # ------------------------------------------------------------------
+    controls = widgets.VBox(
+        [
+            widgets.HBox([slider, slice_info]),
+            pixel_info,
+        ],
+        layout=widgets.Layout(margin="4px 0 0 0"),
+    )
+
+    display(widgets.VBox([fig.canvas, controls]))
+
+    # Initial render
+    _redraw_slice(initial_slice)
+
+
+# ---------------------------------------------------------------------------
+# Utility
+# ---------------------------------------------------------------------------
+def _slice_info_text(z_idx: int, z_axis: np.ndarray, z_label: str) -> str:
+    return f"  {z_label} = {z_axis[z_idx]:.4g}  (index {z_idx})"
+
+
+# ---------------------------------------------------------------------------
+# Quick smoke-test (run as a script — not inside a notebook)
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    print(
+        "This module is designed for Jupyter notebooks.\n"
+        "Import it in a cell and call visualize_slices_with_profile_jupyter().\n\n"
+        "Minimal example:\n"
+        "  %matplotlib widget\n"
+        "  import numpy as np\n"
+        "  from visualize_slices_jupyter import visualize_slices_with_profile_jupyter\n"
+        "  vol = np.random.rand(64, 128, 128).astype(np.float32)\n"
+        "  visualize_slices_with_profile_jupyter(\n"
+        "      vol,\n"
+        "      z_values=np.linspace(0, 31.5, 64),\n"
+        "      z_label='Depth (µm)',\n"
+        "  )\n"
+    )

@@ -5,6 +5,7 @@ Provides GPU- and CPU-backed ASTRA Toolbox reconstruction routines, a helper to
 assemble sinograms from integrated HDF5 files, and the :class:`ReconstructedVolume`
 container that manages per-voxel .xy file I/O and parallelised GSAS-II refinement.
 """
+
 import concurrent.futures
 import os
 import time
@@ -636,7 +637,6 @@ def _load_data_from_gpx(filename: str):
 
 
 def _refine_ii_jj(args):
-    """Call *func(xy_file, gpx_file)* for voxel ``(ii, jj)``; silently skips on any exception."""
     try:
         ii, jj, func, folder, name = args
         xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"

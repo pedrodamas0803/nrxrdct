@@ -372,10 +372,12 @@ def assemble_sinogram(
         bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][:]), axis=0)
         bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][:]), axis=0)
         bkg = (bkg1 + bkg2) / 2
+        bkg /= bkg.max()
         sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
         for ii, scan in enumerate(valid_keys):
             im = hin[f"integrated/{scan}"][:]
             for jj, line in enumerate(im):
+                im[jj] /= line.max()
                 im[jj] = line - bkg
             # bkg = gaussian_filter(im, (10, 100))
             # im -= bkg

@@ -5,6 +5,7 @@ Provides helpers to look up XRF emission line energies via xraylib, read
 per-scan ROI or full-spectrum fluorescence data from HDF5 master files,
 and assemble the resulting data into sinogram arrays ready for reconstruction.
 """
+
 import h5py
 import numpy as np
 import xraylib
@@ -74,7 +75,9 @@ def get_fluo_lines(
     return lines
 
 
-def get_fluo_roi(fn, n_angles=901, data_entry="mca_det0_all", filter_size=3):
+def get_fluo_roi(
+    fn, n_angles=901, data_entry="mca_det0_all", monitor_entry="fpico6", filter_size=3
+):
     """
     Load per-scan ROI fluorescence data from an HDF5 master file.
 
@@ -113,7 +116,9 @@ def get_fluo_roi(fn, n_angles=901, data_entry="mca_det0_all", filter_size=3):
             ypos.append((hin[f"{key}/instrument/positioners/dty"][()]))
             rot = hin[f"{key}/measurement/rot"][:]
             dat = hin[f"{key}/measurement/{data_entry}"][:].astype(np.float32)
+            mon = hin[f"{key}/measurement/{monitor_entry}"][:].astype(np.float32)
 
+            dat /= mon
             if filter_size != 0:
                 dat = median_filter(dat, size=filter_size)
 

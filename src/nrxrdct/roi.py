@@ -75,7 +75,7 @@ def select_roi(
     """
     own_figure = ax is None
     if own_figure:
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(16, 9))
     else:
         fig = ax.figure
 

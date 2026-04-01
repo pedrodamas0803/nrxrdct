@@ -20,6 +20,7 @@ dependencies = [
 [project.scripts]
 nrxrdct = "nrxrdct:main"
 nrxrdct-slurm = "nrxrdct.slurm_integration.cli:main"
+nrxrdct-slurm-recon = "nrxrdct.slurm_reconstruction.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]

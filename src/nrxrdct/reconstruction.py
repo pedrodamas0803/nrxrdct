@@ -369,8 +369,8 @@ def assemble_sinogram(
     with h5py.File(integrated_file, "r") as hin:
         keys = list(hin["integrated"].keys())
         valid_keys = [key for key in keys if "scan" in key]
-        bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][:]), axis=0)
-        bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][:]), axis=0)
+        bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][0:10]), axis=0)
+        bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][0:10]), axis=0)
         bkg = (bkg1 + bkg2) / 2
         bkg /= bkg.max()
         sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)

@@ -22,6 +22,32 @@ class HyperspectralNMF:
     scikit-learn NMF, and exposes the component maps, component spectra, and
     per-pixel RMSE through :meth:`fit_data`.  Results can be visualised with
     :meth:`plot`.
+
+    Attributes
+    ----------
+    vol : np.ndarray
+        Original ``(nx, ny, n_channels)`` volume passed at construction.
+    X : np.ndarray, shape ``(nx*ny, n_channels)``
+        Flattened 2-D representation used as NMF input.
+    n_comp : int
+        Number of NMF components.
+    x_spectra : np.ndarray
+        Spectral axis values.
+    unit : str
+        Spectral axis label used in plots.
+
+    The following attributes are set after calling :meth:`fit_data`:
+
+    W_maps : np.ndarray, shape ``(nx, ny, K)``
+        Per-component spatial intensity maps.
+    H : np.ndarray, shape ``(K, n_channels)``
+        Component spectra (rows of the NMF H matrix).
+    X_rec : np.ndarray, shape ``(nx*ny, n_channels)``
+        Reconstructed data matrix ``W @ H``.
+    E_map : np.ndarray, shape ``(nx, ny)``
+        Per-pixel RMSE between original and reconstructed data.
+    model : sklearn.decomposition.NMF
+        Fitted scikit-learn NMF object.
     """
 
     def __init__(self, volume:np.ndarray, n_components:int, spectral_axis:np.ndarray, unit_name="energy (keV)",
@@ -102,13 +128,13 @@ class HyperspectralNMF:
             map_shape = self.map_shape,  # (nx, ny) with nx*ny == n_pixels
             n_components=self.n_comp,
             wavelength=self.x_spectra,  # (n_channels,)
-            unit_name=self.unit_name,
+            unit_name=self.unit,
             loss=self.loss_function,  # "frobenius" or "kullback-leibler"
             solver=self.solver,  # None -> pick default based on loss
             init=self.init,
             max_iter=self.iter_max,
-            random_state=self.random_state,
-            l1_ratio=self.l1_ratio,
+            random_state=self.rand_state,
+            l1_ratio=self.l1ratio,
             alpha_W=self.alphaW,
             alpha_H=self.alphaH,
             clip_negative=self.clip_negative,

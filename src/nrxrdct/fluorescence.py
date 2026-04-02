@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import xraylib
 from scipy.ndimage import median_filter
+from scipy.optimize import nnls
 from skimage.measure import block_reduce
 from tqdm.auto import tqdm
 
@@ -253,3 +254,277 @@ def get_fluo_full_spectra(
                 sino[:, ii, :] = dat.T
 
     return sino, rot
+
+
+# ---------------------------------------------------------------------------
+# Spectrum fitting
+# ---------------------------------------------------------------------------
+
+_LINE_CONSTS = [
+    xraylib.KA1_LINE,
+    xraylib.KA2_LINE,
+    xraylib.KB1_LINE,
+    xraylib.KB2_LINE,
+    xraylib.LA1_LINE,
+    xraylib.LB1_LINE,
+    xraylib.LG1_LINE,
+]
+
+
+def _gaussian(x, center, sigma):
+    return np.exp(-0.5 * ((x - center) / sigma) ** 2)
+
+
+def build_element_component(element, energy_axis, excitation_energy, fwhm_keV):
+    """
+    Build the expected spectral shape for one element on a given energy axis.
+
+    Each emission line is modelled as a Gaussian weighted by its fluorescence
+    cross-section (``CS_FluorLine_Kissel``), so relative amplitudes between
+    lines of the same element are physically motivated.
+
+    Parameters
+    ----------
+    element : str
+        Chemical symbol, e.g. ``"Fe"``.
+    energy_axis : np.ndarray
+        1-D array of energy values in keV (from MCA calibration).
+    excitation_energy : float
+        Incident beam energy in keV.
+    fwhm_keV : float
+        Detector energy resolution (FWHM) in keV — typically 0.13–0.25 keV
+        for a Si drift detector.
+
+    Returns
+    -------
+    component : np.ndarray, shape ``(len(energy_axis),)``
+        Normalised spectral template for the element (max = 1).
+        Returns a zero array if no lines fall within the energy axis range.
+    """
+    sigma = fwhm_keV / (2 * np.sqrt(2 * np.log(2)))
+    Z = xraylib.SymbolToAtomicNumber(element)
+    emin, emax = energy_axis[0], energy_axis[-1]
+
+    component = np.zeros_like(energy_axis, dtype=np.float64)
+    for _, lconst in zip(DEFAULT_LINES, _LINE_CONSTS):
+        try:
+            en = xraylib.LineEnergy(Z, lconst)
+            if not (emin <= en <= emax):
+                continue
+            cs = xraylib.CS_FluorLine_Kissel(Z, lconst, excitation_energy)
+            component += cs * _gaussian(energy_axis, en, sigma)
+        except Exception:
+            continue
+
+    norm = component.max()
+    return component / norm if norm > 0 else component
+
+
+def fit_fluo_spectrum(
+    spectrum,
+    energy_axis,
+    elements,
+    excitation_energy,
+    fwhm_keV=0.18,
+    background_order=2,
+):
+    """
+    Fit a fluorescence spectrum as a linear combination of element templates.
+
+    A polynomial background is included as additional free components.  The fit
+    is solved with non-negative least squares (NNLS), which prevents unphysical
+    negative elemental intensities.
+
+    Parameters
+    ----------
+    spectrum : np.ndarray, shape ``(n_channels,)``
+        Measured (normalised) MCA spectrum.
+    energy_axis : np.ndarray, shape ``(n_channels,)``
+        Energy in keV for each MCA channel.
+    elements : list of str
+        Elements to include, e.g. ``["Fe", "Cu", "Zn"]``.
+    excitation_energy : float
+        Incident beam energy in keV.
+    fwhm_keV : float, optional
+        Detector FWHM in keV (default 0.18).
+    background_order : int, optional
+        Polynomial degree for the background model (default 2).
+
+    Returns
+    -------
+    coefficients : dict
+        Mapping ``element -> fitted amplitude`` (arbitrary units proportional
+        to element concentration × thickness).
+    residual : np.ndarray
+        Measured minus fitted spectrum.
+    fitted : np.ndarray
+        Reconstructed spectrum (element contributions + background).
+    components : dict
+        Spectral template used for each element (before scaling).
+    """
+    E_norm = (energy_axis - energy_axis.mean()) / energy_axis.ptp()
+
+    columns = {}
+    for el in elements:
+        comp = build_element_component(el, energy_axis, excitation_energy, fwhm_keV)
+        if comp.max() > 0:
+            columns[el] = comp
+
+    for deg in range(background_order + 1):
+        columns[f"_bg{deg}"] = E_norm**deg
+
+    labels = list(columns.keys())
+    A = np.column_stack([columns[k] for k in labels])
+
+    coeffs, _ = nnls(A, spectrum)
+
+    fitted = A @ coeffs
+    residual = spectrum - fitted
+
+    coefficients = {k: v for k, v in zip(labels, coeffs) if not k.startswith("_bg")}
+    components = {k: columns[k] for k in elements if k in columns}
+
+    return coefficients, residual, fitted, components
+
+
+def build_fit_matrix(
+    energy_axis, elements, excitation_energy, fwhm_keV=0.18, background_order=2
+):
+    """
+    Build the design matrix for XRF spectrum fitting.
+
+    Separating matrix construction from fitting allows the (identical) matrix
+    to be built once and reused across all pixels.
+
+    Parameters
+    ----------
+    energy_axis : np.ndarray, shape ``(n_channels,)``
+        Energy in keV for each MCA channel.
+    elements : list of str
+        Elements to model, e.g. ``["Fe", "Cu", "Zn"]``.
+    excitation_energy : float
+        Incident beam energy in keV.
+    fwhm_keV : float, optional
+        Detector FWHM in keV (default 0.18).
+    background_order : int, optional
+        Polynomial degree for the background model (default 2).
+
+    Returns
+    -------
+    A : np.ndarray, shape ``(n_channels, n_components)``
+        Design matrix.  Columns are element templates followed by background
+        polynomial terms.
+    labels : list of str
+        Column labels.  Element names come first; background terms are named
+        ``"_bg0"``, ``"_bg1"``, etc.
+    """
+    E_norm = (energy_axis - energy_axis.mean()) / energy_axis.ptp()
+
+    columns, labels = [], []
+    for el in elements:
+        comp = build_element_component(el, energy_axis, excitation_energy, fwhm_keV)
+        if comp.max() > 0:
+            columns.append(comp)
+            labels.append(el)
+
+    for deg in range(background_order + 1):
+        columns.append(E_norm**deg)
+        labels.append(f"_bg{deg}")
+
+    return np.column_stack(columns), labels
+
+
+def fit_fluo_volume(
+    data,
+    energy_axis,
+    elements,
+    excitation_energy,
+    fwhm_keV=0.18,
+    background_order=2,
+    method="lstsq",
+    n_jobs=-1,
+):
+    """
+    Fit fluorescence spectra for every pixel in a 3-D dataset.
+
+    Parameters
+    ----------
+    data : np.ndarray, shape ``(n_energy, n_y, n_x)``
+        Full-spectrum dataset; axis 0 is the energy dimension.
+    energy_axis : np.ndarray, shape ``(n_energy,)``
+        Energy in keV for each channel.
+    elements : list of str
+        Elements to fit, e.g. ``["Fe", "Cu", "Zn"]``.
+    excitation_energy : float
+        Incident beam energy in keV.
+    fwhm_keV : float, optional
+        Detector FWHM in keV (default 0.18).
+    background_order : int, optional
+        Polynomial degree for the background model (default 2).
+    method : ``"lstsq"`` or ``"nnls"``, optional
+        Fitting strategy.
+
+        ``"lstsq"``
+            Solves all pixels in a single batched ``np.linalg.lstsq`` call.
+            Very fast (single LAPACK call), but non-negativity is only enforced
+            by clipping.  Prefer this when speed matters or negative values are
+            rare in practice.
+
+        ``"nnls"``
+            Calls ``scipy.optimize.nnls`` per pixel, parallelised with
+            ``joblib`` when available.  Strictly non-negative; slower but more
+            physically correct for absent elements.
+
+        Default ``"lstsq"``.
+    n_jobs : int, optional
+        Number of parallel workers for ``method="nnls"`` (passed to
+        ``joblib.Parallel``; ``-1`` uses all available CPUs).  Ignored for
+        ``method="lstsq"`` (default ``-1``).
+
+    Returns
+    -------
+    coeff_maps : dict
+        Mapping ``element -> np.ndarray`` of shape ``(n_y, n_x)`` with the
+        fitted amplitude for each spatial pixel.
+    """
+    n_energy, n_y, n_x = data.shape
+    n_pixels = n_y * n_x
+
+    A, labels = build_fit_matrix(
+        energy_axis, elements, excitation_energy, fwhm_keV, background_order
+    )
+    element_labels = [l for l in labels if not l.startswith("_bg")]
+
+    # Shape: (n_energy, n_pixels) — keeps memory contiguous for LAPACK
+    spectra = data.reshape(n_energy, n_pixels)
+
+    if method == "lstsq":
+        # Single batched solve: A (n_energy, n_comp) \ spectra (n_energy, n_pixels)
+        coeffs, _, _, _ = np.linalg.lstsq(A, spectra, rcond=None)
+        # coeffs: (n_comp, n_pixels) -> (n_pixels, n_comp)
+        coeffs = np.clip(coeffs.T, 0, None)
+
+    elif method == "nnls":
+        # spectra.T: (n_pixels, n_energy) for row-wise iteration
+        spectra_t = np.ascontiguousarray(spectra.T)
+        try:
+            from joblib import Parallel, delayed
+
+            results = Parallel(n_jobs=n_jobs)(
+                delayed(nnls)(A, spectra_t[i]) for i in range(n_pixels)
+            )
+            coeffs = np.array([r[0] for r in results])
+        except ImportError:
+            coeffs = np.array(
+                [nnls(A, spectra_t[i])[0] for i in tqdm(range(n_pixels))]
+            )
+
+    else:
+        raise ValueError(f"Unknown method '{method}'. Choose 'lstsq' or 'nnls'.")
+
+    coeff_maps = {
+        label: coeffs[:, j].reshape(n_y, n_x)
+        for j, label in enumerate(labels)
+        if label in element_labels
+    }
+    return coeff_maps

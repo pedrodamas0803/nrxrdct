@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xraylib
 import xrayutilities as xu
 from pybaselines import Baseline
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
@@ -408,7 +409,147 @@ def get_powder_xrd_peaks(
         df = pd.DataFrame(rows).sort_values("r", ascending=False).reset_index(drop=True)
         results[phase_name] = df
 
+    _print_peaks_table(results)
     return results
+
+
+def _print_peaks_table(results: dict[str, pd.DataFrame]) -> None:
+    """Print a well-aligned summary of XRD peak tables to stdout."""
+    col_fmts = {
+        "h":    ("{:>4}",  "{:>4}"),
+        "k":    ("{:>4}",  "{:>4}"),
+        "l":    ("{:>4}",  "{:>4}"),
+        "hkl":  ("{:>12}", "{:>12}"),
+        "tth":  ("{:>10}", "{:>10.4f}"),
+        "d_hkl":("{:>10}", "{:>10.4f}"),
+        "r":    ("{:>14}", "{:>14.2f}"),
+    }
+    header = "".join(hfmt.format(col) for col, (hfmt, _) in col_fmts.items())
+    sep = "-" * len(header)
+
+    for phase, df in results.items():
+        print(f"\n{phase}  ({len(df)} reflections)")
+        print(sep)
+        print(header)
+        print(sep)
+        for _, row in df.iterrows():
+            line = "".join(
+                rfmt.format(row[col]) for col, (_, rfmt) in col_fmts.items()
+            )
+            print(line)
+        print(sep)
+
+
+def calculate_absorption_coefficient(
+    compound: str,
+    density: float,
+    energy_keV: float,
+    sample_diameter_mm: float,
+    geometry: str = "debye-scherrer",
+) -> dict:
+    """
+    Estimate the GSAS-II absorption parameter for a powder sample using xraylib.
+
+    The function computes the linear attenuation coefficient μ (cm⁻¹) from the
+    mass attenuation coefficient and density, then converts it to the
+    dimensionless parameter expected by GSAS-II for the chosen geometry.
+
+    Parameters
+    ----------
+    compound : str
+        Chemical formula understood by xraylib, e.g. ``"Fe2O3"``, ``"LaB6"``,
+        ``"Al"``.  Elements and simple compounds are supported; use standard
+        Hill notation (C first, H second, then alphabetical).
+    density : float
+        Sample density in g/cm³.  For a packed powder bed this should be the
+        effective (packing) density, not the crystallographic density.
+    energy_keV : float
+        Incident X-ray energy in keV.
+    sample_diameter_mm : float
+        Sample diameter (or thickness for flat-plate) in mm.  For a capillary
+        this is the outer diameter; for a flat-plate it is the thickness.
+    geometry : ``"debye-scherrer"`` | ``"flat-plate"``, optional
+        Sample geometry (default ``"debye-scherrer"``).
+
+        * ``"debye-scherrer"`` — cylindrical capillary in transmission.
+          GSAS-II expects the dimensionless product μr (linear absorption
+          coefficient × capillary radius), where r = diameter / 2.
+          Units: μ in cm⁻¹, r in cm  →  μr dimensionless.
+
+        * ``"flat-plate"`` — reflection or transmission flat-plate geometry.
+          GSAS-II expects μt (linear absorption coefficient × plate
+          thickness), where t is the sample thickness.
+          Units: μ in cm⁻¹, t in cm  →  μt dimensionless.
+
+    Returns
+    -------
+    dict with keys:
+
+    ``"mu_cm"`` : float
+        Linear attenuation coefficient μ in cm⁻¹.
+    ``"mu_mm"`` : float
+        Linear attenuation coefficient μ in mm⁻¹.
+    ``"mass_atten_cm2_g"`` : float
+        Mass attenuation coefficient μ/ρ in cm²/g from xraylib.
+    ``"gsasii_absorption"`` : float
+        Dimensionless GSAS-II ``Absorption`` parameter (μr or μt).
+
+    Examples
+    --------
+    Estimate absorption for a 0.3 mm Al₂O₃ capillary at 44 keV:
+
+    >>> result = calculate_absorption_coefficient(
+    ...     compound="Al2O3", density=3.99, energy_keV=44.0,
+    ...     sample_diameter_mm=0.3, geometry="debye-scherrer"
+    ... )
+    >>> print(f"μ = {result['mu_cm']:.2f} cm⁻¹")
+    >>> print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")
+
+    Notes
+    -----
+    xraylib's ``CS_Total_CP`` returns the *total* mass attenuation
+    coefficient (photoelectric + Compton + Rayleigh) in cm²/g.  This is
+    appropriate for absorption corrections in powder diffraction where all
+    removed photons are treated as lost.
+
+    For multi-phase samples the effective μ can be approximated as the
+    volume-weighted average of the individual phase μ values.  Pass the
+    bulk density of the *mixture*, not the crystallographic density of a
+    single phase.
+    """
+    valid_geometries = {"debye-scherrer", "flat-plate"}
+    if geometry not in valid_geometries:
+        raise ValueError(
+            f"Unknown geometry '{geometry}'. Valid options: {sorted(valid_geometries)}"
+        )
+
+    mass_atten = xraylib.CS_Total_CP(compound, energy_keV)  # cm²/g
+    mu_cm = mass_atten * density                              # cm⁻¹
+    mu_mm = mu_cm / 10.0                                      # mm⁻¹
+
+    # Convert sample_diameter_mm to cm for GSAS-II parameter
+    if geometry == "debye-scherrer":
+        radius_cm = (sample_diameter_mm / 2.0) / 10.0
+        gsasii_absorption = mu_cm * radius_cm                 # μr, dimensionless
+    else:  # flat-plate
+        thickness_cm = sample_diameter_mm / 10.0
+        gsasii_absorption = mu_cm * thickness_cm              # μt, dimensionless
+
+    print(f"Compound           : {compound}")
+    print(f"Density            : {density:.4f} g/cm³")
+    print(f"Energy             : {energy_keV:.3f} keV")
+    print(f"μ/ρ                : {mass_atten:.4f} cm²/g")
+    print(f"μ                  : {mu_cm:.4f} cm⁻¹  ({mu_mm:.4f} mm⁻¹)")
+    print(f"Geometry           : {geometry}")
+    print(f"GSAS-II Absorption : {gsasii_absorption:.6f}  (μr)" if geometry == "debye-scherrer"
+          else f"GSAS-II Absorption : {gsasii_absorption:.6f}  (μt)")
+
+    return {
+        "mu_cm": mu_cm,
+        "mu_mm": mu_mm,
+        "mass_atten_cm2_g": mass_atten,
+        "gsasii_absorption": gsasii_absorption,
+    }
 
 
 def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple):

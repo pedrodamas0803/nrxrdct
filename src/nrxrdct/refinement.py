@@ -102,6 +102,37 @@ class BaseRefinement(Scan):
             polarization=polarization, wavelength=self.wavelength
         )
 
+    def load_model(self, gpx_file: Path) -> tuple:
+        """
+        Load an existing GSAS-II project from a ``.gpx`` file.
+
+        Use this to resume a refinement that was previously saved, or to
+        reload a project after restarting Python.  The first histogram and
+        all phases found in the project are attached to ``self.hist`` and
+        ``self.phases`` respectively so that all other methods work
+        immediately after loading.
+
+        Parameters
+        ----------
+        gpx_file : Path
+            Path to an existing ``.gpx`` file.
+
+        Returns
+        -------
+        tuple
+            ``(gpx, hist)`` — the :class:`G2Project` and the first histogram.
+        """
+        self.gpx = G2sc.G2Project(gpxfile=str(gpx_file))
+        self.hist = self.gpx.histograms()[0]
+        self.phases = self.gpx.phases()
+        if self.phases:
+            self.phase = self.phases[-1]
+            self.calibrant_composition = self.phase.name
+        print(f"Loaded project: {gpx_file}")
+        print(f"  Histogram : {self.hist.name}")
+        print(f"  Phases    : {[ph.name for ph in self.phases]}")
+        return self.gpx, self.hist
+
     def create_model(self, gpx_file: Path = Path("model.gpx")) -> tuple:
         """
         Create a new GSAS-II project and add the powder histogram.
@@ -160,6 +191,100 @@ class BaseRefinement(Scan):
         self.phases.append(self.phase)
         self.gpx.save()
         return self.phase
+
+    def set_limits(self, low: float, high: float) -> None:
+        """
+        Set the active 2θ refinement range.
+
+        Only data points within ``[low, high]`` are included in the
+        least-squares fit.  Can be called at any time to narrow or widen
+        the range without rebuilding the project.
+
+        Parameters
+        ----------
+        low : float
+            Lower 2θ limit in degrees.
+        high : float
+            Upper 2θ limit in degrees.
+        """
+        self.hist.set_refinements({"Limits": [low, high]})
+        self.low_lim = low
+        self.high_lim = high
+        self.gpx.save()
+        print(f"2θ limits set to [{low:.4f}, {high:.4f}] °")
+
+    def add_excluded_region(self, low: float, high: float) -> None:
+        """
+        Exclude a 2θ interval from the refinement.
+
+        Data points in ``[low, high]`` are masked out of the residual
+        calculation.  Multiple calls add independent excluded regions.
+        Typical uses: ice rings, substrate peaks, beam-stop shadow,
+        or detector artefacts.
+
+        Parameters
+        ----------
+        low : float
+            Lower bound of the excluded region in degrees.
+        high : float
+            Upper bound of the excluded region in degrees.
+        """
+        current = self.hist.Excluded()
+        current.append([low, high])
+        self.hist.Excluded(current)
+        self.gpx.save()
+        print(f"Excluded region added: [{low:.4f}, {high:.4f}] °"
+              f"  (total excluded regions: {len(current)})")
+
+    def set_LeBail(
+        self,
+        phase: str | list[str] | None = None,
+        enable: bool = True,
+    ) -> None:
+        """
+        Activate or deactivate LeBail extraction for one or more phases.
+
+        In LeBail mode the integrated intensities of all reflections are
+        treated as free parameters and refined to best match the observed
+        pattern, without any structural model.  This is useful for:
+
+        * Checking the unit cell and space group before a full Rietveld
+          refinement.
+        * Extracting intensities for structure solution.
+        * Fitting patterns where the structure of one phase is unknown
+          while the others are refined by Rietveld.
+
+        When LeBail is active for a phase, the HAP scale factor for that
+        phase is refined instead of the structural scale, and atomic
+        structure factors are not used.
+
+        Parameters
+        ----------
+        phase : str, list of str, or None, optional
+            Phase name(s) to change.  ``None`` (default) applies to all
+            phases.
+        enable : bool, optional
+            ``True`` (default) activates LeBail; ``False`` switches back
+            to Rietveld mode.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
+            ph.set_refinements({"LeBail": enable})
+            mode = "LeBail" if enable else "Rietveld"
+            print(f"Phase '{ph.name}' set to {mode} mode")
+        self.gpx.save()
 
     def refine_background(
         self,
@@ -249,9 +374,17 @@ class BaseRefinement(Scan):
 
         self.gpx.save()
         self.gpx.do_refinements([{}])
+
+        # Freeze all background flags after refinement
+        bkg = self.hist["Background"]
+        bkg[0][1] = False
+        for term in bkg[1].get("debyeTerms", []):
+            term[1] = term[3] = term[5] = False  # refA, refR, refU
+        self.gpx.save()
+
         print(f"Background refinement performed (function='{function}'"
               + (f", {len(debye_terms)} Debye term(s)" if debye_terms else "")
-              + ")")
+              + ", parameters frozen)")
 
     def refine_histogram_scale(self) -> None:
         """Refine the overall histogram scale factor, then freeze it."""
@@ -343,26 +476,165 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print(f"Sample displacement refinement done for '{parameter}' (parameter frozen)")
 
+    def set_absorption(
+        self,
+        absorption: float,
+        refine: bool = False,
+    ) -> None:
+        """
+        Set the GSAS-II ``Absorption`` sample parameter and optionally refine it.
+
+        The absorption correction accounts for the attenuation of both the
+        incident and diffracted beams as they travel through the sample.  Its
+        effect is strongest at low 2θ angles (long path length through the
+        sample) and weakens at higher angles.  Neglecting absorption when μr
+        (or μt) is significant causes systematic under-estimation of
+        low-angle reflection intensities relative to high-angle ones.
+
+        Use :func:`~nrxrdct.utils.calculate_absorption_coefficient` to
+        estimate the parameter value from the chemical composition, density,
+        beam energy, and sample dimensions before calling this method.
+
+        Parameters
+        ----------
+        absorption : float
+            GSAS-II ``Absorption`` parameter value.  The physical meaning
+            depends on the sample geometry set in the GSAS-II project:
+
+            * **Debye-Scherrer (capillary, transmission)** — dimensionless
+              product μr, where μ is the linear attenuation coefficient
+              (cm⁻¹) and r is the capillary radius (cm).  Typical values
+              for 0.3–0.7 mm capillaries at synchrotron energies
+              (30–100 keV) are in the range 0.001–0.5.
+
+            * **Flat-plate (reflection or transmission)** — dimensionless
+              product μt, where t is the sample thickness (cm).
+
+        refine : bool, optional
+            If ``True``, activate the refinement flag so the absorption
+            parameter is included in the next least-squares cycle.
+            Default ``False`` (parameter fixed at the supplied value).
+
+            .. note::
+                Absorption and the overall scale factor are strongly
+                correlated — both scale the pattern intensity.  Only free
+                absorption for refinement after the scale factor and
+                background are well converged, and only when the pattern
+                exhibits a clear low-angle intensity deficit consistent with
+                absorption.  For thin capillaries (μr < 0.1) the correction
+                is small enough to fix at the calculated value.
+        """
+        self.hist.SampleParameters["Absorption"][0] = absorption
+        self.hist.SampleParameters["Absorption"][1] = refine
+        self.gpx.save()
+        status = "free for refinement" if refine else "fixed"
+        print(f"Absorption set to {absorption:.6f} ({status})")
+
     def refine_gaussian_broadening(self, refine: list = ["U", "V", "W", "SH/L"]) -> None:
         """
-        Possible parameters are U, V, W, Z, SH/L
-        For synchrotron light with 2D detectors, go only for W.
+        Refine Gaussian peak-width parameters one at a time, then freeze them.
+
+        Each parameter is refined in a separate cycle.  After the cycle its
+        flag is cleared so that the value is not changed by later refinement
+        steps unless explicitly freed again.
+
+        Parameters
+        ----------
+        refine : list of str, optional
+            Ordered list of Gaussian instrument parameters to refine.
+            Valid choices (all available in the FCJVoigt / ExpFCJVoigt profile):
+
+            ``"U"``
+                Caglioti quadratic term: FWHM²_G += U·tan²θ.
+                Dominated by sample microstrain and wavelength dispersion.
+                Units: centideg².
+
+            ``"V"``
+                Caglioti linear term: FWHM²_G += V·tanθ.
+                Usually small; cross-term between source and detector
+                contributions.  Units: centideg².
+
+            ``"W"``
+                Caglioti constant term: FWHM²_G += W.
+                For a well-collimated synchrotron beam with a 2-D detector
+                this is often the *only* non-negligible Gaussian contribution.
+                Units: centideg².
+
+            ``"Z"``
+                Size-broadening Gaussian term: FWHM²_G += Z/cos²θ.
+                Encodes crystallite-size broadening in the Gaussian channel.
+                Units: centideg².
+
+            ``"SH/L"``
+                Finger–Cox–Jepcoat axial-divergence parameter (ratio of
+                sample-to-detector half-height over sample-to-detector
+                distance).  Affects low-angle peak asymmetry.  Dimensionless.
+                Not available in the EpsVoigt (PXB) profile.
+
+            For a synchrotron experiment with a 2-D integrating detector a
+            typical starting point is ``["W"]``.  Laboratory sources usually
+            benefit from refining ``["U", "V", "W"]`` together (sequentially).
+
+        Notes
+        -----
+        Parameters are refined *sequentially* (one per cycle).  To refine
+        them simultaneously use :meth:`refine_peak_profile` and pass the
+        desired list via the ``parameters`` argument.
         """
+        ip = self.hist["Instrument Parameters"][0]
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            print(f"Refined {param} (Gaussian broadening)")
+            if param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+                ip[param][2] = False
+            print(f"Refined {param} (Gaussian broadening, parameter frozen)")
+        self.gpx.save()
 
     def refine_lorentzian_broadening(self, refine: list = ["X", "Y"]) -> None:
         """
-        Possible parameters are X, and Y
+        Refine Lorentzian peak-width parameters one at a time, then freeze them.
+
+        Each parameter is refined in a separate cycle.  After the cycle its
+        flag is cleared so that the value is not changed by later refinement
+        steps unless explicitly freed again.
+
+        Parameters
+        ----------
+        refine : list of str, optional
+            Ordered list of Lorentzian instrument parameters to refine.
+            Valid choices:
+
+            ``"X"``
+                Lorentzian size-broadening term: FWHM_L += X/cosθ.
+                Encodes crystallite-size-induced Lorentzian broadening.
+                Units: centideg.
+
+            ``"Y"``
+                Lorentzian strain-broadening term: FWHM_L += Y·tanθ.
+                Encodes microstrain-induced Lorentzian broadening.
+                Units: centideg.
+
+            The total Lorentzian FWHM combines with the Gaussian via the
+            Thompson–Cox–Hastings pseudo-Voigt mixing rule:
+
+                FWHM_total⁵ = FWHM_G⁵ + FWHM_L⁵  (approximate)
+
+        Notes
+        -----
+        Parameters are refined *sequentially* (one per cycle).  To refine
+        them simultaneously use :meth:`refine_peak_profile` and pass the
+        desired list via the ``parameters`` argument.
         """
+        ip = self.hist["Instrument Parameters"][0]
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            print(f"Refined {param} (Lorentzian broadening)")
+            if param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+                ip[param][2] = False
+            print(f"Refined {param} (Lorentzian broadening, parameter frozen)")
+        self.gpx.save()
 
     def refine_peak_profile(
         self,
@@ -850,6 +1122,128 @@ class BaseRefinement(Scan):
         atom_info = f", atoms={atoms}" if atoms is not None else ""
         print(f"Occupancy refinement done for {phase_names}{atom_info} (flag frozen)")
 
+    def refine_Uiso(
+        self,
+        phase: str | list[str] | None = None,
+        atoms: list[str] | None = None,
+        freeze: bool = True,
+    ) -> None:
+        """
+        Refine the isotropic atomic displacement parameter U\ :sub:`iso` for
+        selected atoms, then optionally freeze the flag.
+
+        U\ :sub:`iso` (also written B\ :sub:`iso` / 8π²U\ :sub:`iso` in older
+        notation) describes the mean-square displacement of an atom from its
+        equilibrium site, averaged over all directions.  It combines genuine
+        thermal vibrations with static disorder (positional spread across the
+        unit cells of the crystal).  Physically, U\ :sub:`iso` enters the
+        structure factor as a Debye-Waller factor:
+
+            T(sinθ/λ) = exp(−8π² U\ :sub:`iso` sin²θ / λ²)
+
+        which attenuates the calculated intensity increasingly at high 2θ
+        angles.  Refining U\ :sub:`iso` therefore corrects the high-angle
+        intensity fall-off and is one of the earliest structural parameters
+        to stabilise in a Rietveld refinement sequence.
+
+        Only atoms whose ``adp_flag`` is ``'I'`` (isotropic displacement model)
+        are modified.  Atoms already set to anisotropic (``'A'``) are skipped
+        silently — use the GSAS-II GUI or direct data manipulation to refine
+        anisotropic ADPs.
+
+        The ``'U'`` refinement flag is added to each target atom's existing
+        flag string before the cycle and, if ``freeze=True``, removed
+        afterwards, leaving any ``'X'`` or ``'F'`` flags that were already
+        active untouched.
+
+        Parameters
+        ----------
+        phase : str, list of str, or None, optional
+            Phase name(s) to apply the refinement to.  ``None`` (default)
+            applies to all phases in the project.  Names must match those
+            used in :meth:`add_phase`.
+        atoms : list of str, or None, optional
+            Restrict refinement to a subset of atoms matched against atom
+            **labels** (e.g. ``"Fe1"``) first, then **element symbols**
+            (e.g. ``"Fe"``).  ``None`` (default) refines all isotropic atoms
+            in the target phases.
+        freeze : bool, optional
+            If ``True`` (default), remove the ``'U'`` flag after the
+            refinement cycle, restoring the original flag state.  Set to
+            ``False`` to keep U\ :sub:`iso` free for subsequent cycles
+            (e.g. when continuing with :meth:`refine_atomic_positions`).
+
+        Notes
+        -----
+        **Typical refinement sequence:**
+
+        1. :meth:`refine_background` — fit the baseline first.
+        2. :meth:`refine_histogram_scale` — establish the overall intensity scale.
+        3. :meth:`refine_Uiso` (this method, ``freeze=False``) — let
+           displacement parameters absorb residual scale errors before
+           freeing atomic positions.
+        4. :meth:`refine_atomic_positions` with flag ``"XU"`` — refine
+           positions and U\ :sub:`iso` simultaneously once the model is stable.
+
+        **Correlations to watch:**
+
+        * U\ :sub:`iso` is positively correlated with the overall scale factor
+          (both scale the calculated pattern) and with site occupancy.  Ensure
+          the scale is well determined before freeing U\ :sub:`iso`.
+        * For light atoms (Z ≲ 10) the Debye-Waller attenuation is weak and
+          U\ :sub:`iso` may refine to unphysical values; consider fixing it.
+        * Very large U\ :sub:`iso` (> 0.05 Å²) often indicates a wrong atom
+          type, split site, or structural disorder rather than genuine thermal
+          motion.
+        * Very small or negative U\ :sub:`iso` usually means the calculated
+          intensities are too low at high angles — check for preferred
+          orientation, absorption, or an incorrect structure model.
+
+        **Typical values:**
+
+        At room temperature, U\ :sub:`iso` for most inorganic phases falls in
+        the range 0.003–0.020 Å².  Lighter atoms and softer bonding
+        environments tend toward the upper end.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        target_atoms = []
+        for ph in targets:
+            for atom in ph.atoms():
+                if atom.adp_flag != "I":
+                    continue
+                if atoms is None or atom.label in atoms or atom.element in atoms:
+                    target_atoms.append(atom)
+
+        original_flags = {id(a): a.refinement_flags for a in target_atoms}
+        for atom in target_atoms:
+            if "U" not in atom.refinement_flags:
+                atom.refinement_flags = atom.refinement_flags + "U"
+
+        self.gpx.save()
+        self.gpx.do_refinements([{}])
+
+        if freeze:
+            for atom in target_atoms:
+                atom.refinement_flags = original_flags[id(atom)]
+            self.gpx.save()
+
+        phase_names = [ph.name for ph in targets]
+        atom_info = f", atoms={atoms}" if atoms is not None else ""
+        frozen_info = " (flag frozen)" if freeze else ""
+        print(f"Uiso refinement done for {phase_names}{atom_info}{frozen_info}")
+
     def refine_phase_content(self) -> None:
         """
         Sets the scale factor of the histogram to zero and activate the refinement per phase to extract phase fractions.
@@ -1156,45 +1550,494 @@ class BaseRefinement(Scan):
             self.gpx.do_refinements([{}])
             print(f"HStrain refined for phase '{ph.name}'")
 
-    def refine_extinction(self) -> None:
-        """Refine the extinction parameter for all phases."""
-        for ph in self.gpx.phases():
+    def refine_extinction(self, phase: str | list[str] | None = None) -> None:
+        """
+        Refine the primary extinction parameter for one or more phases.
+
+        Primary extinction occurs when a strong Bragg reflection partially
+        depletes the incident beam before it reaches deeper layers of the
+        crystal, reducing the measured intensity below the kinematic
+        (structure-factor-squared) prediction.  It is most pronounced for
+        large, nearly perfect crystallites and for low-angle, high-intensity
+        reflections where the structure factor is large.
+
+        GSAS-II models primary extinction with a single scalar parameter *x*
+        (the extinction coefficient).  The corrected intensity is:
+
+            I_corr = I_kin / (1 + x · F²)
+
+        where F² is the squared structure factor for that reflection.  When
+        *x* = 0 there is no extinction correction.
+
+        Parameters
+        ----------
+        phase : str, list of str, or None, optional
+            Phase name(s) to refine.  ``None`` (default) refines all phases.
+
+        Notes
+        -----
+        Primary extinction is only significant for well-crystallised,
+        large-grained phases (grain size ≳ a few micrometres) or for samples
+        with very low mosaic spread.  For typical powder diffraction specimens,
+        where the crystallites are small and randomly oriented, extinction
+        effects are negligible and this parameter should be kept fixed.
+
+        Do not confuse primary extinction with secondary extinction (multiple
+        scattering between grains), which is not modelled by this parameter,
+        or with absorption, which is handled separately through the histogram
+        sample parameters.  Refine extinction only after the structure is
+        well determined; it is correlated with the overall scale factor and
+        with U\ :sub:`iso` for the heaviest scatterers.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
             ph.set_HAP_refinements({"Extinction": True}, histograms=[self.hist])
             self.gpx.save()
             self.gpx.do_refinements([{}])
+            print(f"Extinction refined for phase '{ph.name}'")
+
+    def refine_babinet(
+        self,
+        refine: str | list[str] = "BabA",
+        phase: str | list[str] | None = None,
+    ) -> None:
+        """
+        Refine Babinet complementary scattering parameters for one or more phases.
+
+        The Babinet principle models the contribution of a diffuse, disordered
+        component (e.g. amorphous matrix, disordered solvent, void space) that
+        is complementary to the crystalline phase.  It modifies the calculated
+        structure factors as:
+
+            F²_corr = F²_cryst · exp(−BabU · Q²) + BabA · exp(−BabU · Q²)
+
+        where Q = 4π sinθ / λ.  The two parameters are:
+
+        ``BabA`` — Babinet amplitude.  Scales the complementary scattering
+        contribution relative to the crystalline phase.  Physically represents
+        the amount of disordered material surrounding or interpenetrating the
+        crystalline domains.  Start with ``BabA`` alone; ``BabU`` is strongly
+        correlated with it.
+
+        ``BabU`` — Babinet U parameter (Å²).  Controls the Q-dependence
+        (angular fall-off) of the complementary scattering, analogous to an
+        isotropic displacement parameter for the disordered component.
+
+        Parameters
+        ----------
+        refine : str or list of str, optional
+            Parameter(s) to refine: ``"BabA"``, ``"BabU"``, or both
+            (default ``"BabA"``).  Refine ``BabA`` first; add ``BabU``
+            only once ``BabA`` is stable.
+        phase : str, list of str, or None, optional
+            Phase name(s) to apply the refinement to.  ``None`` (default)
+            applies to all phases.
+
+        Notes
+        -----
+        Babinet parameters are most useful when there is clear diffuse
+        scattering beneath the Bragg peaks that cannot be accounted for by
+        the background function alone.  They are strongly correlated with the
+        overall scale factor and with the background coefficients — converge
+        both before introducing Babinet terms.
+        """
+        params = [refine] if isinstance(refine, str) else list(refine)
+        valid = {"BabA", "BabU"}
+        invalid = set(params) - valid
+        if invalid:
+            raise ValueError(
+                f"Unknown Babinet parameter(s) {sorted(invalid)}. "
+                f"Valid options: {sorted(valid)}"
+            )
+
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        bab_dict = {"Babinet": {p: {"refine": True} for p in params}}
+        for ph in targets:
+            ph.set_HAP_refinements(bab_dict, histograms=[self.hist])
+            self.gpx.save()
+            self.gpx.do_refinements([{}])
+            print(f"Babinet {params} refined for phase '{ph.name}'")
 
     def print_refinement_results(self) -> None:
-        """Print a summary of calibrated instrument parameters and per-phase cell results to stdout."""
+        """Print a full summary of all refinable parameters and their current state."""
         print("\n" + "=" * 60)
         print("REFINEMENT RESULTS")
         print("=" * 60)
 
-        ip = self.hist["Instrument Parameters"][0]
-        params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
-        calibrated = {}
-        for p in params_to_report:
-            if p in ip:
-                val = ip[p][1] if isinstance(ip[p], list) else ip[p]
-                calibrated[p] = val
-
-        print("\nCalibrated instrument parameters:")
-        for p, v in calibrated.items():
-            fixed = "" if (isinstance(ip[p], list) and ip[p][2]) else " (fixed)"
-            print(f"  {p:12s} = {v:.6f}{fixed}")
-
+        # ── R-factors ──────────────────────────────────────────────────────────
         wR = self.hist.get_wR()
-        print(
-            f"\n  Rwp = {wR:.2f} %" if wR is not None else "\n  Rwp = refinement failed"
-        )
+        residuals = self.hist.residuals
+        print("\nR-factors:")
+        print(f"  Rwp  = {wR:.4f} %" if wR is not None else "  Rwp  = n/a")
+        for key in ("R", "Rb", "wRb", "wRmin"):
+            v = residuals.get(key)
+            if v is not None:
+                print(f"  {key:<5}= {v:.4f} %")
+
+        # ── Instrument parameters ──────────────────────────────────────────────
+        ip = self.hist["Instrument Parameters"][0]
+        profile_type = ip.get("Type", ["?"])[0]
+        print(f"\nInstrument parameters  (profile: {profile_type}):")
+        all_inst_params = [
+            "Lam", "Lam1", "Lam2", "Zero", "Azimuth", "Polariz.",
+            "U", "V", "W", "Z", "X", "Y", "SH/L",
+            "alpha-0", "alpha-1", "beta-0", "beta-1",
+        ]
+        for p in all_inst_params:
+            if p not in ip:
+                continue
+            entry = ip[p]
+            val   = entry[1] if isinstance(entry, list) else entry
+            if not isinstance(val, (int, float)):
+                continue
+            refine = entry[2] if (isinstance(entry, list) and len(entry) >= 3) else False
+            flag   = "refine" if refine else "fixed"
+            print(f"  {p:<12} = {val:14.6g}  ({flag})")
+
+        # ── Sample parameters ──────────────────────────────────────────────────
+        sp = self.hist.SampleParameters
+        print("\nSample parameters:")
+        for key in ("Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
+                    "Transparency", "SurfRoughA", "SurfRoughB"):
+            if key not in sp:
+                continue
+            entry = sp[key]
+            val, refine = entry[0], entry[1]
+            flag = "refine" if refine else "fixed"
+            print(f"  {key:<14} = {val:14.6g}  ({flag})")
+
+        # ── Background ────────────────────────────────────────────────────────
+        bkg = self.hist["Background"]
+        bkg0 = bkg[0]
+        print(f"\nBackground:")
+        print(f"  Function   : {bkg0[0]}")
+        print(f"  Refine     : {bkg0[1]}")
+        print(f"  # coeffs   : {bkg0[2]}")
+        print(f"  Coefficients: {[f'{c:.4g}' for c in bkg0[3:3+bkg0[2]]]}")
+        n_debye = bkg[1].get("nDebye", 0)
+        if n_debye:
+            print(f"  Debye terms: {n_debye}")
+            for i, t in enumerate(bkg[1].get("debyeTerms", [])):
+                A, refA, R, refR, U, refU = t
+                print(f"    [{i}]  A={A:.4g}(ref={refA})  R={R:.4g}(ref={refR})  U={U:.4g}(ref={refU})")
+
+        # ── Per-phase results ──────────────────────────────────────────────────
         print("\nPhase results:")
         for ph in self.gpx.phases():
-            print(f"\n  Phase: {ph.name}")
+            print(f"\n  {'─'*54}")
+            print(f"  Phase: {ph.name}")
             cell = ph.get_cell()
-            for k, v in cell.items():
-                try:
-                    print(f"    {k} = {v:.5f}")
-                except Exception:
-                    print(f"    {k} = {v}")
+            cell_refine = ph.data["General"]["Cell"][0]
+            print(f"  Cell ({'refine' if cell_refine else 'fixed'}):")
+            print(f"    a={cell['length_a']:.5f}  b={cell['length_b']:.5f}  c={cell['length_c']:.5f}  Å")
+            print(f"    α={cell['angle_alpha']:.4f}  β={cell['angle_beta']:.4f}  γ={cell['angle_gamma']:.4f}  °")
+            print(f"    V={cell['volume']:.4f}  Å³")
+
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            if hap:
+                sc = hap.get("Scale", [1.0, False])
+                print(f"  HAP Scale     : {sc[0]:.6g}  ({'refine' if sc[1] else 'fixed'})")
+
+                ext = hap.get("Extinction", [0.0, False])
+                print(f"  Extinction    : {ext[0]:.6g}  ({'refine' if ext[1] else 'fixed'})")
+
+                hs = hap.get("HStrain")
+                if hs:
+                    vals  = hs[0]
+                    flags = hs[1]
+                    dij_str = "  ".join(f"D{i}={v:.4g}({'R' if f else 'F'})"
+                                       for i, (v, f) in enumerate(zip(vals, flags)))
+                    print(f"  HStrain       : {dij_str}")
+
+                sz = hap.get("Size")
+                if sz:
+                    model   = sz[0]
+                    ref_iso = any(sz[2]) if isinstance(sz[2], list) else sz[2]
+                    if model == "isotropic":
+                        print(f"  Size          : {model}  val={sz[1][0]:.4g}  refine={ref_iso}")
+                    elif model == "uniaxial":
+                        print(f"  Size          : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}")
+                    else:
+                        print(f"  Size          : {model}  refine={any(sz[5])}")
+
+                ms = hap.get("Mustrain")
+                if ms:
+                    model   = ms[0]
+                    ref_iso = any(ms[2]) if isinstance(ms[2], list) else ms[2]
+                    if model == "isotropic":
+                        print(f"  Mustrain      : {model}  val={ms[1][0]:.4g}  refine={ref_iso}")
+                    elif model == "uniaxial":
+                        print(f"  Mustrain      : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}")
+                    else:
+                        print(f"  Mustrain      : {model}  refine={any(ms[5])}")
+
+                po = hap.get("Pref.Ori.")
+                if po:
+                    model  = po[0]
+                    refine = po[2]
+                    if model == "MD":
+                        print(f"  Pref.Ori.     : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}")
+                    else:
+                        print(f"  Pref.Ori.     : SH  ord={po[4]}  axis={po[3]}  refine={refine}")
+
+            # Atoms summary
+            atoms = ph.atoms()
+            if atoms:
+                print(f"  Atoms ({len(atoms)}):")
+                print(f"    {'Label':<8} {'Element':<6} {'x':>9} {'y':>9} {'z':>9}"
+                      f" {'Occ':>6} {'Uiso':>8} {'Flags'}")
+                print(f"    {'─'*68}")
+                for atom in atoms:
+                    x, y, z = atom.coordinates
+                    uiso = atom.ADP if atom.adp_flag == "I" else "aniso"
+                    uiso_str = f"{uiso:.5f}" if isinstance(uiso, float) else uiso
+                    print(f"    {atom.label:<8} {atom.element:<6}"
+                          f" {x:9.5f} {y:9.5f} {z:9.5f}"
+                          f" {atom.occupancy:6.4f} {uiso_str:>8}"
+                          f"  {atom.refinement_flags!r}")
+
+    # ------------------------------------------------------------------
+    # Convenience / utility methods
+    # ------------------------------------------------------------------
+
+    def get_Rwp(self) -> float | None:
+        """
+        Return the current weighted-profile R-factor (Rwp) in percent.
+
+        Rwp is the principal figure-of-merit for a Rietveld refinement.  It
+        is defined as::
+
+            Rwp = 100 · √[ Σ w·(yobs−ycalc)² / Σ w·yobs² ]
+
+        where *w* = 1/σ² are the per-point weights.
+
+        Returns
+        -------
+        float or None
+            Rwp in percent, or ``None`` if no refinement has been run yet.
+        """
+        return self.hist.get_wR()
+
+    def get_chi2(self) -> float | None:
+        """
+        Return the reduced chi-squared (goodness-of-fit, GOF) of the last cycle.
+
+        The reduced χ² is::
+
+            χ² = Σ w·(yobs−ycalc)² / (N_obs − N_vars)
+
+        where *N_obs* is the number of data points and *N_vars* is the number
+        of free parameters.  A value near 1.0 indicates a statistically ideal
+        fit; values ≫ 1 suggest systematic misfit or underestimated errors.
+
+        Returns
+        -------
+        float or None
+            Reduced χ², or ``None`` if no refinement has been run yet.
+        """
+        return self.hist.residuals.get("GOF")
+
+    def save(self) -> None:
+        """
+        Save the GSAS-II project file to disk.
+
+        Wraps :meth:`G2Project.save`.  Call this after any manual parameter
+        edits (e.g. direct dictionary access) to ensure the ``.gpx`` file
+        reflects the current in-memory state.
+        """
+        self.gpx.save()
+        print(f"Project saved: {self.gpx.filename}")
+
+    def export_pattern(self, path: str | Path = "pattern.csv") -> None:
+        """
+        Export the observed, calculated, difference, and background arrays
+        to a plain-text CSV file.
+
+        The output file contains five columns::
+
+            2theta, yobs, ycalc, diff, background
+
+        with a one-line header.  Values are written with six significant
+        figures.  The file can be read by any spreadsheet or plotting tool.
+
+        Parameters
+        ----------
+        path : str or Path, optional
+            Output file path (default ``"pattern.csv"``).  The extension
+            determines the format:
+
+            - ``.csv`` — comma-separated (default)
+            - any other extension — space-separated (suitable for most
+              plotting packages that accept ``.xy`` or ``.dat``)
+        """
+        tth  = self.hist.getdata("x")
+        yobs = self.hist.getdata("yobs")
+        ycalc = self.hist.getdata("ycalc")
+        ybkg  = self.hist.getdata("background")
+        diff  = yobs - ycalc
+
+        path = Path(path)
+        sep = "," if path.suffix.lower() == ".csv" else "  "
+        header = sep.join(["2theta", "yobs", "ycalc", "diff", "background"])
+
+        data = np.column_stack([tth, yobs, ycalc, diff, ybkg])
+        fmt = "%.6g"
+        np.savetxt(str(path), data, delimiter=sep, header=header, comments="",
+                   fmt=fmt)
+        print(f"Pattern exported to: {path}")
+
+    def print_HAP_parameters(self, phase: str | list[str] | None = None) -> None:
+        """
+        Print a focused table of all Histogram-And-Phase (HAP) parameters for
+        one or more phases linked to the current histogram.
+
+        HAP parameters control the per-phase contribution to the powder
+        pattern and live in the ``Histograms`` sub-dictionary of each phase.
+        This method shows the current *values* together with their refinement
+        flags so that the state of the model is immediately visible.
+
+        Parameters
+        ----------
+        phase : str, list of str, or None, optional
+            Phase name(s) to inspect.  ``None`` (default) prints all phases
+            linked to the current histogram.
+
+        Printed quantities
+        ------------------
+        Scale
+            Phase fraction scale factor (dimensionless).  Relates to the
+            weight fraction via the Brindley–Hill formula.
+        Extinction
+            Isotropic extinction coefficient (dimensionless, Lorentz model).
+        HStrain (D_ij)
+            Hydrostatic / deviatoric strain tensor components in the crystal
+            coordinate system.  Up to six independent D_ij values, labelled
+            D11, D22, D33, D12, D13, D23 (symmetry-allowed subset depends on
+            the Laue class).
+        Size
+            Apparent crystallite size parameters in µm.  Model is one of
+            ``isotropic`` (one scalar), ``uniaxial`` (equatorial + axial along
+            a specified crystallographic axis), or ``generalized`` (full
+            symmetry-adapted harmonic expansion).
+        Mustrain
+            Microstrain parameters in µε (parts per million).  Same three
+            models as Size.  The Lorentzian peak broadening from microstrain
+            is proportional to tan θ.
+        Pref.Ori.
+            Preferred orientation.  Either ``MD`` (March–Dollase scalar
+            distribution) or ``SH`` (spherical harmonics expansion).
+        Babinet
+            Babinet solvent-correction parameters ``BabA`` (amplitude, Å²)
+            and ``BabU`` (thermal factor, Å²).  Used for macromolecular or
+            porous samples where a featureless electron-density background
+            contributes diffuse scattering.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            if not hap:
+                print(f"\nPhase '{ph.name}' is not linked to histogram '{self.hist.name}'.")
+                continue
+
+            print("\n" + "=" * 60)
+            print(f"HAP parameters  —  phase: {ph.name}")
+            print(f"                   histogram: {self.hist.name}")
+            print("=" * 60)
+
+            sc = hap.get("Scale", [1.0, False])
+            print(f"  Scale      : {sc[0]:.6g}  (refine={sc[1]})")
+
+            ext = hap.get("Extinction", [0.0, False])
+            print(f"  Extinction : {ext[0]:.6g}  (refine={ext[1]})")
+
+            hs = hap.get("HStrain")
+            if hs:
+                vals, flags = hs[0], hs[1]
+                dij_labels = ["D11", "D22", "D33", "D12", "D13", "D23"]
+                dij_parts = [
+                    f"{dij_labels[i]}={v:.4g}({'R' if f else 'F'})"
+                    for i, (v, f) in enumerate(zip(vals, flags))
+                ]
+                print(f"  HStrain    : {', '.join(dij_parts)}")
+
+            sz = hap.get("Size")
+            if sz:
+                model = sz[0]
+                ref_flag = any(sz[2]) if isinstance(sz[2], list) else bool(sz[2])
+                if model == "isotropic":
+                    print(f"  Size       : {model}  value={sz[1][0]:.4g} µm  refine={ref_flag}")
+                elif model == "uniaxial":
+                    print(f"  Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g} µm"
+                          f"  axis={sz[3]}  refine={ref_flag}")
+                else:
+                    gen_vals = sz[4]
+                    print(f"  Size       : {model}  {len(gen_vals)} gen. coeffs  refine={any(sz[5])}")
+
+            ms = hap.get("Mustrain")
+            if ms:
+                model = ms[0]
+                ref_flag = any(ms[2]) if isinstance(ms[2], list) else bool(ms[2])
+                if model == "isotropic":
+                    print(f"  Mustrain   : {model}  value={ms[1][0]:.4g} µε  refine={ref_flag}")
+                elif model == "uniaxial":
+                    print(f"  Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g} µε"
+                          f"  axis={ms[3]}  refine={ref_flag}")
+                else:
+                    gen_vals = ms[4]
+                    print(f"  Mustrain   : {model}  {len(gen_vals)} gen. coeffs  refine={any(ms[5])}")
+
+            po = hap.get("Pref.Ori.")
+            if po:
+                model = po[0]
+                ref = po[2]
+                if model == "MD":
+                    print(f"  Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={ref}")
+                else:
+                    print(f"  Pref.Ori.  : SH  order={po[4]}  axis={po[3]}  refine={ref}")
+
+            bab = hap.get("Babinet", {})
+            if bab:
+                for key in ("BabA", "BabU"):
+                    entry = bab.get(key, {})
+                    val = entry.get("BabVal", 0.0)
+                    ref = entry.get("refine", False)
+                    print(f"  Babinet {key[-1]}  : {val:.4g}  (refine={ref})")
 
     def fix_all_parameters(self) -> None:
         """
@@ -1217,8 +2060,11 @@ class BaseRefinement(Scan):
             if isinstance(val, list) and len(val) >= 3:
                 val[2] = False
 
-        # Histogram scale
-        self.hist.SampleParameters["Scale"][1] = False
+        # Histogram scale and sample parameters
+        sp = self.hist.SampleParameters
+        for key in ("Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY"):
+            if key in sp and isinstance(sp[key], list) and len(sp[key]) >= 2:
+                sp[key][1] = False
 
         # Per-phase
         for ph in self.gpx.phases():
@@ -1381,26 +2227,51 @@ class BaseRefinement(Scan):
             hap = ph.data["Histograms"].get(self.hist.name, {})
             if hap:
                 print(f"\n  HAP refinement state ({self.hist.name}):")
-                for key in ("Scale", "Extinction", "HStrain", "Size",
-                            "Mustrain", "Pref.Ori."):
-                    if key not in hap:
-                        continue
-                    val = hap[key]
-                    if key == "Scale":
-                        print(f"    Scale      : {val[0]:.6g}  (refine={val[1]})")
-                    elif key == "Extinction":
-                        print(f"    Extinction : {val[0]:.6g}  (refine={val[1]})")
-                    elif key == "HStrain":
-                        flags = val[1]
-                        print(f"    HStrain    : refine={flags}")
-                    elif key in ("Size", "Mustrain"):
-                        model = val[0]
-                        refine = val[2]
-                        print(f"    {key:<10} : model={model!r}  refine={refine}")
-                    elif key == "Pref.Ori.":
-                        model = val[2]
-                        refine = bool(val[6]) if len(val) > 6 else val[2]
-                        print(f"    Pref.Ori.  : model={model!r}  refine={val[6] if len(val) > 6 else '?'}")
+
+                sc = hap.get("Scale", [1.0, False])
+                print(f"    Scale      : {sc[0]:.6g}  (refine={sc[1]})")
+
+                ext = hap.get("Extinction", [0.0, False])
+                print(f"    Extinction : {ext[0]:.6g}  (refine={ext[1]})")
+
+                hs = hap.get("HStrain")
+                if hs:
+                    vals  = hs[0]
+                    flags = hs[1]
+                    dij_str = "  ".join(f"D{i}={v:.4g}({'R' if f else 'F'})"
+                                        for i, (v, f) in enumerate(zip(vals, flags)))
+                    print(f"    HStrain    : {dij_str if dij_str else 'none'}")
+
+                sz = hap.get("Size")
+                if sz:
+                    model   = sz[0]
+                    ref_iso = any(sz[2]) if isinstance(sz[2], list) else sz[2]
+                    if model == "isotropic":
+                        print(f"    Size       : {model}  val={sz[1][0]:.4g}  refine={ref_iso}")
+                    elif model == "uniaxial":
+                        print(f"    Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}")
+                    else:
+                        print(f"    Size       : {model}  refine={any(sz[5])}")
+
+                ms = hap.get("Mustrain")
+                if ms:
+                    model   = ms[0]
+                    ref_iso = any(ms[2]) if isinstance(ms[2], list) else ms[2]
+                    if model == "isotropic":
+                        print(f"    Mustrain   : {model}  val={ms[1][0]:.4g}  refine={ref_iso}")
+                    elif model == "uniaxial":
+                        print(f"    Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}")
+                    else:
+                        print(f"    Mustrain   : {model}  refine={any(ms[5])}")
+
+                po = hap.get("Pref.Ori.")
+                if po:
+                    model  = po[0]   # 'MD' or 'SH'
+                    refine = po[2]
+                    if model == "MD":
+                        print(f"    Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}")
+                    else:
+                        print(f"    Pref.Ori.  : SH  ord={po[4]}  axis={po[3]}  refine={refine}")
 
     def plot_results(
         self, image_path: Path = "calibration_plot.png", show: bool = True
@@ -1460,10 +2331,16 @@ class BaseRefinement(Scan):
                 pass
 
         ax_main.set_ylabel("Intensity")
+        residuals = self.hist.residuals
+        chi2 = residuals.get("GOF")
+        stat_parts = []
+        if wR is not None:
+            stat_parts.append(f"Rwp = {wR:.2f} %")
+        if chi2 is not None:
+            stat_parts.append(f"χ² = {chi2:.4f}")
+        stats_str = "   ".join(stat_parts)
         ax_main.set_title(
-            f"{self.calibrant_composition}\nRwp = {wR:.2f} %"
-            if wR
-            else "Calibration fit"
+            f"{self.calibrant_composition}\n{stats_str}" if stats_str else "Rietveld fit"
         )
         ax_main.legend(fontsize=7, markerscale=2)
         plt.setp(ax_main.get_xticklabels(), visible=False)
@@ -1576,38 +2453,6 @@ class InstrumentCalibration(BaseRefinement):
         self.calibration_file = Path("calibration") / self.param_file
         self.calibration_image = Path("calibration") / image_file
 
-    def print_refinement_results(self) -> None:
-        print("\n" + "=" * 60)
-        print("REFINEMENT RESULTS")
-        print("=" * 60)
-
-        ip = self.hist["Instrument Parameters"][0]
-        params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
-        calibrated = {}
-        for p in params_to_report:
-            if p in ip:
-                val = ip[p][1] if isinstance(ip[p], list) else ip[p]
-                calibrated[p] = val
-
-        print("\nCalibrated instrument parameters:")
-        for p, v in calibrated.items():
-            fixed = "" if (isinstance(ip[p], list) and ip[p][2]) else " (fixed)"
-            print(f"  {p:12s} = {v:.6f}{fixed}")
-
-        wR = self.hist.get_wR()
-        print(
-            f"\n  Rwp = {wR:.2f} %" if wR is not None else "\n  Rwp = refinement failed"
-        )
-        print("\nPhase results:")
-        for ph in self.gpx.phases():
-            print(f"\n  Phase: {ph.name}")
-            cell = ph.get_cell()
-            for k, v in cell.items():
-                try:
-                    print(f"    {k} = {v:.5f}")
-                except Exception:
-                    print(f"    {k} = {v}")
-
     def write_calibrated_instrument_pars(self) -> None:
         """
         Export the refined instrument parameters to a GSAS-II ``.instprm`` file.
@@ -1662,17 +2507,88 @@ class InstrumentCalibration(BaseRefinement):
 
     def plot_calibration_results(self, show: bool = True) -> None:
         """
-        Generate and save a multi-panel calibration diagnostic figure.
+        Generate and save a five-panel calibration diagnostic figure.
 
-        The figure contains: the Rietveld fit with reflection markers; an
-        observed-minus-calculated difference plot; a bar chart of the key
-        refined parameters; a FWHM-vs-2θ model plot; and a parameter table.
-        The image is saved to ``calibration/<image_file>``.
+        The figure is laid out on a 3-row × 2-column grid and saved to
+        ``calibration/<image_file>`` (set in :meth:`__init__` via
+        ``image_file``).  Each panel is described below.
+
+        Figure layout
+        -------------
+        **Top-left — Rietveld fit** (``ax_main``)
+            Observed intensities (black dots), calculated profile (red line),
+            and fitted background (blue dashed line) plotted against 2θ.
+            Vertical tick marks below the pattern show the position of every
+            allowed Bragg reflection for each phase; colours cycle through the
+            ``colours_ticks`` dict (``"calibrant"`` → magenta,
+            ``"Al_holder"`` → dark orange, others → green).  The title shows
+            the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).
+
+        **Bottom-left — Difference plot** (``ax_diff``, shares x-axis)
+            Observed minus calculated residuals (I\ :sub:`obs` − I\ :sub:`calc`)
+            in intensity units.  A horizontal dashed line marks zero.  A good
+            calibration should show a flat, featureless residual with amplitude
+            well below the peak heights.  Systematic wiggles indicate
+            remaining peak-shape errors; asymmetric residuals around strong
+            peaks suggest that ``Zero`` or ``SH/L`` need attention.
+
+        **Top-right — Refined parameter bar chart** (``ax_ip``)
+            Bar chart of the four key refined instrument parameters:
+            ``Zero``, ``W``, ``X``, ``Y``.  Blue bars are positive values,
+            red bars are negative.  Each bar is labelled with its numerical
+            value to four decimal places.
+
+            * **Zero** — 2θ zero-point offset (degrees).  A non-zero value
+              means the diffractometer's mechanical zero does not coincide
+              with the true 2θ = 0°.  Should be small (|Zero| ≲ 0.05°) for
+              a well-aligned instrument.
+            * **W** — angle-independent Gaussian width coefficient
+              (centideg²).  For a synchrotron beam with a 2-D detector this
+              is typically the dominant peak-width contribution.
+            * **X** — Lorentzian width, 1/cosθ term (centideg).  Related to
+              sample crystallite size and instrumental contributions along
+              the beam direction.
+            * **Y** — Lorentzian width, tanθ term (centideg).  Related to
+              microstrain and other angle-dependent broadening.
+
+            U, V, and SH/L are fixed at 0 / 0.0001 for synchrotron data with
+            a 2-D detector and are not shown here.
+
+        **Bottom-right — FWHM model** (``ax_fw``)
+            Predicted peak FWHM as a function of 2θ, decomposed into its
+            Gaussian (orange, driven by ``W``) and Lorentzian (blue, driven
+            by ``X`` and ``Y``) components, plus the Thompson-Cox-Hastings
+            (TCH) combined total (black).  The TCH pseudo-Voigt combination
+            rule is:
+
+                FWHM\ :sub:`total`\ ⁵ = FWHM\ :sub:`G`\ ⁵ + FWHM\ :sub:`L`\ ⁵
+
+            Use this panel to judge whether the peak-width model is
+            physically reasonable across the full angular range.  If the
+            Lorentzian contribution dominates strongly, consider whether
+            sample broadening (size or strain) is contaminating the
+            instrumental calibration.
+
+        **Bottom strip — Parameter table** (``ax_text``, spans both columns)
+            Tabulated values of all nine instrument parameters reported:
+            Lam, Zero, U, V, W, X, Y, SH/L, and Polariz.  Values that were
+            fixed during calibration (U = V = 0, SH/L = 0.0001) are included
+            for completeness but carry no physical meaning for 2-D detector
+            synchrotron data.
 
         Parameters
         ----------
         show : bool, optional
             If ``True``, call ``plt.show()`` after saving (default ``True``).
+            Set to ``False`` when running in a batch/headless environment.
+
+        Notes
+        -----
+        The output image is written to the path set by
+        ``self.calibration_image``, which resolves to
+        ``calibration/<image_file>`` relative to the working directory.
+        The ``calibration/`` directory is created automatically in
+        :meth:`__init__`.
         """
         ip = self.hist["Instrument Parameters"][0]
         params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
@@ -1731,10 +2647,16 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
+        residuals = self.hist.residuals
+        chi2 = residuals.get("GOF")
+        stat_parts = []
+        if wR is not None:
+            stat_parts.append(f"Rwp = {wR:.2f} %")
+        if chi2 is not None:
+            stat_parts.append(f"χ² = {chi2:.4f}")
+        stats_str = "   ".join(stat_parts)
         ax_main.set_title(
-            f"{self.calibrant_composition}\nRwp = {wR:.2f} %"
-            if wR
-            else "Calibration fit"
+            f"{self.calibrant_composition}\n{stats_str}" if stats_str else "Calibration fit"
         )
         ax_main.legend(fontsize=7, markerscale=2)
         plt.setp(ax_main.get_xticklabels(), visible=False)

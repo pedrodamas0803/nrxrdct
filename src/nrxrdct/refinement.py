@@ -635,6 +635,54 @@ class BaseRefinement(Scan):
         status = "free for refinement" if refine else "fixed"
         print(f"Absorption set to {absorption:.6f} ({status})")
 
+    def set_sample_parameter(self, parameter: str, value: float, freeze: bool = False) -> None:
+        """
+        Set a sample parameter to a given value and optionally freeze it.
+
+        The parameter value slot (``entry[0]``) is updated.  If
+        ``freeze=True`` the refinement flag (``entry[1]``) is also cleared
+        so the parameter will not move in subsequent refinement cycles.
+
+        Parameters
+        ----------
+        parameter : str
+            Key in ``self.hist.SampleParameters`` to modify.  Common
+            choices: ``"Scale"``, ``"Absorption"``, ``"Shift"``,
+            ``"DisplaceX"``, ``"DisplaceY"``, ``"Transparency"``,
+            ``"SurfRoughA"``, ``"SurfRoughB"``.
+        value : float
+            Value to assign to the parameter.
+        freeze : bool, optional
+            If ``True``, clear the refinement flag after setting the value
+            so the parameter stays fixed in subsequent cycles (default
+            ``False``).
+
+        Raises
+        ------
+        KeyError
+            If *parameter* is not found in the sample-parameter dictionary.
+        TypeError
+            If the entry for *parameter* is not a list (read-only field).
+        """
+        sp = self.hist.SampleParameters
+        if parameter not in sp:
+            available = [k for k, v in sp.items() if isinstance(v, list)]
+            raise KeyError(
+                f"Sample parameter '{parameter}' not found. "
+                f"Available parameters: {sorted(available)}"
+            )
+        entry = sp[parameter]
+        if not isinstance(entry, list):
+            raise TypeError(
+                f"'{parameter}' is a read-only metadata field and cannot be set."
+            )
+        entry[0] = value
+        if freeze:
+            entry[1] = False
+        self.gpx.save()
+        frozen_info = " and frozen" if freeze else ""
+        print(f"Sample parameter '{parameter}' set to {value}{frozen_info}.")
+
     def refine_gaussian_broadening(
         self, refine: list = ["U", "V", "W", "SH/L"], freeze: bool = False
     ) -> None:

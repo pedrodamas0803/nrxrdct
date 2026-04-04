@@ -7,6 +7,7 @@ peak broadening, cell, preferred orientation, crystallite size, microstrain,
 extinction), and :class:`InstrumentCalibration`, a specialised subclass for
 calibrant-based instrument parameter calibration with dedicated plotting.
 """
+
 import os
 from pathlib import Path
 
@@ -233,8 +234,10 @@ class BaseRefinement(Scan):
         current.append([low, high])
         self.hist.Excluded(current)
         self.gpx.save()
-        print(f"Excluded region added: [{low:.4f}, {high:.4f}] °"
-              f"  (total excluded regions: {len(current)})")
+        print(
+            f"Excluded region added: [{low:.4f}, {high:.4f}] °"
+            f"  (total excluded regions: {len(current)})"
+        )
 
     def set_LeBail(
         self,
@@ -384,9 +387,12 @@ class BaseRefinement(Scan):
             self.gpx.save()
 
         frozen_info = " (parameters frozen)" if freeze else ""
-        print(f"Background refinement performed (function='{function}'"
-              + (f", {len(debye_terms)} Debye term(s)" if debye_terms else "")
-              + frozen_info + ")")
+        print(
+            f"Background refinement performed (function='{function}'"
+            + (f", {len(debye_terms)} Debye term(s)" if debye_terms else "")
+            + frozen_info
+            + ")"
+        )
 
     def refine_histogram_scale(self, freeze: bool = False) -> None:
         """Refine the overall histogram scale factor."""
@@ -417,14 +423,15 @@ class BaseRefinement(Scan):
         for name in names:
             if name not in available:
                 raise ValueError(
-                    f"Phase '{name}' not found. "
-                    f"Available phases: {list(available)}"
+                    f"Phase '{name}' not found. " f"Available phases: {list(available)}"
                 )
             available[name].set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
             self.gpx.do_refinements([{}])
             if freeze:
-                available[name].set_HAP_refinements({"Scale": False}, histograms=[self.hist])
+                available[name].set_HAP_refinements(
+                    {"Scale": False}, histograms=[self.hist]
+                )
                 self.gpx.save()
             frozen_info = " (parameter frozen)" if freeze else ""
             print(f"Phase scale refinement done for '{name}'{frozen_info}")
@@ -501,9 +508,13 @@ class BaseRefinement(Scan):
         """
         ip = self.hist["Instrument Parameters"][0]
         if parameter not in ip:
-            available = [k for k, v in ip.items()
-                         if isinstance(v, list) and len(v) >= 3
-                         and isinstance(v[1], (int, float))]
+            available = [
+                k
+                for k, v in ip.items()
+                if isinstance(v, list)
+                and len(v) >= 3
+                and isinstance(v[1], (int, float))
+            ]
             raise KeyError(
                 f"Parameter '{parameter}' not found in instrument parameters. "
                 f"Available parameters: {sorted(available)}"
@@ -519,7 +530,9 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print(f"Instrument parameter '{parameter}' set to {value} and frozen.")
 
-    def refine_sample_displacement(self, parameter: str = "Shift", freeze: bool = False) -> None:
+    def refine_sample_displacement(
+        self, parameter: str = "Shift", freeze: bool = False
+    ) -> None:
         """
         Refine a sample displacement parameter.
 
@@ -622,7 +635,9 @@ class BaseRefinement(Scan):
         status = "free for refinement" if refine else "fixed"
         print(f"Absorption set to {absorption:.6f} ({status})")
 
-    def refine_gaussian_broadening(self, refine: list = ["U", "V", "W", "SH/L"], freeze: bool = False) -> None:
+    def refine_gaussian_broadening(
+        self, refine: list = ["U", "V", "W", "SH/L"], freeze: bool = False
+    ) -> None:
         """
         Refine Gaussian peak-width parameters one at a time.
 
@@ -678,14 +693,21 @@ class BaseRefinement(Scan):
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            if freeze and param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+            if (
+                freeze
+                and param in ip
+                and isinstance(ip[param], list)
+                and len(ip[param]) >= 3
+            ):
                 ip[param][2] = False
             frozen_info = " (parameter frozen)" if freeze else ""
             print(f"Refined {param} (Gaussian broadening{frozen_info})")
         if freeze:
             self.gpx.save()
 
-    def refine_lorentzian_broadening(self, refine: list = ["X", "Y"], freeze: bool = False) -> None:
+    def refine_lorentzian_broadening(
+        self, refine: list = ["X", "Y"], freeze: bool = False
+    ) -> None:
         """
         Refine Lorentzian peak-width parameters one at a time.
 
@@ -725,7 +747,12 @@ class BaseRefinement(Scan):
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            if freeze and param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+            if (
+                freeze
+                and param in ip
+                and isinstance(ip[param], list)
+                and len(ip[param]) >= 3
+            ):
                 ip[param][2] = False
             frozen_info = " (parameter frozen)" if freeze else ""
             print(f"Refined {param} (Lorentzian broadening{frozen_info})")
@@ -839,28 +866,48 @@ class BaseRefinement(Scan):
         """
         _TYPE_CHAR = {"FCJVoigt": "C", "ExpFCJVoigt": "A", "EpsVoigt": "B"}
         _VALID_PARAMS = {
-            "FCJVoigt":    {"U", "V", "W", "X", "Y", "Z", "SH/L"},
-            "ExpFCJVoigt": {"U", "V", "W", "X", "Y", "Z", "SH/L",
-                            "alpha-0", "alpha-1", "beta-0", "beta-1"},
-            "EpsVoigt":    {"U", "V", "W", "X", "Y", "Z",
-                            "alpha-0", "alpha-1", "beta-0", "beta-1"},
+            "FCJVoigt": {"U", "V", "W", "X", "Y", "Z", "SH/L"},
+            "ExpFCJVoigt": {
+                "U",
+                "V",
+                "W",
+                "X",
+                "Y",
+                "Z",
+                "SH/L",
+                "alpha-0",
+                "alpha-1",
+                "beta-0",
+                "beta-1",
+            },
+            "EpsVoigt": {
+                "U",
+                "V",
+                "W",
+                "X",
+                "Y",
+                "Z",
+                "alpha-0",
+                "alpha-1",
+                "beta-0",
+                "beta-1",
+            },
         }
         _DEFAULT_PARAMS = {
-            "FCJVoigt":    ["W", "X", "Y"],
+            "FCJVoigt": ["W", "X", "Y"],
             "ExpFCJVoigt": ["W", "alpha-0", "alpha-1", "beta-0", "beta-1"],
-            "EpsVoigt":    ["W", "alpha-0", "alpha-1", "beta-0", "beta-1"],
+            "EpsVoigt": ["W", "alpha-0", "alpha-1", "beta-0", "beta-1"],
         }
         _EXTRA_DEFAULTS = {
             "alpha-0": [0.1, 0.1, False],
             "alpha-1": [0.0, 0.0, False],
-            "beta-0":  [0.1, 0.1, False],
-            "beta-1":  [0.0, 0.0, False],
+            "beta-0": [0.1, 0.1, False],
+            "beta-1": [0.0, 0.0, False],
         }
 
         if profile not in _TYPE_CHAR:
             raise ValueError(
-                f"Unknown profile '{profile}'. "
-                f"Valid options: {list(_TYPE_CHAR)}"
+                f"Unknown profile '{profile}'. " f"Valid options: {list(_TYPE_CHAR)}"
             )
 
         if parameters is None:
@@ -875,7 +922,7 @@ class BaseRefinement(Scan):
 
         # Update profile type in the instrument parameters
         ip = self.hist["Instrument Parameters"][0]
-        current = ip["Type"][0]          # e.g. 'PXC'
+        current = ip["Type"][0]  # e.g. 'PXC'
         new_type = current[:2] + _TYPE_CHAR[profile]
         if current != new_type:
             ip["Type"][0] = new_type
@@ -1141,7 +1188,9 @@ class BaseRefinement(Scan):
             self.gpx.do_refinements([{}])
             phase_names = [ph.name for ph in targets]
             atom_info = f", atoms={atoms}" if atoms is not None else ""
-            print(f"Atomic refinement flag '{flag}' applied to {phase_names}{atom_info}")
+            print(
+                f"Atomic refinement flag '{flag}' applied to {phase_names}{atom_info}"
+            )
 
     def refine_occupancy(
         self,
@@ -1437,7 +1486,12 @@ class BaseRefinement(Scan):
         if isinstance(refine_dict, dict):
             refine_type = "personalized"
 
-        if refine_type.lower() not in ("isotropic", "uniaxial", "generalized", "personalized"):
+        if refine_type.lower() not in (
+            "isotropic",
+            "uniaxial",
+            "generalized",
+            "personalized",
+        ):
             raise ValueError(
                 f"Unknown size model '{refine_type}'. "
                 "Valid options: 'isotropic', 'uniaxial', 'generalized'."
@@ -1551,7 +1605,12 @@ class BaseRefinement(Scan):
         if isinstance(refine_dict, dict):
             refine_type = "personalized"
 
-        if refine_type.lower() not in ("isotropic", "uniaxial", "generalized", "personalized"):
+        if refine_type.lower() not in (
+            "isotropic",
+            "uniaxial",
+            "generalized",
+            "personalized",
+        ):
             raise ValueError(
                 f"Unknown mustrain model '{refine_type}'. "
                 "Valid options: 'isotropic', 'uniaxial', 'generalized'."
@@ -1801,26 +1860,50 @@ class BaseRefinement(Scan):
         profile_type = ip.get("Type", ["?"])[0]
         print(f"\nInstrument parameters  (profile: {profile_type}):")
         all_inst_params = [
-            "Lam", "Lam1", "Lam2", "Zero", "Azimuth", "Polariz.",
-            "U", "V", "W", "Z", "X", "Y", "SH/L",
-            "alpha-0", "alpha-1", "beta-0", "beta-1",
+            "Lam",
+            "Lam1",
+            "Lam2",
+            "Zero",
+            "Azimuth",
+            "Polariz.",
+            "U",
+            "V",
+            "W",
+            "Z",
+            "X",
+            "Y",
+            "SH/L",
+            "alpha-0",
+            "alpha-1",
+            "beta-0",
+            "beta-1",
         ]
         for p in all_inst_params:
             if p not in ip:
                 continue
             entry = ip[p]
-            val   = entry[1] if isinstance(entry, list) else entry
+            val = entry[1] if isinstance(entry, list) else entry
             if not isinstance(val, (int, float)):
                 continue
-            refine = entry[2] if (isinstance(entry, list) and len(entry) >= 3) else False
-            flag   = "refine" if refine else "fixed"
+            refine = (
+                entry[2] if (isinstance(entry, list) and len(entry) >= 3) else False
+            )
+            flag = "refine" if refine else "fixed"
             print(f"  {p:<12} = {val:14.6g}  ({flag})")
 
         # ── Sample parameters ──────────────────────────────────────────────────
         sp = self.hist.SampleParameters
         print("\nSample parameters:")
-        for key in ("Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
-                    "Transparency", "SurfRoughA", "SurfRoughB"):
+        for key in (
+            "Scale",
+            "Absorption",
+            "Shift",
+            "DisplaceX",
+            "DisplaceY",
+            "Transparency",
+            "SurfRoughA",
+            "SurfRoughB",
+        ):
             if key not in sp:
                 continue
             entry = sp[key]
@@ -1841,7 +1924,9 @@ class BaseRefinement(Scan):
             print(f"  Debye terms: {n_debye}")
             for i, t in enumerate(bkg[1].get("debyeTerms", [])):
                 A, refA, R, refR, U, refU = t
-                print(f"    [{i}]  A={A:.4g}(ref={refA})  R={R:.4g}(ref={refR})  U={U:.4g}(ref={refU})")
+                print(
+                    f"    [{i}]  A={A:.4g}(ref={refA})  R={R:.4g}(ref={refR})  U={U:.4g}(ref={refU})"
+                )
 
         # ── Per-phase results ──────────────────────────────────────────────────
         print("\nPhase results:")
@@ -1851,72 +1936,98 @@ class BaseRefinement(Scan):
             cell = ph.get_cell()
             cell_refine = ph.data["General"]["Cell"][0]
             print(f"  Cell ({'refine' if cell_refine else 'fixed'}):")
-            print(f"    a={cell['length_a']:.5f}  b={cell['length_b']:.5f}  c={cell['length_c']:.5f}  Å")
-            print(f"    α={cell['angle_alpha']:.4f}  β={cell['angle_beta']:.4f}  γ={cell['angle_gamma']:.4f}  °")
+            print(
+                f"    a={cell['length_a']:.5f}  b={cell['length_b']:.5f}  c={cell['length_c']:.5f}  Å"
+            )
+            print(
+                f"    α={cell['angle_alpha']:.4f}  β={cell['angle_beta']:.4f}  γ={cell['angle_gamma']:.4f}  °"
+            )
             print(f"    V={cell['volume']:.4f}  Å³")
 
             hap = ph.data["Histograms"].get(self.hist.name, {})
             if hap:
                 sc = hap.get("Scale", [1.0, False])
-                print(f"  HAP Scale     : {sc[0]:.6g}  ({'refine' if sc[1] else 'fixed'})")
+                print(
+                    f"  HAP Scale     : {sc[0]:.6g}  ({'refine' if sc[1] else 'fixed'})"
+                )
 
                 ext = hap.get("Extinction", [0.0, False])
-                print(f"  Extinction    : {ext[0]:.6g}  ({'refine' if ext[1] else 'fixed'})")
+                print(
+                    f"  Extinction    : {ext[0]:.6g}  ({'refine' if ext[1] else 'fixed'})"
+                )
 
                 hs = hap.get("HStrain")
                 if hs:
-                    vals  = hs[0]
+                    vals = hs[0]
                     flags = hs[1]
-                    dij_str = "  ".join(f"D{i}={v:.4g}({'R' if f else 'F'})"
-                                       for i, (v, f) in enumerate(zip(vals, flags)))
+                    dij_str = "  ".join(
+                        f"D{i}={v:.4g}({'R' if f else 'F'})"
+                        for i, (v, f) in enumerate(zip(vals, flags))
+                    )
                     print(f"  HStrain       : {dij_str}")
 
                 sz = hap.get("Size")
                 if sz:
-                    model   = sz[0]
+                    model = sz[0]
                     ref_iso = any(sz[2]) if isinstance(sz[2], list) else sz[2]
                     if model == "isotropic":
-                        print(f"  Size          : {model}  val={sz[1][0]:.4g}  refine={ref_iso}")
+                        print(
+                            f"  Size          : {model}  val={sz[1][0]:.4g}  refine={ref_iso}"
+                        )
                     elif model == "uniaxial":
-                        print(f"  Size          : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}")
+                        print(
+                            f"  Size          : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}"
+                        )
                     else:
                         print(f"  Size          : {model}  refine={any(sz[5])}")
 
                 ms = hap.get("Mustrain")
                 if ms:
-                    model   = ms[0]
+                    model = ms[0]
                     ref_iso = any(ms[2]) if isinstance(ms[2], list) else ms[2]
                     if model == "isotropic":
-                        print(f"  Mustrain      : {model}  val={ms[1][0]:.4g}  refine={ref_iso}")
+                        print(
+                            f"  Mustrain      : {model}  val={ms[1][0]:.4g}  refine={ref_iso}"
+                        )
                     elif model == "uniaxial":
-                        print(f"  Mustrain      : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}")
+                        print(
+                            f"  Mustrain      : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}"
+                        )
                     else:
                         print(f"  Mustrain      : {model}  refine={any(ms[5])}")
 
                 po = hap.get("Pref.Ori.")
                 if po:
-                    model  = po[0]
+                    model = po[0]
                     refine = po[2]
                     if model == "MD":
-                        print(f"  Pref.Ori.     : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}")
+                        print(
+                            f"  Pref.Ori.     : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}"
+                        )
                     else:
-                        print(f"  Pref.Ori.     : SH  ord={po[4]}  axis={po[3]}  refine={refine}")
+                        print(
+                            f"  Pref.Ori.     : SH  ord={po[4]}  axis={po[3]}  refine={refine}"
+                        )
 
             # Atoms summary
             atoms = ph.atoms()
             if atoms:
                 print(f"  Atoms ({len(atoms)}):")
-                print(f"    {'Label':<8} {'Element':<6} {'x':>9} {'y':>9} {'z':>9}"
-                      f" {'Occ':>6} {'Uiso':>8} {'Flags'}")
+                print(
+                    f"    {'Label':<8} {'Element':<6} {'x':>9} {'y':>9} {'z':>9}"
+                    f" {'Occ':>6} {'Uiso':>8} {'Flags'}"
+                )
                 print(f"    {'─'*68}")
                 for atom in atoms:
                     x, y, z = atom.coordinates
                     uiso = atom.ADP if atom.adp_flag == "I" else "aniso"
                     uiso_str = f"{uiso:.5f}" if isinstance(uiso, float) else uiso
-                    print(f"    {atom.label:<8} {atom.element:<6}"
-                          f" {x:9.5f} {y:9.5f} {z:9.5f}"
-                          f" {atom.occupancy:6.4f} {uiso_str:>8}"
-                          f"  {atom.refinement_flags!r}")
+                    print(
+                        f"    {atom.label:<8} {atom.element:<6}"
+                        f" {x:9.5f} {y:9.5f} {z:9.5f}"
+                        f" {atom.occupancy:6.4f} {uiso_str:>8}"
+                        f"  {atom.refinement_flags!r}"
+                    )
 
     # ------------------------------------------------------------------
     # Convenience / utility methods
@@ -1992,11 +2103,11 @@ class BaseRefinement(Scan):
             - any other extension — space-separated (suitable for most
               plotting packages that accept ``.xy`` or ``.dat``)
         """
-        tth  = self.hist.getdata("x")
+        tth = self.hist.getdata("x")
         yobs = self.hist.getdata("yobs")
         ycalc = self.hist.getdata("ycalc")
-        ybkg  = self.hist.getdata("background")
-        diff  = yobs - ycalc
+        ybkg = self.hist.getdata("background")
+        diff = yobs - ycalc
 
         path = Path(path)
         sep = "," if path.suffix.lower() == ".csv" else "  "
@@ -2004,8 +2115,7 @@ class BaseRefinement(Scan):
 
         data = np.column_stack([tth, yobs, ycalc, diff, ybkg])
         fmt = "%.6g"
-        np.savetxt(str(path), data, delimiter=sep, header=header, comments="",
-                   fmt=fmt)
+        np.savetxt(str(path), data, delimiter=sep, header=header, comments="", fmt=fmt)
         print(f"Pattern exported to: {path}")
 
     def print_HAP_parameters(self, phase: str | list[str] | None = None) -> None:
@@ -2070,7 +2180,9 @@ class BaseRefinement(Scan):
         for ph in targets:
             hap = ph.data["Histograms"].get(self.hist.name, {})
             if not hap:
-                print(f"\nPhase '{ph.name}' is not linked to histogram '{self.hist.name}'.")
+                print(
+                    f"\nPhase '{ph.name}' is not linked to histogram '{self.hist.name}'."
+                )
                 continue
 
             print("\n" + "=" * 60)
@@ -2099,35 +2211,51 @@ class BaseRefinement(Scan):
                 model = sz[0]
                 ref_flag = any(sz[2]) if isinstance(sz[2], list) else bool(sz[2])
                 if model == "isotropic":
-                    print(f"  Size       : {model}  value={sz[1][0]:.4g} µm  refine={ref_flag}")
+                    print(
+                        f"  Size       : {model}  value={sz[1][0]:.4g} µm  refine={ref_flag}"
+                    )
                 elif model == "uniaxial":
-                    print(f"  Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g} µm"
-                          f"  axis={sz[3]}  refine={ref_flag}")
+                    print(
+                        f"  Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g} µm"
+                        f"  axis={sz[3]}  refine={ref_flag}"
+                    )
                 else:
                     gen_vals = sz[4]
-                    print(f"  Size       : {model}  {len(gen_vals)} gen. coeffs  refine={any(sz[5])}")
+                    print(
+                        f"  Size       : {model}  {len(gen_vals)} gen. coeffs  refine={any(sz[5])}"
+                    )
 
             ms = hap.get("Mustrain")
             if ms:
                 model = ms[0]
                 ref_flag = any(ms[2]) if isinstance(ms[2], list) else bool(ms[2])
                 if model == "isotropic":
-                    print(f"  Mustrain   : {model}  value={ms[1][0]:.4g} µε  refine={ref_flag}")
+                    print(
+                        f"  Mustrain   : {model}  value={ms[1][0]:.4g} µε  refine={ref_flag}"
+                    )
                 elif model == "uniaxial":
-                    print(f"  Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g} µε"
-                          f"  axis={ms[3]}  refine={ref_flag}")
+                    print(
+                        f"  Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g} µε"
+                        f"  axis={ms[3]}  refine={ref_flag}"
+                    )
                 else:
                     gen_vals = ms[4]
-                    print(f"  Mustrain   : {model}  {len(gen_vals)} gen. coeffs  refine={any(ms[5])}")
+                    print(
+                        f"  Mustrain   : {model}  {len(gen_vals)} gen. coeffs  refine={any(ms[5])}"
+                    )
 
             po = hap.get("Pref.Ori.")
             if po:
                 model = po[0]
                 ref = po[2]
                 if model == "MD":
-                    print(f"  Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={ref}")
+                    print(
+                        f"  Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={ref}"
+                    )
                 else:
-                    print(f"  Pref.Ori.  : SH  order={po[4]}  axis={po[3]}  refine={ref}")
+                    print(
+                        f"  Pref.Ori.  : SH  order={po[4]}  axis={po[3]}  refine={ref}"
+                    )
 
             bab = hap.get("Babinet", {})
             if bab:
@@ -2190,7 +2318,15 @@ class BaseRefinement(Scan):
             set as a single scalar.
         """
         _DIJ = {"D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5}
-        _VALID = {"Scale", "Extinction", "Size", "Mustrain", "MD", "BabA", "BabU"} | _DIJ.keys()
+        _VALID = {
+            "Scale",
+            "Extinction",
+            "Size",
+            "Mustrain",
+            "MD",
+            "BabA",
+            "BabU",
+        } | _DIJ.keys()
 
         if parameter not in _VALID:
             raise ValueError(
@@ -2214,7 +2350,9 @@ class BaseRefinement(Scan):
         for ph in targets:
             hap = ph.data["Histograms"].get(self.hist.name)
             if hap is None:
-                print(f"  Skipping phase '{ph.name}': not linked to '{self.hist.name}'.")
+                print(
+                    f"  Skipping phase '{ph.name}': not linked to '{self.hist.name}'."
+                )
                 continue
 
             if parameter == "Scale":
@@ -2239,9 +2377,7 @@ class BaseRefinement(Scan):
             elif parameter == "Size":
                 sz = hap.get("Size")
                 if sz is None:
-                    raise ValueError(
-                        f"Phase '{ph.name}' has no Size entry."
-                    )
+                    raise ValueError(f"Phase '{ph.name}' has no Size entry.")
                 if sz[0] != "isotropic":
                     raise ValueError(
                         f"Phase '{ph.name}' Size model is '{sz[0]}'. "
@@ -2253,9 +2389,7 @@ class BaseRefinement(Scan):
             elif parameter == "Mustrain":
                 ms = hap.get("Mustrain")
                 if ms is None:
-                    raise ValueError(
-                        f"Phase '{ph.name}' has no Mustrain entry."
-                    )
+                    raise ValueError(f"Phase '{ph.name}' has no Mustrain entry.")
                 if ms[0] != "isotropic":
                     raise ValueError(
                         f"Phase '{ph.name}' Mustrain model is '{ms[0]}'. "
@@ -2267,9 +2401,7 @@ class BaseRefinement(Scan):
             elif parameter == "MD":
                 po = hap.get("Pref.Ori.")
                 if po is None:
-                    raise ValueError(
-                        f"Phase '{ph.name}' has no Pref.Ori. entry."
-                    )
+                    raise ValueError(f"Phase '{ph.name}' has no Pref.Ori. entry.")
                 if po[0] != "MD":
                     raise ValueError(
                         f"Phase '{ph.name}' preferred orientation model is '{po[0]}', not 'MD'."
@@ -2286,7 +2418,9 @@ class BaseRefinement(Scan):
                 bab[parameter]["BabVal"] = value
                 bab[parameter]["refine"] = False
 
-            print(f"  HAP '{parameter}' for phase '{ph.name}' set to {value} and frozen.")
+            print(
+                f"  HAP '{parameter}' for phase '{ph.name}' set to {value} and frozen."
+            )
 
         self.gpx.save()
 
@@ -2455,7 +2589,7 @@ class BaseRefinement(Scan):
         """
         for ph in self.gpx.phases():
             gen = ph.data["General"]
-            cell = gen["Cell"]           # [refine, a, b, c, α, β, γ, V]
+            cell = gen["Cell"]  # [refine, a, b, c, α, β, γ, V]
             sg = gen["SGData"]["SpGrp"]
             phase_type = gen["Type"]
             c = ph.get_cell()
@@ -2471,8 +2605,12 @@ class BaseRefinement(Scan):
 
             refine_flag = "refine" if cell[0] else "fixed"
             print(f"\n  Cell parameters ({refine_flag}):")
-            print(f"    a={c['length_a']:.5f}  b={c['length_b']:.5f}  c={c['length_c']:.5f}  Å")
-            print(f"    α={c['angle_alpha']:.4f}  β={c['angle_beta']:.4f}  γ={c['angle_gamma']:.4f}  °")
+            print(
+                f"    a={c['length_a']:.5f}  b={c['length_b']:.5f}  c={c['length_c']:.5f}  Å"
+            )
+            print(
+                f"    α={c['angle_alpha']:.4f}  β={c['angle_beta']:.4f}  γ={c['angle_gamma']:.4f}  °"
+            )
             print(f"    V={c['volume']:.3f}  Å³")
 
             hap = ph.data["Histograms"].get(self.hist.name, {})
@@ -2487,42 +2625,56 @@ class BaseRefinement(Scan):
 
                 hs = hap.get("HStrain")
                 if hs:
-                    vals  = hs[0]
+                    vals = hs[0]
                     flags = hs[1]
-                    dij_str = "  ".join(f"D{i}={v:.4g}({'R' if f else 'F'})"
-                                        for i, (v, f) in enumerate(zip(vals, flags)))
+                    dij_str = "  ".join(
+                        f"D{i}={v:.4g}({'R' if f else 'F'})"
+                        for i, (v, f) in enumerate(zip(vals, flags))
+                    )
                     print(f"    HStrain    : {dij_str if dij_str else 'none'}")
 
                 sz = hap.get("Size")
                 if sz:
-                    model   = sz[0]
+                    model = sz[0]
                     ref_iso = any(sz[2]) if isinstance(sz[2], list) else sz[2]
                     if model == "isotropic":
-                        print(f"    Size       : {model}  val={sz[1][0]:.4g}  refine={ref_iso}")
+                        print(
+                            f"    Size       : {model}  val={sz[1][0]:.4g}  refine={ref_iso}"
+                        )
                     elif model == "uniaxial":
-                        print(f"    Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}")
+                        print(
+                            f"    Size       : {model}  eq={sz[1][0]:.4g}  ax={sz[1][1]:.4g}  axis={sz[3]}  refine={ref_iso}"
+                        )
                     else:
                         print(f"    Size       : {model}  refine={any(sz[5])}")
 
                 ms = hap.get("Mustrain")
                 if ms:
-                    model   = ms[0]
+                    model = ms[0]
                     ref_iso = any(ms[2]) if isinstance(ms[2], list) else ms[2]
                     if model == "isotropic":
-                        print(f"    Mustrain   : {model}  val={ms[1][0]:.4g}  refine={ref_iso}")
+                        print(
+                            f"    Mustrain   : {model}  val={ms[1][0]:.4g}  refine={ref_iso}"
+                        )
                     elif model == "uniaxial":
-                        print(f"    Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}")
+                        print(
+                            f"    Mustrain   : {model}  eq={ms[1][0]:.4g}  ax={ms[1][1]:.4g}  axis={ms[3]}  refine={ref_iso}"
+                        )
                     else:
                         print(f"    Mustrain   : {model}  refine={any(ms[5])}")
 
                 po = hap.get("Pref.Ori.")
                 if po:
-                    model  = po[0]   # 'MD' or 'SH'
+                    model = po[0]  # 'MD' or 'SH'
                     refine = po[2]
                     if model == "MD":
-                        print(f"    Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}")
+                        print(
+                            f"    Pref.Ori.  : MD  ratio={po[1]:.4g}  axis={po[3]}  refine={refine}"
+                        )
                     else:
-                        print(f"    Pref.Ori.  : SH  ord={po[4]}  axis={po[3]}  refine={refine}")
+                        print(
+                            f"    Pref.Ori.  : SH  ord={po[4]}  axis={po[3]}  refine={refine}"
+                        )
 
     def plot_results(
         self, image_path: Path = "calibration_plot.png", show: bool = True
@@ -2591,7 +2743,9 @@ class BaseRefinement(Scan):
             stat_parts.append(f"χ² = {chi2:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
-            f"{self.calibrant_composition}\n{stats_str}" if stats_str else "Rietveld fit"
+            f"{self.calibrant_composition}\n{stats_str}"
+            if stats_str
+            else "Rietveld fit"
         )
         ax_main.legend(fontsize=7, markerscale=2)
         plt.setp(ax_main.get_xticklabels(), visible=False)
@@ -2784,7 +2938,7 @@ class InstrumentCalibration(BaseRefinement):
 
         # Step 3 — Zero shift
         print("\n--- Step 3: Zero shift ---")
-        self.refine_zero_shift()
+        self.refine_zero_shift(freeze=True)
 
         # Step 4 — Peak profile
         print("\n--- Step 4: Peak profile ---")
@@ -2998,7 +3152,9 @@ class InstrumentCalibration(BaseRefinement):
             stat_parts.append(f"χ² = {chi2:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
-            f"{self.calibrant_composition}\n{stats_str}" if stats_str else "Calibration fit"
+            f"{self.calibrant_composition}\n{stats_str}"
+            if stats_str
+            else "Calibration fit"
         )
         ax_main.legend(fontsize=7, markerscale=2)
         plt.setp(ax_main.get_xticklabels(), visible=False)

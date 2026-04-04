@@ -429,6 +429,85 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print("Zero shift refinement done (parameter frozen)")
 
+    def print_instrument_parameters(self) -> None:
+        """
+        Print all instrument parameters currently present in the histogram.
+
+        Lists every entry found in ``self.hist["Instrument Parameters"][0]``
+        together with its current value and whether it is free to refine or
+        frozen.  Use this to discover which parameter strings are valid
+        arguments to :meth:`set_instrument_parameter`.
+        """
+        ip = self.hist["Instrument Parameters"][0]
+        profile_type = ip.get("Type", ["?"])[0]
+        print(f"Instrument parameters  (profile: {profile_type}):")
+        print(f"  {'Parameter':<14}  {'Value':>14}  Status")
+        print(f"  {'-'*14}  {'-'*14}  ------")
+        for key, entry in ip.items():
+            if key == "Type":
+                continue
+            if isinstance(entry, list) and len(entry) >= 2:
+                val = entry[1]
+                if not isinstance(val, (int, float)):
+                    continue
+                refine = entry[2] if len(entry) >= 3 else False
+                flag = "refine" if refine else "fixed"
+            elif isinstance(entry, (int, float)):
+                val = entry
+                flag = "fixed"
+            else:
+                continue
+            print(f"  {key:<14}  {val:>14.6g}  ({flag})")
+
+    def set_instrument_parameter(self, parameter: str, value: float) -> None:
+        """
+        Set an instrument parameter to a fixed value and freeze it.
+
+        The parameter is set to *value* in both the initial-value slot
+        (``entry[0]``) and the current-value slot (``entry[1]``) of the
+        GSAS-II instrument-parameter list, and its refinement flag
+        (``entry[2]``) is set to ``False`` so it will not move during
+        subsequent refinement cycles.
+
+        Parameters
+        ----------
+        parameter : str
+            Key in ``self.hist["Instrument Parameters"][0]`` to modify.
+            Call :meth:`print_instrument_parameters` to see all available
+            keys for the current project (e.g. ``"Zero"``, ``"Lam"``,
+            ``"U"``, ``"V"``, ``"W"``).
+        value : float
+            Value to assign to the parameter.
+
+        Raises
+        ------
+        KeyError
+            If *parameter* is not found in the instrument-parameter
+            dictionary for this histogram.
+        TypeError
+            If the entry for *parameter* is not a list (i.e. it is a
+            read-only metadata field such as ``"Type"``).
+        """
+        ip = self.hist["Instrument Parameters"][0]
+        if parameter not in ip:
+            available = [k for k, v in ip.items()
+                         if isinstance(v, list) and len(v) >= 3
+                         and isinstance(v[1], (int, float))]
+            raise KeyError(
+                f"Parameter '{parameter}' not found in instrument parameters. "
+                f"Available parameters: {sorted(available)}"
+            )
+        entry = ip[parameter]
+        if not isinstance(entry, list):
+            raise TypeError(
+                f"'{parameter}' is a read-only metadata field and cannot be set."
+            )
+        entry[0] = value  # initial / reset value
+        entry[1] = value  # current refined value
+        entry[2] = False  # freeze
+        self.gpx.save()
+        print(f"Instrument parameter '{parameter}' set to {value} and frozen.")
+
     def refine_sample_displacement(self, parameter: str = "Shift") -> None:
         """
         Refine a sample displacement parameter, then freeze it.
@@ -2038,6 +2117,159 @@ class BaseRefinement(Scan):
                     val = entry.get("BabVal", 0.0)
                     ref = entry.get("refine", False)
                     print(f"  Babinet {key[-1]}  : {val:.4g}  (refine={ref})")
+
+    def set_HAP_parameter(
+        self,
+        parameter: str,
+        value: float,
+        phase: str | list[str] | None = None,
+    ) -> None:
+        """
+        Set a Histogram-And-Phase (HAP) parameter to a fixed value and freeze it.
+
+        The supported *parameter* strings and the HAP entries they control are:
+
+        +--------------+-------------------------------------------------------+
+        | parameter    | HAP entry                                             |
+        +==============+=======================================================+
+        | ``"Scale"``  | Phase fraction scale factor ``hap["Scale"][0]``      |
+        +--------------+-------------------------------------------------------+
+        | ``"Extinction"`` | Extinction coefficient ``hap["Extinction"][0]``   |
+        +--------------+-------------------------------------------------------+
+        | ``"D11"`` … ``"D33"``, ``"D12"``, ``"D13"``, ``"D23"``             |
+        |              | Individual HStrain tensor components                  |
+        +--------------+-------------------------------------------------------+
+        | ``"Size"``   | Isotropic crystallite size value (µm)                 |
+        +--------------+-------------------------------------------------------+
+        | ``"Mustrain"`` | Isotropic microstrain value (µε)                    |
+        +--------------+-------------------------------------------------------+
+        | ``"MD"``     | March–Dollase preferred orientation ratio             |
+        +--------------+-------------------------------------------------------+
+        | ``"BabA"``   | Babinet amplitude ``BabA``                            |
+        +--------------+-------------------------------------------------------+
+        | ``"BabU"``   | Babinet thermal factor ``BabU``                       |
+        +--------------+-------------------------------------------------------+
+
+        Call :meth:`print_HAP_parameters` first to check available keys and
+        current values for a given phase.
+
+        Parameters
+        ----------
+        parameter : str
+            HAP parameter to set (see table above).
+        value : float
+            Value to assign and freeze.
+        phase : str, list of str, or None, optional
+            Phase name(s) to update.  ``None`` (default) updates all phases
+            linked to the current histogram.
+
+        Raises
+        ------
+        ValueError
+            If *parameter* is not a recognised key, or if a model-dependent
+            parameter (e.g. ``"Size"`` in uniaxial/generalized mode) cannot be
+            set as a single scalar.
+        """
+        _DIJ = {"D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5}
+        _VALID = {"Scale", "Extinction", "Size", "Mustrain", "MD", "BabA", "BabU"} | _DIJ.keys()
+
+        if parameter not in _VALID:
+            raise ValueError(
+                f"'{parameter}' is not a supported HAP parameter. "
+                f"Valid options: {sorted(_VALID)}"
+            )
+
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
+            hap = ph.data["Histograms"].get(self.hist.name)
+            if hap is None:
+                print(f"  Skipping phase '{ph.name}': not linked to '{self.hist.name}'.")
+                continue
+
+            if parameter == "Scale":
+                hap["Scale"][0] = value
+                hap["Scale"][1] = False
+
+            elif parameter == "Extinction":
+                hap["Extinction"][0] = value
+                hap["Extinction"][1] = False
+
+            elif parameter in _DIJ:
+                idx = _DIJ[parameter]
+                hs = hap.get("HStrain")
+                if hs is None:
+                    raise ValueError(
+                        f"Phase '{ph.name}' has no HStrain entry. "
+                        "Enable HStrain first."
+                    )
+                hs[0][idx] = value
+                hs[1][idx] = False
+
+            elif parameter == "Size":
+                sz = hap.get("Size")
+                if sz is None:
+                    raise ValueError(
+                        f"Phase '{ph.name}' has no Size entry."
+                    )
+                if sz[0] != "isotropic":
+                    raise ValueError(
+                        f"Phase '{ph.name}' Size model is '{sz[0]}'. "
+                        "set_HAP_parameter only supports isotropic Size."
+                    )
+                sz[1][0] = value
+                sz[2][0] = False
+
+            elif parameter == "Mustrain":
+                ms = hap.get("Mustrain")
+                if ms is None:
+                    raise ValueError(
+                        f"Phase '{ph.name}' has no Mustrain entry."
+                    )
+                if ms[0] != "isotropic":
+                    raise ValueError(
+                        f"Phase '{ph.name}' Mustrain model is '{ms[0]}'. "
+                        "set_HAP_parameter only supports isotropic Mustrain."
+                    )
+                ms[1][0] = value
+                ms[2][0] = False
+
+            elif parameter == "MD":
+                po = hap.get("Pref.Ori.")
+                if po is None:
+                    raise ValueError(
+                        f"Phase '{ph.name}' has no Pref.Ori. entry."
+                    )
+                if po[0] != "MD":
+                    raise ValueError(
+                        f"Phase '{ph.name}' preferred orientation model is '{po[0]}', not 'MD'."
+                    )
+                po[1] = value
+                po[2] = False
+
+            elif parameter in ("BabA", "BabU"):
+                bab = hap.get("Babinet")
+                if bab is None or parameter not in bab:
+                    raise ValueError(
+                        f"Phase '{ph.name}' has no Babinet '{parameter}' entry."
+                    )
+                bab[parameter]["BabVal"] = value
+                bab[parameter]["refine"] = False
+
+            print(f"  HAP '{parameter}' for phase '{ph.name}' set to {value} and frozen.")
+
+        self.gpx.save()
 
     def fix_all_parameters(self) -> None:
         """

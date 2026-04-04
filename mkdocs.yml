@@ -1,0 +1,83 @@
+site_name: nrxrdct
+site_description: X-ray diffraction computed tomography — full XRD-CT data-reduction pipeline
+repo_url: https://github.com/pedrodamas0803/nrxrdct
+repo_name: nrxrdct
+edit_uri: edit/main/docs/
+
+theme:
+  name: readthedocs
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - User Guide:
+    - Quickstart: user-guide/quickstart.md
+    - Typical Workflow: user-guide/workflow.md
+    - SLURM / HPC Integration: user-guide/slurm.md
+    - GPU Support: user-guide/gpu.md
+  - API Reference:
+    - parameters: api/parameters.md
+    - preprocessing: api/preprocessing.md
+    - integration: api/integration.md
+    - reconstruction: api/reconstruction.md
+    - refinement: api/refinement.md
+    - refine_dict: api/refine_dict.md
+    - fluorescence: api/fluorescence.md
+    - nmf: api/nmf.md
+    - utils: api/utils.md
+    - plotting: api/plotting.md
+    - visualization: api/visualization.md
+    - io: api/io.md
+    - roi: api/roi.md
+    - slurm_integration: api/slurm_integration.md
+    - slurm_reconstruction: api/slurm_reconstruction.md

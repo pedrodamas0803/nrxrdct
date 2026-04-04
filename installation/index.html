@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Installation - nrxrdct</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../assets/_mkdocstrings.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Installation";
+        var mkdocs_page_input_path = "installation.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Installation</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#with-uv-recommended">With uv (recommended)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#with-pip">With pip</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#building-the-documentation-locally">Building the documentation locally</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#dependencies">Dependencies</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#declared-pyprojecttoml">Declared (pyproject.toml)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#additional-runtime-dependencies">Additional runtime dependencies</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../user-guide/quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../user-guide/workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../user-guide/slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../user-guide/gpu/">GPU Support</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/parameters/">parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/preprocessing/">preprocessing</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/integration/">integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/reconstruction/">reconstruction</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/refinement/">refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/refine_dict/">refine_dict</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/fluorescence/">fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/nmf/">nmf</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/plotting/">plotting</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/visualization/">visualization</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/io/">io</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/roi/">roi</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/slurm_integration/">slurm_integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/slurm_reconstruction/">slurm_reconstruction</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Installation</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/installation.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h1>
+<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Python <strong>3.11</strong> or later</li>
+<li>A working <a href="https://gsas-ii.readthedocs.io/">GSAS-II</a> installation (<code>GSASIIscriptable</code> must be importable)</li>
+<li><a href="https://astra-toolbox.com/">ASTRA Toolbox</a> (GPU reconstruction requires an NVIDIA GPU and CUDA)</li>
+</ul>
+<h2 id="with-uv-recommended">With <code>uv</code> (recommended)<a class="headerlink" href="#with-uv-recommended" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>sync
+</code></pre></div>
+<h2 id="with-pip">With <code>pip</code><a class="headerlink" href="#with-pip" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
+<h2 id="building-the-documentation-locally">Building the documentation locally<a class="headerlink" href="#building-the-documentation-locally" title="Permanent link">&para;</a></h2>
+<p>Install the docs extras and serve:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>docs
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
+</code></pre></div>
+<p>Then open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>.</p>
+<hr />
+<h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
+<h3 id="declared-pyprojecttoml">Declared (<code>pyproject.toml</code>)<a class="headerlink" href="#declared-pyprojecttoml" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numpy &gt;= 2.4</code></td>
+<td>Array operations throughout</td>
+</tr>
+<tr>
+<td><code>scipy &gt;= 1.17</code></td>
+<td>Median filter, Gaussian filter</td>
+</tr>
+<tr>
+<td><code>h5py &gt;= 3.16</code></td>
+<td>HDF5 file I/O</td>
+</tr>
+<tr>
+<td><code>matplotlib &gt;= 3.10</code></td>
+<td>Plotting</td>
+</tr>
+<tr>
+<td><code>pyFAI &gt;= 2026.2</code></td>
+<td>Azimuthal integration</td>
+</tr>
+<tr>
+<td><code>scikit-image &gt;= 0.26</code></td>
+<td>Block reduce for XRF binning</td>
+</tr>
+<tr>
+<td><code>scikit-learn &gt;= 1.8</code></td>
+<td>NMF decomposition</td>
+</tr>
+<tr>
+<td><code>pandas &gt;= 3.0</code></td>
+<td>Peak table output</td>
+</tr>
+<tr>
+<td><code>xraylib &gt;= 4.2</code></td>
+<td>XRF emission line energies</td>
+</tr>
+<tr>
+<td><code>xrayutilities &gt;= 1.7</code></td>
+<td>Powder pattern simulation and peak listing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="additional-runtime-dependencies">Additional runtime dependencies<a class="headerlink" href="#additional-runtime-dependencies" title="Permanent link">&para;</a></h3>
+<p>These are used by specific modules but must be installed separately:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Module</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>astra-toolbox</code></td>
+<td><code>reconstruction</code></td>
+<td>Tomographic reconstruction (GPU + CPU)</td>
+</tr>
+<tr>
+<td><code>GSAS-II</code></td>
+<td><code>reconstruction</code>, <code>refinement</code></td>
+<td>Rietveld refinement scripting</td>
+</tr>
+<tr>
+<td><code>fabio</code></td>
+<td><code>integration</code></td>
+<td>Reading mask files</td>
+</tr>
+<tr>
+<td><code>hdf5plugin</code></td>
+<td><code>reconstruction</code></td>
+<td>Compressed HDF5 dataset support</td>
+</tr>
+<tr>
+<td><code>napari</code></td>
+<td><code>visualization</code></td>
+<td>Interactive 3-D volume viewer</td>
+</tr>
+<tr>
+<td><code>pybaselines</code></td>
+<td><code>utils</code></td>
+<td>XRD baseline fitting</td>
+</tr>
+<tr>
+<td><code>tqdm</code></td>
+<td><code>integration</code>, <code>fluorescence</code>, <code>nmf</code></td>
+<td>Progress bars</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href=".." class="btn btn-neutral float-left" title="Home"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../user-guide/quickstart/" class="btn btn-neutral float-right" title="Quickstart">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href=".." style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../user-guide/quickstart/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

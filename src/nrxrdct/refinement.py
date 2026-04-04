@@ -292,6 +292,7 @@ class BaseRefinement(Scan):
         do_refine: bool = True,
         function: str = "chebyschev",
         debye_terms: list | None = None,
+        freeze: bool = False,
     ) -> None:
         """
         Refine the powder pattern background.
@@ -375,27 +376,30 @@ class BaseRefinement(Scan):
         self.gpx.save()
         self.gpx.do_refinements([{}])
 
-        # Freeze all background flags after refinement
-        bkg = self.hist["Background"]
-        bkg[0][1] = False
-        for term in bkg[1].get("debyeTerms", []):
-            term[1] = term[3] = term[5] = False  # refA, refR, refU
-        self.gpx.save()
+        if freeze:
+            bkg = self.hist["Background"]
+            bkg[0][1] = False
+            for term in bkg[1].get("debyeTerms", []):
+                term[1] = term[3] = term[5] = False  # refA, refR, refU
+            self.gpx.save()
 
+        frozen_info = " (parameters frozen)" if freeze else ""
         print(f"Background refinement performed (function='{function}'"
               + (f", {len(debye_terms)} Debye term(s)" if debye_terms else "")
-              + ", parameters frozen)")
+              + frozen_info + ")")
 
-    def refine_histogram_scale(self) -> None:
-        """Refine the overall histogram scale factor, then freeze it."""
+    def refine_histogram_scale(self, freeze: bool = False) -> None:
+        """Refine the overall histogram scale factor."""
         self.hist.SampleParameters["Scale"][1] = True
         self.gpx.save()
         self.gpx.do_refinements([{}])
-        self.hist.SampleParameters["Scale"][1] = False
-        self.gpx.save()
-        print("Histogram scale refinement done (parameter frozen)")
+        if freeze:
+            self.hist.SampleParameters["Scale"][1] = False
+            self.gpx.save()
+        frozen_info = " (parameter frozen)" if freeze else ""
+        print(f"Histogram scale refinement done{frozen_info}")
 
-    def refine_phase_scale(self, phase: str | list[str]) -> None:
+    def refine_phase_scale(self, phase: str | list[str], freeze: bool = False) -> None:
         """
         Refine the HAP scale factor for one or more phases.
 
@@ -404,6 +408,9 @@ class BaseRefinement(Scan):
         phase : str or list of str
             Phase name, or list of phase names, whose HAP scale factor should
             be refined.  Names must match those used in :meth:`add_phase`.
+        freeze : bool, optional
+            If ``True``, freeze the scale flag after the refinement cycle
+            (default ``False``).
         """
         names = [phase] if isinstance(phase, str) else list(phase)
         available = {ph.name: ph for ph in self.gpx.phases()}
@@ -416,18 +423,22 @@ class BaseRefinement(Scan):
             available[name].set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            available[name].set_HAP_refinements({"Scale": False}, histograms=[self.hist])
-            self.gpx.save()
-            print(f"Phase scale refinement done for '{name}' (parameter frozen)")
+            if freeze:
+                available[name].set_HAP_refinements({"Scale": False}, histograms=[self.hist])
+                self.gpx.save()
+            frozen_info = " (parameter frozen)" if freeze else ""
+            print(f"Phase scale refinement done for '{name}'{frozen_info}")
 
-    def refine_zero_shift(self) -> None:
-        """Refine the 2θ zero-shift instrument parameter, then freeze it."""
+    def refine_zero_shift(self, freeze: bool = False) -> None:
+        """Refine the 2θ zero-shift instrument parameter."""
         self.hist.set_refinements({"Instrument Parameters": ["Zero"]})
         self.gpx.save()
         self.gpx.do_refinements([{}])
-        self.hist["Instrument Parameters"][0]["Zero"][2] = False
-        self.gpx.save()
-        print("Zero shift refinement done (parameter frozen)")
+        if freeze:
+            self.hist["Instrument Parameters"][0]["Zero"][2] = False
+            self.gpx.save()
+        frozen_info = " (parameter frozen)" if freeze else ""
+        print(f"Zero shift refinement done{frozen_info}")
 
     def print_instrument_parameters(self) -> None:
         """
@@ -508,9 +519,9 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print(f"Instrument parameter '{parameter}' set to {value} and frozen.")
 
-    def refine_sample_displacement(self, parameter: str = "Shift") -> None:
+    def refine_sample_displacement(self, parameter: str = "Shift", freeze: bool = False) -> None:
         """
-        Refine a sample displacement parameter, then freeze it.
+        Refine a sample displacement parameter.
 
         Parameters
         ----------
@@ -551,9 +562,11 @@ class BaseRefinement(Scan):
         self.hist.set_refinements({"Sample Parameters": [parameter]})
         self.gpx.save()
         self.gpx.do_refinements([{}])
-        self.hist.clear_refinements({"Sample Parameters": [parameter]})
-        self.gpx.save()
-        print(f"Sample displacement refinement done for '{parameter}' (parameter frozen)")
+        if freeze:
+            self.hist.clear_refinements({"Sample Parameters": [parameter]})
+            self.gpx.save()
+        frozen_info = " (parameter frozen)" if freeze else ""
+        print(f"Sample displacement refinement done for '{parameter}'{frozen_info}")
 
     def set_absorption(
         self,
@@ -609,9 +622,9 @@ class BaseRefinement(Scan):
         status = "free for refinement" if refine else "fixed"
         print(f"Absorption set to {absorption:.6f} ({status})")
 
-    def refine_gaussian_broadening(self, refine: list = ["U", "V", "W", "SH/L"]) -> None:
+    def refine_gaussian_broadening(self, refine: list = ["U", "V", "W", "SH/L"], freeze: bool = False) -> None:
         """
-        Refine Gaussian peak-width parameters one at a time, then freeze them.
+        Refine Gaussian peak-width parameters one at a time.
 
         Each parameter is refined in a separate cycle.  After the cycle its
         flag is cleared so that the value is not changed by later refinement
@@ -665,14 +678,16 @@ class BaseRefinement(Scan):
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            if param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+            if freeze and param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
                 ip[param][2] = False
-            print(f"Refined {param} (Gaussian broadening, parameter frozen)")
-        self.gpx.save()
+            frozen_info = " (parameter frozen)" if freeze else ""
+            print(f"Refined {param} (Gaussian broadening{frozen_info})")
+        if freeze:
+            self.gpx.save()
 
-    def refine_lorentzian_broadening(self, refine: list = ["X", "Y"]) -> None:
+    def refine_lorentzian_broadening(self, refine: list = ["X", "Y"], freeze: bool = False) -> None:
         """
-        Refine Lorentzian peak-width parameters one at a time, then freeze them.
+        Refine Lorentzian peak-width parameters one at a time.
 
         Each parameter is refined in a separate cycle.  After the cycle its
         flag is cleared so that the value is not changed by later refinement
@@ -710,10 +725,12 @@ class BaseRefinement(Scan):
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
             self.gpx.do_refinements([{}])
-            if param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
+            if freeze and param in ip and isinstance(ip[param], list) and len(ip[param]) >= 3:
                 ip[param][2] = False
-            print(f"Refined {param} (Lorentzian broadening, parameter frozen)")
-        self.gpx.save()
+            frozen_info = " (parameter frozen)" if freeze else ""
+            print(f"Refined {param} (Lorentzian broadening{frozen_info})")
+        if freeze:
+            self.gpx.save()
 
     def refine_peak_profile(
         self,
@@ -1130,9 +1147,10 @@ class BaseRefinement(Scan):
         self,
         phase: str | list[str] | None = None,
         atoms: list[str] | None = None,
+        freeze: bool = False,
     ) -> None:
         """
-        Refine site occupancy for selected atoms, then freeze the occupancy flag.
+        Refine site occupancy for selected atoms.
 
         The ``"F"`` refinement flag is added to the current flags of every
         target atom before the refinement cycle and removed afterwards, so
@@ -1192,20 +1210,21 @@ class BaseRefinement(Scan):
         self.gpx.save()
         self.gpx.do_refinements([{}])
 
-        # Freeze: restore flags without "F"
-        for atom in target_atoms:
-            atom.refinement_flags = original_flags[id(atom)]
-        self.gpx.save()
+        if freeze:
+            for atom in target_atoms:
+                atom.refinement_flags = original_flags[id(atom)]
+            self.gpx.save()
 
         phase_names = [ph.name for ph in targets]
         atom_info = f", atoms={atoms}" if atoms is not None else ""
-        print(f"Occupancy refinement done for {phase_names}{atom_info} (flag frozen)")
+        frozen_info = " (flag frozen)" if freeze else ""
+        print(f"Occupancy refinement done for {phase_names}{atom_info}{frozen_info}")
 
     def refine_Uiso(
         self,
         phase: str | list[str] | None = None,
         atoms: list[str] | None = None,
-        freeze: bool = True,
+        freeze: bool = False,
     ) -> None:
         """
         Refine the isotropic atomic displacement parameter U\ :sub:`iso` for
@@ -2684,6 +2703,97 @@ class InstrumentCalibration(BaseRefinement):
 
         self.calibration_file = Path("calibration") / self.param_file
         self.calibration_image = Path("calibration") / image_file
+
+    def refine_instrument_parameters(
+        self,
+        profile_params: list[str] = ["W", "X", "Y"],
+        profile: str = "FCJVoigt",
+        n_background_coeff: int = 12,
+        background_function: str = "chebyschev",
+        use_lebail: bool = True,
+    ) -> None:
+        """
+        Run the recommended instrument-calibration refinement sequence.
+
+        Performs the following steps in order, each building on the converged
+        result of the previous one:
+
+        1. **Background** — fit the powder-pattern baseline.
+        2. **Scale** — establish the overall intensity scale (or LeBail
+           intensities when ``use_lebail=True``).
+        3. **Zero shift** — correct the 2θ zero-point offset.
+        4. **Peak profile** — refine the width parameters listed in
+           ``profile_params`` sequentially, one per refinement cycle.
+        5. **Export** — write the calibrated ``.instprm`` file via
+           :meth:`write_calibrated_instrument_pars`.
+
+        At every step the refined parameter is left *free* (``freeze=False``)
+        so that subsequent steps can absorb any residual correlation.  Only
+        after the full sequence is the project saved with all flags in their
+        final refined state.
+
+        This method assumes the GSAS-II project has already been created
+        (:meth:`create_model` or :meth:`load_model`) and the calibrant phase
+        has been added (:meth:`add_phase`) with its cell and atomic positions
+        fixed (``block_cell=True``, the default).
+
+        Parameters
+        ----------
+        profile_params : list of str, optional
+            Ordered list of instrument peak-profile parameters to refine.
+            Refined sequentially, one per GSAS-II cycle.  Must be valid for
+            the chosen ``profile``.  Default ``["W", "X", "Y"]`` is the
+            recommended starting set for synchrotron data with a 2-D
+            integrating detector (``U``, ``V``, and ``SH/L`` are typically
+            fixed at 0/0/0.0001 for such data).
+        profile : str, optional
+            Peak-profile model passed to :meth:`refine_peak_profile`.
+            One of ``"FCJVoigt"`` (default), ``"ExpFCJVoigt"``,
+            ``"EpsVoigt"``.
+        n_background_coeff : int, optional
+            Number of background polynomial coefficients (default 12).
+        background_function : str, optional
+            Background function type passed to :meth:`refine_background`
+            (default ``"chebyschev"``).
+        use_lebail : bool, optional
+            If ``True`` (default), activate LeBail extraction for the
+            calibrant phase before refining the scale, so that the
+            integrated intensities are free parameters rather than
+            structure-factor predictions.  Recommended for calibrants whose
+            exact structure is well-known and whose scale should not
+            contaminate the profile fit.
+        """
+        print("\n" + "=" * 60)
+        print("INSTRUMENT CALIBRATION REFINEMENT SEQUENCE")
+        print("=" * 60)
+
+        # Step 1 — Background
+        print("\n--- Step 1: Background ---")
+        self.refine_background(
+            number_coeff=n_background_coeff,
+            function=background_function,
+        )
+
+        # Step 2 — Scale (LeBail or Rietveld)
+        print("\n--- Step 2: Scale ---")
+        if use_lebail:
+            self.set_LeBail(enable=True)
+            self.refine_histogram_scale()
+        else:
+            self.refine_histogram_scale()
+
+        # Step 3 — Zero shift
+        print("\n--- Step 3: Zero shift ---")
+        self.refine_zero_shift()
+
+        # Step 4 — Peak profile
+        print("\n--- Step 4: Peak profile ---")
+        self.refine_peak_profile(profile=profile, parameters=profile_params)
+
+        # Step 5 — Export
+        print("\n--- Step 5: Export ---")
+        self.write_calibrated_instrument_pars()
+        print("\nCalibration sequence complete.")
 
     def write_calibrated_instrument_pars(self) -> None:
         """

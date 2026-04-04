@@ -6,10 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "h5py>=3.16.0",
-    "ipympl==0.9.4",
-    "matplotlib==3.8.0",
-    "numpy>=2.4.3",
-    "pandas>=3.0.1",
+    "ipympl>=0.9.4",
+    "matplotlib>=3.9.0",
+    "numpy>=2.0",
+    "pandas==3.0.2",
     "pyfai>=2026.2.1",
     "scikit-image>=0.26.0",
     "scikit-learn>=1.8.0",
@@ -22,6 +22,14 @@ dependencies = [
 nrxrdct = "nrxrdct:main"
 nrxrdct-slurm = "nrxrdct.slurm_integration.cli:main"
 nrxrdct-slurm-recon = "nrxrdct.slurm_reconstruction.cli:main"
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+    "mkdocs-gen-files>=0.5",
+    "mkdocs-literate-nav>=0.6",
+]
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]

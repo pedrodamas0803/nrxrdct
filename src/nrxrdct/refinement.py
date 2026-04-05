@@ -447,6 +447,35 @@ class BaseRefinement(Scan):
         frozen_info = " (parameter frozen)" if freeze else ""
         print(f"Zero shift refinement done{frozen_info}")
 
+    def refine_wavelength(self, freeze: bool = False) -> None:
+        """
+        Refine the incident-beam wavelength (``Lam``).
+
+        The wavelength enters every d-spacing calculation via Bragg's law and
+        is therefore strongly correlated with the unit-cell parameters.  It
+        should only be refined when the nominal wavelength from the beamline
+        monochromator calibration is uncertain, and only after the cell
+        parameters are well converged.  Refining wavelength and cell
+        simultaneously is generally not recommended.
+
+        Parameters
+        ----------
+        freeze : bool, optional
+            If ``True``, clear the ``Lam`` refinement flag after the cycle
+            so the wavelength stays fixed in subsequent steps (default
+            ``False``).
+        """
+        self.hist.set_refinements({"Instrument Parameters": ["Lam"]})
+        self.gpx.save()
+        self.gpx.do_refinements([{}])
+        if freeze:
+            self.hist["Instrument Parameters"][0]["Lam"][2] = False
+            self.gpx.save()
+        lam_val = self.hist["Instrument Parameters"][0]["Lam"][1]
+        energy_kev = 12.398 / lam_val
+        frozen_info = " (parameter frozen)" if freeze else ""
+        print(f"Wavelength refinement done: Lam = {lam_val:.8f} Å  ({energy_kev:.4f} keV){frozen_info}")
+
     def print_instrument_parameters(self) -> None:
         """
         Print all instrument parameters currently present in the histogram.

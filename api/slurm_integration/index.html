@@ -888,24 +888,25 @@ Call merge() after all jobs finish to assemble the output HDF5.</p>
 
 
 <a href="#nrxrdct.slurm_integration.repair" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">repair</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">watch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">repair</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">watch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>Resubmit SLURM jobs for any scans missing from the tmp directory.</p>
-<p>Reads launch_meta.json to find missing indices, then submits
-one or more repair jobs. Call merge() afterwards.</p>
+<p>All integration and SLURM settings are read from launch_meta.json so
+you don't need to repeat them. Pass **kwargs to override any individual
+setting (e.g. partition, mem, n_workers).</p>
 <h5 id="nrxrdct.slurm_integration.repair--parameters">Parameters<a class="headerlink" href="#nrxrdct.slurm_integration.repair--parameters" title="Permanent link">&para;</a></h5>
 <p>tmp_dir     : Path  — tmp directory from the original launch()
-master_file : Path  — master HDF5 file
-poni_file   : Path  — calibration file
-mask_file   : Path  — mask file
+master_file : Path  — override master HDF5 (default: from launch_meta)
+poni_file   : Path  — override calibration file (default: from launch_meta)
+mask_file   : Path  — override mask file (default: from launch_meta)
 output_file : Path  — only used to check merge status if provided
 n_jobs      : int   — number of repair jobs (default 1)
 watch       : bool  — block until repair jobs finish
 interval    : int   — polling interval in seconds when watch=True
-**kwargs    : forwarded to _submit_job (partition, conda_env, mem, etc.)</p>
+**kwargs    : override any setting from launch_meta (partition, mem, etc.)</p>
 
 
             <details class="mkdocstrings-source">
@@ -1010,11 +1011,34 @@ interval    : int   — polling interval in seconds when watch=True
 <span class="normal"><a href="#__codelineno-0-277">277</a></span>
 <span class="normal"><a href="#__codelineno-0-278">278</a></span>
 <span class="normal"><a href="#__codelineno-0-279">279</a></span>
-<span class="normal"><a href="#__codelineno-0-280">280</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="k">def</span><span class="w"> </span><span class="nf">repair</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="k">def</span><span class="w"> </span><span class="nf">repair</span><span class="p">(</span>
 <a id="__codelineno-0-181" name="__codelineno-0-181"></a>    <span class="n">tmp_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a>    <span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a>    <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a>    <span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a>    <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-185" name="__codelineno-0-185"></a>    <span class="o">*</span><span class="p">,</span>
 <a id="__codelineno-0-186" name="__codelineno-0-186"></a>    <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-187" name="__codelineno-0-187"></a>    <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
@@ -1025,92 +1049,115 @@ interval    : int   — polling interval in seconds when watch=True
 <a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">    Resubmit SLURM jobs for any scans missing from the tmp directory.</span>
 <a id="__codelineno-0-194" name="__codelineno-0-194"></a>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">    Reads launch_meta.json to find missing indices, then submits</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">    one or more repair jobs. Call merge() afterwards.</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">    Parameters</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">    ----------</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">    tmp_dir     : Path  — tmp directory from the original launch()</span>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">    master_file : Path  — master HDF5 file</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">    poni_file   : Path  — calibration file</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">    mask_file   : Path  — mask file</span>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    output_file : Path  — only used to check merge status if provided</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">    n_jobs      : int   — number of repair jobs (default 1)</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">    watch       : bool  — block until repair jobs finish</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    interval    : int   — polling interval in seconds when watch=True</span>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">    **kwargs    : forwarded to _submit_job (partition, conda_env, mem, etc.)</span>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.launch_jobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">_split_indices</span><span class="p">,</span> <span class="n">_submit_job</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="n">tmp_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">check</span><span class="p">(</span><span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">)</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="n">missing</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;missing_tmp&quot;</span><span class="p">]</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">missing</span><span class="p">:</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓  Nothing to repair — all scans present in tmp dir.&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a>        <span class="k">return</span> <span class="n">result</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔧  Repairing </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span><span class="si">}</span><span class="s2"> missing scans across </span><span class="si">{</span><span class="n">n_jobs</span><span class="si">}</span><span class="s2"> job(s)...&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tmp_dir</span> <span class="o">/</span> <span class="s2">&quot;launch_meta.json&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a>        <span class="n">launch_meta</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="n">log_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">launch_meta</span><span class="p">[</span><span class="s2">&quot;output_file&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;slurm_logs&quot;</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">log_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">existing</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">log_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;job_*.sh&quot;</span><span class="p">))</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="n">base_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">existing</span><span class="p">)</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a>    <span class="n">n_workers</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;n_workers&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a>    <span class="n">cpus</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cpus&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a>    <span class="n">effective_n_workers</span> <span class="o">=</span> <span class="n">n_workers</span> <span class="k">if</span> <span class="n">n_workers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">cpus</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="n">chunks</span> <span class="o">=</span> <span class="n">_split_indices</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_jobs</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)))</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="n">chunks</span> <span class="o">=</span> <span class="p">[[</span><span class="n">missing</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">chunk</span><span class="p">]</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">]</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="n">slurm_ids</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="k">for</span> <span class="n">offset</span><span class="p">,</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">chunks</span><span class="p">):</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">sid</span> <span class="o">=</span> <span class="n">_submit_job</span><span class="p">(</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a>            <span class="n">base_id</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a>            <span class="n">chunk</span><span class="p">,</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a>            <span class="n">master_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">launch_meta</span><span class="p">[</span><span class="s2">&quot;master_file&quot;</span><span class="p">]),</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a>            <span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a>            <span class="n">poni_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">launch_meta</span><span class="p">[</span><span class="s2">&quot;poni_file&quot;</span><span class="p">]),</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a>            <span class="n">mask_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">launch_meta</span><span class="p">[</span><span class="s2">&quot;mask_file&quot;</span><span class="p">]),</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a>            <span class="n">n_points</span><span class="o">=</span><span class="n">launch_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;n_points&quot;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">),</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a>            <span class="n">n_workers</span><span class="o">=</span><span class="n">effective_n_workers</span><span class="p">,</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a>            <span class="n">batch_size</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;batch_size&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a>            <span class="n">unit</span><span class="o">=</span><span class="n">launch_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;unit&quot;</span><span class="p">,</span> <span class="s2">&quot;2th_deg&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a>            <span class="n">method</span><span class="o">=</span><span class="n">launch_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;method&quot;</span><span class="p">,</span> <span class="s2">&quot;standard&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a>            <span class="n">percentile</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;percentile&quot;</span><span class="p">,</span> <span class="s2">&quot;10,90&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a>            <span class="n">thres</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;thres&quot;</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">),</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a>            <span class="n">max_iter</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;max_iter&quot;</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a>            <span class="n">partition</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;partition&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a>            <span class="n">time</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;04:00:00&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a>            <span class="n">mem</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;mem&quot;</span><span class="p">,</span> <span class="s2">&quot;32G&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a>            <span class="n">cpus</span><span class="o">=</span><span class="n">cpus</span><span class="p">,</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a>            <span class="n">gpu</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>            <span class="n">env_activate</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;env_activate&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a>            <span class="n">conda_env</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;conda_env&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a>            <span class="n">log_dir</span><span class="o">=</span><span class="n">log_dir</span><span class="p">,</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="p">)</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="n">slurm_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sid</span><span class="p">)</span>
-<a id="__codelineno-0-264" name="__codelineno-0-264"></a>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="nb">print</span><span class="p">(</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a>        <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">slurm_ids</span><span class="p">)</span><span class="si">}</span><span class="s2"> repair job(s) submitted — IDs: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">slurm_ids</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="p">)</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a>
-<a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="k">if</span> <span class="n">watch</span><span class="p">:</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">.monitor</span><span class="w"> </span><span class="kn">import</span> <span class="n">monitor</span> <span class="k">as</span> <span class="n">_monitor</span>
-<a id="__codelineno-0-271" name="__codelineno-0-271"></a>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a>        <span class="n">_monitor</span><span class="p">(</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a>            <span class="n">slurm_ids</span><span class="o">=</span><span class="n">slurm_ids</span><span class="p">,</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a>            <span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a>            <span class="n">watch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a>            <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="p">)</span>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a>    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;repair_job_ids&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">slurm_ids</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a>    <span class="k">return</span> <span class="n">result</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">    All integration and SLURM settings are read from launch_meta.json so</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">    you don&#39;t need to repeat them. Pass **kwargs to override any individual</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">    setting (e.g. partition, mem, n_workers).</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">    Parameters</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">    ----------</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">    tmp_dir     : Path  — tmp directory from the original launch()</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">    master_file : Path  — override master HDF5 (default: from launch_meta)</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">    poni_file   : Path  — override calibration file (default: from launch_meta)</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    mask_file   : Path  — override mask file (default: from launch_meta)</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">    output_file : Path  — only used to check merge status if provided</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">    n_jobs      : int   — number of repair jobs (default 1)</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    watch       : bool  — block until repair jobs finish</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">    interval    : int   — polling interval in seconds when watch=True</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">    **kwargs    : override any setting from launch_meta (partition, mem, etc.)</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.launch_jobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">_split_indices</span><span class="p">,</span> <span class="n">_submit_job</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">tmp_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">check</span><span class="p">(</span><span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">)</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="n">missing</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;missing_tmp&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">missing</span><span class="p">:</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓  Nothing to repair — all scans present in tmp dir.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>        <span class="k">return</span> <span class="n">result</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔧  Repairing </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span><span class="si">}</span><span class="s2"> missing scans across </span><span class="si">{</span><span class="n">n_jobs</span><span class="si">}</span><span class="s2"> job(s)...&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tmp_dir</span> <span class="o">/</span> <span class="s2">&quot;launch_meta.json&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="n">lm</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="c1"># Resolve paths — kwargs override launch_meta, launch_meta overrides defaults</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">_master_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;master_file&quot;</span><span class="p">,</span> <span class="n">master_file</span> <span class="ow">or</span> <span class="n">lm</span><span class="p">[</span><span class="s2">&quot;master_file&quot;</span><span class="p">]))</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="n">_poni_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;poni_file&quot;</span><span class="p">,</span> <span class="n">poni_file</span> <span class="ow">or</span> <span class="n">lm</span><span class="p">[</span><span class="s2">&quot;poni_file&quot;</span><span class="p">]))</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="n">_mask_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;mask_file&quot;</span><span class="p">,</span> <span class="n">mask_file</span> <span class="ow">or</span> <span class="n">lm</span><span class="p">[</span><span class="s2">&quot;mask_file&quot;</span><span class="p">]))</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a>    <span class="n">_env_activate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;env_activate&quot;</span><span class="p">,</span> <span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;env_activate&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a>    <span class="n">_env_activate</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">_env_activate</span><span class="p">)</span> <span class="k">if</span> <span class="n">_env_activate</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>    <span class="c1"># All settings fall back to what was used at launch time</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="n">settings</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>        <span class="n">n_points</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;n_points&quot;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">),</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="n">n_workers</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cpus&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="n">batch_size</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;batch_size&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>        <span class="n">unit</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;unit&quot;</span><span class="p">,</span> <span class="s2">&quot;2th_deg&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">method</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;method&quot;</span><span class="p">,</span> <span class="s2">&quot;standard&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="n">percentile</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;percentile&quot;</span><span class="p">,</span> <span class="s2">&quot;10,90&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>        <span class="n">thres</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;thres&quot;</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">),</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a>        <span class="n">max_iter</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max_iter&quot;</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a>        <span class="n">partition</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;partition&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="n">time</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;04:00:00&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a>        <span class="n">mem</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mem&quot;</span><span class="p">,</span> <span class="s2">&quot;32G&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a>        <span class="n">cpus</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cpus&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="n">gpu</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a>        <span class="n">conda_env</span><span class="o">=</span><span class="n">lm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conda_env&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a>    <span class="p">)</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a>    <span class="c1"># Apply user overrides</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>    <span class="n">settings</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a>    <span class="n">log_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">lm</span><span class="p">[</span><span class="s2">&quot;output_file&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;slurm_logs&quot;</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="n">log_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">base_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">log_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;job_*.sh&quot;</span><span class="p">)))</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">chunks</span> <span class="o">=</span> <span class="n">_split_indices</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_jobs</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)))</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="n">chunks</span> <span class="o">=</span> <span class="p">[[</span><span class="n">missing</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">chunk</span><span class="p">]</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">]</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">slurm_ids</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="k">for</span> <span class="n">offset</span><span class="p">,</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">chunks</span><span class="p">):</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="n">sid</span> <span class="o">=</span> <span class="n">_submit_job</span><span class="p">(</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>            <span class="n">base_id</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>            <span class="n">chunk</span><span class="p">,</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>            <span class="n">master_file</span><span class="o">=</span><span class="n">_master_file</span><span class="p">,</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>            <span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>            <span class="n">poni_file</span><span class="o">=</span><span class="n">_poni_file</span><span class="p">,</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>            <span class="n">mask_file</span><span class="o">=</span><span class="n">_mask_file</span><span class="p">,</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>            <span class="n">n_points</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;n_points&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a>            <span class="n">n_workers</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;n_workers&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>            <span class="n">batch_size</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;batch_size&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>            <span class="n">unit</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;unit&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>            <span class="n">method</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;method&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>            <span class="n">percentile</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;percentile&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>            <span class="n">thres</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;thres&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>            <span class="n">max_iter</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;max_iter&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>            <span class="n">partition</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;partition&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>            <span class="n">time</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>            <span class="n">mem</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;mem&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="n">cpus</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;cpus&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>            <span class="n">gpu</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;gpu&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>            <span class="n">env_activate</span><span class="o">=</span><span class="n">_env_activate</span><span class="p">,</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>            <span class="n">conda_env</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;conda_env&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>            <span class="n">log_dir</span><span class="o">=</span><span class="n">log_dir</span><span class="p">,</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="p">)</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="n">slurm_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sid</span><span class="p">)</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">slurm_ids</span><span class="p">)</span><span class="si">}</span><span class="s2"> repair job(s) submitted — IDs: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">slurm_ids</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="p">)</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="k">if</span> <span class="n">watch</span><span class="p">:</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">.monitor</span><span class="w"> </span><span class="kn">import</span> <span class="n">monitor</span> <span class="k">as</span> <span class="n">_monitor</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="n">_monitor</span><span class="p">(</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>            <span class="n">slurm_ids</span><span class="o">=</span><span class="n">slurm_ids</span><span class="p">,</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>            <span class="n">tmp_dir</span><span class="o">=</span><span class="n">tmp_dir</span><span class="p">,</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>            <span class="n">watch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>            <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="p">)</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;repair_job_ids&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">slurm_ids</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

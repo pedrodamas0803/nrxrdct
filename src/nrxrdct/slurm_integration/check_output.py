@@ -179,9 +179,9 @@ def check(
 
 def repair(
     tmp_dir: Path,
-    master_file: Path,
-    poni_file: Path,
-    mask_file: Path,
+    master_file: Path | None = None,
+    poni_file: Path | None = None,
+    mask_file: Path | None = None,
     *,
     output_file: Path | None = None,
     n_jobs: int = 1,
@@ -192,20 +192,21 @@ def repair(
     """
     Resubmit SLURM jobs for any scans missing from the tmp directory.
 
-    Reads launch_meta.json to find missing indices, then submits
-    one or more repair jobs. Call merge() afterwards.
+    All integration and SLURM settings are read from launch_meta.json so
+    you don't need to repeat them. Pass **kwargs to override any individual
+    setting (e.g. partition, mem, n_workers).
 
     Parameters
     ----------
     tmp_dir     : Path  — tmp directory from the original launch()
-    master_file : Path  — master HDF5 file
-    poni_file   : Path  — calibration file
-    mask_file   : Path  — mask file
+    master_file : Path  — override master HDF5 (default: from launch_meta)
+    poni_file   : Path  — override calibration file (default: from launch_meta)
+    mask_file   : Path  — override mask file (default: from launch_meta)
     output_file : Path  — only used to check merge status if provided
     n_jobs      : int   — number of repair jobs (default 1)
     watch       : bool  — block until repair jobs finish
     interval    : int   — polling interval in seconds when watch=True
-    **kwargs    : forwarded to _submit_job (partition, conda_env, mem, etc.)
+    **kwargs    : override any setting from launch_meta (partition, mem, etc.)
     """
     from .launch_jobs import _split_indices, _submit_job
 
@@ -220,16 +221,38 @@ def repair(
     print(f"\n🔧  Repairing {len(missing)} missing scans across {n_jobs} job(s)...")
 
     with open(tmp_dir / "launch_meta.json") as f:
-        launch_meta = json.load(f)
+        lm = json.load(f)
 
-    log_dir = Path(launch_meta["output_file"]).parent / "slurm_logs"
+    # Resolve paths — kwargs override launch_meta, launch_meta overrides defaults
+    _master_file = Path(kwargs.pop("master_file", master_file or lm["master_file"]))
+    _poni_file = Path(kwargs.pop("poni_file", poni_file or lm["poni_file"]))
+    _mask_file = Path(kwargs.pop("mask_file", mask_file or lm["mask_file"]))
+    _env_activate = kwargs.pop("env_activate", lm.get("env_activate"))
+    _env_activate = Path(_env_activate) if _env_activate else None
+
+    # All settings fall back to what was used at launch time
+    settings = dict(
+        n_points=lm.get("n_points", 1000),
+        n_workers=lm.get("cpus", 16),
+        batch_size=lm.get("batch_size", 32),
+        unit=lm.get("unit", "2th_deg"),
+        method=lm.get("method", "standard"),
+        percentile=lm.get("percentile", "10,90"),
+        thres=lm.get("thres", 3.0),
+        max_iter=lm.get("max_iter", 5),
+        partition=lm.get("partition", "cpu"),
+        time=lm.get("time", "04:00:00"),
+        mem=lm.get("mem", "32G"),
+        cpus=lm.get("cpus", 16),
+        gpu=lm.get("gpu", False),
+        conda_env=lm.get("conda_env", None),
+    )
+    # Apply user overrides
+    settings.update(kwargs)
+
+    log_dir = Path(lm["output_file"]).parent / "slurm_logs"
     log_dir.mkdir(exist_ok=True)
-    existing = sorted(log_dir.glob("job_*.sh"))
-    base_id = len(existing)
-
-    n_workers = kwargs.pop("n_workers", None)
-    cpus = kwargs.get("cpus", 16)
-    effective_n_workers = n_workers if n_workers is not None else cpus
+    base_id = len(sorted(log_dir.glob("job_*.sh")))
 
     chunks = _split_indices(len(missing), min(n_jobs, len(missing)))
     chunks = [[missing[i] for i in chunk] for chunk in chunks]
@@ -239,25 +262,25 @@ def repair(
         sid = _submit_job(
             base_id + offset,
             chunk,
-            master_file=Path(launch_meta["master_file"]),
+            master_file=_master_file,
             tmp_dir=tmp_dir,
-            poni_file=Path(launch_meta["poni_file"]),
-            mask_file=Path(launch_meta["mask_file"]),
-            n_points=launch_meta.get("n_points", 1000),
-            n_workers=effective_n_workers,
-            batch_size=kwargs.pop("batch_size", 32),
-            unit=launch_meta.get("unit", "2th_deg"),
-            method=launch_meta.get("method", "standard"),
-            percentile=kwargs.pop("percentile", "10,90"),
-            thres=kwargs.pop("thres", 3.0),
-            max_iter=kwargs.pop("max_iter", 5),
-            partition=kwargs.pop("partition", "cpu"),
-            time=kwargs.pop("time", "04:00:00"),
-            mem=kwargs.pop("mem", "32G"),
-            cpus=cpus,
-            gpu=kwargs.pop("gpu", False),
-            env_activate=kwargs.pop("env_activate", None),
-            conda_env=kwargs.pop("conda_env", None),
+            poni_file=_poni_file,
+            mask_file=_mask_file,
+            n_points=settings["n_points"],
+            n_workers=settings["n_workers"],
+            batch_size=settings["batch_size"],
+            unit=settings["unit"],
+            method=settings["method"],
+            percentile=settings["percentile"],
+            thres=settings["thres"],
+            max_iter=settings["max_iter"],
+            partition=settings["partition"],
+            time=settings["time"],
+            mem=settings["mem"],
+            cpus=settings["cpus"],
+            gpu=settings["gpu"],
+            env_activate=_env_activate,
+            conda_env=settings["conda_env"],
             log_dir=log_dir,
         )
         slurm_ids.append(sid)

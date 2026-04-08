@@ -74,6 +74,7 @@ def check(
         "n_merged": 0,
         "missing_tmp": [],
         "missing_h5": [],
+        "nan_scans": [],
     }
 
     # ── Read total expected scans from launch_meta.json ───────────────────────
@@ -91,27 +92,71 @@ def check(
         n_total = len(valid_entries)
         result["n_total"] = n_total
 
-        # Count .npy files (only count if matching .meta.json also exists)
-        integrated = {
-            int(p.stem.split("_")[1])
-            for p in tmp_dir.glob("scan_????.npy")
-            if (tmp_dir / f"{p.stem}.meta.json").exists()
-        }
+        # Count completed scans — a scan is done when both .npy and .meta.json
+        # exist. Also count misnamed files from the previous bug.
+        integrated = set()
+        for p in tmp_dir.glob("scan_????.npy"):
+            ii = int(p.stem.split("_")[1])
+            if (tmp_dir / f"scan_{ii:04d}.meta.json").exists():
+                integrated.add(ii)
+        # Count misnamed files (scan_XXXX.npy.tmp.npy) from previous bug
+        for p in tmp_dir.glob("scan_????.npy.tmp.npy"):
+            ii = int(p.name.split("_")[1].split(".")[0])
+            metas = list(tmp_dir.glob(f"scan_{ii:04d}.meta.meta.json.tmp")) + list(
+                tmp_dir.glob(f"scan_{ii:04d}.meta.json.tmp")
+            )
+            if metas:
+                integrated.add(ii)
+
+        # ── NaN check — load each .npy and flag scans with NaN rows ──────────
+        nan_scans = []
+        for ii in sorted(integrated):
+            npy_path = tmp_dir / f"scan_{ii:04d}.npy"
+            if not npy_path.exists():
+                # misnamed file — skip NaN check, merge will rename it
+                continue
+            try:
+                sinogram = np.load(npy_path)
+                nan_rows = int(np.all(np.isnan(sinogram), axis=1).sum())
+                if nan_rows > 0:
+                    nan_scans.append((ii, nan_rows, sinogram.shape[0]))
+            except Exception as e:
+                print(f"  ⚠  scan_{ii:04d}: could not load for NaN check — {e}")
+
+        # Remove NaN scans from integrated set and delete their tmp files
+        # so repair() will reintegrate them
+        if nan_scans:
+            print(
+                f"\n  ⚠  {len(nan_scans)} scans have NaN frames — "
+                f"deleting and flagging for reintegration:"
+            )
+            for ii, nan_rows, n_frames in nan_scans:
+                print(f"     scan_{ii:04d}: {nan_rows}/{n_frames} NaN frames")
+                integrated.discard(ii)
+                for f in [
+                    tmp_dir / f"scan_{ii:04d}.npy",
+                    tmp_dir / f"scan_{ii:04d}.meta.json",
+                ]:
+                    if f.exists():
+                        f.unlink()
+
         missing_tmp = sorted(set(range(n_total)) - integrated)
 
         result["n_integrated"] = len(integrated)
         result["missing_tmp"] = missing_tmp
+        result["nan_scans"] = nan_scans
 
         print(f"\n{'='*60}")
         print(f"  Integration progress  ({tmp_dir.name})")
         print(f"{'='*60}")
         print(f"  Expected    : {n_total}")
         print(f"  Integrated  : {len(integrated)}")
+        print(f"  NaN scans   : {len(nan_scans)}  (deleted, will be reintegrated)")
         print(f"  Remaining   : {len(missing_tmp)}")
         if missing_tmp:
             print(f"  Missing idx : {missing_tmp}")
         else:
-            print(f"  ✓  All scans integrated — ready to merge.")
+            print(f"  ✓  All scans integrated and NaN-free — ready to merge.")
 
     # ── Check HDF5 merge completeness ─────────────────────────────────────────
     if output_file is not None:
@@ -339,7 +384,6 @@ def _cli_check(args):
 if __name__ == "__main__":
     p = _build_parser()
     _cli_check(p.parse_args())
-
 # """
 # nrxrdct.slurm_integration.check_output
 # ----------------------------------------

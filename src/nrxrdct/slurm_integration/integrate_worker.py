@@ -40,7 +40,6 @@ from nrxrdct.integration import (
     azimuthal_integration_1d_filter,
     azimuthal_integration_1d_sigma_clip,
 )
-from nrxrdct.utils import calculate_xrd_baseline
 
 # Valid method names — checked at startup so failures are obvious
 INTEGRATION_METHODS = ("standard", "filter", "sigma_clip")
@@ -117,7 +116,7 @@ def _integrate_frame(
 ) -> tuple[int, np.ndarray]:
     """Dispatch to the requested integration method and normalise by monitor."""
     if method == "filter":
-        tt, itt, _ = azimuthal_integration_1d_filter(
+        _, itt, _ = azimuthal_integration_1d_filter(
             image=image,
             poni_file=str(poni_file),
             npt=n_points,
@@ -126,7 +125,7 @@ def _integrate_frame(
             percentile=percentile,
         )
     elif method == "sigma_clip":
-        tt, itt, _ = azimuthal_integration_1d_sigma_clip(
+        _, itt, _ = azimuthal_integration_1d_sigma_clip(
             image=image,
             poni_file=str(poni_file),
             npt=n_points,
@@ -136,7 +135,7 @@ def _integrate_frame(
             max_iter=max_iter,
         )
     else:  # "standard"
-        tt, itt, _ = azimuthal_integration_1d(
+        _, itt, _ = azimuthal_integration_1d(
             image=image,
             poni_file=str(poni_file),
             npt=n_points,
@@ -147,9 +146,6 @@ def _integrate_frame(
     if monitor <= 0:
         print(f"  ⚠  Frame {jj}: fpico6={monitor:.4g}, skipping normalisation")
         return jj, itt
-
-    # bkg, _ = calculate_xrd_baseline(itt, tt)
-    # itt -= bkg
     return jj, itt / monitor
 
 
@@ -169,33 +165,6 @@ def _write_scan(
     fpico6: np.ndarray,
     method: str,
 ) -> None:
-    """
-    Write a completed sinogram to the output HDF5 file under an exclusive POSIX lock.
-
-    Uses ``fcntl.flock`` to serialise concurrent writes from multiple threads.
-    Silently skips if the dataset already exists (idempotent).  Stores
-    provenance attributes (source file, dty position, monitor statistics,
-    integration method) alongside the sinogram data.
-
-    Parameters
-    ----------
-    output_file : Path
-        Destination HDF5 file.
-    group_path : str
-        HDF5 dataset path, e.g. ``"integrated/scan_0042"``.
-    sinogram : np.ndarray
-        2-D array of shape ``(n_frames, n_points)`` to store.
-    entry : str
-        Original master-file entry key stored as an attribute.
-    dty_value : float
-        Translation motor position stored as an attribute.
-    master_file : Path
-        Path to the source master file stored as an attribute.
-    fpico6 : np.ndarray
-        Monitor values; mean/min/max stored as attributes.
-    method : str
-        Integration method name stored as an attribute.
-    """
     lock_path = str(output_file) + ".lock"
     with open(lock_path, "w") as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
@@ -205,7 +174,7 @@ def _write_scan(
                 # corrupted B-tree/cache entries ("bad symbol table node").
                 try:
                     already_exists = group_path in hout
-                except (RuntimeError, OSError):
+                except (RuntimeError, OSError, KeyError):
                     already_exists = False  # corrupted entry: overwrite it
                 if already_exists:
                     return
@@ -252,61 +221,13 @@ def _process_scan(
     thres: float,
     max_iter: int,
 ) -> bool:
-    """
-    Integrate and write a single scan entry, streaming frames in batches.
-
-    Skips the scan silently if it is already present in the output file.
-    Reads only lightweight metadata (monitor values, rotation, frame count)
-    upfront; raw detector images are streamed from HDF5 in chunks of
-    *batch_size* to keep peak RAM bounded.  Frames are integrated in parallel
-    within each batch using a :class:`~concurrent.futures.ThreadPoolExecutor`.
-
-    Parameters
-    ----------
-    ii : int
-        Global scan index (used to name the output dataset ``scan_<ii:04d>``).
-    entry : str
-        HDF5 entry key in the master file (e.g. ``"1.1"``).
-    dty_value : float
-        Translation motor position for this scan.
-    master_file : Path
-        Source HDF5 master file.
-    output_file : Path
-        Destination HDF5 output file.
-    poni_file : Path
-        pyFAI ``.poni`` calibration file.
-    mask : np.ndarray
-        Detector mask array (1 = masked).
-    n_points : int
-        Number of radial bins in the integrated pattern.
-    n_workers : int or None
-        Integration threads; ``None`` triggers auto-scaling from available RAM.
-    batch_size : int
-        Number of frames loaded from HDF5 per iteration.
-    unit : str
-        Radial unit for integration (e.g. ``"2th_deg"``).
-    method : str
-        Integration method: ``"standard"``, ``"filter"``, or ``"sigma_clip"``.
-    percentile : tuple of (float, float)
-        Percentile bounds used when *method* is ``"filter"``.
-    thres : float
-        Sigma threshold used when *method* is ``"sigma_clip"``.
-    max_iter : int
-        Maximum sigma-clipping iterations.
-
-    Returns
-    -------
-    bool
-        ``True`` if the scan was processed (or already done), ``False`` on
-        unrecoverable read failure.
-    """
     scan_name = f"scan_{ii:04d}"
     group_path = f"integrated/{scan_name}"
 
     with h5py.File(output_file, "r") as hout:
         try:
             already_done = group_path in hout
-        except (RuntimeError, OSError):
+        except (RuntimeError, OSError, KeyError):
             already_done = False  # corrupted entry: reprocess it
         if already_done:
             print(f"  → Skipping {scan_name} (already done)")
@@ -433,7 +354,6 @@ def _process_scan(
 
 
 def _parse_args():
-    """Parse command-line arguments for the integrate worker."""
     p = argparse.ArgumentParser(
         description="nrxrdct powder integration worker (one SLURM job)"
     )
@@ -494,14 +414,6 @@ def _parse_args():
 
 
 def main():
-    """
-    Entry point for the integrate worker process launched inside each SLURM job.
-
-    Reads the assigned scan indices from ``--entry-indices``, loads the mask,
-    resolves the valid entry list from the output HDF5 file, and calls
-    :func:`_process_scan` for each index.  Exits with code 1 if any scan
-    failed, 0 otherwise.
-    """
     args = _parse_args()
     entry_indices = [int(x) for x in args.entry_indices.split(",")]
     percentile = tuple(int(x) for x in args.percentile.split(","))

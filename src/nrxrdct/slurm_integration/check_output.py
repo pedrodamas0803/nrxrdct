@@ -273,7 +273,7 @@ def check(
             # table itself is damaged ("incorrect cache entry type").
             try:
                 exists = group_path in hout
-            except (RuntimeError, OSError) as e:
+            except (RuntimeError, OSError, KeyError) as e:
                 print(f"  ✗ {scan_name} (index {ii}): corrupted link — {e}")
                 corrupted.append(ii)
                 continue
@@ -290,7 +290,7 @@ def check(
                 present.append((ii, scan_name, nan_rows, data.shape))
                 if nan_rows:
                     nan_scans.append((ii, scan_name, nan_rows, data.shape))
-            except (RuntimeError, OSError) as e:
+            except (RuntimeError, OSError, KeyError) as e:
                 print(f"  ✗ {scan_name} (index {ii}): corrupted dataset — {e}")
                 corrupted.append(ii)
 
@@ -582,7 +582,7 @@ def rebuild(
                 for special in ("integrated/radial", "integrated/cake_mask"):
                     try:
                         exists = special in src
-                    except (RuntimeError, OSError):
+                    except (RuntimeError, OSError, KeyError):
                         exists = False
                     if exists:
                         try:
@@ -600,7 +600,7 @@ def rebuild(
 
                     try:
                         exists = group_path in src
-                    except (RuntimeError, OSError):
+                    except (RuntimeError, OSError, KeyError):
                         exists = False
 
                     if not exists:
@@ -619,7 +619,7 @@ def rebuild(
                         for k, v in src[group_path].attrs.items():
                             ds.attrs[k] = v
                         n_copied += 1
-                    except (RuntimeError, OSError, ValueError) as e:
+                    except (RuntimeError, OSError, ValueError, KeyError) as e:
                         print(f"  ✗  {scan_name}: unreadable — {e}")
                         n_skipped += 1
 

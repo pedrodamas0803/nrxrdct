@@ -65,6 +65,8 @@ nav:
     - Typical Workflow: user-guide/workflow.md
     - SLURM / HPC Integration: user-guide/slurm.md
     - GPU Support: user-guide/gpu.md
+  - Examples:
+    - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:
     - parameters: api/parameters.md
     - preprocessing: api/preprocessing.md

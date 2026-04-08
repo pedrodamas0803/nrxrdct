@@ -20,7 +20,7 @@ Python API
         master_file  = Path("master.h5"),
         poni_file    = Path("calib.poni"),
         mask_file    = Path("mask.edf"),
-        partition    = "nice",
+        partition    = "cpu",
         conda_env    = "nrxrdct",
     )
 
@@ -44,6 +44,7 @@ import numpy as np
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _delete_datasets(output_file: Path, indices: list[int]) -> None:
     """
     Delete HDF5 datasets for the given scan indices.
@@ -56,7 +57,7 @@ def _delete_datasets(output_file: Path, indices: list[int]) -> None:
     with h5py.File(output_file, "a") as h:
         for i in indices:
             scan_name = f"scan_{i:04d}"
-            path      = f"integrated/{scan_name}"
+            path = f"integrated/{scan_name}"
 
             # ── Try via parent group (most reliable) ──────────────────────────
             try:
@@ -65,18 +66,20 @@ def _delete_datasets(output_file: Path, indices: list[int]) -> None:
                 print(f"  🗑  Deleted {path}")
                 continue
             except KeyError:
-                pass   # link didn't exist — nothing to do
+                pass  # link didn't exist — nothing to do
             except Exception as e1:
-                pass   # parent group unreadable — fall through to root attempt
+                pass  # parent group unreadable — fall through to root attempt
 
             # ── Fallback: unlink from root using full path ────────────────────
             try:
                 h5py.h5g.unlink(h["/"].id, path.encode())
                 print(f"  🗑  Deleted {path} (root fallback)")
             except KeyError:
-                pass   # truly doesn't exist
+                pass  # truly doesn't exist
             except Exception as e2:
-                print(f"  ⚠  Could not delete {path}: {e2} — will be treated as missing")
+                print(
+                    f"  ⚠  Could not delete {path}: {e2} — will be treated as missing"
+                )
 
 
 def _resubmit(
@@ -120,39 +123,39 @@ def _resubmit(
 
     # Split into at most n_jobs chunks (may be fewer if n_jobs > len(needs_rerun))
     actual_n_jobs = min(n_jobs, len(needs_rerun))
-    chunks        = _split_indices(len(needs_rerun), actual_n_jobs)
+    chunks = _split_indices(len(needs_rerun), actual_n_jobs)
     # _split_indices works on range(n), remap to actual indices
-    chunks        = [[needs_rerun[i] for i in chunk] for chunk in chunks]
+    chunks = [[needs_rerun[i] for i in chunk] for chunk in chunks]
 
     # Start job_id counter after existing scripts to avoid collisions
     existing = sorted(log_dir.glob("job_*.sh"))
-    base_id  = len(existing)
+    base_id = len(existing)
 
     slurm_ids = []
     for offset, chunk in enumerate(chunks):
         slurm_id = _submit_job(
             base_id + offset,
             chunk,
-            master_file  = master_file,
-            output_file  = output_file,
-            poni_file    = poni_file,
-            mask_file    = mask_file,
-            n_points     = n_points,
-            n_workers    = effective_n_workers,
-            batch_size   = batch_size,
-            unit         = unit,
-            method       = method,
-            percentile   = percentile,
-            thres        = thres,
-            max_iter     = max_iter,
-            partition    = partition,
-            time         = time,
-            mem          = mem,
-            cpus         = cpus,
-            gpu          = gpu,
-            env_activate = env_activate,
-            conda_env    = conda_env,
-            log_dir      = log_dir,
+            master_file=master_file,
+            output_file=output_file,
+            poni_file=poni_file,
+            mask_file=mask_file,
+            n_points=n_points,
+            n_workers=effective_n_workers,
+            batch_size=batch_size,
+            unit=unit,
+            method=method,
+            percentile=percentile,
+            thres=thres,
+            max_iter=max_iter,
+            partition=partition,
+            time=time,
+            mem=mem,
+            cpus=cpus,
+            gpu=gpu,
+            env_activate=env_activate,
+            conda_env=conda_env,
+            log_dir=log_dir,
         )
         slurm_ids.append(slurm_id)
 
@@ -162,6 +165,7 @@ def _resubmit(
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def check(
     output_file: Path,
@@ -180,7 +184,7 @@ def check(
     percentile: tuple = (10, 90),
     thres: float = 3.0,
     max_iter: int = 5,
-    partition: str = "nice",
+    partition: str = "cpu",
     time: str = "04:00:00",
     mem: str = "32G",
     cpus: int = 16,
@@ -196,76 +200,57 @@ def check(
     Parameters
     ----------
     output_file : Path
-        Path to the output HDF5 file produced by ``launch()``.
-    resubmit : bool, optional
+    resubmit    : bool
         Print the ``--entry-indices`` hint needed to rerun missing/corrupted
-        scans manually (default ``False``).
-    repair : bool, optional
+        scans manually.
+    repair      : bool
         Automatically delete corrupted datasets and submit SLURM jobs to
-        reintegrate all missing and corrupted scans.  Requires *master_file*,
-        *poni_file*, and *mask_file* (default ``False``).
-    master_file : Path or None, optional
-        Original acquisition HDF5 master file; required when *repair* is ``True``.
-    poni_file : Path or None, optional
-        pyFAI ``.poni`` calibration file; required when *repair* is ``True``.
-    mask_file : Path or None, optional
-        Detector mask file; required when *repair* is ``True``.
-    n_jobs : int, optional
-        Number of SLURM jobs to split repair work across (default 1).
-    n_points : int, optional
-        Number of radial bins for repair integration (default 1000).
-    n_workers : int or None, optional
-        Integration threads per repair job; ``None`` auto-scales from RAM.
-    batch_size : int, optional
-        Frames streamed per batch in the repair worker (default 32).
-    unit : str, optional
-        Radial unit for repair integration (default ``"2th_deg"``).
-    method : str, optional
-        Integration method for repair: ``"standard"``, ``"filter"``, or
-        ``"sigma_clip"`` (default ``"standard"``).
-    percentile : tuple of (float, float), optional
-        Percentile bounds used when *method* is ``"filter"`` (default ``(10, 90)``).
-    thres : float, optional
-        Sigma threshold used when *method* is ``"sigma_clip"`` (default 3.0).
-    max_iter : int, optional
-        Maximum sigma-clipping iterations (default 5).
-    partition : str, optional
-        SLURM partition for repair jobs (default ``"nice"``).
-    time : str, optional
-        SLURM wall-time limit for repair jobs (default ``"04:00:00"``).
-    mem : str, optional
-        SLURM memory request for repair jobs (default ``"32G"``).
-    cpus : int, optional
-        CPUs per repair job (default 16).
-    gpu : bool, optional
-        Request a GPU node for repair jobs (default ``False``).
-    env_activate : Path or None, optional
-        Path to a shell activate script sourced before the worker command.
-    conda_env : str or None, optional
-        Conda environment name used via ``conda run`` (alternative to *env_activate*).
-    watch : bool, optional
-        If ``True``, block after submitting repair jobs and poll until they all
-        finish via :func:`~nrxrdct.slurm_integration.monitor.monitor`
-        (default ``False``).
-    interval : int, optional
-        Polling interval in seconds when *watch* is ``True`` (default 30).
+        reintegrate all missing and corrupted scans.
+        Requires master_file, poni_file, and mask_file.
+    n_jobs      : int
+        Number of SLURM jobs to split the repair work across (default: 1).
+        Useful when many scans need reintegrating after a rebuild.
+    watch       : bool
+        If True, block after submitting repair jobs and poll until they all
+        finish (passed to ``monitor()``). Default: False.
+    interval    : int
+        Polling interval in seconds when watch=True (default: 30).
 
     Returns
     -------
-    dict
-        Keys: ``"n_expected"``, ``"present"``, ``"missing"``, ``"corrupted"``,
-        ``"nan_scans"``, ``"needs_rerun"``, and (if *repair* is ``True``)
-        ``"repair_job_ids"``.
+    dict with keys 'n_expected', 'present', 'missing', 'corrupted',
+    'nan_scans', and (if repair=True) 'repair_job_ids'.
     """
     output_file = Path(output_file)
 
     if repair and not all([master_file, poni_file, mask_file]):
-        raise ValueError(
-            "repair=True requires master_file, poni_file, and mask_file."
-        )
+        raise ValueError("repair=True requires master_file, poni_file, and mask_file.")
 
     # ── 1. Scan the output file ───────────────────────────────────────────────
-    with h5py.File(output_file, "r") as hout:
+    # A truncated file (eof < stored_eof) crashes on open — catch it early
+    # and tell the user to call rebuild() instead of check().
+    try:
+        hout_handle = h5py.File(output_file, "r")
+    except OSError as e:
+        msg = str(e)
+        if "truncated" in msg.lower() or "stored_eof" in msg.lower():
+            raise OSError(
+                f"\n\nThe output file is truncated (a job was killed mid-write):\n"
+                f"  {output_file}\n\n"
+                f"The file cannot be opened for reading. Run rebuild() to recover:\n\n"
+                f"  from nrxrdct.slurm_integration import rebuild\n"
+                f"  rebuild(\n"
+                f"      output_file = Path('{output_file}'),\n"
+                f"      master_file = Path('<master.h5>'),\n"
+                f"      poni_file   = Path('<calib.poni>'),\n"
+                f"      mask_file   = Path('<mask.edf>'),\n"
+                f"      n_jobs      = 4,\n"
+                f"      watch       = True,\n"
+                f"  )\n"
+            ) from e
+        raise  # re-raise unrelated OSErrors unchanged
+
+    with hout_handle as hout:
         if "meta/valid_entries" not in hout:
             raise RuntimeError(
                 f"'meta/valid_entries' not found in {output_file}. "
@@ -281,7 +266,7 @@ def check(
         present, missing, nan_scans, corrupted = [], [], [], []
 
         for ii, entry in enumerate(valid_entries):
-            scan_name  = f"scan_{ii:04d}"
+            scan_name = f"scan_{ii:04d}"
             group_path = f"integrated/{scan_name}"
 
             # Membership check — RuntimeError fires when the HDF5 link/cache
@@ -300,7 +285,7 @@ def check(
             # Data read — OSError fires when gzip chunks are truncated
             # (OOM-killed mid-write).
             try:
-                data     = hout[group_path][:]
+                data = hout[group_path][:]
                 nan_rows = int(np.all(np.isnan(data), axis=1).sum())
                 present.append((ii, scan_name, nan_rows, data.shape))
                 if nan_rows:
@@ -311,9 +296,12 @@ def check(
 
         has_radial = "integrated/radial" in hout
         radial_info = (
-            (hout["integrated/radial"].shape[0],
-             hout["integrated/radial"].attrs.get("unit", "unknown"))
-            if has_radial else None
+            (
+                hout["integrated/radial"].shape[0],
+                hout["integrated/radial"].attrs.get("unit", "unknown"),
+            )
+            if has_radial
+            else None
         )
 
     # ── 2. Report ─────────────────────────────────────────────────────────────
@@ -334,7 +322,7 @@ def check(
             print(f"⚠  Missing scan indices  : {missing}")
         if corrupted:
             print(f"⚠  Corrupted scan indices: {corrupted}")
-            print( "   (likely OOM-killed mid-write)")
+            print("   (likely OOM-killed mid-write)")
 
     if nan_scans:
         print(f"\n⚠  {len(nan_scans)} scans have fully-NaN frames:")
@@ -351,7 +339,9 @@ def check(
         idx_str = ",".join(str(i) for i in needs_rerun)
         print(f"\nResubmit hint:")
         if corrupted:
-            print(textwrap.dedent(f"""
+            print(
+                textwrap.dedent(
+                    f"""
   # Step 1 — delete corrupted datasets
   python - <<'EOF'
   import h5py
@@ -360,7 +350,9 @@ def check(
           path = f"integrated/scan_{{i:04d}}"
           if path in h:
               del h[path]; print(f"Deleted {{path}}")
-  EOF"""))
+  EOF"""
+                )
+            )
         print(
             f"\n  # Step 2 — rerun worker\n"
             f"  python -m nrxrdct.slurm_integration.integrate_worker \\\n"
@@ -372,8 +364,10 @@ def check(
     # ── 3b. Auto-repair ───────────────────────────────────────────────────────
     repair_job_ids = []
     if repair and needs_rerun:
-        print(f"\n🔧  Repair mode: fixing {len(needs_rerun)} scans "
-              f"(missing={len(missing)}, corrupted={len(corrupted)})")
+        print(
+            f"\n🔧  Repair mode: fixing {len(needs_rerun)} scans "
+            f"(missing={len(missing)}, corrupted={len(corrupted)})"
+        )
 
         # Delete corrupted datasets so the worker can rewrite them
         if corrupted:
@@ -383,51 +377,54 @@ def check(
         # Submit repair jobs — split across n_jobs if requested
         print(f"  Submitting {n_jobs} repair job(s) for {len(needs_rerun)} scans...")
         repair_job_ids = _resubmit(
-            output_file  = output_file,
-            needs_rerun  = needs_rerun,
-            master_file  = Path(master_file),
-            poni_file    = Path(poni_file),
-            mask_file    = Path(mask_file),
-            n_jobs       = n_jobs,
-            n_points     = n_points,
-            n_workers    = n_workers,
-            batch_size   = batch_size,
-            unit         = unit,
-            method       = method,
-            percentile   = f"{percentile[0]},{percentile[1]}",
-            thres        = thres,
-            max_iter     = max_iter,
-            partition    = partition,
-            time         = time,
-            mem          = mem,
-            cpus         = cpus,
-            gpu          = gpu,
-            env_activate = env_activate,
-            conda_env    = conda_env,
+            output_file=output_file,
+            needs_rerun=needs_rerun,
+            master_file=Path(master_file),
+            poni_file=Path(poni_file),
+            mask_file=Path(mask_file),
+            n_jobs=n_jobs,
+            n_points=n_points,
+            n_workers=n_workers,
+            batch_size=batch_size,
+            unit=unit,
+            method=method,
+            percentile=f"{percentile[0]},{percentile[1]}",
+            thres=thres,
+            max_iter=max_iter,
+            partition=partition,
+            time=time,
+            mem=mem,
+            cpus=cpus,
+            gpu=gpu,
+            env_activate=env_activate,
+            conda_env=conda_env,
         )
-        print(f"\n✓  {len(repair_job_ids)} repair job(s) submitted — "
-              f"SLURM IDs: {', '.join(repair_job_ids)}")
+        print(
+            f"\n✓  {len(repair_job_ids)} repair job(s) submitted — "
+            f"SLURM IDs: {', '.join(repair_job_ids)}"
+        )
         print(f"   Re-run check() after they complete to verify.")
 
         if watch:
             from .monitor import monitor as _monitor
+
             _monitor(
-                slurm_ids   = repair_job_ids,
-                output_file = output_file,
-                watch       = True,
-                interval    = interval,
+                slurm_ids=repair_job_ids,
+                output_file=output_file,
+                watch=True,
+                interval=interval,
             )
 
     elif repair and not needs_rerun:
         print("\n✓  Nothing to repair.")
 
     result = {
-        "n_expected":    n_expected,
-        "present":       present,
-        "missing":       missing,
-        "corrupted":     corrupted,
-        "nan_scans":     nan_scans,
-        "needs_rerun":   needs_rerun,
+        "n_expected": n_expected,
+        "present": present,
+        "missing": missing,
+        "corrupted": corrupted,
+        "nan_scans": nan_scans,
+        "needs_rerun": needs_rerun,
     }
     if repair:
         result["repair_job_ids"] = repair_job_ids if needs_rerun else []
@@ -437,6 +434,7 @@ def check(
 # ─────────────────────────────────────────────────────────────────────────────
 # Convenience wrapper
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def repair(
     output_file: Path,
@@ -475,19 +473,19 @@ def repair(
             mask_file   = Path("mask.edf"),
             n_jobs      = 4,
             watch       = True,
-            partition   = "nice",
+            partition   = "cpu",
             conda_env   = "nrxrdct",
         )
     """
     return check(
-        output_file = output_file,
-        repair      = True,
-        master_file = master_file,
-        poni_file   = poni_file,
-        mask_file   = mask_file,
-        n_jobs      = n_jobs,
-        watch       = watch,
-        interval    = interval,
+        output_file=output_file,
+        repair=True,
+        master_file=master_file,
+        poni_file=poni_file,
+        mask_file=mask_file,
+        n_jobs=n_jobs,
+        watch=watch,
+        interval=interval,
         **kwargs,
     )
 
@@ -533,85 +531,132 @@ def rebuild(
     dict — same as ``repair()`` called on the rebuilt file
     """
     output_file = Path(output_file)
-    tmp_file    = Path(rebuilt_file) if rebuilt_file else output_file.with_suffix(".rebuilt.h5")
+    tmp_file = (
+        Path(rebuilt_file) if rebuilt_file else output_file.with_suffix(".rebuilt.h5")
+    )
 
     print(f"\n{'='*60}")
     print(f"Rebuilding {output_file.name} → {tmp_file.name}")
     print(f"{'='*60}\n")
 
-    # ── 1. Read metadata from the (possibly corrupted) original ───────────────
-    with h5py.File(output_file, "r") as src:
-        valid_entries = [
-            e.decode() if isinstance(e, bytes) else e
-            for e in src["meta/valid_entries"][:]
-        ]
+    # ── 1. Open the corrupted source — handle truncated files ─────────────────
+    # A truncated file crashes on open. In that case we can't recover any scan
+    # data, so we create a fresh output file and reintegrate everything from
+    # the master. The metadata (valid_entries, dty, rot, radial) is re-read
+    # from the master file via launch_jobs._init_output_file.
+    try:
+        src_handle = h5py.File(output_file, "r")
+        src_opened = True
+    except OSError as e:
+        if "truncated" in str(e).lower() or "stored_eof" in str(e).lower():
+            print(f"  ⚠  Source file is truncated and cannot be opened.")
+            print(
+                f"     No scan data can be recovered — all scans will be reintegrated."
+            )
+            src_opened = False
+        else:
+            raise
+
+    if src_opened:
+        with src_handle as src:
+            valid_entries = [
+                e.decode() if isinstance(e, bytes) else e
+                for e in src["meta/valid_entries"][:]
+            ]
+            n_total = len(valid_entries)
+
+            # ── 2a. Create fresh destination file from readable source ─────────
+            with h5py.File(tmp_file, "w") as dst:
+
+                # Copy all non-scan groups verbatim
+                for key in src.keys():
+                    if key != "integrated":
+                        try:
+                            src.copy(key, dst)
+                        except Exception as e:
+                            print(f"  ⚠  Could not copy group '{key}': {e}")
+
+                dst.require_group("integrated")
+
+                # Copy integrated/radial and integrated/cake_mask explicitly
+                for special in ("integrated/radial", "integrated/cake_mask"):
+                    try:
+                        exists = special in src
+                    except (RuntimeError, OSError):
+                        exists = False
+                    if exists:
+                        try:
+                            parent_dst = dst.require_group("integrated")
+                            name = special.split("/")[-1]
+                            src.copy(special, parent_dst, name=name)
+                        except Exception as e:
+                            print(f"  ⚠  Could not copy '{special}': {e}")
+
+                # Copy readable scan datasets
+                n_copied = n_skipped = 0
+                for ii in range(n_total):
+                    scan_name = f"scan_{ii:04d}"
+                    group_path = f"integrated/{scan_name}"
+
+                    try:
+                        exists = group_path in src
+                    except (RuntimeError, OSError):
+                        exists = False
+
+                    if not exists:
+                        n_skipped += 1
+                        continue
+
+                    try:
+                        data = src[group_path][:]
+                        ds = dst.create_dataset(
+                            group_path,
+                            data=data,
+                            compression="gzip",
+                            compression_opts=4,
+                            chunks=(1, data.shape[1]),
+                        )
+                        for k, v in src[group_path].attrs.items():
+                            ds.attrs[k] = v
+                        n_copied += 1
+                    except (RuntimeError, OSError, ValueError) as e:
+                        print(f"  ✗  {scan_name}: unreadable — {e}")
+                        n_skipped += 1
+
+        print(f"\n✓  Copied {n_copied}/{n_total} scans into {tmp_file.name}")
+        print(f"   Skipped {n_skipped} corrupted/missing scans (will be reintegrated)")
+
+    else:
+        # ── 2b. Truncated — initialise a blank output file from master ─────────
+        import fabio
+        import numpy as np
+
+        from .launch_jobs import _init_output_file, _validate_entries
+
+        print("  Validating master file to rebuild metadata...")
+        valid_entries, bad_entries, dty_values = _validate_entries(Path(master_file))
         n_total = len(valid_entries)
 
-        # ── 2. Create fresh destination file ──────────────────────────────────
-        with h5py.File(tmp_file, "w") as dst:
+        with h5py.File(master_file, "r") as hin:
+            rot = hin[f"{valid_entries[0]}/measurement/rot"][:]
 
-            # Copy all non-scan groups verbatim
-            for key in src.keys():
-                if key != "integrated":
-                    try:
-                        src.copy(key, dst)
-                    except Exception as e:
-                        print(f"  ⚠  Could not copy group '{key}': {e}")
-
-            dst.require_group("integrated")
-
-            # Copy integrated/radial and integrated/cake_mask explicitly —
-            # these live inside "integrated" which was skipped above.
-            for special in ("integrated/radial", "integrated/cake_mask"):
-                try:
-                    exists = special in src
-                except (RuntimeError, OSError):
-                    exists = False
-                if exists:
-                    try:
-                        # copy() needs the parent group as destination
-                        parent_dst = dst.require_group("integrated")
-                        name       = special.split("/")[-1]
-                        src.copy(special, parent_dst, name=name)
-                    except Exception as e:
-                        print(f"  ⚠  Could not copy '{special}': {e}")
-
-            # Copy readable scan datasets
-            n_copied = n_skipped = 0
-            for ii in range(n_total):
-                scan_name  = f"scan_{ii:04d}"
-                group_path = f"integrated/{scan_name}"
-
-                # Check existence safely
-                try:
-                    exists = group_path in src
-                except (RuntimeError, OSError):
-                    exists = False
-
-                if not exists:
-                    n_skipped += 1
-                    continue
-
-                # Try to read and copy
-                try:
-                    data = src[group_path][:]
-                    ds   = dst.create_dataset(
-                        group_path,
-                        data=data,
-                        compression="gzip",
-                        compression_opts=4,
-                        chunks=(1, data.shape[1]),
-                    )
-                    # Copy attributes
-                    for k, v in src[group_path].attrs.items():
-                        ds.attrs[k] = v
-                    n_copied += 1
-                except (RuntimeError, OSError, ValueError) as e:
-                    print(f"  ✗  {scan_name}: unreadable — {e}")
-                    n_skipped += 1
-
-    print(f"\n✓  Copied {n_copied}/{n_total} scans into {tmp_file.name}")
-    print(f"   Skipped {n_skipped} corrupted/missing scans (will be reintegrated)")
+        _init_output_file(
+            master_file=Path(master_file),
+            output_file=tmp_file,
+            poni_file=Path(poni_file),
+            mask_file=Path(mask_file),
+            valid_entries=valid_entries,
+            bad_entries=bad_entries,
+            dty_values=dty_values,
+            rot=rot,
+            n_points=kwargs.get("n_points", 1000),
+            unit=kwargs.get("unit", "2th_deg"),
+        )
+        n_copied = 0
+        n_skipped = n_total
+        print(
+            f"\n✓  Fresh output file initialised — all {n_total} scans will be reintegrated"
+        )
 
     # ── 3. Swap files: original → .bak, rebuilt → original path ──────────────
     bak_file = output_file.with_suffix(".bak.h5")
@@ -623,93 +668,124 @@ def rebuild(
     # ── 4. Run repair on the clean rebuilt file ───────────────────────────────
     print(f"\nRunning repair on rebuilt file...")
     return repair(
-        output_file = output_file,
-        master_file = master_file,
-        poni_file   = poni_file,
-        mask_file   = mask_file,
-        n_jobs      = n_jobs,
-        watch       = watch,
-        interval    = interval,
+        output_file=output_file,
+        master_file=master_file,
+        poni_file=poni_file,
+        mask_file=mask_file,
+        n_jobs=n_jobs,
+        watch=watch,
+        interval=interval,
         **kwargs,
     )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_parser(sub=None):
-    """Build the ``check`` sub-command argument parser, attaching it to *sub* if provided."""
-    import argparse
-    desc = "Verify (and optionally repair) the output HDF5 file"
-    p = sub.add_parser("check", help=desc, description=desc) if sub else argparse.ArgumentParser(description=desc)
 
-    p.add_argument("--output-file",  required=True, type=Path)
-    p.add_argument("--resubmit",     action="store_true",
-                   help="Print manual resubmit hints for missing/corrupted scans")
+def _build_parser(sub=None):
+    import argparse
+
+    desc = "Verify (and optionally repair) the output HDF5 file"
+    p = (
+        sub.add_parser("check", help=desc, description=desc)
+        if sub
+        else argparse.ArgumentParser(description=desc)
+    )
+
+    p.add_argument("--output-file", required=True, type=Path)
+    p.add_argument(
+        "--resubmit",
+        action="store_true",
+        help="Print manual resubmit hints for missing/corrupted scans",
+    )
 
     repair = p.add_argument_group("repair mode (auto-fix)")
-    repair.add_argument("--repair",       action="store_true",
-                        help="Delete corrupted datasets and submit repair SLURM job(s)")
-    repair.add_argument("--n-jobs",       type=int, default=1,
-                        help="Number of SLURM jobs to split repair work across (default: 1)")
-    repair.add_argument("--master-file",  type=Path, default=None)
-    repair.add_argument("--poni-file",    type=Path, default=None)
-    repair.add_argument("--mask-file",    type=Path, default=None)
-    repair.add_argument("--n-points",     type=int,  default=1000)
-    repair.add_argument("--n-workers",    type=int,  default=None)
-    repair.add_argument("--batch-size",   type=int,  default=32)
-    repair.add_argument("--unit",         default="2th_deg")
-    repair.add_argument("--method",       default="standard",
-                        choices=("standard", "filter", "sigma_clip"),
-                        help="Integration method (default: standard)")
-    repair.add_argument("--percentile",   default="10,90",
-                        help="Low,high percentile for 'filter' method")
-    repair.add_argument("--thres",        type=float, default=3.0,
-                        help="Sigma threshold for 'sigma_clip' method")
-    repair.add_argument("--max-iter",     type=int,   default=5,
-                        help="Max iterations for 'sigma_clip' method")
-    repair.add_argument("--partition",    default="nice")
-    repair.add_argument("--time",         default="04:00:00")
-    repair.add_argument("--mem",          default="32G")
-    repair.add_argument("--cpus",         type=int, default=16)
-    repair.add_argument("--gpu",          action="store_true")
+    repair.add_argument(
+        "--repair",
+        action="store_true",
+        help="Delete corrupted datasets and submit repair SLURM job(s)",
+    )
+    repair.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of SLURM jobs to split repair work across (default: 1)",
+    )
+    repair.add_argument("--master-file", type=Path, default=None)
+    repair.add_argument("--poni-file", type=Path, default=None)
+    repair.add_argument("--mask-file", type=Path, default=None)
+    repair.add_argument("--n-points", type=int, default=1000)
+    repair.add_argument("--n-workers", type=int, default=None)
+    repair.add_argument("--batch-size", type=int, default=32)
+    repair.add_argument("--unit", default="2th_deg")
+    repair.add_argument(
+        "--method",
+        default="standard",
+        choices=("standard", "filter", "sigma_clip"),
+        help="Integration method (default: standard)",
+    )
+    repair.add_argument(
+        "--percentile", default="10,90", help="Low,high percentile for 'filter' method"
+    )
+    repair.add_argument(
+        "--thres",
+        type=float,
+        default=3.0,
+        help="Sigma threshold for 'sigma_clip' method",
+    )
+    repair.add_argument(
+        "--max-iter", type=int, default=5, help="Max iterations for 'sigma_clip' method"
+    )
+    repair.add_argument("--partition", default="cpu")
+    repair.add_argument("--time", default="04:00:00")
+    repair.add_argument("--mem", default="32G")
+    repair.add_argument("--cpus", type=int, default=16)
+    repair.add_argument("--gpu", action="store_true")
     repair.add_argument("--env-activate", type=Path, default=None)
-    repair.add_argument("--conda-env",    default=None)
-    repair.add_argument("--watch",        action="store_true",
-                        help="Block until repair jobs finish (calls monitor internally)")
-    repair.add_argument("--interval",     type=int, default=30,
-                        help="Polling interval in seconds when --watch is set (default: 30)")
+    repair.add_argument("--conda-env", default=None)
+    repair.add_argument(
+        "--watch",
+        action="store_true",
+        help="Block until repair jobs finish (calls monitor internally)",
+    )
+    repair.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Polling interval in seconds when --watch is set (default: 30)",
+    )
     return p
 
 
 def _cli_check(args):
-    """Parse CLI arguments and delegate to :func:`check`."""
     pct = tuple(int(x) for x in args.percentile.split(","))
     check(
-        output_file  = args.output_file,
-        resubmit     = args.resubmit,
-        repair       = args.repair,
-        master_file  = args.master_file,
-        poni_file    = args.poni_file,
-        mask_file    = args.mask_file,
-        n_jobs       = args.n_jobs,
-        n_points     = args.n_points,
-        n_workers    = args.n_workers,
-        batch_size   = args.batch_size,
-        unit         = args.unit,
-        method       = args.method,
-        percentile   = pct,
-        thres        = args.thres,
-        max_iter     = args.max_iter,
-        partition    = args.partition,
-        time         = args.time,
-        mem          = args.mem,
-        cpus         = args.cpus,
-        gpu          = args.gpu,
-        env_activate = args.env_activate,
-        conda_env    = args.conda_env,
-        watch        = args.watch,
-        interval     = args.interval,
+        output_file=args.output_file,
+        resubmit=args.resubmit,
+        repair=args.repair,
+        master_file=args.master_file,
+        poni_file=args.poni_file,
+        mask_file=args.mask_file,
+        n_jobs=args.n_jobs,
+        n_points=args.n_points,
+        n_workers=args.n_workers,
+        batch_size=args.batch_size,
+        unit=args.unit,
+        method=args.method,
+        percentile=pct,
+        thres=args.thres,
+        max_iter=args.max_iter,
+        partition=args.partition,
+        time=args.time,
+        mem=args.mem,
+        cpus=args.cpus,
+        gpu=args.gpu,
+        env_activate=args.env_activate,
+        conda_env=args.conda_env,
+        watch=args.watch,
+        interval=args.interval,
     )
 
 

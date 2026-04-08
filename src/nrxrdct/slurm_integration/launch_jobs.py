@@ -313,7 +313,7 @@ def launch(
     mask = fabio.open(mask_file).data
     with h5py.File(master_file, "r") as hin:
         first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
-    tt, _ = azimuthal_integration_1d(
+    tt, _, _ = azimuthal_integration_1d(
         image=first_image,
         poni_file=poni_file,
         npt=n_points,
@@ -349,6 +349,19 @@ def launch(
         "poni_file": str(poni_file),
         "mask_file": str(mask_file),
         "method": method,
+        # SLURM settings — reused by repair()
+        "partition": partition,
+        "time": time,
+        "mem": mem,
+        "cpus": cpus,
+        "gpu": gpu,
+        "env_activate": str(env_activate) if env_activate else None,
+        "conda_env": conda_env,
+        # Integration settings — reused by repair()
+        "batch_size": batch_size,
+        "percentile": f"{percentile[0]},{percentile[1]}",
+        "thres": thres,
+        "max_iter": max_iter,
     }
     sidecar_path = tmp_dir / "launch_meta.json"
     sidecar_path.write_text(json.dumps(launch_meta, indent=2))

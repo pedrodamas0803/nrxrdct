@@ -1,39 +1,39 @@
 """
 nrxrdct.slurm_integration.launch_jobs
 --------------------------------------
-Validates master HDF5 entries, initialises the output file, splits scans into
-N chunks, and submits one sbatch job per chunk.
+Validates master HDF5 entries, writes a launch_meta.json sidecar into the
+tmp directory, and submits N sbatch jobs.
+
+The output HDF5 file is NOT created here — it is assembled by merge() after
+all jobs finish.
 
 Python API
 ----------
     from nrxrdct.slurm_integration import launch
 
-    launch(
-        master_file  = Path("master.h5"),
-        output_file  = Path("output.h5"),
-        poni_file    = Path("calib.poni"),
-        mask_file    = Path("mask.edf"),
-        n_jobs       = 8,
-        n_workers    = 16,
-        partition    = "nice",
-        time         = "04:00:00",
-        mem          = "64G",
-        cpus         = 16,
-        conda_env    = "nrxrdct",   # or env_activate=Path(...)
+    slurm_ids = launch(
+        master_file = Path("master.h5"),
+        output_file = Path("output.h5"),   # used to derive tmp_dir name
+        poni_file   = Path("calib.poni"),
+        mask_file   = Path("mask.edf"),
+        n_jobs      = 8,
+        partition   = "cpu",
+        conda_env   = "nrxrdct",
     )
 
-CLI (registered as 'nrxrdct-slurm launch')
--------------------------------------------
-    nrxrdct-slurm launch \\
-        --master-file master.h5 --output-file output.h5 \\
-        --poni-file calib.poni  --mask-file mask.edf   \\
+CLI
+---
+    nrxrdct-slurm launch --master-file master.h5 --output-file output.h5 \\
+        --poni-file calib.poni --mask-file mask.edf \\
         --n-jobs 8 --partition cpu --conda-env nrxrdct
 """
 
 from __future__ import annotations
 
+import json
 import math
 import subprocess
+import sys
 from pathlib import Path
 
 import fabio
@@ -47,27 +47,8 @@ from nrxrdct.integration import azimuthal_integration_1d, cake_integration
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _validate_entries(master_file: Path) -> tuple[list, list, list]:
-    """
-    Scan the master HDF5 file and separate valid from incomplete entries.
-
-    An entry is considered valid if it contains ``measurement/eiger``,
-    ``measurement/fpico6``, and ``instrument/positioners/dty``.
-
-    Parameters
-    ----------
-    master_file : Path
-        HDF5 master file to inspect.
-
-    Returns
-    -------
-    valid_entries : list of str
-        Entry keys with all required datasets present.
-    bad_entries : list of str
-        Entry keys that are missing one or more required datasets.
-    dty_values : list of float
-        Translation motor positions corresponding to *valid_entries*.
-    """
     valid_entries, bad_entries, dty_values = [], [], []
     with h5py.File(master_file, "r") as hin:
         all_entries = list(hin.keys())
@@ -81,7 +62,6 @@ def _validate_entries(master_file: Path) -> tuple[list, list, list]:
             except KeyError as e:
                 print(f"  ⚠  Entry {entry} missing dataset ({e}) — skipping")
                 bad_entries.append(entry)
-
     print(f"\n✓  {len(valid_entries)}/{len(all_entries)} entries OK")
     if bad_entries:
         print(f"⚠  Skipping {len(bad_entries)} entries: {bad_entries}\n")
@@ -99,84 +79,54 @@ def _init_output_file(
     rot: np.ndarray,
     n_points: int,
     unit: str,
-) -> None:
-    """
-    Initialise the output HDF5 file with metadata and axis datasets (idempotent).
-
-    Writes the radial axis, CAKE validity mask, motor positions, valid/bad
-    entry lists, and rotation angles.  Skips any dataset that already exists,
-    so it is safe to call on a partially-filled output file.
-
-    Parameters
-    ----------
-    master_file : Path
-        Source HDF5 master file (used to read the first frame for axis setup).
-    output_file : Path
-        Destination HDF5 file (opened in append mode).
-    poni_file : Path
-        pyFAI ``.poni`` calibration file.
-    mask_file : Path
-        Detector mask file (fabio-readable).
-    valid_entries : list of str
-        Entry keys confirmed to contain all required datasets.
-    bad_entries : list of str
-        Entry keys that were skipped during validation.
-    dty_values : list of float
-        Translation motor positions for each valid entry.
-    rot : np.ndarray
-        Rotation angle array from the first valid entry.
-    n_points : int
-        Number of radial bins.
-    unit : str
-        Radial unit (e.g. ``"2th_deg"``).
-    """
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute radial axis + cake_mask, write them into the output file.
+    Returns (radial, cake_mask) so launch() can store them in launch_meta."""
     mask = fabio.open(mask_file).data
     with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
         if "integrated/radial" not in hout:
-            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
+            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(
+                np.float32
+            )
             tt, _, _ = azimuthal_integration_1d(
-                image=first_image, poni_file=poni_file,
-                npt=n_points, mask=mask, unit=unit,
+                image=first_image,
+                poni_file=poni_file,
+                npt=n_points,
+                mask=mask,
+                unit=unit,
             )
             mascake = (
                 cake_integration(
                     np.ones_like(first_image) * 10,
-                    poni_file, npt_rad=n_points, mask=mask,
-                )[0] > 0
+                    poni_file,
+                    npt_rad=n_points,
+                    mask=mask,
+                )[0]
+                > 0
             )
             hout["integrated/cake_mask"] = mascake
-            hout["integrated/radial"]    = tt
+            hout["integrated/radial"] = tt
             hout["integrated/radial"].attrs["unit"] = unit
+        else:
+            tt = hout["integrated/radial"][:]
+            mascake = hout["integrated/cake_mask"][:]
 
         if "motors/dty" not in hout:
             hout["motors/dty"] = dty_values
         if "motors/rot" not in hout:
             hout["motors/rot"] = rot
         if "meta/valid_entries" not in hout:
-            hout["meta/valid_entries"] = np.array(valid_entries, dtype=h5py.string_dtype())
+            hout["meta/valid_entries"] = np.array(
+                valid_entries, dtype=h5py.string_dtype()
+            )
         if bad_entries and "bad_entries" not in hout:
             hout["bad_entries"] = np.array(bad_entries, dtype=h5py.string_dtype())
 
-    print(f"✓  Output file initialised: {output_file}")
+    return tt, mascake
 
 
 def _split_indices(n_scans: int, n_jobs: int) -> list[list[int]]:
-    """
-    Split ``range(n_scans)`` into *n_jobs* roughly equal chunks.
-
-    Parameters
-    ----------
-    n_scans : int
-        Total number of scans to distribute.
-    n_jobs : int
-        Number of chunks (SLURM jobs) to create.
-
-    Returns
-    -------
-    list of list of int
-        Chunk assignments; the last chunk may be shorter than the others.
-    """
-    all_idx    = list(range(n_scans))
+    all_idx = list(range(n_scans))
     chunk_size = math.ceil(n_scans / n_jobs)
     chunks = [all_idx[i : i + chunk_size] for i in range(0, n_scans, chunk_size)]
     print(f"✓  {n_scans} scans → {len(chunks)} jobs (~{chunk_size} scans each)")
@@ -188,7 +138,7 @@ def _submit_job(
     indices: list[int],
     *,
     master_file: Path,
-    output_file: Path,
+    tmp_dir: Path,
     poni_file: Path,
     mask_file: Path,
     n_points: int,
@@ -208,86 +158,45 @@ def _submit_job(
     conda_env: str | None,
     log_dir: Path,
 ) -> str:
-    """
-    Write an sbatch script for *indices* and submit it, returning the SLURM job ID.
-
-    The script is written to ``<log_dir>/job_<job_id:04d>.sh`` and invokes
-    :mod:`nrxrdct.slurm_integration.integrate_worker` as a Python module.
-    Environment activation uses ``source <env_activate>`` or
-    ``conda run -n <conda_env>`` depending on which argument is supplied.
-
-    Parameters
-    ----------
-    job_id : int
-        Sequential job identifier used for script and log file naming.
-    indices : list of int
-        Global scan indices assigned to this job.
-    master_file, output_file, poni_file, mask_file : Path
-        Files forwarded verbatim to the worker CLI.
-    n_points, n_workers, batch_size : int
-        Integration parameters forwarded to the worker.
-    unit, method, percentile : str
-        Integration settings forwarded to the worker.
-    thres : float
-        Sigma-clipping threshold forwarded to the worker.
-    max_iter : int
-        Maximum sigma-clipping iterations forwarded to the worker.
-    partition, time, mem : str
-        SLURM resource directives.
-    cpus : int
-        ``--cpus-per-task`` value.
-    gpu : bool
-        If ``True``, adds ``#SBATCH --gres=gpu:1``.
-    env_activate : Path or None
-        Shell script to ``source`` before the worker command.
-    conda_env : str or None
-        Conda environment for ``conda run``; used when *env_activate* is ``None``.
-    log_dir : Path
-        Directory where the script and log files are written.
-
-    Returns
-    -------
-    str
-        SLURM job ID string returned by ``sbatch``.
-    """
     indices_str = ",".join(str(i) for i in indices)
     script_path = log_dir / f"job_{job_id:04d}.sh"
-    log_out     = log_dir / f"job_{job_id:04d}_%j.out"
-    log_err     = log_dir / f"job_{job_id:04d}_%j.err"
+    log_out = log_dir / f"job_{job_id:04d}_%j.out"
+    log_err = log_dir / f"job_{job_id:04d}_%j.err"
 
     gpu_line = "#SBATCH --gres=gpu:1" if gpu else ""
 
-    # Build the python invocation line.
-    # `conda activate` requires an interactive shell and silently fails in
-    # non-interactive sbatch jobs.  `conda run` works without shell init.
     worker_args = (
         f'    --master-file   "{master_file}"   \\\n'
-        f'    --output-file   "{output_file}"   \\\n'
+        f'    --tmp-dir       "{tmp_dir}"        \\\n'
         f'    --poni-file     "{poni_file}"     \\\n'
         f'    --mask-file     "{mask_file}"     \\\n'
         f'    --entry-indices "{indices_str}"   \\\n'
-        f'    --n-points      {n_points}        \\\n'
-        f'    --n-workers     {n_workers}       \\\n'
-        f'    --batch-size    {batch_size}      \\\n'
+        f"    --n-points      {n_points}        \\\n"
+        f"    --n-workers     {n_workers}       \\\n"
+        f"    --batch-size    {batch_size}      \\\n"
         f'    --unit          "{unit}"          \\\n'
         f'    --method        "{method}"        \\\n'
         f'    --percentile    "{percentile}"    \\\n'
-        f'    --thres         {thres}           \\\n'
-        f'    --max-iter      {max_iter}'
+        f"    --thres         {thres}           \\\n"
+        f"    --max-iter      {max_iter}"
     )
 
     if env_activate:
         env_block = f"source {env_activate}"
-        python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+        python_line = (
+            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+        )
     elif conda_env:
-        env_block = "# conda run used below — no separate activate needed"
+        env_block = "# conda run used below"
         python_line = (
             f"conda run -n {conda_env} --no-capture-output "
             f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
         )
     else:
         env_block = "# no environment activation"
-        python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+        python_line = (
+            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+        )
 
     script = (
         f"#!/bin/bash\n"
@@ -315,17 +224,22 @@ def _submit_job(
 
     result = subprocess.run(
         ["sbatch", str(script_path)],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     slurm_id = result.stdout.strip().split()[-1]
-    print(f"  Submitted job {job_id:04d} "
-          f"(indices {indices[0]}–{indices[-1]}) → SLURM {slurm_id}")
+    print(
+        f"  Submitted job {job_id:04d} "
+        f"(indices {indices[0]}–{indices[-1]}) → SLURM {slurm_id}"
+    )
     return slurm_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def launch(
     master_file: Path,
@@ -343,7 +257,7 @@ def launch(
     thres: float = 3.0,
     max_iter: int = 5,
     # SLURM
-    partition: str = "nice",
+    partition: str = "cpu",
     time: str = "04:00:00",
     mem: str = "32G",
     cpus: int = 16,
@@ -351,78 +265,39 @@ def launch(
     # Environment
     env_activate: Path | None = None,
     conda_env: str | None = None,
-) -> list[str]:
+) -> dict:
     """
-    Validate, initialise output, and submit N SLURM jobs for powder integration.
+    Validate master file, write launch_meta.json, and submit N SLURM jobs.
 
-    Parameters
-    ----------
-    master_file : Path
-        HDF5 master file containing all scan entries.
-    output_file : Path
-        Destination HDF5 file for integrated patterns.
-    poni_file : Path
-        pyFAI ``.poni`` calibration file.
-    mask_file : Path
-        Detector mask file (fabio-readable).
-    rot : np.ndarray or None, optional
-        Rotation angle array; read from the first valid entry when ``None``.
-    n_jobs : int, optional
-        Number of SLURM jobs to submit (default 8).
-    n_points : int, optional
-        Number of radial bins per integrated pattern (default 1000).
-    n_workers : int, optional
-        Integration threads per job (default 16).
-    batch_size : int, optional
-        Frames streamed from HDF5 per batch in the worker (default 32).
-    unit : str, optional
-        Radial unit (default ``"2th_deg"``).
-    method : str, optional
-        Integration method: ``"standard"``, ``"filter"``, or ``"sigma_clip"``
-        (default ``"standard"``).
-    percentile : tuple of (float, float), optional
-        Percentile bounds used when *method* is ``"filter"`` (default ``(10, 90)``).
-    thres : float, optional
-        Sigma-clipping threshold used when *method* is ``"sigma_clip"``
-        (default 3.0).
-    max_iter : int, optional
-        Maximum sigma-clipping iterations (default 5).
-    partition : str, optional
-        SLURM partition (default ``"nice"``).
-    time : str, optional
-        SLURM wall-time limit (default ``"04:00:00"``).
-    mem : str, optional
-        SLURM memory request (default ``"32G"``).
-    cpus : int, optional
-        CPUs per task (default 16).
-    gpu : bool, optional
-        Request a GPU node (default ``False``).
-    env_activate : Path or None, optional
-        Shell activate script sourced before the worker command.
-    conda_env : str or None, optional
-        Conda environment used via ``conda run`` (alternative to *env_activate*).
+    Workers write results to <output_file.parent>/<output_file.stem>_tmp/.
+    Call merge() after all jobs finish to assemble the output HDF5.
 
     Returns
     -------
-    list of str
-        SLURM job IDs of the submitted jobs.
+    dict with keys 'slurm_ids', 'tmp_dir', 'n_scans'.
     """
     from nrxrdct.slurm_integration.integrate_worker import INTEGRATION_METHODS
+
     if method not in INTEGRATION_METHODS:
         raise ValueError(f"method must be one of {INTEGRATION_METHODS}, got '{method}'")
 
-    master_file    = Path(master_file)
-    output_file    = Path(output_file)
-    poni_file      = Path(poni_file)
-    mask_file      = Path(mask_file)
+    master_file = Path(master_file)
+    output_file = Path(output_file)
+    poni_file = Path(poni_file)
+    mask_file = Path(mask_file)
     percentile_str = f"{percentile[0]},{percentile[1]}"
+
+    # tmp dir lives next to the output file, named after it
+    tmp_dir = output_file.parent / (output_file.stem + "_tmp")
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = output_file.parent / "slurm_logs"
+    log_dir.mkdir(exist_ok=True)
 
     # ── 1. Validate ───────────────────────────────────────────────────────────
     print("=" * 60)
     print("Step 1 — Validating master file entries")
     print("=" * 60)
     valid_entries, bad_entries, dty_values = _validate_entries(master_file)
-
     if not valid_entries:
         raise RuntimeError("No valid entries found in master file.")
 
@@ -431,133 +306,732 @@ def launch(
         with h5py.File(master_file, "r") as hin:
             rot = hin[f"{valid_entries[0]}/measurement/rot"][:]
 
-    # ── 3. Initialise output file ─────────────────────────────────────────────
+    # ── 3. Compute radial axis + cake_mask, write output file skeleton ────────
     print("\n" + "=" * 60)
-    print("Step 2 — Initialising output HDF5 file")
+    print("Step 2 — Computing radial axis")
     print("=" * 60)
-    _init_output_file(
-        master_file   = master_file,
-        output_file   = output_file,
-        poni_file     = poni_file,
-        mask_file     = mask_file,
-        valid_entries = valid_entries,
-        bad_entries   = bad_entries,
-        dty_values    = dty_values,
-        rot           = rot,
-        n_points      = n_points,
-        unit          = unit,
+    mask = fabio.open(mask_file).data
+    with h5py.File(master_file, "r") as hin:
+        first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
+    tt, _ = azimuthal_integration_1d(
+        image=first_image,
+        poni_file=poni_file,
+        npt=n_points,
+        mask=mask,
+        unit=unit,
     )
+    mascake = (
+        cake_integration(
+            np.ones_like(first_image) * 10,
+            poni_file,
+            npt_rad=n_points,
+            mask=mask,
+        )[0]
+        > 0
+    )
+    print(f"✓  Radial axis computed: {n_points} points, unit={unit}")
 
-    # ── 4. Split & submit ─────────────────────────────────────────────────────
+    # ── 4. Write launch_meta.json sidecar ─────────────────────────────────────
     print("\n" + "=" * 60)
-    print("Step 3 — Splitting work and submitting jobs")
+    print("Step 3 — Writing launch metadata")
     print("=" * 60)
-    chunks  = _split_indices(len(valid_entries), n_jobs)
-    log_dir = output_file.parent / "slurm_logs"
-    log_dir.mkdir(exist_ok=True)
+    launch_meta = {
+        "valid_entries": valid_entries,
+        "bad_entries": bad_entries,
+        "dty_values": dty_values,
+        "rot": rot.tolist(),
+        "radial": tt.tolist(),
+        "cake_mask": mascake.tolist(),
+        "unit": unit,
+        "n_points": n_points,
+        "master_file": str(master_file),
+        "output_file": str(output_file),
+        "poni_file": str(poni_file),
+        "mask_file": str(mask_file),
+        "method": method,
+    }
+    sidecar_path = tmp_dir / "launch_meta.json"
+    sidecar_path.write_text(json.dumps(launch_meta, indent=2))
+    print(f"✓  launch_meta.json → {sidecar_path}")
 
+    # ── 5. Split & submit ─────────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("Step 4 — Splitting work and submitting jobs")
+    print("=" * 60)
+    chunks = _split_indices(len(valid_entries), n_jobs)
     slurm_ids = []
     for job_id, indices in enumerate(chunks):
         sid = _submit_job(
             job_id,
             indices,
-            master_file  = master_file,
-            output_file  = output_file,
-            poni_file    = poni_file,
-            mask_file    = mask_file,
-            n_points     = n_points,
-            n_workers    = n_workers,
-            batch_size   = batch_size,
-            unit         = unit,
-            method       = method,
-            percentile   = percentile_str,
-            thres        = thres,
-            max_iter     = max_iter,
-            partition    = partition,
-            time         = time,
-            mem          = mem,
-            cpus         = cpus,
-            gpu          = gpu,
-            env_activate = env_activate,
-            conda_env    = conda_env,
-            log_dir      = log_dir,
+            master_file=master_file,
+            tmp_dir=tmp_dir,
+            poni_file=poni_file,
+            mask_file=mask_file,
+            n_points=n_points,
+            n_workers=n_workers,
+            batch_size=batch_size,
+            unit=unit,
+            method=method,
+            percentile=percentile_str,
+            thres=thres,
+            max_iter=max_iter,
+            partition=partition,
+            time=time,
+            mem=mem,
+            cpus=cpus,
+            gpu=gpu,
+            env_activate=env_activate,
+            conda_env=conda_env,
+            log_dir=log_dir,
         )
         slurm_ids.append(sid)
 
     print(f"\n✓  {len(slurm_ids)} jobs submitted — IDs: {', '.join(slurm_ids)}")
-    print(f"   Logs in: {log_dir}/")
-    print(f"\n   Monitor : squeue -u $USER")
-    print(f"   Verify  : python -m nrxrdct.slurm_integration.check_output "
-          f"--output-file {output_file}")
-    return slurm_ids
+    print(f"   Tmp dir : {tmp_dir}/")
+    print(f"   Logs    : {log_dir}/")
+    print(
+        f"\n   Monitor : nrxrdct-slurm monitor --slurm-ids {','.join(slurm_ids)} "
+        f"--tmp-dir {tmp_dir} --watch"
+    )
+    print(
+        f"   Merge   : nrxrdct-slurm merge --tmp-dir {tmp_dir} "
+        f"--output-file {output_file}"
+    )
+
+    return {"slurm_ids": slurm_ids, "tmp_dir": tmp_dir, "n_scans": len(valid_entries)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CLI entry point (called by 'nrxrdct-slurm launch ...')
+# CLI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _build_parser(sub=None):
-    """Build the ``launch`` sub-command argument parser, attaching it to *sub* if provided."""
     import argparse
-    desc = "Submit powder integration across N SLURM jobs"
-    p = sub.add_parser("launch", help=desc, description=desc) if sub else argparse.ArgumentParser(description=desc)
 
-    p.add_argument("--master-file",   required=True, type=Path)
-    p.add_argument("--output-file",   required=True, type=Path)
-    p.add_argument("--poni-file",     required=True, type=Path)
-    p.add_argument("--mask-file",     required=True, type=Path)
-    p.add_argument("--n-jobs",        type=int, default=8)
-    p.add_argument("--n-points",      type=int, default=1000)
-    p.add_argument("--n-workers",     type=int, default=16)
-    p.add_argument("--batch-size",    type=int, default=32,
-                   help="Frames streamed per batch in the worker (default: 32)")
-    p.add_argument("--unit",          default="2th_deg")
-    p.add_argument("--method",        default="standard",
-                   choices=("standard", "filter", "sigma_clip"),
-                   help="Integration method (default: standard)")
-    p.add_argument("--percentile",    default="10,90",
-                   help="Low,high percentile for 'filter' method (default: 10,90)")
-    p.add_argument("--thres",         type=float, default=3.0,
-                   help="Sigma threshold for 'sigma_clip' method (default: 3.0)")
-    p.add_argument("--max-iter",      type=int,   default=5,
-                   help="Max iterations for 'sigma_clip' method (default: 5)")
-    p.add_argument("--partition",     default="nice")
-    p.add_argument("--time",          default="04:00:00")
-    p.add_argument("--mem",           default="32G")
-    p.add_argument("--cpus",          type=int, default=16)
-    p.add_argument("--gpu",           action="store_true")
-    p.add_argument("--env-activate",  type=Path, default=None)
-    p.add_argument("--conda-env",     default=None)
+    desc = "Submit powder integration across N SLURM jobs"
+    p = (
+        sub.add_parser("launch", help=desc, description=desc)
+        if sub
+        else argparse.ArgumentParser(description=desc)
+    )
+
+    p.add_argument("--master-file", required=True, type=Path)
+    p.add_argument("--output-file", required=True, type=Path)
+    p.add_argument("--poni-file", required=True, type=Path)
+    p.add_argument("--mask-file", required=True, type=Path)
+    p.add_argument("--n-jobs", type=int, default=8)
+    p.add_argument("--n-points", type=int, default=1000)
+    p.add_argument("--n-workers", type=int, default=16)
+    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--unit", default="2th_deg")
+    p.add_argument(
+        "--method", default="standard", choices=("standard", "filter", "sigma_clip")
+    )
+    p.add_argument("--percentile", default="10,90")
+    p.add_argument("--thres", type=float, default=3.0)
+    p.add_argument("--max-iter", type=int, default=5)
+    p.add_argument("--partition", default="cpu")
+    p.add_argument("--time", default="04:00:00")
+    p.add_argument("--mem", default="32G")
+    p.add_argument("--cpus", type=int, default=16)
+    p.add_argument("--gpu", action="store_true")
+    p.add_argument("--env-activate", type=Path, default=None)
+    p.add_argument("--conda-env", default=None)
     return p
 
 
 def _cli_launch(args):
-    """Parse CLI arguments and delegate to :func:`launch`."""
     pct = tuple(int(x) for x in args.percentile.split(","))
     launch(
-        master_file  = args.master_file,
-        output_file  = args.output_file,
-        poni_file    = args.poni_file,
-        mask_file    = args.mask_file,
-        n_jobs       = args.n_jobs,
-        n_points     = args.n_points,
-        n_workers    = args.n_workers,
-        batch_size   = args.batch_size,
-        unit         = args.unit,
-        method       = args.method,
-        percentile   = pct,
-        thres        = args.thres,
-        max_iter     = args.max_iter,
-        partition    = args.partition,
-        time         = args.time,
-        mem          = args.mem,
-        cpus         = args.cpus,
-        gpu          = args.gpu,
-        env_activate = args.env_activate,
-        conda_env    = args.conda_env,
+        master_file=args.master_file,
+        output_file=args.output_file,
+        poni_file=args.poni_file,
+        mask_file=args.mask_file,
+        n_jobs=args.n_jobs,
+        n_points=args.n_points,
+        n_workers=args.n_workers,
+        batch_size=args.batch_size,
+        unit=args.unit,
+        method=args.method,
+        percentile=pct,
+        thres=args.thres,
+        max_iter=args.max_iter,
+        partition=args.partition,
+        time=args.time,
+        mem=args.mem,
+        cpus=args.cpus,
+        gpu=args.gpu,
+        env_activate=args.env_activate,
+        conda_env=args.conda_env,
     )
 
 
 if __name__ == "__main__":
     p = _build_parser()
     _cli_launch(p.parse_args())
+
+# """
+# nrxrdct.slurm_integration.launch_jobs
+# --------------------------------------
+# Validates master HDF5 entries, initialises the output file, splits scans into
+# N chunks, and submits one sbatch job per chunk.
+
+# Python API
+# ----------
+#     from nrxrdct.slurm_integration import launch
+
+#     launch(
+#         master_file  = Path("master.h5"),
+#         output_file  = Path("output.h5"),
+#         poni_file    = Path("calib.poni"),
+#         mask_file    = Path("mask.edf"),
+#         n_jobs       = 8,
+#         n_workers    = 16,
+#         partition    = "nice",
+#         time         = "04:00:00",
+#         mem          = "64G",
+#         cpus         = 16,
+#         conda_env    = "nrxrdct",   # or env_activate=Path(...)
+#     )
+
+# CLI (registered as 'nrxrdct-slurm launch')
+# -------------------------------------------
+#     nrxrdct-slurm launch \\
+#         --master-file master.h5 --output-file output.h5 \\
+#         --poni-file calib.poni  --mask-file mask.edf   \\
+#         --n-jobs 8 --partition cpu --conda-env nrxrdct
+# """
+
+# from __future__ import annotations
+
+# import math
+# import subprocess
+# from pathlib import Path
+
+# import fabio
+# import h5py
+# import numpy as np
+# from tqdm import tqdm
+
+# from nrxrdct.integration import azimuthal_integration_1d, cake_integration
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Internal helpers
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# def _validate_entries(master_file: Path) -> tuple[list, list, list]:
+#     """
+#     Scan the master HDF5 file and separate valid from incomplete entries.
+
+#     An entry is considered valid if it contains ``measurement/eiger``,
+#     ``measurement/fpico6``, and ``instrument/positioners/dty``.
+
+#     Parameters
+#     ----------
+#     master_file : Path
+#         HDF5 master file to inspect.
+
+#     Returns
+#     -------
+#     valid_entries : list of str
+#         Entry keys with all required datasets present.
+#     bad_entries : list of str
+#         Entry keys that are missing one or more required datasets.
+#     dty_values : list of float
+#         Translation motor positions corresponding to *valid_entries*.
+#     """
+#     valid_entries, bad_entries, dty_values = [], [], []
+#     with h5py.File(master_file, "r") as hin:
+#         all_entries = list(hin.keys())
+#         for entry in tqdm(all_entries, desc="Validating entries"):
+#             try:
+#                 _ = hin[f"{entry}/measurement/eiger"].shape
+#                 _ = hin[f"{entry}/measurement/fpico6"].shape
+#                 dty = float(hin[f"{entry}/instrument/positioners/dty"][()])
+#                 valid_entries.append(entry)
+#                 dty_values.append(dty)
+#             except KeyError as e:
+#                 print(f"  ⚠  Entry {entry} missing dataset ({e}) — skipping")
+#                 bad_entries.append(entry)
+
+#     print(f"\n✓  {len(valid_entries)}/{len(all_entries)} entries OK")
+#     if bad_entries:
+#         print(f"⚠  Skipping {len(bad_entries)} entries: {bad_entries}\n")
+#     return valid_entries, bad_entries, dty_values
+
+
+# def _init_output_file(
+#     master_file: Path,
+#     output_file: Path,
+#     poni_file: Path,
+#     mask_file: Path,
+#     valid_entries: list,
+#     bad_entries: list,
+#     dty_values: list,
+#     rot: np.ndarray,
+#     n_points: int,
+#     unit: str,
+# ) -> None:
+#     """
+#     Initialise the output HDF5 file with metadata and axis datasets (idempotent).
+
+#     Writes the radial axis, CAKE validity mask, motor positions, valid/bad
+#     entry lists, and rotation angles.  Skips any dataset that already exists,
+#     so it is safe to call on a partially-filled output file.
+
+#     Parameters
+#     ----------
+#     master_file : Path
+#         Source HDF5 master file (used to read the first frame for axis setup).
+#     output_file : Path
+#         Destination HDF5 file (opened in append mode).
+#     poni_file : Path
+#         pyFAI ``.poni`` calibration file.
+#     mask_file : Path
+#         Detector mask file (fabio-readable).
+#     valid_entries : list of str
+#         Entry keys confirmed to contain all required datasets.
+#     bad_entries : list of str
+#         Entry keys that were skipped during validation.
+#     dty_values : list of float
+#         Translation motor positions for each valid entry.
+#     rot : np.ndarray
+#         Rotation angle array from the first valid entry.
+#     n_points : int
+#         Number of radial bins.
+#     unit : str
+#         Radial unit (e.g. ``"2th_deg"``).
+#     """
+#     mask = fabio.open(mask_file).data
+#     with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
+#         if "integrated/radial" not in hout:
+#             first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(np.float32)
+#             tt, _, _ = azimuthal_integration_1d(
+#                 image=first_image, poni_file=poni_file,
+#                 npt=n_points, mask=mask, unit=unit,
+#             )
+#             mascake = (
+#                 cake_integration(
+#                     np.ones_like(first_image) * 10,
+#                     poni_file, npt_rad=n_points, mask=mask,
+#                 )[0] > 0
+#             )
+#             hout["integrated/cake_mask"] = mascake
+#             hout["integrated/radial"]    = tt
+#             hout["integrated/radial"].attrs["unit"] = unit
+
+#         if "motors/dty" not in hout:
+#             hout["motors/dty"] = dty_values
+#         if "motors/rot" not in hout:
+#             hout["motors/rot"] = rot
+#         if "meta/valid_entries" not in hout:
+#             hout["meta/valid_entries"] = np.array(valid_entries, dtype=h5py.string_dtype())
+#         if bad_entries and "bad_entries" not in hout:
+#             hout["bad_entries"] = np.array(bad_entries, dtype=h5py.string_dtype())
+
+#     print(f"✓  Output file initialised: {output_file}")
+
+
+# def _split_indices(n_scans: int, n_jobs: int) -> list[list[int]]:
+#     """
+#     Split ``range(n_scans)`` into *n_jobs* roughly equal chunks.
+
+#     Parameters
+#     ----------
+#     n_scans : int
+#         Total number of scans to distribute.
+#     n_jobs : int
+#         Number of chunks (SLURM jobs) to create.
+
+#     Returns
+#     -------
+#     list of list of int
+#         Chunk assignments; the last chunk may be shorter than the others.
+#     """
+#     all_idx    = list(range(n_scans))
+#     chunk_size = math.ceil(n_scans / n_jobs)
+#     chunks = [all_idx[i : i + chunk_size] for i in range(0, n_scans, chunk_size)]
+#     print(f"✓  {n_scans} scans → {len(chunks)} jobs (~{chunk_size} scans each)")
+#     return chunks
+
+
+# def _submit_job(
+#     job_id: int,
+#     indices: list[int],
+#     *,
+#     master_file: Path,
+#     output_file: Path,
+#     poni_file: Path,
+#     mask_file: Path,
+#     n_points: int,
+#     n_workers: int,
+#     batch_size: int,
+#     unit: str,
+#     method: str,
+#     percentile: str,
+#     thres: float,
+#     max_iter: int,
+#     partition: str,
+#     time: str,
+#     mem: str,
+#     cpus: int,
+#     gpu: bool,
+#     env_activate: Path | None,
+#     conda_env: str | None,
+#     log_dir: Path,
+# ) -> str:
+#     """
+#     Write an sbatch script for *indices* and submit it, returning the SLURM job ID.
+
+#     The script is written to ``<log_dir>/job_<job_id:04d>.sh`` and invokes
+#     :mod:`nrxrdct.slurm_integration.integrate_worker` as a Python module.
+#     Environment activation uses ``source <env_activate>`` or
+#     ``conda run -n <conda_env>`` depending on which argument is supplied.
+
+#     Parameters
+#     ----------
+#     job_id : int
+#         Sequential job identifier used for script and log file naming.
+#     indices : list of int
+#         Global scan indices assigned to this job.
+#     master_file, output_file, poni_file, mask_file : Path
+#         Files forwarded verbatim to the worker CLI.
+#     n_points, n_workers, batch_size : int
+#         Integration parameters forwarded to the worker.
+#     unit, method, percentile : str
+#         Integration settings forwarded to the worker.
+#     thres : float
+#         Sigma-clipping threshold forwarded to the worker.
+#     max_iter : int
+#         Maximum sigma-clipping iterations forwarded to the worker.
+#     partition, time, mem : str
+#         SLURM resource directives.
+#     cpus : int
+#         ``--cpus-per-task`` value.
+#     gpu : bool
+#         If ``True``, adds ``#SBATCH --gres=gpu:1``.
+#     env_activate : Path or None
+#         Shell script to ``source`` before the worker command.
+#     conda_env : str or None
+#         Conda environment for ``conda run``; used when *env_activate* is ``None``.
+#     log_dir : Path
+#         Directory where the script and log files are written.
+
+#     Returns
+#     -------
+#     str
+#         SLURM job ID string returned by ``sbatch``.
+#     """
+#     indices_str = ",".join(str(i) for i in indices)
+#     script_path = log_dir / f"job_{job_id:04d}.sh"
+#     log_out     = log_dir / f"job_{job_id:04d}_%j.out"
+#     log_err     = log_dir / f"job_{job_id:04d}_%j.err"
+
+#     gpu_line = "#SBATCH --gres=gpu:1" if gpu else ""
+
+#     # Build the python invocation line.
+#     # `conda activate` requires an interactive shell and silently fails in
+#     # non-interactive sbatch jobs.  `conda run` works without shell init.
+#     worker_args = (
+#         f'    --master-file   "{master_file}"   \\\n'
+#         f'    --output-file   "{output_file}"   \\\n'
+#         f'    --poni-file     "{poni_file}"     \\\n'
+#         f'    --mask-file     "{mask_file}"     \\\n'
+#         f'    --entry-indices "{indices_str}"   \\\n'
+#         f'    --n-points      {n_points}        \\\n'
+#         f'    --n-workers     {n_workers}       \\\n'
+#         f'    --batch-size    {batch_size}      \\\n'
+#         f'    --unit          "{unit}"          \\\n'
+#         f'    --method        "{method}"        \\\n'
+#         f'    --percentile    "{percentile}"    \\\n'
+#         f'    --thres         {thres}           \\\n'
+#         f'    --max-iter      {max_iter}'
+#     )
+
+#     if env_activate:
+#         env_block = f"source {env_activate}"
+#         python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+#     elif conda_env:
+#         env_block = "# conda run used below — no separate activate needed"
+#         python_line = (
+#             f"conda run -n {conda_env} --no-capture-output "
+#             f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+#         )
+#     else:
+#         env_block = "# no environment activation"
+#         python_line = f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+
+#     script = (
+#         f"#!/bin/bash\n"
+#         f"#SBATCH --job-name=nrxrdct_{job_id:04d}\n"
+#         f"#SBATCH --output={log_out}\n"
+#         f"#SBATCH --error={log_err}\n"
+#         f"#SBATCH --partition={partition}\n"
+#         f"#SBATCH --time={time}\n"
+#         f"#SBATCH --mem={mem}\n"
+#         f"#SBATCH --cpus-per-task={cpus}\n"
+#         + (f"#SBATCH --gres=gpu:1\n" if gpu else "")
+#         + f"\n"
+#         f"{env_block}\n"
+#         f"\n"
+#         f'echo "Job {job_id} started on $(hostname) at $(date)"\n'
+#         f'echo "Indices: {indices_str}"\n'
+#         f"\n"
+#         f"{python_line}\n"
+#         f"\n"
+#         f'echo "Job {job_id} finished at $(date)"\n'
+#     )
+
+#     script_path.write_text(script)
+#     script_path.chmod(0o755)
+
+#     result = subprocess.run(
+#         ["sbatch", str(script_path)],
+#         capture_output=True, text=True, check=True,
+#     )
+#     slurm_id = result.stdout.strip().split()[-1]
+#     print(f"  Submitted job {job_id:04d} "
+#           f"(indices {indices[0]}–{indices[-1]}) → SLURM {slurm_id}")
+#     return slurm_id
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Public API
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# def launch(
+#     master_file: Path,
+#     output_file: Path,
+#     poni_file: Path,
+#     mask_file: Path,
+#     rot: np.ndarray | None = None,
+#     n_jobs: int = 8,
+#     n_points: int = 1000,
+#     n_workers: int = 16,
+#     batch_size: int = 32,
+#     unit: str = "2th_deg",
+#     method: str = "standard",
+#     percentile: tuple = (10, 90),
+#     thres: float = 3.0,
+#     max_iter: int = 5,
+#     # SLURM
+#     partition: str = "nice",
+#     time: str = "04:00:00",
+#     mem: str = "32G",
+#     cpus: int = 16,
+#     gpu: bool = False,
+#     # Environment
+#     env_activate: Path | None = None,
+#     conda_env: str | None = None,
+# ) -> list[str]:
+#     """
+#     Validate, initialise output, and submit N SLURM jobs for powder integration.
+
+#     Parameters
+#     ----------
+#     master_file : Path
+#         HDF5 master file containing all scan entries.
+#     output_file : Path
+#         Destination HDF5 file for integrated patterns.
+#     poni_file : Path
+#         pyFAI ``.poni`` calibration file.
+#     mask_file : Path
+#         Detector mask file (fabio-readable).
+#     rot : np.ndarray or None, optional
+#         Rotation angle array; read from the first valid entry when ``None``.
+#     n_jobs : int, optional
+#         Number of SLURM jobs to submit (default 8).
+#     n_points : int, optional
+#         Number of radial bins per integrated pattern (default 1000).
+#     n_workers : int, optional
+#         Integration threads per job (default 16).
+#     batch_size : int, optional
+#         Frames streamed from HDF5 per batch in the worker (default 32).
+#     unit : str, optional
+#         Radial unit (default ``"2th_deg"``).
+#     method : str, optional
+#         Integration method: ``"standard"``, ``"filter"``, or ``"sigma_clip"``
+#         (default ``"standard"``).
+#     percentile : tuple of (float, float), optional
+#         Percentile bounds used when *method* is ``"filter"`` (default ``(10, 90)``).
+#     thres : float, optional
+#         Sigma-clipping threshold used when *method* is ``"sigma_clip"``
+#         (default 3.0).
+#     max_iter : int, optional
+#         Maximum sigma-clipping iterations (default 5).
+#     partition : str, optional
+#         SLURM partition (default ``"nice"``).
+#     time : str, optional
+#         SLURM wall-time limit (default ``"04:00:00"``).
+#     mem : str, optional
+#         SLURM memory request (default ``"32G"``).
+#     cpus : int, optional
+#         CPUs per task (default 16).
+#     gpu : bool, optional
+#         Request a GPU node (default ``False``).
+#     env_activate : Path or None, optional
+#         Shell activate script sourced before the worker command.
+#     conda_env : str or None, optional
+#         Conda environment used via ``conda run`` (alternative to *env_activate*).
+
+#     Returns
+#     -------
+#     list of str
+#         SLURM job IDs of the submitted jobs.
+#     """
+#     from nrxrdct.slurm_integration.integrate_worker import INTEGRATION_METHODS
+#     if method not in INTEGRATION_METHODS:
+#         raise ValueError(f"method must be one of {INTEGRATION_METHODS}, got '{method}'")
+
+#     master_file    = Path(master_file)
+#     output_file    = Path(output_file)
+#     poni_file      = Path(poni_file)
+#     mask_file      = Path(mask_file)
+#     percentile_str = f"{percentile[0]},{percentile[1]}"
+
+#     # ── 1. Validate ───────────────────────────────────────────────────────────
+#     print("=" * 60)
+#     print("Step 1 — Validating master file entries")
+#     print("=" * 60)
+#     valid_entries, bad_entries, dty_values = _validate_entries(master_file)
+
+#     if not valid_entries:
+#         raise RuntimeError("No valid entries found in master file.")
+
+#     # ── 2. Rotation angles ────────────────────────────────────────────────────
+#     if rot is None:
+#         with h5py.File(master_file, "r") as hin:
+#             rot = hin[f"{valid_entries[0]}/measurement/rot"][:]
+
+#     # ── 3. Initialise output file ─────────────────────────────────────────────
+#     print("\n" + "=" * 60)
+#     print("Step 2 — Initialising output HDF5 file")
+#     print("=" * 60)
+#     _init_output_file(
+#         master_file   = master_file,
+#         output_file   = output_file,
+#         poni_file     = poni_file,
+#         mask_file     = mask_file,
+#         valid_entries = valid_entries,
+#         bad_entries   = bad_entries,
+#         dty_values    = dty_values,
+#         rot           = rot,
+#         n_points      = n_points,
+#         unit          = unit,
+#     )
+
+#     # ── 4. Split & submit ─────────────────────────────────────────────────────
+#     print("\n" + "=" * 60)
+#     print("Step 3 — Splitting work and submitting jobs")
+#     print("=" * 60)
+#     chunks  = _split_indices(len(valid_entries), n_jobs)
+#     log_dir = output_file.parent / "slurm_logs"
+#     log_dir.mkdir(exist_ok=True)
+
+#     slurm_ids = []
+#     for job_id, indices in enumerate(chunks):
+#         sid = _submit_job(
+#             job_id,
+#             indices,
+#             master_file  = master_file,
+#             output_file  = output_file,
+#             poni_file    = poni_file,
+#             mask_file    = mask_file,
+#             n_points     = n_points,
+#             n_workers    = n_workers,
+#             batch_size   = batch_size,
+#             unit         = unit,
+#             method       = method,
+#             percentile   = percentile_str,
+#             thres        = thres,
+#             max_iter     = max_iter,
+#             partition    = partition,
+#             time         = time,
+#             mem          = mem,
+#             cpus         = cpus,
+#             gpu          = gpu,
+#             env_activate = env_activate,
+#             conda_env    = conda_env,
+#             log_dir      = log_dir,
+#         )
+#         slurm_ids.append(sid)
+
+#     print(f"\n✓  {len(slurm_ids)} jobs submitted — IDs: {', '.join(slurm_ids)}")
+#     print(f"   Logs in: {log_dir}/")
+#     print(f"\n   Monitor : squeue -u $USER")
+#     print(f"   Verify  : python -m nrxrdct.slurm_integration.check_output "
+#           f"--output-file {output_file}")
+#     return slurm_ids
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # CLI entry point (called by 'nrxrdct-slurm launch ...')
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# def _build_parser(sub=None):
+#     """Build the ``launch`` sub-command argument parser, attaching it to *sub* if provided."""
+#     import argparse
+#     desc = "Submit powder integration across N SLURM jobs"
+#     p = sub.add_parser("launch", help=desc, description=desc) if sub else argparse.ArgumentParser(description=desc)
+
+#     p.add_argument("--master-file",   required=True, type=Path)
+#     p.add_argument("--output-file",   required=True, type=Path)
+#     p.add_argument("--poni-file",     required=True, type=Path)
+#     p.add_argument("--mask-file",     required=True, type=Path)
+#     p.add_argument("--n-jobs",        type=int, default=8)
+#     p.add_argument("--n-points",      type=int, default=1000)
+#     p.add_argument("--n-workers",     type=int, default=16)
+#     p.add_argument("--batch-size",    type=int, default=32,
+#                    help="Frames streamed per batch in the worker (default: 32)")
+#     p.add_argument("--unit",          default="2th_deg")
+#     p.add_argument("--method",        default="standard",
+#                    choices=("standard", "filter", "sigma_clip"),
+#                    help="Integration method (default: standard)")
+#     p.add_argument("--percentile",    default="10,90",
+#                    help="Low,high percentile for 'filter' method (default: 10,90)")
+#     p.add_argument("--thres",         type=float, default=3.0,
+#                    help="Sigma threshold for 'sigma_clip' method (default: 3.0)")
+#     p.add_argument("--max-iter",      type=int,   default=5,
+#                    help="Max iterations for 'sigma_clip' method (default: 5)")
+#     p.add_argument("--partition",     default="nice")
+#     p.add_argument("--time",          default="04:00:00")
+#     p.add_argument("--mem",           default="32G")
+#     p.add_argument("--cpus",          type=int, default=16)
+#     p.add_argument("--gpu",           action="store_true")
+#     p.add_argument("--env-activate",  type=Path, default=None)
+#     p.add_argument("--conda-env",     default=None)
+#     return p
+
+
+# def _cli_launch(args):
+#     """Parse CLI arguments and delegate to :func:`launch`."""
+#     pct = tuple(int(x) for x in args.percentile.split(","))
+#     launch(
+#         master_file  = args.master_file,
+#         output_file  = args.output_file,
+#         poni_file    = args.poni_file,
+#         mask_file    = args.mask_file,
+#         n_jobs       = args.n_jobs,
+#         n_points     = args.n_points,
+#         n_workers    = args.n_workers,
+#         batch_size   = args.batch_size,
+#         unit         = args.unit,
+#         method       = args.method,
+#         percentile   = pct,
+#         thres        = args.thres,
+#         max_iter     = args.max_iter,
+#         partition    = args.partition,
+#         time         = args.time,
+#         mem          = args.mem,
+#         cpus         = args.cpus,
+#         gpu          = args.gpu,
+#         env_activate = args.env_activate,
+#         conda_env    = args.conda_env,
+#     )
+
+
+# if __name__ == "__main__":
+#     p = _build_parser()
+#     _cli_launch(p.parse_args())

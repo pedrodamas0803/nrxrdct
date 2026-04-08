@@ -40,6 +40,7 @@ import numpy as np
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def check(
     tmp_dir: Path | None = None,
     output_file: Path | None = None,
@@ -68,27 +69,27 @@ def check(
         raise ValueError("Provide at least one of tmp_dir or output_file.")
 
     result = {
-        "n_total":      0,
+        "n_total": 0,
         "n_integrated": 0,
-        "n_merged":     0,
-        "missing_tmp":  [],
-        "missing_h5":   [],
+        "n_merged": 0,
+        "missing_tmp": [],
+        "missing_h5": [],
+        "nan_scans": [],
     }
 
     # ── Read total expected scans from launch_meta.json ───────────────────────
     if tmp_dir is not None:
-        tmp_dir      = Path(tmp_dir)
+        tmp_dir = Path(tmp_dir)
         meta_sidecar = tmp_dir / "launch_meta.json"
         if not meta_sidecar.exists():
             raise FileNotFoundError(
-                f"launch_meta.json not found in {tmp_dir}. "
-                "Was launch() called?"
+                f"launch_meta.json not found in {tmp_dir}. " "Was launch() called?"
             )
         with open(meta_sidecar) as f:
             launch_meta = json.load(f)
 
         valid_entries = launch_meta["valid_entries"]
-        n_total       = len(valid_entries)
+        n_total = len(valid_entries)
         result["n_total"] = n_total
 
         # Count completed scans — a scan is done when both .npy and .meta.json
@@ -101,25 +102,61 @@ def check(
         # Count misnamed files (scan_XXXX.npy.tmp.npy) from previous bug
         for p in tmp_dir.glob("scan_????.npy.tmp.npy"):
             ii = int(p.name.split("_")[1].split(".")[0])
-            metas = (list(tmp_dir.glob(f"scan_{ii:04d}.meta.meta.json.tmp")) +
-                     list(tmp_dir.glob(f"scan_{ii:04d}.meta.json.tmp")))
+            metas = list(tmp_dir.glob(f"scan_{ii:04d}.meta.meta.json.tmp")) + list(
+                tmp_dir.glob(f"scan_{ii:04d}.meta.json.tmp")
+            )
             if metas:
                 integrated.add(ii)
+
+        # ── NaN check — load each .npy and flag scans with NaN rows ──────────
+        nan_scans = []
+        for ii in sorted(integrated):
+            npy_path = tmp_dir / f"scan_{ii:04d}.npy"
+            if not npy_path.exists():
+                # misnamed file — skip NaN check, merge will rename it
+                continue
+            try:
+                sinogram = np.load(npy_path)
+                nan_rows = int(np.all(np.isnan(sinogram), axis=1).sum())
+                if nan_rows > 0:
+                    nan_scans.append((ii, nan_rows, sinogram.shape[0]))
+            except Exception as e:
+                print(f"  ⚠  scan_{ii:04d}: could not load for NaN check — {e}")
+
+        # Remove NaN scans from integrated set and delete their tmp files
+        # so repair() will reintegrate them
+        if nan_scans:
+            print(
+                f"\n  ⚠  {len(nan_scans)} scans have NaN frames — "
+                f"deleting and flagging for reintegration:"
+            )
+            for ii, nan_rows, n_frames in nan_scans:
+                print(f"     scan_{ii:04d}: {nan_rows}/{n_frames} NaN frames")
+                integrated.discard(ii)
+                for f in [
+                    tmp_dir / f"scan_{ii:04d}.npy",
+                    tmp_dir / f"scan_{ii:04d}.meta.json",
+                ]:
+                    if f.exists():
+                        f.unlink()
+
         missing_tmp = sorted(set(range(n_total)) - integrated)
 
         result["n_integrated"] = len(integrated)
-        result["missing_tmp"]  = missing_tmp
+        result["missing_tmp"] = missing_tmp
+        result["nan_scans"] = nan_scans
 
         print(f"\n{'='*60}")
         print(f"  Integration progress  ({tmp_dir.name})")
         print(f"{'='*60}")
         print(f"  Expected    : {n_total}")
         print(f"  Integrated  : {len(integrated)}")
+        print(f"  NaN scans   : {len(nan_scans)}  (deleted, will be reintegrated)")
         print(f"  Remaining   : {len(missing_tmp)}")
         if missing_tmp:
             print(f"  Missing idx : {missing_tmp}")
         else:
-            print(f"  ✓  All scans integrated — ready to merge.")
+            print(f"  ✓  All scans integrated and NaN-free — ready to merge.")
 
     # ── Check HDF5 merge completeness ─────────────────────────────────────────
     if output_file is not None:
@@ -132,26 +169,30 @@ def check(
         try:
             with h5py.File(output_file, "r") as hout:
                 if "meta/valid_entries" not in hout:
-                    print(f"\n  ⚠  'meta/valid_entries' missing from {output_file.name}")
+                    print(
+                        f"\n  ⚠  'meta/valid_entries' missing from {output_file.name}"
+                    )
                     return result
 
                 n_total = len(hout["meta/valid_entries"])
                 result["n_total"] = max(result["n_total"], n_total)
 
                 merged = {
-                    ii for ii in range(n_total)
-                    if f"integrated/scan_{ii:04d}" in hout
+                    ii for ii in range(n_total) if f"integrated/scan_{ii:04d}" in hout
                 }
                 missing_h5 = sorted(set(range(n_total)) - merged)
 
-                result["n_merged"]   = len(merged)
+                result["n_merged"] = len(merged)
                 result["missing_h5"] = missing_h5
 
                 has_radial = "integrated/radial" in hout
                 radial_info = (
-                    (hout["integrated/radial"].shape[0],
-                     hout["integrated/radial"].attrs.get("unit", "?"))
-                    if has_radial else None
+                    (
+                        hout["integrated/radial"].shape[0],
+                        hout["integrated/radial"].attrs.get("unit", "?"),
+                    )
+                    if has_radial
+                    else None
                 )
 
         except OSError as e:
@@ -179,6 +220,7 @@ def check(
 # ─────────────────────────────────────────────────────────────────────────────
 # repair() — resubmit missing scans
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def repair(
     tmp_dir: Path,
@@ -214,7 +256,7 @@ def repair(
     from .launch_jobs import _split_indices, _submit_job
 
     tmp_dir = Path(tmp_dir)
-    result  = check(tmp_dir=tmp_dir, output_file=output_file)
+    result = check(tmp_dir=tmp_dir, output_file=output_file)
 
     missing = result["missing_tmp"]
     if not missing:
@@ -227,76 +269,79 @@ def repair(
         lm = json.load(f)
 
     # Resolve paths — kwargs override launch_meta, launch_meta overrides defaults
-    _master_file  = Path(kwargs.pop("master_file",  master_file  or lm["master_file"]))
-    _poni_file    = Path(kwargs.pop("poni_file",    poni_file    or lm["poni_file"]))
-    _mask_file    = Path(kwargs.pop("mask_file",    mask_file    or lm["mask_file"]))
+    _master_file = Path(kwargs.pop("master_file", master_file or lm["master_file"]))
+    _poni_file = Path(kwargs.pop("poni_file", poni_file or lm["poni_file"]))
+    _mask_file = Path(kwargs.pop("mask_file", mask_file or lm["mask_file"]))
     _env_activate = kwargs.pop("env_activate", lm.get("env_activate"))
     _env_activate = Path(_env_activate) if _env_activate else None
 
     # All settings fall back to what was used at launch time
     settings = dict(
-        n_points     = lm.get("n_points",   1000),
-        n_workers    = lm.get("cpus",       16),
-        batch_size   = lm.get("batch_size", 32),
-        unit         = lm.get("unit",       "2th_deg"),
-        method       = lm.get("method",     "standard"),
-        percentile   = lm.get("percentile", "10,90"),
-        thres        = lm.get("thres",      3.0),
-        max_iter     = lm.get("max_iter",   5),
-        partition    = lm.get("partition",  "cpu"),
-        time         = lm.get("time",       "04:00:00"),
-        mem          = lm.get("mem",        "32G"),
-        cpus         = lm.get("cpus",       16),
-        gpu          = lm.get("gpu",        False),
-        conda_env    = lm.get("conda_env",  None),
+        n_points=lm.get("n_points", 1000),
+        n_workers=lm.get("cpus", 16),
+        batch_size=lm.get("batch_size", 32),
+        unit=lm.get("unit", "2th_deg"),
+        method=lm.get("method", "standard"),
+        percentile=lm.get("percentile", "10,90"),
+        thres=lm.get("thres", 3.0),
+        max_iter=lm.get("max_iter", 5),
+        partition=lm.get("partition", "cpu"),
+        time=lm.get("time", "04:00:00"),
+        mem=lm.get("mem", "32G"),
+        cpus=lm.get("cpus", 16),
+        gpu=lm.get("gpu", False),
+        conda_env=lm.get("conda_env", None),
     )
     # Apply user overrides
     settings.update(kwargs)
 
-    log_dir  = Path(lm["output_file"]).parent / "slurm_logs"
+    log_dir = Path(lm["output_file"]).parent / "slurm_logs"
     log_dir.mkdir(exist_ok=True)
-    base_id  = len(sorted(log_dir.glob("job_*.sh")))
+    base_id = len(sorted(log_dir.glob("job_*.sh")))
 
-    chunks    = _split_indices(len(missing), min(n_jobs, len(missing)))
-    chunks    = [[missing[i] for i in chunk] for chunk in chunks]
+    chunks = _split_indices(len(missing), min(n_jobs, len(missing)))
+    chunks = [[missing[i] for i in chunk] for chunk in chunks]
 
     slurm_ids = []
     for offset, chunk in enumerate(chunks):
         sid = _submit_job(
             base_id + offset,
             chunk,
-            master_file  = _master_file,
-            tmp_dir      = tmp_dir,
-            poni_file    = _poni_file,
-            mask_file    = _mask_file,
-            n_points     = settings["n_points"],
-            n_workers    = settings["n_workers"],
-            batch_size   = settings["batch_size"],
-            unit         = settings["unit"],
-            method       = settings["method"],
-            percentile   = settings["percentile"],
-            thres        = settings["thres"],
-            max_iter     = settings["max_iter"],
-            partition    = settings["partition"],
-            time         = settings["time"],
-            mem          = settings["mem"],
-            cpus         = settings["cpus"],
-            gpu          = settings["gpu"],
-            env_activate = _env_activate,
-            conda_env    = settings["conda_env"],
-            log_dir      = log_dir,
+            master_file=_master_file,
+            tmp_dir=tmp_dir,
+            poni_file=_poni_file,
+            mask_file=_mask_file,
+            n_points=settings["n_points"],
+            n_workers=settings["n_workers"],
+            batch_size=settings["batch_size"],
+            unit=settings["unit"],
+            method=settings["method"],
+            percentile=settings["percentile"],
+            thres=settings["thres"],
+            max_iter=settings["max_iter"],
+            partition=settings["partition"],
+            time=settings["time"],
+            mem=settings["mem"],
+            cpus=settings["cpus"],
+            gpu=settings["gpu"],
+            env_activate=_env_activate,
+            conda_env=settings["conda_env"],
+            log_dir=log_dir,
         )
         slurm_ids.append(sid)
 
-    print(f"\n✓  {len(slurm_ids)} repair job(s) submitted — IDs: {', '.join(slurm_ids)}")
+    print(
+        f"\n✓  {len(slurm_ids)} repair job(s) submitted — IDs: {', '.join(slurm_ids)}"
+    )
 
     if watch:
         from .monitor import monitor as _monitor
+
         _monitor(
-            slurm_ids = slurm_ids,
-            tmp_dir   = tmp_dir,
-            watch     = True,
-            interval  = interval,
+            slurm_ids=slurm_ids,
+            tmp_dir=tmp_dir,
+            watch=True,
+            interval=interval,
         )
 
     result["repair_job_ids"] = slurm_ids
@@ -307,18 +352,28 @@ def repair(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_parser(sub=None):
     import argparse
+
     desc = "Check integration progress and merge completeness"
     p = (
         sub.add_parser("check", help=desc, description=desc)
-        if sub else
-        argparse.ArgumentParser(description=desc)
+        if sub
+        else argparse.ArgumentParser(description=desc)
     )
-    p.add_argument("--tmp-dir",     type=Path, default=None,
-                   help="Tmp directory from launch() — checks .npy progress")
-    p.add_argument("--output-file", type=Path, default=None,
-                   help="Output HDF5 — checks merge completeness")
+    p.add_argument(
+        "--tmp-dir",
+        type=Path,
+        default=None,
+        help="Tmp directory from launch() — checks .npy progress",
+    )
+    p.add_argument(
+        "--output-file",
+        type=Path,
+        default=None,
+        help="Output HDF5 — checks merge completeness",
+    )
     return p
 
 
@@ -329,7 +384,6 @@ def _cli_check(args):
 if __name__ == "__main__":
     p = _build_parser()
     _cli_check(p.parse_args())
-
 # """
 # nrxrdct.slurm_integration.check_output
 # ----------------------------------------

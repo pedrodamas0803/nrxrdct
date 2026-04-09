@@ -45,7 +45,6 @@ INTEGRATION_METHODS = ("standard", "filter", "sigma_clip")
 # Memory helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def _available_ram_bytes() -> int:
     try:
         with open("/proc/meminfo") as f:
@@ -54,7 +53,7 @@ def _available_ram_bytes() -> int:
                     return int(line.split()[1]) * 1024
     except Exception:
         pass
-    return 32 * 1024**3
+    return 32 * 1024 ** 3
 
 
 def _safe_n_workers(
@@ -65,11 +64,11 @@ def _safe_n_workers(
 ) -> int:
     if requested is not None:
         return requested
-    frame_bytes = int(np.prod(frame_shape)) * 4
+    frame_bytes  = int(np.prod(frame_shape)) * 4
     budget_bytes = _available_ram_bytes() * mem_fraction
-    max_frames = max(1, int(budget_bytes / (frame_bytes * 2)))
-    n_cpus = os.cpu_count() or 16
-    n = max(1, min(max_frames, batch_size, n_cpus))
+    max_frames   = max(1, int(budget_bytes / (frame_bytes * 2)))
+    n_cpus       = os.cpu_count() or 16
+    n            = max(1, min(max_frames, batch_size, n_cpus))
     print(
         f"  Auto thread count: {n}  "
         f"(frame={frame_bytes/1e6:.1f} MB, "
@@ -82,7 +81,6 @@ def _safe_n_workers(
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame-level integration
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def _integrate_frame(
     jj: int,
@@ -100,30 +98,18 @@ def _integrate_frame(
 ) -> tuple[int, np.ndarray]:
     if method == "filter":
         _, itt, _ = azimuthal_integration_1d_filter(
-            image=image,
-            poni_file=str(poni_file),
-            npt=n_points,
-            mask=mask,
-            unit=unit,
-            percentile=percentile,
+            image=image, poni_file=str(poni_file), npt=n_points,
+            mask=mask, unit=unit, percentile=percentile,
         )
     elif method == "sigma_clip":
         _, itt, _ = azimuthal_integration_1d_sigma_clip(
-            image=image,
-            poni_file=str(poni_file),
-            npt=n_points,
-            mask=mask,
-            unit=unit,
-            thres=thres,
-            max_iter=max_iter,
+            image=image, poni_file=str(poni_file), npt=n_points,
+            mask=mask, unit=unit, thres=thres, max_iter=max_iter,
         )
     else:
         _, itt, _ = azimuthal_integration_1d(
-            image=image,
-            poni_file=str(poni_file),
-            npt=n_points,
-            mask=mask,
-            unit=unit,
+            image=image, poni_file=str(poni_file), npt=n_points,
+            mask=mask, unit=unit,
         )
     if monitor <= 0:
         print(f"  ⚠  Frame {jj}: fpico6={monitor:.4g}, skipping normalisation")
@@ -134,7 +120,6 @@ def _integrate_frame(
 # ─────────────────────────────────────────────────────────────────────────────
 # Scan-level processing
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def _process_scan(
     ii: int,
@@ -155,7 +140,7 @@ def _process_scan(
     max_iter: int,
 ) -> bool:
     scan_name = f"scan_{ii:04d}"
-    npy_path = tmp_dir / f"{scan_name}.npy"
+    npy_path  = tmp_dir / f"{scan_name}.npy"
     meta_path = tmp_dir / f"{scan_name}.meta.json"
 
     # Resume: skip if already written
@@ -168,44 +153,39 @@ def _process_scan(
     # ── Read lightweight metadata only ────────────────────────────────────────
     try:
         with h5py.File(master_file, "r") as hin:
-            fpico6 = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
-            rot = hin[f"{entry}/measurement/rot"][:]
-            n_frames = hin[f"{entry}/measurement/eiger"].shape[0]
+            fpico6      = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
+            rot         = hin[f"{entry}/measurement/rot"][:]
+            n_frames    = hin[f"{entry}/measurement/eiger"].shape[0]
             frame_shape = hin[f"{entry}/measurement/eiger"].shape[1:]
     except (OSError, KeyError) as e:
         print(f"  ✗ Failed to read metadata for {entry}: {e} — skipping")
         return False
 
     if len(fpico6) != n_frames:
-        print(
-            f"  ✗ Length mismatch: fpico6={len(fpico6)}, frames={n_frames} — skipping"
-        )
+        print(f"  ✗ Length mismatch: fpico6={len(fpico6)}, frames={n_frames} — skipping")
         return False
 
     # Sort ascending rotation
-    descending = rot[-1] < rot[0]
-    frame_order = (
-        list(range(n_frames - 1, -1, -1)) if descending else list(range(n_frames))
-    )
-    fpico6 = fpico6[frame_order]
+    descending  = rot[-1] < rot[0]
+    frame_order = list(range(n_frames - 1, -1, -1)) if descending else list(range(n_frames))
+    fpico6      = fpico6[frame_order]
 
-    workers = _safe_n_workers(
-        frame_shape=frame_shape, batch_size=batch_size, requested=n_workers
-    )
+    workers  = _safe_n_workers(frame_shape=frame_shape, batch_size=batch_size,
+                                requested=n_workers)
     sinogram = np.empty((n_frames, n_points), dtype=np.float32)
     n_batches = max(1, (n_frames + batch_size - 1) // batch_size)
 
     with tqdm(total=n_frames, desc=scan_name) as pbar:
         for b in range(n_batches):
-            batch_start = b * batch_size
-            batch_end = min(batch_start + batch_size, n_frames)
+            batch_start  = b * batch_size
+            batch_end    = min(batch_start + batch_size, n_frames)
             batch_h5_idx = frame_order[batch_start:batch_end]
 
             try:
                 with h5py.File(master_file, "r") as hin:
-                    ds = hin[f"{entry}/measurement/eiger"]
-                    lo = min(batch_h5_idx)
-                    hi = max(batch_h5_idx) + 1
+                    ds  = hin[f"{entry}/measurement/eiger"]
+                    lo  = min(batch_h5_idx)
+                    hi  = max(batch_h5_idx) + 1
                     raw = ds[lo:hi].astype(np.float32)
                     batch_images = raw[[j - lo for j in batch_h5_idx]]
             except (OSError, KeyError) as e:
@@ -219,24 +199,15 @@ def _process_scan(
             def _task(args):
                 local_jj, image, monitor = args
                 return _integrate_frame(
-                    local_jj,
-                    image,
-                    monitor,
-                    poni_file=poni_file,
-                    n_points=n_points,
-                    mask=mask,
-                    unit=unit,
-                    method=method,
-                    percentile=percentile,
-                    thres=thres,
-                    max_iter=max_iter,
+                    local_jj, image, monitor,
+                    poni_file=poni_file, n_points=n_points,
+                    mask=mask, unit=unit, method=method,
+                    percentile=percentile, thres=thres, max_iter=max_iter,
                 )
 
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = {
-                    pool.submit(
-                        _task, (batch_start + k, batch_images[k], batch_fpico6[k])
-                    ): k
+                    pool.submit(_task, (batch_start + k, batch_images[k], batch_fpico6[k])): k
                     for k in range(len(batch_images))
                 }
                 for future in as_completed(futures):
@@ -252,27 +223,29 @@ def _process_scan(
             del batch_images, raw
 
     # ── Write tmp files atomically ────────────────────────────────────────────
-    # Write to a .tmp file first, then rename — so a killed job never leaves
-    # a partial .npy that looks complete.
-    npy_tmp = npy_path.with_suffix(".npy.tmp")
-    meta_tmp = meta_path.with_suffix(".meta.json.tmp")
+    # np.save() always appends .npy to the path, so we name the temp file
+    # without any extension and let np.save add .npy, then rename.
+    npy_tmp_stem = tmp_dir / f"{scan_name}.tmp"   # np.save → scan_XXXX.tmp.npy
+    meta_tmp     = tmp_dir / f"{scan_name}.meta.json.tmp"
 
-    np.save(npy_tmp, sinogram)
+    np.save(npy_tmp_stem, sinogram)               # writes scan_XXXX.tmp.npy
+    npy_tmp = tmp_dir / f"{scan_name}.tmp.npy"    # actual file on disk
+
     meta = {
-        "scan_index": ii,
-        "scan_name": scan_name,
-        "entry": entry,
-        "dty": dty_value,
-        "fpico6_mean": float(np.nanmean(fpico6)),
-        "fpico6_min": float(np.nanmin(fpico6)),
-        "fpico6_max": float(np.nanmax(fpico6)),
-        "normalised_by": "fpico6",
+        "scan_index":         ii,
+        "scan_name":          scan_name,
+        "entry":              entry,
+        "dty":                dty_value,
+        "fpico6_mean":        float(np.nanmean(fpico6)),
+        "fpico6_min":         float(np.nanmin(fpico6)),
+        "fpico6_max":         float(np.nanmax(fpico6)),
+        "normalised_by":      "fpico6",
         "integration_method": method,
-        "valid": True,
+        "valid":              True,
     }
     meta_tmp.write_text(json.dumps(meta, indent=2))
 
-    # Atomic rename — visible to merge only when both files are complete
+    # Atomic rename — both files visible only when complete
     npy_tmp.rename(npy_path)
     meta_tmp.rename(meta_path)
 
@@ -284,36 +257,32 @@ def _process_scan(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def _parse_args():
     p = argparse.ArgumentParser(
         description="nrxrdct powder integration worker (one SLURM job)"
     )
-    p.add_argument("--master-file", required=True, type=Path)
-    p.add_argument(
-        "--tmp-dir",
-        required=True,
-        type=Path,
-        help="Shared tmp directory for .npy and .meta.json outputs",
-    )
-    p.add_argument("--poni-file", required=True, type=Path)
-    p.add_argument("--mask-file", required=True, type=Path)
+    p.add_argument("--master-file",   required=True, type=Path)
+    p.add_argument("--tmp-dir",       required=True, type=Path,
+                   help="Shared tmp directory for .npy and .meta.json outputs")
+    p.add_argument("--poni-file",     required=True, type=Path)
+    p.add_argument("--mask-file",     required=True, type=Path)
     p.add_argument("--entry-indices", required=True)
-    p.add_argument("--n-points", type=int, default=1000)
-    p.add_argument("--n-workers", type=int, default=None)
-    p.add_argument("--batch-size", type=int, default=32)
-    p.add_argument("--unit", default="2th_deg")
-    p.add_argument("--method", default="standard", choices=INTEGRATION_METHODS)
-    p.add_argument("--percentile", default="10,90")
-    p.add_argument("--thres", type=float, default=3.0)
-    p.add_argument("--max-iter", type=int, default=5)
+    p.add_argument("--n-points",      type=int, default=1000)
+    p.add_argument("--n-workers",     type=int, default=None)
+    p.add_argument("--batch-size",    type=int, default=32)
+    p.add_argument("--unit",          default="2th_deg")
+    p.add_argument("--method",        default="standard",
+                   choices=INTEGRATION_METHODS)
+    p.add_argument("--percentile",    default="10,90")
+    p.add_argument("--thres",         type=float, default=3.0)
+    p.add_argument("--max-iter",      type=int,   default=5)
     return p.parse_args()
 
 
 def main():
-    args = _parse_args()
+    args          = _parse_args()
     entry_indices = [int(x) for x in args.entry_indices.split(",")]
-    percentile = tuple(int(x) for x in args.percentile.split(","))
+    percentile    = tuple(int(x) for x in args.percentile.split(","))
 
     print(
         f"Worker started — {len(entry_indices)} scans | "
@@ -325,9 +294,9 @@ def main():
     # Read valid_entries and dty from the meta.json sidecar written by launch()
     meta_sidecar = args.tmp_dir / "launch_meta.json"
     with open(meta_sidecar) as f:
-        launch_meta = json.load(f)
+        launch_meta   = json.load(f)
     valid_entries = launch_meta["valid_entries"]
-    dty_values = launch_meta["dty_values"]
+    dty_values    = launch_meta["dty_values"]
 
     mask = fabio.open(args.mask_file).data
     args.tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -337,23 +306,21 @@ def main():
 
     for ii in entry_indices:
         ok = _process_scan(
-            ii,
-            valid_entries[ii],
-            dty_values[ii],
-            master_file=args.master_file,
-            tmp_dir=args.tmp_dir,
-            poni_file=args.poni_file,
-            mask=mask,
-            n_points=args.n_points,
-            n_workers=args.n_workers,
-            batch_size=args.batch_size,
-            unit=args.unit,
-            method=args.method,
-            percentile=percentile,
-            thres=args.thres,
-            max_iter=args.max_iter,
+            ii, valid_entries[ii], dty_values[ii],
+            master_file  = args.master_file,
+            tmp_dir      = args.tmp_dir,
+            poni_file    = args.poni_file,
+            mask         = mask,
+            n_points     = args.n_points,
+            n_workers    = args.n_workers,
+            batch_size   = args.batch_size,
+            unit         = args.unit,
+            method       = args.method,
+            percentile   = percentile,
+            thres        = args.thres,
+            max_iter     = args.max_iter,
         )
-        n_ok += ok
+        n_ok   += ok
         n_fail += not ok
 
     elapsed = time.time() - t0
@@ -363,7 +330,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+    
 # """
 # nrxrdct.slurm_integration.integrate_worker
 # -------------------------------------------

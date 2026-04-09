@@ -35,7 +35,6 @@ from tqdm import tqdm
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def merge(
     tmp_dir: Path,
     output_file: Path,
@@ -60,7 +59,7 @@ def merge(
     -------
     dict with keys 'n_merged', 'n_skipped', 'n_missing'.
     """
-    tmp_dir = Path(tmp_dir)
+    tmp_dir     = Path(tmp_dir)
     output_file = Path(output_file)
 
     # ── Read launch metadata ──────────────────────────────────────────────────
@@ -71,22 +70,40 @@ def merge(
             "Was launch() called with this tmp_dir?"
         )
     with open(meta_sidecar) as f:
-        launch_meta = json.load(f)
+        launch_meta   = json.load(f)
 
     valid_entries = launch_meta["valid_entries"]
-    dty_values = launch_meta["dty_values"]
-    rot = np.array(launch_meta["rot"])
-    bad_entries = launch_meta.get("bad_entries", [])
-    unit = launch_meta["unit"]
-    n_total = len(valid_entries)
+    dty_values    = launch_meta["dty_values"]
+    rot           = np.array(launch_meta["rot"])
+    bad_entries   = launch_meta.get("bad_entries", [])
+    unit          = launch_meta["unit"]
+    n_total       = len(valid_entries)
 
     # ── Collect available scan files ──────────────────────────────────────────
-    available = {
-        int(p.stem.split("_")[1]): p
-        for p in tmp_dir.glob("scan_????.npy")
-        if p.with_suffix("").with_suffix(".meta.json").exists()
-        or (tmp_dir / (p.stem + ".meta.json")).exists()
-    }
+    # Support both correctly named files (scan_XXXX.npy + scan_XXXX.meta.json)
+    # and the previously misnamed tmp files (scan_XXXX.npy.tmp.npy +
+    # scan_XXXX.meta.meta.json.tmp) so existing runs can be recovered.
+    available: dict[int, tuple[Path, Path]] = {}
+
+    for npy_path in sorted(tmp_dir.glob("scan_????.npy")):
+        ii        = int(npy_path.stem.split("_")[1])
+        meta_path = tmp_dir / f"scan_{ii:04d}.meta.json"
+        if meta_path.exists():
+            available[ii] = (npy_path, meta_path)
+
+    # Recover misnamed files from previous bug (rename them in-place)
+    for bad_npy in sorted(tmp_dir.glob("scan_????.npy.tmp.npy")):
+        ii       = int(bad_npy.name.split("_")[1].split(".")[0])
+        good_npy = tmp_dir / f"scan_{ii:04d}.npy"
+        # Find matching misnamed meta file
+        bad_metas = list(tmp_dir.glob(f"scan_{ii:04d}.meta.meta.json.tmp"))
+        bad_metas += list(tmp_dir.glob(f"scan_{ii:04d}.meta.json.tmp"))
+        if ii not in available and bad_metas:
+            good_meta = tmp_dir / f"scan_{ii:04d}.meta.json"
+            print(f"  ↻  Recovering scan_{ii:04d}: renaming misnamed tmp files")
+            bad_npy.rename(good_npy)
+            bad_metas[0].rename(good_meta)
+            available[ii] = (good_npy, good_meta)
 
     print(f"\n{'='*60}")
     print(f"Merging {len(available)}/{n_total} scans → {output_file.name}")
@@ -106,26 +123,26 @@ def merge(
                 valid_entries, dtype=h5py.string_dtype()
             )
         if bad_entries and "bad_entries" not in hout:
-            hout["bad_entries"] = np.array(bad_entries, dtype=h5py.string_dtype())
+            hout["bad_entries"] = np.array(
+                bad_entries, dtype=h5py.string_dtype()
+            )
 
         # ── Write radial axis from first available scan ────────────────────────
         if "integrated/radial" not in hout:
             # Read the radial axis from launch_meta (stored by launch())
             if "radial" in launch_meta:
-                hout["integrated/radial"] = np.array(launch_meta["radial"])
+                hout["integrated/radial"]            = np.array(launch_meta["radial"])
                 hout["integrated/radial"].attrs["unit"] = unit
             else:
-                print(
-                    "  ⚠  No radial axis in launch_meta.json — "
-                    "it will be written from the first scan npy sidecar."
-                )
+                print("  ⚠  No radial axis in launch_meta.json — "
+                      "it will be written from the first scan npy sidecar.")
 
         if "integrated/cake_mask" not in hout and "cake_mask" in launch_meta:
             hout["integrated/cake_mask"] = np.array(launch_meta["cake_mask"])
 
         # ── Merge scan datasets ───────────────────────────────────────────────
         for ii in tqdm(range(n_total), desc="Merging scans"):
-            scan_name = f"scan_{ii:04d}"
+            scan_name  = f"scan_{ii:04d}"
             group_path = f"integrated/{scan_name}"
 
             # Skip if already in output and not overwriting
@@ -137,8 +154,7 @@ def merge(
                 n_missing += 1
                 continue
 
-            npy_path = available[ii]
-            meta_path = tmp_dir / f"{scan_name}.meta.json"
+            npy_path, meta_path = available[ii]
 
             try:
                 sinogram = np.load(npy_path)
@@ -174,17 +190,16 @@ def merge(
 
     if n_missing:
         missing_idx = [
-            ii
-            for ii in range(n_total)
-            if ii not in available
-            and f"integrated/scan_{ii:04d}"
-            not in (h5py.File(output_file, "r") if output_file.exists() else {})
+            ii for ii in range(n_total)
+            if ii not in available and
+               f"integrated/scan_{ii:04d}" not in
+               (h5py.File(output_file, "r") if output_file.exists() else {})
         ]
         print(f"  Missing indices: {sorted(set(range(n_total)) - set(available))}")
         print(f"  Re-run repair() or launch() for those indices.\n")
 
     return {
-        "n_merged": n_merged,
+        "n_merged":  n_merged,
         "n_skipped": n_skipped,
         "n_missing": n_missing,
     }
@@ -194,31 +209,26 @@ def merge(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def _build_parser(sub=None):
     import argparse
-
     desc = "Assemble output HDF5 from per-scan tmp files"
     p = (
         sub.add_parser("merge", help=desc, description=desc)
-        if sub
-        else argparse.ArgumentParser(description=desc)
+        if sub else
+        argparse.ArgumentParser(description=desc)
     )
-    p.add_argument("--tmp-dir", required=True, type=Path)
+    p.add_argument("--tmp-dir",     required=True, type=Path)
     p.add_argument("--output-file", required=True, type=Path)
-    p.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing scan datasets in the output file",
-    )
+    p.add_argument("--overwrite",   action="store_true",
+                   help="Overwrite existing scan datasets in the output file")
     return p
 
 
 def _cli_merge(args):
     merge(
-        tmp_dir=args.tmp_dir,
-        output_file=args.output_file,
-        overwrite=args.overwrite,
+        tmp_dir     = args.tmp_dir,
+        output_file = args.output_file,
+        overwrite   = args.overwrite,
     )
 
 

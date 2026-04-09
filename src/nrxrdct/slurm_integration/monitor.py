@@ -24,17 +24,9 @@ from datetime import timedelta
 from pathlib import Path
 
 _RUNNING_STATES = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "REQUEUED"}
-_DONE_STATES = {"COMPLETED"}
-_FAILED_STATES = {
-    "FAILED",
-    "OUT_OF_MEMORY",
-    "TIMEOUT",
-    "CANCELLED",
-    "NODE_FAIL",
-    "PREEMPTED",
-    "BOOT_FAIL",
-    "DEADLINE",
-}
+_DONE_STATES    = {"COMPLETED"}
+_FAILED_STATES  = {"FAILED", "OUT_OF_MEMORY", "TIMEOUT", "CANCELLED",
+                   "NODE_FAIL", "PREEMPTED", "BOOT_FAIL", "DEADLINE"}
 
 
 def _query_slurm(slurm_ids: list[str]) -> dict[str, str]:
@@ -42,18 +34,9 @@ def _query_slurm(slurm_ids: list[str]) -> dict[str, str]:
         return {}
     try:
         result = subprocess.run(
-            [
-                "sacct",
-                "--jobs",
-                ",".join(slurm_ids),
-                "--format",
-                "JobID,State",
-                "--noheader",
-                "--parsable2",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
+            ["sacct", "--jobs", ",".join(slurm_ids),
+             "--format", "JobID,State", "--noheader", "--parsable2"],
+            capture_output=True, text=True, check=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return {jid: "UNKNOWN" for jid in slurm_ids}
@@ -80,11 +63,17 @@ def _query_progress(tmp_dir: Path) -> tuple[int, int]:
         with open(meta_sidecar) as f:
             launch_meta = json.load(f)
         n_total = len(launch_meta["valid_entries"])
-        n_done = sum(
-            1
-            for p in tmp_dir.glob("scan_????.npy")
-            if (tmp_dir / f"{p.stem}.meta.json").exists()
-        )
+        n_done  = 0
+        for p in tmp_dir.glob("scan_????.npy"):
+            ii = int(p.stem.split("_")[1])
+            if (tmp_dir / f"scan_{ii:04d}.meta.json").exists():
+                n_done += 1
+        for p in tmp_dir.glob("scan_????.npy.tmp.npy"):
+            ii = int(p.name.split("_")[1].split(".")[0])
+            metas = (list(tmp_dir.glob(f"scan_{ii:04d}.meta.meta.json.tmp")) +
+                     list(tmp_dir.glob(f"scan_{ii:04d}.meta.json.tmp")))
+            if metas:
+                n_done += 1
         return n_done, n_total
     except Exception:
         return 0, 0
@@ -109,11 +98,11 @@ def _render_snapshot(
     elapsed: float,
 ) -> str:
     lines = []
-    n_pending = sum(1 for s in states.values() if s == "PENDING")
-    n_running = sum(1 for s in states.values() if s == "RUNNING")
-    n_done_j = sum(1 for s in states.values() if s in _DONE_STATES)
-    n_failed = sum(1 for s in states.values() if s in _FAILED_STATES)
-    n_unknown = sum(1 for s in states.values() if s == "UNKNOWN")
+    n_pending  = sum(1 for s in states.values() if s == "PENDING")
+    n_running  = sum(1 for s in states.values() if s == "RUNNING")
+    n_done_j   = sum(1 for s in states.values() if s in _DONE_STATES)
+    n_failed   = sum(1 for s in states.values() if s in _FAILED_STATES)
+    n_unknown  = sum(1 for s in states.values() if s == "UNKNOWN")
 
     lines.append(f"\n{'─'*56}")
     lines.append(f"  nrxrdct SLURM monitor   elapsed: {_fmt_duration(elapsed)}")
@@ -134,7 +123,7 @@ def _render_snapshot(
     )
 
     if n_done > 0 and n_total > 0 and elapsed > 0:
-        rate = n_done / elapsed
+        rate      = n_done / elapsed
         remaining = (n_total - n_done) / rate
         lines.append(f"  Rate   {rate * 3600:.1f} scans/hr")
         lines.append(f"  ETA    {_fmt_duration(remaining)}")
@@ -146,18 +135,12 @@ def _render_snapshot(
     lines.append(f"  {'──────':<12} {'─────':<16}")
     for jid in slurm_ids:
         state = states.get(jid, "UNKNOWN")
-        icon = (
-            "⏳"
-            if state == "PENDING"
-            else (
-                "▶ "
-                if state == "RUNNING"
-                else (
-                    "✓ "
-                    if state in _DONE_STATES
-                    else "✗ " if state in _FAILED_STATES else "? "
-                )
-            )
+        icon  = (
+            "⏳" if state == "PENDING"      else
+            "▶ " if state == "RUNNING"      else
+            "✓ " if state in _DONE_STATES   else
+            "✗ " if state in _FAILED_STATES else
+            "? "
         )
         lines.append(f"  {jid:<12} {icon} {state}")
     lines.append(f"{'─'*56}\n")
@@ -167,7 +150,6 @@ def _render_snapshot(
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def monitor(
     slurm_ids: list[str],
@@ -197,45 +179,39 @@ def monitor(
     'all_done', 'any_failed'.
     """
     tmp_dir = Path(tmp_dir)
-    t0 = start_time or time.time()
+    t0      = start_time or time.time()
 
     def _snapshot() -> dict:
-        states = _query_slurm(slurm_ids)
+        states          = _query_slurm(slurm_ids)
         n_done, n_total = _query_progress(tmp_dir)
-        elapsed = time.time() - t0
+        elapsed         = time.time() - t0
         print(_render_snapshot(slurm_ids, states, n_done, n_total, elapsed))
-        all_done = all(s in _DONE_STATES | _FAILED_STATES for s in states.values())
+        all_done   = all(s in _DONE_STATES | _FAILED_STATES for s in states.values())
         any_failed = any(s in _FAILED_STATES for s in states.values())
         return {
-            "states": states,
-            "n_done": n_done,
-            "n_total": n_total,
-            "elapsed": elapsed,
-            "all_done": all_done,
+            "states":     states,
+            "n_done":     n_done,
+            "n_total":    n_total,
+            "elapsed":    elapsed,
+            "all_done":   all_done,
             "any_failed": any_failed,
         }
 
     if not watch:
         return _snapshot()
 
-    print(
-        f"Watching {len(slurm_ids)} jobs — polling every {interval}s. "
-        f"Press Ctrl+C to stop.\n"
-    )
+    print(f"Watching {len(slurm_ids)} jobs — polling every {interval}s. "
+          f"Press Ctrl+C to stop.\n")
     result = {}
     try:
         while True:
             result = _snapshot()
             if result["all_done"]:
                 if result["any_failed"]:
-                    print(
-                        "⚠  Some jobs failed. Run check() to find missing scans,\n"
-                        "   then repair() to resubmit them."
-                    )
+                    print("⚠  Some jobs failed. Run check() to find missing scans,\n"
+                          "   then repair() to resubmit them.")
                 else:
-                    print(
-                        f"✓  All jobs completed in {_fmt_duration(result['elapsed'])}."
-                    )
+                    print(f"✓  All jobs completed in {_fmt_duration(result['elapsed'])}.")
                     print(f"   Run merge() to assemble the output HDF5.")
                 break
             time.sleep(interval)
@@ -248,36 +224,31 @@ def monitor(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def _build_parser(sub=None):
     import argparse
-
     desc = "Monitor SLURM powder integration jobs"
     p = (
         sub.add_parser("monitor", help=desc, description=desc)
-        if sub
-        else argparse.ArgumentParser(description=desc)
+        if sub else
+        argparse.ArgumentParser(description=desc)
     )
-    p.add_argument(
-        "--slurm-ids", required=True, help="Comma-separated SLURM job IDs from launch()"
-    )
-    p.add_argument(
-        "--tmp-dir", required=True, type=Path, help="Tmp directory written by workers"
-    )
-    p.add_argument(
-        "--watch", action="store_true", help="Poll until all jobs finish (blocking)"
-    )
-    p.add_argument("--interval", type=int, default=30)
+    p.add_argument("--slurm-ids",  required=True,
+                   help="Comma-separated SLURM job IDs from launch()")
+    p.add_argument("--tmp-dir",    required=True, type=Path,
+                   help="Tmp directory written by workers")
+    p.add_argument("--watch",      action="store_true",
+                   help="Poll until all jobs finish (blocking)")
+    p.add_argument("--interval",   type=int, default=30)
     return p
 
 
 def _cli_monitor(args):
     slurm_ids = [s.strip() for s in args.slurm_ids.split(",")]
     monitor(
-        slurm_ids=slurm_ids,
-        tmp_dir=args.tmp_dir,
-        watch=args.watch,
-        interval=args.interval,
+        slurm_ids = slurm_ids,
+        tmp_dir   = args.tmp_dir,
+        watch     = args.watch,
+        interval  = args.interval,
     )
 
 

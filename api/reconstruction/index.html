@@ -1307,7 +1307,7 @@ results to <em>gpx_file</em>.</p>
 
 
 <a href="#nrxrdct.reconstruction.assemble_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">assemble_sinogram</span><span class="p">(</span><span class="n">integrated_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_lines</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">assemble_sinogram</span><span class="p">(</span><span class="n">integrated_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_lines</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1382,6 +1382,7 @@ unused (default 10).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Sinogram array of shape <code>(n_tth_angles, n_lines, n_rot)</code>
@@ -1442,7 +1443,7 @@ as <code>float32</code>.</p>
 <span class="normal"><a href="#__codelineno-0-346">346</a></span>
 <span class="normal"><a href="#__codelineno-0-347">347</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="k">def</span><span class="w"> </span><span class="nf">assemble_sinogram</span><span class="p">(</span>
 <a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">integrated_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_lines</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="p">):</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">    Build a 3-D sinogram from an HDF5 file of integrated patterns.</span>
 <a id="__codelineno-0-308" name="__codelineno-0-308"></a>
@@ -1499,7 +1500,7 @@ as <code>float32</code>.</p>
 
 
 <a href="#nrxrdct.reconstruction.forward_project_gpu" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">forward_project_gpu</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">,</span> <span class="n">det_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FP_CUDA&#39;</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">forward_project_gpu</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">,</span> <span class="n">det_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FP_CUDA&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1570,6 +1571,7 @@ as <code>float32</code>.</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Sinogram of shape <code>(num_angles, N)</code>.</p>
@@ -1623,7 +1625,7 @@ as <code>float32</code>.</p>
 <span class="normal"><a href="#__codelineno-0-260">260</a></span>
 <span class="normal"><a href="#__codelineno-0-261">261</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_project_gpu</span><span class="p">(</span>
 <a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="n">volume</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">,</span> <span class="n">det_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;FP_CUDA&quot;</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="p">):</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">    Compute the GPU forward projection (sinogram) of a 2-D volume.</span>
 <a id="__codelineno-0-228" name="__codelineno-0-228"></a>
@@ -1674,7 +1676,7 @@ as <code>float32</code>.</p>
 
 
 <a href="#nrxrdct.reconstruction.reconstruct_astra_cpu" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_astra_cpu</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FBP&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_astra_cpu</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FBP&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1759,6 +1761,7 @@ performed regardless (default 200).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Reconstructed 2-D slice of shape <code>(num_detectors, num_detectors)</code>.</p>
@@ -1843,10 +1846,10 @@ performed regardless (default 200).</p>
 <span class="normal"><a href="#__codelineno-0-220">220</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_astra_cpu</span><span class="p">(</span>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
 <a id="__codelineno-0-154" name="__codelineno-0-154"></a>    <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-155" name="__codelineno-0-155"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a>    <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;FBP&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="p">):</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">    Reconstruct a single 2-D slice using a CPU ASTRA algorithm.</span>
 <a id="__codelineno-0-161" name="__codelineno-0-161"></a>
@@ -1923,7 +1926,7 @@ performed regardless (default 200).</p>
 
 
 <a href="#nrxrdct.reconstruction.reconstruct_astra_gpu" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_astra_gpu</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;SART_CUDA&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_astra_gpu</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;SART_CUDA&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2007,6 +2010,7 @@ performed regardless (default 200).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Reconstructed 2-D slice of shape <code>(N, N)</code> where <code>N</code> equals
@@ -2075,10 +2079,10 @@ the number of detectors.</p>
 <span class="normal"><a href="#__codelineno-0-149">149</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_astra_gpu</span><span class="p">(</span>
 <a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
 <a id="__codelineno-0-100" name="__codelineno-0-100"></a>    <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a>    <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SART_CUDA&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a>    <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="p">):</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">    Reconstruct a single 2-D slice using a GPU-accelerated ASTRA algorithm.</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>
@@ -2383,7 +2387,7 @@ vertical detector size / number of slices.</p>
 
 
 <a href="#nrxrdct.reconstruction.reconstruct_slice" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_slice</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;SART_CUDA&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reconstruct_slice</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">angles_rad</span><span class="p">:</span> <span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;SART_CUDA&#39;</span><span class="p">,</span> <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2471,6 +2475,7 @@ full 180° linspace is generated automatically.</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Reconstructed 2-D slice.</p>
@@ -2523,10 +2528,10 @@ full 180° linspace is generated automatically.</p>
 <span class="normal"><a href="#__codelineno-0-300">300</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_slice</span><span class="p">(</span>
 <a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
 <a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="n">dty_step</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="n">angles_rad</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span>
 <a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="n">algo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SART_CUDA&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="n">num_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="p">):</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">    Reconstruct a single 2-D slice, dispatching to GPU or CPU automatically.</span>
 <a id="__codelineno-0-273" name="__codelineno-0-273"></a>

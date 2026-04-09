@@ -190,7 +190,7 @@ xrayutilities, and array padding helpers used by the reconstruction pipeline.</p
 
 
 <a href="#nrxrdct.utils.calculate_absorption_coefficient" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">calculate_absorption_coefficient</span><span class="p">(</span><span class="n">compound</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">density</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">sample_diameter_mm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">geometry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;debye-scherrer&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">calculate_absorption_coefficient</span><span class="p">(</span><span class="n">compound</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">density</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">sample_diameter_mm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">geometry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;debye-scherrer&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -279,7 +279,7 @@ expects the dimensionless product μr (μ in cm⁻¹ × radius in cm).
       <td class="field-body">
         <ul class="first simple">
             <li>
-<b><code>dict</code></b>(                  <code><span title="dict">dict</span></code>
+<b><code>dict</code></b>(                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="float">float</span>]</code>
 )              –
               <div class="doc-md-description">
                 <p>A dictionary with keys <code>"mu_cm"</code> (float, μ in cm⁻¹),
@@ -408,7 +408,7 @@ print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")</p>
 <a id="__codelineno-0-399" name="__codelineno-0-399"></a>    <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="n">sample_diameter_mm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="n">geometry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;debye-scherrer&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
 <a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="sd">    Estimate the GSAS-II absorption parameter for a powder sample using xraylib.</span>
 <a id="__codelineno-0-405" name="__codelineno-0-405"></a>
@@ -499,7 +499,7 @@ print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")</p>
 
 
 <a href="#nrxrdct.utils.calculate_padding_widths_2D" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -553,7 +553,8 @@ print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
-<b><code>tuple</code></b>              –
+<b><code>tuple</code></b>(                  <code><span title="tuple">tuple</span>[<span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>], <span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>]]</code>
+)              –
               <div class="doc-md-description">
                 <p>Padding widths <code>((top, bottom), (left, right))</code> suitable for
 passing directly to :func:<code>numpy.pad</code>.</p>
@@ -589,7 +590,7 @@ passing directly to :func:<code>numpy.pad</code>.</p>
 <span class="normal"><a href="#__codelineno-0-500">500</a></span>
 <span class="normal"><a href="#__codelineno-0-501">501</a></span>
 <span class="normal"><a href="#__codelineno-0-502">502</a></span>
-<span class="normal"><a href="#__codelineno-0-503">503</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-503">503</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
 <a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">    Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.</span>
 <a id="__codelineno-0-484" name="__codelineno-0-484"></a>
@@ -1386,7 +1387,7 @@ q, I, _ = azimuthal_integration_1d_filter(
 
 
 <a href="#nrxrdct.utils.generate_circular_mask" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_circular_mask</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">diameter</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_circular_mask</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">diameter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1446,6 +1447,7 @@ over the last two dimensions.</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: 2-D boolean array of shape <code>(ny, nx)</code> where <code>True</code> marks
@@ -1478,7 +1480,7 @@ pixels inside the circle.</p>
 <span class="normal"><a href="#__codelineno-0-245">245</a></span>
 <span class="normal"><a href="#__codelineno-0-246">246</a></span>
 <span class="normal"><a href="#__codelineno-0-247">247</a></span>
-<span class="normal"><a href="#__codelineno-0-248">248</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_circular_mask</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">diameter</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_circular_mask</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">diameter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">    Generate a 2-D boolean circular mask for a given volume shape.</span>
 <a id="__codelineno-0-233" name="__codelineno-0-233"></a>
@@ -1744,7 +1746,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 
 
 <a href="#nrxrdct.utils.simulate_powder_xrd_monophase" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">simulate_powder_xrd_monophase</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">cif_files</span><span class="p">,</span> <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">en_eV</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-07</span><span class="p">,</span> <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">simulate_powder_xrd_monophase</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">cif_files</span><span class="p">,</span> <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">en_eV</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-07</span><span class="p">,</span> <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1839,6 +1841,7 @@ for peak broadening (default 100 nm).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Simulated intensity array for the <em>last</em> phase in <em>cif_files</em>,
@@ -1907,7 +1910,7 @@ evaluated at <em>tth</em>.</p>
 <a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">en_eV</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span>
 <a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100e-9</span><span class="p">,</span>
 <a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="p">):</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">    Simulate a powder XRD pattern for one or more phases using xrayutilities.</span>
 <a id="__codelineno-0-261" name="__codelineno-0-261"></a>

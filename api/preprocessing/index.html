@@ -179,7 +179,7 @@ with a parallelised wrapper for processing image stacks.</p>
 
 
 <a href="#nrxrdct.preprocessing.dezinger" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dezinger</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">medsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dezinger</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">medsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -245,6 +245,7 @@ thread pool sized to <code>os.cpu_count() - 1</code>.</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Dezingered stack with the same shape and dtype as <em>image</em>.</p>
@@ -286,7 +287,7 @@ thread pool sized to <code>os.cpu_count() - 1</code>.</p>
 <span class="normal"><a href="#__codelineno-0-65">65</a></span>
 <span class="normal"><a href="#__codelineno-0-66">66</a></span>
 <span class="normal"><a href="#__codelineno-0-67">67</a></span>
-<span class="normal"><a href="#__codelineno-0-68">68</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">dezinger</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">medsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">dezinger</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">medsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">    Apply zinger removal to a stack of detector images in parallel.</span>
 <a id="__codelineno-0-43" name="__codelineno-0-43"></a>
@@ -329,7 +330,7 @@ thread pool sized to <code>os.cpu_count() - 1</code>.</p>
 
 
 <a href="#nrxrdct.preprocessing.zinger_remove" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">zinger_remove</span><span class="p">(</span><span class="n">dimg</span><span class="p">,</span> <span class="n">medsize</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">zinger_remove</span><span class="p">(</span><span class="n">dimg</span><span class="p">,</span> <span class="n">medsize</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -397,6 +398,7 @@ a zinger (default 5).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
               –
               <div class="doc-md-description">
                 <p>np.ndarray: Cleaned image with the same shape and dtype as <em>dimg</em>.</p>
@@ -433,7 +435,7 @@ a zinger (default 5).</p>
 <span class="normal"><a href="#__codelineno-0-34">34</a></span>
 <span class="normal"><a href="#__codelineno-0-35">35</a></span>
 <span class="normal"><a href="#__codelineno-0-36">36</a></span>
-<span class="normal"><a href="#__codelineno-0-37">37</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">zinger_remove</span><span class="p">(</span><span class="n">dimg</span><span class="p">,</span> <span class="n">medsize</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">zinger_remove</span><span class="p">(</span><span class="n">dimg</span><span class="p">,</span> <span class="n">medsize</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">nsigma</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-15" name="__codelineno-0-15"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="sd">    Remove zingers (hot pixels) from a single 2-D detector image.</span>
 <a id="__codelineno-0-17" name="__codelineno-0-17"></a>

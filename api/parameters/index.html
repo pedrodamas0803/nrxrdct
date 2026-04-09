@@ -338,7 +338,7 @@ Important units:
 <a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">scan_type</span> <span class="o">=</span> <span class="n">scan_type</span>
 <a id="__codelineno-0-58" name="__codelineno-0-58"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span> <span class="o">=</span> <span class="mf">12.398</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span>
 <a id="__codelineno-0-59" name="__codelineno-0-59"></a>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a>        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="s2">            XRDCT scan stored in </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span><span class="p">)</span><span class="si">}</span>
 <a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="s2">            Translation motor name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span><span class="si">}</span>
@@ -347,7 +347,7 @@ Important units:
 <a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="s2">            &quot;&quot;&quot;</span>
 <a id="__codelineno-0-67" name="__codelineno-0-67"></a>        <span class="k">return</span> <span class="n">msg</span>
 <a id="__codelineno-0-68" name="__codelineno-0-68"></a>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">        Persist all scan parameters to an HDF5 file.</span>
 <a id="__codelineno-0-72" name="__codelineno-0-72"></a>
@@ -362,7 +362,7 @@ Important units:
 <a id="__codelineno-0-81" name="__codelineno-0-81"></a>                <span class="n">hout</span><span class="p">[</span><span class="n">flag</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 <a id="__codelineno-0-82" name="__codelineno-0-82"></a>
 <a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scan&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">        Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
 <a id="__codelineno-0-87" name="__codelineno-0-87"></a>
@@ -601,7 +601,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
   </span>
 
 <a href="#nrxrdct.parameters.Scan.get_scan_from_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">Scan</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -647,7 +647,8 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
       <td class="field-body">
         <ul class="first simple">
             <li>
-<b><code>Scan</code></b>              –
+<b><code>Scan</code></b>(                  <code><a class="autorefs autorefs-internal" title="Scan (nrxrdct.parameters.Scan)" href="#nrxrdct.parameters.Scan">Scan</a></code>
+)              –
               <div class="doc-md-description">
                 <p>A new :class:<code>Scan</code> instance populated from the stored parameters.</p>
               </div>
@@ -681,7 +682,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 <span class="normal"><a href="#__codelineno-0-101">101</a></span>
 <span class="normal"><a href="#__codelineno-0-102">102</a></span>
 <span class="normal"><a href="#__codelineno-0-103">103</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scan&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
 <a id="__codelineno-0-87" name="__codelineno-0-87"></a>
@@ -715,7 +716,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 
 
 <a href="#nrxrdct.parameters.Scan.save_parameter_file" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_parameter_file</span><span class="p">(</span><span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_parameter_file</span><span class="p">(</span><span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -765,7 +766,7 @@ are encoded automatically by h5py.</p>
 <span class="normal"><a href="#__codelineno-0-78">78</a></span>
 <span class="normal"><a href="#__codelineno-0-79">79</a></span>
 <span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Persist all scan parameters to an HDF5 file.</span>
 <a id="__codelineno-0-72" name="__codelineno-0-72"></a>

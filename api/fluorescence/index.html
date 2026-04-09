@@ -190,7 +190,7 @@ and assemble the resulting data into sinogram arrays ready for reconstruction.</
 
 
 <a href="#nrxrdct.fluorescence.build_element_component" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build_element_component</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build_element_component</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -315,7 +315,7 @@ lines fall within the energy axis range.</p>
 <span class="normal"><a href="#__codelineno-0-290">290</a></span>
 <span class="normal"><a href="#__codelineno-0-291">291</a></span>
 <span class="normal"><a href="#__codelineno-0-292">292</a></span>
-<span class="normal"><a href="#__codelineno-0-293">293</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_element_component</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_element_component</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">    Build the expected spectral shape for one element on a given energy axis.</span>
 <a id="__codelineno-0-259" name="__codelineno-0-259"></a>
@@ -367,7 +367,7 @@ lines fall within the energy axis range.</p>
 
 
 <a href="#nrxrdct.fluorescence.build_fit_matrix" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build_fit_matrix</span><span class="p">(</span><span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build_fit_matrix</span><span class="p">(</span><span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -512,7 +512,7 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 <span class="normal"><a href="#__codelineno-0-391">391</a></span>
 <span class="normal"><a href="#__codelineno-0-392">392</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_fit_matrix</span><span class="p">(</span>
 <a id="__codelineno-0-356" name="__codelineno-0-356"></a>    <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="p">):</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
 <a id="__codelineno-0-358" name="__codelineno-0-358"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">    Build the design matrix for XRF spectrum fitting.</span>
 <a id="__codelineno-0-360" name="__codelineno-0-360"></a>
@@ -562,7 +562,7 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 
 
 <a href="#nrxrdct.fluorescence.fit_fluo_spectrum" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_spectrum</span><span class="p">(</span><span class="n">spectrum</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_spectrum</span><span class="p">(</span><span class="n">spectrum</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -755,7 +755,7 @@ background).</p>
 <a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="n">excitation_energy</span><span class="p">,</span>
 <a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span>
 <a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="p">):</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
 <a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">    Fit a fluorescence spectrum as a linear combination of element templates.</span>
 <a id="__codelineno-0-306" name="__codelineno-0-306"></a>
@@ -819,7 +819,7 @@ background).</p>
 
 
 <a href="#nrxrdct.fluorescence.fit_fluo_volume" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_volume</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lstsq&#39;</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_volume</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lstsq&#39;</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1033,7 +1033,7 @@ with the fitted amplitude for each spatial pixel.</p>
 <a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
 <a id="__codelineno-0-402" name="__codelineno-0-402"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;lstsq&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-403" name="__codelineno-0-403"></a>    <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="p">):</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-406" name="__codelineno-0-406"></a><span class="sd">    Fit fluorescence spectra for every pixel in a 3-D dataset.</span>
 <a id="__codelineno-0-407" name="__codelineno-0-407"></a>
@@ -1114,7 +1114,7 @@ with the fitted amplitude for each spatial pixel.</p>
 
 
 <a href="#nrxrdct.fluorescence.get_fluo_full_spectra" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_full_spectra</span><span class="p">(</span><span class="n">h5_file</span><span class="p">,</span> <span class="n">n_angles</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">binning_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">filter_size</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">dat_entry</span><span class="o">=</span><span class="s1">&#39;mca_det0&#39;</span><span class="p">,</span> <span class="n">binning_func</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">monitor_entry</span><span class="o">=</span><span class="s1">&#39;fpico6&#39;</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_full_spectra</span><span class="p">(</span><span class="n">h5_file</span><span class="p">,</span> <span class="n">n_angles</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">binning_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">filter_size</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">dat_entry</span><span class="o">=</span><span class="s1">&#39;mca_det0&#39;</span><span class="p">,</span> <span class="n">binning_func</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">monitor_entry</span><span class="o">=</span><span class="s1">&#39;fpico6&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1347,7 +1347,7 @@ processed.</p>
 <a id="__codelineno-0-149" name="__codelineno-0-149"></a>    <span class="n">dat_entry</span><span class="o">=</span><span class="s2">&quot;mca_det0&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150"></a>    <span class="n">binning_func</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a>    <span class="n">monitor_entry</span><span class="o">=</span><span class="s2">&quot;fpico6&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="p">):</span>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">    Assemble a full-spectrum XRF sinogram from an HDF5 master file.</span>
 <a id="__codelineno-0-155" name="__codelineno-0-155"></a>
@@ -1444,7 +1444,7 @@ processed.</p>
 
 
 <a href="#nrxrdct.fluorescence.get_fluo_lines" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_lines</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_range</span><span class="p">,</span> <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_LINES</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_lines</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_range</span><span class="p">,</span> <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_LINES</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1518,7 +1518,8 @@ stdout (default <code>False</code>).</p>
       <td class="field-body">
         <ul class="first simple">
             <li>
-<b><code>dict</code></b>              –
+<b><code>dict</code></b>(                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="float">float</span>]</code>
+)              –
               <div class="doc-md-description">
                 <p>Mapping of line name (str) to energy in keV (float) for lines that
 fall within <em>energy_range</em>. Lines not available for the element are
@@ -1586,7 +1587,7 @@ silently skipped.</p>
 <span class="normal"><a href="#__codelineno-0-70">70</a></span>
 <span class="normal"><a href="#__codelineno-0-71">71</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_fluo_lines</span><span class="p">(</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21"></a>    <span class="n">element</span><span class="p">,</span> <span class="n">energy_range</span><span class="p">,</span> <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_LINES</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span>
-<a id="__codelineno-0-22" name="__codelineno-0-22"></a><span class="p">):</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="sd">    Return the XRF emission line energies for an element within a given energy range.</span>
 <a id="__codelineno-0-25" name="__codelineno-0-25"></a>
@@ -1650,7 +1651,7 @@ silently skipped.</p>
 
 
 <a href="#nrxrdct.fluorescence.get_fluo_roi" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_roi</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">n_angles</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">data_entry</span><span class="o">=</span><span class="s1">&#39;mca_det0_all&#39;</span><span class="p">,</span> <span class="n">monitor_entry</span><span class="o">=</span><span class="s1">&#39;fpico6&#39;</span><span class="p">,</span> <span class="n">filter_size</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_fluo_roi</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">n_angles</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">data_entry</span><span class="o">=</span><span class="s1">&#39;mca_det0_all&#39;</span><span class="p">,</span> <span class="n">monitor_entry</span><span class="o">=</span><span class="s1">&#39;fpico6&#39;</span><span class="p">,</span> <span class="n">filter_size</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1828,7 +1829,7 @@ angles.</p>
 <span class="normal"><a href="#__codelineno-0-140">140</a></span>
 <span class="normal"><a href="#__codelineno-0-141">141</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_fluo_roi</span><span class="p">(</span>
 <a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">fn</span><span class="p">,</span> <span class="n">n_angles</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">data_entry</span><span class="o">=</span><span class="s2">&quot;mca_det0_all&quot;</span><span class="p">,</span> <span class="n">monitor_entry</span><span class="o">=</span><span class="s2">&quot;fpico6&quot;</span><span class="p">,</span> <span class="n">filter_size</span><span class="o">=</span><span class="mi">3</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="p">):</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">    Load per-scan ROI fluorescence data from an HDF5 master file.</span>
 <a id="__codelineno-0-79" name="__codelineno-0-79"></a>

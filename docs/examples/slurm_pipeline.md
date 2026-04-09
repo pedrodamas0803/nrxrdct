@@ -200,46 +200,46 @@ After integration jobs finish, verify every scan was written correctly before ru
 
 A minimal end-to-end script combining all steps:
 
-```python
-from pathlib import Path
-from nrxrdct.slurm_integration import launch, monitor, check, repair
-from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
+    ```python
+    from pathlib import Path
+    from nrxrdct.slurm_integration import launch, monitor, check, repair
+    from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
 
-DATA        = Path("/data/raw/sample_master.h5")
-INTEGRATED  = Path("/data/processed/integrated.h5")
-SINOGRAM    = Path("/data/processed/sinogram.h5")
-RECON       = Path("/data/processed/reconstruction.h5")
-PONI        = Path("/data/calib/detector.poni")
-MASK        = Path("/data/calib/mask.edf")
+    DATA        = Path("/data/raw/sample_master.h5")
+    INTEGRATED  = Path("/data/processed/integrated.h5")
+    SINOGRAM    = Path("/data/processed/sinogram.h5")
+    RECON       = Path("/data/processed/reconstruction.h5")
+    PONI        = Path("/data/calib/detector.poni")
+    MASK        = Path("/data/calib/mask.edf")
 
-# 1. Integrate
-ids = launch(
-    master_file=DATA, output_file=INTEGRATED,
-    poni_file=PONI, mask_file=MASK,
-    n_jobs=8, n_points=1000, n_workers=16,
-    method="filter", percentile=(10, 90),
-    partition="nice", time="04:00:00", mem="64G", cpus=16,
-    conda_env="nrxrdct",
-)
-monitor(slurm_ids=ids, output_file=INTEGRATED, watch=True)
+    # 1. Integrate
+    ids = launch(
+        master_file=DATA, output_file=INTEGRATED,
+        poni_file=PONI, mask_file=MASK,
+        n_jobs=8, n_points=1000, n_workers=16,
+        method="filter", percentile=(10, 90),
+        partition="nice", time="04:00:00", mem="64G", cpus=16,
+        conda_env="nrxrdct",
+    )
+    monitor(slurm_ids=ids, output_file=INTEGRATED, watch=True)
 
-# 2. Check and repair
-result = check(output_file=INTEGRATED)
-if result["missing"] or result["corrupted"]:
-    repair(output_file=INTEGRATED, master_file=DATA,
-           poni_file=PONI, mask_file=MASK,
-           n_jobs=2, watch=True, conda_env="nrxrdct")
+    # 2. Check and repair
+    result = check(output_file=INTEGRATED)
+    if result["missing"] or result["corrupted"]:
+        repair(output_file=INTEGRATED, master_file=DATA,
+            poni_file=PONI, mask_file=MASK,
+            n_jobs=2, watch=True, conda_env="nrxrdct")
 
-# 3. Build sinogram
-build_sinogram(integrated_file=INTEGRATED, sinogram_file=SINOGRAM,
-               n_rot=901, n_tth_angles=1000, n_lines=10)
+    # 3. Build sinogram
+    build_sinogram(integrated_file=INTEGRATED, sinogram_file=SINOGRAM,
+                n_rot=901, n_tth_angles=1000, n_lines=10)
 
-# 4. Reconstruct
-recon_ids = launch_recon(
-    sinogram_file=SINOGRAM, output_file=RECON,
-    n_jobs=8, algo="SART_CUDA", num_iter=200,
-    partition="gpu", time="08:00:00", mem="64G", cpus=8,
-    gpu=True, conda_env="nrxrdct",
-)
-print("Reconstruction submitted:", recon_ids)
-```
+    # 4. Reconstruct
+    recon_ids = launch_recon(
+        sinogram_file=SINOGRAM, output_file=RECON,
+        n_jobs=8, algo="SART_CUDA", num_iter=200,
+        partition="gpu", time="08:00:00", mem="64G", cpus=8,
+        gpu=True, conda_env="nrxrdct",
+    )
+    print("Reconstruction submitted:", recon_ids)
+    ```

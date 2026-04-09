@@ -44,34 +44,25 @@ def select_roi(
     """
     Display *image* and let the user draw a closed polygon interactively.
 
-    Controls
-    --------
-    - **Left click** — add a vertex.
-    - **Right-click / backspace** — remove the last vertex.
-    - **Enter** — confirm the polygon and close the figure.
-    - **Escape** — cancel (returns an all-False mask).
+    Controls:
+        - **Left click** — add a vertex.
+        - **Right-click / backspace** — remove the last vertex.
+        - **Enter** — confirm the polygon and close the figure.
+        - **Escape** — cancel (returns an all-False mask).
 
-    Parameters
-    ----------
-    image:
-        2-D (or 3-D RGB/RGBA) array to display.
-    ax:
-        Existing ``Axes`` to draw into.  A new figure is created when
-        *None* (default).
-    cmap:
-        Colormap passed to ``imshow``.  Ignored for RGB images.
-    title:
-        Title shown above the axes.
-    **imshow_kwargs:
-        Extra keyword arguments forwarded to ``ax.imshow``.
+    Args:
+        image (np.ndarray): 2-D (or 3-D RGB/RGBA) array to display.
+        ax (plt.Axes, optional): Existing ``Axes`` to draw into. A new figure
+            is created when *None* (default).
+        cmap (str): Colormap passed to ``imshow``. Ignored for RGB images.
+        title (str): Title shown above the axes.
+        **imshow_kwargs: Extra keyword arguments forwarded to ``ax.imshow``.
 
-    Returns
-    -------
-    mask : np.ndarray of bool, shape ``image.shape[:2]``
-        ``True`` inside the selected polygon, ``False`` outside.
-    vertices : list of (x, y) tuples
-        Polygon vertices in image (pixel) coordinates.
-        Empty list if the selection was cancelled.
+    Returns:
+        mask (np.ndarray): Boolean array of shape ``image.shape[:2]``;
+            ``True`` inside the selected polygon, ``False`` outside.
+        vertices (list): Polygon vertices as (x, y) tuples in image (pixel)
+            coordinates. Empty list if the selection was cancelled.
     """
     own_figure = ax is None
     if own_figure:

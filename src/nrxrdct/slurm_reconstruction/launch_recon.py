@@ -87,29 +87,19 @@ def build_sinogram(
     - ``motors/rot``  — rotation angles in degrees
     - ``motors/dty``  — translation motor positions
 
-    Parameters
-    ----------
-    integrated_file : Path
-        HDF5 file produced by the integration pipeline (contains
-        ``integrated/scan_*``, ``integrated/radial``, ``motors/rot``,
-        ``motors/dty``).
-    sinogram_file : Path
-        Output HDF5 file to write (created or overwritten).
-    n_rot : int
-        Number of rotation frames per scan (sinogram angular dimension).
-    n_tth_angles : int
-        Number of 2θ bins (spectral dimension).
-    n_lines : int, optional
-        Number of translation (dty) lines; passed to
-        :func:`~nrxrdct.reconstruction.assemble_sinogram` (default 10).
-    overwrite : bool, optional
-        Re-build and overwrite even if *sinogram_file* already exists
-        (default ``False``).
+    Args:
+        integrated_file (Path): HDF5 file produced by the integration pipeline (contains
+            ``integrated/scan_*``, ``integrated/radial``, ``motors/rot``, ``motors/dty``).
+        sinogram_file (Path): Output HDF5 file to write (created or overwritten).
+        n_rot (int): Number of rotation frames per scan (sinogram angular dimension).
+        n_tth_angles (int): Number of 2θ bins (spectral dimension).
+        n_lines (int, optional): Number of translation (dty) lines; passed to
+            :func:`~nrxrdct.reconstruction.assemble_sinogram` (default 10).
+        overwrite (bool, optional): Re-build and overwrite even if *sinogram_file* already exists
+            (default ``False``).
 
-    Returns
-    -------
-    Path
-        Path to the written sinogram file.
+    Returns:
+        Path: Path to the written sinogram file.
     """
     from nrxrdct.reconstruction import assemble_sinogram
 
@@ -183,12 +173,9 @@ def _init_output_file(
     Copies the radial axis, motor arrays, and provenance metadata from
     *sinogram_file*.  Datasets that already exist are not overwritten.
 
-    Parameters
-    ----------
-    output_file : Path
-        Destination HDF5 file (opened in append mode).
-    sinogram_file : Path
-        Source sinogram file to copy metadata from.
+    Args:
+        output_file (Path): Destination HDF5 file (opened in append mode).
+        sinogram_file (Path): Source sinogram file to copy metadata from.
     """
     with h5py.File(sinogram_file, "r") as hin, h5py.File(output_file, "a") as hout:
         if "radial" not in hout:
@@ -238,37 +225,26 @@ def _submit_job(
     invokes :mod:`nrxrdct.slurm_reconstruction.reconstruct_worker` as a
     Python module.
 
-    Parameters
-    ----------
-    job_id : int
-        Sequential job identifier used for script and log file naming.
-    tth_indices : list of int
-        Global 2θ bin indices assigned to this job.
-    sinogram_file, output_file : Path
-        Files forwarded verbatim to the worker CLI.
-    algo : str
-        ASTRA reconstruction algorithm forwarded to the worker.
-    num_iter : int
-        Number of reconstruction iterations forwarded to the worker.
-    dty_step : float
-        Detector pixel spacing forwarded to the worker.
-    partition, time, mem : str
-        SLURM resource directives.
-    cpus : int
-        ``--cpus-per-task`` value.
-    gpu : bool
-        If ``True``, adds ``#SBATCH --gres=gpu:1``.
-    env_activate : Path or None
-        Shell script to ``source`` before the worker command.
-    conda_env : str or None
-        Conda environment for ``conda run``; used when *env_activate* is ``None``.
-    log_dir : Path
-        Directory where the script and log files are written.
+    Args:
+        job_id (int): Sequential job identifier used for script and log file naming.
+        tth_indices (list of int): Global 2θ bin indices assigned to this job.
+        sinogram_file (Path): File forwarded verbatim to the worker CLI.
+        output_file (Path): File forwarded verbatim to the worker CLI.
+        algo (str): ASTRA reconstruction algorithm forwarded to the worker.
+        num_iter (int): Number of reconstruction iterations forwarded to the worker.
+        dty_step (float): Detector pixel spacing forwarded to the worker.
+        partition (str): SLURM partition directive.
+        time (str): SLURM wall-time directive.
+        mem (str): SLURM memory directive.
+        cpus (int): ``--cpus-per-task`` value.
+        gpu (bool): If ``True``, adds ``#SBATCH --gres=gpu:1``.
+        env_activate (Path or None): Shell script to ``source`` before the worker command.
+        conda_env (str or None): Conda environment for ``conda run``; used when
+            *env_activate* is ``None``.
+        log_dir (Path): Directory where the script and log files are written.
 
-    Returns
-    -------
-    str
-        SLURM job ID string returned by ``sbatch``.
+    Returns:
+        str: SLURM job ID string returned by ``sbatch``.
     """
     indices_str = ",".join(str(i) for i in tth_indices)
     script_path = log_dir / f"recon_job_{job_id:04d}.sh"
@@ -373,42 +349,27 @@ def launch_recon(
     Use :func:`build_sinogram` first if you need to assemble the sinogram from
     an integrated HDF5 file.
 
-    Parameters
-    ----------
-    sinogram_file : Path
-        HDF5 sinogram file produced by :func:`build_sinogram`.
-    output_file : Path
-        Destination HDF5 file for reconstructed slices.
-    n_jobs : int, optional
-        Number of SLURM jobs to submit (default 8).
-    algo : str, optional
-        ASTRA reconstruction algorithm.  GPU algorithms:
-        ``"SART_CUDA"``, ``"SIRT_CUDA"``, ``"FBP_CUDA"``, ``"CGLS_CUDA"``.
-        CPU algorithms: ``"FBP"``, ``"SIRT"``, ``"SART"``, ``"CGLS"``.
-        (default ``"SART_CUDA"``).
-    num_iter : int, optional
-        Number of reconstruction iterations (default 200).
-    dty_step : float, optional
-        Detector pixel spacing passed to ASTRA (default 1.0).
-    partition : str, optional
-        SLURM partition (default ``"nice"``).
-    time : str, optional
-        SLURM wall-time limit (default ``"08:00:00"``).
-    mem : str, optional
-        SLURM memory request (default ``"64G"``).
-    cpus : int, optional
-        CPUs per task (default 8).
-    gpu : bool, optional
-        Request a GPU node via ``--gres=gpu:1`` (default ``True``).
-    env_activate : Path or None, optional
-        Shell activate script sourced before the worker command.
-    conda_env : str or None, optional
-        Conda environment used via ``conda run`` (alternative to *env_activate*).
+    Args:
+        sinogram_file (Path): HDF5 sinogram file produced by :func:`build_sinogram`.
+        output_file (Path): Destination HDF5 file for reconstructed slices.
+        n_jobs (int, optional): Number of SLURM jobs to submit (default 8).
+        algo (str, optional): ASTRA reconstruction algorithm.  GPU algorithms:
+            ``"SART_CUDA"``, ``"SIRT_CUDA"``, ``"FBP_CUDA"``, ``"CGLS_CUDA"``.
+            CPU algorithms: ``"FBP"``, ``"SIRT"``, ``"SART"``, ``"CGLS"``.
+            (default ``"SART_CUDA"``).
+        num_iter (int, optional): Number of reconstruction iterations (default 200).
+        dty_step (float, optional): Detector pixel spacing passed to ASTRA (default 1.0).
+        partition (str, optional): SLURM partition (default ``"nice"``).
+        time (str, optional): SLURM wall-time limit (default ``"08:00:00"``).
+        mem (str, optional): SLURM memory request (default ``"64G"``).
+        cpus (int, optional): CPUs per task (default 8).
+        gpu (bool, optional): Request a GPU node via ``--gres=gpu:1`` (default ``True``).
+        env_activate (Path or None, optional): Shell activate script sourced before the worker command.
+        conda_env (str or None, optional): Conda environment used via ``conda run``
+            (alternative to *env_activate*).
 
-    Returns
-    -------
-    list of str
-        SLURM job IDs of the submitted jobs.
+    Returns:
+        list of str: SLURM job IDs of the submitted jobs.
     """
     if algo not in RECONSTRUCTION_ALGOS:
         raise ValueError(

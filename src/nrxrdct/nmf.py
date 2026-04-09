@@ -23,31 +23,23 @@ class HyperspectralNMF:
     per-pixel RMSE through :meth:`fit_data`.  Results can be visualised with
     :meth:`plot`.
 
-    Attributes
-    ----------
-    vol : np.ndarray
-        Original ``(nx, ny, n_channels)`` volume passed at construction.
-    X : np.ndarray, shape ``(nx*ny, n_channels)``
-        Flattened 2-D representation used as NMF input.
-    n_comp : int
-        Number of NMF components.
-    x_spectra : np.ndarray
-        Spectral axis values.
-    unit : str
-        Spectral axis label used in plots.
-
-    The following attributes are set after calling :meth:`fit_data`:
-
-    W_maps : np.ndarray, shape ``(nx, ny, K)``
-        Per-component spatial intensity maps.
-    H : np.ndarray, shape ``(K, n_channels)``
-        Component spectra (rows of the NMF H matrix).
-    X_rec : np.ndarray, shape ``(nx*ny, n_channels)``
-        Reconstructed data matrix ``W @ H``.
-    E_map : np.ndarray, shape ``(nx, ny)``
-        Per-pixel RMSE between original and reconstructed data.
-    model : sklearn.decomposition.NMF
-        Fitted scikit-learn NMF object.
+    Attributes:
+        vol (np.ndarray): Original ``(nx, ny, n_channels)`` volume passed at construction.
+        X (np.ndarray): Flattened 2-D representation of shape ``(nx*ny, n_channels)``
+            used as NMF input.
+        n_comp (int): Number of NMF components.
+        x_spectra (np.ndarray): Spectral axis values.
+        unit (str): Spectral axis label used in plots.
+        W_maps (np.ndarray): Per-component spatial intensity maps, shape ``(nx, ny, K)``.
+            Set after calling :meth:`fit_data`.
+        H (np.ndarray): Component spectra of shape ``(K, n_channels)``.
+            Set after calling :meth:`fit_data`.
+        X_rec (np.ndarray): Reconstructed data matrix ``W @ H``, shape
+            ``(nx*ny, n_channels)``. Set after calling :meth:`fit_data`.
+        E_map (np.ndarray): Per-pixel RMSE of shape ``(nx, ny)``.
+            Set after calling :meth:`fit_data`.
+        model (sklearn.decomposition.NMF): Fitted scikit-learn NMF object.
+            Set after calling :meth:`fit_data`.
     """
 
     def __init__(self, volume:np.ndarray, n_components:int, spectral_axis:np.ndarray, unit_name="energy (keV)",
@@ -61,39 +53,30 @@ class HyperspectralNMF:
         alpha_H=0.0,
         clip_negative=True):
         """
-        Parameters
-        ----------
-        volume : np.ndarray
-            3-D array of shape ``(nx, ny, n_channels)`` containing the
-            hyperspectral volume.
-        n_components : int
-            Number of NMF components (endmembers) to extract.
-        spectral_axis : np.ndarray
-            1-D array of spectral axis values (e.g. 2θ or energy), length
-            ``n_channels``.
-        unit_name : str, optional
-            Label for the spectral axis used in plots (default ``"energy (keV)"``).
-        loss_function : str, optional
-            NMF beta-loss: ``"frobenius"`` (default) or ``"kullback-leibler"``.
-        solver : str or None, optional
-            NMF solver; ``None`` selects ``"cd"`` for Frobenius and ``"mu"``
-            for KL loss automatically.
-        init : str, optional
-            Initialisation strategy passed to :class:`~sklearn.decomposition.NMF`
-            (default ``"nndsvdar"``).
-        max_iter : int, optional
-            Maximum number of NMF iterations (default 1000).
-        random_state : int, optional
-            Random seed for reproducibility (default 0).
-        l1_ratio : float, optional
-            Elastic-net mixing parameter; 0 = pure L2, 1 = pure L1 (default 0.0).
-        alpha_W : float, optional
-            Regularisation strength applied to W (default 0.0).
-        alpha_H : float, optional
-            Regularisation strength applied to H (default 0.0).
-        clip_negative : bool, optional
-            If ``True``, negative values in the input are clipped to zero before
-            fitting (default ``True``).
+        Args:
+            volume (np.ndarray): 3-D array of shape ``(nx, ny, n_channels)``
+                containing the hyperspectral volume.
+            n_components (int): Number of NMF components (endmembers) to extract.
+            spectral_axis (np.ndarray): 1-D array of spectral axis values
+                (e.g. 2θ or energy), length ``n_channels``.
+            unit_name (str, optional): Label for the spectral axis used in plots
+                (default ``"energy (keV)"``).
+            loss_function (str, optional): NMF beta-loss: ``"frobenius"`` (default)
+                or ``"kullback-leibler"``.
+            solver (str or None, optional): NMF solver; ``None`` selects ``"cd"``
+                for Frobenius and ``"mu"`` for KL loss automatically.
+            init (str, optional): Initialisation strategy passed to
+                :class:`~sklearn.decomposition.NMF` (default ``"nndsvdar"``).
+            max_iter (int, optional): Maximum number of NMF iterations (default 1000).
+            random_state (int, optional): Random seed for reproducibility (default 0).
+            l1_ratio (float, optional): Elastic-net mixing parameter; 0 = pure L2,
+                1 = pure L1 (default 0.0).
+            alpha_W (float, optional): Regularisation strength applied to W
+                (default 0.0).
+            alpha_H (float, optional): Regularisation strength applied to H
+                (default 0.0).
+            clip_negative (bool, optional): If ``True``, negative values in the
+                input are clipped to zero before fitting (default ``True``).
         """
         self.vol = volume
         self.X = volume.reshape((volume.shape[0]**2, volume.shape[2]))
@@ -150,21 +133,17 @@ class HyperspectralNMF:
         """
         Visualise the NMF decomposition with component spectra and spatial maps.
 
-        Parameters
-        ----------
-        normalize_spectra : bool, optional
-            If ``True``, normalise each component spectrum to unit L2 norm before
-            plotting (default ``False``).
-        titles : list of str or None, optional
-            Per-component subplot titles; defaults to ``["Component 1", ...]``.
-        figsize : tuple, optional
-            Figure size in inches (default ``(14, 7)``).
-        extent : tuple or None, optional
-            ``(xmin, xmax, ymin, ymax)`` passed to :func:`~matplotlib.pyplot.imshow`
-            for physical axis scaling (default ``None``).
-        save : bool, optional
-            If ``True``, save the figure to
-            ``nmf_decomposition_<K>_components.png`` (default ``True``).
+        Args:
+            normalize_spectra (bool, optional): If ``True``, normalise each component
+                spectrum to unit L2 norm before plotting (default ``False``).
+            titles (list or None, optional): Per-component subplot titles; defaults
+                to ``["Component 1", ...]``.
+            figsize (tuple, optional): Figure size in inches (default ``(14, 7)``).
+            extent (tuple or None, optional): ``(xmin, xmax, ymin, ymax)`` passed to
+                :func:`~matplotlib.pyplot.imshow` for physical axis scaling
+                (default ``None``).
+            save (bool, optional): If ``True``, save the figure to
+                ``nmf_decomposition_<K>_components.png`` (default ``True``).
         """
         _plot_nmf_panel(
                         W_maps=self.W_maps,
@@ -200,51 +179,36 @@ def _nmf_sklearn_hyperspectral(
     """
     Fit NMF with scikit-learn on a 2-D hyperspectral array.
 
-    Parameters
-    ----------
-    X : array-like, shape ``(n_pixels, n_channels)``
-        Flattened hyperspectral data; must be non-negative (or ``clip_negative=True``).
-    map_shape : tuple of int
-        ``(nx, ny)`` spatial dimensions with ``nx * ny == n_pixels``.
-    n_components : int, optional
-        Number of NMF components (default 4).
-    wavelength : np.ndarray or None, optional
-        Spectral axis values of length ``n_channels``; auto-generated if ``None``.
-    unit_name : str, optional
-        Spectral axis label used in the progress display (default ``"Wavelength (nm)"``).
-    loss : str, optional
-        Beta-loss: ``"frobenius"`` (default) or ``"kullback-leibler"``.
-    solver : str or None, optional
-        NMF solver; ``None`` picks ``"cd"`` for Frobenius and ``"mu"`` for KL.
-    init : str, optional
-        Initialisation strategy (default ``"nndsvdar"``).
-    max_iter : int, optional
-        Maximum iterations (default 1000).
-    random_state : int, optional
-        Random seed (default 0).
-    l1_ratio : float, optional
-        Elastic-net mixing parameter (default 0.0).
-    alpha_W : float, optional
-        Regularisation on W (default 0.0).
-    alpha_H : float, optional
-        Regularisation on H (default 0.0).
-    clip_negative : bool, optional
-        Clip negative values to zero before fitting (default ``True``).
-    show_progress : bool, optional
-        Show a tqdm progress bar (default ``True``).
+    Args:
+        X (array-like): Flattened hyperspectral data of shape ``(n_pixels, n_channels)``;
+            must be non-negative (or ``clip_negative=True``).
+        map_shape (tuple): ``(nx, ny)`` spatial dimensions with ``nx * ny == n_pixels``.
+        n_components (int, optional): Number of NMF components (default 4).
+        wavelength (np.ndarray or None, optional): Spectral axis values of length
+            ``n_channels``; auto-generated if ``None``.
+        unit_name (str, optional): Spectral axis label used in the progress display
+            (default ``"Wavelength (nm)"``).
+        loss (str, optional): Beta-loss: ``"frobenius"`` (default) or
+            ``"kullback-leibler"``.
+        solver (str or None, optional): NMF solver; ``None`` picks ``"cd"`` for
+            Frobenius and ``"mu"`` for KL.
+        init (str, optional): Initialisation strategy (default ``"nndsvdar"``).
+        max_iter (int, optional): Maximum iterations (default 1000).
+        random_state (int, optional): Random seed (default 0).
+        l1_ratio (float, optional): Elastic-net mixing parameter (default 0.0).
+        alpha_W (float, optional): Regularisation on W (default 0.0).
+        alpha_H (float, optional): Regularisation on H (default 0.0).
+        clip_negative (bool, optional): Clip negative values to zero before fitting
+            (default ``True``).
+        show_progress (bool, optional): Show a tqdm progress bar (default ``True``).
 
-    Returns
-    -------
-    W_maps : np.ndarray, shape ``(nx, ny, K)``
-        Per-component spatial intensity maps.
-    H : np.ndarray, shape ``(K, n_channels)``
-        Component spectra (rows of the NMF H matrix).
-    X_rec : np.ndarray, shape ``(n_pixels, n_channels)``
-        Reconstructed data matrix ``W @ H``.
-    E_map : np.ndarray, shape ``(nx, ny)``
-        Per-pixel RMSE between original and reconstructed data.
-    model : sklearn NMF
-        Fitted :class:`~sklearn.decomposition.NMF` object.
+    Returns:
+        W_maps (np.ndarray): Per-component spatial intensity maps, shape ``(nx, ny, K)``.
+        H (np.ndarray): Component spectra of shape ``(K, n_channels)``.
+        X_rec (np.ndarray): Reconstructed data matrix ``W @ H``, shape
+            ``(n_pixels, n_channels)``.
+        E_map (np.ndarray): Per-pixel RMSE of shape ``(nx, ny)``.
+        model: Fitted :class:`~sklearn.decomposition.NMF` object.
     """
     if show_progress:
         from tqdm.auto import tqdm
@@ -342,28 +306,22 @@ def _plot_nmf_panel(
     Layout: one row of component spectra (top, full width) and one row of
     spatial maps plus a residual RMSE map (bottom).
 
-    Parameters
-    ----------
-    W_maps : np.ndarray, shape ``(nx, ny, K)``
-        Component intensity maps.
-    H : np.ndarray, shape ``(K, n_channels)``
-        Component spectra.
-    E_map : np.ndarray, shape ``(nx, ny)``
-        Per-pixel RMSE map.
-    wavelength : np.ndarray
-        Spectral axis values.
-    unit_name : str, optional
-        Spectral axis label (default ``"Wavelength (nm)"``).
-    normalize_spectra : bool, optional
-        Normalise each spectrum to unit L2 norm before plotting (default ``True``).
-    titles : list of str or None, optional
-        Component subplot titles; defaults to ``["Component 1", ...]``.
-    figsize : tuple, optional
-        Figure size in inches (default ``(14, 7)``).
-    extent : tuple or None, optional
-        ``(xmin, xmax, ymin, ymax)`` for spatial map axis scaling (default ``None``).
-    save : bool, optional
-        Save to ``nmf_decomposition_<K>_components.png`` (default ``True``).
+    Args:
+        W_maps (np.ndarray): Component intensity maps of shape ``(nx, ny, K)``.
+        H (np.ndarray): Component spectra of shape ``(K, n_channels)``.
+        E_map (np.ndarray): Per-pixel RMSE map of shape ``(nx, ny)``.
+        wavelength (np.ndarray): Spectral axis values.
+        unit_name (str, optional): Spectral axis label
+            (default ``"Wavelength (nm)"``).
+        normalize_spectra (bool, optional): Normalise each spectrum to unit L2
+            norm before plotting (default ``True``).
+        titles (list or None, optional): Component subplot titles; defaults to
+            ``["Component 1", ...]``.
+        figsize (tuple, optional): Figure size in inches (default ``(14, 7)``).
+        extent (tuple or None, optional): ``(xmin, xmax, ymin, ymax)`` for
+            spatial map axis scaling (default ``None``).
+        save (bool, optional): Save to ``nmf_decomposition_<K>_components.png``
+            (default ``True``).
     """
     K = H.shape[0]
     if titles is None:

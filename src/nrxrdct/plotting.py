@@ -9,18 +9,13 @@ def plot_integrated_cake(cake, radial, azimuthal, log_scale = False):
     """
     Display a 2-D CAKE integration result as a false-colour image.
 
-    Parameters
-    ----------
-    cake : np.ndarray
-        2-D CAKE array of shape ``(npt_azim, npt_rad)`` as returned by
-        :func:`~nrxrdct.integration.cake_integration`.
-    radial : np.ndarray
-        Radial axis values (length ``npt_rad``).
-    azimuthal : np.ndarray
-        Azimuthal axis values in degrees (length ``npt_azim``).
-    log_scale : bool, optional
-        If ``True``, display ``log(1 + I)`` instead of raw intensity
-        (default ``False``).
+    Args:
+        cake (np.ndarray): 2-D CAKE array of shape ``(npt_azim, npt_rad)`` as
+            returned by :func:`~nrxrdct.integration.cake_integration`.
+        radial (np.ndarray): Radial axis values (length ``npt_rad``).
+        azimuthal (np.ndarray): Azimuthal axis values in degrees (length ``npt_azim``).
+        log_scale (bool, optional): If ``True``, display ``log(1 + I)`` instead of
+            raw intensity (default ``False``).
     """
     display_data = np.log1p(np.clip(cake, 0, None)) if log_scale else cake
 

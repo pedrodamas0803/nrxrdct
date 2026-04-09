@@ -45,62 +45,38 @@ def visualize_volume(
     """
     Visualize a 3D NumPy array interactively using napari.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        A 3D array of shape (Z, Y, X) to visualize.
-    name : str
-        Label shown in the napari layer list. Default: "Volume".
-    colormap : str
-        Colormap name (e.g. "grays", "turbo", "magma", "green").
-        See napari.utils.colormaps.AVAILABLE_COLORMAPS for the full list.
-    rendering : str
-        Volume rendering mode. One of:
-          - "mip"       Max Intensity Projection (good for bright spots)
-          - "minip"     Min Intensity Projection
-          - "translucent"  Semi-transparent full volume
-          - "iso"       Isosurface
-          - "attenuated_mip"  MIP with depth attenuation
-        Default: "mip".
-    contrast_limits : tuple of (float, float), optional
-        (low, high) display range. Defaults to the data min/max.
-    gamma : float
-        Gamma correction applied to the colormap. Default: 1.0.
-    opacity : float
-        Layer opacity between 0 (transparent) and 1 (opaque). Default: 1.0.
-    scale : tuple of float, optional
-        Physical voxel spacing (z_scale, y_scale, x_scale).
-        Useful when voxels are anisotropic (e.g. (4.0, 1.0, 1.0)).
-        Default: None (isotropic, all ones).
-    add_axes : bool
-        Whether to display the 3D axis widget. Default: True.
+    Args:
+        volume (np.ndarray): A 3D array of shape (Z, Y, X) to visualize.
+        name (str): Label shown in the napari layer list. Default: "Volume".
+        colormap (str): Colormap name (e.g. "grays", "turbo", "magma", "green").
+            See napari.utils.colormaps.AVAILABLE_COLORMAPS for the full list.
+        rendering (str): Volume rendering mode: "mip" – Max Intensity Projection
+            (default), "minip" – Min Intensity Projection, "translucent" –
+            semi-transparent full volume, "iso" – isosurface, "attenuated_mip" –
+            MIP with depth attenuation.
+        contrast_limits (tuple, optional): (low, high) display range. Defaults to
+            the data min/max.
+        gamma (float): Gamma correction applied to the colormap. Default: 1.0.
+        opacity (float): Layer opacity between 0 (transparent) and 1 (opaque).
+            Default: 1.0.
+        scale (tuple, optional): Physical voxel spacing (z_scale, y_scale, x_scale).
+            Useful when voxels are anisotropic (e.g. (4.0, 1.0, 1.0)).
+            Default: None (isotropic).
+        add_axes (bool): Whether to display the 3D axis widget. Default: True.
 
-    Returns
-    -------
-    napari.Viewer
-        The napari viewer instance (keep a reference to prevent GC).
+    Returns:
+        napari.Viewer: The napari viewer instance (keep a reference to prevent GC).
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from visualize_volume_napari import visualize_volume
-
-    # Synthetic Gaussian blob
-    >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
-    >>> viewer = visualize_volume(vol, colormap="turbo", rendering="mip")
-
-    # Real microscopy-like data with anisotropic voxels
-    >>> viewer = visualize_volume(
-    ...     vol,
-    ...     name="Confocal stack",
-    ...     colormap="green",
-    ...     rendering="translucent",
-    ...     scale=(4.0, 1.0, 1.0),  # z is 4x coarser than xy
-    ...     contrast_limits=(0.1, 0.9),
-    ... )
-
-    # Start napari event loop (required in scripts; not needed in Jupyter)
-    >>> napari.run()
+    Example:
+        >>> import numpy as np
+        >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
+        >>> viewer = visualize_volume(vol, colormap="turbo", rendering="mip")
+        >>> viewer = visualize_volume(
+        ...     vol, name="Confocal stack", colormap="green",
+        ...     rendering="translucent", scale=(4.0, 1.0, 1.0),
+        ...     contrast_limits=(0.1, 0.9),
+        ... )
+        >>> napari.run()
     """
     if volume.ndim != 3:
         raise ValueError(
@@ -150,55 +126,35 @@ def visualize_slices(
     The viewer opens in 2-D mode.  A slider at the bottom of the window lets
     you scroll through every slice along axis-0 in real time.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        A 3-D array of shape (Z, Y, X).  Each slice shown is volume[z, :, :].
-    name : str
-        Label shown in the napari layer list.  Default: "Volume".
-    colormap : str
-        Napari colormap name (e.g. "grays", "turbo", "magma", "green").
-        Full list: napari.utils.colormaps.AVAILABLE_COLORMAPS.
-    contrast_limits : tuple of (float, float), optional
-        (low, high) display range.  Defaults to data min / max.
-    gamma : float
-        Gamma correction on the colormap.  Default: 1.0.
-    opacity : float
-        Layer opacity between 0 and 1.  Default: 1.0.
-    scale : tuple of (float, float, float), optional
-        Physical voxel spacing (z_scale, y_scale, x_scale).
-        Example: (4.0, 1.0, 1.0) for anisotropic confocal data.
-    initial_slice : int, optional
-        Index along axis-0 to show on first open.
-        Defaults to the middle slice.
+    Args:
+        volume (np.ndarray): A 3-D array of shape (Z, Y, X). Each slice shown
+            is volume[z, :, :].
+        name (str): Label shown in the napari layer list. Default: "Volume".
+        colormap (str): Napari colormap name (e.g. "grays", "turbo", "magma",
+            "green").
+        contrast_limits (tuple, optional): (low, high) display range. Defaults
+            to data min / max.
+        gamma (float): Gamma correction on the colormap. Default: 1.0.
+        opacity (float): Layer opacity between 0 and 1. Default: 1.0.
+        scale (tuple, optional): Physical voxel spacing (z_scale, y_scale,
+            x_scale). Example: (4.0, 1.0, 1.0) for anisotropic confocal data.
+        initial_slice (int, optional): Index along axis-0 to show on first open.
+            Defaults to the middle slice.
 
-    Returns
-    -------
-    napari.Viewer
-        The napari viewer instance (keep a reference to prevent garbage
-        collection while the window is open).
+    Returns:
+        napari.Viewer: The napari viewer instance (keep a reference to prevent
+            garbage collection while the window is open).
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from visualize_slices_napari import visualize_slices
-
-    # Synthetic test volume
-    >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
-    >>> viewer = visualize_slices(vol, colormap="turbo")
-
-    # Real microscopy stack with anisotropic voxels
-    >>> viewer = visualize_slices(
-    ...     vol,
-    ...     name="Confocal stack",
-    ...     colormap="green",
-    ...     scale=(4.0, 1.0, 1.0),
-    ...     contrast_limits=(0.05, 0.95),
-    ...     initial_slice=10,
-    ... )
-
-    # Start the event loop (required in scripts; not needed in Jupyter)
-    >>> napari.run()
+    Example:
+        >>> import numpy as np
+        >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
+        >>> viewer = visualize_slices(vol, colormap="turbo")
+        >>> viewer = visualize_slices(
+        ...     vol, name="Confocal stack", colormap="green",
+        ...     scale=(4.0, 1.0, 1.0), contrast_limits=(0.05, 0.95),
+        ...     initial_slice=10,
+        ... )
+        >>> napari.run()
     """
     if volume.ndim != 3:
         raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
@@ -257,17 +213,15 @@ class ZProfilePlot:
         z_label: str = "Z  (axis-0 index)",
     ):
         """
-        Parameters
-        ----------
-        n_slices : int
-            Total number of slices along axis-0 of the volume.
-        volume_name : str, optional
-            Used as part of the matplotlib window title (default ``"Volume"``).
-        z_values : np.ndarray or None, optional
-            Physical values for the Z axis (e.g. depth in mm or 2θ in degrees).
-            Defaults to integer indices ``0 … n_slices-1``.
-        z_label : str, optional
-            X-axis label for the profile plot (default ``"Z  (axis-0 index)"``).
+        Args:
+            n_slices (int): Total number of slices along axis-0 of the volume.
+            volume_name (str, optional): Used as part of the matplotlib window title
+                (default ``"Volume"``).
+            z_values (np.ndarray or None, optional): Physical values for the Z axis
+                (e.g. depth in mm or 2θ in degrees). Defaults to integer indices
+                ``0 … n_slices-1``.
+            z_label (str, optional): X-axis label for the profile plot
+                (default ``"Z  (axis-0 index)"``).
         """
         self.n_slices = n_slices
         self.z_axis = (
@@ -318,17 +272,13 @@ class ZProfilePlot:
         """
         Redraw the profile for a newly selected pixel.
 
-        Parameters
-        ----------
-        y : int
-            Row index of the selected pixel.
-        x : int
-            Column index of the selected pixel.
-        profile : np.ndarray
-            1-D intensity profile along axis-0, length ``n_slices``.
-        current_z_idx : int
-            Current slider position (axis-0 index) used to place the vertical
-            marker line.
+        Args:
+            y (int): Row index of the selected pixel.
+            x (int): Column index of the selected pixel.
+            profile (np.ndarray): 1-D intensity profile along axis-0, length
+                ``n_slices``.
+            current_z_idx (int): Current slider position (axis-0 index) used to
+                place the vertical marker line.
         """
         self.line.set_xdata(self.z_axis)
         self.line.set_ydata(profile)
@@ -342,10 +292,8 @@ class ZProfilePlot:
         """
         Move the vertical slice-position marker without redrawing the profile.
 
-        Parameters
-        ----------
-        z_idx : int
-            Current axis-0 slice index.
+        Args:
+            z_idx (int): Current axis-0 slice index.
         """
         self.vline.set_xdata([self.z_axis[z_idx], self.z_axis[z_idx]])
         self.fig.canvas.draw_idle()
@@ -372,48 +320,34 @@ def visualize_slices_with_profile(
     location.  A dashed orange vertical line tracks the currently displayed
     slice as you move the slider.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        3-D array of shape (Z, Y, X).
-    name : str
-        Layer name shown in the napari layer list.
-    colormap : str
-        Napari colormap (e.g. "grays", "turbo", "magma").
-    contrast_limits : (float, float), optional
-        Display range. Defaults to data min/max.
-    gamma : float
-        Gamma correction for the colormap.
-    opacity : float
-        Layer opacity [0, 1].
-    scale : (float, float, float), optional
-        Anisotropic voxel spacing (z, y, x).
-    initial_slice : int, optional
-        Axis-0 index to display on open. Defaults to middle slice.
-    z_values : array-like, optional
-        Physical values to use on the X axis of the Z-profile plot
-        (e.g. depths in mm, timestamps, wavelengths).  Must have exactly
-        ``volume.shape[0]`` elements.  Defaults to integer slice indices.
-    z_label : str, optional
-        Label for the X axis of the Z-profile plot.
-        Default: "Z  (axis-0 index)".
+    Args:
+        volume (np.ndarray): 3-D array of shape (Z, Y, X).
+        name (str): Layer name shown in the napari layer list.
+        colormap (str): Napari colormap (e.g. "grays", "turbo", "magma").
+        contrast_limits (tuple, optional): Display range. Defaults to data min/max.
+        gamma (float): Gamma correction for the colormap.
+        opacity (float): Layer opacity [0, 1].
+        scale (tuple, optional): Anisotropic voxel spacing (z, y, x).
+        initial_slice (int, optional): Axis-0 index to display on open. Defaults
+            to middle slice.
+        z_values (array-like, optional): Physical values for the X axis of the
+            Z-profile plot (e.g. depths in mm, timestamps, wavelengths). Must have
+            exactly ``volume.shape[0]`` elements. Defaults to integer slice indices.
+        z_label (str, optional): Label for the X axis of the Z-profile plot.
+            Default: "Z  (axis-0 index)".
 
-    Returns
-    -------
-    napari.Viewer
+    Returns:
+        napari.Viewer: The napari viewer instance.
 
-    Notes
-    -----
-    * Works with matplotlib's interactive backend (Qt / Tk / Wx).
-    * Call ``napari.run()`` at the end of a script to start the event loop.
+    Note:
+        Works with matplotlib's interactive backend (Qt / Tk / Wx). Call
+        ``napari.run()`` at the end of a script to start the event loop.
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from visualize_slices_with_profile_napari import visualize_slices_with_profile
-    >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
-    >>> viewer = visualize_slices_with_profile(vol, colormap="turbo")
-    >>> napari.run()
+    Example:
+        >>> import numpy as np
+        >>> vol = np.random.rand(64, 128, 128).astype(np.float32)
+        >>> viewer = visualize_slices_with_profile(vol, colormap="turbo")
+        >>> napari.run()
     """
     if volume.ndim != 3:
         raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
@@ -556,64 +490,44 @@ def visualize_slices_with_profile_jupyter(
     Display an interactive 2-D slice viewer with a Z-profile panel inside
     a Jupyter notebook.
 
-    Layout
-    ------
-    Left panel  : 2-D slice image (axis-0 = Z scrolled by a slider).
-                  Click any pixel → the right panel updates.
-    Right panel : Intensity profile along axis-0 at the selected (y, x).
-                  A dashed orange line marks the currently displayed slice.
+    Layout: left panel shows 2-D slices (axis-0 = Z scrolled by a slider,
+    click any pixel to update); right panel shows the intensity profile along
+    axis-0 at the selected (y, x) with a dashed orange line marking the current
+    slice.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        3-D array of shape (Z, Y, X).
-    name : str
-        Title shown above the figure.
-    colormap : str
-        Matplotlib colormap name (e.g. "gray", "turbo", "magma", "viridis").
-    contrast_limits : (float, float), optional
-        (vmin, vmax) for the image display.  Defaults to data min / max.
-    initial_slice : int, optional
-        Axis-0 index shown on first render.  Defaults to middle slice.
-    z_values : array-like, optional
-        Physical coordinates for the X axis of the Z-profile plot
-        (e.g. depths in µm, timestamps, wavelengths).
-        Must have exactly ``volume.shape[0]`` elements.
-        Defaults to integer slice indices [0, 1, 2, …].
-    z_label : str, optional
-        X-axis label of the Z-profile plot.
-        Default: ``"Z  (axis-0 index)"``.
-    figsize : (float, float), optional
-        Overall figure size in inches.  Default: (12, 5).
+    Args:
+        volume (np.ndarray): 3-D array of shape (Z, Y, X).
+        name (str): Title shown above the figure.
+        colormap (str): Matplotlib colormap name (e.g. "gray", "turbo", "magma",
+            "viridis").
+        contrast_limits (tuple, optional): (vmin, vmax) for the image display.
+            Defaults to data min / max.
+        initial_slice (int, optional): Axis-0 index shown on first render.
+            Defaults to middle slice.
+        z_values (array-like, optional): Physical coordinates for the X axis of
+            the Z-profile plot (e.g. depths in µm, timestamps, wavelengths). Must
+            have exactly ``volume.shape[0]`` elements. Defaults to integer indices.
+        z_label (str, optional): X-axis label of the Z-profile plot.
+            Default: ``"Z  (axis-0 index)"``.
+        figsize (tuple, optional): Overall figure size in inches. Default: (12, 5).
 
-    Notes
-    -----
-    **Recommended cell magic**: ``%matplotlib widget`` (ipympl backend).
-    This gives a truly live canvas — clicks and slider updates happen
-    without redrawing the full figure.
+    Note:
+        Recommended cell magic is ``%matplotlib widget`` (ipympl backend) for a
+        truly live canvas. ``%matplotlib inline`` also works but redraws on every
+        interaction.
 
-    ``%matplotlib inline`` also works but redraws the whole figure on
-    every interaction, which is slower.
+    Example:
+        In a notebook cell::
 
-    Examples
-    --------
-    In a notebook cell::
+            %matplotlib widget
+            import numpy as np
+            vol = np.random.rand(64, 128, 128).astype(np.float32)
+            visualize_slices_with_profile_jupyter(vol, colormap="turbo")
 
-        %matplotlib widget
-        import numpy as np
-        from visualize_slices_jupyter import visualize_slices_with_profile_jupyter
-
-        vol = np.random.rand(64, 128, 128).astype(np.float32)
-        visualize_slices_with_profile_jupyter(vol, colormap="turbo")
-
-    With physical axis::
-
-        depths = np.linspace(0, 31.5, 64)   # 64 slices × 0.5 µm
-        visualize_slices_with_profile_jupyter(
-            vol,
-            z_values=depths,
-            z_label="Depth (µm)",
-        )
+            depths = np.linspace(0, 31.5, 64)
+            visualize_slices_with_profile_jupyter(
+                vol, z_values=depths, z_label="Depth (µm)",
+            )
     """
     # ------------------------------------------------------------------
     # Input validation

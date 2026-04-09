@@ -23,24 +23,19 @@ def get_fluo_lines(
     """
     Return the XRF emission line energies for an element within a given energy range.
 
-    Parameters
-    ----------
-    element : str
-        Chemical symbol (e.g. ``"Fe"``, ``"Cu"``).
-    energy_range : tuple of (float, float)
-        ``(emin, emax)`` energy window in keV; lines outside this range are
-        excluded.
-    lines : list of str, optional
-        Emission line names to query (default: Ka1, Ka2, Kb1, Kb2, La1, Lb1, Lg1).
-    verbose : bool, optional
-        If ``True``, print each line name and energy to stdout (default ``False``).
+    Args:
+        element (str): Chemical symbol (e.g. ``"Fe"``, ``"Cu"``).
+        energy_range (tuple): ``(emin, emax)`` energy window in keV; lines outside
+            this range are excluded.
+        lines (list, optional): Emission line names to query (default: Ka1, Ka2,
+            Kb1, Kb2, La1, Lb1, Lg1).
+        verbose (bool, optional): If ``True``, print each line name and energy to
+            stdout (default ``False``).
 
-    Returns
-    -------
-    dict
-        Mapping of line name (str) to energy in keV (float) for lines that
-        fall within *energy_range*.  Lines not available for the element are
-        silently skipped.
+    Returns:
+        dict: Mapping of line name (str) to energy in keV (float) for lines that
+            fall within *energy_range*. Lines not available for the element are
+            silently skipped.
     """
 
     emin, emax = energy_range
@@ -86,28 +81,21 @@ def get_fluo_roi(
     dataset are read, optionally median-filtered, zero-padded to *n_angles*,
     and sorted in ascending rotation order.
 
-    Parameters
-    ----------
-    fn : str or Path
-        Path to the HDF5 master file.
-    n_angles : int, optional
-        Target number of rotation steps; shorter scans are symmetrically
-        zero-padded to this length (default 901).
-    data_entry : str, optional
-        HDF5 dataset name under ``<entry>/measurement/`` to read
-        (default ``"mca_det0_all"``).
-    filter_size : int, optional
-        Size of the median filter applied along the rotation axis; set to
-        ``0`` to skip filtering (default 3).
+    Args:
+        fn (str or Path): Path to the HDF5 master file.
+        n_angles (int, optional): Target number of rotation steps; shorter scans
+            are symmetrically zero-padded to this length (default 901).
+        data_entry (str, optional): HDF5 dataset name under ``<entry>/measurement/``
+            to read (default ``"mca_det0_all"``).
+        filter_size (int, optional): Size of the median filter applied along the
+            rotation axis; set to ``0`` to skip filtering (default 3).
 
-    Returns
-    -------
-    meas : np.ndarray
-        2-D array of shape ``(n_scans, n_angles)`` with ROI intensities.
-    ypos : np.ndarray
-        1-D array of ``dty`` translation positions, one per scan.
-    rotz : np.ndarray
-        2-D array of shape ``(n_scans, n_angles)`` with rotation angles.
+    Returns:
+        meas (np.ndarray): 2-D array of shape ``(n_scans, n_angles)`` with ROI
+            intensities.
+        ypos (np.ndarray): 1-D array of ``dty`` translation positions, one per scan.
+        rotz (np.ndarray): 2-D array of shape ``(n_scans, n_angles)`` with rotation
+            angles.
     """
     ypos = []
     rotz = []
@@ -169,36 +157,26 @@ def get_fluo_full_spectra(
     energy-binned, zero-padded to *n_angles*, and stacked into a 3-D
     sinogram array.
 
-    Parameters
-    ----------
-    h5_file : str or Path
-        Path to the HDF5 master file.
-    n_angles : int, optional
-        Target number of rotation steps; shorter scans are symmetrically
-        zero-padded (default 901).
-    binning_factor : int, optional
-        Number of adjacent energy channels to combine; ``1`` means no binning
-        (default 1).
-    filter_size : int, optional
-        Size of the median filter applied along the energy axis after
-        normalisation (default 7).
-    dat_entry : str, optional
-        HDF5 dataset name under ``<entry>/measurement/`` containing the MCA
-        spectra (default ``"mca_det0"``).
-    binning_func : callable, optional
-        Aggregation function used when *binning_factor* > 1 (default
-        ``np.mean``).
-    monitor_entry : str, optional
-        HDF5 dataset name for the beam-intensity monitor used for
-        normalisation (default ``"fpico6"``).
+    Args:
+        h5_file (str or Path): Path to the HDF5 master file.
+        n_angles (int, optional): Target number of rotation steps; shorter scans
+            are symmetrically zero-padded (default 901).
+        binning_factor (int, optional): Number of adjacent energy channels to
+            combine; ``1`` means no binning (default 1).
+        filter_size (int, optional): Size of the median filter applied along the
+            energy axis after normalisation (default 7).
+        dat_entry (str, optional): HDF5 dataset name under ``<entry>/measurement/``
+            containing the MCA spectra (default ``"mca_det0"``).
+        binning_func (callable, optional): Aggregation function used when
+            *binning_factor* > 1 (default ``np.mean``).
+        monitor_entry (str, optional): HDF5 dataset name for the beam-intensity
+            monitor used for normalisation (default ``"fpico6"``).
 
-    Returns
-    -------
-    sino : np.ndarray
-        3-D sinogram of shape ``(n_energy_bins, n_scans, n_angles)`` as
-        ``float32``.
-    rot : np.ndarray
-        1-D rotation angle array from the last scan entry processed.
+    Returns:
+        sino (np.ndarray): 3-D sinogram of shape ``(n_energy_bins, n_scans,
+            n_angles)`` as ``float32``.
+        rot (np.ndarray): 1-D rotation angle array from the last scan entry
+            processed.
     """
     with h5py.File(h5_file, "r") as hin:
         N = len(hin.keys())
@@ -283,23 +261,18 @@ def build_element_component(element, energy_axis, excitation_energy, fwhm_keV):
     cross-section (``CS_FluorLine_Kissel``), so relative amplitudes between
     lines of the same element are physically motivated.
 
-    Parameters
-    ----------
-    element : str
-        Chemical symbol, e.g. ``"Fe"``.
-    energy_axis : np.ndarray
-        1-D array of energy values in keV (from MCA calibration).
-    excitation_energy : float
-        Incident beam energy in keV.
-    fwhm_keV : float
-        Detector energy resolution (FWHM) in keV — typically 0.13–0.25 keV
-        for a Si drift detector.
+    Args:
+        element (str): Chemical symbol, e.g. ``"Fe"``.
+        energy_axis (np.ndarray): 1-D array of energy values in keV (from MCA
+            calibration).
+        excitation_energy (float): Incident beam energy in keV.
+        fwhm_keV (float): Detector energy resolution (FWHM) in keV — typically
+            0.13–0.25 keV for a Si drift detector.
 
-    Returns
-    -------
-    component : np.ndarray, shape ``(len(energy_axis),)``
-        Normalised spectral template for the element (max = 1).
-        Returns a zero array if no lines fall within the energy axis range.
+    Returns:
+        component (np.ndarray): Normalised spectral template for the element
+            (max = 1), shape ``(len(energy_axis),)``. Returns a zero array if no
+            lines fall within the energy axis range.
     """
     sigma = fwhm_keV / (2 * np.sqrt(2 * np.log(2)))
     Z = xraylib.SymbolToAtomicNumber(element)
@@ -335,32 +308,24 @@ def fit_fluo_spectrum(
     is solved with non-negative least squares (NNLS), which prevents unphysical
     negative elemental intensities.
 
-    Parameters
-    ----------
-    spectrum : np.ndarray, shape ``(n_channels,)``
-        Measured (normalised) MCA spectrum.
-    energy_axis : np.ndarray, shape ``(n_channels,)``
-        Energy in keV for each MCA channel.
-    elements : list of str
-        Elements to include, e.g. ``["Fe", "Cu", "Zn"]``.
-    excitation_energy : float
-        Incident beam energy in keV.
-    fwhm_keV : float, optional
-        Detector FWHM in keV (default 0.18).
-    background_order : int, optional
-        Polynomial degree for the background model (default 2).
+    Args:
+        spectrum (np.ndarray): Measured (normalised) MCA spectrum, shape
+            ``(n_channels,)``.
+        energy_axis (np.ndarray): Energy in keV for each MCA channel, shape
+            ``(n_channels,)``.
+        elements (list): Elements to include, e.g. ``["Fe", "Cu", "Zn"]``.
+        excitation_energy (float): Incident beam energy in keV.
+        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).
+        background_order (int, optional): Polynomial degree for the background
+            model (default 2).
 
-    Returns
-    -------
-    coefficients : dict
-        Mapping ``element -> fitted amplitude`` (arbitrary units proportional
-        to element concentration × thickness).
-    residual : np.ndarray
-        Measured minus fitted spectrum.
-    fitted : np.ndarray
-        Reconstructed spectrum (element contributions + background).
-    components : dict
-        Spectral template used for each element (before scaling).
+    Returns:
+        coefficients (dict): Mapping ``element -> fitted amplitude`` (arbitrary
+            units proportional to element concentration × thickness).
+        residual (np.ndarray): Measured minus fitted spectrum.
+        fitted (np.ndarray): Reconstructed spectrum (element contributions +
+            background).
+        components (dict): Spectral template used for each element (before scaling).
     """
     E_norm = (energy_axis - energy_axis.mean()) / energy_axis.ptp()
 
@@ -396,27 +361,20 @@ def build_fit_matrix(
     Separating matrix construction from fitting allows the (identical) matrix
     to be built once and reused across all pixels.
 
-    Parameters
-    ----------
-    energy_axis : np.ndarray, shape ``(n_channels,)``
-        Energy in keV for each MCA channel.
-    elements : list of str
-        Elements to model, e.g. ``["Fe", "Cu", "Zn"]``.
-    excitation_energy : float
-        Incident beam energy in keV.
-    fwhm_keV : float, optional
-        Detector FWHM in keV (default 0.18).
-    background_order : int, optional
-        Polynomial degree for the background model (default 2).
+    Args:
+        energy_axis (np.ndarray): Energy in keV for each MCA channel, shape
+            ``(n_channels,)``.
+        elements (list): Elements to model, e.g. ``["Fe", "Cu", "Zn"]``.
+        excitation_energy (float): Incident beam energy in keV.
+        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).
+        background_order (int, optional): Polynomial degree for the background
+            model (default 2).
 
-    Returns
-    -------
-    A : np.ndarray, shape ``(n_channels, n_components)``
-        Design matrix.  Columns are element templates followed by background
-        polynomial terms.
-    labels : list of str
-        Column labels.  Element names come first; background terms are named
-        ``"_bg0"``, ``"_bg1"``, etc.
+    Returns:
+        A (np.ndarray): Design matrix of shape ``(n_channels, n_components)``.
+            Columns are element templates followed by background polynomial terms.
+        labels (list): Column labels. Element names come first; background terms
+            are named ``"_bg0"``, ``"_bg1"``, etc.
     """
     E_norm = (energy_axis - energy_axis.mean()) / energy_axis.ptp()
 
@@ -447,45 +405,27 @@ def fit_fluo_volume(
     """
     Fit fluorescence spectra for every pixel in a 3-D dataset.
 
-    Parameters
-    ----------
-    data : np.ndarray, shape ``(n_energy, n_y, n_x)``
-        Full-spectrum dataset; axis 0 is the energy dimension.
-    energy_axis : np.ndarray, shape ``(n_energy,)``
-        Energy in keV for each channel.
-    elements : list of str
-        Elements to fit, e.g. ``["Fe", "Cu", "Zn"]``.
-    excitation_energy : float
-        Incident beam energy in keV.
-    fwhm_keV : float, optional
-        Detector FWHM in keV (default 0.18).
-    background_order : int, optional
-        Polynomial degree for the background model (default 2).
-    method : ``"lstsq"`` or ``"nnls"``, optional
-        Fitting strategy.
+    Args:
+        data (np.ndarray): Full-spectrum dataset of shape ``(n_energy, n_y, n_x)``;
+            axis 0 is the energy dimension.
+        energy_axis (np.ndarray): Energy in keV for each channel, shape
+            ``(n_energy,)``.
+        elements (list): Elements to fit, e.g. ``["Fe", "Cu", "Zn"]``.
+        excitation_energy (float): Incident beam energy in keV.
+        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).
+        background_order (int, optional): Polynomial degree for the background
+            model (default 2).
+        method (str, optional): Fitting strategy. ``"lstsq"`` solves all pixels
+            in a single batched ``np.linalg.lstsq`` call — very fast but
+            non-negativity is only enforced by clipping. ``"nnls"`` calls
+            ``scipy.optimize.nnls`` per pixel (parallelised with ``joblib``) —
+            strictly non-negative but slower. Default ``"lstsq"``.
+        n_jobs (int, optional): Number of parallel workers for ``method="nnls"``
+            (``-1`` uses all CPUs). Ignored for ``method="lstsq"`` (default ``-1``).
 
-        ``"lstsq"``
-            Solves all pixels in a single batched ``np.linalg.lstsq`` call.
-            Very fast (single LAPACK call), but non-negativity is only enforced
-            by clipping.  Prefer this when speed matters or negative values are
-            rare in practice.
-
-        ``"nnls"``
-            Calls ``scipy.optimize.nnls`` per pixel, parallelised with
-            ``joblib`` when available.  Strictly non-negative; slower but more
-            physically correct for absent elements.
-
-        Default ``"lstsq"``.
-    n_jobs : int, optional
-        Number of parallel workers for ``method="nnls"`` (passed to
-        ``joblib.Parallel``; ``-1`` uses all available CPUs).  Ignored for
-        ``method="lstsq"`` (default ``-1``).
-
-    Returns
-    -------
-    coeff_maps : dict
-        Mapping ``element -> np.ndarray`` of shape ``(n_y, n_x)`` with the
-        fitted amplitude for each spatial pixel.
+    Returns:
+        coeff_maps (dict): Mapping ``element -> np.ndarray`` of shape ``(n_y, n_x)``
+            with the fitted amplitude for each spatial pixel.
     """
     n_energy, n_y, n_x = data.shape
     n_pixels = n_y * n_x

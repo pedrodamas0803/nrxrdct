@@ -48,41 +48,22 @@ def cake_integration(
     """
     Perform 2D azimuthal regrouping (CAKE) of a detector image using pyFAI.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image.
-    poni_file : str
-        Path to the PONI calibration file.
-    npt_rad : int
-        Number of radial bins (x-axis resolution), default 1000.
-    npt_azim : int
-        Number of azimuthal bins (y-axis resolution), default 360 (1°/bin).
-    unit : str
-        Radial unit: "q_A^-1", "q_nm^-1", "2th_deg", "2th_rad", "r_mm".
-    mask : np.ndarray, optional
-        Mask array (1 = ignore, 0 = valid).
-    dark : np.ndarray, optional
-        Dark current image to subtract.
-    flat : np.ndarray, optional
-        Flat field image for correction.
-    radial_range : tuple, optional
-        (min, max) radial range in the chosen unit.
-    azimuth_range : tuple, optional
-        (min, max) azimuthal range in degrees, default (-180, 180).
-    plot : bool
-        If True, display the CAKE image with matplotlib.
-    log_scale : bool
-        If True, plot on a log intensity scale (recommended).
+    Args:
+        image (np.ndarray): 2D detector image.
+        poni_file (str): Path to the PONI calibration file.
+        npt_rad (int): Number of radial bins (x-axis resolution), default 1000.
+        npt_azim (int): Number of azimuthal bins (y-axis resolution), default 360 (1°/bin).
+        unit (str): Radial unit: "q_A^-1", "q_nm^-1", "2th_deg", "2th_rad", "r_mm".
+        mask (np.ndarray, optional): Mask array (1 = ignore, 0 = valid).
+        dark (np.ndarray, optional): Dark current image to subtract.
+        flat (np.ndarray, optional): Flat field image for correction.
+        radial_range (tuple, optional): (min, max) radial range in the chosen unit.
+        azimuth_range (tuple, optional): (min, max) azimuthal range in degrees, default (-180, 180).
 
-    Returns
-    -------
-    cake : np.ndarray
-        2D CAKE image array, shape (npt_azim, npt_rad).
-    radial : np.ndarray
-        Radial axis values (length npt_rad).
-    azimuthal : np.ndarray
-        Azimuthal axis values in degrees (length npt_azim).
+    Returns:
+        cake (np.ndarray): 2D CAKE image array, shape (npt_azim, npt_rad).
+        radial (np.ndarray): Radial axis values (length npt_rad).
+        azimuthal (np.ndarray): Azimuthal axis values in degrees (length npt_azim).
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
@@ -134,53 +115,31 @@ def azimuthal_integration_1d_sigma_clip(
     The AzimuthalIntegrator is cached per PONI file so repeated calls
     (e.g. looping over thousands of frames) do not reload the geometry.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image as a numpy array.
-    poni_file : str
-        Path to the PONI (Point Of Normal Incidence) calibration file.
-    npt : int, optional
-        Number of radial bins in the output pattern (default: 1000).
-    unit : str, optional
-        Output radial unit:
-            "2th_deg" – two-theta in degrees (default)
-            "q_A^-1"  – scattering vector q in Å⁻¹
-            "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_rad" – two-theta in radians
-            "r_mm"    – radius on detector in mm
-    mask : np.ndarray, optional
-        2D mask array (1 = masked/ignored, 0 = valid).
-    dark : np.ndarray, optional
-        Dark-current image to subtract before integration.
-    flat : np.ndarray, optional
-        Flat-field image for pixel-efficiency correction.
-    error_model : str, optional
-        Error model for uncertainty propagation.
-        "hybrid"  – combines Poisson and readout noise (default).
-        "poisson" – pure photon-counting noise.
-    radial_range : tuple of (float, float), optional
-        (min, max) radial range in the chosen unit.
-    azimuth_range : tuple of (float, float), optional
-        (min, max) azimuthal range in degrees, e.g. (-180, 180).
-    thres : float, optional
-        Sigma-clipping threshold in units of standard deviations (default: 3.0).
-    max_iter : int, optional
-        Maximum number of sigma-clipping iterations (default: 5).
+    Args:
+        image (np.ndarray): 2D detector image as a numpy array.
+        poni_file (str): Path to the PONI (Point Of Normal Incidence) calibration file.
+        npt (int, optional): Number of radial bins in the output pattern (default: 1000).
+        unit (str, optional): Output radial unit: "2th_deg" – two-theta in degrees
+            (default), "q_A^-1" – scattering vector q in Å⁻¹, "q_nm^-1" – q in nm⁻¹,
+            "2th_rad" – two-theta in radians, "r_mm" – radius on detector in mm.
+        mask (np.ndarray, optional): 2D mask array (1 = masked/ignored, 0 = valid).
+        dark (np.ndarray, optional): Dark-current image to subtract before integration.
+        flat (np.ndarray, optional): Flat-field image for pixel-efficiency correction.
+        error_model (str, optional): Error model for uncertainty propagation.
+            "hybrid" combines Poisson and readout noise (default); "poisson" is
+            pure photon-counting noise.
+        radial_range (tuple, optional): (min, max) radial range in the chosen unit.
+        azimuth_range (tuple, optional): (min, max) azimuthal range in degrees, e.g. (-180, 180).
+        thres (float, optional): Sigma-clipping threshold in standard deviations (default: 3.0).
+        max_iter (int, optional): Maximum number of sigma-clipping iterations (default: 5).
 
-    Returns
-    -------
-    radial : np.ndarray
-        Radial axis values in the requested unit, shape (npt,).
-    intensity : np.ndarray
-        Integrated intensity at each radial position, shape (npt,).
-    sigma : np.ndarray or None
-        Per-bin uncertainty (only when error_model is set).
+    Returns:
+        radial (np.ndarray): Radial axis values in the requested unit, shape (npt,).
+        intensity (np.ndarray): Integrated intensity at each radial position, shape (npt,).
+        sigma (np.ndarray or None): Per-bin uncertainty (only when error_model is set).
 
-    Raises
-    ------
-    ValueError
-        If the image is not 2-dimensional.
+    Raises:
+        ValueError: If the image is not 2-dimensional.
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
@@ -220,54 +179,33 @@ def azimuthal_integration_1d(
     """
     Perform 1D azimuthal integration of a detector image using pyFAI.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image as a numpy array.
-    poni_file : str
-        Path to the PONI (Point Of Normal Incidence) calibration file.
-    npt : int, optional
-        Number of radial bins in the output pattern (default: 1000).
-    unit : str, optional
-        Output radial unit:
-            "2th_deg" – two-theta in degrees (default)
-            "q_A^-1"  – scattering vector q in Å⁻¹
-            "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_rad" – two-theta in radians
-            "r_mm"    – radius on detector in mm
-    mask : np.ndarray, optional
-        2D mask array (1 = masked/ignored, 0 = valid).
-    dark : np.ndarray, optional
-        Dark-current image to subtract before integration.
-    flat : np.ndarray, optional
-        Flat-field image for pixel-efficiency correction.
-    error_model : str, optional
-        Error model for uncertainty propagation.
-        "poisson" for photon-counting detectors.
-    radial_range : tuple of (float, float), optional
-        (min, max) radial range in the chosen unit.
-    azimuth_range : tuple of (float, float), optional
-        (min, max) azimuthal range in degrees, e.g. (-180, 180).
+    Args:
+        image (np.ndarray): 2D detector image as a numpy array.
+        poni_file (str): Path to the PONI (Point Of Normal Incidence) calibration file.
+        npt (int, optional): Number of radial bins in the output pattern (default: 1000).
+        unit (str, optional): Output radial unit: "2th_deg" – two-theta in degrees
+            (default), "q_A^-1" – scattering vector q in Å⁻¹, "q_nm^-1" – q in nm⁻¹,
+            "2th_rad" – two-theta in radians, "r_mm" – radius on detector in mm.
+        mask (np.ndarray, optional): 2D mask array (1 = masked/ignored, 0 = valid).
+        dark (np.ndarray, optional): Dark-current image to subtract before integration.
+        flat (np.ndarray, optional): Flat-field image for pixel-efficiency correction.
+        error_model (str, optional): Error model for uncertainty propagation;
+            "poisson" for photon-counting detectors.
+        radial_range (tuple, optional): (min, max) radial range in the chosen unit.
+        azimuth_range (tuple, optional): (min, max) azimuthal range in degrees, e.g. (-180, 180).
 
-    Returns
-    -------
-    radial : np.ndarray
-        Radial axis values in the requested unit, shape (npt,).
-    intensity : np.ndarray
-        Integrated intensity at each radial position, shape (npt,).
-    sigma : np.ndarray or None
-        Per-bin uncertainty (only when error_model is set).
+    Returns:
+        radial (np.ndarray): Radial axis values in the requested unit, shape (npt,).
+        intensity (np.ndarray): Integrated intensity at each radial position, shape (npt,).
+        sigma (np.ndarray or None): Per-bin uncertainty (only when error_model is set).
 
-    Raises
-    ------
-    ValueError
-        If the image is not 2-dimensional.
+    Raises:
+        ValueError: If the image is not 2-dimensional.
 
-    Examples
-    --------
-    >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
-    >>> q, I, sigma = azimuthal_integration_1d(image, "detector.poni", npt=500)
-    >>> print(q.shape, I.shape)  # (500,) (500,)
+    Example:
+        >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
+        >>> q, I, sigma = azimuthal_integration_1d(image, "detector.poni", npt=500)
+        >>> print(q.shape, I.shape)  # (500,) (500,)
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
@@ -310,57 +248,35 @@ def azimuthal_integration_1d_filter(
     range within each radial bin are rejected before averaging, making
     this robust against hot pixels and zingers without iterative clipping.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image as a numpy array.
-    poni_file : str
-        Path to the PONI (Point Of Normal Incidence) calibration file.
-    npt : int, optional
-        Number of radial bins in the output pattern (default: 1000).
-    unit : str, optional
-        Output radial unit:
-            "2th_deg" – two-theta in degrees (default)
-            "q_A^-1"  – scattering vector q in Å⁻¹
-            "q_nm^-1" – scattering vector q in nm⁻¹
-            "2th_rad" – two-theta in radians
-            "r_mm"    – radius on detector in mm
-    mask : np.ndarray, optional
-        2D mask array (1 = masked/ignored, 0 = valid).
-    dark : np.ndarray, optional
-        Dark-current image to subtract before integration.
-    flat : np.ndarray, optional
-        Flat-field image for pixel-efficiency correction.
-    error_model : str, optional
-        Error model for uncertainty propagation.
-        "poisson" for photon-counting detectors.
-    radial_range : tuple of (float, float), optional
-        (min, max) radial range in the chosen unit.
-    azimuth_range : tuple of (float, float), optional
-        (min, max) azimuthal range in degrees, e.g. (-180, 180).
-    percentile : tuple of (float, float), optional
-        (low, high) percentile bounds for pixel rejection within each
-        radial bin (default: (10, 90)).
+    Args:
+        image (np.ndarray): 2D detector image as a numpy array.
+        poni_file (str): Path to the PONI (Point Of Normal Incidence) calibration file.
+        npt (int, optional): Number of radial bins in the output pattern (default: 1000).
+        unit (str, optional): Output radial unit: "2th_deg" – two-theta in degrees
+            (default), "q_A^-1" – scattering vector q in Å⁻¹, "q_nm^-1" – q in nm⁻¹,
+            "2th_rad" – two-theta in radians, "r_mm" – radius on detector in mm.
+        mask (np.ndarray, optional): 2D mask array (1 = masked/ignored, 0 = valid).
+        dark (np.ndarray, optional): Dark-current image to subtract before integration.
+        flat (np.ndarray, optional): Flat-field image for pixel-efficiency correction.
+        error_model (str, optional): Error model for uncertainty propagation;
+            "poisson" for photon-counting detectors.
+        radial_range (tuple, optional): (min, max) radial range in the chosen unit.
+        azimuth_range (tuple, optional): (min, max) azimuthal range in degrees, e.g. (-180, 180).
+        percentile (tuple, optional): (low, high) percentile bounds for pixel rejection
+            within each radial bin (default: (10, 90)).
 
-    Returns
-    -------
-    radial : np.ndarray
-        Radial axis values in the requested unit, shape (npt,).
-    intensity : np.ndarray
-        Filtered integrated intensity at each radial position, shape (npt,).
-    sigma : np.ndarray or None
-        Per-bin uncertainty (only when error_model is set).
+    Returns:
+        radial (np.ndarray): Radial axis values in the requested unit, shape (npt,).
+        intensity (np.ndarray): Filtered integrated intensity at each radial position, shape (npt,).
+        sigma (np.ndarray or None): Per-bin uncertainty (only when error_model is set).
 
-    Raises
-    ------
-    ValueError
-        If the image is not 2-dimensional.
+    Raises:
+        ValueError: If the image is not 2-dimensional.
 
-    Examples
-    --------
-    >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
-    >>> q, I, sigma = azimuthal_integration_1d_filter(image, "detector.poni", npt=500)
-    >>> print(q.shape, I.shape)  # (500,) (500,)
+    Example:
+        >>> image = np.random.poisson(1000, (2048, 2048)).astype(np.float32)
+        >>> q, I, sigma = azimuthal_integration_1d_filter(image, "detector.poni", npt=500)
+        >>> print(q.shape, I.shape)  # (500,) (500,)
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
@@ -400,33 +316,21 @@ def integrate_powder_parallel(
     Perform parallel 1D azimuthal integration reading image stacks directly
     from each entry in the HDF5 master file, with normalization by fpico6.
 
-    Parameters
-    ----------
-    master_file : Path
-        Path to the master HDF5 file containing all scan entries.
-    output_file : Path
-        Path to the output HDF5 file.
-    poni_file : Path
-        Path to the PONI calibration file.
-    mask_file : Path
-        Path to the mask file (fabio-readable).
-    rot : np.ndarray
-        Array of rotation angles.
-    n_points : int
-        Number of radial bins in the integrated pattern.
-    n_workers : int
-        Number of parallel integration threads.
-    unit : str
-        Radial unit for integration (e.g. ``"2th_deg"``, ``"q_A^-1"``).
-    remove_spots : bool, optional
-        If ``True``, use percentile-filtered integration
-        (:func:`azimuthal_integration_1d_filter`) to reject single-crystal
-        Bragg spots from each frame; otherwise plain integration is used
-        (default ``False``).
-    percentile : tuple of (float, float), optional
-        ``(low, high)`` percentile bounds passed to
-        :func:`azimuthal_integration_1d_filter` when *remove_spots* is ``True``
-        (default ``(10, 90)``).
+    Args:
+        master_file (Path): Path to the master HDF5 file containing all scan entries.
+        output_file (Path): Path to the output HDF5 file.
+        poni_file (Path): Path to the PONI calibration file.
+        mask_file (Path): Path to the mask file (fabio-readable).
+        rot (np.ndarray): Array of rotation angles.
+        n_points (int): Number of radial bins in the integrated pattern.
+        n_workers (int): Number of parallel integration threads.
+        unit (str): Radial unit for integration (e.g. ``"2th_deg"``, ``"q_A^-1"``).
+        remove_spots (bool, optional): If ``True``, use percentile-filtered integration
+            (:func:`azimuthal_integration_1d_filter`) to reject single-crystal Bragg
+            spots from each frame; otherwise plain integration is used (default ``False``).
+        percentile (tuple, optional): ``(low, high)`` percentile bounds passed to
+            :func:`azimuthal_integration_1d_filter` when *remove_spots* is ``True``
+            (default ``(10, 90)``).
     """
     t0 = time.time()
     mask = fabio.open(mask_file).data

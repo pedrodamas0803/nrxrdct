@@ -48,18 +48,13 @@ def _read_sinogram_slice(
     """
     Read one 2θ slice from the sinogram HDF5 file.
 
-    Parameters
-    ----------
-    sinogram_file : Path
-        HDF5 file containing the ``sinogram`` dataset of shape
-        ``(n_tth, n_rot, n_lines)``.
-    tth_idx : int
-        Index along the 2θ axis to read.
+    Args:
+        sinogram_file (Path): HDF5 file containing the ``sinogram`` dataset of shape
+            ``(n_tth, n_rot, n_lines)``.
+        tth_idx (int): Index along the 2θ axis to read.
 
-    Returns
-    -------
-    np.ndarray
-        Array of shape ``(n_lines, n_rot)`` ready for :func:`reconstruct_slice`.
+    Returns:
+        np.ndarray: Array of shape ``(n_lines, n_rot)`` ready for :func:`reconstruct_slice`.
     """
     with h5py.File(sinogram_file, "r") as hin:
         # sino shape: (n_tth, n_rot, n_lines)
@@ -84,20 +79,13 @@ def _write_slice(
     provenance attributes.  If the dataset already exists the write is
     silently skipped (idempotent).
 
-    Parameters
-    ----------
-    output_file : Path
-        Destination HDF5 file.
-    tth_idx : int
-        2θ bin index used to name the dataset.
-    reconstruction : np.ndarray
-        2-D reconstructed image of shape ``(N, N)``.
-    algo : str
-        ASTRA algorithm name stored as an attribute.
-    num_iter : int
-        Number of iterations stored as an attribute.
-    dty_step : float
-        Detector pixel spacing stored as an attribute.
+    Args:
+        output_file (Path): Destination HDF5 file.
+        tth_idx (int): 2θ bin index used to name the dataset.
+        reconstruction (np.ndarray): 2-D reconstructed image of shape ``(N, N)``.
+        algo (str): ASTRA algorithm name stored as an attribute.
+        num_iter (int): Number of iterations stored as an attribute.
+        dty_step (float): Detector pixel spacing stored as an attribute.
     """
     dataset_path = f"reconstruction/slice_{tth_idx:04d}"
     lock_path    = str(output_file) + ".lock"
@@ -147,28 +135,18 @@ def _process_slice(
     Skips silently if ``reconstruction/slice_<tth_idx:04d>`` is already
     present in *output_file*.
 
-    Parameters
-    ----------
-    tth_idx : int
-        2θ bin index to reconstruct.
-    sinogram_file : Path
-        HDF5 file containing the full sinogram.
-    output_file : Path
-        Destination HDF5 file for reconstructed slices.
-    rot_rad : np.ndarray
-        Rotation angles in radians, length ``n_rot``.
-    algo : str
-        ASTRA reconstruction algorithm.
-    num_iter : int
-        Number of iterations.
-    dty_step : float
-        Detector pixel spacing.
+    Args:
+        tth_idx (int): 2θ bin index to reconstruct.
+        sinogram_file (Path): HDF5 file containing the full sinogram.
+        output_file (Path): Destination HDF5 file for reconstructed slices.
+        rot_rad (np.ndarray): Rotation angles in radians, length ``n_rot``.
+        algo (str): ASTRA reconstruction algorithm.
+        num_iter (int): Number of iterations.
+        dty_step (float): Detector pixel spacing.
 
-    Returns
-    -------
-    bool
-        ``True`` if the slice was processed (or already done), ``False`` on
-        unrecoverable failure.
+    Returns:
+        bool: ``True`` if the slice was processed (or already done), ``False`` on
+            unrecoverable failure.
     """
     dataset_path = f"reconstruction/slice_{tth_idx:04d}"
 

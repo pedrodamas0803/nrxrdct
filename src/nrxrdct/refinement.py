@@ -48,34 +48,21 @@ class BaseRefinement(Scan):
         polarization: float = 0.99,
     ) -> None:
         """
-        Parameters
-        ----------
-        acquisition_file : Path
-            Raw acquisition data file (passed to :class:`~nrxrdct.parameters.Scan`).
-        sample_name : str
-            Sample identifier used in output file names.
-        scan_type : str, optional
-            Scan geometry (default ``"half-turn"``).
-        translation_motor : str, optional
-            Inner-loop translation motor name (default ``"dty"``).
-        rotation_motor : str, optional
-            Rotation motor name (default ``"rot"``).
-        outer_loop_motor : str, optional
-            Outer-loop motor name (default ``"translation"``).
-        beam_size : float, optional
-            Beam size in metres (default 100 µm).
-        beam_energy : float, optional
-            Beam energy in keV (default 44).
-        tth_lims : tuple of (float or None, float or None), optional
-            ``(low, high)`` 2θ limits in degrees.  ``None`` means use the
-            pattern extent (default ``(None, None)``).
-        xy_file : Path, optional
-            Integrated pattern to fit (default ``"integrated_data.xy"``).
-        param_file : Path, optional
-            Calibrated ``.instprm`` file (default ``"calibrated_instrument.instprm"``).
-        polarization : float, optional
-            Beam polarization fraction used when writing the starting instrument
-            parameter file (default 0.99).
+        Args:
+            acquisition_file (Path): Raw acquisition data file (passed to :class:`~nrxrdct.parameters.Scan`).
+            sample_name (str): Sample identifier used in output file names.
+            scan_type (str, optional): Scan geometry (default ``"half-turn"``).
+            translation_motor (str, optional): Inner-loop translation motor name (default ``"dty"``).
+            rotation_motor (str, optional): Rotation motor name (default ``"rot"``).
+            outer_loop_motor (str, optional): Outer-loop motor name (default ``"translation"``).
+            beam_size (float, optional): Beam size in metres (default 100 µm).
+            beam_energy (float, optional): Beam energy in keV (default 44).
+            tth_lims (tuple of (float or None, float or None), optional): ``(low, high)`` 2θ limits
+                in degrees.  ``None`` means use the pattern extent (default ``(None, None)``).
+            xy_file (Path, optional): Integrated pattern to fit (default ``"integrated_data.xy"``).
+            param_file (Path, optional): Calibrated ``.instprm`` file (default ``"calibrated_instrument.instprm"``).
+            polarization (float, optional): Beam polarization fraction used when writing the starting
+                instrument parameter file (default 0.99).
         """
         super().__init__(
             acquisition_file,
@@ -113,15 +100,11 @@ class BaseRefinement(Scan):
         ``self.phases`` respectively so that all other methods work
         immediately after loading.
 
-        Parameters
-        ----------
-        gpx_file : Path
-            Path to an existing ``.gpx`` file.
+        Args:
+            gpx_file (Path): Path to an existing ``.gpx`` file.
 
-        Returns
-        -------
-        tuple
-            ``(gpx, hist)`` — the :class:`G2Project` and the first histogram.
+        Returns:
+            tuple: ``(gpx, hist)`` — the :class:`G2Project` and the first histogram.
         """
         self.gpx = G2sc.G2Project(gpxfile=str(gpx_file))
         self.hist = self.gpx.histograms()[0]
@@ -138,15 +121,11 @@ class BaseRefinement(Scan):
         """
         Create a new GSAS-II project and add the powder histogram.
 
-        Parameters
-        ----------
-        gpx_file : Path, optional
-            Output ``.gpx`` file path (default ``"model.gpx"``).
+        Args:
+            gpx_file (Path, optional): Output ``.gpx`` file path (default ``"model.gpx"``).
 
-        Returns
-        -------
-        tuple
-            ``(gpx, hist)`` — the :class:`G2Project` and the added histogram object.
+        Returns:
+            tuple: ``(gpx, hist)`` — the :class:`G2Project` and the added histogram object.
         """
         self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
@@ -166,20 +145,14 @@ class BaseRefinement(Scan):
         """
         Add a crystallographic phase from a CIF file to the GSAS-II project.
 
-        Parameters
-        ----------
-        cif_file : Path, optional
-            Path to the CIF file (default ``"cif_file"``).
-        phase_name : str, optional
-            Name to assign the phase in GSAS-II (default ``"LaB6"``).
-        block_cell : bool, optional
-            If ``True``, fixes all atom positions and the unit cell so only
-            instrumental parameters are refined in subsequent steps (default ``True``).
+        Args:
+            cif_file (Path, optional): Path to the CIF file (default ``"cif_file"``).
+            phase_name (str, optional): Name to assign the phase in GSAS-II (default ``"LaB6"``).
+            block_cell (bool, optional): If ``True``, fixes all atom positions and the unit cell so only
+                instrumental parameters are refined in subsequent steps (default ``True``).
 
-        Returns
-        -------
-        G2Phase
-            The newly added GSAS-II phase object.
+        Returns:
+            G2Phase: The newly added GSAS-II phase object.
         """
         self.calibrant_composition = phase_name
         self.phase = self.gpx.add_phase(
@@ -201,12 +174,9 @@ class BaseRefinement(Scan):
         least-squares fit.  Can be called at any time to narrow or widen
         the range without rebuilding the project.
 
-        Parameters
-        ----------
-        low : float
-            Lower 2θ limit in degrees.
-        high : float
-            Upper 2θ limit in degrees.
+        Args:
+            low (float): Lower 2θ limit in degrees.
+            high (float): Upper 2θ limit in degrees.
         """
         self.hist.set_refinements({"Limits": [low, high]})
         self.low_lim = low
@@ -223,12 +193,9 @@ class BaseRefinement(Scan):
         Typical uses: ice rings, substrate peaks, beam-stop shadow,
         or detector artefacts.
 
-        Parameters
-        ----------
-        low : float
-            Lower bound of the excluded region in degrees.
-        high : float
-            Upper bound of the excluded region in degrees.
+        Args:
+            low (float): Lower bound of the excluded region in degrees.
+            high (float): Upper bound of the excluded region in degrees.
         """
         current = self.hist.Excluded()
         current.append([low, high])
@@ -261,14 +228,11 @@ class BaseRefinement(Scan):
         phase is refined instead of the structural scale, and atomic
         structure factors are not used.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to change.  ``None`` (default) applies to all
-            phases.
-        enable : bool, optional
-            ``True`` (default) activates LeBail; ``False`` switches back
-            to Rietveld mode.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to change.  ``None``
+                (default) applies to all phases.
+            enable (bool, optional): ``True`` (default) activates LeBail; ``False`` switches back
+                to Rietveld mode.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -300,41 +264,36 @@ class BaseRefinement(Scan):
         """
         Refine the powder pattern background.
 
-        Parameters
-        ----------
-        number_coeff : int, optional
-            Number of background function coefficients (default 12).
-        do_refine : bool, optional
-            Whether to activate the background refinement flag (default ``True``).
-        function : str, optional
-            Background function type.  Must be one of:
+        Args:
+            number_coeff (int, optional): Number of background function coefficients (default 12).
+            do_refine (bool, optional): Whether to activate the background refinement flag (default ``True``).
+            function (str, optional): Background function type.  Must be one of:
 
-            * ``"chebyschev"``        — Chebyshev polynomial (default)
-            * ``"chebyschev-1"``      — Chebyshev polynomial (1st kind)
-            * ``"cosine"``            — Cosine series
-            * ``"Q^2 power series"``  — Q² power series
-            * ``"Q^-2 power series"`` — Q⁻² power series
-            * ``"lin interpolate"``   — Linear interpolation
-            * ``"inv interpolate"``   — Inverse interpolation
-            * ``"log interpolate"``   — Logarithmic interpolation
-        debye_terms : list of dict, optional
-            Debye–scattering components for amorphous content.  Each entry is a
-            dict with the following keys (all optional; unset keys fall back to
-            defaults):
+                * ``"chebyschev"``        — Chebyshev polynomial (default)
+                * ``"chebyschev-1"``      — Chebyshev polynomial (1st kind)
+                * ``"cosine"``            — Cosine series
+                * ``"Q^2 power series"``  — Q² power series
+                * ``"Q^-2 power series"`` — Q⁻² power series
+                * ``"lin interpolate"``   — Linear interpolation
+                * ``"inv interpolate"``   — Inverse interpolation
+                * ``"log interpolate"``   — Logarithmic interpolation
+            debye_terms (list of dict, optional): Debye–scattering components for amorphous content.
+                Each entry is a dict with the following keys (all optional; unset keys fall back to
+                defaults):
 
-            * ``"A"``        — amplitude (default 1.0)
-            * ``"R"``        — characteristic radius in Å (default 1.0)
-            * ``"U"``        — damping / thermal factor (default 0.01)
-            * ``"refine_A"`` — refine A (default ``True``)
-            * ``"refine_R"`` — refine R (default ``True``)
-            * ``"refine_U"`` — refine U (default ``True``)
+                * ``"A"``        — amplitude (default 1.0)
+                * ``"R"``        — characteristic radius in Å (default 1.0)
+                * ``"U"``        — damping / thermal factor (default 0.01)
+                * ``"refine_A"`` — refine A (default ``True``)
+                * ``"refine_R"`` — refine R (default ``True``)
+                * ``"refine_U"`` — refine U (default ``True``)
 
-            Example::
+                Example::
 
-                debye_terms=[
-                    {"A": 1000.0, "R": 4.5, "U": 0.01,
-                     "refine_A": True, "refine_R": True, "refine_U": False},
-                ]
+                    debye_terms=[
+                        {"A": 1000.0, "R": 4.5, "U": 0.01,
+                         "refine_A": True, "refine_R": True, "refine_U": False},
+                    ]
         """
         valid_functions = {
             "chebyschev",
@@ -409,14 +368,11 @@ class BaseRefinement(Scan):
         """
         Refine the HAP scale factor for one or more phases.
 
-        Parameters
-        ----------
-        phase : str or list of str
-            Phase name, or list of phase names, whose HAP scale factor should
-            be refined.  Names must match those used in :meth:`add_phase`.
-        freeze : bool, optional
-            If ``True``, freeze the scale flag after the refinement cycle
-            (default ``False``).
+        Args:
+            phase (str or list of str): Phase name, or list of phase names, whose HAP scale factor
+                should be refined.  Names must match those used in :meth:`add_phase`.
+            freeze (bool, optional): If ``True``, freeze the scale flag after the refinement cycle
+                (default ``False``).
         """
         names = [phase] if isinstance(phase, str) else list(phase)
         available = {ph.name: ph for ph in self.gpx.phases()}
@@ -458,12 +414,9 @@ class BaseRefinement(Scan):
         parameters are well converged.  Refining wavelength and cell
         simultaneously is generally not recommended.
 
-        Parameters
-        ----------
-        freeze : bool, optional
-            If ``True``, clear the ``Lam`` refinement flag after the cycle
-            so the wavelength stays fixed in subsequent steps (default
-            ``False``).
+        Args:
+            freeze (bool, optional): If ``True``, clear the ``Lam`` refinement flag after the cycle
+                so the wavelength stays fixed in subsequent steps (default ``False``).
         """
         self.hist.set_refinements({"Instrument Parameters": ["Lam"]})
         self.gpx.save()
@@ -516,24 +469,17 @@ class BaseRefinement(Scan):
         (``entry[2]``) is set to ``False`` so it will not move during
         subsequent refinement cycles.
 
-        Parameters
-        ----------
-        parameter : str
-            Key in ``self.hist["Instrument Parameters"][0]`` to modify.
-            Call :meth:`print_instrument_parameters` to see all available
-            keys for the current project (e.g. ``"Zero"``, ``"Lam"``,
-            ``"U"``, ``"V"``, ``"W"``).
-        value : float
-            Value to assign to the parameter.
+        Args:
+            parameter (str): Key in ``self.hist["Instrument Parameters"][0]`` to modify.
+                Call :meth:`print_instrument_parameters` to see all available keys for the
+                current project (e.g. ``"Zero"``, ``"Lam"``, ``"U"``, ``"V"``, ``"W"``).
+            value (float): Value to assign to the parameter.
 
-        Raises
-        ------
-        KeyError
-            If *parameter* is not found in the instrument-parameter
-            dictionary for this histogram.
-        TypeError
-            If the entry for *parameter* is not a list (i.e. it is a
-            read-only metadata field such as ``"Type"``).
+        Raises:
+            KeyError: If *parameter* is not found in the instrument-parameter dictionary for
+                this histogram.
+            TypeError: If the entry for *parameter* is not a list (i.e. it is a read-only
+                metadata field such as ``"Type"``).
         """
         ip = self.hist["Instrument Parameters"][0]
         if parameter not in ip:
@@ -565,35 +511,33 @@ class BaseRefinement(Scan):
         """
         Refine a sample displacement parameter.
 
-        Parameters
-        ----------
-        parameter : str, optional
-            Sample parameter to refine.  Choose according to the geometry:
+        Args:
+            parameter (str, optional): Sample parameter to refine.  Choose according to the geometry:
 
-            * ``"Shift"`` (default) — Bragg-Brentano geometry.  Displacement of
-              the sample surface along the diffractometer axis (perpendicular to
-              the sample surface, i.e. along the bisector of the incident and
-              diffracted beams).  Shifts peak positions as:
+                * ``"Shift"`` (default) — Bragg-Brentano geometry.  Displacement of
+                  the sample surface along the diffractometer axis (perpendicular to
+                  the sample surface, i.e. along the bisector of the incident and
+                  diffracted beams).  Shifts peak positions as:
 
-                  Δ(2θ) = −2 · (0.18 / π·R) · Shift · cos(θ)
+                      Δ(2θ) = −2 · (0.18 / π·R) · Shift · cos(θ)
 
-            * ``"DisplaceX"`` — Debye-Scherrer (capillary) geometry.
-              Displacement **perpendicular to the incident beam** in the
-              horizontal plane (the plane containing the beam and the detector
-              arc).  Shifts peak positions as:
+                * ``"DisplaceX"`` — Debye-Scherrer (capillary) geometry.
+                  Displacement **perpendicular to the incident beam** in the
+                  horizontal plane (the plane containing the beam and the detector
+                  arc).  Shifts peak positions as:
 
-                  Δ(2θ) = −(0.18 / π·R) · DisplaceX · cos(2θ)
+                      Δ(2θ) = −(0.18 / π·R) · DisplaceX · cos(2θ)
 
-            * ``"DisplaceY"`` — Debye-Scherrer (capillary) geometry.
-              Displacement **parallel to the incident beam** (along the beam
-              propagation direction).  Shifts peak positions as:
+                * ``"DisplaceY"`` — Debye-Scherrer (capillary) geometry.
+                  Displacement **parallel to the incident beam** (along the beam
+                  propagation direction).  Shifts peak positions as:
 
-                  Δ(2θ) = −(0.18 / π·R) · DisplaceY · sin(2θ)
+                      Δ(2θ) = −(0.18 / π·R) · DisplaceY · sin(2θ)
 
-            In all formulae R is the goniometer radius in mm and displacements
-            are in μm.  ``DisplaceX`` and ``DisplaceY`` are mutually orthogonal
-            components whose combined effect rotates with 2θ through the cos/sin
-            weighting.
+                In all formulae R is the goniometer radius in mm and displacements
+                are in μm.  ``DisplaceX`` and ``DisplaceY`` are mutually orthogonal
+                components whose combined effect rotates with 2θ through the cos/sin
+                weighting.
         """
         valid = {"Shift", "DisplaceX", "DisplaceY"}
         if parameter not in valid:
@@ -629,34 +573,31 @@ class BaseRefinement(Scan):
         estimate the parameter value from the chemical composition, density,
         beam energy, and sample dimensions before calling this method.
 
-        Parameters
-        ----------
-        absorption : float
-            GSAS-II ``Absorption`` parameter value.  The physical meaning
-            depends on the sample geometry set in the GSAS-II project:
+        Args:
+            absorption (float): GSAS-II ``Absorption`` parameter value.  The physical meaning
+                depends on the sample geometry set in the GSAS-II project:
 
-            * **Debye-Scherrer (capillary, transmission)** — dimensionless
-              product μr, where μ is the linear attenuation coefficient
-              (cm⁻¹) and r is the capillary radius (cm).  Typical values
-              for 0.3–0.7 mm capillaries at synchrotron energies
-              (30–100 keV) are in the range 0.001–0.5.
+                * **Debye-Scherrer (capillary, transmission)** — dimensionless
+                  product μr, where μ is the linear attenuation coefficient
+                  (cm⁻¹) and r is the capillary radius (cm).  Typical values
+                  for 0.3–0.7 mm capillaries at synchrotron energies
+                  (30–100 keV) are in the range 0.001–0.5.
 
-            * **Flat-plate (reflection or transmission)** — dimensionless
-              product μt, where t is the sample thickness (cm).
+                * **Flat-plate (reflection or transmission)** — dimensionless
+                  product μt, where t is the sample thickness (cm).
 
-        refine : bool, optional
-            If ``True``, activate the refinement flag so the absorption
-            parameter is included in the next least-squares cycle.
-            Default ``False`` (parameter fixed at the supplied value).
+            refine (bool, optional): If ``True``, activate the refinement flag so the absorption
+                parameter is included in the next least-squares cycle.
+                Default ``False`` (parameter fixed at the supplied value).
 
-            .. note::
-                Absorption and the overall scale factor are strongly
-                correlated — both scale the pattern intensity.  Only free
-                absorption for refinement after the scale factor and
-                background are well converged, and only when the pattern
-                exhibits a clear low-angle intensity deficit consistent with
-                absorption.  For thin capillaries (μr < 0.1) the correction
-                is small enough to fix at the calculated value.
+                Note:
+                    Absorption and the overall scale factor are strongly
+                    correlated — both scale the pattern intensity.  Only free
+                    absorption for refinement after the scale factor and
+                    background are well converged, and only when the pattern
+                    exhibits a clear low-angle intensity deficit consistent with
+                    absorption.  For thin capillaries (μr < 0.1) the correction
+                    is small enough to fix at the calculated value.
         """
         self.hist.SampleParameters["Absorption"][0] = absorption
         self.hist.SampleParameters["Absorption"][1] = refine
@@ -672,26 +613,18 @@ class BaseRefinement(Scan):
         ``freeze=True`` the refinement flag (``entry[1]``) is also cleared
         so the parameter will not move in subsequent refinement cycles.
 
-        Parameters
-        ----------
-        parameter : str
-            Key in ``self.hist.SampleParameters`` to modify.  Common
-            choices: ``"Scale"``, ``"Absorption"``, ``"Shift"``,
-            ``"DisplaceX"``, ``"DisplaceY"``, ``"Transparency"``,
-            ``"SurfRoughA"``, ``"SurfRoughB"``.
-        value : float
-            Value to assign to the parameter.
-        freeze : bool, optional
-            If ``True``, clear the refinement flag after setting the value
-            so the parameter stays fixed in subsequent cycles (default
-            ``False``).
+        Args:
+            parameter (str): Key in ``self.hist.SampleParameters`` to modify.  Common
+                choices: ``"Scale"``, ``"Absorption"``, ``"Shift"``,
+                ``"DisplaceX"``, ``"DisplaceY"``, ``"Transparency"``,
+                ``"SurfRoughA"``, ``"SurfRoughB"``.
+            value (float): Value to assign to the parameter.
+            freeze (bool, optional): If ``True``, clear the refinement flag after setting the value
+                so the parameter stays fixed in subsequent cycles (default ``False``).
 
-        Raises
-        ------
-        KeyError
-            If *parameter* is not found in the sample-parameter dictionary.
-        TypeError
-            If the entry for *parameter* is not a list (read-only field).
+        Raises:
+            KeyError: If *parameter* is not found in the sample-parameter dictionary.
+            TypeError: If the entry for *parameter* is not a list (read-only field).
         """
         sp = self.hist.SampleParameters
         if parameter not in sp:
@@ -722,48 +655,45 @@ class BaseRefinement(Scan):
         flag is cleared so that the value is not changed by later refinement
         steps unless explicitly freed again.
 
-        Parameters
-        ----------
-        refine : list of str, optional
-            Ordered list of Gaussian instrument parameters to refine.
-            Valid choices (all available in the FCJVoigt / ExpFCJVoigt profile):
+        Args:
+            refine (list of str, optional): Ordered list of Gaussian instrument parameters to refine.
+                Valid choices (all available in the FCJVoigt / ExpFCJVoigt profile):
 
-            ``"U"``
-                Caglioti quadratic term: FWHM²_G += U·tan²θ.
-                Dominated by sample microstrain and wavelength dispersion.
-                Units: centideg².
+                ``"U"``
+                    Caglioti quadratic term: FWHM²_G += U·tan²θ.
+                    Dominated by sample microstrain and wavelength dispersion.
+                    Units: centideg².
 
-            ``"V"``
-                Caglioti linear term: FWHM²_G += V·tanθ.
-                Usually small; cross-term between source and detector
-                contributions.  Units: centideg².
+                ``"V"``
+                    Caglioti linear term: FWHM²_G += V·tanθ.
+                    Usually small; cross-term between source and detector
+                    contributions.  Units: centideg².
 
-            ``"W"``
-                Caglioti constant term: FWHM²_G += W.
-                For a well-collimated synchrotron beam with a 2-D detector
-                this is often the *only* non-negligible Gaussian contribution.
-                Units: centideg².
+                ``"W"``
+                    Caglioti constant term: FWHM²_G += W.
+                    For a well-collimated synchrotron beam with a 2-D detector
+                    this is often the *only* non-negligible Gaussian contribution.
+                    Units: centideg².
 
-            ``"Z"``
-                Size-broadening Gaussian term: FWHM²_G += Z/cos²θ.
-                Encodes crystallite-size broadening in the Gaussian channel.
-                Units: centideg².
+                ``"Z"``
+                    Size-broadening Gaussian term: FWHM²_G += Z/cos²θ.
+                    Encodes crystallite-size broadening in the Gaussian channel.
+                    Units: centideg².
 
-            ``"SH/L"``
-                Finger–Cox–Jepcoat axial-divergence parameter (ratio of
-                sample-to-detector half-height over sample-to-detector
-                distance).  Affects low-angle peak asymmetry.  Dimensionless.
-                Not available in the EpsVoigt (PXB) profile.
+                ``"SH/L"``
+                    Finger–Cox–Jepcoat axial-divergence parameter (ratio of
+                    sample-to-detector half-height over sample-to-detector
+                    distance).  Affects low-angle peak asymmetry.  Dimensionless.
+                    Not available in the EpsVoigt (PXB) profile.
 
-            For a synchrotron experiment with a 2-D integrating detector a
-            typical starting point is ``["W"]``.  Laboratory sources usually
-            benefit from refining ``["U", "V", "W"]`` together (sequentially).
+                For a synchrotron experiment with a 2-D integrating detector a
+                typical starting point is ``["W"]``.  Laboratory sources usually
+                benefit from refining ``["U", "V", "W"]`` together (sequentially).
 
-        Notes
-        -----
-        Parameters are refined *sequentially* (one per cycle).  To refine
-        them simultaneously use :meth:`refine_peak_profile` and pass the
-        desired list via the ``parameters`` argument.
+        Note:
+            Parameters are refined *sequentially* (one per cycle).  To refine
+            them simultaneously use :meth:`refine_peak_profile` and pass the
+            desired list via the ``parameters`` argument.
         """
         ip = self.hist["Instrument Parameters"][0]
         for param in refine:
@@ -792,32 +722,29 @@ class BaseRefinement(Scan):
         flag is cleared so that the value is not changed by later refinement
         steps unless explicitly freed again.
 
-        Parameters
-        ----------
-        refine : list of str, optional
-            Ordered list of Lorentzian instrument parameters to refine.
-            Valid choices:
+        Args:
+            refine (list of str, optional): Ordered list of Lorentzian instrument parameters to refine.
+                Valid choices:
 
-            ``"X"``
-                Lorentzian size-broadening term: FWHM_L += X/cosθ.
-                Encodes crystallite-size-induced Lorentzian broadening.
-                Units: centideg.
+                ``"X"``
+                    Lorentzian size-broadening term: FWHM_L += X/cosθ.
+                    Encodes crystallite-size-induced Lorentzian broadening.
+                    Units: centideg.
 
-            ``"Y"``
-                Lorentzian strain-broadening term: FWHM_L += Y·tanθ.
-                Encodes microstrain-induced Lorentzian broadening.
-                Units: centideg.
+                ``"Y"``
+                    Lorentzian strain-broadening term: FWHM_L += Y·tanθ.
+                    Encodes microstrain-induced Lorentzian broadening.
+                    Units: centideg.
 
-            The total Lorentzian FWHM combines with the Gaussian via the
-            Thompson–Cox–Hastings pseudo-Voigt mixing rule:
+                The total Lorentzian FWHM combines with the Gaussian via the
+                Thompson–Cox–Hastings pseudo-Voigt mixing rule:
 
-                FWHM_total⁵ = FWHM_G⁵ + FWHM_L⁵  (approximate)
+                    FWHM_total⁵ = FWHM_G⁵ + FWHM_L⁵  (approximate)
 
-        Notes
-        -----
-        Parameters are refined *sequentially* (one per cycle).  To refine
-        them simultaneously use :meth:`refine_peak_profile` and pass the
-        desired list via the ``parameters`` argument.
+        Note:
+            Parameters are refined *sequentially* (one per cycle).  To refine
+            them simultaneously use :meth:`refine_peak_profile` and pass the
+            desired list via the ``parameters`` argument.
         """
         ip = self.hist["Instrument Parameters"][0]
         for param in refine:
@@ -844,8 +771,8 @@ class BaseRefinement(Scan):
         """
         Refine instrument peak-profile parameters for the chosen profile model.
 
-        Profile models
-        --------------
+        **Profile models**
+
         GSAS-II encodes the active profile in the third character of the
         ``Type`` instrument-parameter string (e.g. ``'PXC'`` → FCJVoigt).
         Switching ``profile`` here updates that character automatically and
@@ -927,19 +854,16 @@ class BaseRefinement(Scan):
             beta-0, beta-1 with ExpFCJVoigt.  ``SH/L`` is **not**
             available for this model.
 
-        Parameters
-        ----------
-        profile : ``"FCJVoigt"`` | ``"ExpFCJVoigt"`` | ``"EpsVoigt"``, optional
-            Peak profile model to activate and refine (default
-            ``"FCJVoigt"``).
-        parameters : list of str, optional
-            Instrument parameters to refine, refined sequentially.
-            Must be valid for the chosen ``profile`` — see table above.
-            If ``None`` (default), a sensible starting set is used:
+        Args:
+            profile (``"FCJVoigt"`` | ``"ExpFCJVoigt"`` | ``"EpsVoigt"``, optional):
+                Peak profile model to activate and refine (default ``"FCJVoigt"``).
+            parameters (list of str, optional): Instrument parameters to refine, refined sequentially.
+                Must be valid for the chosen ``profile`` — see table above.
+                If ``None`` (default), a sensible starting set is used:
 
-            * FCJVoigt   → ``["W", "X", "Y"]``
-            * ExpFCJVoigt → ``["W", "alpha-0", "alpha-1", "beta-0", "beta-1"]``
-            * EpsVoigt   → ``["W", "alpha-0", "alpha-1", "beta-0", "beta-1"]``
+                * FCJVoigt   → ``["W", "X", "Y"]``
+                * ExpFCJVoigt → ``["W", "alpha-0", "alpha-1", "beta-0", "beta-1"]``
+                * EpsVoigt   → ``["W", "alpha-0", "alpha-1", "beta-0", "beta-1"]``
         """
         _TYPE_CHAR = {"FCJVoigt": "C", "ExpFCJVoigt": "A", "EpsVoigt": "B"}
         _VALID_PARAMS = {
@@ -1033,25 +957,19 @@ class BaseRefinement(Scan):
         """
         Refine preferred orientation (texture) for one or more phases.
 
-        Parameters
-        ----------
-        model : ``"MD"`` | ``"SH"``, optional
-            Texture model (default ``"MD"``).  See model descriptions below.
-        phase : str, list of str, or None, optional
-            Phase name(s) to apply the refinement to.  ``None`` (default)
-            applies to all phases in the project.
-        parsMD : dict, optional
-            Full parameter dictionary for the March-Dollase model.
-            Default is ``MD_DICT`` from ``refine_dict``.  You must supply
-            the complete dict when overriding any value — partial updates
-            are not merged automatically.
-        parsSH : dict, optional
-            Full parameter dictionary for the spherical-harmonics model.
-            Default is ``SH_DICT`` from ``refine_dict``.  Same caveat as
-            ``parsMD``.
+        Args:
+            model (``"MD"`` | ``"SH"``, optional): Texture model (default ``"MD"``).
+                See model descriptions below.
+            phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
+                ``None`` (default) applies to all phases in the project.
+            parsMD (dict, optional): Full parameter dictionary for the March-Dollase model.
+                Default is ``MD_DICT`` from ``refine_dict``.  You must supply the complete dict
+                when overriding any value — partial updates are not merged automatically.
+            parsSH (dict, optional): Full parameter dictionary for the spherical-harmonics model.
+                Default is ``SH_DICT`` from ``refine_dict``.  Same caveat as ``parsMD``.
 
-        Models
-        ------
+        **Models:**
+
         **March-Dollase** (``"MD"``)
             Single-parameter phenomenological model.  It assumes a
             cylindrically symmetric texture (fibre or rolling texture) about
@@ -1179,69 +1097,64 @@ class BaseRefinement(Scan):
         approach lets less-correlated parameters (e.g. U\ :sub:`iso`)
         converge before adding more (e.g. fractional coordinates).
 
-        Parameters
-        ----------
-        flags : list of str, optional
-            Sequence of GSAS-II atom-refinement flag strings applied in
-            order.  Each string is any combination of the tokens below;
-            the valid characters are ``X``, ``U``, ``F``, and space.
+        Args:
+            flags (list of str, optional): Sequence of GSAS-II atom-refinement flag strings applied
+                in order.  Each string is any combination of the tokens below;
+                the valid characters are ``X``, ``U``, ``F``, and space.
 
-            ``""`` or ``" "``
-                All atomic parameters fixed.  Safe starting point before
-                any structural refinement begins.
+                ``""`` or ``" "``
+                    All atomic parameters fixed.  Safe starting point before
+                    any structural refinement begins.
 
-            ``"U"``
-                Isotropic displacement parameter U\ :sub:`iso` only.
-                Good first step once scale and background are stable:
-                U\ :sub:`iso` is weakly correlated with most structural
-                parameters and converges quickly.
+                ``"U"``
+                    Isotropic displacement parameter U\ :sub:`iso` only.
+                    Good first step once scale and background are stable:
+                    U\ :sub:`iso` is weakly correlated with most structural
+                    parameters and converges quickly.
 
-            ``"X"``
-                Fractional coordinates (x, y, z) only.  Use when the
-                displacement model is already well determined and you want
-                to let the atoms relax to their equilibrium positions.
+                ``"X"``
+                    Fractional coordinates (x, y, z) only.  Use when the
+                    displacement model is already well determined and you want
+                    to let the atoms relax to their equilibrium positions.
 
-            ``"XU"``
-                Fractional coordinates + U\ :sub:`iso`.  Standard choice
-                for a well-conditioned Rietveld refinement.  Default second
-                stage after ``"U"``.
+                ``"XU"``
+                    Fractional coordinates + U\ :sub:`iso`.  Standard choice
+                    for a well-conditioned Rietveld refinement.  Default second
+                    stage after ``"U"``.
 
-            ``"F"``
-                Site occupancy only.  Isolate occupancy refinement when
-                the structure is well determined but partial occupancy is
-                suspected (defects, solid solutions).
+                ``"F"``
+                    Site occupancy only.  Isolate occupancy refinement when
+                    the structure is well determined but partial occupancy is
+                    suspected (defects, solid solutions).
 
-            ``"XF"``
-                Fractional coordinates + site occupancy.  Use when
-                U\ :sub:`iso` is already stable and occupancy needs to
-                be freed simultaneously with positional parameters.
+                ``"XF"``
+                    Fractional coordinates + site occupancy.  Use when
+                    U\ :sub:`iso` is already stable and occupancy needs to
+                    be freed simultaneously with positional parameters.
 
-            ``"XUF"``
-                Fractional coordinates + U\ :sub:`iso` + occupancy.  Most
-                complete isotropic refinement.  Occupancy and U\ :sub:`iso`
-                are often correlated — converge them separately first if
-                the refinement is unstable.
+                ``"XUF"``
+                    Fractional coordinates + U\ :sub:`iso` + occupancy.  Most
+                    complete isotropic refinement.  Occupancy and U\ :sub:`iso`
+                    are often correlated — converge them separately first if
+                    the refinement is unstable.
 
-            .. note::
-                Anisotropic displacement parameters (ADP / U\ :sub:`ij`
-                tensor) are **not** controlled through this flag string.
-                They require changing the atom's displacement model from
-                isotropic (``'I'``) to anisotropic (``'A'``) via the
-                ``cia`` field directly in the GSAS-II project, and are
-                only justified for single-crystal-quality powder data.
+                Note:
+                    Anisotropic displacement parameters (ADP / U\ :sub:`ij`
+                    tensor) are **not** controlled through this flag string.
+                    They require changing the atom's displacement model from
+                    isotropic (``'I'``) to anisotropic (``'A'``) via the
+                    ``cia`` field directly in the GSAS-II project, and are
+                    only justified for single-crystal-quality powder data.
 
-        phase : str, list of str, or None, optional
-            Phase name(s) to apply the refinement to.  ``None`` (default)
-            applies to all phases in the project.  Names must match those
-            passed to :meth:`add_phase`.
+            phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
+                ``None`` (default) applies to all phases in the project.  Names must match those
+                passed to :meth:`add_phase`.
 
-        atoms : list of str, or None, optional
-            Restrict refinement to a subset of atoms.  Each entry is
-            matched against atom **labels** (e.g. ``"Fe1"``, ``"O2"``)
-            first, then against **element symbols** (e.g. ``"Fe"``,
-            ``"O"``).  If an entry matches neither in a given phase it is
-            silently skipped for that phase.  ``None`` (default) refines
-            all atoms.
+            atoms (list of str, or None, optional): Restrict refinement to a subset of atoms.
+                Each entry is matched against atom **labels** (e.g. ``"Fe1"``, ``"O2"``) first,
+                then against **element symbols** (e.g. ``"Fe"``, ``"O"``).  If an entry matches
+                neither in a given phase it is silently skipped for that phase.  ``None`` (default)
+                refines all atoms.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -1283,30 +1196,26 @@ class BaseRefinement(Scan):
         that positional and displacement flags that were already active are
         left untouched.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to apply the refinement to.  ``None`` (default)
-            applies to all phases in the project.  Names must match those
-            used in :meth:`add_phase`.
-        atoms : list of str, or None, optional
-            Restrict refinement to a subset of atoms.  Each entry is matched
-            against atom **labels** (e.g. ``"Fe1"``) first, then against
-            **element symbols** (e.g. ``"Fe"``).  ``None`` (default) refines
-            the occupancy of all atoms in the target phases.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
+                ``None`` (default) applies to all phases in the project.  Names must match those
+                used in :meth:`add_phase`.
+            atoms (list of str, or None, optional): Restrict refinement to a subset of atoms.  Each
+                entry is matched against atom **labels** (e.g. ``"Fe1"``) first, then against
+                **element symbols** (e.g. ``"Fe"``).  ``None`` (default) refines the occupancy of
+                all atoms in the target phases.
 
-        Notes
-        -----
-        Occupancy and U\ :sub:`iso` are often correlated, particularly for
-        light atoms or when the site is close to fully occupied.  Converge
-        the displacement parameters first (via :meth:`refine_atomic_positions`
-        with flag ``"U"`` or ``"XU"``) before freeing occupancy.
+        Note:
+            Occupancy and U\ :sub:`iso` are often correlated, particularly for
+            light atoms or when the site is close to fully occupied.  Converge
+            the displacement parameters first (via :meth:`refine_atomic_positions`
+            with flag ``"U"`` or ``"XU"``) before freeing occupancy.
 
-        Occupancy refinement is only physically meaningful when partial
-        occupancy is expected — for example in solid solutions, vacancy-
-        disordered structures, or mixed-occupancy Wyckoff sites.  Refining
-        occupancy on a fully occupied structure will correlate strongly with
-        the scale factor and may cause divergence.
+            Occupancy refinement is only physically meaningful when partial
+            occupancy is expected — for example in solid solutions, vacancy-
+            disordered structures, or mixed-occupancy Wyckoff sites.  Refining
+            occupancy on a fully occupied structure will correlate strongly with
+            the scale factor and may cause divergence.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -1380,25 +1289,19 @@ class BaseRefinement(Scan):
         afterwards, leaving any ``'X'`` or ``'F'`` flags that were already
         active untouched.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to apply the refinement to.  ``None`` (default)
-            applies to all phases in the project.  Names must match those
-            used in :meth:`add_phase`.
-        atoms : list of str, or None, optional
-            Restrict refinement to a subset of atoms matched against atom
-            **labels** (e.g. ``"Fe1"``) first, then **element symbols**
-            (e.g. ``"Fe"``).  ``None`` (default) refines all isotropic atoms
-            in the target phases.
-        freeze : bool, optional
-            If ``True`` (default), remove the ``'U'`` flag after the
-            refinement cycle, restoring the original flag state.  Set to
-            ``False`` to keep U\ :sub:`iso` free for subsequent cycles
-            (e.g. when continuing with :meth:`refine_atomic_positions`).
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
+                ``None`` (default) applies to all phases in the project.  Names must match those
+                used in :meth:`add_phase`.
+            atoms (list of str, or None, optional): Restrict refinement to a subset of atoms matched
+                against atom **labels** (e.g. ``"Fe1"``) first, then **element symbols**
+                (e.g. ``"Fe"``).  ``None`` (default) refines all isotropic atoms in the target phases.
+            freeze (bool, optional): If ``True`` (default), remove the ``'U'`` flag after the
+                refinement cycle, restoring the original flag state.  Set to ``False`` to keep
+                U\ :sub:`iso` free for subsequent cycles (e.g. when continuing with
+                :meth:`refine_atomic_positions`).
 
-        Notes
-        -----
+        Note:
         **Typical refinement sequence:**
 
         1. :meth:`refine_background` — fit the baseline first.
@@ -1500,20 +1403,18 @@ class BaseRefinement(Scan):
         below correspond to different assumptions about the shape of the
         size distribution.
 
-        Parameters
-        ----------
-        refine_type : ``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional
-            Size broadening model (default ``"isotropic"``).  Ignored when
-            ``refine_dict`` is supplied.
-        refine_dict : dict or None, optional
-            Custom parameter dictionary following the same structure as the
-            predefined ``SIZE_*_DICT`` constants (i.e. the top-level key must
-            be ``"Size"``).  When provided, ``refine_type`` is ignored.
-        phase : str, list of str, or None, optional
-            Phase name(s) to refine.  ``None`` (default) refines all phases.
+        Args:
+            refine_type (``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional):
+                Size broadening model (default ``"isotropic"``).  Ignored when
+                ``refine_dict`` is supplied.
+            refine_dict (dict or None, optional): Custom parameter dictionary following the same
+                structure as the predefined ``SIZE_*_DICT`` constants (i.e. the top-level key must
+                be ``"Size"``).  When provided, ``refine_type`` is ignored.
+            phase (str, list of str, or None, optional): Phase name(s) to refine.
+                ``None`` (default) refines all phases.
 
-        Models
-        ------
+        **Models:**
+
         **isotropic** (default)
             Single size parameter *p* (µm) that scales the Lorentzian
             contribution uniformly in all directions.  The Scherrer formula
@@ -1551,14 +1452,13 @@ class BaseRefinement(Scan):
 
                 SIZE_GEN_DICT = {"Size": {"type": "generalized", "refine": True}}
 
-        Notes
-        -----
-        Crystallite size broadening and microstrain broadening both contribute
-        to Lorentzian peak widths and are strongly correlated.  Refine them
-        sequentially — size first if the phase is nanocrystalline, mustrain
-        first if the sample has significant lattice distortions — or use
-        Williamson-Hall analysis to decide which dominates before starting the
-        Rietveld refinement.
+        Note:
+            Crystallite size broadening and microstrain broadening both contribute
+            to Lorentzian peak widths and are strongly correlated.  Refine them
+            sequentially — size first if the phase is nanocrystalline, mustrain
+            first if the sample has significant lattice distortions — or use
+            Williamson-Hall analysis to decide which dominates before starting the
+            Rietveld refinement.
         """
         if isinstance(refine_dict, dict):
             refine_type = "personalized"
@@ -1619,21 +1519,19 @@ class BaseRefinement(Scan):
         (Williamson-Hall slope), in contrast to size broadening which goes as
         1/cosθ.
 
-        Parameters
-        ----------
-        refine_type : ``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional
-            Microstrain model (default ``"isotropic"``).  Ignored when
-            ``refine_dict`` is supplied.
-        refine_dict : dict or None, optional
-            Custom parameter dictionary following the same structure as the
-            predefined ``MUSTRAIN_*_DICT`` constants (i.e. no top-level
-            ``"Mustrain"`` key — the inner dict is passed directly).  When
-            provided, ``refine_type`` is ignored.
-        phase : str, list of str, or None, optional
-            Phase name(s) to refine.  ``None`` (default) refines all phases.
+        Args:
+            refine_type (``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional):
+                Microstrain model (default ``"isotropic"``).  Ignored when ``refine_dict``
+                is supplied.
+            refine_dict (dict or None, optional): Custom parameter dictionary following the same
+                structure as the predefined ``MUSTRAIN_*_DICT`` constants (i.e. no top-level
+                ``"Mustrain"`` key — the inner dict is passed directly).  When provided,
+                ``refine_type`` is ignored.
+            phase (str, list of str, or None, optional): Phase name(s) to refine.
+                ``None`` (default) refines all phases.
 
-        Models
-        ------
+        **Models:**
+
         **isotropic** (default)
             Single microstrain parameter *e* (µstrain) applied uniformly
             in all directions.  The Williamson-Hall relationship gives
@@ -1670,14 +1568,13 @@ class BaseRefinement(Scan):
 
                 MUSTRAIN_GEN_DICT = {"type": "generalized", "refine": True}
 
-        Notes
-        -----
-        Microstrain and crystallite-size broadening are highly correlated
-        because both affect the Lorentzian component of the peak profile.  A
-        Williamson-Hall plot (βcosθ vs sinθ) can help determine which
-        contribution dominates before committing to a model.  Avoid refining
-        both simultaneously unless the data quality and angular range clearly
-        support it.
+        Note:
+            Microstrain and crystallite-size broadening are highly correlated
+            because both affect the Lorentzian component of the peak profile.  A
+            Williamson-Hall plot (βcosθ vs sinθ) can help determine which
+            contribution dominates before committing to a model.  Avoid refining
+            both simultaneously unless the data quality and angular range clearly
+            support it.
         """
         if isinstance(refine_dict, dict):
             refine_type = "personalized"
@@ -1750,20 +1647,18 @@ class BaseRefinement(Scan):
         Triclinic              6  D11, D22, D33, D12, D13, D23
         ============== ========= ================================
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to refine.  ``None`` (default) refines all phases.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to refine.
+                ``None`` (default) refines all phases.
 
-        Notes
-        -----
-        HStrain shifts peak positions without broadening them, so it is
-        distinct from microstrain (which broadens peaks).  It is strongly
-        correlated with the unit cell parameters — both affect d-spacings in
-        an hkl-dependent manner.  Always converge the cell refinement before
-        introducing HStrain, and be cautious in low-symmetry systems where
-        the number of D_ij parameters approaches the number of independent
-        d-spacing observations.
+        Note:
+            HStrain shifts peak positions without broadening them, so it is
+            distinct from microstrain (which broadens peaks).  It is strongly
+            correlated with the unit cell parameters — both affect d-spacings in
+            an hkl-dependent manner.  Always converge the cell refinement before
+            introducing HStrain, and be cautious in low-symmetry systems where
+            the number of D_ij parameters approaches the number of independent
+            d-spacing observations.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -1803,25 +1698,23 @@ class BaseRefinement(Scan):
         where F² is the squared structure factor for that reflection.  When
         *x* = 0 there is no extinction correction.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to refine.  ``None`` (default) refines all phases.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to refine.
+                ``None`` (default) refines all phases.
 
-        Notes
-        -----
-        Primary extinction is only significant for well-crystallised,
-        large-grained phases (grain size ≳ a few micrometres) or for samples
-        with very low mosaic spread.  For typical powder diffraction specimens,
-        where the crystallites are small and randomly oriented, extinction
-        effects are negligible and this parameter should be kept fixed.
+        Note:
+            Primary extinction is only significant for well-crystallised,
+            large-grained phases (grain size ≳ a few micrometres) or for samples
+            with very low mosaic spread.  For typical powder diffraction specimens,
+            where the crystallites are small and randomly oriented, extinction
+            effects are negligible and this parameter should be kept fixed.
 
-        Do not confuse primary extinction with secondary extinction (multiple
-        scattering between grains), which is not modelled by this parameter,
-        or with absorption, which is handled separately through the histogram
-        sample parameters.  Refine extinction only after the structure is
-        well determined; it is correlated with the overall scale factor and
-        with U\ :sub:`iso` for the heaviest scatterers.
+            Do not confuse primary extinction with secondary extinction (multiple
+            scattering between grains), which is not modelled by this parameter,
+            or with absorption, which is handled separately through the histogram
+            sample parameters.  Refine extinction only after the structure is
+            well determined; it is correlated with the overall scale factor and
+            with U\ :sub:`iso` for the heaviest scatterers.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -1869,23 +1762,19 @@ class BaseRefinement(Scan):
         (angular fall-off) of the complementary scattering, analogous to an
         isotropic displacement parameter for the disordered component.
 
-        Parameters
-        ----------
-        refine : str or list of str, optional
-            Parameter(s) to refine: ``"BabA"``, ``"BabU"``, or both
-            (default ``"BabA"``).  Refine ``BabA`` first; add ``BabU``
-            only once ``BabA`` is stable.
-        phase : str, list of str, or None, optional
-            Phase name(s) to apply the refinement to.  ``None`` (default)
-            applies to all phases.
+        Args:
+            refine (str or list of str, optional): Parameter(s) to refine: ``"BabA"``, ``"BabU"``,
+                or both (default ``"BabA"``).  Refine ``BabA`` first; add ``BabU`` only once
+                ``BabA`` is stable.
+            phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
+                ``None`` (default) applies to all phases.
 
-        Notes
-        -----
-        Babinet parameters are most useful when there is clear diffuse
-        scattering beneath the Bragg peaks that cannot be accounted for by
-        the background function alone.  They are strongly correlated with the
-        overall scale factor and with the background coefficients — converge
-        both before introducing Babinet terms.
+        Note:
+            Babinet parameters are most useful when there is clear diffuse
+            scattering beneath the Bragg peaks that cannot be accounted for by
+            the background function alone.  They are strongly correlated with the
+            overall scale factor and with the background coefficients — converge
+            both before introducing Babinet terms.
         """
         params = [refine] if isinstance(refine, str) else list(refine)
         valid = {"BabA", "BabU"}
@@ -2121,10 +2010,8 @@ class BaseRefinement(Scan):
 
         where *w* = 1/σ² are the per-point weights.
 
-        Returns
-        -------
-        float or None
-            Rwp in percent, or ``None`` if no refinement has been run yet.
+        Returns:
+            float or None: Rwp in percent, or ``None`` if no refinement has been run yet.
         """
         return self.hist.get_wR()
 
@@ -2140,10 +2027,8 @@ class BaseRefinement(Scan):
         of free parameters.  A value near 1.0 indicates a statistically ideal
         fit; values ≫ 1 suggest systematic misfit or underestimated errors.
 
-        Returns
-        -------
-        float or None
-            Reduced χ², or ``None`` if no refinement has been run yet.
+        Returns:
+            float or None: Reduced χ², or ``None`` if no refinement has been run yet.
         """
         return self.hist.residuals.get("GOF")
 
@@ -2170,15 +2055,13 @@ class BaseRefinement(Scan):
         with a one-line header.  Values are written with six significant
         figures.  The file can be read by any spreadsheet or plotting tool.
 
-        Parameters
-        ----------
-        path : str or Path, optional
-            Output file path (default ``"pattern.csv"``).  The extension
-            determines the format:
+        Args:
+            path (str or Path, optional): Output file path (default ``"pattern.csv"``).  The
+                extension determines the format:
 
-            - ``.csv`` — comma-separated (default)
-            - any other extension — space-separated (suitable for most
-              plotting packages that accept ``.xy`` or ``.dat``)
+                - ``.csv`` — comma-separated (default)
+                - any other extension — space-separated (suitable for most
+                  plotting packages that accept ``.xy`` or ``.dat``)
         """
         tth = self.hist.getdata("x")
         yobs = self.hist.getdata("yobs")
@@ -2205,14 +2088,12 @@ class BaseRefinement(Scan):
         This method shows the current *values* together with their refinement
         flags so that the state of the model is immediately visible.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to inspect.  ``None`` (default) prints all phases
-            linked to the current histogram.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to inspect.
+                ``None`` (default) prints all phases linked to the current histogram.
 
-        Printed quantities
-        ------------------
+        **Printed quantities:**
+
         Scale
             Phase fraction scale factor (dimensionless).  Relates to the
             weight fraction via the Brindley–Hill formula.
@@ -2377,22 +2258,16 @@ class BaseRefinement(Scan):
         Call :meth:`print_HAP_parameters` first to check available keys and
         current values for a given phase.
 
-        Parameters
-        ----------
-        parameter : str
-            HAP parameter to set (see table above).
-        value : float
-            Value to assign and freeze.
-        phase : str, list of str, or None, optional
-            Phase name(s) to update.  ``None`` (default) updates all phases
-            linked to the current histogram.
+        Args:
+            parameter (str): HAP parameter to set (see table above).
+            value (float): Value to assign and freeze.
+            phase (str, list of str, or None, optional): Phase name(s) to update.
+                ``None`` (default) updates all phases linked to the current histogram.
 
-        Raises
-        ------
-        ValueError
-            If *parameter* is not a recognised key, or if a model-dependent
-            parameter (e.g. ``"Size"`` in uniaxial/generalized mode) cannot be
-            set as a single scalar.
+        Raises:
+            ValueError: If *parameter* is not a recognised key, or if a model-dependent
+                parameter (e.g. ``"Size"`` in uniaxial/generalized mode) cannot be
+                set as a single scalar.
         """
         _DIJ = {"D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5}
         _VALID = {
@@ -2619,11 +2494,10 @@ class BaseRefinement(Scan):
         Print a table of all atoms in one or more phases with their current
         refinement state.
 
-        Parameters
-        ----------
-        phase : str, list of str, or None, optional
-            Phase name(s) to inspect.  ``None`` (default) prints all phases
-            in the project.  Names must match those used in :meth:`add_phase`.
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to inspect.
+                ``None`` (default) prints all phases in the project.  Names must match
+                those used in :meth:`add_phase`.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -2759,12 +2633,9 @@ class BaseRefinement(Scan):
         """
         Plot the Rietveld fit (observed / calculated / difference) and save to disk.
 
-        Parameters
-        ----------
-        image_path : Path, optional
-            Output image file (default ``"calibration_plot.png"``).
-        show : bool, optional
-            If ``True``, call ``plt.show()`` after saving (default ``True``).
+        Args:
+            image_path (Path, optional): Output image file (default ``"calibration_plot.png"``).
+            show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
         """
         wR = self.hist.get_wR()
         print("\n" + "=" * 60)
@@ -2869,36 +2740,22 @@ class InstrumentCalibration(BaseRefinement):
         image_file: Path = Path("calibration_results.png"),
     ) -> None:
         """
-        Parameters
-        ----------
-        acquisition_file : Path
-            Raw acquisition data file.
-        sample_name : str
-            Sample / calibrant identifier.
-        scan_type : str, optional
-            Scan geometry (default ``"half-turn"``).
-        translation_motor : str, optional
-            Inner-loop translation motor name (default ``"dty"``).
-        rotation_motor : str, optional
-            Rotation motor name (default ``"rot"``).
-        outer_loop_motor : str, optional
-            Outer-loop motor name (default ``"translation"``).
-        beam_size : float, optional
-            Beam size in metres (default 100 µm).
-        beam_energy : float, optional
-            Beam energy in keV (default 44).
-        tth_lims : tuple, optional
-            ``(low, high)`` 2θ limits in degrees (default ``(None, None)``).
-        xy_file : Path, optional
-            Integrated calibrant pattern (default ``"integrated_data.xy"``).
-        param_file : Path, optional
-            Base name for the calibrated ``.instprm`` output inside ``calibration/``
-            (default ``"calibrated_instrument.instprm"``).
-        polarization : float, optional
-            Beam polarization fraction (default 0.99).
-        image_file : Path, optional
-            Base name for the calibration plot inside ``calibration/``
-            (default ``"calibration_results.png"``).
+        Args:
+            acquisition_file (Path): Raw acquisition data file.
+            sample_name (str): Sample / calibrant identifier.
+            scan_type (str, optional): Scan geometry (default ``"half-turn"``).
+            translation_motor (str, optional): Inner-loop translation motor name (default ``"dty"``).
+            rotation_motor (str, optional): Rotation motor name (default ``"rot"``).
+            outer_loop_motor (str, optional): Outer-loop motor name (default ``"translation"``).
+            beam_size (float, optional): Beam size in metres (default 100 µm).
+            beam_energy (float, optional): Beam energy in keV (default 44).
+            tth_lims (tuple, optional): ``(low, high)`` 2θ limits in degrees (default ``(None, None)``).
+            xy_file (Path, optional): Integrated calibrant pattern (default ``"integrated_data.xy"``).
+            param_file (Path, optional): Base name for the calibrated ``.instprm`` output inside
+                ``calibration/`` (default ``"calibrated_instrument.instprm"``).
+            polarization (float, optional): Beam polarization fraction (default 0.99).
+            image_file (Path, optional): Base name for the calibration plot inside ``calibration/``
+                (default ``"calibration_results.png"``).
         """
         super().__init__(
             acquisition_file,
@@ -2968,31 +2825,21 @@ class InstrumentCalibration(BaseRefinement):
         has been added (:meth:`add_phase`) with its cell and atomic positions
         fixed (``block_cell=True``, the default).
 
-        Parameters
-        ----------
-        profile_params : list of str, optional
-            Ordered list of instrument peak-profile parameters to refine.
-            Refined sequentially, one per GSAS-II cycle.  Must be valid for
-            the chosen ``profile``.  Default ``["W", "X", "Y"]`` is the
-            recommended starting set for synchrotron data with a 2-D
-            integrating detector (``U``, ``V``, and ``SH/L`` are typically
-            fixed at 0/0/0.0001 for such data).
-        profile : str, optional
-            Peak-profile model passed to :meth:`refine_peak_profile`.
-            One of ``"FCJVoigt"`` (default), ``"ExpFCJVoigt"``,
-            ``"EpsVoigt"``.
-        n_background_coeff : int, optional
-            Number of background polynomial coefficients (default 12).
-        background_function : str, optional
-            Background function type passed to :meth:`refine_background`
-            (default ``"chebyschev"``).
-        use_lebail : bool, optional
-            If ``True`` (default), activate LeBail extraction for the
-            calibrant phase before refining the scale, so that the
-            integrated intensities are free parameters rather than
-            structure-factor predictions.  Recommended for calibrants whose
-            exact structure is well-known and whose scale should not
-            contaminate the profile fit.
+        Args:
+            profile_params (list of str, optional): Ordered list of instrument peak-profile
+                parameters to refine.  Refined sequentially, one per GSAS-II cycle.  Must be valid
+                for the chosen ``profile``.  Default ``["W", "X", "Y"]`` is the recommended starting
+                set for synchrotron data with a 2-D integrating detector (``U``, ``V``, and ``SH/L``
+                are typically fixed at 0/0/0.0001 for such data).
+            profile (str, optional): Peak-profile model passed to :meth:`refine_peak_profile`.
+                One of ``"FCJVoigt"`` (default), ``"ExpFCJVoigt"``, ``"EpsVoigt"``.
+            n_background_coeff (int, optional): Number of background polynomial coefficients (default 12).
+            background_function (str, optional): Background function type passed to
+                :meth:`refine_background` (default ``"chebyschev"``).
+            use_lebail (bool, optional): If ``True`` (default), activate LeBail extraction for the
+                calibrant phase before refining the scale, so that the integrated intensities are free
+                parameters rather than structure-factor predictions.  Recommended for calibrants whose
+                exact structure is well-known and whose scale should not contaminate the profile fit.
         """
         print("\n" + "=" * 60)
         print("INSTRUMENT CALIBRATION REFINEMENT SEQUENCE")
@@ -3086,8 +2933,8 @@ class InstrumentCalibration(BaseRefinement):
         ``calibration/<image_file>`` (set in :meth:`__init__` via
         ``image_file``).  Each panel is described below.
 
-        Figure layout
-        -------------
+        **Figure layout:**
+
         **Top-left — Rietveld fit** (``ax_main``)
             Observed intensities (black dots), calculated profile (red line),
             and fitted background (blue dashed line) plotted against 2θ.
@@ -3149,19 +2996,16 @@ class InstrumentCalibration(BaseRefinement):
             for completeness but carry no physical meaning for 2-D detector
             synchrotron data.
 
-        Parameters
-        ----------
-        show : bool, optional
-            If ``True``, call ``plt.show()`` after saving (default ``True``).
-            Set to ``False`` when running in a batch/headless environment.
+        Args:
+            show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
+                Set to ``False`` when running in a batch/headless environment.
 
-        Notes
-        -----
-        The output image is written to the path set by
-        ``self.calibration_image``, which resolves to
-        ``calibration/<image_file>`` relative to the working directory.
-        The ``calibration/`` directory is created automatically in
-        :meth:`__init__`.
+        Note:
+            The output image is written to the path set by
+            ``self.calibration_image``, which resolves to
+            ``calibration/<image_file>`` relative to the working directory.
+            The ``calibration/`` directory is created automatically in
+            :meth:`__init__`.
         """
         ip = self.hist["Instrument Parameters"][0]
         params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]

@@ -16,12 +16,9 @@ def save_sinogram(sinogram: np.ndarray, output_file: Path):
     """
     Save a sinogram array to an HDF5 file under the key ``"sinogram"``.
 
-    Parameters
-    ----------
-    sinogram : np.ndarray
-        Sinogram data to store.
-    output_file : Path
-        Destination HDF5 file path (opened in append mode).
+    Args:
+        sinogram (np.ndarray): Sinogram data to store.
+        output_file (Path): Destination HDF5 file path (opened in append mode).
     """
     with h5py.File(str(output_file), "a") as hout:
         hout["sinogram"] = sinogram
@@ -31,12 +28,9 @@ def save_volume(volume: np.ndarray, output_file: Path):
     """
     Save a reconstructed volume array to an HDF5 file under the key ``"volume"``.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        Volume data to store.
-    output_file : Path
-        Destination HDF5 file path (opened in append mode).
+    Args:
+        volume (np.ndarray): Volume data to store.
+        output_file (Path): Destination HDF5 file path (opened in append mode).
     """
     with h5py.File(str(output_file), "a") as hout:
         hout["volume"] = volume
@@ -46,14 +40,10 @@ def add_array_to_output(array: np.ndarray, array_name: str, output_file: Path):
     """
     Append an array to an HDF5 file under an arbitrary key.
 
-    Parameters
-    ----------
-    array : np.ndarray
-        Data to store.
-    array_name : str
-        HDF5 dataset key.
-    output_file : Path
-        Destination HDF5 file path (opened in append mode).
+    Args:
+        array (np.ndarray): Data to store.
+        array_name (str): HDF5 dataset key.
+        output_file (Path): Destination HDF5 file path (opened in append mode).
     """
     with h5py.File(str(output_file), "a") as hout:
         hout[array_name] = array
@@ -66,17 +56,12 @@ def get_array_from_file(
     """
     Read an array from an HDF5 file by key name.
 
-    Parameters
-    ----------
-    filename : Path
-        HDF5 file to read from.
-    array_name : str
-        HDF5 dataset key.
+    Args:
+        filename (Path): HDF5 file to read from.
+        array_name (str): HDF5 dataset key.
 
-    Returns
-    -------
-    np.ndarray
-        The dataset loaded into memory.
+    Returns:
+        np.ndarray: The dataset loaded into memory.
     """
     with h5py.File(str(filename), "a") as hin:
         out = hin[array_name][:]
@@ -87,18 +72,14 @@ def read_sinogram_from_file(input_file: Path, slicing: tuple | None = None):
     """
     Read a sinogram from an HDF5 file, optionally with sub-region slicing.
 
-    Parameters
-    ----------
-    input_file : Path
-        HDF5 file containing a ``"sinogram"`` dataset.
-    slicing : tuple or None, optional
-        If provided, a 6-element tuple ``(tthmin, tthmax, xmin, xmax, ymin, ymax)``
-        used to extract a sub-region.  If ``None``, the full sinogram is loaded.
+    Args:
+        input_file (Path): HDF5 file containing a ``"sinogram"`` dataset.
+        slicing (tuple or None, optional): If provided, a 6-element tuple
+            ``(tthmin, tthmax, xmin, xmax, ymin, ymax)`` used to extract a
+            sub-region. If ``None``, the full sinogram is loaded.
 
-    Returns
-    -------
-    np.ndarray
-        Sinogram data as ``float32``.
+    Returns:
+        np.ndarray: Sinogram data as ``float32``.
     """
     with h5py.File(input_file, "r") as hin:
 
@@ -117,18 +98,14 @@ def read_volume_from_file(input_file: Path, slicing: tuple | None = None):
     """
     Read a reconstructed volume from an HDF5 file, optionally with sub-region slicing.
 
-    Parameters
-    ----------
-    input_file : Path
-        HDF5 file containing a ``"volume"`` dataset.
-    slicing : tuple or None, optional
-        If provided, a 6-element tuple ``(tthmin, tthmax, xmin, xmax, ymin, ymax)``
-        used to extract a sub-region.  If ``None``, the full volume is loaded.
+    Args:
+        input_file (Path): HDF5 file containing a ``"volume"`` dataset.
+        slicing (tuple or None, optional): If provided, a 6-element tuple
+            ``(tthmin, tthmax, xmin, xmax, ymin, ymax)`` used to extract a
+            sub-region. If ``None``, the full volume is loaded.
 
-    Returns
-    -------
-    np.ndarray
-        Volume data as ``float32``.
+    Returns:
+        np.ndarray: Volume data as ``float32``.
     """
     with h5py.File(input_file, "r") as hin:
         if isinstance(slicing, tuple):
@@ -153,20 +130,17 @@ def save_xy_file(
     """
     Save an integrated 1-D diffraction pattern to a plain-text .xy file.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        Scattering axis values (e.g. 2-theta in degrees).
-    y : np.ndarray
-        Intensity values.
-    err : np.ndarray or None, optional
-        Per-point uncertainties.  Defaults to an array of zeros when not provided.
-    output_file : Path, optional
-        Destination file path (default ``"integrated_data.xy"``).
-    unit : str, optional
-        Label for the scattering-angle axis written into the header (default ``"2th_deg"``).
-    verbose : bool, optional
-        If ``True``, print the output path after saving (default ``True``).
+    Args:
+        x (np.ndarray): Scattering axis values (e.g. 2-theta in degrees).
+        y (np.ndarray): Intensity values.
+        err (np.ndarray or None, optional): Per-point uncertainties. Defaults to
+            an array of zeros when not provided.
+        output_file (Path, optional): Destination file path
+            (default ``"integrated_data.xy"``).
+        unit (str, optional): Label for the scattering-angle axis written into
+            the header (default ``"2th_deg"``).
+        verbose (bool, optional): If ``True``, print the output path after saving
+            (default ``True``).
     """
     if not isinstance(err, np.ndarray):
         err = np.zeros_like(y)
@@ -184,15 +158,11 @@ def read_xy_file(input_file: Path = "integrated_data.xy"):
     """
     Load a plain-text .xy diffraction pattern file.
 
-    Parameters
-    ----------
-    input_file : Path, optional
-        Source file path (default ``"integrated_data.xy"``).
+    Args:
+        input_file (Path, optional): Source file path (default ``"integrated_data.xy"``).
 
-    Returns
-    -------
-    tuple of np.ndarray
-        Columns unpacked as separate arrays (e.g. ``(x, y)`` or ``(x, y, err)``).
+    Returns:
+        tuple: Columns unpacked as separate arrays (e.g. ``(x, y)`` or ``(x, y, err)``).
     """
     return np.loadtxt(str(input_file), unpack=True)
 
@@ -208,19 +178,15 @@ def write_starting_instrument_pars(
     The file is skipped without error if it already exists, so this function is
     safe to call at the start of a workflow.
 
-    Parameters
-    ----------
-    output_file : Path, optional
-        Destination ``.instprm`` file (default ``"instrument_init.instprm"``).
-    polarization : float, optional
-        Beam polarization fraction (default 0.99).
-    wavelength : float, optional
-        Incident wavelength in angstrom (default 1.5418 Å, Cu Kα).
+    Args:
+        output_file (Path, optional): Destination ``.instprm`` file
+            (default ``"instrument_init.instprm"``).
+        polarization (float, optional): Beam polarization fraction (default 0.99).
+        wavelength (float, optional): Incident wavelength in angstrom
+            (default 1.5418 Å, Cu Kα).
 
-    Returns
-    -------
-    Path
-        Path to the (existing or newly created) instrument parameter file.
+    Returns:
+        Path: Path to the (existing or newly created) instrument parameter file.
     """
     lines = [
         "#GSAS-II instrument parameter file\n",
@@ -258,14 +224,12 @@ def write_calibrated_intrument_pars(
     Reads the refined instrument parameters from ``hist["Instrument Parameters"][0]``
     and writes them to a ``.instprm`` file alongside the specified wavelength.
 
-    Parameters
-    ----------
-    hist : dict
-        GSAS-II histogram object (e.g. ``gpx.histogram(0)``).
-    wavelength : float, optional
-        Incident wavelength in angstrom to embed in the file (default 1.5418 Å).
-    output_file : Path, optional
-        Destination ``.instprm`` file (default ``"calibrated_instrument.instprm"``).
+    Args:
+        hist (dict): GSAS-II histogram object (e.g. ``gpx.histogram(0)``).
+        wavelength (float, optional): Incident wavelength in angstrom to embed in
+            the file (default 1.5418 Å).
+        output_file (Path, optional): Destination ``.instprm`` file
+            (default ``"calibrated_instrument.instprm"``).
     """
 
     print("\n" + "=" * 60)

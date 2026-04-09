@@ -37,27 +37,18 @@ def reconstruct_astra_gpu_3d(
     """
     3D GPU-accelerated reconstruction using the ASTRA Toolbox.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        Sinogram stack of shape (num_detectors_x, num_angles, num_detectors_y).
-        - num_detectors_x: horizontal detector size (columns)
-        - num_angles:       number of projection angles
-        - num_detectors_y:  vertical detector size / number of slices (rows)
-    dty_step : float
-        Detector pixel spacing.
-    angles_rad : np.ndarray
-        1D array of projection angles in radians.
-    algo : str
-        ASTRA 3D CUDA algorithm. One of:
-        "SIRT3D_CUDA", "CGLS3D_CUDA".
-    num_iter : int
-        Number of iterations.
+    Args:
+        data (np.ndarray): Sinogram stack of shape (num_detectors_x, num_angles,
+            num_detectors_y), where num_detectors_x is the horizontal detector size,
+            num_angles is the number of projection angles, and num_detectors_y is the
+            vertical detector size / number of slices.
+        dty_step (float): Detector pixel spacing.
+        angles_rad (np.ndarray): 1D array of projection angles in radians.
+        algo (str): ASTRA 3D CUDA algorithm: "SIRT3D_CUDA" or "CGLS3D_CUDA".
+        num_iter (int): Number of iterations.
 
-    Returns
-    -------
-    np.ndarray
-        Reconstructed volume of shape (num_detectors_y, N, N).
+    Returns:
+        np.ndarray: Reconstructed volume of shape (num_detectors_y, N, N).
     """
     # data is expected as (num_detectors_x, num_angles, num_detectors_y)
     # ASTRA 3D expects projections as (num_detectors_y, num_angles, num_detectors_x)
@@ -114,25 +105,17 @@ def reconstruct_astra_gpu(
     """
     Reconstruct a single 2-D slice using a GPU-accelerated ASTRA algorithm.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        2-D sinogram of shape ``(num_detectors, num_angles)``.
-    dty_step : float, optional
-        Detector pixel spacing (default 1.0).
-    angles_rad : np.ndarray, optional
-        1-D array of projection angles in radians.
-    algo : str, optional
-        ASTRA 2D CUDA algorithm, e.g. ``"SART_CUDA"`` or ``"SIRT_CUDA"``
-        (default ``"SART_CUDA"``).
-    num_iter : int, optional
-        Number of iterations (default 200).
+    Args:
+        data (np.ndarray): 2-D sinogram of shape ``(num_detectors, num_angles)``.
+        dty_step (float, optional): Detector pixel spacing (default 1.0).
+        angles_rad (np.ndarray, optional): 1-D array of projection angles in radians.
+        algo (str, optional): ASTRA 2D CUDA algorithm, e.g. ``"SART_CUDA"`` or
+            ``"SIRT_CUDA"`` (default ``"SART_CUDA"``).
+        num_iter (int, optional): Number of iterations (default 200).
 
-    Returns
-    -------
-    np.ndarray
-        Reconstructed 2-D slice of shape ``(N, N)`` where ``N`` equals the
-        number of detectors.
+    Returns:
+        np.ndarray: Reconstructed 2-D slice of shape ``(N, N)`` where ``N`` equals
+            the number of detectors.
     """
     N = data.shape[0]
     data = data.T
@@ -176,25 +159,17 @@ def reconstruct_astra_cpu(
     """
     Reconstruct a single 2-D slice using a CPU ASTRA algorithm.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        2-D sinogram of shape ``(num_detectors, num_angles)``.
-    dty_step : float, optional
-        Detector pixel spacing (default 1.0).
-    angles_rad : np.ndarray, optional
-        1-D array of projection angles in radians.
-    algo : str, optional
-        ASTRA 2D CPU algorithm, e.g. ``"FBP"``, ``"SIRT"``, or ``"SART"``
-        (default ``"FBP"``).
-    num_iter : int, optional
-        Number of iterations; for FBP only one pass is performed regardless
-        (default 200).
+    Args:
+        data (np.ndarray): 2-D sinogram of shape ``(num_detectors, num_angles)``.
+        dty_step (float, optional): Detector pixel spacing (default 1.0).
+        angles_rad (np.ndarray, optional): 1-D array of projection angles in radians.
+        algo (str, optional): ASTRA 2D CPU algorithm, e.g. ``"FBP"``, ``"SIRT"``, or
+            ``"SART"`` (default ``"FBP"``).
+        num_iter (int, optional): Number of iterations; for FBP only one pass is
+            performed regardless (default 200).
 
-    Returns
-    -------
-    np.ndarray
-        Reconstructed 2-D slice of shape ``(num_detectors, num_detectors)``.
+    Returns:
+        np.ndarray: Reconstructed 2-D slice of shape ``(num_detectors, num_detectors)``.
     """
     N = data.shape[0]
     data = data.T
@@ -251,21 +226,14 @@ def forward_project_gpu(
     """
     Compute the GPU forward projection (sinogram) of a 2-D volume.
 
-    Parameters
-    ----------
-    volume : np.ndarray
-        2-D image/slice to project, shape ``(N, N)``.
-    angles_rad : np.ndarray
-        1-D array of projection angles in radians.
-    det_spacing : float, optional
-        Detector pixel spacing (default 1.0).
-    algo : str, optional
-        ASTRA forward-projection algorithm (default ``"FP_CUDA"``).
+    Args:
+        volume (np.ndarray): 2-D image/slice to project, shape ``(N, N)``.
+        angles_rad (np.ndarray): 1-D array of projection angles in radians.
+        det_spacing (float, optional): Detector pixel spacing (default 1.0).
+        algo (str, optional): ASTRA forward-projection algorithm (default ``"FP_CUDA"``).
 
-    Returns
-    -------
-    np.ndarray
-        Sinogram of shape ``(num_angles, N)``.
+    Returns:
+        np.ndarray: Sinogram of shape ``(num_angles, N)``.
     """
     # Create geometries
     N = volume.shape[1]
@@ -308,23 +276,16 @@ def reconstruct_slice(
     :func:`reconstruct_astra_cpu`.  If fewer than 10 angles are provided a
     full 180° linspace is generated automatically.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        2-D sinogram of shape ``(num_detectors, num_angles)``.
-    dty_step : float, optional
-        Detector pixel spacing (default 1.0).
-    angles_rad : np.ndarray, optional
-        1-D array of projection angles in radians.
-    algo : str, optional
-        ASTRA algorithm name passed to the backend (default ``"SART_CUDA"``).
-    num_iter : int, optional
-        Number of iterations (default 200).
+    Args:
+        data (np.ndarray): 2-D sinogram of shape ``(num_detectors, num_angles)``.
+        dty_step (float, optional): Detector pixel spacing (default 1.0).
+        angles_rad (np.ndarray, optional): 1-D array of projection angles in radians.
+        algo (str, optional): ASTRA algorithm name passed to the backend
+            (default ``"SART_CUDA"``).
+        num_iter (int, optional): Number of iterations (default 200).
 
-    Returns
-    -------
-    np.ndarray
-        Reconstructed 2-D slice.
+    Returns:
+        np.ndarray: Reconstructed 2-D slice.
     """
     N = data.shape[0]
     if angles_rad.shape[0] < 10:
@@ -350,21 +311,17 @@ def assemble_sinogram(
     ``(n_rot, n_tth_angles)``, and stacked.  The resulting array is rolled so
     that the 2θ axis comes first: shape ``(n_tth_angles, n_lines, n_rot)``.
 
-    Parameters
-    ----------
-    integrated_file : Path
-        HDF5 file containing integrated patterns under the ``"integrated"`` group.
-    n_rot : int
-        Number of rotation steps (sinogram angular dimension).
-    n_tth_angles : int
-        Number of 2θ bins (spectral dimension).
-    n_lines : int, optional
-        Expected number of translation lines; currently unused (default 10).
+    Args:
+        integrated_file (Path): HDF5 file containing integrated patterns under
+            the ``"integrated"`` group.
+        n_rot (int): Number of rotation steps (sinogram angular dimension).
+        n_tth_angles (int): Number of 2θ bins (spectral dimension).
+        n_lines (int, optional): Expected number of translation lines; currently
+            unused (default 10).
 
-    Returns
-    -------
-    np.ndarray
-        Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)`` as ``float32``.
+    Returns:
+        np.ndarray: Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)``
+            as ``float32``.
     """
     with h5py.File(integrated_file, "r") as hin:
         keys = list(hin["integrated"].keys())
@@ -419,19 +376,15 @@ class ReconstructedVolume:
         processing_folder: Path = Path("volume"),
     ):
         """
-        Parameters
-        ----------
-        volume : np.ndarray
-            Reconstructed volume of shape ``(n_tth, nx, ny)``.
-        tth_deg : np.ndarray
-            1-D array of 2θ values in degrees, length ``n_tth``.
-        sample_name : str
-            Base name used for output file naming.
-        phases : list
-            List of phase objects or identifiers (passed through; not used internally).
-        processing_folder : Path, optional
-            Root output directory; ``xy_files/`` and ``gpx_files/`` sub-folders
-            are created automatically (default ``"volume"``).
+        Args:
+            volume (np.ndarray): Reconstructed volume of shape ``(n_tth, nx, ny)``.
+            tth_deg (np.ndarray): 1-D array of 2θ values in degrees, length ``n_tth``.
+            sample_name (str): Base name used for output file naming.
+            phases (list): List of phase objects or identifiers (passed through; not
+                used internally).
+            processing_folder (Path, optional): Root output directory; ``xy_files/``
+                and ``gpx_files/`` sub-folders are created automatically
+                (default ``"volume"``).
         """
         self.volume = volume
         self.tth = tth_deg
@@ -488,11 +441,10 @@ class ReconstructedVolume:
         """
         Run a GSAS-II refinement function on every voxel sequentially.
 
-        Parameters
-        ----------
-        refining_function : callable
-            Function with signature ``f(xy_file, gpx_file)`` that performs the
-            refinement and saves results to *gpx_file*.
+        Args:
+            refining_function (callable): Function with signature
+                ``f(xy_file, gpx_file)`` that performs the refinement and saves
+                results to *gpx_file*.
         """
         t0 = time.time()
 
@@ -506,11 +458,10 @@ class ReconstructedVolume:
         """
         Run a GSAS-II refinement function on every voxel using a thread pool.
 
-        Parameters
-        ----------
-        refining_function : callable
-            Function with signature ``f(xy_file, gpx_file)`` that performs the
-            refinement and saves results to *gpx_file*.
+        Args:
+            refining_function (callable): Function with signature
+                ``f(xy_file, gpx_file)`` that performs the refinement and saves
+                results to *gpx_file*.
         """
         t0 = time.time()
 
@@ -529,11 +480,9 @@ class ReconstructedVolume:
         """
         Extract the weighted R-factor (Rwp) from each voxel's .gpx file.
 
-        Returns
-        -------
-        np.ndarray
-            2-D map of shape ``(nx, ny)`` with Rwp values; voxels whose .gpx
-            file is missing or failed return ``nan``.
+        Returns:
+            np.ndarray: 2-D map of shape ``(nx, ny)`` with Rwp values; voxels
+                whose .gpx file is missing or failed return ``nan``.
         """
         result = np.zeros_like(self.volume.sum(axis=0))
         t0 = time.time()
@@ -549,11 +498,9 @@ class ReconstructedVolume:
         """
         Extract unit-cell lengths a, b, c from each voxel's .gpx file.
 
-        Returns
-        -------
-        tuple of np.ndarray
-            Three 2-D maps ``(a_map, b_map, c_map)`` of shape ``(nx, ny)``;
-            voxels whose .gpx file is missing or failed return ``nan``.
+        Returns:
+            tuple: Three 2-D maps ``(a_map, b_map, c_map)`` of shape ``(nx, ny)``;
+                voxels whose .gpx file is missing or failed return ``nan``.
         """
         t0 = time.time()
         a_map = np.zeros_like(self.volume.sum(axis=0))
@@ -574,11 +521,9 @@ class ReconstructedVolume:
         """
         Extract the refined isotropic crystallite size from each voxel's .gpx file.
 
-        Returns
-        -------
-        np.ndarray
-            2-D map of shape ``(nx, ny)`` with crystallite sizes; voxels whose
-            .gpx file is missing or failed return ``nan``.
+        Returns:
+            np.ndarray: 2-D map of shape ``(nx, ny)`` with crystallite sizes; voxels
+                whose .gpx file is missing or failed return ``nan``.
         """
         t0 = time.time()
         size_map = np.zeros_like(self.volume.sum(axis=0))

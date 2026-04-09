@@ -20,19 +20,14 @@ def zinger_remove(dimg, medsize=3, nsigma=5):
     median-filtered value.  The replacement region is dilated by one pixel to
     catch ringing artefacts around bright zingers.
 
-    Parameters
-    ----------
-    dimg : np.ndarray
-        2-D detector image.
-    medsize : int, optional
-        Side length of the square median-filter kernel (default 3).
-    nsigma : int or float, optional
-        Sigma threshold above which a pixel is considered a zinger (default 5).
+    Args:
+        dimg (np.ndarray): 2-D detector image.
+        medsize (int, optional): Side length of the square median-filter kernel (default 3).
+        nsigma (int or float, optional): Sigma threshold above which a pixel is considered
+            a zinger (default 5).
 
-    Returns
-    -------
-    np.ndarray
-        Cleaned image with the same shape and dtype as *dimg*.
+    Returns:
+        np.ndarray: Cleaned image with the same shape and dtype as *dimg*.
     """
     med = ndi.median_filter(dimg, medsize)
     err = dimg - med
@@ -49,19 +44,14 @@ def dezinger(image, medsize: int = 3, nsigma: int = 5):
     Each frame is processed independently via :func:`zinger_remove` using a
     thread pool sized to ``os.cpu_count() - 1``.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        3-D array of shape ``(N, rows, cols)`` containing *N* detector frames.
-    medsize : int, optional
-        Median-filter kernel size passed to :func:`zinger_remove` (default 3).
-    nsigma : int, optional
-        Sigma threshold passed to :func:`zinger_remove` (default 5).
+    Args:
+        image (np.ndarray): 3-D array of shape ``(N, rows, cols)`` containing *N* detector frames.
+        medsize (int, optional): Median-filter kernel size passed to :func:`zinger_remove`
+            (default 3).
+        nsigma (int, optional): Sigma threshold passed to :func:`zinger_remove` (default 5).
 
-    Returns
-    -------
-    np.ndarray
-        Dezingered stack with the same shape and dtype as *image*.
+    Returns:
+        np.ndarray: Dezingered stack with the same shape and dtype as *image*.
     """
     t0 = time.time()
     N = image.shape[0]

@@ -49,58 +49,40 @@ def estimate_percentile_from_separate(
         3. The low percentile is set so that `threshold` of the background
            pixels are retained; the high percentile clips the Bragg-spot tail.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D detector image.
-    poni_file : str
-        Path to the PONI calibration file.
-    npt : int
-        Number of radial bins (default: 1000).
-    unit : str
-        Radial unit (default: "2th_deg").
-    mask : np.ndarray, optional
-        Detector mask (1 = masked, 0 = valid).
-    dark : np.ndarray, optional
-        Dark-current image.
-    flat : np.ndarray, optional
-        Flat-field image.
-    radial_range : tuple of (float, float), optional
-        Radial range to consider.
-    azimuth_range : tuple of (float, float), optional
-        Azimuthal range in degrees.
-    npt_azim : int
-        Number of azimuthal bins used internally by `separate` (default: 360).
-    threshold : float
-        Fraction of background pixels to retain when setting the high
-        percentile (default: 0.95). Lower values clip more aggressively.
-    plot : bool
-        If True, plot the original vs background 1D patterns and mark
-        the estimated percentile cut-offs.
+    Args:
+        image (np.ndarray): 2D detector image.
+        poni_file (str): Path to the PONI calibration file.
+        npt (int): Number of radial bins (default: 1000).
+        unit (str): Radial unit (default: "2th_deg").
+        mask (np.ndarray, optional): Detector mask (1 = masked, 0 = valid).
+        dark (np.ndarray, optional): Dark-current image.
+        flat (np.ndarray, optional): Flat-field image.
+        radial_range (tuple, optional): Radial range to consider.
+        azimuth_range (tuple, optional): Azimuthal range in degrees.
+        npt_azim (int): Number of azimuthal bins used internally by `separate`
+            (default: 360).
+        threshold (float): Fraction of background pixels to retain when setting
+            the high percentile (default: 0.95). Lower values clip more aggressively.
+        plot (bool): If True, plot the original vs background 1D patterns and mark
+            the estimated percentile cut-offs.
 
-    Returns
-    -------
-    low_percentile : float
-        Recommended lower percentile bound (always 0.0 — keep all low-side).
-    high_percentile : float
-        Recommended upper percentile bound in [0, 100] that clips Bragg spots
-        while retaining `threshold` of the background signal.
+    Returns:
+        low_percentile (float): Recommended lower percentile bound (always 0.0).
+        high_percentile (float): Recommended upper percentile bound in [0, 100] that
+            clips Bragg spots while retaining `threshold` of the background signal.
 
-    Notes
-    -----
-    `ai.separate` is relatively slow (it runs a full 2D integration
-    internally). Call this function on a representative image to obtain
-    the percentile estimate, then reuse the result across all frames via
-    `azimuthal_integration_1d_filter` or `integrate_powder_parallel` with
-    `method=IntegrationMethod.PERCENTILE`.
+    Note:
+        `ai.separate` is relatively slow (it runs a full 2D integration internally).
+        Call this function on a representative image to obtain the percentile estimate,
+        then reuse the result across all frames via `azimuthal_integration_1d_filter`
+        or `integrate_powder_parallel`.
 
-    Examples
-    --------
-    >>> low, high = estimate_percentile_from_separate(image, "det.poni")
-    >>> print(f"Recommended percentile: ({low:.1f}, {high:.1f})")
-    >>> q, I, _ = azimuthal_integration_1d_filter(
-    ...     image, "det.poni", percentile=(low, high)
-    ... )
+    Example:
+        >>> low, high = estimate_percentile_from_separate(image, "det.poni")
+        >>> print(f"Recommended percentile: ({low:.1f}, {high:.1f})")
+        >>> q, I, _ = azimuthal_integration_1d_filter(
+        ...     image, "det.poni", percentile=(low, high)
+        ... )
     """
     if image.ndim != 2:
         raise ValueError(f"image must be 2D, got shape {image.shape}")
@@ -181,46 +163,32 @@ def calculate_xrd_baseline(
     """
     Calculate the baseline of an X-ray diffraction (XRD) intensity curve.
 
-    Parameters
-    ----------
-    y : np.ndarray
-        1D array of intensity values from the XRD measurement.
-    x : np.ndarray, optional
-        1D array of 2θ (or q) values corresponding to `y`.
-        If None, integer indices [0, 1, ..., len(y)-1] are used.
-    method : str
-        Baseline algorithm to use. Recommended options for XRD:
-          - "iasls"   : Iterative asymmetric least squares (default).
-                        Good general-purpose choice for XRD.
-          - "aspls"   : Adaptive smoothness penalized least squares.
-                        Better when peaks are dense or asymmetric.
-          - "snip"    : Statistics-sensitive Non-linear Iterative Peak-clipping.
-                        Fast, parameter-light; great for quick estimates.
-          - "arpls"   : Asymmetrically reweighted penalized least squares.
-          - "mor"     : Morphological baseline (very fast, no iteration).
-    **kwargs
-        Extra keyword arguments forwarded to the chosen pybaselines method.
-        Useful tuning parameters per method:
-          iasls  → lam=1e6, lam_1=1e-4, p=1e-2
-          aspls  → lam=1e5, diff_order=2
-          snip   → max_half_window=40, decreasing=True, smooth_half_window=3
-          arpls  → lam=1e5, threshold=0.001
+    Args:
+        y (np.ndarray): 1D array of intensity values from the XRD measurement.
+        x (np.ndarray, optional): 1D array of 2θ (or q) values corresponding to `y`.
+            If None, integer indices [0, 1, ..., len(y)-1] are used.
+        method (str): Baseline algorithm to use. Recommended options for XRD:
+            "iasls" – Iterative asymmetric least squares (default), good general-purpose
+            choice; "aspls" – Adaptive smoothness penalized least squares, better when
+            peaks are dense or asymmetric; "snip" – Statistics-sensitive Non-linear
+            Iterative Peak-clipping, fast and parameter-light; "arpls" – Asymmetrically
+            reweighted penalized least squares; "mor" – Morphological baseline (very fast).
+        **kwargs: Extra keyword arguments forwarded to the chosen pybaselines method.
+            Useful tuning parameters: iasls → lam=1e6, lam_1=1e-4, p=1e-2;
+            aspls → lam=1e5, diff_order=2; snip → max_half_window=40,
+            decreasing=True, smooth_half_window=3; arpls → lam=1e5, threshold=0.001.
 
-    Returns
-    -------
-    baseline : np.ndarray
-        Estimated baseline array, same shape as `y`.
-    params : dict
-        Dictionary returned by pybaselines containing diagnostic info
-        (e.g. weights, residuals, number of iterations).
+    Returns:
+        baseline (np.ndarray): Estimated baseline array, same shape as `y`.
+        params (dict): Dictionary returned by pybaselines containing diagnostic info
+            (e.g. weights, residuals, number of iterations).
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> two_theta = np.linspace(10, 80, 1000)
-    >>> intensity  = np.random.default_rng(0).normal(500, 10, 1000)
-    >>> baseline, info = calculate_xrd_baseline(intensity, two_theta)
-    >>> corrected = intensity - baseline
+    Example:
+        >>> import numpy as np
+        >>> two_theta = np.linspace(10, 80, 1000)
+        >>> intensity  = np.random.default_rng(0).normal(500, 10, 1000)
+        >>> baseline, info = calculate_xrd_baseline(intensity, two_theta)
+        >>> corrected = intensity - baseline
     """
     y = np.asarray(y, dtype=float)
 
@@ -263,21 +231,15 @@ def generate_circular_mask(shape, center, diameter):
     """
     Generate a 2-D boolean circular mask for a given volume shape.
 
-    Parameters
-    ----------
-    shape : tuple of int
-        Shape of the volume ``(n_tth, ny, nx)``; the mask is built over the
-        last two dimensions.
-    center : tuple of (float, float)
-        ``(cx, cy)`` centre of the circle in pixel coordinates.
-    diameter : int or float
-        Diameter of the circular region in pixels.
+    Args:
+        shape (tuple): Shape of the volume ``(n_tth, ny, nx)``; the mask is built
+            over the last two dimensions.
+        center (tuple): ``(cx, cy)`` centre of the circle in pixel coordinates.
+        diameter (int or float): Diameter of the circular region in pixels.
 
-    Returns
-    -------
-    np.ndarray
-        2-D boolean array of shape ``(ny, nx)`` where ``True`` marks pixels
-        inside the circle.
+    Returns:
+        np.ndarray: 2-D boolean array of shape ``(ny, nx)`` where ``True`` marks
+            pixels inside the circle.
     """
     x, y = np.arange(0, shape[1]), np.arange(0, shape[2])
     X, Y = np.meshgrid(x, y)
@@ -297,28 +259,21 @@ def simulate_powder_xrd_monophase(
     """
     Simulate a powder XRD pattern for one or more phases using xrayutilities.
 
-    Parameters
-    ----------
-    tth : np.ndarray
-        2θ array in degrees at which to evaluate the pattern.
-    cif_files : str or list of str
-        Path(s) to CIF file(s); each phase is simulated independently.
-    do_plot : bool, optional
-        If ``True``, produce a matplotlib figure for each phase (default ``True``).
-    en_eV : float, optional
-        X-ray energy in eV (default 100 000 eV = 100 keV).
-    crystallite_size : float, optional
-        Gaussian crystallite size in metres used for peak broadening
-        (default 100 nm).
-    do_save : bool, optional
-        If ``True``, save each pattern to ``<phase_name>_simulated.xy``
-        (default ``True``).
+    Args:
+        tth (np.ndarray): 2θ array in degrees at which to evaluate the pattern.
+        cif_files (str or list): Path(s) to CIF file(s); each phase is simulated
+            independently.
+        do_plot (bool, optional): If ``True``, produce a matplotlib figure for each
+            phase (default ``True``).
+        en_eV (float, optional): X-ray energy in eV (default 100 000 eV = 100 keV).
+        crystallite_size (float, optional): Gaussian crystallite size in metres used
+            for peak broadening (default 100 nm).
+        do_save (bool, optional): If ``True``, save each pattern to
+            ``<phase_name>_simulated.xy`` (default ``True``).
 
-    Returns
-    -------
-    np.ndarray
-        Simulated intensity array for the *last* phase in *cif_files*,
-        evaluated at *tth*.
+    Returns:
+        np.ndarray: Simulated intensity array for the *last* phase in *cif_files*,
+            evaluated at *tth*.
     """
     if not isinstance(cif_files, list):
         cif_files = [cif_files]
@@ -352,17 +307,15 @@ def get_powder_xrd_peaks(
     """
     Return peak positions and hkl families for one or more CIF files.
 
-    Parameters
-    ----------
-    cif_files : path or list of paths to CIF files
-    en_eV     : X-ray energy in eV (default 100 keV)
-    tth_min   : minimum 2theta in degrees (optional, auto if None)
-    tth_max   : maximum 2theta in degrees (optional, auto if None)
+    Args:
+        cif_files (path or list): Path(s) to CIF file(s).
+        en_eV (float): X-ray energy in eV (default 100 keV).
+        tth_min (float, optional): Minimum 2theta in degrees (auto if None).
+        tth_max (float, optional): Maximum 2theta in degrees (auto if None).
 
-    Returns
-    -------
-    dict mapping phase_name -> DataFrame with columns:
-        h, k, l, hkl, tth, d_hkl, r (structure factor |F|²)
+    Returns:
+        dict: Mapping of phase_name to DataFrame with columns
+            h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).
     """
     if not isinstance(cif_files, list):
         cif_files = [cif_files]
@@ -454,68 +407,41 @@ def calculate_absorption_coefficient(
     mass attenuation coefficient and density, then converts it to the
     dimensionless parameter expected by GSAS-II for the chosen geometry.
 
-    Parameters
-    ----------
-    compound : str
-        Chemical formula understood by xraylib, e.g. ``"Fe2O3"``, ``"LaB6"``,
-        ``"Al"``.  Elements and simple compounds are supported; use standard
-        Hill notation (C first, H second, then alphabetical).
-    density : float
-        Sample density in g/cm³.  For a packed powder bed this should be the
-        effective (packing) density, not the crystallographic density.
-    energy_keV : float
-        Incident X-ray energy in keV.
-    sample_diameter_mm : float
-        Sample diameter (or thickness for flat-plate) in mm.  For a capillary
-        this is the outer diameter; for a flat-plate it is the thickness.
-    geometry : ``"debye-scherrer"`` | ``"flat-plate"``, optional
-        Sample geometry (default ``"debye-scherrer"``).
+    Args:
+        compound (str): Chemical formula understood by xraylib, e.g. ``"Fe2O3"``,
+            ``"LaB6"``, ``"Al"``. Elements and simple compounds are supported; use
+            standard Hill notation (C first, H second, then alphabetical).
+        density (float): Sample density in g/cm³. For a packed powder bed this should
+            be the effective (packing) density, not the crystallographic density.
+        energy_keV (float): Incident X-ray energy in keV.
+        sample_diameter_mm (float): Sample diameter (or thickness for flat-plate) in mm.
+            For a capillary this is the outer diameter; for a flat-plate it is the
+            thickness.
+        geometry (str, optional): Sample geometry (default ``"debye-scherrer"``).
+            ``"debye-scherrer"`` — cylindrical capillary in transmission; GSAS-II
+            expects the dimensionless product μr (μ in cm⁻¹ × radius in cm).
+            ``"flat-plate"`` — flat-plate geometry; GSAS-II expects μt
+            (μ in cm⁻¹ × thickness in cm).
 
-        * ``"debye-scherrer"`` — cylindrical capillary in transmission.
-          GSAS-II expects the dimensionless product μr (linear absorption
-          coefficient × capillary radius), where r = diameter / 2.
-          Units: μ in cm⁻¹, r in cm  →  μr dimensionless.
+    Returns:
+        dict: A dictionary with keys ``"mu_cm"`` (float, μ in cm⁻¹),
+            ``"mu_mm"`` (float, μ in mm⁻¹), ``"mass_atten_cm2_g"`` (float, μ/ρ
+            in cm²/g from xraylib), and ``"gsasii_absorption"`` (float,
+            dimensionless GSAS-II Absorption parameter μr or μt).
 
-        * ``"flat-plate"`` — reflection or transmission flat-plate geometry.
-          GSAS-II expects μt (linear absorption coefficient × plate
-          thickness), where t is the sample thickness.
-          Units: μ in cm⁻¹, t in cm  →  μt dimensionless.
+    Note:
+        xraylib's ``CS_Total_CP`` returns the *total* mass attenuation coefficient
+        (photoelectric + Compton + Rayleigh) in cm²/g. For multi-phase samples the
+        effective μ can be approximated as the volume-weighted average of the individual
+        phase μ values.
 
-    Returns
-    -------
-    dict with keys:
-
-    ``"mu_cm"`` : float
-        Linear attenuation coefficient μ in cm⁻¹.
-    ``"mu_mm"`` : float
-        Linear attenuation coefficient μ in mm⁻¹.
-    ``"mass_atten_cm2_g"`` : float
-        Mass attenuation coefficient μ/ρ in cm²/g from xraylib.
-    ``"gsasii_absorption"`` : float
-        Dimensionless GSAS-II ``Absorption`` parameter (μr or μt).
-
-    Examples
-    --------
-    Estimate absorption for a 0.3 mm Al₂O₃ capillary at 44 keV:
-
-    >>> result = calculate_absorption_coefficient(
-    ...     compound="Al2O3", density=3.99, energy_keV=44.0,
-    ...     sample_diameter_mm=0.3, geometry="debye-scherrer"
-    ... )
-    >>> print(f"μ = {result['mu_cm']:.2f} cm⁻¹")
-    >>> print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")
-
-    Notes
-    -----
-    xraylib's ``CS_Total_CP`` returns the *total* mass attenuation
-    coefficient (photoelectric + Compton + Rayleigh) in cm²/g.  This is
-    appropriate for absorption corrections in powder diffraction where all
-    removed photons are treated as lost.
-
-    For multi-phase samples the effective μ can be approximated as the
-    volume-weighted average of the individual phase μ values.  Pass the
-    bulk density of the *mixture*, not the crystallographic density of a
-    single phase.
+    Example:
+        >>> result = calculate_absorption_coefficient(
+        ...     compound="Al2O3", density=3.99, energy_keV=44.0,
+        ...     sample_diameter_mm=0.3, geometry="debye-scherrer"
+        ... )
+        >>> print(f"μ = {result['mu_cm']:.2f} cm⁻¹")
+        >>> print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")
     """
     valid_geometries = {"debye-scherrer", "flat-plate"}
     if geometry not in valid_geometries:
@@ -556,19 +482,14 @@ def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple):
     """
     Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.
 
-    Parameters
-    ----------
-    input_shape : tuple of (int, int)
-        ``(height, width)`` of the array to be padded.
-    desired_shape : tuple of (int, int)
-        ``(height, width)`` of the target shape; must be >= *input_shape* in
-        both dimensions.
+    Args:
+        input_shape (tuple): ``(height, width)`` of the array to be padded.
+        desired_shape (tuple): ``(height, width)`` of the target shape; must be
+            >= *input_shape* in both dimensions.
 
-    Returns
-    -------
-    tuple of ((int, int), (int, int))
-        Padding widths ``((top, bottom), (left, right))`` suitable for passing
-        directly to :func:`numpy.pad`.
+    Returns:
+        tuple: Padding widths ``((top, bottom), (left, right))`` suitable for
+            passing directly to :func:`numpy.pad`.
     """
     y_in, x_in = input_shape
     y_des, x_des = desired_shape

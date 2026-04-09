@@ -318,47 +318,49 @@
 <hr />
 <h2 id="full-pipeline-script">Full pipeline script<a class="headerlink" href="#full-pipeline-script" title="Permanent link">&para;</a></h2>
 <p>A minimal end-to-end script combining all steps:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.slurm_integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">launch</span><span class="p">,</span> <span class="n">monitor</span><span class="p">,</span> <span class="n">check</span><span class="p">,</span> <span class="n">repair</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.slurm_reconstruction</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_sinogram</span><span class="p">,</span> <span class="n">launch_recon</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">DATA</span>        <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/raw/sample_master.h5&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">INTEGRATED</span>  <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">SINOGRAM</span>    <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/sinogram.h5&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">RECON</span>       <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/reconstruction.h5&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">PONI</span>        <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/detector.poni&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">MASK</span>        <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/mask.edf&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
-<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># 1. Integrate</span>
-<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="n">ids</span> <span class="o">=</span> <span class="n">launch</span><span class="p">(</span>
-<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">master_file</span><span class="o">=</span><span class="n">DATA</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">INTEGRATED</span><span class="p">,</span>
-<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="n">PONI</span><span class="p">,</span> <span class="n">mask_file</span><span class="o">=</span><span class="n">MASK</span><span class="p">,</span>
-<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">n_jobs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">n_points</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">n_workers</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;filter&quot;</span><span class="p">,</span> <span class="n">percentile</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">90</span><span class="p">),</span>
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">partition</span><span class="o">=</span><span class="s2">&quot;nice&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="s2">&quot;04:00:00&quot;</span><span class="p">,</span> <span class="n">mem</span><span class="o">=</span><span class="s2">&quot;64G&quot;</span><span class="p">,</span> <span class="n">cpus</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">conda_env</span><span class="o">=</span><span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="p">)</span>
-<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="n">monitor</span><span class="p">(</span><span class="n">slurm_ids</span><span class="o">=</span><span class="n">ids</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">INTEGRATED</span><span class="p">,</span> <span class="n">watch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
-<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="c1"># 2. Check and repair</span>
-<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="n">result</span> <span class="o">=</span> <span class="n">check</span><span class="p">(</span><span class="n">output_file</span><span class="o">=</span><span class="n">INTEGRATED</span><span class="p">)</span>
-<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;missing&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;corrupted&quot;</span><span class="p">]:</span>
-<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="n">repair</span><span class="p">(</span><span class="n">output_file</span><span class="o">=</span><span class="n">INTEGRATED</span><span class="p">,</span> <span class="n">master_file</span><span class="o">=</span><span class="n">DATA</span><span class="p">,</span>
-<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>           <span class="n">poni_file</span><span class="o">=</span><span class="n">PONI</span><span class="p">,</span> <span class="n">mask_file</span><span class="o">=</span><span class="n">MASK</span><span class="p">,</span>
-<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>           <span class="n">n_jobs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">watch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">conda_env</span><span class="o">=</span><span class="s2">&quot;nrxrdct&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>
-<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="c1"># 3. Build sinogram</span>
-<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="n">build_sinogram</span><span class="p">(</span><span class="n">integrated_file</span><span class="o">=</span><span class="n">INTEGRATED</span><span class="p">,</span> <span class="n">sinogram_file</span><span class="o">=</span><span class="n">SINOGRAM</span><span class="p">,</span>
-<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>               <span class="n">n_rot</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">n_lines</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>
-<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="c1"># 4. Reconstruct</span>
-<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="n">recon_ids</span> <span class="o">=</span> <span class="n">launch_recon</span><span class="p">(</span>
-<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>    <span class="n">sinogram_file</span><span class="o">=</span><span class="n">SINOGRAM</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">RECON</span><span class="p">,</span>
-<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>    <span class="n">n_jobs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">algo</span><span class="o">=</span><span class="s2">&quot;SART_CUDA&quot;</span><span class="p">,</span> <span class="n">num_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
-<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>    <span class="n">partition</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="s2">&quot;08:00:00&quot;</span><span class="p">,</span> <span class="n">mem</span><span class="o">=</span><span class="s2">&quot;64G&quot;</span><span class="p">,</span> <span class="n">cpus</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
-<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>    <span class="n">gpu</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">conda_env</span><span class="o">=</span><span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="p">)</span>
-<a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reconstruction submitted:&quot;</span><span class="p">,</span> <span class="n">recon_ids</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code>```python
+from pathlib import Path
+from nrxrdct.slurm_integration import launch, monitor, check, repair
+from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
+
+DATA        = Path(&quot;/data/raw/sample_master.h5&quot;)
+INTEGRATED  = Path(&quot;/data/processed/integrated.h5&quot;)
+SINOGRAM    = Path(&quot;/data/processed/sinogram.h5&quot;)
+RECON       = Path(&quot;/data/processed/reconstruction.h5&quot;)
+PONI        = Path(&quot;/data/calib/detector.poni&quot;)
+MASK        = Path(&quot;/data/calib/mask.edf&quot;)
+
+# 1. Integrate
+ids = launch(
+    master_file=DATA, output_file=INTEGRATED,
+    poni_file=PONI, mask_file=MASK,
+    n_jobs=8, n_points=1000, n_workers=16,
+    method=&quot;filter&quot;, percentile=(10, 90),
+    partition=&quot;nice&quot;, time=&quot;04:00:00&quot;, mem=&quot;64G&quot;, cpus=16,
+    conda_env=&quot;nrxrdct&quot;,
+)
+monitor(slurm_ids=ids, output_file=INTEGRATED, watch=True)
+
+# 2. Check and repair
+result = check(output_file=INTEGRATED)
+if result[&quot;missing&quot;] or result[&quot;corrupted&quot;]:
+    repair(output_file=INTEGRATED, master_file=DATA,
+        poni_file=PONI, mask_file=MASK,
+        n_jobs=2, watch=True, conda_env=&quot;nrxrdct&quot;)
+
+# 3. Build sinogram
+build_sinogram(integrated_file=INTEGRATED, sinogram_file=SINOGRAM,
+            n_rot=901, n_tth_angles=1000, n_lines=10)
+
+# 4. Reconstruct
+recon_ids = launch_recon(
+    sinogram_file=SINOGRAM, output_file=RECON,
+    n_jobs=8, algo=&quot;SART_CUDA&quot;, num_iter=200,
+    partition=&quot;gpu&quot;, time=&quot;08:00:00&quot;, mem=&quot;64G&quot;, cpus=8,
+    gpu=True, conda_env=&quot;nrxrdct&quot;,
+)
+print(&quot;Reconstruction submitted:&quot;, recon_ids)
+```
 </code></pre></div>
               
             </div>

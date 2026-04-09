@@ -293,18 +293,7 @@ Important units:
 <span class="normal"><a href="#__codelineno-0-100">100</a></span>
 <span class="normal"><a href="#__codelineno-0-101">101</a></span>
 <span class="normal"><a href="#__codelineno-0-102">102</a></span>
-<span class="normal"><a href="#__codelineno-0-103">103</a></span>
-<span class="normal"><a href="#__codelineno-0-104">104</a></span>
-<span class="normal"><a href="#__codelineno-0-105">105</a></span>
-<span class="normal"><a href="#__codelineno-0-106">106</a></span>
-<span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span>
-<span class="normal"><a href="#__codelineno-0-111">111</a></span>
-<span class="normal"><a href="#__codelineno-0-112">112</a></span>
-<span class="normal"><a href="#__codelineno-0-113">113</a></span>
-<span class="normal"><a href="#__codelineno-0-114">114</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-15" name="__codelineno-0-15"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scan</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-15" name="__codelineno-0-15"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scan</span><span class="p">:</span>
 <a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="sd">    Class that holds data from each scan and their important parameters.</span>
 <a id="__codelineno-0-18" name="__codelineno-0-18"></a><span class="sd">    Important units:</span>
@@ -324,86 +313,75 @@ Important units:
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a>        <span class="n">beam_energy</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">44</span><span class="p">,</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="p">):</span>
 <a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">        Parameters</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">        ----------</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        acquisition_file : Path</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="sd">            Path to the raw acquisition data file.</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">        sample_name : str</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">            Identifier for the sample being scanned.</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">        scan_type : str, optional</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">            Scan geometry, e.g. ``&quot;half-turn&quot;`` or ``&quot;full-turn&quot;`` (default ``&quot;half-turn&quot;``).</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">        translation_motor : str, optional</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">            Name of the fast (inner-loop) translation motor in the data file (default ``&quot;dty&quot;``).</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">        rotation_motor : str, optional</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">            Name of the rotation motor in the data file (default ``&quot;rot&quot;``).</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">        outer_loop_motor : str, optional</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">            Name of the slow (outer-loop) motor, typically a second translation</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">            axis (default ``&quot;translation&quot;``).</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        beam_size : float, optional</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">            Beam size in metres (default 100 µm).</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">        beam_energy : float, optional</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">            Beam energy in keV (default 44 keV).  The wavelength in ångströms is</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">            derived automatically as ``12.398 / beam_energy``.</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span> <span class="o">=</span> <span class="n">acquisition_file</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">sample_name</span> <span class="o">=</span> <span class="n">sample_name</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span> <span class="o">=</span> <span class="n">translation_motor</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span> <span class="o">=</span> <span class="n">rotation_motor</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span> <span class="o">=</span> <span class="n">outer_loop_motor</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">beam_size</span> <span class="o">=</span> <span class="n">beam_size</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span> <span class="o">=</span> <span class="n">beam_energy</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">scan_type</span> <span class="o">=</span> <span class="n">scan_type</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span> <span class="o">=</span> <span class="mf">12.398</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a>        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="s2">            XRDCT scan stored in </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span><span class="p">)</span><span class="si">}</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="s2">            Translation motor name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span><span class="si">}</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="s2">            Rotation motor name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span><span class="si">}</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="s2">            Scan outer loop: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span><span class="si">}</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="s2">            &quot;&quot;&quot;</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="k">return</span> <span class="n">msg</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74"></a>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">        Persist all scan parameters to an HDF5 file.</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a>
-<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        Each instance attribute is stored as a separate dataset.  String values</span>
-<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">        are encoded automatically by h5py.</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">        Parameters</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">        ----------</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">        output_file : Path, optional</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">            Destination HDF5 file (default ``&quot;xrdct_scan.h5&quot;``).</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_file</span><span class="p">),</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88"></a>            <span class="k">for</span> <span class="n">flag</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89"></a>                <span class="n">hout</span><span class="p">[</span><span class="n">flag</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-0-90" name="__codelineno-0-90"></a>
-<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">        Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
-<a id="__codelineno-0-95" name="__codelineno-0-95"></a>
-<a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">        Parameters</span>
-<a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="sd">        ----------</span>
-<a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">        parameter_file : Path, optional</span>
-<a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">            HDF5 file written by :meth:`save_parameter_file` (default ``&quot;xrdct_scan.h5&quot;``).</span>
-<a id="__codelineno-0-100" name="__codelineno-0-100"></a>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">        Returns</span>
-<a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">        -------</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">        Scan</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="sd">            A new :class:`Scan` instance populated from the stored parameters.</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="n">scan_dict</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-107" name="__codelineno-0-107"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
-<a id="__codelineno-0-108" name="__codelineno-0-108"></a>            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hin</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109"></a>                <span class="n">value</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="n">key</span><span class="p">][()]</span>
-<a id="__codelineno-0-110" name="__codelineno-0-110"></a>                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)):</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111"></a>                    <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112"></a>                <span class="n">scan_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-0-113" name="__codelineno-0-113"></a>
-<a id="__codelineno-0-114" name="__codelineno-0-114"></a>        <span class="k">return</span> <span class="n">Scan</span><span class="p">(</span><span class="o">**</span><span class="n">scan_dict</span><span class="p">)</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">            acquisition_file (Path): Path to the raw acquisition data file.</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">            sample_name (str): Identifier for the sample being scanned.</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="sd">            scan_type (str, optional): Scan geometry, e.g. ``&quot;half-turn&quot;`` or</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">                ``&quot;full-turn&quot;`` (default ``&quot;half-turn&quot;``).</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">            translation_motor (str, optional): Name of the fast (inner-loop) translation</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">                motor in the data file (default ``&quot;dty&quot;``).</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">            rotation_motor (str, optional): Name of the rotation motor in the data file</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">                (default ``&quot;rot&quot;``).</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">            outer_loop_motor (str, optional): Name of the slow (outer-loop) motor,</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">                typically a second translation axis (default ``&quot;translation&quot;``).</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">            beam_size (float, optional): Beam size in metres (default 100 µm).</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">            beam_energy (float, optional): Beam energy in keV (default 44 keV). The</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">                wavelength in ångströms is derived automatically as ``12.398 / beam_energy``.</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span> <span class="o">=</span> <span class="n">acquisition_file</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">sample_name</span> <span class="o">=</span> <span class="n">sample_name</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span> <span class="o">=</span> <span class="n">translation_motor</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span> <span class="o">=</span> <span class="n">rotation_motor</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span> <span class="o">=</span> <span class="n">outer_loop_motor</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">beam_size</span> <span class="o">=</span> <span class="n">beam_size</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span> <span class="o">=</span> <span class="n">beam_energy</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">scan_type</span> <span class="o">=</span> <span class="n">scan_type</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span> <span class="o">=</span> <span class="mf">12.398</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a>        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="s2">            XRDCT scan stored in </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span><span class="p">)</span><span class="si">}</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="s2">            Translation motor name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span><span class="si">}</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="s2">            Rotation motor name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span><span class="si">}</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="s2">            Scan outer loop: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span><span class="si">}</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="s2">            &quot;&quot;&quot;</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a>        <span class="k">return</span> <span class="n">msg</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">        Persist all scan parameters to an HDF5 file.</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">        Each instance attribute is stored as a separate dataset.  String values</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">        are encoded automatically by h5py.</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">            output_file (Path, optional): Destination HDF5 file (default ``&quot;xrdct_scan.h5&quot;``).</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_file</span><span class="p">),</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a>            <span class="k">for</span> <span class="n">flag</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a>                <span class="n">hout</span><span class="p">[</span><span class="n">flag</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">        Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="sd">            parameter_file (Path, optional): HDF5 file written by :meth:`save_parameter_file`</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="sd">                (default ``&quot;xrdct_scan.h5&quot;``).</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">            Scan: A new :class:`Scan` instance populated from the stored parameters.</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="n">scan_dict</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hin</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>                <span class="n">value</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="n">key</span><span class="p">][()]</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)):</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>                    <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>                <span class="n">scan_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="k">return</span> <span class="n">Scan</span><span class="p">(</span><span class="o">**</span><span class="n">scan_dict</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -433,26 +411,104 @@ Important units:
 
     <div class="doc doc-contents ">
 
-        <h6 id="nrxrdct.parameters.Scan.__init__--parameters">Parameters<a class="headerlink" href="#nrxrdct.parameters.Scan.__init__--parameters" title="Permanent link">&para;</a></h6>
-<p>acquisition_file : Path
-    Path to the raw acquisition data file.
-sample_name : str
-    Identifier for the sample being scanned.
-scan_type : str, optional
-    Scan geometry, e.g. <code>"half-turn"</code> or <code>"full-turn"</code> (default <code>"half-turn"</code>).
-translation_motor : str, optional
-    Name of the fast (inner-loop) translation motor in the data file (default <code>"dty"</code>).
-rotation_motor : str, optional
-    Name of the rotation motor in the data file (default <code>"rot"</code>).
-outer_loop_motor : str, optional
-    Name of the slow (outer-loop) motor, typically a second translation
-    axis (default <code>"translation"</code>).
-beam_size : float, optional
-    Beam size in metres (default 100 µm).
-beam_energy : float, optional
-    Beam energy in keV (default 44 keV).  The wavelength in ångströms is
-    derived automatically as <code>12.398 / beam_energy</code>.</p>
 
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>acquisition_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the raw acquisition data file.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>sample_name</code></b>
+                  (<code><span title="str">str</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Identifier for the sample being scanned.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>scan_type</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;half-turn&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Scan geometry, e.g. <code>"half-turn"</code> or
+<code>"full-turn"</code> (default <code>"half-turn"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>translation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;dty&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Name of the fast (inner-loop) translation
+motor in the data file (default <code>"dty"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>rotation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;rot&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Name of the rotation motor in the data file
+(default <code>"rot"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>outer_loop_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;translation&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Name of the slow (outer-loop) motor,
+typically a second translation axis (default <code>"translation"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>beam_size</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>0.0001</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Beam size in metres (default 100 µm).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>beam_energy</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>44</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Beam energy in keV (default 44 keV). The
+wavelength in ångströms is derived automatically as <code>12.398 / beam_energy</code>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
@@ -491,13 +547,7 @@ beam_energy : float, optional
 <span class="normal"><a href="#__codelineno-0-55">55</a></span>
 <span class="normal"><a href="#__codelineno-0-56">56</a></span>
 <span class="normal"><a href="#__codelineno-0-57">57</a></span>
-<span class="normal"><a href="#__codelineno-0-58">58</a></span>
-<span class="normal"><a href="#__codelineno-0-59">59</a></span>
-<span class="normal"><a href="#__codelineno-0-60">60</a></span>
-<span class="normal"><a href="#__codelineno-0-61">61</a></span>
-<span class="normal"><a href="#__codelineno-0-62">62</a></span>
-<span class="normal"><a href="#__codelineno-0-63">63</a></span>
-<span class="normal"><a href="#__codelineno-0-64">64</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-23" name="__codelineno-0-23"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-23" name="__codelineno-0-23"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
 <a id="__codelineno-0-24" name="__codelineno-0-24"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-25" name="__codelineno-0-25"></a>    <span class="n">acquisition_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
 <a id="__codelineno-0-26" name="__codelineno-0-26"></a>    <span class="n">sample_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -509,36 +559,30 @@ beam_energy : float, optional
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">beam_energy</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">44</span><span class="p">,</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="p">):</span>
 <a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    Parameters</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">    ----------</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">    acquisition_file : Path</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="sd">        Path to the raw acquisition data file.</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">    sample_name : str</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">        Identifier for the sample being scanned.</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">    scan_type : str, optional</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">        Scan geometry, e.g. ``&quot;half-turn&quot;`` or ``&quot;full-turn&quot;`` (default ``&quot;half-turn&quot;``).</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    translation_motor : str, optional</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">        Name of the fast (inner-loop) translation motor in the data file (default ``&quot;dty&quot;``).</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    rotation_motor : str, optional</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        Name of the rotation motor in the data file (default ``&quot;rot&quot;``).</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    outer_loop_motor : str, optional</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        Name of the slow (outer-loop) motor, typically a second translation</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        axis (default ``&quot;translation&quot;``).</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    beam_size : float, optional</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">        Beam size in metres (default 100 µm).</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">    beam_energy : float, optional</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">        Beam energy in keV (default 44 keV).  The wavelength in ångströms is</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">        derived automatically as ``12.398 / beam_energy``.</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span> <span class="o">=</span> <span class="n">acquisition_file</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">sample_name</span> <span class="o">=</span> <span class="n">sample_name</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span> <span class="o">=</span> <span class="n">translation_motor</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span> <span class="o">=</span> <span class="n">rotation_motor</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span> <span class="o">=</span> <span class="n">outer_loop_motor</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">beam_size</span> <span class="o">=</span> <span class="n">beam_size</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span> <span class="o">=</span> <span class="n">beam_energy</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">scan_type</span> <span class="o">=</span> <span class="n">scan_type</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span> <span class="o">=</span> <span class="mf">12.398</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">        acquisition_file (Path): Path to the raw acquisition data file.</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        sample_name (str): Identifier for the sample being scanned.</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="sd">        scan_type (str, optional): Scan geometry, e.g. ``&quot;half-turn&quot;`` or</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">            ``&quot;full-turn&quot;`` (default ``&quot;half-turn&quot;``).</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">        translation_motor (str, optional): Name of the fast (inner-loop) translation</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">            motor in the data file (default ``&quot;dty&quot;``).</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">        rotation_motor (str, optional): Name of the rotation motor in the data file</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">            (default ``&quot;rot&quot;``).</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">        outer_loop_motor (str, optional): Name of the slow (outer-loop) motor,</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">            typically a second translation axis (default ``&quot;translation&quot;``).</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        beam_size (float, optional): Beam size in metres (default 100 µm).</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">        beam_energy (float, optional): Beam energy in keV (default 44 keV). The</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">            wavelength in ångströms is derived automatically as ``12.398 / beam_energy``.</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">acquisition_file</span> <span class="o">=</span> <span class="n">acquisition_file</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">sample_name</span> <span class="o">=</span> <span class="n">sample_name</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">translation_motor</span> <span class="o">=</span> <span class="n">translation_motor</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">rotation_motor</span> <span class="o">=</span> <span class="n">rotation_motor</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">outer_loop_motor</span> <span class="o">=</span> <span class="n">outer_loop_motor</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">beam_size</span> <span class="o">=</span> <span class="n">beam_size</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span> <span class="o">=</span> <span class="n">beam_energy</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">scan_type</span> <span class="o">=</span> <span class="n">scan_type</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span> <span class="o">=</span> <span class="mf">12.398</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_energy</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -563,17 +607,68 @@ beam_energy : float, optional
     <div class="doc doc-contents ">
 
         <p>Reconstruct a :class:<code>Scan</code> instance from a previously saved HDF5 parameter file.</p>
-<h6 id="nrxrdct.parameters.Scan.get_scan_from_parameters--parameters">Parameters<a class="headerlink" href="#nrxrdct.parameters.Scan.get_scan_from_parameters--parameters" title="Permanent link">&para;</a></h6>
-<p>parameter_file : Path, optional
-    HDF5 file written by :meth:<code>save_parameter_file</code> (default <code>"xrdct_scan.h5"</code>).</p>
-<h6 id="nrxrdct.parameters.Scan.get_scan_from_parameters--returns">Returns<a class="headerlink" href="#nrxrdct.parameters.Scan.get_scan_from_parameters--returns" title="Permanent link">&para;</a></h6>
-<p>Scan
-    A new :class:<code>Scan</code> instance populated from the stored parameters.</p>
 
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>parameter_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>, default:
+                      <code><span title="pathlib.Path">Path</span>(&#39;xrdct_scan.h5&#39;)</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>HDF5 file written by :meth:<code>save_parameter_file</code>
+(default <code>"xrdct_scan.h5"</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>Scan</code></b>              –
+              <div class="doc-md-description">
+                <p>A new :class:<code>Scan</code> instance populated from the stored parameters.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
+<span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
+<span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
+<span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
+<span class="normal"><a href="#__codelineno-0-87"> 87</a></span>
+<span class="normal"><a href="#__codelineno-0-88"> 88</a></span>
+<span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
+<span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
+<span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
 <span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
 <span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
 <span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
@@ -585,41 +680,27 @@ beam_energy : float, optional
 <span class="normal"><a href="#__codelineno-0-100">100</a></span>
 <span class="normal"><a href="#__codelineno-0-101">101</a></span>
 <span class="normal"><a href="#__codelineno-0-102">102</a></span>
-<span class="normal"><a href="#__codelineno-0-103">103</a></span>
-<span class="normal"><a href="#__codelineno-0-104">104</a></span>
-<span class="normal"><a href="#__codelineno-0-105">105</a></span>
-<span class="normal"><a href="#__codelineno-0-106">106</a></span>
-<span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span>
-<span class="normal"><a href="#__codelineno-0-111">111</a></span>
-<span class="normal"><a href="#__codelineno-0-112">112</a></span>
-<span class="normal"><a href="#__codelineno-0-113">113</a></span>
-<span class="normal"><a href="#__codelineno-0-114">114</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-91" name="__codelineno-0-91"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">    Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
-<a id="__codelineno-0-95" name="__codelineno-0-95"></a>
-<a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">    Parameters</span>
-<a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="sd">    ----------</span>
-<a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">    parameter_file : Path, optional</span>
-<a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">        HDF5 file written by :meth:`save_parameter_file` (default ``&quot;xrdct_scan.h5&quot;``).</span>
-<a id="__codelineno-0-100" name="__codelineno-0-100"></a>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">    Returns</span>
-<a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">    -------</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    Scan</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="sd">        A new :class:`Scan` instance populated from the stored parameters.</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">scan_dict</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
-<a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hin</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="n">key</span><span class="p">][()]</span>
-<a id="__codelineno-0-110" name="__codelineno-0-110"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)):</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111"></a>                <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112"></a>            <span class="n">scan_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-0-113" name="__codelineno-0-113"></a>
-<a id="__codelineno-0-114" name="__codelineno-0-114"></a>    <span class="k">return</span> <span class="n">Scan</span><span class="p">(</span><span class="o">**</span><span class="n">scan_dict</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="sd">        parameter_file (Path, optional): HDF5 file written by :meth:`save_parameter_file`</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="sd">            (default ``&quot;xrdct_scan.h5&quot;``).</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">        Scan: A new :class:`Scan` instance populated from the stored parameters.</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="n">scan_dict</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hin</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="n">key</span><span class="p">][()]</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)):</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>                <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="n">scan_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>    <span class="k">return</span> <span class="n">Scan</span><span class="p">(</span><span class="o">**</span><span class="n">scan_dict</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -642,42 +723,61 @@ beam_energy : float, optional
         <p>Persist all scan parameters to an HDF5 file.</p>
 <p>Each instance attribute is stored as a separate dataset.  String values
 are encoded automatically by h5py.</p>
-<h6 id="nrxrdct.parameters.Scan.save_parameter_file--parameters">Parameters<a class="headerlink" href="#nrxrdct.parameters.Scan.save_parameter_file--parameters" title="Permanent link">&para;</a></h6>
-<p>output_file : Path, optional
-    Destination HDF5 file (default <code>"xrdct_scan.h5"</code>).</p>
 
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>output_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>, default:
+                      <code><span title="pathlib.Path">Path</span>(&#39;xrdct_scan.h5&#39;)</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Destination HDF5 file (default <code>"xrdct_scan.h5"</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-75">75</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
 <span class="normal"><a href="#__codelineno-0-77">77</a></span>
 <span class="normal"><a href="#__codelineno-0-78">78</a></span>
 <span class="normal"><a href="#__codelineno-0-79">79</a></span>
 <span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span>
-<span class="normal"><a href="#__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#__codelineno-0-83">83</a></span>
-<span class="normal"><a href="#__codelineno-0-84">84</a></span>
-<span class="normal"><a href="#__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#__codelineno-0-86">86</a></span>
-<span class="normal"><a href="#__codelineno-0-87">87</a></span>
-<span class="normal"><a href="#__codelineno-0-88">88</a></span>
-<span class="normal"><a href="#__codelineno-0-89">89</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">    Persist all scan parameters to an HDF5 file.</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a>
-<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">    Each instance attribute is stored as a separate dataset.  String values</span>
-<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">    are encoded automatically by h5py.</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">    Parameters</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">    ----------</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">    output_file : Path, optional</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">        Destination HDF5 file (default ``&quot;xrdct_scan.h5&quot;``).</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_file</span><span class="p">),</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88"></a>        <span class="k">for</span> <span class="n">flag</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89"></a>            <span class="n">hout</span><span class="p">[</span><span class="n">flag</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">save_parameter_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;xrdct_scan.h5&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Persist all scan parameters to an HDF5 file.</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">    Each instance attribute is stored as a separate dataset.  String values</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">    are encoded automatically by h5py.</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">        output_file (Path, optional): Destination HDF5 file (default ``&quot;xrdct_scan.h5&quot;``).</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_file</span><span class="p">),</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a>        <span class="k">for</span> <span class="n">flag</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a>            <span class="n">hout</span><span class="p">[</span><span class="n">flag</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

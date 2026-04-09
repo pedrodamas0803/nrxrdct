@@ -29,19 +29,19 @@ cal.plot_calibration_results()
 
 ## Full pipeline
 
-    ```
-    Raw HDF5 frames
-        │
-        ▼ preprocessing.py  — zinger removal
-        │
-        ▼ integration.py    — azimuthal integration (pyFAI)
-        │
-        ▼ reconstruction.py — sinogram assembly + ASTRA reconstruction
-        │
-        ▼ refinement.py     — per-voxel Rietveld (GSAS-II)
-        │
-        ▼ Parameter maps    — Rwp, unit-cell, crystallite size, …
-    ```
+```
+Raw HDF5 frames
+    │
+    ▼ preprocessing.py  — zinger removal
+    │
+    ▼ integration.py    — azimuthal integration (pyFAI)
+    │
+    ▼ reconstruction.py — sinogram assembly + ASTRA reconstruction
+    │
+    ▼ refinement.py     — per-voxel Rietveld (GSAS-II)
+    │
+    ▼ Parameter maps    — Rwp, unit-cell, crystallite size, …
+```
 
 ## Package structure
 

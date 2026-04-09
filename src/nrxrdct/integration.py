@@ -311,10 +311,15 @@ def integrate_powder_parallel(
     unit: str = "2th_deg",
     remove_spots: bool = False,
     percentile: tuple = (10, 90),
+    camera_name: str = "eiger",
+    monitor_name: str = "fpico6",
+    translation_motor: str = "dty",
+    rotation_motor: str = "rot",
 ):
     """
     Perform parallel 1D azimuthal integration reading image stacks directly
-    from each entry in the HDF5 master file, with normalization by fpico6.
+    from each entry in the HDF5 master file, with normalisation by a monitor
+    counter.
 
     Args:
         master_file (Path): Path to the master HDF5 file containing all scan entries.
@@ -331,6 +336,19 @@ def integrate_powder_parallel(
         percentile (tuple, optional): ``(low, high)`` percentile bounds passed to
             :func:`azimuthal_integration_1d_filter` when *remove_spots* is ``True``
             (default ``(10, 90)``).
+        camera_name (str, optional): Name of the detector dataset inside each HDF5
+            entry under ``measurement/`` (default ``"eiger"``). Change this to match
+            the detector name used at your beamline or facility.
+        monitor_name (str, optional): Name of the monitor/ion-chamber dataset inside
+            each HDF5 entry under ``measurement/`` used for normalisation
+            (default ``"fpico6"``). Change this to match the monitor channel available
+            at your beamline or facility.
+        translation_motor (str, optional): Name of the translation motor (sample
+            y-position) read from ``instrument/positioners/`` in each HDF5 entry
+            (default ``"dty"``). Change this to match the motor name at your beamline.
+        rotation_motor (str, optional): Name of the rotation motor dataset inside
+            each HDF5 entry under ``measurement/`` (default ``"rot"``). Change this
+            to match the rotation axis name at your beamline.
     """
     t0 = time.time()
     mask = fabio.open(mask_file).data
@@ -343,9 +361,9 @@ def integrate_powder_parallel(
         all_entries = list(hin.keys())
         for entry in tqdm(all_entries, desc="Validating entries"):
             try:
-                _ = hin[f"{entry}/measurement/eiger"].shape
-                _ = hin[f"{entry}/measurement/fpico6"].shape
-                dty = float(hin[f"{entry}/instrument/positioners/dty"][()])
+                _ = hin[f"{entry}/measurement/{camera_name}"].shape
+                _ = hin[f"{entry}/measurement/{monitor_name}"].shape
+                dty = float(hin[f"{entry}/instrument/positioners/{translation_motor}"][()])
                 valid_entries.append(entry)
                 dty_values.append(dty)
             except KeyError as e:
@@ -360,7 +378,7 @@ def integrate_powder_parallel(
     with h5py.File(master_file, "r") as hin, h5py.File(output_file, "a") as hout:
 
         if "integrated/radial" not in hout:
-            first_image = hin[f"{valid_entries[0]}/measurement/eiger"][0].astype(
+            first_image = hin[f"{valid_entries[0]}/measurement/{camera_name}"][0].astype(
                 np.float32
             )
             tt, _, _ = azimuthal_integration_1d(
@@ -383,10 +401,10 @@ def integrate_powder_parallel(
             hout["integrated/radial"] = tt
             hout["integrated/radial"].attrs["unit"] = unit
 
-        if "motors/dty" not in hout:
-            hout["motors/dty"] = dty_values
-        if "motors/rot" not in hout:
-            hout["motors/rot"] = rot
+        if f"motors/{translation_motor}" not in hout:
+            hout[f"motors/{translation_motor}"] = dty_values
+        if f"motors/{rotation_motor}" not in hout:
+            hout[f"motors/{rotation_motor}"] = rot
         if bad_entries and "bad_entries" not in hout:
             hout["bad_entries"] = bad_entries
 
@@ -410,7 +428,7 @@ def integrate_powder_parallel(
             )
         if monitor <= 0:
             print(
-                f"  ⚠  Frame {jj}: fpico6 monitor value is {monitor:.4g}, skipping normalisation"
+                f"  ⚠  Frame {jj}: {monitor_name} monitor value is {monitor:.4g}, skipping normalisation"
             )
             return jj, itt
         return jj, itt / monitor
@@ -432,9 +450,9 @@ def integrate_powder_parallel(
 
         try:
             with h5py.File(master_file, "r") as hin:
-                images = hin[f"{entry}/measurement/eiger"][:].astype(np.float32)
-                fpico6 = hin[f"{entry}/measurement/fpico6"][:].astype(np.float64)
-                rot = hin[f"{entry}/measurement/rot"][:]
+                images = hin[f"{entry}/measurement/{camera_name}"][:].astype(np.float32)
+                fpico6 = hin[f"{entry}/measurement/{monitor_name}"][:].astype(np.float64)
+                rot = hin[f"{entry}/measurement/{rotation_motor}"][:]
         except OSError as e:
             print(f"  ✗ Failed to read entry {entry}: {e} — skipping")
             continue
@@ -476,12 +494,12 @@ def integrate_powder_parallel(
                 chunks=(1, n_points),
             )
             ds.attrs["entry"] = entry
-            ds.attrs["dty"] = dty_values[ii]
+            ds.attrs[translation_motor] = dty_values[ii]
             ds.attrs["source"] = str(master_file)
-            ds.attrs["fpico6_mean"] = float(np.mean(fpico6))
-            ds.attrs["fpico6_min"] = float(np.min(fpico6))
-            ds.attrs["fpico6_max"] = float(np.max(fpico6))
-            ds.attrs["normalised_by"] = "fpico6"
+            ds.attrs[f"{monitor_name}_mean"] = float(np.mean(fpico6))
+            ds.attrs[f"{monitor_name}_min"] = float(np.min(fpico6))
+            ds.attrs[f"{monitor_name}_max"] = float(np.max(fpico6))
+            ds.attrs["normalised_by"] = monitor_name
             ds.attrs["valid"] = True
 
     elapsed = time.time() - t0

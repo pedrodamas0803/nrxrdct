@@ -19,7 +19,7 @@ DEFAULT_LINES = ["Ka1", "Ka2", "Kb1", "Kb2", "La1", "Lb1", "Lg1"]
 
 def get_fluo_lines(
     element, energy_range, lines: list[str] = DEFAULT_LINES, verbose=False
-):
+) -> dict[str, float]:
     """
     Return the XRF emission line energies for an element within a given energy range.
 
@@ -73,7 +73,7 @@ def get_fluo_lines(
 
 def get_fluo_roi(
     fn, n_angles=901, data_entry="mca_det0_all", monitor_entry="fpico6", filter_size=3
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Load per-scan ROI fluorescence data from an HDF5 master file.
 
@@ -149,7 +149,7 @@ def get_fluo_full_spectra(
     dat_entry="mca_det0",
     binning_func=np.mean,
     monitor_entry="fpico6",
-):
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Assemble a full-spectrum XRF sinogram from an HDF5 master file.
 
@@ -249,11 +249,11 @@ _LINE_CONSTS = [
 ]
 
 
-def _gaussian(x, center, sigma):
+def _gaussian(x, center, sigma) -> np.ndarray:
     return np.exp(-0.5 * ((x - center) / sigma) ** 2)
 
 
-def build_element_component(element, energy_axis, excitation_energy, fwhm_keV):
+def build_element_component(element, energy_axis, excitation_energy, fwhm_keV) -> np.ndarray:
     """
     Build the expected spectral shape for one element on a given energy axis.
 
@@ -300,7 +300,7 @@ def fit_fluo_spectrum(
     excitation_energy,
     fwhm_keV=0.18,
     background_order=2,
-):
+) -> tuple[dict[str, float], np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     """
     Fit a fluorescence spectrum as a linear combination of element templates.
 
@@ -354,7 +354,7 @@ def fit_fluo_spectrum(
 
 def build_fit_matrix(
     energy_axis, elements, excitation_energy, fwhm_keV=0.18, background_order=2
-):
+) -> tuple[np.ndarray, list[str]]:
     """
     Build the design matrix for XRF spectrum fitting.
 
@@ -401,7 +401,7 @@ def fit_fluo_volume(
     background_order=2,
     method="lstsq",
     n_jobs=-1,
-):
+) -> dict[str, np.ndarray]:
     """
     Fit fluorescence spectra for every pixel in a 3-D dataset.
 

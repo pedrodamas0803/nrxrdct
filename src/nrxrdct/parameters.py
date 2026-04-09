@@ -57,7 +57,7 @@ class Scan:
         self.scan_type = scan_type
         self.wavelength = 12.398 / self.beam_energy
 
-    def __str__(self):
+    def __str__(self) -> str:
         msg = f"""
             XRDCT scan stored in {str(self.acquisition_file)}
             Translation motor name: {self.translation_motor}
@@ -66,7 +66,7 @@ class Scan:
             """
         return msg
 
-    def save_parameter_file(self, output_file: Path = Path("xrdct_scan.h5")):
+    def save_parameter_file(self, output_file: Path = Path("xrdct_scan.h5")) -> None:
         """
         Persist all scan parameters to an HDF5 file.
 
@@ -81,7 +81,7 @@ class Scan:
                 hout[flag] = value
 
     @classmethod
-    def get_scan_from_parameters(cls, parameter_file: Path = Path("xrdct_scan.h5")):
+    def get_scan_from_parameters(cls, parameter_file: Path = Path("xrdct_scan.h5")) -> "Scan":
         """
         Reconstruct a :class:`Scan` instance from a previously saved HDF5 parameter file.
 

@@ -12,7 +12,7 @@ import h5py
 import numpy as np
 
 
-def save_sinogram(sinogram: np.ndarray, output_file: Path):
+def save_sinogram(sinogram: np.ndarray, output_file: Path) -> None:
     """
     Save a sinogram array to an HDF5 file under the key ``"sinogram"``.
 
@@ -24,7 +24,7 @@ def save_sinogram(sinogram: np.ndarray, output_file: Path):
         hout["sinogram"] = sinogram
 
 
-def save_volume(volume: np.ndarray, output_file: Path):
+def save_volume(volume: np.ndarray, output_file: Path) -> None:
     """
     Save a reconstructed volume array to an HDF5 file under the key ``"volume"``.
 
@@ -36,7 +36,7 @@ def save_volume(volume: np.ndarray, output_file: Path):
         hout["volume"] = volume
 
 
-def add_array_to_output(array: np.ndarray, array_name: str, output_file: Path):
+def add_array_to_output(array: np.ndarray, array_name: str, output_file: Path) -> None:
     """
     Append an array to an HDF5 file under an arbitrary key.
 
@@ -52,7 +52,7 @@ def add_array_to_output(array: np.ndarray, array_name: str, output_file: Path):
 def get_array_from_file(
     filename: Path,
     array_name: str,
-):
+) -> np.ndarray:
     """
     Read an array from an HDF5 file by key name.
 
@@ -68,7 +68,7 @@ def get_array_from_file(
     return out
 
 
-def read_sinogram_from_file(input_file: Path, slicing: tuple | None = None):
+def read_sinogram_from_file(input_file: Path, slicing: tuple | None = None) -> np.ndarray:
     """
     Read a sinogram from an HDF5 file, optionally with sub-region slicing.
 
@@ -94,7 +94,7 @@ def read_sinogram_from_file(input_file: Path, slicing: tuple | None = None):
     return sinogram
 
 
-def read_volume_from_file(input_file: Path, slicing: tuple | None = None):
+def read_volume_from_file(input_file: Path, slicing: tuple | None = None) -> np.ndarray:
     """
     Read a reconstructed volume from an HDF5 file, optionally with sub-region slicing.
 
@@ -120,13 +120,13 @@ def read_volume_from_file(input_file: Path, slicing: tuple | None = None):
 
 
 def save_xy_file(
-    x: np.array,
-    y: np.array,
-    err: np.array = None,
+    x: np.ndarray,
+    y: np.ndarray,
+    err: np.ndarray = None,
     output_file: Path = Path("integrated_data.xy"),
     unit: str = "2th_deg",
     verbose: bool = True,
-):
+) -> None:
     """
     Save an integrated 1-D diffraction pattern to a plain-text .xy file.
 
@@ -154,7 +154,7 @@ def save_xy_file(
         print(f"Integrated pattern saved to:\n  {str(output_file)}")
 
 
-def read_xy_file(input_file: Path = "integrated_data.xy"):
+def read_xy_file(input_file: Path = "integrated_data.xy") -> tuple[np.ndarray, ...]:
     """
     Load a plain-text .xy diffraction pattern file.
 
@@ -171,7 +171,7 @@ def write_starting_instrument_pars(
     output_file: Path = Path("instrument_init.instprm"),
     polarization: float = 0.99,
     wavelength: float = 1.5418,
-):
+) -> Path:
     """
     Write a minimal GSAS-II instrument parameter file with starting (unfitted) values.
 
@@ -217,7 +217,7 @@ def write_calibrated_intrument_pars(
     hist,
     wavelength: float = 1.5418,
     output_file: Path = Path("calibrated_instrument.instprm"),
-):
+) -> None:
     """
     Export a calibrated GSAS-II instrument parameter file from a refined histogram.
 

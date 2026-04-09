@@ -98,10 +98,10 @@ def reconstruct_astra_gpu_3d(
 def reconstruct_astra_gpu(
     data: np.ndarray,
     dty_step: float = 1.0,
-    angles_rad: np.array = np.empty((1,)),
+    angles_rad: np.ndarray = np.empty((1,)),
     algo: str = "SART_CUDA",
     num_iter: int = 200,
-):
+) -> np.ndarray:
     """
     Reconstruct a single 2-D slice using a GPU-accelerated ASTRA algorithm.
 
@@ -152,10 +152,10 @@ def reconstruct_astra_gpu(
 def reconstruct_astra_cpu(
     data: np.ndarray,
     dty_step: float = 1.0,
-    angles_rad: np.array = np.empty((1,)),
+    angles_rad: np.ndarray = np.empty((1,)),
     algo: str = "FBP",
     num_iter: int = 200,
-):
+) -> np.ndarray:
     """
     Reconstruct a single 2-D slice using a CPU ASTRA algorithm.
 
@@ -222,7 +222,7 @@ def reconstruct_astra_cpu(
 
 def forward_project_gpu(
     volume, angles_rad, det_spacing: float = 1.0, algo: str = "FP_CUDA"
-):
+) -> np.ndarray:
     """
     Compute the GPU forward projection (sinogram) of a 2-D volume.
 
@@ -264,10 +264,10 @@ def forward_project_gpu(
 def reconstruct_slice(
     data: np.ndarray,
     dty_step: float = 1.0,
-    angles_rad: np.array = np.empty((1,)),
+    angles_rad: np.ndarray = np.empty((1,)),
     algo: str = "SART_CUDA",
     num_iter: int = 200,
-):
+) -> np.ndarray:
     """
     Reconstruct a single 2-D slice, dispatching to GPU or CPU automatically.
 
@@ -302,7 +302,7 @@ def reconstruct_slice(
 
 def assemble_sinogram(
     integrated_file: Path, n_rot: int, n_tth_angles: int, n_lines: int = 10
-):
+) -> np.ndarray:
     """
     Build a 3-D sinogram from an HDF5 file of integrated patterns.
 

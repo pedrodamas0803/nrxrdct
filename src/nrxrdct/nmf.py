@@ -95,7 +95,7 @@ class HyperspectralNMF:
         self.alphaH = alpha_H
         self.clip_negative = clip_negative
 
-    def fit_data(self):
+    def fit_data(self) -> None:
         """
         Fit the NMF model and store results as instance attributes.
 
@@ -129,7 +129,7 @@ class HyperspectralNMF:
         self.E_map = E_map
         self.model = model
 
-    def plot(self, normalize_spectra:bool=False, titles=None, figsize=(14, 7), extent=None,  save=True):
+    def plot(self, normalize_spectra:bool=False, titles=None, figsize=(14, 7), extent=None,  save=True) -> None:
         """
         Visualise the NMF decomposition with component spectra and spatial maps.
 
@@ -175,7 +175,7 @@ def _nmf_sklearn_hyperspectral(
     alpha_H=0.0,
     clip_negative=True,
     show_progress=True,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, NMF]:
     """
     Fit NMF with scikit-learn on a 2-D hyperspectral array.
 
@@ -299,7 +299,7 @@ def _plot_nmf_panel(
     figsize=(14, 7),
     extent=None,
     save=True,
-):
+) -> None:
     """
     Render a publication-style NMF results panel.
 

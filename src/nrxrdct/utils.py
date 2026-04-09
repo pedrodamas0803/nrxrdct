@@ -227,7 +227,7 @@ def calculate_xrd_baseline(
     return baseline, info
 
 
-def generate_circular_mask(shape, center, diameter):
+def generate_circular_mask(shape, center, diameter) -> np.ndarray:
     """
     Generate a 2-D boolean circular mask for a given volume shape.
 
@@ -255,7 +255,7 @@ def simulate_powder_xrd_monophase(
     en_eV=100000,
     crystallite_size: float = 100e-9,
     do_save: bool = True,
-):
+) -> np.ndarray:
     """
     Simulate a powder XRD pattern for one or more phases using xrayutilities.
 
@@ -399,7 +399,7 @@ def calculate_absorption_coefficient(
     energy_keV: float,
     sample_diameter_mm: float,
     geometry: str = "debye-scherrer",
-) -> dict:
+) -> dict[str, float]:
     """
     Estimate the GSAS-II absorption parameter for a powder sample using xraylib.
 
@@ -478,7 +478,7 @@ def calculate_absorption_coefficient(
     }
 
 
-def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple):
+def calculate_padding_widths_2D(input_shape: tuple, desired_shape: tuple) -> tuple[tuple[int, int], tuple[int, int]]:
     """
     Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.
 

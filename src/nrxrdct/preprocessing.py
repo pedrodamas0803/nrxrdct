@@ -11,7 +11,7 @@ import scipy.ndimage as ndi
 NTHREAD = os.cpu_count() - 1
 
 
-def zinger_remove(dimg, medsize=3, nsigma=5):
+def zinger_remove(dimg, medsize=3, nsigma=5) -> np.ndarray:
     """
     Remove zingers (hot pixels) from a single 2-D detector image.
 
@@ -37,7 +37,7 @@ def zinger_remove(dimg, medsize=3, nsigma=5):
     return np.where(gromsk, med, dimg)
 
 
-def dezinger(image, medsize: int = 3, nsigma: int = 5):
+def dezinger(image, medsize: int = 3, nsigma: int = 5) -> np.ndarray:
     """
     Apply zinger removal to a stack of detector images in parallel.
 

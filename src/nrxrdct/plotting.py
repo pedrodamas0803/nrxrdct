@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_integrated_cake(cake, radial, azimuthal, log_scale = False):
+def plot_integrated_cake(cake, radial, azimuthal, unit: str = "2th_deg", log_scale = False) -> None:
     """
     Display a 2-D CAKE integration result as a false-colour image.
 
@@ -14,6 +14,7 @@ def plot_integrated_cake(cake, radial, azimuthal, log_scale = False):
             returned by :func:`~nrxrdct.integration.cake_integration`.
         radial (np.ndarray): Radial axis values (length ``npt_rad``).
         azimuthal (np.ndarray): Azimuthal axis values in degrees (length ``npt_azim``).
+        unit (str, optional): Label for the radial axis (default ``"2th_deg"``).
         log_scale (bool, optional): If ``True``, display ``log(1 + I)`` instead of
             raw intensity (default ``False``).
     """

@@ -89,6 +89,9 @@ def get_fluo_roi(
             to read (default ``"mca_det0_all"``).
         filter_size (int, optional): Size of the median filter applied along the
             rotation axis; set to ``0`` to skip filtering (default 3).
+        monitor_entry (str or None, optional): HDF5 dataset name for the beam-intensity
+            monitor used for normalisation. Pass ``None`` to skip normalisation
+            (default ``"fpico6"``).
 
     Returns:
         meas (np.ndarray): 2-D array of shape ``(n_scans, n_angles)`` with ROI
@@ -105,9 +108,10 @@ def get_fluo_roi(
             ypos.append((hin[f"{key}/instrument/positioners/dty"][()]))
             rot = hin[f"{key}/measurement/rot"][:]
             dat = hin[f"{key}/measurement/{data_entry}"][:].astype(np.float32)
-            mon = hin[f"{key}/measurement/{monitor_entry}"][:].astype(np.float32)
 
-            dat /= mon
+            if monitor_entry is not None:
+                mon = hin[f"{key}/measurement/{monitor_entry}"][:].astype(np.float32)
+                dat /= mon
             if filter_size != 0:
                 dat = median_filter(dat, size=filter_size)
 
@@ -169,8 +173,9 @@ def get_fluo_full_spectra(
             containing the MCA spectra (default ``"mca_det0"``).
         binning_func (callable, optional): Aggregation function used when
             *binning_factor* > 1 (default ``np.mean``).
-        monitor_entry (str, optional): HDF5 dataset name for the beam-intensity
-            monitor used for normalisation (default ``"fpico6"``).
+        monitor_entry (str or None, optional): HDF5 dataset name for the beam-intensity
+            monitor used for normalisation. Pass ``None`` to skip normalisation
+            (default ``"fpico6"``).
 
     Returns:
         sino (np.ndarray): 3-D sinogram of shape ``(n_energy_bins, n_scans,
@@ -195,9 +200,10 @@ def get_fluo_full_spectra(
             rot = hin[f"{key}/measurement/rot"][:].astype(np.float32)
             dat = hin[f"{key}/measurement/{dat_entry}"][:].astype(np.float32)
 
-            p = hin[f"{key}/measurement/{monitor_entry}"][:]
-            pico = np.repeat(p, dat.shape[1]).reshape(dat.shape)
-            dat = dat / (pico + 1e-8)
+            if monitor_entry is not None:
+                p = hin[f"{key}/measurement/{monitor_entry}"][:]
+                pico = np.repeat(p, dat.shape[1]).reshape(dat.shape)
+                dat = dat / (pico + 1e-8)
             dat = median_filter(dat, (1, filter_size))
 
             if binning_factor > 1:

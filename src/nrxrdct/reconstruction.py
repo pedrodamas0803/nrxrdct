@@ -551,6 +551,32 @@ class ReconstructedVolume:
         print(f"Fetched Rwp map in {time.time()-t0:.2f} s.")
         return result
 
+    def get_chi2_map(self) -> np.ndarray:
+        """
+        Extract the reduced chi-squared (χ²) from each voxel's .gpx file.
+
+        χ² is a histogram-level metric and does not depend on the phase index.
+
+        Returns:
+            np.ndarray: 2-D map of shape ``(nx, ny)``; masked pixels return ``0``,
+                failed extractions return ``nan``.
+        """
+        t0 = time.time()
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
+
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(pool.map(_get_chi2_ii_jj, args, chunksize=64), total=len(args), desc="Chi2 map")
+            )
+
+        result = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), val in zip(active, values):
+            result[ii, jj] = val
+        print(f"Fetched chi2 map in {time.time()-t0:.2f} s.")
+        return result
+
     def get_cell_map(
         self, phase: int = 0
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -701,6 +727,7 @@ class ReconstructedVolume:
             dict: 2-D maps of shape ``(nx, ny)`` keyed by parameter name:
 
             * ``"rwp"``      — weighted R-factor (histogram level, phase-independent)
+            * ``"chi2"``     — reduced chi-squared (histogram level, phase-independent)
             * ``"a"``, ``"b"``, ``"c"`` — unit-cell lengths (Å)
             * ``"size"``     — isotropic crystallite size
             * ``"mustrain"`` — isotropic microstrain
@@ -722,7 +749,7 @@ class ReconstructedVolume:
                 )
             )
 
-        keys = ["rwp", "a", "b", "c", "size", "mustrain", "scale"]
+        keys = ["rwp", "chi2", "a", "b", "c", "size", "mustrain", "scale"]
         maps = {k: np.zeros((nx, ny), dtype=np.float32) for k in keys}
         for (ii, jj), vals in zip(active, values):
             for k, v in zip(keys, vals):
@@ -780,6 +807,7 @@ class ReconstructedVolume:
         phase: int = 0,
         cmap: str = "viridis",
         figsize: tuple | None = None,
+        return_fig: bool = False,
     ):
         """
         Plot a mosaic of all refined parameter maps for a given phase.
@@ -795,10 +823,12 @@ class ReconstructedVolume:
                 (default ``"viridis"``).
             figsize (tuple or None, optional): ``(width, height)`` in inches.
                 Defaults to ``(4 * ncols, 4 * nrows)``.
+            return_fig (bool, optional): If ``True``, return the
+                ``matplotlib.figure.Figure`` object.  Set to ``False``
+                (default) to avoid duplicate display in Jupyter notebooks.
 
         Returns:
-            matplotlib.figure.Figure: The figure, for further customisation
-                or saving with ``fig.savefig(...)``.
+            matplotlib.figure.Figure or None
         """
         import matplotlib.pyplot as plt
 
@@ -806,6 +836,7 @@ class ReconstructedVolume:
 
         labels = {
             "rwp":      "Rwp",
+            "chi2":     "χ²",
             "a":        "a (Å)",
             "b":        "b (Å)",
             "c":        "c (Å)",
@@ -850,7 +881,7 @@ class ReconstructedVolume:
 
         fig.suptitle(title, fontsize=13)
         fig.tight_layout()
-        return fig
+        return fig if return_fig else None
 
     def write_slurm_scripts(
         self,
@@ -1028,6 +1059,24 @@ class ReconstructedVolume:
         return worker_path, submit_path
 
 
+def _get_chi2_ii_jj(args: tuple) -> float:
+    """Return reduced chi-squared for voxel ``(ii, jj)``.
+
+    Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
+    ``nan`` if the .xy file exists but the parameter could not be extracted.
+    """
+    ii, jj, folder, name = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0
+    try:
+        gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
+        g, hists, phases = _load_data_from_gpx(gpx_filename)
+        return float(hists[0].data["Residuals"]["chisq"])
+    except Exception:
+        return np.nan
+
+
 def _get_Rwp_ii_jj(args: tuple) -> float:
     """Return Rwp for voxel ``(ii, jj)``.
 
@@ -1108,27 +1157,60 @@ def _get_scale_ii_jj(args: tuple) -> float:
 def _get_all_maps_ii_jj(args: tuple) -> Tuple[float, ...]:
     """Return ``(rwp, a, b, c, size, mustrain, scale)`` for voxel ``(ii, jj)``.
 
-    Returns all-zeros if the .xy file does not exist (masked-out pixel),
-    all-nan if the .xy file exists but parameters could not be extracted.
+    Returns all-zeros if the .xy file does not exist (masked-out pixel).
+    Each parameter is extracted independently so a missing/unrefined parameter
+    returns ``nan`` for that slot without affecting the others.
     """
     ii, jj, folder, name, phase_idx = args
     xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
     if not xy_filename.exists():
-        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
     try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        wR   = hists[0].get_wR()
-        cell = phases[phase_idx].get_cell()
-        hap  = phases[phase_idx].data["Histograms"][hists[0].name]
-        sz       = hap["Size"]["Size"]
-        mustrain = hap["Mustrain"]["Mustrain"]
-        sz       = float(sz)       if np.isscalar(sz)       else float(sz[0])
-        mustrain = float(mustrain) if np.isscalar(mustrain) else float(mustrain[0])
-        scale    = float(hap["Scale"][0])
-        return wR, cell["length_a"], cell["length_b"], cell["length_c"], sz, mustrain, scale
     except Exception:
-        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+
+    try:
+        wR = hists[0].get_wR()
+    except Exception:
+        wR = np.nan
+
+    try:
+        chi2 = float(hists[0].data["Residuals"]["chisq"])
+    except Exception:
+        chi2 = np.nan
+
+    try:
+        cell = phases[phase_idx].get_cell()
+        a, b, c = cell["length_a"], cell["length_b"], cell["length_c"]
+    except Exception:
+        a = b = c = np.nan
+
+    try:
+        hap = phases[phase_idx].data["Histograms"][hists[0].name]
+    except Exception:
+        return wR, chi2, a, b, c, np.nan, np.nan, np.nan
+
+    try:
+        sz = hap["Size"]["Size"]
+        sz = float(sz) if np.isscalar(sz) else float(sz[0])
+    except Exception:
+        sz = np.nan
+
+    try:
+        mustrain = hap["Mustrain"]["Mustrain"]
+        mustrain = float(mustrain) if np.isscalar(mustrain) else float(mustrain[0])
+    except Exception:
+        mustrain = np.nan
+
+    try:
+        scale = float(hap["Scale"][0])
+    except Exception:
+        scale = np.nan
+
+    return wR, chi2, a, b, c, sz, mustrain, scale
 
 
 def _get_cell_params_ii_jj(args: tuple) -> Tuple[float, float, float]:

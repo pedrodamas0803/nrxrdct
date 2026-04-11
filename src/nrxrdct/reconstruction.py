@@ -655,6 +655,7 @@ class ReconstructedVolume:
         refining_function: str,
         n_array_jobs: int = 500,
         conda_env: str = "nrxrdct",
+        conda_base: str = "",
         mem: str = "4G",
         time_limit: str = "02:00:00",
         partition: str = "all",
@@ -693,6 +694,11 @@ class ReconstructedVolume:
                 (default 500; one element covers ~500 voxels for 500×500).
             conda_env (str, optional): Conda environment to activate
                 (default ``"nrxrdct"``).
+            conda_base (str, optional): Path to the conda installation root,
+                e.g. ``"/cvmfs/hpc.esrf.fr/software/packages/linux/x86_64/jupyter-slurm/2025.04.5"``.
+                When provided, ``<conda_base>/etc/profile.d/conda.sh`` is sourced
+                before ``conda activate`` so the environment works in non-interactive
+                SLURM batch shells.  Leave empty to skip (default ``""``).
             mem (str, optional): Memory per job (default ``"4G"``).
             time_limit (str, optional): Wall-time limit (default ``"02:00:00"``).
             partition (str, optional): SLURM partition (default ``"all"``).
@@ -776,8 +782,9 @@ class ReconstructedVolume:
             f"#SBATCH --time={time_limit}\n"
             f"#SBATCH --partition={partition}\n"
             f"#SBATCH --output={folder_abs}/slurm_%A_%a.out\n\n"
-            "# Adjust the activation line to match your cluster's setup:\n"
-            f"conda activate {conda_env}\n\n"
+            "# Conda environment activation\n"
+            + (f"source {conda_base}/etc/profile.d/conda.sh\n" if conda_base else "")
+            + f"conda activate {conda_env}\n\n"
             f"python {str(worker_path.resolve())} \\\n"
             "    --job-id $SLURM_ARRAY_TASK_ID \\\n"
             f"    --n-jobs {n_array_jobs}\n"

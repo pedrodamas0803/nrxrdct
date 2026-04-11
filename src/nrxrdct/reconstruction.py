@@ -10,6 +10,7 @@ import concurrent.futures
 import os
 import time
 from pathlib import Path
+from typing import Any, Callable, Tuple
 
 import astra
 import h5py
@@ -221,7 +222,10 @@ def reconstruct_astra_cpu(
 
 
 def forward_project_gpu(
-    volume, angles_rad, det_spacing: float = 1.0, algo: str = "FP_CUDA"
+    volume: np.ndarray,
+    angles_rad: np.ndarray,
+    det_spacing: float = 1.0,
+    algo: str = "FP_CUDA",
 ) -> np.ndarray:
     """
     Compute the GPU forward projection (sinogram) of a 2-D volume.
@@ -245,7 +249,7 @@ def forward_project_gpu(
 
     # Calculate forward projection
     projection_id = astra.data2d.create("-sino", proj_geom)
-    cfg = astra.astra_dict("FP_CUDA")
+    cfg = astra.astra_dict(algo)
     cfg["ProjectionDataId"] = projection_id
     cfg["VolumeDataId"] = phantom_id
     algorithm_id = astra.algorithm.create(cfg)
@@ -370,10 +374,11 @@ class ReconstructedVolume:
     def __init__(
         self,
         volume: np.ndarray,
-        tth_deg: np.array,
+        tth_deg: np.ndarray,
         sample_name: str,
         phases: list,
         processing_folder: Path = Path("volume"),
+        mask: np.ndarray | None = None,
     ):
         """
         Args:
@@ -385,6 +390,10 @@ class ReconstructedVolume:
             processing_folder (Path, optional): Root output directory; ``xy_files/``
                 and ``gpx_files/`` sub-folders are created automatically
                 (default ``"volume"``).
+            mask (np.ndarray or None, optional): Boolean or integer array of shape
+                ``(nx, ny)``.  Truthy pixels are processed; falsy pixels are skipped
+                (no .xy file written, no refinement run) and appear as **zero** in
+                all output maps.  ``None`` processes every voxel (default).
         """
         self.volume = volume
         self.tth = tth_deg
@@ -392,54 +401,85 @@ class ReconstructedVolume:
         self.name = sample_name
         self.shape = volume.shape
         self.folder = processing_folder
+        self.mask = mask  # shape (nx, ny) or None; truthy = process
         self.folder_xy = self.folder / "xy_files"
         self.folder_models = self.folder / "gpx_files"
         os.makedirs(str(self.folder_xy), exist_ok=True)
         os.makedirs(str(self.folder_models), exist_ok=True)
 
-    def write_xy_files(self):
-        """Write one .xy file per voxel sequentially, with a tqdm progress bar."""
+    @property
+    def mask(self) -> np.ndarray | None:
+        """Boolean/integer mask of shape ``(nx, ny)``; truthy = process, falsy = skip."""
+        return self._mask
+
+    @mask.setter
+    def mask(self, value: np.ndarray | None) -> None:
+        if value is not None:
+            value = np.asarray(value)
+            if value.shape != self.volume.shape[1:]:
+                raise ValueError(
+                    f"mask shape {value.shape} does not match volume spatial shape {self.volume.shape[1:]}"
+                )
+        self._mask = value
+
+    @property
+    def _active_indices(self) -> list:
+        """List of ``(ii, jj)`` pairs that should be processed (mask truthy or no mask)."""
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        if self.mask is None:
+            return [(ii, jj) for ii in range(nx) for jj in range(ny)]
+        return [
+            (ii, jj)
+            for ii in range(nx)
+            for jj in range(ny)
+            if self.mask[ii, jj]
+        ]
+
+    def write_xy_files(self) -> None:
+        """Write one .xy file per active (unmasked) voxel sequentially, with a tqdm progress bar."""
         t0 = time.time()
         assert self.volume.shape[0] == self.tth.shape[0], "Wrong shapes"
 
-        for ii in tqdm(range(self.volume.shape[1]), total=self.volume.shape[1]):
-            for jj in range(self.volume.shape[2]):
-                filename = self.folder / "xy_files" / f"{self.name}_{ii:04}_{jj:04}.xy"
-                save_xy_file(
-                    self.tth, self.volume[:, ii, jj], None, str(filename), verbose=False
-                )
+        active = self._active_indices
+        for ii, jj in tqdm(active, total=len(active)):
+            filename = self.folder / "xy_files" / f"{self.name}_{ii:04}_{jj:04}.xy"
+            save_xy_file(
+                self.tth, self.volume[:, ii, jj], None, str(filename), verbose=False
+            )
         t1 = time.time()
         print(60 * "=")
-        print(f"Finished writing xy files to {self.folder} in {t1-t0:.2f} s.")
+        print(f"Finished writing {len(active)} xy files to {self.folder} in {t1-t0:.2f} s.")
         print(60 * "=")
 
-    def write_xy_files_parallel(self):
-        """Write one .xy file per voxel using a thread pool for faster I/O."""
+    def write_xy_files_parallel(self) -> None:
+        """Write one .xy file per active (unmasked) voxel using a thread pool for faster I/O."""
         t0 = time.time()
 
-        def write_ii_jj(index):
+        def write_ii_jj(index: Tuple[int, int]) -> None:
             ii, jj = index
             filename = self.folder / "xy_files" / f"{self.name}_{ii:04}_{jj:04}.xy"
             save_xy_file(
                 self.tth, self.volume[:, ii, jj], None, str(filename), verbose=False
             )
-            return f"Did {filename}."
 
-        indexes = (
-            (ii, jj)
-            for ii in range(self.volume.shape[1])
-            for jj in range(self.volume.shape[2])
-        )
+        indexes = self._active_indices
 
         with concurrent.futures.ThreadPoolExecutor(NTHREADS) as pool:
-            results = list(pool.map(write_ii_jj, indexes, chunksize=64))
+            for _ in tqdm(
+                pool.map(write_ii_jj, indexes),
+                total=len(indexes),
+                desc="Writing xy",
+            ):
+                pass
 
-        print("\n".join(results))
-        print(f"Finished in {time.time() - t0:.2f} s")
+        print(f"Finished writing {len(indexes)} xy files in {time.time() - t0:.2f} s")
 
-    def refine_models(self, refining_function):
+    def refine_models(self, refining_function: Callable[[Path, Path], Any]) -> None:
         """
-        Run a GSAS-II refinement function on every voxel sequentially.
+        Run a GSAS-II refinement function on every active voxel sequentially.
+
+        Voxels whose .xy file does not exist (masked out or never written) are
+        silently skipped.
 
         Args:
             refining_function (callable): Function with signature
@@ -447,36 +487,44 @@ class ReconstructedVolume:
                 results to *gpx_file*.
         """
         t0 = time.time()
+        active = self._active_indices
 
-        for ii in range(self.volume.shape[1]):
-            for jj in range(self.volume.shape[2]):
-                _refine_ii_jj((ii, jj, refining_function, self.folder, self.name))
+        for ii, jj in active:
+            _refine_ii_jj((ii, jj, refining_function, self.folder, self.name))
 
         print(f"Refined models in {time.time()-t0:.2f} s.")
 
-    def refine_models_parallel(self, refining_function):
+    def refine_models_parallel(self, refining_function: Callable[[Path, Path], Any]) -> None:
         """
-        Run a GSAS-II refinement function on every voxel using a thread pool.
+        Run a GSAS-II refinement function on every voxel using a process pool.
+
+        GSAS-II refinements are CPU-bound; ``ProcessPoolExecutor`` is used so that
+        all available cores are utilised without GIL contention.
 
         Args:
-            refining_function (callable): Function with signature
+            refining_function (callable): Module-level function with signature
                 ``f(xy_file, gpx_file)`` that performs the refinement and saves
-                results to *gpx_file*.
+                results to *gpx_file*.  Must be picklable (i.e. defined at
+                module level, not a lambda or closure).
         """
         t0 = time.time()
 
-        indexes = (
+        args = [
             (ii, jj, refining_function, self.folder, self.name)
-            for ii in range(self.volume.shape[1])
-            for jj in range(self.volume.shape[2])
-        )
+            for ii, jj in self._active_indices
+        ]
 
-        with concurrent.futures.ThreadPoolExecutor(NTHREADS) as pool:
-            _ = list(pool.map(_refine_ii_jj, indexes, chunksize=64))
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            for _ in tqdm(
+                pool.map(_refine_ii_jj, args, chunksize=16),
+                total=len(args),
+                desc="Refining",
+            ):
+                pass
 
         print(f"Finished in {time.time() - t0:.2f} s")
 
-    def get_Rwp_map(self):
+    def get_Rwp_map(self) -> np.ndarray:
         """
         Extract the weighted R-factor (Rwp) from each voxel's .gpx file.
 
@@ -484,17 +532,23 @@ class ReconstructedVolume:
             np.ndarray: 2-D map of shape ``(nx, ny)`` with Rwp values; voxels
                 whose .gpx file is missing or failed return ``nan``.
         """
-        result = np.zeros_like(self.volume.sum(axis=0))
         t0 = time.time()
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
 
-        for ii in range(self.volume.shape[1]):
-            for jj in range(self.volume.shape[2]):
-                rwp = _get_Rwp_ii_jj((ii, jj, self.folder, self.name))
-                result[ii, jj] = rwp
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(pool.map(_get_Rwp_ii_jj, args, chunksize=64), total=len(args), desc="Rwp map")
+            )
+
+        result = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), val in zip(active, values):
+            result[ii, jj] = val
         print(f"Fetched Rwp map in {time.time()-t0:.2f} s.")
         return result
 
-    def get_cell_map(self):
+    def get_cell_map(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Extract unit-cell lengths a, b, c from each voxel's .gpx file.
 
@@ -503,21 +557,30 @@ class ReconstructedVolume:
                 voxels whose .gpx file is missing or failed return ``nan``.
         """
         t0 = time.time()
-        a_map = np.zeros_like(self.volume.sum(axis=0))
-        b_map = np.zeros_like(self.volume.sum(axis=0))
-        c_map = np.zeros_like(self.volume.sum(axis=0))
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
 
-        for ii in range(self.volume.shape[1]):
-            for jj in range(self.volume.shape[2]):
-                a, b, c = _get_cell_params_ii_jj((ii, jj, self.folder, self.name))
-                a_map[ii, jj] = a
-                b_map[ii, jj] = b
-                c_map[ii, jj] = c
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(
+                    pool.map(_get_cell_params_ii_jj, args, chunksize=64),
+                    total=len(args),
+                    desc="Cell map",
+                )
+            )
 
+        a_map = np.zeros((nx, ny), dtype=np.float32)
+        b_map = np.zeros((nx, ny), dtype=np.float32)
+        c_map = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), (a, b, c) in zip(active, values):
+            a_map[ii, jj] = a
+            b_map[ii, jj] = b
+            c_map[ii, jj] = c
         print(f"Fetched cell parameters map in {time.time()-t0:.2f} s.")
         return a_map, b_map, c_map
 
-    def get_crystallite_size_map(self):
+    def get_crystallite_size_map(self) -> np.ndarray:
         """
         Extract the refined isotropic crystallite size from each voxel's .gpx file.
 
@@ -526,56 +589,287 @@ class ReconstructedVolume:
                 whose .gpx file is missing or failed return ``nan``.
         """
         t0 = time.time()
-        size_map = np.zeros_like(self.volume.sum(axis=0))
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
 
-        for ii in range(self.volume.shape[1]):
-            for jj in range(self.volume.shape[2]):
-                size = _get_crystallite_sizes((ii, jj, self.folder, self.name))
-                size_map[ii, jj] = size
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(
+                    pool.map(_get_crystallite_sizes, args, chunksize=64),
+                    total=len(args),
+                    desc="Size map",
+                )
+            )
 
+        size_map = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), val in zip(active, values):
+            size_map[ii, jj] = val
         print(f"Fetched crystallite size map in {time.time()-t0:.2f} s.")
         return size_map
 
+    def get_all_maps(
+        self,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Extract Rwp, unit-cell lengths (a, b, c), and crystallite size from every
+        voxel's .gpx file in a **single** parallel pass — 3× faster than calling
+        the individual methods separately.
 
-def _get_Rwp_ii_jj(args):
-    """Return the Rwp for voxel ``(ii, jj)`` from its .gpx file, or ``nan`` on failure."""
+        Returns:
+            tuple: ``(rwp_map, a_map, b_map, c_map, size_map)`` — five 2-D arrays
+                of shape ``(nx, ny)``; failed voxels return ``nan``.
+        """
+        t0 = time.time()
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
+
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(
+                    pool.map(_get_all_maps_ii_jj, args, chunksize=64),
+                    total=len(args),
+                    desc="All maps",
+                )
+            )
+
+        rwp_map  = np.zeros((nx, ny), dtype=np.float32)
+        a_map    = np.zeros((nx, ny), dtype=np.float32)
+        b_map    = np.zeros((nx, ny), dtype=np.float32)
+        c_map    = np.zeros((nx, ny), dtype=np.float32)
+        size_map = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), (rwp, a, b, c, sz) in zip(active, values):
+            rwp_map[ii, jj]  = rwp
+            a_map[ii, jj]    = a
+            b_map[ii, jj]    = b
+            c_map[ii, jj]    = c
+            size_map[ii, jj] = sz
+        print(f"Fetched all maps in {time.time()-t0:.2f} s.")
+        return rwp_map, a_map, b_map, c_map, size_map
+
+    def write_slurm_scripts(
+        self,
+        volume_hdf5: Path,
+        refining_module: str,
+        refining_function: str,
+        n_array_jobs: int = 500,
+        conda_env: str = "nrxrdct",
+        mem: str = "4G",
+        time_limit: str = "02:00:00",
+        partition: str = "all",
+    ) -> Tuple[Path, Path]:
+        """
+        Generate a SLURM array-job script and a matching Python worker for
+        cluster-side refinement of all voxels.
+
+        The volume and 2θ axis must already be saved to *volume_hdf5* under
+        keys ``"volume"`` and ``"tth"`` respectively::
+
+            import h5py
+            with h5py.File("volume.h5", "a") as f:
+                f["volume"] = vol.volume
+                f["tth"] = vol.tth
+
+        Each SLURM array element writes the xy files for its chunk (if not yet
+        present) and then runs the refinements, so ``write_xy_files`` need not be
+        called in advance.  The mask (if set) is read from the HDF5 file; store it
+        before calling this method::
+
+            with h5py.File("volume.h5", "a") as f:
+                f["volume"] = vol.volume
+                f["tth"]    = vol.tth
+                if vol.mask is not None:
+                    f["mask"] = vol.mask
+
+        Args:
+            volume_hdf5 (Path): HDF5 file with keys ``"volume"`` and ``"tth"``
+                (and optionally ``"mask"``).
+            refining_module (str): Importable Python module containing
+                *refining_function* (e.g. ``"my_project.refinements"``).
+            refining_function (str): Name of a module-level function with
+                signature ``f(xy_file: Path, gpx_file: Path)``.
+            n_array_jobs (int, optional): Number of SLURM array elements
+                (default 500; one element covers ~500 voxels for 500×500).
+            conda_env (str, optional): Conda environment to activate
+                (default ``"nrxrdct"``).
+            mem (str, optional): Memory per job (default ``"4G"``).
+            time_limit (str, optional): Wall-time limit (default ``"02:00:00"``).
+            partition (str, optional): SLURM partition (default ``"all"``).
+
+        Returns:
+            tuple: ``(worker_path, submit_path)`` — absolute paths to the
+                generated Python worker and the ``sbatch`` submission script.
+                Submit with ``sbatch <submit_path>``.
+        """
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        worker_path = self.folder / "worker_refine.py"
+        submit_path = self.folder / "submit_refine.sh"
+        folder_abs = str(self.folder.resolve())
+        volume_abs = str(Path(volume_hdf5).resolve())
+
+        # Build the worker script via template substitution so that inner
+        # Python f-strings (run at worker time) are not evaluated here.
+        worker_template = (
+            "#!/usr/bin/env python\n"
+            '"""SLURM array worker — refine a chunk of voxels.\n\n'
+            "Usage::\n\n"
+            "    python worker_refine.py --job-id JOB_ID --n-jobs N_JOBS\n\n"
+            "*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).\n"
+            '"""\n\n'
+            "import argparse\n"
+            "import importlib\n"
+            "from pathlib import Path\n\n"
+            "import h5py\n\n"
+            "from nrxrdct.io import save_xy_file\n\n\n"
+            "def main() -> None:\n"
+            "    parser = argparse.ArgumentParser()\n"
+            '    parser.add_argument("--job-id", type=int, required=True)\n'
+            '    parser.add_argument("--n-jobs", type=int, required=True)\n'
+            "    args = parser.parse_args()\n\n"
+            "    volume_hdf5 = Path(VOLUME_HDF5)\n"
+            '    with h5py.File(volume_hdf5, "r") as h:\n'
+            '        volume = h["volume"][:]\n'
+            '        tth = h["tth"][:]\n'
+            '        mask = h["mask"][:] if "mask" in h else None\n\n'
+            "    folder = Path(FOLDER_ABS)\n"
+            "    name = SAMPLE_NAME\n"
+            "    nx, ny = NX, NY\n"
+            "    all_indexes = [\n"
+            "        (ii, jj)\n"
+            "        for ii in range(nx)\n"
+            "        for jj in range(ny)\n"
+            "        if mask is None or mask[ii, jj]\n"
+            "    ]\n"
+            "    chunk_size = -(-len(all_indexes) // args.n_jobs)\n"
+            "    start = args.job_id * chunk_size\n"
+            "    chunk = all_indexes[start : start + chunk_size]\n\n"
+            "    mod = importlib.import_module(REFINING_MODULE)\n"
+            "    refine_fn = getattr(mod, REFINING_FUNCTION)\n\n"
+            "    for ii, jj in chunk:\n"
+            '        xy_file = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"\n'
+            '        gpx_file = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"\n'
+            "        if not xy_file.exists():\n"
+            "            save_xy_file(tth, volume[:, ii, jj], None, str(xy_file), verbose=False)\n"
+            "        try:\n"
+            "            refine_fn(xy_file, gpx_file)\n"
+            "        except Exception as exc:\n"
+            '            print(f"Voxel ({ii}, {jj}) failed: {exc}")\n\n\n'
+            'if __name__ == "__main__":\n'
+            "    main()\n"
+        )
+        worker_code = (
+            worker_template
+            .replace("VOLUME_HDF5", repr(volume_abs))
+            .replace("FOLDER_ABS", repr(folder_abs))
+            .replace("SAMPLE_NAME", repr(self.name))
+            .replace("NX, NY", f"{nx}, {ny}")
+            .replace("REFINING_MODULE", repr(refining_module))
+            .replace("REFINING_FUNCTION", repr(refining_function))
+        )
+
+        submit_script = (
+            "#!/bin/bash\n"
+            f"#SBATCH --job-name={self.name}_refine\n"
+            f"#SBATCH --array=0-{n_array_jobs - 1}\n"
+            f"#SBATCH --mem={mem}\n"
+            f"#SBATCH --time={time_limit}\n"
+            f"#SBATCH --partition={partition}\n"
+            f"#SBATCH --output={folder_abs}/slurm_%A_%a.out\n\n"
+            "# Adjust the activation line to match your cluster's setup:\n"
+            f"conda activate {conda_env}\n\n"
+            f"python {str(worker_path.resolve())} \\\n"
+            "    --job-id $SLURM_ARRAY_TASK_ID \\\n"
+            f"    --n-jobs {n_array_jobs}\n"
+        )
+
+        worker_path.write_text(worker_code)
+        submit_path.write_text(submit_script)
+        print(f"Worker script : {worker_path}")
+        print(f"Submit script : {submit_path}")
+        print(f"Submit with   : sbatch {submit_path}")
+        return worker_path, submit_path
+
+
+def _get_Rwp_ii_jj(args: tuple) -> float:
+    """Return Rwp for voxel ``(ii, jj)``.
+
+    Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
+    ``nan`` if the .xy file exists but the parameter could not be extracted.
+    """
+    ii, jj, folder, name = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0
     try:
-        ii, jj, folder, name = args
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        wR = hists[0].get_wR()
-        return wR
-    except:
+        return hists[0].get_wR()
+    except Exception:
         return np.nan
 
 
-def _get_crystallite_sizes(args):
-    """Return the refined crystallite size for voxel ``(ii, jj)`` from its .gpx file, or ``nan`` on failure."""
+def _get_crystallite_sizes(args: tuple) -> float:
+    """Return crystallite size for voxel ``(ii, jj)``.
+
+    Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
+    ``nan`` if the .xy file exists but the parameter could not be extracted.
+    """
+    ii, jj, folder, name = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0
     try:
-        ii, jj, folder, name = args
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
         hap = phases[0].data["Histograms"][hists[0].name]
-        sz = hap["Size"]["Size"]
-        print(sz)
-        return sz
-    except:
+        return hap["Size"]["Size"]
+    except Exception:
         return np.nan
 
 
-def _get_cell_params_ii_jj(args):
-    """Return ``(a, b, c)`` unit-cell lengths for voxel ``(ii, jj)`` from its .gpx file, or ``(nan, nan, nan)`` on failure."""
+def _get_all_maps_ii_jj(args: tuple) -> Tuple[float, float, float, float, float]:
+    """Return ``(rwp, a, b, c, size)`` for voxel ``(ii, jj)`` in one .gpx open.
+
+    Returns all-zeros if the .xy file does not exist (masked-out pixel),
+    all-nan if the .xy file exists but parameters could not be extracted.
+    """
+    ii, jj, folder, name = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0, 0.0, 0.0, 0.0, 0.0
     try:
-        ii, jj, folder, name = args
+        gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
+        g, hists, phases = _load_data_from_gpx(gpx_filename)
+        wR   = hists[0].get_wR()
+        cell = phases[0].get_cell()
+        hap  = phases[0].data["Histograms"][hists[0].name]
+        sz   = hap["Size"]["Size"]
+        return wR, cell["length_a"], cell["length_b"], cell["length_c"], sz
+    except Exception:
+        return np.nan, np.nan, np.nan, np.nan, np.nan
+
+
+def _get_cell_params_ii_jj(args: tuple) -> Tuple[float, float, float]:
+    """Return ``(a, b, c)`` unit-cell lengths for voxel ``(ii, jj)``.
+
+    Returns ``(0., 0., 0.)`` if the .xy file does not exist (masked-out pixel),
+    ``(nan, nan, nan)`` if the .xy file exists but parameters could not be extracted.
+    """
+    ii, jj, folder, name = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0, 0.0, 0.0
+    try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
         cell = phases[0].get_cell()
         return cell["length_a"], cell["length_b"], cell["length_c"]
-    except:
+    except Exception:
         return np.nan, np.nan, np.nan
 
 
-def _load_data_from_gpx(filename: str):
+def _load_data_from_gpx(filename: Path) -> Tuple[Any, list, list]:
     """Open a GSAS-II project file and return ``(project, histograms, phases)``."""
     g = G2sc.G2Project(filename)
     hists = g.histograms()
@@ -583,11 +877,14 @@ def _load_data_from_gpx(filename: str):
     return g, hists, phases
 
 
-def _refine_ii_jj(args):
+def _refine_ii_jj(args: tuple) -> None:
+    """Run the refinement for one voxel; silently skips if the .xy file is absent."""
     try:
         ii, jj, func, folder, name = args
         xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+        if not xy_filename.exists():
+            return
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         func(xy_filename, gpx_filename)
-    except:
+    except Exception:
         pass

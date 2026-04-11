@@ -19,7 +19,7 @@ Usage in a notebook cell
     visualize_slices_with_profile_jupyter(volume)
 """
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import ipywidgets as widgets
 import matplotlib.gridspec as gridspec
@@ -27,8 +27,6 @@ import matplotlib.pyplot as plt
 import napari  # type: ignore
 import numpy as np
 from IPython.display import display
-from matplotlib.lines import Line2D
-from matplotlib.patches import Circle
 
 
 def visualize_volume(
@@ -211,6 +209,7 @@ class ZProfilePlot:
         volume_name: str = "Volume",
         z_values: Optional[np.ndarray] = None,
         z_label: str = "Z  (axis-0 index)",
+        phases: Optional[Dict[str, List[float]]] = None,
     ):
         """
         Args:
@@ -222,6 +221,11 @@ class ZProfilePlot:
                 ``0 … n_slices-1``.
             z_label (str, optional): X-axis label for the profile plot
                 (default ``"Z  (axis-0 index)"``).
+            phases (dict, optional): Mapping of phase name → list of peak positions
+                (in the same units as *z_values*). Each phase is shown as a row of
+                colored tick marks in a panel below the profile. Example::
+
+                    {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
         """
         self.n_slices = n_slices
         self.z_axis = (
@@ -230,18 +234,35 @@ class ZProfilePlot:
         self.z_label = z_label
 
         plt.ion()  # non-blocking mode
+        n_phases = len(phases) if phases else 0
+        fig_height = 3.6 + (0.4 + 0.22 * n_phases if n_phases else 0)
         self.fig = plt.figure(
-            figsize=(6, 3.6),
+            figsize=(6, fig_height),
             facecolor="#0e1117",
             num=f"Z-profile — {volume_name}",
         )
-        self.fig.subplots_adjust(left=0.12, right=0.97, top=0.88, bottom=0.16)
 
-        ax = self.fig.add_subplot(111, facecolor="#161b22")
-        ax.tick_params(colors="#8b949e", labelsize=8)
+        if phases:
+            gs = gridspec.GridSpec(
+                2, 1,
+                figure=self.fig,
+                left=0.12, right=0.97, top=0.88, bottom=0.12,
+                height_ratios=[5, max(1, n_phases)],
+                hspace=0.06,
+            )
+            ax = self.fig.add_subplot(gs[0], facecolor="#161b22")
+            ax_ticks = self.fig.add_subplot(gs[1], facecolor="#161b22", sharex=ax)
+            ax.tick_params(colors="#8b949e", labelsize=8, labelbottom=False)
+            _draw_phase_ticks(ax_ticks, phases, self.z_axis)
+            ax_ticks.set_xlabel(z_label, color="#8b949e", fontsize=9)
+        else:
+            self.fig.subplots_adjust(left=0.12, right=0.97, top=0.88, bottom=0.16)
+            ax = self.fig.add_subplot(111, facecolor="#161b22")
+            ax.tick_params(colors="#8b949e", labelsize=8)
+            ax.set_xlabel(z_label, color="#8b949e", fontsize=9)
+
         for spine in ax.spines.values():
             spine.set_edgecolor("#30363d")
-        ax.set_xlabel(z_label, color="#8b949e", fontsize=9)
         ax.set_ylabel("Intensity", color="#8b949e", fontsize=9)
         ax.set_xlim(self.z_axis[0], self.z_axis[-1])
 
@@ -268,7 +289,7 @@ class ZProfilePlot:
         self.fig.canvas.draw_idle()
         plt.pause(0.05)
 
-    def update(self, y: int, x: int, profile: np.ndarray, current_z_idx: int):
+    def update(self, y: int, x: int, profile: np.ndarray, current_z_idx: int) -> None:
         """
         Redraw the profile for a newly selected pixel.
 
@@ -288,7 +309,7 @@ class ZProfilePlot:
         self.fig.canvas.draw_idle()
         plt.pause(0.01)
 
-    def mark_current_z(self, z_idx: int):
+    def mark_current_z(self, z_idx: int) -> None:
         """
         Move the vertical slice-position marker without redrawing the profile.
 
@@ -311,6 +332,7 @@ def visualize_slices_with_profile(
     initial_slice: Optional[int] = None,
     z_values: Optional[np.ndarray] = None,
     z_label: str = "Z  (axis-0 index)",
+    phases: Optional[Dict[str, List[float]]] = None,
 ) -> napari.Viewer:
     """
     Visualize 2-D slices of a 3-D volume (parallel to axis-0) in napari.
@@ -335,6 +357,11 @@ def visualize_slices_with_profile(
             exactly ``volume.shape[0]`` elements. Defaults to integer slice indices.
         z_label (str, optional): Label for the X axis of the Z-profile plot.
             Default: "Z  (axis-0 index)".
+        phases (dict, optional): Mapping of phase name → list of peak positions
+            (in the same units as *z_values*). Each phase is shown as a row of
+            colored tick marks in a panel below the Z-profile plot. Example::
+
+                {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
 
     Returns:
         napari.Viewer: The napari viewer instance.
@@ -406,6 +433,7 @@ def visualize_slices_with_profile(
         volume_name=name,
         z_values=z_values,
         z_label=z_label,
+        phases=phases,
     )
 
     # Track last selected pixel so the vline keeps updating on slice changes
@@ -413,7 +441,7 @@ def visualize_slices_with_profile(
 
     # --- Callback: click in the napari canvas -------------------------------
     @image_layer.mouse_drag_callbacks.append
-    def on_click(layer, event):
+    def on_click(layer: Any, event: Any) -> None:
         # Only react on left-button press (not drag)
         if event.type != "mouse_press" or event.button != 1:
             return
@@ -457,7 +485,7 @@ def visualize_slices_with_profile(
         )
 
     # --- Callback: slider moves → update vertical marker -------------------
-    def on_slice_change(event):
+    def on_slice_change(event: Any) -> None:
         if last_pixel["y"] is not None:
             current_z = int(viewer.dims.current_step[0])
             profile_plot.mark_current_z(current_z)
@@ -485,6 +513,7 @@ def visualize_slices_with_profile_jupyter(
     z_values: Optional[np.ndarray] = None,
     z_label: str = "Z  (axis-0 index)",
     figsize: tuple = (12, 5),
+    phases: Optional[Dict[str, List[float]]] = None,
 ) -> None:
     """
     Display an interactive 2-D slice viewer with a Z-profile panel inside
@@ -493,7 +522,8 @@ def visualize_slices_with_profile_jupyter(
     Layout: left panel shows 2-D slices (axis-0 = Z scrolled by a slider,
     click any pixel to update); right panel shows the intensity profile along
     axis-0 at the selected (y, x) with a dashed orange line marking the current
-    slice.
+    slice.  When *phases* is supplied a tick panel is shown below the profile,
+    with one colored row of tick marks per phase.
 
     Args:
         volume (np.ndarray): 3-D array of shape (Z, Y, X).
@@ -510,6 +540,11 @@ def visualize_slices_with_profile_jupyter(
         z_label (str, optional): X-axis label of the Z-profile plot.
             Default: ``"Z  (axis-0 index)"``.
         figsize (tuple, optional): Overall figure size in inches. Default: (12, 5).
+        phases (dict, optional): Mapping of phase name → list of peak positions
+            (in the same units as *z_values*). Each phase is shown as a row of
+            colored tick marks below the profile plot. Example::
+
+                {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
 
     Note:
         Recommended cell magic is ``%matplotlib widget`` (ipympl backend) for a
@@ -527,6 +562,7 @@ def visualize_slices_with_profile_jupyter(
             depths = np.linspace(0, 31.5, 64)
             visualize_slices_with_profile_jupyter(
                 vol, z_values=depths, z_label="Depth (µm)",
+                phases={"Phase A": [1.5, 3.0, 4.5], "Phase B": [2.0, 4.0]},
             )
     """
     # ------------------------------------------------------------------
@@ -619,22 +655,42 @@ def visualize_slices_with_profile_jupyter(
         markeredgewidth=0.8,
     )
 
-    slice_label = ax_img.set_title(
-        f"Slice viewer  —  click to select pixel",
+    ax_img.set_title(
+        "Slice viewer  —  click to select pixel",
         color="#8b949e",
         fontsize=9,
         pad=6,
     )
 
-    # --- Right: Z-profile ---
-    ax_prof = fig.add_subplot(gs[1], facecolor="#161b22")
+    # --- Right: Z-profile (optionally split with a phase-ticks panel) ---
+    if phases:
+        n_phases = len(phases)
+        gs_right = gridspec.GridSpecFromSubplotSpec(
+            2, 1,
+            subplot_spec=gs[1],
+            height_ratios=[5, max(1, n_phases)],
+            hspace=0.06,
+        )
+        ax_prof = fig.add_subplot(gs_right[0], facecolor="#161b22")
+        ax_phase_ticks = fig.add_subplot(
+            gs_right[1], facecolor="#161b22", sharex=ax_prof
+        )
+        _draw_phase_ticks(ax_phase_ticks, phases, z_axis)
+        ax_phase_ticks.set_xlabel(z_label, color="#8b949e", fontsize=8)
+        ax_prof.tick_params(
+            colors="#8b949e", labelsize=7, axis="x", labelbottom=False
+        )
+        ax_prof.tick_params(colors="#8b949e", labelsize=7, axis="y")
+    else:
+        ax_prof = fig.add_subplot(gs[1], facecolor="#161b22")
+        ax_prof.tick_params(colors="#8b949e", labelsize=7)
+        ax_prof.set_xlabel(z_label, color="#8b949e", fontsize=8)
+
     ax_prof.set_title(
         "Z-profile  —  select a pixel", color="#8b949e", fontsize=9, pad=6
     )
-    ax_prof.tick_params(colors="#8b949e", labelsize=7)
     for sp in ax_prof.spines.values():
         sp.set_edgecolor("#30363d")
-    ax_prof.set_xlabel(z_label, color="#8b949e", fontsize=8)
     ax_prof.set_ylabel("Intensity", color="#8b949e", fontsize=8)
     ax_prof.set_xlim(z_axis[0], z_axis[-1])
     ax_prof.set_ylim(vmin, vmax)
@@ -680,7 +736,7 @@ def visualize_slices_with_profile_jupyter(
     # ------------------------------------------------------------------
     # Helper
     # ------------------------------------------------------------------
-    def _redraw_slice(z_idx: int):
+    def _redraw_slice(z_idx: int) -> None:
         img_display.set_data(volume[z_idx])
         vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
         # Update crosshair title
@@ -692,7 +748,7 @@ def visualize_slices_with_profile_jupyter(
         )
         fig.canvas.draw_idle()
 
-    def _redraw_profile(y: int, x: int, z_idx: int):
+    def _redraw_profile(y: int, x: int, z_idx: int) -> None:
         profile = volume[:, y, x]
         profile_line.set_xdata(z_axis)
         profile_line.set_ydata(profile)
@@ -713,7 +769,7 @@ def visualize_slices_with_profile_jupyter(
     # ------------------------------------------------------------------
     # Callbacks
     # ------------------------------------------------------------------
-    def on_slider_change(change):
+    def on_slider_change(change: dict) -> None:
         z_idx = change["new"]
         state["z_idx"] = z_idx
         slice_info.value = _slice_info_text(z_idx, z_axis, z_label)
@@ -725,7 +781,7 @@ def visualize_slices_with_profile_jupyter(
 
     slider.observe(on_slider_change, names="value")
 
-    def on_click(event):
+    def on_click(event: Any) -> None:
         # Only react to clicks inside the image axis
         if event.inaxes is not ax_img:
             return
@@ -773,6 +829,54 @@ def visualize_slices_with_profile_jupyter(
 # ---------------------------------------------------------------------------
 def _slice_info_text(z_idx: int, z_axis: np.ndarray, z_label: str) -> str:
     return f"  {z_label} = {z_axis[z_idx]:.4g}  (index {z_idx})"
+
+
+_PHASE_COLORS: List[str] = [
+    "#ff7b72",  # red
+    "#7ee787",  # green
+    "#d2a8ff",  # purple
+    "#ffa657",  # orange
+    "#79c0ff",  # blue
+    "#f2cc60",  # yellow
+    "#ff9bce",  # pink
+    "#56d364",  # bright green
+]
+
+
+def _draw_phase_ticks(
+    ax: plt.Axes,
+    phases: Dict[str, List[float]],
+    z_axis: np.ndarray,
+) -> None:
+    """
+    Populate a dedicated axes with phase tick marks.
+
+    Each phase occupies one row.  Ticks are vertical lines drawn at the
+    supplied peak positions; phase names appear as y-tick labels.
+
+    Args:
+        ax: The matplotlib axes to draw into (should be below the profile axes
+            and share its x-axis).
+        phases: Mapping of phase name → list of peak positions in the same
+            units as *z_axis*.
+        z_axis: Physical x-coordinates used for the profile plot.
+    """
+    n_phases = len(phases)
+    ax.set_facecolor("#161b22")
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#30363d")
+
+    ax.set_ylim(-0.5, n_phases - 0.5)
+    ax.set_xlim(z_axis[0], z_axis[-1])
+    ax.tick_params(colors="#8b949e", labelsize=7)
+    ax.tick_params(axis="y", length=0)
+
+    for i, (_, peaks) in enumerate(phases.items()):
+        color = _PHASE_COLORS[i % len(_PHASE_COLORS)]
+        ax.vlines(peaks, i - 0.4, i + 0.4, colors=color, linewidth=1.2)
+
+    ax.set_yticks(range(n_phases))
+    ax.set_yticklabels(list(phases.keys()), color="#8b949e", fontsize=7)
 
 
 # ---------------------------------------------------------------------------

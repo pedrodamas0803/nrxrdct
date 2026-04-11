@@ -1181,12 +1181,24 @@ class BaseRefinement(Scan):
                     )
             targets = [available[n] for n in names]
 
-        freeze_dict = {p: False for p in params}
         for ph in targets:
-            ph.set_HAP_refinements(freeze_dict, histograms=[self.hist])
-            print(
-                f"Frozen {params} for phase '{ph.name}'"
-            )
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            for p in params:
+                if p == "HStrain" and "HStrain" in hap:
+                    hap["HStrain"][1] = [False] * len(hap["HStrain"][1])
+                elif p == "Size" and "Size" in hap:
+                    hap["Size"][2] = [False] * len(hap["Size"][2])
+                    hap["Size"][5] = [False] * len(hap["Size"][5])
+                elif p == "Mustrain" and "Mustrain" in hap:
+                    hap["Mustrain"][2] = [False] * len(hap["Mustrain"][2])
+                    hap["Mustrain"][5] = [False] * len(hap["Mustrain"][5])
+                elif p == "Pref.Ori." and "Pref.Ori." in hap:
+                    hap["Pref.Ori."][2] = False
+                elif p == "Scale" and "Scale" in hap:
+                    hap["Scale"][1] = False
+                elif p == "Extinction" and "Extinction" in hap:
+                    hap["Extinction"][1] = False
+            print(f"Frozen {params} for phase '{ph.name}'")
         self.gpx.save()
 
     def refine_preferential_orientation(

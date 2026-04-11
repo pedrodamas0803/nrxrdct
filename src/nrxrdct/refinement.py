@@ -582,21 +582,26 @@ class BaseRefinement(Scan):
                 continue
             print(f"  {key:<14}  {val:>14.6g}  ({flag})")
 
-    def set_instrument_parameter(self, parameter: str, value: float) -> None:
+    def set_instrument_parameter(
+        self, parameter: str, value: float, freeze: bool = False
+    ) -> None:
         """
-        Set an instrument parameter to a fixed value and freeze it.
+        Set an instrument parameter to a given value and optionally freeze it.
 
         The parameter is set to *value* in both the initial-value slot
         (``entry[0]``) and the current-value slot (``entry[1]``) of the
-        GSAS-II instrument-parameter list, and its refinement flag
-        (``entry[2]``) is set to ``False`` so it will not move during
-        subsequent refinement cycles.
+        GSAS-II instrument-parameter list.  When ``freeze=True`` (the
+        default) its refinement flag (``entry[2]``) is also cleared so it
+        will not move during subsequent refinement cycles.
 
         Args:
             parameter (str): Key in ``self.hist["Instrument Parameters"][0]`` to modify.
                 Call :meth:`print_instrument_parameters` to see all available keys for the
                 current project (e.g. ``"Zero"``, ``"Lam"``, ``"U"``, ``"V"``, ``"W"``).
             value (float): Value to assign to the parameter.
+            freeze (bool, optional): If ``True`` (default), clear the refinement flag after
+                setting the value so the parameter stays fixed in subsequent cycles.
+                Pass ``False`` to update the value while keeping the parameter free.
 
         Raises:
             KeyError: If *parameter* is not found in the instrument-parameter dictionary for
@@ -624,9 +629,11 @@ class BaseRefinement(Scan):
             )
         entry[0] = value  # initial / reset value
         entry[1] = value  # current refined value
-        entry[2] = False  # freeze
+        if freeze:
+            entry[2] = False
         self.gpx.save()
-        print(f"Instrument parameter '{parameter}' set to {value} and frozen.")
+        frozen_info = " and frozen" if freeze else ""
+        print(f"Instrument parameter '{parameter}' set to {value}{frozen_info}.")
 
     def refine_sample_displacement(
         self, parameter: str = "Shift", freeze: bool = False
@@ -2482,9 +2489,10 @@ class BaseRefinement(Scan):
         parameter: str,
         value: float,
         phase: str | list[str] | None = None,
+        freeze: bool = False,
     ) -> None:
         """
-        Set a Histogram-And-Phase (HAP) parameter to a fixed value and freeze it.
+        Set a Histogram-And-Phase (HAP) parameter to a given value and optionally freeze it.
 
         The supported *parameter* strings and the HAP entries they control are:
 
@@ -2514,9 +2522,13 @@ class BaseRefinement(Scan):
 
         Args:
             parameter (str): HAP parameter to set (see table above).
-            value (float): Value to assign and freeze.
+            value (float): Value to assign.
             phase (str, list of str, or None, optional): Phase name(s) to update.
                 ``None`` (default) updates all phases linked to the current histogram.
+            freeze (bool, optional): If ``True`` (default), clear the refinement flag
+                after setting the value so the parameter stays fixed in subsequent
+                cycles.  Pass ``False`` to update the value while keeping the
+                parameter free.
 
         Raises:
             ValueError: If *parameter* is not a recognised key, or if a model-dependent
@@ -2563,11 +2575,13 @@ class BaseRefinement(Scan):
 
             if parameter == "Scale":
                 hap["Scale"][0] = value
-                hap["Scale"][1] = False
+                if freeze:
+                    hap["Scale"][1] = False
 
             elif parameter == "Extinction":
                 hap["Extinction"][0] = value
-                hap["Extinction"][1] = False
+                if freeze:
+                    hap["Extinction"][1] = False
 
             elif parameter in _DIJ:
                 idx = _DIJ[parameter]
@@ -2578,7 +2592,8 @@ class BaseRefinement(Scan):
                         "Enable HStrain first."
                     )
                 hs[0][idx] = value
-                hs[1][idx] = False
+                if freeze:
+                    hs[1][idx] = False
 
             elif parameter == "Size":
                 sz = hap.get("Size")
@@ -2590,7 +2605,8 @@ class BaseRefinement(Scan):
                         "set_HAP_parameter only supports isotropic Size."
                     )
                 sz[1][0] = value
-                sz[2][0] = False
+                if freeze:
+                    sz[2][0] = False
 
             elif parameter == "Mustrain":
                 ms = hap.get("Mustrain")
@@ -2602,7 +2618,8 @@ class BaseRefinement(Scan):
                         "set_HAP_parameter only supports isotropic Mustrain."
                     )
                 ms[1][0] = value
-                ms[2][0] = False
+                if freeze:
+                    ms[2][0] = False
 
             elif parameter == "MD":
                 po = hap.get("Pref.Ori.")
@@ -2613,7 +2630,8 @@ class BaseRefinement(Scan):
                         f"Phase '{ph.name}' preferred orientation model is '{po[0]}', not 'MD'."
                     )
                 po[1] = value
-                po[2] = False
+                if freeze:
+                    po[2] = False
 
             elif parameter in ("BabA", "BabU"):
                 bab = hap.get("Babinet")
@@ -2622,10 +2640,12 @@ class BaseRefinement(Scan):
                         f"Phase '{ph.name}' has no Babinet '{parameter}' entry."
                     )
                 bab[parameter]["BabVal"] = value
-                bab[parameter]["refine"] = False
+                if freeze:
+                    bab[parameter]["refine"] = False
 
+            frozen_info = " and frozen" if freeze else ""
             print(
-                f"  HAP '{parameter}' for phase '{ph.name}' set to {value} and frozen."
+                f"  HAP '{parameter}' for phase '{ph.name}' set to {value}{frozen_info}."
             )
 
         self.gpx.save()
@@ -2695,7 +2715,7 @@ class BaseRefinement(Scan):
         "D11": "Å⁻²",      "D22": "Å⁻²",       "D33": "Å⁻²",
         "D12": "Å⁻²",      "D13": "Å⁻²",       "D23": "Å⁻²",
         # HAP – Size (isotropic;i, uniaxial;u, generalized coefficients)
-        "Size;i": "Å",      "Size;u": "Å",       "Size;mx": "Å",
+        "Size;i": "µm",     "Size;u": "µm",      "Size;mx": "µm",
         # HAP – Mustrain
         "Mustrain;i": "µε", "Mustrain;u": "µε",  "Mustrain;mx": "µε",
         # HAP – preferred orientation (March-Dollase ratio)
@@ -2713,7 +2733,7 @@ class BaseRefinement(Scan):
     _VAR_UNITS_PREFIX: list[tuple[str, str]] = [
         ("Back;",     "cts"),   # background polynomial coefficients
         ("Mustrain;", "µε"),    # generalised mustrain coefficients
-        ("Size;",     "Å"),     # generalised size coefficients
+        ("Size;",     "µm"),    # generalised size coefficients
         ("MD;",       "—"),     # March-Dollase per-reflection
     ]
 
@@ -2934,7 +2954,7 @@ class BaseRefinement(Scan):
                     ("Extinction", "Primary extinction coefficient",                                     "dimensionless"),
                     ("HStrain",    "Anisotropic strain tensor Dij – hkl-dependent peak shifts",         "Å⁻²"),
                     ("Mustrain",   "Microstrain broadening (isotropic / uniaxial / generalized)",        "×10⁻⁶"),
-                    ("Size",       "Crystallite size / Scherrer broadening (isotropic / uniaxial / ellipsoidal)", "Å"),
+                    ("Size",       "Crystallite size / Scherrer broadening (isotropic / uniaxial / ellipsoidal)", "µm"),
                     ("Pref.Ori.", "Preferred orientation: March-Dollase ratio or SH coefficients",      "dimensionless"),
                     ("LeBail",     "Le Bail extraction flag – bypasses structure factors (bool)",        "—"),
                 ],

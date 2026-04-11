@@ -7,6 +7,7 @@ Wraps scikit-learn's :class:`~sklearn.decomposition.NMF` for volumetric
 diffraction data, providing :class:`HyperspectralNMF` as a convenient high-level
 interface and private helpers for fitting and visualisation.
 """
+
 # This module was partially prepared by Beatriz G. Foschiani - CEA Grenoble
 
 import matplotlib.pyplot as plt
@@ -42,7 +43,12 @@ class HyperspectralNMF:
             Set after calling :meth:`fit_data`.
     """
 
-    def __init__(self, volume:np.ndarray, n_components:int, spectral_axis:np.ndarray, unit_name="energy (keV)",
+    def __init__(
+        self,
+        volume: np.ndarray,
+        n_components: int,
+        spectral_axis: np.ndarray,
+        unit_name="energy (keV)",
         loss_function="frobenius",  # "frobenius" or "kullback-leibler"
         solver=None,  # None -> pick default based on loss
         init="nndsvdar",
@@ -51,7 +57,8 @@ class HyperspectralNMF:
         l1_ratio=0.0,
         alpha_W=0.0,
         alpha_H=0.0,
-        clip_negative=True):
+        clip_negative=True,
+    ):
         """
         Args:
             volume (np.ndarray): 3-D array of shape ``(nx, ny, n_channels)``
@@ -79,8 +86,8 @@ class HyperspectralNMF:
                 input are clipped to zero before fitting (default ``True``).
         """
         self.vol = volume
-        self.X = volume.reshape((volume.shape[0]**2, volume.shape[2]))
-        self.map_shape = (volume.shape[1], volume.shape[2])
+        self.X = volume.reshape((volume.shape[0] * volume.shape[1], volume.shape[2]))
+        self.map_shape = (volume.shape[0], volume.shape[1])
         self.n_comp = n_components
         # self.comp_map = np.empty((self.n_comp, self.map_shape[0], self.map_shape[1]), dtype=float)
         self.x_spectra = spectral_axis
@@ -107,8 +114,9 @@ class HyperspectralNMF:
         - ``E_map``  — ``(nx, ny)`` per-pixel RMSE map
         - ``model``  — fitted :class:`~sklearn.decomposition.NMF` object
         """
-        W_maps, H, X_rec, E_map, model = _nmf_sklearn_hyperspectral(X = self.X,  # (n_pixels, n_channels)
-            map_shape = self.map_shape,  # (nx, ny) with nx*ny == n_pixels
+        W_maps, H, X_rec, E_map, model = _nmf_sklearn_hyperspectral(
+            X=self.X,  # (n_pixels, n_channels)
+            map_shape=self.map_shape,  # (nx, ny) with nx*ny == n_pixels
             n_components=self.n_comp,
             wavelength=self.x_spectra,  # (n_channels,)
             unit_name=self.unit,
@@ -121,15 +129,23 @@ class HyperspectralNMF:
             alpha_W=self.alphaW,
             alpha_H=self.alphaH,
             clip_negative=self.clip_negative,
-            show_progress=True)
-        
+            show_progress=True,
+        )
+
         self.W_maps = W_maps
         self.H = H
         self.X_rec = X_rec
         self.E_map = E_map
         self.model = model
 
-    def plot(self, normalize_spectra:bool=False, titles=None, figsize=(14, 7), extent=None,  save=True) -> None:
+    def plot(
+        self,
+        normalize_spectra: bool = False,
+        titles=None,
+        figsize=(14, 7),
+        extent=None,
+        save=True,
+    ) -> None:
         """
         Visualise the NMF decomposition with component spectra and spatial maps.
 
@@ -146,17 +162,17 @@ class HyperspectralNMF:
                 ``nmf_decomposition_<K>_components.png`` (default ``True``).
         """
         _plot_nmf_panel(
-                        W_maps=self.W_maps,
-                        H=self.H,
-                        E_map = self.E_map,
-                        wavelength=self.x_spectra,
-                        unit_name=self.unit,
-                        normalize_spectra=normalize_spectra,
-                        titles=titles,
-                        figsize=figsize,
-                        extent=extent,
-                        save=save)
-
+            W_maps=self.W_maps,
+            H=self.H,
+            E_map=self.E_map,
+            wavelength=self.x_spectra,
+            unit_name=self.unit,
+            normalize_spectra=normalize_spectra,
+            titles=titles,
+            figsize=figsize,
+            extent=extent,
+            save=save,
+        )
 
 
 def _nmf_sklearn_hyperspectral(

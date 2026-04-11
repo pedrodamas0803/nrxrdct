@@ -9,6 +9,8 @@ calibrant-based instrument parameter calibration with dedicated plotting.
 """
 
 import os
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -116,6 +118,118 @@ class BaseRefinement(Scan):
         print(f"  Histogram : {self.hist.name}")
         print(f"  Phases    : {[ph.name for ph in self.phases]}")
         return self.gpx, self.hist
+
+    def backup_model(self, label: str | None = None) -> Path:
+        """
+        Save a timestamped copy of the current ``.gpx`` project to a
+        ``bkp_model`` folder located next to the project file.
+
+        The project is saved before copying so the backup reflects the latest
+        state.  Each backup lives in its own subfolder named
+        ``YYYYMMDD_HHMMSS`` (optionally suffixed with a user-supplied label),
+        making it easy to identify and sort chronologically.
+
+        Args:
+            label (str or None, optional): Short descriptive tag appended to
+                the subfolder name, e.g. ``"after_cell"`` produces a folder
+                named ``"20240115_143022_after_cell"``.  ``None`` (default)
+                uses the timestamp alone.
+
+        Returns:
+            Path: Path to the backup ``.gpx`` file that was written.
+        """
+        self.gpx.save()
+
+        gpx_path = Path(self.gpx.filename)
+        bkp_root = gpx_path.parent / "bkp_model"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = f"{timestamp}_{label}" if label else timestamp
+        bkp_dir = bkp_root / folder_name
+        bkp_dir.mkdir(parents=True, exist_ok=True)
+
+        dest = bkp_dir / gpx_path.name
+        shutil.copy2(gpx_path, dest)
+
+        print(f"Backup saved to:\n  {dest}")
+        return dest
+
+    def restore_backup(self, backup: int | str) -> None:
+        """
+        Restore the ``.gpx`` project from a previously saved backup.
+
+        Backups are looked up from the ``bkp_model`` folder next to the
+        current project file.  The chosen backup is copied over the live
+        project file and the project is reloaded so all subsequent method
+        calls reflect the restored state.
+
+        Args:
+            backup (int or str): Identifies which backup to restore.
+
+                * **int** — zero-based index into the list of backups sorted
+                  chronologically (``0`` is the oldest, ``-1`` is the most
+                  recent).  Call :meth:`list_backups` to see the index table.
+                * **str** — exact subfolder name (e.g.
+                  ``"20240115_143022_after_cell"``).
+
+        Raises:
+            FileNotFoundError: If ``bkp_model`` does not exist or is empty.
+            IndexError: If an integer index is out of range.
+            ValueError: If a string name does not match any backup.
+        """
+        gpx_path = Path(self.gpx.filename)
+        bkp_root = gpx_path.parent / "bkp_model"
+
+        if not bkp_root.exists():
+            raise FileNotFoundError(f"No backup folder found at '{bkp_root}'")
+
+        backups = sorted(bkp_root.iterdir())
+        if not backups:
+            raise FileNotFoundError(f"Backup folder '{bkp_root}' is empty")
+
+        if isinstance(backup, int):
+            try:
+                bkp_dir = backups[backup]
+            except IndexError:
+                raise IndexError(
+                    f"Backup index {backup} out of range " f"(0 – {len(backups) - 1})"
+                )
+        else:
+            matches = [b for b in backups if b.name == backup]
+            if not matches:
+                raise ValueError(
+                    f"No backup named '{backup}'. "
+                    f"Available: {[b.name for b in backups]}"
+                )
+            bkp_dir = matches[0]
+
+        src = bkp_dir / gpx_path.name
+        if not src.exists():
+            raise FileNotFoundError(f"Expected .gpx file not found in backup: '{src}'")
+
+        shutil.copy2(src, gpx_path)
+        print(f"Restored backup '{bkp_dir.name}' → '{gpx_path}'")
+        self.load_model(gpx_path)
+
+    def list_backups(self) -> list[str]:
+        """
+        Print and return the available backups in chronological order.
+
+        Returns:
+            list[str]: Subfolder names, oldest first.
+        """
+        gpx_path = Path(self.gpx.filename)
+        bkp_root = gpx_path.parent / "bkp_model"
+
+        if not bkp_root.exists() or not any(bkp_root.iterdir()):
+            print("No backups found.")
+            return []
+
+        backups = sorted(bkp_root.iterdir())
+        print(f"{'Index':>6}  Backup")
+        print("-" * 40)
+        for i, b in enumerate(backups):
+            print(f"{i:>6}  {b.name}")
+        return [b.name for b in backups]
 
     def create_model(self, gpx_file: Path = Path("model.gpx")) -> tuple:
         """
@@ -2099,7 +2213,7 @@ class BaseRefinement(Scan):
         Returns:
             float or None: Reduced χ², or ``None`` if no refinement has been run yet.
         """
-        return self.hist.residuals.get("GOF")
+        return self.hist["data"][0].get("GOF")
 
     def save(self) -> None:
         """
@@ -2559,7 +2673,7 @@ class BaseRefinement(Scan):
             print(f"    {i:3d}  {var}")
 
     def plot_covariance_matrix(
-        self, show: bool = True, figsize: tuple = (12, 9)
+        self, show: bool = True, figsize: tuple = (6, 4)
     ) -> tuple:
         """
         Plot the correlation matrix (normalised covariance) as a heatmap.
@@ -2653,13 +2767,83 @@ class BaseRefinement(Scan):
                     f" {atom.adp_flag:>4}  {atom.refinement_flags!r}"
                 )
 
-    def print_phases(self) -> None:
+    def print_phases(self, phase: str | None = None) -> None:
         """
-        Print a summary of every phase in the project, including cell
+        Print a summary of phases in the project, including cell
         parameters, space group, composition, and the current refinement
         state of all phase-level and HAP parameters.
+
+        Args:
+            phase (str or None, optional): Name of a single phase to print.
+                ``None`` (default) prints all phases.
+
+        **HAP parameters** (Histogram-And-Phase, i.e. parameters that are
+        specific to the combination of a phase and a powder histogram):
+
+        ``Scale``
+            Phase fraction scale factor (dimensionless).  Proportional to the
+            weight fraction of the phase in the mixture.  Refined
+            independently for each phase/histogram pair.
+
+        ``Extinction``
+            Primary extinction correction coefficient (dimensionless).
+            Accounts for the reduction in diffracted intensity caused by
+            re-diffraction within large, perfect crystalline domains.  Only
+            significant for large single-domain crystallites; usually left
+            fixed at 0.
+
+        ``HStrain`` (Dij)
+            Hydrostatic / anisotropic strain broadening coefficients
+            (units: Å⁻² for *d*-space, or dimensionless in reciprocal
+            lattice units depending on the GSAS-II convention).  The Dij
+            tensor components model a homogeneous lattice strain that shifts
+            peak positions in an hkl-dependent way without changing peak
+            widths.  The number of independent Dij terms is determined by
+            the Laue symmetry of the phase (e.g. 1 for cubic, up to 6 for
+            triclinic).  Typical use: residual-stress or
+            solid-solution-induced lattice distortions.
+
+        ``Size``
+            Mean apparent crystallite (domain) size, related to Scherrer
+            broadening (units: Å).  Three models are available:
+
+            * ``isotropic`` — single scalar size, same in all directions.
+            * ``uniaxial`` — equatorial size and axial size along a
+              specified crystallographic axis.
+            * ``generalized`` — full set of symmetry-allowed spherical
+              harmonic coefficients for arbitrary anisotropic broadening.
+
+        ``Mustrain``
+            Microstrain broadening coefficient (dimensionless, ×10⁻⁶).
+            Models peak broadening caused by local, non-uniform lattice
+            distortions (dislocations, defects).  Three models are
+            available with the same isotropic / uniaxial / generalized
+            choice as Size.  Mustrain and Size broadening are added in
+            quadrature in the peak-profile function.
+
+        ``Pref.Ori.`` (preferred orientation / texture)
+            Correction for non-random crystallite orientation (texture).
+            Two models are available:
+
+            * ``MD`` (March-Dollase) — single ratio parameter *r*
+              (dimensionless) along a preferred axis.  *r* = 1 means no
+              texture; *r* < 1 needle texture; *r* > 1 plate texture.
+            * ``SH`` (spherical harmonics) — series of harmonic
+              coefficients (dimensionless) up to order *L*, capturing
+              complex multi-component textures.
         """
-        for ph in self.gpx.phases():
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is not None:
+            if phase not in available:
+                raise ValueError(
+                    f"Phase '{phase}' not found. "
+                    f"Available phases: {list(available)}"
+                )
+            phases = [available[phase]]
+        else:
+            phases = list(available.values())
+
+        for ph in phases:
             gen = ph.data["General"]
             cell = gen["Cell"]  # [refine, a, b, c, α, β, γ, V]
             sg = gen["SGData"]["SpGrp"]
@@ -2752,7 +2936,7 @@ class BaseRefinement(Scan):
         self,
         image_path: Path = "calibration_plot.png",
         show: bool = True,
-        figsize: tuple = (12, 9),
+        figsize: tuple = (9, 6),
     ) -> None:
         """
         Plot the Rietveld fit (observed / calculated / difference) and save to disk.

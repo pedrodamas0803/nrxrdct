@@ -551,25 +551,31 @@ class ReconstructedVolume:
         print(f"Fetched Rwp map in {time.time()-t0:.2f} s.")
         return result
 
-    def get_cell_map(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_cell_map(
+        self, phase: int = 0
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Extract unit-cell lengths a, b, c from each voxel's .gpx file.
 
+        Args:
+            phase (int, optional): Zero-based index of the phase to extract
+                (default ``0``).
+
         Returns:
-            tuple: Three 2-D maps ``(a_map, b_map, c_map)`` of shape ``(nx, ny)``;
-                voxels whose .gpx file is missing or failed return ``nan``.
+            tuple: ``(a_map, b_map, c_map)`` — 2-D arrays of shape ``(nx, ny)``;
+                masked pixels return ``0``, failed extractions return ``nan``.
         """
         t0 = time.time()
         nx, ny = self.volume.shape[1], self.volume.shape[2]
         active = self._active_indices
-        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
+        args = [(ii, jj, self.folder, self.name, phase) for ii, jj in active]
 
         with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
             values = list(
                 tqdm(
                     pool.map(_get_cell_params_ii_jj, args, chunksize=64),
                     total=len(args),
-                    desc="Cell map",
+                    desc=f"Cell map (phase {phase})",
                 )
             )
 
@@ -583,25 +589,29 @@ class ReconstructedVolume:
         print(f"Fetched cell parameters map in {time.time()-t0:.2f} s.")
         return a_map, b_map, c_map
 
-    def get_crystallite_size_map(self) -> np.ndarray:
+    def get_crystallite_size_map(self, phase: int = 0) -> np.ndarray:
         """
         Extract the refined isotropic crystallite size from each voxel's .gpx file.
 
+        Args:
+            phase (int, optional): Zero-based index of the phase to extract
+                (default ``0``).
+
         Returns:
-            np.ndarray: 2-D map of shape ``(nx, ny)`` with crystallite sizes; voxels
-                whose .gpx file is missing or failed return ``nan``.
+            np.ndarray: 2-D map of shape ``(nx, ny)``; masked pixels return ``0``,
+                failed extractions return ``nan``.
         """
         t0 = time.time()
         nx, ny = self.volume.shape[1], self.volume.shape[2]
         active = self._active_indices
-        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
+        args = [(ii, jj, self.folder, self.name, phase) for ii, jj in active]
 
         with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
             values = list(
                 tqdm(
                     pool.map(_get_crystallite_sizes, args, chunksize=64),
                     total=len(args),
-                    desc="Size map",
+                    desc=f"Size map (phase {phase})",
                 )
             )
 
@@ -611,45 +621,236 @@ class ReconstructedVolume:
         print(f"Fetched crystallite size map in {time.time()-t0:.2f} s.")
         return size_map
 
-    def get_all_maps(
-        self,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def get_microstrain_map(self, phase: int = 0) -> np.ndarray:
         """
-        Extract Rwp, unit-cell lengths (a, b, c), and crystallite size from every
-        voxel's .gpx file in a **single** parallel pass — 3× faster than calling
-        the individual methods separately.
+        Extract the refined isotropic microstrain from each voxel's .gpx file.
+
+        Args:
+            phase (int, optional): Zero-based index of the phase to extract
+                (default ``0``).
 
         Returns:
-            tuple: ``(rwp_map, a_map, b_map, c_map, size_map)`` — five 2-D arrays
-                of shape ``(nx, ny)``; failed voxels return ``nan``.
+            np.ndarray: 2-D map of shape ``(nx, ny)``; masked pixels return ``0``,
+                failed extractions return ``nan``.
         """
         t0 = time.time()
         nx, ny = self.volume.shape[1], self.volume.shape[2]
         active = self._active_indices
-        args = [(ii, jj, self.folder, self.name) for ii, jj in active]
+        args = [(ii, jj, self.folder, self.name, phase) for ii, jj in active]
+
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(
+                    pool.map(_get_microstrain_ii_jj, args, chunksize=64),
+                    total=len(args),
+                    desc=f"Microstrain map (phase {phase})",
+                )
+            )
+
+        mustrain_map = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), val in zip(active, values):
+            mustrain_map[ii, jj] = val
+        print(f"Fetched microstrain map in {time.time()-t0:.2f} s.")
+        return mustrain_map
+
+    def get_scale_map(self, phase: int = 0) -> np.ndarray:
+        """
+        Extract the refined HAP scale factor from each voxel's .gpx file.
+
+        The HAP scale factor is proportional to the phase fraction and can be
+        used as a proxy for phase abundance.
+
+        Args:
+            phase (int, optional): Zero-based index of the phase to extract
+                (default ``0``).
+
+        Returns:
+            np.ndarray: 2-D map of shape ``(nx, ny)``; masked pixels return ``0``,
+                failed extractions return ``nan``.
+        """
+        t0 = time.time()
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name, phase) for ii, jj in active]
+
+        with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
+            values = list(
+                tqdm(
+                    pool.map(_get_scale_ii_jj, args, chunksize=64),
+                    total=len(args),
+                    desc=f"Scale map (phase {phase})",
+                )
+            )
+
+        scale_map = np.zeros((nx, ny), dtype=np.float32)
+        for (ii, jj), val in zip(active, values):
+            scale_map[ii, jj] = val
+        print(f"Fetched scale map in {time.time()-t0:.2f} s.")
+        return scale_map
+
+    def get_all_maps(self, phase: int = 0) -> dict:
+        """
+        Extract all refined parameters from every voxel's .gpx file in a
+        **single** parallel pass.
+
+        Args:
+            phase (int, optional): Zero-based index of the phase to extract
+                (default ``0``).
+
+        Returns:
+            dict: 2-D maps of shape ``(nx, ny)`` keyed by parameter name:
+
+            * ``"rwp"``      — weighted R-factor (histogram level, phase-independent)
+            * ``"a"``, ``"b"``, ``"c"`` — unit-cell lengths (Å)
+            * ``"size"``     — isotropic crystallite size
+            * ``"mustrain"`` — isotropic microstrain
+            * ``"scale"``    — HAP scale factor
+
+            Masked pixels are ``0``; active pixels that failed extraction are ``nan``.
+        """
+        t0 = time.time()
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        args = [(ii, jj, self.folder, self.name, phase) for ii, jj in active]
 
         with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
             values = list(
                 tqdm(
                     pool.map(_get_all_maps_ii_jj, args, chunksize=64),
                     total=len(args),
-                    desc="All maps",
+                    desc=f"All maps (phase {phase})",
                 )
             )
 
-        rwp_map = np.zeros((nx, ny), dtype=np.float32)
-        a_map = np.zeros((nx, ny), dtype=np.float32)
-        b_map = np.zeros((nx, ny), dtype=np.float32)
-        c_map = np.zeros((nx, ny), dtype=np.float32)
-        size_map = np.zeros((nx, ny), dtype=np.float32)
-        for (ii, jj), (rwp, a, b, c, sz) in zip(active, values):
-            rwp_map[ii, jj] = rwp
-            a_map[ii, jj] = a
-            b_map[ii, jj] = b
-            c_map[ii, jj] = c
-            size_map[ii, jj] = sz
+        keys = ["rwp", "a", "b", "c", "size", "mustrain", "scale"]
+        maps = {k: np.zeros((nx, ny), dtype=np.float32) for k in keys}
+        for (ii, jj), vals in zip(active, values):
+            for k, v in zip(keys, vals):
+                maps[k][ii, jj] = v
         print(f"Fetched all maps in {time.time()-t0:.2f} s.")
-        return rwp_map, a_map, b_map, c_map, size_map
+        return maps
+
+    def list_phases(
+        self,
+        ii: int | None = None,
+        jj: int | None = None,
+        verbose: bool = True,
+    ) -> list:
+        """
+        Open one voxel's .gpx file and return the index and name of each phase.
+
+        Useful for discovering phase indices before calling map methods with
+        ``phase=N``.  Defaults to the centre pixel of the volume.
+
+        Args:
+            ii (int or None, optional): Row index of the voxel to inspect.
+                Defaults to the centre row.
+            jj (int or None, optional): Column index of the voxel to inspect.
+                Defaults to the centre column.
+            verbose (bool, optional): Print the phase list (default ``True``).
+
+        Returns:
+            list of ``(index, name)`` tuples, one per phase found in the project.
+
+        Raises:
+            FileNotFoundError: If the .gpx file for the requested voxel does not
+                exist (voxel masked out or refinement not yet run).
+        """
+        if ii is None:
+            ii = self.volume.shape[1] // 2
+        if jj is None:
+            jj = self.volume.shape[2] // 2
+
+        gpx_filename = self.folder / "gpx_files" / f"{self.name}_{ii:04}_{jj:04}.gpx"
+        if not gpx_filename.exists():
+            raise FileNotFoundError(
+                f"No .gpx file found for voxel ({ii}, {jj}): {gpx_filename}\n"
+                "Make sure refinements have been run for this voxel."
+            )
+
+        _, _, phases = _load_data_from_gpx(gpx_filename)
+        result = [(idx, ph.name) for idx, ph in enumerate(phases)]
+        if verbose:
+            for idx, name in result:
+                print(f"  phase {idx}: {name}")
+        return result
+
+    def plot_maps(
+        self,
+        phase: int = 0,
+        cmap: str = "viridis",
+        figsize: tuple | None = None,
+    ):
+        """
+        Plot a mosaic of all refined parameter maps for a given phase.
+
+        Calls :meth:`get_all_maps` internally.  Masked-out pixels are shown
+        as white.  The colour range of each panel is computed from the
+        unmasked, finite values only.
+
+        Args:
+            phase (int, optional): Phase index to display (default ``0``).
+                Use :meth:`list_phases` to discover available indices.
+            cmap (str, optional): Matplotlib colormap name
+                (default ``"viridis"``).
+            figsize (tuple or None, optional): ``(width, height)`` in inches.
+                Defaults to ``(4 * ncols, 4 * nrows)``.
+
+        Returns:
+            matplotlib.figure.Figure: The figure, for further customisation
+                or saving with ``fig.savefig(...)``.
+        """
+        import matplotlib.pyplot as plt
+
+        maps = self.get_all_maps(phase=phase)
+
+        labels = {
+            "rwp":      "Rwp",
+            "a":        "a (Å)",
+            "b":        "b (Å)",
+            "c":        "c (Å)",
+            "size":     "Crystallite size",
+            "mustrain": "Microstrain",
+            "scale":    "Scale",
+        }
+
+        keys = list(labels.keys())
+        n = len(keys)
+        ncols = 4
+        nrows = -(-n // ncols)  # ceiling division
+
+        if figsize is None:
+            figsize = (ncols * 4, nrows * 4)
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+        axes_flat = np.array(axes).flatten()
+
+        for idx, key in enumerate(keys):
+            ax = axes_flat[idx]
+            data = maps[key].astype(float)
+            if self.mask is not None:
+                data[self.mask == 0] = np.nan
+
+            finite = data[np.isfinite(data)]
+            vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0, 1)
+
+            im = ax.imshow(data, cmap=cmap, origin="lower", vmin=vmin, vmax=vmax)
+            ax.set_title(labels[key])
+            ax.axis("off")
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+        for ax in axes_flat[n:]:
+            ax.set_visible(False)
+
+        try:
+            phase_name = self.list_phases(verbose=False)[phase][1]
+            title = f"{self.name}  —  phase {phase}: {phase_name}"
+        except Exception:
+            title = f"{self.name}  —  phase {phase}"
+
+        fig.suptitle(title, fontsize=13)
+        fig.tight_layout()
+        return fig
 
     def write_slurm_scripts(
         self,
@@ -846,60 +1047,104 @@ def _get_Rwp_ii_jj(args: tuple) -> float:
 
 
 def _get_crystallite_sizes(args: tuple) -> float:
-    """Return crystallite size for voxel ``(ii, jj)``.
+    """Return crystallite size for voxel ``(ii, jj)``, phase ``phase_idx``.
 
     Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
     ``nan`` if the .xy file exists but the parameter could not be extracted.
     """
-    ii, jj, folder, name = args
+    ii, jj, folder, name, phase_idx = args
     xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
     if not xy_filename.exists():
         return 0.0
     try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        hap = phases[0].data["Histograms"][hists[0].name]
-        return hap["Size"]["Size"]
+        hap = phases[phase_idx].data["Histograms"][hists[0].name]
+        sz = hap["Size"]["Size"]
+        return float(sz) if np.isscalar(sz) else float(sz[0])
     except Exception:
         return np.nan
 
 
-def _get_all_maps_ii_jj(args: tuple) -> Tuple[float, float, float, float, float]:
-    """Return ``(rwp, a, b, c, size)`` for voxel ``(ii, jj)`` in one .gpx open.
+def _get_microstrain_ii_jj(args: tuple) -> float:
+    """Return isotropic microstrain for voxel ``(ii, jj)``, phase ``phase_idx``.
+
+    Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
+    ``nan`` if the .xy file exists but the parameter could not be extracted.
+    """
+    ii, jj, folder, name, phase_idx = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0
+    try:
+        gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
+        g, hists, phases = _load_data_from_gpx(gpx_filename)
+        hap = phases[phase_idx].data["Histograms"][hists[0].name]
+        mustrain = hap["Mustrain"]["Mustrain"]
+        return float(mustrain) if np.isscalar(mustrain) else float(mustrain[0])
+    except Exception:
+        return np.nan
+
+
+def _get_scale_ii_jj(args: tuple) -> float:
+    """Return HAP scale factor for voxel ``(ii, jj)``, phase ``phase_idx``.
+
+    Returns ``0.0`` if the .xy file does not exist (masked-out pixel),
+    ``nan`` if the .xy file exists but the parameter could not be extracted.
+    """
+    ii, jj, folder, name, phase_idx = args
+    xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
+    if not xy_filename.exists():
+        return 0.0
+    try:
+        gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
+        g, hists, phases = _load_data_from_gpx(gpx_filename)
+        hap = phases[phase_idx].data["Histograms"][hists[0].name]
+        return float(hap["Scale"][0])
+    except Exception:
+        return np.nan
+
+
+def _get_all_maps_ii_jj(args: tuple) -> Tuple[float, ...]:
+    """Return ``(rwp, a, b, c, size, mustrain, scale)`` for voxel ``(ii, jj)``.
 
     Returns all-zeros if the .xy file does not exist (masked-out pixel),
     all-nan if the .xy file exists but parameters could not be extracted.
     """
-    ii, jj, folder, name = args
+    ii, jj, folder, name, phase_idx = args
     xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
     if not xy_filename.exists():
-        return 0.0, 0.0, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        wR = hists[0].get_wR()
-        cell = phases[0].get_cell()
-        hap = phases[0].data["Histograms"][hists[0].name]
-        sz = hap["Size"]["Size"]
-        return wR, cell["length_a"], cell["length_b"], cell["length_c"], sz
+        wR   = hists[0].get_wR()
+        cell = phases[phase_idx].get_cell()
+        hap  = phases[phase_idx].data["Histograms"][hists[0].name]
+        sz       = hap["Size"]["Size"]
+        mustrain = hap["Mustrain"]["Mustrain"]
+        sz       = float(sz)       if np.isscalar(sz)       else float(sz[0])
+        mustrain = float(mustrain) if np.isscalar(mustrain) else float(mustrain[0])
+        scale    = float(hap["Scale"][0])
+        return wR, cell["length_a"], cell["length_b"], cell["length_c"], sz, mustrain, scale
     except Exception:
-        return np.nan, np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
 
 def _get_cell_params_ii_jj(args: tuple) -> Tuple[float, float, float]:
-    """Return ``(a, b, c)`` unit-cell lengths for voxel ``(ii, jj)``.
+    """Return ``(a, b, c)`` unit-cell lengths for voxel ``(ii, jj)``, phase ``phase_idx``.
 
     Returns ``(0., 0., 0.)`` if the .xy file does not exist (masked-out pixel),
     ``(nan, nan, nan)`` if the .xy file exists but parameters could not be extracted.
     """
-    ii, jj, folder, name = args
+    ii, jj, folder, name, phase_idx = args
     xy_filename = folder / "xy_files" / f"{name}_{ii:04}_{jj:04}.xy"
     if not xy_filename.exists():
         return 0.0, 0.0, 0.0
     try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        cell = phases[0].get_cell()
+        cell = phases[phase_idx].get_cell()
         return cell["length_a"], cell["length_b"], cell["length_c"]
     except Exception:
         return np.nan, np.nan, np.nan

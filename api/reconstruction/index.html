@@ -663,7 +663,14 @@ crystallite sizes.</p>
 <span class="normal"><a href="#__codelineno-0-788">788</a></span>
 <span class="normal"><a href="#__codelineno-0-789">789</a></span>
 <span class="normal"><a href="#__codelineno-0-790">790</a></span>
-<span class="normal"><a href="#__codelineno-0-791">791</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-363" name="__codelineno-0-363"></a><span class="k">class</span><span class="w"> </span><span class="nc">ReconstructedVolume</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span>
+<span class="normal"><a href="#__codelineno-0-793">793</a></span>
+<span class="normal"><a href="#__codelineno-0-794">794</a></span>
+<span class="normal"><a href="#__codelineno-0-795">795</a></span>
+<span class="normal"><a href="#__codelineno-0-796">796</a></span>
+<span class="normal"><a href="#__codelineno-0-797">797</a></span>
+<span class="normal"><a href="#__codelineno-0-798">798</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-363" name="__codelineno-0-363"></a><span class="k">class</span><span class="w"> </span><span class="nc">ReconstructedVolume</span><span class="p">:</span>
 <a id="__codelineno-0-364" name="__codelineno-0-364"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="sd">    Container for a reconstructed XRD-CT volume with per-voxel analysis helpers.</span>
 <a id="__codelineno-0-366" name="__codelineno-0-366"></a>
@@ -958,140 +965,147 @@ crystallite sizes.</p>
 <a id="__codelineno-0-655" name="__codelineno-0-655"></a>        <span class="n">refining_function</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-656" name="__codelineno-0-656"></a>        <span class="n">n_array_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
 <a id="__codelineno-0-657" name="__codelineno-0-657"></a>        <span class="n">conda_env</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;4G&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a>        <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>        <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]:</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">        Generate a SLURM array-job script and a matching Python worker for</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">        cluster-side refinement of all voxels.</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        The volume and 2θ axis must already be saved to *volume_hdf5* under</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        keys ``&quot;volume&quot;`` and ``&quot;tth&quot;`` respectively::</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">            import h5py</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">            with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">                f[&quot;volume&quot;] = vol.volume</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">                f[&quot;tth&quot;] = vol.tth</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">        Each SLURM array element writes the xy files for its chunk (if not yet</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        present) and then runs the refinements, so ``write_xy_files`` need not be</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">        called in advance.  The mask (if set) is read from the HDF5 file; store it</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">        before calling this method::</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">            with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">                f[&quot;volume&quot;] = vol.volume</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">                f[&quot;tth&quot;]    = vol.tth</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">                if vol.mask is not None:</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">                    f[&quot;mask&quot;] = vol.mask</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">            volume_hdf5 (Path): HDF5 file with keys ``&quot;volume&quot;`` and ``&quot;tth&quot;``</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">                (and optionally ``&quot;mask&quot;``).</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">            refining_module (str): Importable Python module containing</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">                *refining_function* (e.g. ``&quot;my_project.refinements&quot;``).</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">            refining_function (str): Name of a module-level function with</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">                signature ``f(xy_file: Path, gpx_file: Path)``.</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            n_array_jobs (int, optional): Number of SLURM array elements</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">                (default 500; one element covers ~500 voxels for 500×500).</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">            conda_env (str, optional): Conda environment to activate</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">                (default ``&quot;nrxrdct&quot;``).</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">            mem (str, optional): Memory per job (default ``&quot;4G&quot;``).</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">            time_limit (str, optional): Wall-time limit (default ``&quot;02:00:00&quot;``).</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a><span class="sd">            partition (str, optional): SLURM partition (default ``&quot;all&quot;``).</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">            tuple: ``(worker_path, submit_path)`` — absolute paths to the</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">                generated Python worker and the ``sbatch`` submission script.</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">                Submit with ``sbatch &lt;submit_path&gt;``.</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a>        <span class="n">nx</span><span class="p">,</span> <span class="n">ny</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a>        <span class="n">worker_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;worker_refine.py&quot;</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a>        <span class="n">submit_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;submit_refine.sh&quot;</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a>        <span class="n">folder_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">folder</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a>        <span class="n">volume_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="c1"># Build the worker script via template substitution so that inner</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a>        <span class="c1"># Python f-strings (run at worker time) are not evaluated here.</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a>        <span class="n">worker_template</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a>            <span class="s2">&quot;#!/usr/bin/env python</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a>            <span class="s1">&#39;&quot;&quot;&quot;SLURM array worker — refine a chunk of voxels.</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a>            <span class="s2">&quot;Usage::</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a>            <span class="s2">&quot;    python worker_refine.py --job-id JOB_ID --n-jobs N_JOBS</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a>            <span class="s2">&quot;*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a>            <span class="s1">&#39;&quot;&quot;&quot;</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a>            <span class="s2">&quot;import argparse</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a>            <span class="s2">&quot;import importlib</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a>            <span class="s2">&quot;from pathlib import Path</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a>            <span class="s2">&quot;import h5py</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a>            <span class="s2">&quot;from nrxrdct.io import save_xy_file</span><span class="se">\n\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a>            <span class="s2">&quot;def main() -&gt; None:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a>            <span class="s2">&quot;    parser = argparse.ArgumentParser()</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a>            <span class="s1">&#39;    parser.add_argument(&quot;--job-id&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a>            <span class="s1">&#39;    parser.add_argument(&quot;--n-jobs&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a>            <span class="s2">&quot;    args = parser.parse_args()</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a>            <span class="s2">&quot;    volume_hdf5 = Path(VOLUME_HDF5)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a>            <span class="s1">&#39;    with h5py.File(volume_hdf5, &quot;r&quot;) as h:</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a>            <span class="s1">&#39;        volume = h[&quot;volume&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a>            <span class="s1">&#39;        tth = h[&quot;tth&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a>            <span class="s1">&#39;        mask = h[&quot;mask&quot;][:] if &quot;mask&quot; in h else None</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a>            <span class="s2">&quot;    folder = Path(FOLDER_ABS)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a>            <span class="s2">&quot;    name = SAMPLE_NAME</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a>            <span class="s2">&quot;    nx, ny = NX, NY</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a>            <span class="s2">&quot;    all_indexes = [</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>            <span class="s2">&quot;        (ii, jj)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a>            <span class="s2">&quot;        for ii in range(nx)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a>            <span class="s2">&quot;        for jj in range(ny)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a>            <span class="s2">&quot;        if mask is None or mask[ii, jj]</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a>            <span class="s2">&quot;    ]</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a>            <span class="s2">&quot;    chunk_size = -(-len(all_indexes) // args.n_jobs)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a>            <span class="s2">&quot;    start = args.job_id * chunk_size</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a>            <span class="s2">&quot;    chunk = all_indexes[start : start + chunk_size]</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>            <span class="s2">&quot;    mod = importlib.import_module(REFINING_MODULE)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a>            <span class="s2">&quot;    refine_fn = getattr(mod, REFINING_FUNCTION)</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a>            <span class="s2">&quot;    for ii, jj in chunk:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a>            <span class="s1">&#39;        xy_file = folder / &quot;xy_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.xy&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a>            <span class="s1">&#39;        gpx_file = folder / &quot;gpx_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.gpx&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a>            <span class="s2">&quot;        if not xy_file.exists():</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a>            <span class="s2">&quot;            save_xy_file(tth, volume[:, ii, jj], None, str(xy_file), verbose=False)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a>            <span class="s2">&quot;        try:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a>            <span class="s2">&quot;            refine_fn(xy_file, gpx_file)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>            <span class="s2">&quot;        except Exception as exc:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a>            <span class="s1">&#39;            print(f&quot;Voxel (</span><span class="si">{ii}</span><span class="s1">, </span><span class="si">{jj}</span><span class="s1">) failed: </span><span class="si">{exc}</span><span class="s1">&quot;)</span><span class="se">\n\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a>            <span class="s1">&#39;if __name__ == &quot;__main__&quot;:</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>            <span class="s2">&quot;    main()</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="p">)</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="n">worker_code</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="n">worker_template</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;VOLUME_HDF5&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">volume_abs</span><span class="p">))</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;FOLDER_ABS&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">folder_abs</span><span class="p">))</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;SAMPLE_NAME&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;NX, NY&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nx</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">ny</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_MODULE&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_module</span><span class="p">))</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_FUNCTION&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_function</span><span class="p">))</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="p">)</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>        <span class="n">submit_script</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="s2">&quot;#!/bin/bash</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --job-name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_refine</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --array=0-</span><span class="si">{</span><span class="n">n_array_jobs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --mem=</span><span class="si">{</span><span class="n">mem</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --time=</span><span class="si">{</span><span class="n">time_limit</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --partition=</span><span class="si">{</span><span class="n">partition</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --output=</span><span class="si">{</span><span class="n">folder_abs</span><span class="si">}</span><span class="s2">/slurm_%A_%a.out</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a>            <span class="s2">&quot;# Adjust the activation line to match your cluster&#39;s setup:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a>            <span class="sa">f</span><span class="s2">&quot;conda activate </span><span class="si">{</span><span class="n">conda_env</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a>            <span class="sa">f</span><span class="s2">&quot;python </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">worker_path</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="si">}</span><span class="s2"> </span><span class="se">\\\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a>            <span class="s2">&quot;    --job-id $SLURM_ARRAY_TASK_ID </span><span class="se">\\\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a>            <span class="sa">f</span><span class="s2">&quot;    --n-jobs </span><span class="si">{</span><span class="n">n_array_jobs</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a>        <span class="p">)</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a>        <span class="n">worker_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">worker_code</span><span class="p">)</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a>        <span class="n">submit_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">submit_script</span><span class="p">)</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Worker script : </span><span class="si">{</span><span class="n">worker_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit script : </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit with   : sbatch </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-791" name="__codelineno-0-791"></a>        <span class="k">return</span> <span class="n">worker_path</span><span class="p">,</span> <span class="n">submit_path</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="n">conda_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a>        <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;4G&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a>        <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a>        <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]:</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">        Generate a SLURM array-job script and a matching Python worker for</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        cluster-side refinement of all voxels.</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        The volume and 2θ axis must already be saved to *volume_hdf5* under</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">        keys ``&quot;volume&quot;`` and ``&quot;tth&quot;`` respectively::</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">            import h5py</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">            with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">                f[&quot;volume&quot;] = vol.volume</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">                f[&quot;tth&quot;] = vol.tth</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        Each SLURM array element writes the xy files for its chunk (if not yet</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">        present) and then runs the refinements, so ``write_xy_files`` need not be</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">        called in advance.  The mask (if set) is read from the HDF5 file; store it</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="sd">        before calling this method::</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">            with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">                f[&quot;volume&quot;] = vol.volume</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">                f[&quot;tth&quot;]    = vol.tth</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">                if vol.mask is not None:</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">                    f[&quot;mask&quot;] = vol.mask</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">            volume_hdf5 (Path): HDF5 file with keys ``&quot;volume&quot;`` and ``&quot;tth&quot;``</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">                (and optionally ``&quot;mask&quot;``).</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">            refining_module (str): Importable Python module containing</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">                *refining_function* (e.g. ``&quot;my_project.refinements&quot;``).</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">            refining_function (str): Name of a module-level function with</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">                signature ``f(xy_file: Path, gpx_file: Path)``.</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">            n_array_jobs (int, optional): Number of SLURM array elements</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">                (default 500; one element covers ~500 voxels for 500×500).</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">            conda_env (str, optional): Conda environment to activate</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">                (default ``&quot;nrxrdct&quot;``).</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">            conda_base (str, optional): Path to the conda installation root,</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a><span class="sd">                e.g. ``&quot;/cvmfs/hpc.esrf.fr/software/packages/linux/x86_64/jupyter-slurm/2025.04.5&quot;``.</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a><span class="sd">                When provided, ``&lt;conda_base&gt;/etc/profile.d/conda.sh`` is sourced</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">                before ``conda activate`` so the environment works in non-interactive</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">                SLURM batch shells.  Leave empty to skip (default ``&quot;&quot;``).</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">            mem (str, optional): Memory per job (default ``&quot;4G&quot;``).</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">            time_limit (str, optional): Wall-time limit (default ``&quot;02:00:00&quot;``).</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">            partition (str, optional): SLURM partition (default ``&quot;all&quot;``).</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">            tuple: ``(worker_path, submit_path)`` — absolute paths to the</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">                generated Python worker and the ``sbatch`` submission script.</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">                Submit with ``sbatch &lt;submit_path&gt;``.</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="n">nx</span><span class="p">,</span> <span class="n">ny</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a>        <span class="n">worker_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;worker_refine.py&quot;</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a>        <span class="n">submit_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;submit_refine.sh&quot;</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a>        <span class="n">folder_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">folder</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a>        <span class="n">volume_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a>        <span class="c1"># Build the worker script via template substitution so that inner</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a>        <span class="c1"># Python f-strings (run at worker time) are not evaluated here.</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a>        <span class="n">worker_template</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a>            <span class="s2">&quot;#!/usr/bin/env python</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a>            <span class="s1">&#39;&quot;&quot;&quot;SLURM array worker — refine a chunk of voxels.</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a>            <span class="s2">&quot;Usage::</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a>            <span class="s2">&quot;    python worker_refine.py --job-id JOB_ID --n-jobs N_JOBS</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a>            <span class="s2">&quot;*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a>            <span class="s1">&#39;&quot;&quot;&quot;</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a>            <span class="s2">&quot;import argparse</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a>            <span class="s2">&quot;import importlib</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a>            <span class="s2">&quot;from pathlib import Path</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a>            <span class="s2">&quot;import h5py</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a>            <span class="s2">&quot;from nrxrdct.io import save_xy_file</span><span class="se">\n\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a>            <span class="s2">&quot;def main() -&gt; None:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a>            <span class="s2">&quot;    parser = argparse.ArgumentParser()</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a>            <span class="s1">&#39;    parser.add_argument(&quot;--job-id&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a>            <span class="s1">&#39;    parser.add_argument(&quot;--n-jobs&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a>            <span class="s2">&quot;    args = parser.parse_args()</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a>            <span class="s2">&quot;    volume_hdf5 = Path(VOLUME_HDF5)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a>            <span class="s1">&#39;    with h5py.File(volume_hdf5, &quot;r&quot;) as h:</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a>            <span class="s1">&#39;        volume = h[&quot;volume&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a>            <span class="s1">&#39;        tth = h[&quot;tth&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a>            <span class="s1">&#39;        mask = h[&quot;mask&quot;][:] if &quot;mask&quot; in h else None</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>            <span class="s2">&quot;    folder = Path(FOLDER_ABS)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a>            <span class="s2">&quot;    name = SAMPLE_NAME</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a>            <span class="s2">&quot;    nx, ny = NX, NY</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a>            <span class="s2">&quot;    all_indexes = [</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a>            <span class="s2">&quot;        (ii, jj)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>            <span class="s2">&quot;        for ii in range(nx)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a>            <span class="s2">&quot;        for jj in range(ny)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a>            <span class="s2">&quot;        if mask is None or mask[ii, jj]</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>            <span class="s2">&quot;    ]</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a>            <span class="s2">&quot;    chunk_size = -(-len(all_indexes) // args.n_jobs)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a>            <span class="s2">&quot;    start = args.job_id * chunk_size</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>            <span class="s2">&quot;    chunk = all_indexes[start : start + chunk_size]</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a>            <span class="s2">&quot;    mod = importlib.import_module(REFINING_MODULE)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a>            <span class="s2">&quot;    refine_fn = getattr(mod, REFINING_FUNCTION)</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a>            <span class="s2">&quot;    for ii, jj in chunk:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a>            <span class="s1">&#39;        xy_file = folder / &quot;xy_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.xy&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a>            <span class="s1">&#39;        gpx_file = folder / &quot;gpx_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.gpx&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>            <span class="s2">&quot;        if not xy_file.exists():</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a>            <span class="s2">&quot;            save_xy_file(tth, volume[:, ii, jj], None, str(xy_file), verbose=False)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a>            <span class="s2">&quot;        try:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>            <span class="s2">&quot;            refine_fn(xy_file, gpx_file)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="s2">&quot;        except Exception as exc:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>            <span class="s1">&#39;            print(f&quot;Voxel (</span><span class="si">{ii}</span><span class="s1">, </span><span class="si">{jj}</span><span class="s1">) failed: </span><span class="si">{exc}</span><span class="s1">&quot;)</span><span class="se">\n\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>            <span class="s1">&#39;if __name__ == &quot;__main__&quot;:</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>            <span class="s2">&quot;    main()</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="p">)</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="n">worker_code</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>            <span class="n">worker_template</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;VOLUME_HDF5&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">volume_abs</span><span class="p">))</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;FOLDER_ABS&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">folder_abs</span><span class="p">))</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;SAMPLE_NAME&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;NX, NY&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nx</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">ny</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_MODULE&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_module</span><span class="p">))</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_FUNCTION&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_function</span><span class="p">))</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>        <span class="p">)</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="n">submit_script</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>            <span class="s2">&quot;#!/bin/bash</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --job-name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_refine</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --array=0-</span><span class="si">{</span><span class="n">n_array_jobs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --mem=</span><span class="si">{</span><span class="n">mem</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --time=</span><span class="si">{</span><span class="n">time_limit</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --partition=</span><span class="si">{</span><span class="n">partition</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a>            <span class="sa">f</span><span class="s2">&quot;#SBATCH --output=</span><span class="si">{</span><span class="n">folder_abs</span><span class="si">}</span><span class="s2">/slurm_%A_%a.out</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a>            <span class="s2">&quot;# Conda environment activation</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a>            <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;source </span><span class="si">{</span><span class="n">conda_base</span><span class="si">}</span><span class="s2">/etc/profile.d/conda.sh</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">conda_base</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a>            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;conda activate </span><span class="si">{</span><span class="n">conda_env</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a>            <span class="sa">f</span><span class="s2">&quot;python </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">worker_path</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="si">}</span><span class="s2"> </span><span class="se">\\\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a>            <span class="s2">&quot;    --job-id $SLURM_ARRAY_TASK_ID </span><span class="se">\\\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a>            <span class="sa">f</span><span class="s2">&quot;    --n-jobs </span><span class="si">{</span><span class="n">n_array_jobs</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a>        <span class="p">)</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a>        <span class="n">worker_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">worker_code</span><span class="p">)</span>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a>        <span class="n">submit_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">submit_script</span><span class="p">)</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Worker script : </span><span class="si">{</span><span class="n">worker_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit script : </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit with   : sbatch </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a>        <span class="k">return</span> <span class="n">worker_path</span><span class="p">,</span> <span class="n">submit_path</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1936,7 +1950,7 @@ module level, not a lambda or closure).</p>
 
 
 <a href="#nrxrdct.reconstruction.ReconstructedVolume.write_slurm_scripts" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_slurm_scripts</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">refining_module</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">refining_function</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_array_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span> <span class="n">conda_env</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;nrxrdct&#39;</span><span class="p">,</span> <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;4G&#39;</span><span class="p">,</span> <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;02:00:00&#39;</span><span class="p">,</span> <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;all&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_slurm_scripts</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">refining_module</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">refining_function</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_array_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span> <span class="n">conda_env</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;nrxrdct&#39;</span><span class="p">,</span> <span class="n">conda_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;4G&#39;</span><span class="p">,</span> <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;02:00:00&#39;</span><span class="p">,</span> <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;all&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2019,6 +2033,20 @@ signature <code>f(xy_file: Path, gpx_file: Path)</code>.</p>
               <div class="doc-md-description">
                 <p>Conda environment to activate
 (default <code>"nrxrdct"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>conda_base</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Path to the conda installation root,
+e.g. <code>"/cvmfs/hpc.esrf.fr/software/packages/linux/x86_64/jupyter-slurm/2025.04.5"</code>.
+When provided, <code>&lt;conda_base&gt;/etc/profile.d/conda.sh</code> is sourced
+before <code>conda activate</code> so the environment works in non-interactive
+SLURM batch shells.  Leave empty to skip (default <code>""</code>).</p>
               </div>
             </li>
             <li>
@@ -2224,147 +2252,161 @@ Submit with <code>sbatch &lt;submit_path&gt;</code>.</p>
 <span class="normal"><a href="#__codelineno-0-788">788</a></span>
 <span class="normal"><a href="#__codelineno-0-789">789</a></span>
 <span class="normal"><a href="#__codelineno-0-790">790</a></span>
-<span class="normal"><a href="#__codelineno-0-791">791</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="k">def</span><span class="w"> </span><span class="nf">write_slurm_scripts</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span>
+<span class="normal"><a href="#__codelineno-0-793">793</a></span>
+<span class="normal"><a href="#__codelineno-0-794">794</a></span>
+<span class="normal"><a href="#__codelineno-0-795">795</a></span>
+<span class="normal"><a href="#__codelineno-0-796">796</a></span>
+<span class="normal"><a href="#__codelineno-0-797">797</a></span>
+<span class="normal"><a href="#__codelineno-0-798">798</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="k">def</span><span class="w"> </span><span class="nf">write_slurm_scripts</span><span class="p">(</span>
 <a id="__codelineno-0-652" name="__codelineno-0-652"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-653" name="__codelineno-0-653"></a>    <span class="n">volume_hdf5</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
 <a id="__codelineno-0-654" name="__codelineno-0-654"></a>    <span class="n">refining_module</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-655" name="__codelineno-0-655"></a>    <span class="n">refining_function</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-656" name="__codelineno-0-656"></a>    <span class="n">n_array_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
 <a id="__codelineno-0-657" name="__codelineno-0-657"></a>    <span class="n">conda_env</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a>    <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;4G&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a>    <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]:</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">    Generate a SLURM array-job script and a matching Python worker for</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">    cluster-side refinement of all voxels.</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">    The volume and 2θ axis must already be saved to *volume_hdf5* under</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">    keys ``&quot;volume&quot;`` and ``&quot;tth&quot;`` respectively::</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">        import h5py</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">        with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">            f[&quot;volume&quot;] = vol.volume</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">            f[&quot;tth&quot;] = vol.tth</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">    Each SLURM array element writes the xy files for its chunk (if not yet</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">    present) and then runs the refinements, so ``write_xy_files`` need not be</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">    called in advance.  The mask (if set) is read from the HDF5 file; store it</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">    before calling this method::</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">        with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">            f[&quot;volume&quot;] = vol.volume</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">            f[&quot;tth&quot;]    = vol.tth</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">            if vol.mask is not None:</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">                f[&quot;mask&quot;] = vol.mask</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">        volume_hdf5 (Path): HDF5 file with keys ``&quot;volume&quot;`` and ``&quot;tth&quot;``</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">            (and optionally ``&quot;mask&quot;``).</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">        refining_module (str): Importable Python module containing</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">            *refining_function* (e.g. ``&quot;my_project.refinements&quot;``).</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">        refining_function (str): Name of a module-level function with</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">            signature ``f(xy_file: Path, gpx_file: Path)``.</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">        n_array_jobs (int, optional): Number of SLURM array elements</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">            (default 500; one element covers ~500 voxels for 500×500).</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">        conda_env (str, optional): Conda environment to activate</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">            (default ``&quot;nrxrdct&quot;``).</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">        mem (str, optional): Memory per job (default ``&quot;4G&quot;``).</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">        time_limit (str, optional): Wall-time limit (default ``&quot;02:00:00&quot;``).</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a><span class="sd">        partition (str, optional): SLURM partition (default ``&quot;all&quot;``).</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">        tuple: ``(worker_path, submit_path)`` — absolute paths to the</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">            generated Python worker and the ``sbatch`` submission script.</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">            Submit with ``sbatch &lt;submit_path&gt;``.</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a>    <span class="n">nx</span><span class="p">,</span> <span class="n">ny</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a>    <span class="n">worker_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;worker_refine.py&quot;</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a>    <span class="n">submit_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;submit_refine.sh&quot;</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a>    <span class="n">folder_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">folder</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a>    <span class="n">volume_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="c1"># Build the worker script via template substitution so that inner</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a>    <span class="c1"># Python f-strings (run at worker time) are not evaluated here.</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="n">worker_template</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a>        <span class="s2">&quot;#!/usr/bin/env python</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a>        <span class="s1">&#39;&quot;&quot;&quot;SLURM array worker — refine a chunk of voxels.</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a>        <span class="s2">&quot;Usage::</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a>        <span class="s2">&quot;    python worker_refine.py --job-id JOB_ID --n-jobs N_JOBS</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a>        <span class="s2">&quot;*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a>        <span class="s1">&#39;&quot;&quot;&quot;</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a>        <span class="s2">&quot;import argparse</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a>        <span class="s2">&quot;import importlib</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a>        <span class="s2">&quot;from pathlib import Path</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a>        <span class="s2">&quot;import h5py</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a>        <span class="s2">&quot;from nrxrdct.io import save_xy_file</span><span class="se">\n\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a>        <span class="s2">&quot;def main() -&gt; None:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a>        <span class="s2">&quot;    parser = argparse.ArgumentParser()</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a>        <span class="s1">&#39;    parser.add_argument(&quot;--job-id&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a>        <span class="s1">&#39;    parser.add_argument(&quot;--n-jobs&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a>        <span class="s2">&quot;    args = parser.parse_args()</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a>        <span class="s2">&quot;    volume_hdf5 = Path(VOLUME_HDF5)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a>        <span class="s1">&#39;    with h5py.File(volume_hdf5, &quot;r&quot;) as h:</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a>        <span class="s1">&#39;        volume = h[&quot;volume&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a>        <span class="s1">&#39;        tth = h[&quot;tth&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a>        <span class="s1">&#39;        mask = h[&quot;mask&quot;][:] if &quot;mask&quot; in h else None</span><span class="se">\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a>        <span class="s2">&quot;    folder = Path(FOLDER_ABS)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a>        <span class="s2">&quot;    name = SAMPLE_NAME</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a>        <span class="s2">&quot;    nx, ny = NX, NY</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a>        <span class="s2">&quot;    all_indexes = [</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>        <span class="s2">&quot;        (ii, jj)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a>        <span class="s2">&quot;        for ii in range(nx)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a>        <span class="s2">&quot;        for jj in range(ny)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a>        <span class="s2">&quot;        if mask is None or mask[ii, jj]</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a>        <span class="s2">&quot;    ]</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="s2">&quot;    chunk_size = -(-len(all_indexes) // args.n_jobs)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a>        <span class="s2">&quot;    start = args.job_id * chunk_size</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="s2">&quot;    chunk = all_indexes[start : start + chunk_size]</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="s2">&quot;    mod = importlib.import_module(REFINING_MODULE)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="s2">&quot;    refine_fn = getattr(mod, REFINING_FUNCTION)</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="s2">&quot;    for ii, jj in chunk:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="s1">&#39;        xy_file = folder / &quot;xy_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.xy&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="s1">&#39;        gpx_file = folder / &quot;gpx_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.gpx&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="s2">&quot;        if not xy_file.exists():</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a>        <span class="s2">&quot;            save_xy_file(tth, volume[:, ii, jj], None, str(xy_file), verbose=False)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a>        <span class="s2">&quot;        try:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="s2">&quot;            refine_fn(xy_file, gpx_file)</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>        <span class="s2">&quot;        except Exception as exc:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="s1">&#39;            print(f&quot;Voxel (</span><span class="si">{ii}</span><span class="s1">, </span><span class="si">{jj}</span><span class="s1">) failed: </span><span class="si">{exc}</span><span class="s1">&quot;)</span><span class="se">\n\n\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a>        <span class="s1">&#39;if __name__ == &quot;__main__&quot;:</span><span class="se">\n</span><span class="s1">&#39;</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="s2">&quot;    main()</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="p">)</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>    <span class="n">worker_code</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="n">worker_template</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;VOLUME_HDF5&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">volume_abs</span><span class="p">))</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;FOLDER_ABS&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">folder_abs</span><span class="p">))</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;SAMPLE_NAME&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;NX, NY&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nx</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">ny</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_MODULE&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_module</span><span class="p">))</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_FUNCTION&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_function</span><span class="p">))</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="p">)</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>    <span class="n">submit_script</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>        <span class="s2">&quot;#!/bin/bash</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --job-name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_refine</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --array=0-</span><span class="si">{</span><span class="n">n_array_jobs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --mem=</span><span class="si">{</span><span class="n">mem</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --time=</span><span class="si">{</span><span class="n">time_limit</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --partition=</span><span class="si">{</span><span class="n">partition</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --output=</span><span class="si">{</span><span class="n">folder_abs</span><span class="si">}</span><span class="s2">/slurm_%A_%a.out</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="s2">&quot;# Adjust the activation line to match your cluster&#39;s setup:</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a>        <span class="sa">f</span><span class="s2">&quot;conda activate </span><span class="si">{</span><span class="n">conda_env</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a>        <span class="sa">f</span><span class="s2">&quot;python </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">worker_path</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="si">}</span><span class="s2"> </span><span class="se">\\\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a>        <span class="s2">&quot;    --job-id $SLURM_ARRAY_TASK_ID </span><span class="se">\\\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a>        <span class="sa">f</span><span class="s2">&quot;    --n-jobs </span><span class="si">{</span><span class="n">n_array_jobs</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a>    <span class="p">)</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a>    <span class="n">worker_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">worker_code</span><span class="p">)</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a>    <span class="n">submit_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">submit_script</span><span class="p">)</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Worker script : </span><span class="si">{</span><span class="n">worker_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit script : </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit with   : sbatch </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-791" name="__codelineno-0-791"></a>    <span class="k">return</span> <span class="n">worker_path</span><span class="p">,</span> <span class="n">submit_path</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>    <span class="n">conda_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a>    <span class="n">mem</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;4G&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="n">time_limit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a>    <span class="n">partition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">]:</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">    Generate a SLURM array-job script and a matching Python worker for</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">    cluster-side refinement of all voxels.</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">    The volume and 2θ axis must already be saved to *volume_hdf5* under</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    keys ``&quot;volume&quot;`` and ``&quot;tth&quot;`` respectively::</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">        import h5py</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">        with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">            f[&quot;volume&quot;] = vol.volume</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">            f[&quot;tth&quot;] = vol.tth</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">    Each SLURM array element writes the xy files for its chunk (if not yet</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">    present) and then runs the refinements, so ``write_xy_files`` need not be</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">    called in advance.  The mask (if set) is read from the HDF5 file; store it</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="sd">    before calling this method::</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">        with h5py.File(&quot;volume.h5&quot;, &quot;a&quot;) as f:</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">            f[&quot;volume&quot;] = vol.volume</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">            f[&quot;tth&quot;]    = vol.tth</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">            if vol.mask is not None:</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">                f[&quot;mask&quot;] = vol.mask</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">        volume_hdf5 (Path): HDF5 file with keys ``&quot;volume&quot;`` and ``&quot;tth&quot;``</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">            (and optionally ``&quot;mask&quot;``).</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">        refining_module (str): Importable Python module containing</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">            *refining_function* (e.g. ``&quot;my_project.refinements&quot;``).</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">        refining_function (str): Name of a module-level function with</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            signature ``f(xy_file: Path, gpx_file: Path)``.</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">        n_array_jobs (int, optional): Number of SLURM array elements</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">            (default 500; one element covers ~500 voxels for 500×500).</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">        conda_env (str, optional): Conda environment to activate</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">            (default ``&quot;nrxrdct&quot;``).</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">        conda_base (str, optional): Path to the conda installation root,</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a><span class="sd">            e.g. ``&quot;/cvmfs/hpc.esrf.fr/software/packages/linux/x86_64/jupyter-slurm/2025.04.5&quot;``.</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a><span class="sd">            When provided, ``&lt;conda_base&gt;/etc/profile.d/conda.sh`` is sourced</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">            before ``conda activate`` so the environment works in non-interactive</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">            SLURM batch shells.  Leave empty to skip (default ``&quot;&quot;``).</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">        mem (str, optional): Memory per job (default ``&quot;4G&quot;``).</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">        time_limit (str, optional): Wall-time limit (default ``&quot;02:00:00&quot;``).</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">        partition (str, optional): SLURM partition (default ``&quot;all&quot;``).</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">        tuple: ``(worker_path, submit_path)`` — absolute paths to the</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">            generated Python worker and the ``sbatch`` submission script.</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">            Submit with ``sbatch &lt;submit_path&gt;``.</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="n">nx</span><span class="p">,</span> <span class="n">ny</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a>    <span class="n">worker_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;worker_refine.py&quot;</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="n">submit_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">folder</span> <span class="o">/</span> <span class="s2">&quot;submit_refine.sh&quot;</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a>    <span class="n">folder_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">folder</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a>    <span class="n">volume_abs</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">volume_hdf5</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a>    <span class="c1"># Build the worker script via template substitution so that inner</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a>    <span class="c1"># Python f-strings (run at worker time) are not evaluated here.</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a>    <span class="n">worker_template</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a>        <span class="s2">&quot;#!/usr/bin/env python</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a>        <span class="s1">&#39;&quot;&quot;&quot;SLURM array worker — refine a chunk of voxels.</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a>        <span class="s2">&quot;Usage::</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a>        <span class="s2">&quot;    python worker_refine.py --job-id JOB_ID --n-jobs N_JOBS</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a>        <span class="s2">&quot;*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a>        <span class="s1">&#39;&quot;&quot;&quot;</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a>        <span class="s2">&quot;import argparse</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a>        <span class="s2">&quot;import importlib</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a>        <span class="s2">&quot;from pathlib import Path</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a>        <span class="s2">&quot;import h5py</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a>        <span class="s2">&quot;from nrxrdct.io import save_xy_file</span><span class="se">\n\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a>        <span class="s2">&quot;def main() -&gt; None:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a>        <span class="s2">&quot;    parser = argparse.ArgumentParser()</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a>        <span class="s1">&#39;    parser.add_argument(&quot;--job-id&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a>        <span class="s1">&#39;    parser.add_argument(&quot;--n-jobs&quot;, type=int, required=True)</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a>        <span class="s2">&quot;    args = parser.parse_args()</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a>        <span class="s2">&quot;    volume_hdf5 = Path(VOLUME_HDF5)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a>        <span class="s1">&#39;    with h5py.File(volume_hdf5, &quot;r&quot;) as h:</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a>        <span class="s1">&#39;        volume = h[&quot;volume&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a>        <span class="s1">&#39;        tth = h[&quot;tth&quot;][:]</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a>        <span class="s1">&#39;        mask = h[&quot;mask&quot;][:] if &quot;mask&quot; in h else None</span><span class="se">\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>        <span class="s2">&quot;    folder = Path(FOLDER_ABS)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a>        <span class="s2">&quot;    name = SAMPLE_NAME</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a>        <span class="s2">&quot;    nx, ny = NX, NY</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="s2">&quot;    all_indexes = [</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a>        <span class="s2">&quot;        (ii, jj)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="s2">&quot;        for ii in range(nx)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="s2">&quot;        for jj in range(ny)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="s2">&quot;        if mask is None or mask[ii, jj]</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="s2">&quot;    ]</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="s2">&quot;    chunk_size = -(-len(all_indexes) // args.n_jobs)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="s2">&quot;    start = args.job_id * chunk_size</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="s2">&quot;    chunk = all_indexes[start : start + chunk_size]</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a>        <span class="s2">&quot;    mod = importlib.import_module(REFINING_MODULE)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a>        <span class="s2">&quot;    refine_fn = getattr(mod, REFINING_FUNCTION)</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="s2">&quot;    for ii, jj in chunk:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a>        <span class="s1">&#39;        xy_file = folder / &quot;xy_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.xy&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="s1">&#39;        gpx_file = folder / &quot;gpx_files&quot; / f&quot;</span><span class="si">{name}</span><span class="s1">_</span><span class="si">{ii:04}</span><span class="s1">_</span><span class="si">{jj:04}</span><span class="s1">.gpx&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>        <span class="s2">&quot;        if not xy_file.exists():</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="s2">&quot;            save_xy_file(tth, volume[:, ii, jj], None, str(xy_file), verbose=False)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="s2">&quot;        try:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="s2">&quot;            refine_fn(xy_file, gpx_file)</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="s2">&quot;        except Exception as exc:</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="s1">&#39;            print(f&quot;Voxel (</span><span class="si">{ii}</span><span class="s1">, </span><span class="si">{jj}</span><span class="s1">) failed: </span><span class="si">{exc}</span><span class="s1">&quot;)</span><span class="se">\n\n\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="s1">&#39;if __name__ == &quot;__main__&quot;:</span><span class="se">\n</span><span class="s1">&#39;</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="s2">&quot;    main()</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="p">)</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="n">worker_code</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">worker_template</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;VOLUME_HDF5&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">volume_abs</span><span class="p">))</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;FOLDER_ABS&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">folder_abs</span><span class="p">))</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;SAMPLE_NAME&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;NX, NY&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nx</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">ny</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_MODULE&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_module</span><span class="p">))</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;REFINING_FUNCTION&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">refining_function</span><span class="p">))</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>    <span class="p">)</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>    <span class="n">submit_script</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="s2">&quot;#!/bin/bash</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --job-name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_refine</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --array=0-</span><span class="si">{</span><span class="n">n_array_jobs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --mem=</span><span class="si">{</span><span class="n">mem</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --time=</span><span class="si">{</span><span class="n">time_limit</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --partition=</span><span class="si">{</span><span class="n">partition</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a>        <span class="sa">f</span><span class="s2">&quot;#SBATCH --output=</span><span class="si">{</span><span class="n">folder_abs</span><span class="si">}</span><span class="s2">/slurm_%A_%a.out</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a>        <span class="s2">&quot;# Conda environment activation</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a>        <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;source </span><span class="si">{</span><span class="n">conda_base</span><span class="si">}</span><span class="s2">/etc/profile.d/conda.sh</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">conda_base</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a>        <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;conda activate </span><span class="si">{</span><span class="n">conda_env</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a>        <span class="sa">f</span><span class="s2">&quot;python </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">worker_path</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="si">}</span><span class="s2"> </span><span class="se">\\\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a>        <span class="s2">&quot;    --job-id $SLURM_ARRAY_TASK_ID </span><span class="se">\\\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a>        <span class="sa">f</span><span class="s2">&quot;    --n-jobs </span><span class="si">{</span><span class="n">n_array_jobs</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a>    <span class="p">)</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a>    <span class="n">worker_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">worker_code</span><span class="p">)</span>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a>    <span class="n">submit_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">submit_script</span><span class="p">)</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Worker script : </span><span class="si">{</span><span class="n">worker_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit script : </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Submit with   : sbatch </span><span class="si">{</span><span class="n">submit_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a>    <span class="k">return</span> <span class="n">worker_path</span><span class="p">,</span> <span class="n">submit_path</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

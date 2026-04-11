@@ -656,6 +656,7 @@ class ReconstructedVolume:
         volume_hdf5: Path,
         refining_module: str,
         refining_function: str,
+        refining_module_dir: str = "",
         n_array_jobs: int = 500,
         conda_env: str = "nrxrdct",
         conda_base: str = "",
@@ -691,9 +692,14 @@ class ReconstructedVolume:
             volume_hdf5 (Path): HDF5 file with keys ``"volume"`` and ``"tth"``
                 (and optionally ``"mask"``).
             refining_module (str): Importable Python module containing
-                *refining_function* (e.g. ``"my_project.refinements"``).
+                *refining_function* (e.g. ``"refine_volume"``).
             refining_function (str): Name of a module-level function with
                 signature ``f(xy_file: Path, gpx_file: Path)``.
+            refining_module_dir (str, optional): Absolute path to the directory
+                containing *refining_module*, e.g. ``"/home/user/scripts"``.
+                Inserted into ``sys.path`` at the top of the worker so the
+                module can be found.  Leave empty if the module is already
+                installed or on the default path (default ``""``).
             n_array_jobs (int, optional): Number of SLURM array elements
                 (default 500; one element covers ~500 voxels for 500×500).
             conda_env (str, optional): Conda environment to activate
@@ -737,9 +743,11 @@ class ReconstructedVolume:
             '"""\n\n'
             "import argparse\n"
             "import importlib\n"
+            "import sys\n"
             "from pathlib import Path\n\n"
             "import h5py\n\n"
-            "from nrxrdct.io import save_xy_file\n\n\n"
+            + (f'sys.path.insert(0, {repr(refining_module_dir)})\n\n' if refining_module_dir else "")
+            + "from nrxrdct.io import save_xy_file\n\n\n"
             "def main() -> None:\n"
             "    parser = argparse.ArgumentParser()\n"
             '    parser.add_argument("--job-id", type=int, required=True)\n'

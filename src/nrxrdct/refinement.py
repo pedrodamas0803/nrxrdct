@@ -988,6 +988,34 @@ class BaseRefinement(Scan):
             self.gpx.save()
             print("Cell parameters frozen after refinement.")
 
+    def freeze_cell(self, phase: str | list[str] | None = None) -> None:
+        """
+        Fixes the unit-cell parameters for one or more phases so they are not
+        varied in subsequent refinement cycles.
+
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to
+                freeze.  ``None`` (default) applies to all phases in the
+                project.  Names must match those passed to :meth:`add_phase`.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
+            ph.set_refinements({"Cell": False})
+            print(f"Cell parameters frozen for phase '{ph.name}'")
+        self.gpx.save()
+
     def refine_preferential_orientation(
         self,
         model: str = "MD",

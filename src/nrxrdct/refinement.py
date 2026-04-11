@@ -92,6 +92,13 @@ class BaseRefinement(Scan):
             polarization=polarization, wavelength=self.wavelength
         )
 
+        print(60 * "=")
+        print("=== If you need more information on the parameters, see the link:")
+        print(
+            "https://gsas-ii.readthedocs.io/en/latest/objvarorg.html#parameter-names-in-gsas-ii"
+        )
+        print(60 * "=")
+
     def load_model(self, gpx_file: Path) -> tuple:
         """
         Load an existing GSAS-II project from a ``.gpx`` file.
@@ -2610,26 +2617,21 @@ class BaseRefinement(Scan):
         """Print all currently refined variables with their values and esds."""
         cov_data = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
-        parm_dict = cov_data.get("parmDict", {})
-        cov_matrix = cov_data.get("covMatrix")
+        variables = cov_data.get("variables", [])
+        sigmas    = cov_data.get("sig", [])
 
         if not vary_list:
             print("No refined variables found (run a refinement first).")
             return
-
-        sigmas = (
-            np.sqrt(np.diag(cov_matrix))
-            if cov_matrix is not None and len(cov_matrix)
-            else [None] * len(vary_list)
-        )
 
         print("\n" + "=" * 60)
         print("REFINED VARIABLES")
         print("=" * 60)
         print(f"  {'Parameter':<40} {'Value':>14} {'Esd':>14}")
         print("  " + "-" * 68)
-        for var, sig in zip(vary_list, sigmas):
-            val = parm_dict.get(var, float("nan"))
+        for i, var in enumerate(vary_list):
+            val     = variables[i] if i < len(variables) else float("nan")
+            sig     = sigmas[i]    if i < len(sigmas)    else None
             esd_str = f"{sig:.6g}" if sig is not None else "n/a"
             print(f"  {var:<40} {val:>14.6g} {esd_str:>14}")
         print(f"\n  Total refined parameters: {len(vary_list)}")
@@ -2766,6 +2768,112 @@ class BaseRefinement(Scan):
                     f" {atom.occupancy:6.4f} {atom.mult:5d}"
                     f" {atom.adp_flag:>4}  {atom.refinement_flags!r}"
                 )
+
+    def print_parameter_info(self, category: str | None = None) -> None:
+        """
+        Print a reference summary of every GSAS-II refinable parameter,
+        grouped by category.
+
+        Parameters follow the naming pattern ``p:h:<var>:n``, where ``p`` is
+        the phase number, ``h`` is the histogram number, ``<var>`` is the
+        variable name shown below, and ``n`` is the atom index.  Components
+        that do not apply are omitted (e.g. ``:h:<var>`` for histogram-only
+        parameters).
+
+        Args:
+            category (str or None, optional): Restrict output to one category.
+                One of ``"instrument"``, ``"hap"``, ``"phase"``, ``"sample"``,
+                or ``"background"``.  ``None`` (default) prints all categories.
+        """
+        _SECTIONS = {
+            "instrument": (
+                "Instrument Parameters (CW)",
+                [
+                    ("Lam",         "Wavelength",                                                   "Å"),
+                    ("Zero",        "Two-theta zero-point correction",                              "degrees"),
+                    ("U",           "Cagliotti Gaussian – U  (FWHM²=Utan²θ+Vtanθ+W)",             "degrees²"),
+                    ("V",           "Cagliotti Gaussian – V",                                       "degrees²"),
+                    ("W",           "Cagliotti Gaussian – W",                                       "degrees²"),
+                    ("X",           "Lorentzian broadening – X  (scales as 1/cosθ)",               "degrees"),
+                    ("Y",           "Lorentzian broadening – Y  (scales as tanθ)",                 "degrees"),
+                    ("Z",           "Lorentzian broadening – Z  (constant term)",                  "degrees"),
+                    ("SH/L",        "Finger-Cox-Jephcoat axial asymmetry = S/L + H/L",             "dimensionless"),
+                    ("Polariz.",    "Beam polarization fraction",                                   "0 – 1"),
+                    ("I(L2)/I(L1)","Kα₂/Kα₁ intensity ratio (dual-wavelength sources only)",      "dimensionless"),
+                ],
+            ),
+            "hap": (
+                "HAP Parameters  (Histogram-And-Phase)",
+                [
+                    ("Scale",      "Phase fraction scale factor",                                        "dimensionless"),
+                    ("Extinction", "Primary extinction coefficient",                                     "dimensionless"),
+                    ("HStrain",    "Anisotropic strain tensor Dij – hkl-dependent peak shifts",         "Å⁻²"),
+                    ("Mustrain",   "Microstrain broadening (isotropic / uniaxial / generalized)",        "×10⁻⁶"),
+                    ("Size",       "Crystallite size / Scherrer broadening (isotropic / uniaxial / ellipsoidal)", "Å"),
+                    ("Pref.Ori.", "Preferred orientation: March-Dollase ratio or SH coefficients",      "dimensionless"),
+                    ("LeBail",     "Le Bail extraction flag – bypasses structure factors (bool)",        "—"),
+                ],
+            ),
+            "phase": (
+                "Phase Parameters",
+                [
+                    ("Cell / a", "Lattice length a",    "Å"),
+                    ("Cell / b", "Lattice length b",    "Å"),
+                    ("Cell / c", "Lattice length c",    "Å"),
+                    ("Cell / α", "Lattice angle alpha", "degrees"),
+                    ("Cell / β", "Lattice angle beta",  "degrees"),
+                    ("Cell / γ", "Lattice angle gamma", "degrees"),
+                    ("Cell / V", "Unit-cell volume",    "Å³"),
+                ],
+            ),
+            "sample": (
+                "Sample Parameters",
+                [
+                    ("Scale",         "Overall histogram scale factor",                          "dimensionless"),
+                    ("Absorption",    "Linear absorption coeff. μr (Debye–Scherrer only)",       "dimensionless"),
+                    ("DisplaceX",     "Sample displacement perpendicular to beam",               "μm"),
+                    ("DisplaceY",     "Sample displacement along beam direction",                "μm"),
+                    ("SurfaceRoughA", "Surface roughness A – Surotti 1972 (Bragg–Brentano only)","dimensionless"),
+                    ("SurfaceRoughB", "Surface roughness B (Bragg–Brentano only)",               "dimensionless"),
+                ],
+            ),
+            "background": (
+                "Background Parameters",
+                [
+                    ("Coefficients", "Background function coefficients (e.g. Chebyshev polynomial)", "counts"),
+                    ("Debye terms",  "Optional diffuse Debye scattering terms",                       "—"),
+                    ("Peaks",        "Optional background peak positions and widths",                  "—"),
+                ],
+            ),
+        }
+
+        categories = (
+            list(_SECTIONS.keys())
+            if category is None
+            else [category.lower()]
+        )
+
+        for cat in categories:
+            if cat not in _SECTIONS:
+                raise ValueError(
+                    f"Unknown category '{cat}'. "
+                    f"Valid options: {list(_SECTIONS)}"
+                )
+            title, params = _SECTIONS[cat]
+            col_w  = max(len(name)  for name, _,  _     in params) + 2
+            unit_w = max(len(units) for _,    _, units   in params) + 2
+            print("\n" + "=" * 72)
+            print(title)
+            print("=" * 72)
+            print(f"  {'Parameter':<{col_w}} {'Units':<{unit_w}} Description")
+            print(f"  {'-'*col_w} {'-'*unit_w} {'-'*20}")
+            for name, desc, units in params:
+                print(f"  {name:<{col_w}} {units:<{unit_w}} {desc}")
+
+        print()
+        print("Naming convention:  p:h:<var>:n")
+        print("  p = phase number   h = histogram number   n = atom number")
+        print("  Omit any component that does not apply.")
 
     def print_phases(self, phase: str | None = None) -> None:
         """

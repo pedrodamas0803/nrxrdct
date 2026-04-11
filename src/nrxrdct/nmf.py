@@ -61,7 +61,7 @@ class HyperspectralNMF:
     ):
         """
         Args:
-            volume (np.ndarray): 3-D array of shape ``(nx, ny, n_channels)``
+            volume (np.ndarray): 3-D array of shape ``(n_channels, nx, ny)``
                 containing the hyperspectral volume.
             n_components (int): Number of NMF components (endmembers) to extract.
             spectral_axis (np.ndarray): 1-D array of spectral axis values
@@ -86,8 +86,8 @@ class HyperspectralNMF:
                 input are clipped to zero before fitting (default ``True``).
         """
         self.vol = volume
-        self.X = volume.reshape((volume.shape[0] * volume.shape[1], volume.shape[2]))
-        self.map_shape = (volume.shape[0], volume.shape[1])
+        self.X = volume.transpose(1, 2, 0).reshape((volume.shape[1] * volume.shape[2], volume.shape[0]))
+        self.map_shape = (volume.shape[1], volume.shape[2])
         self.n_comp = n_components
         # self.comp_map = np.empty((self.n_comp, self.map_shape[0], self.map_shape[1]), dtype=float)
         self.x_spectra = spectral_axis

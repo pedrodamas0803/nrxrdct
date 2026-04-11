@@ -1137,6 +1137,58 @@ class BaseRefinement(Scan):
             print(f"Cell parameters frozen for phase '{ph.name}'")
         self.gpx.save()
 
+    def freeze_HAP_parameter(
+        self,
+        parameters: str | list[str],
+        phase: str | list[str] | None = None,
+    ) -> None:
+        """
+        Fix one or more HAP parameters for one or more phases so they are
+        not varied in subsequent refinement cycles.
+
+        Args:
+            parameters (str or list of str): HAP parameter name(s) to freeze.
+                Valid values: ``"HStrain"``, ``"Size"``, ``"Mustrain"``,
+                ``"Pref.Ori."``, ``"Scale"``, ``"Extinction"``.
+            phase (str, list of str, or None, optional): Phase name(s) to
+                apply the freeze to.  ``None`` (default) applies to all
+                phases in the project.  Names must match those passed to
+                :meth:`add_phase`.
+
+        Raises:
+            ValueError: If an unknown parameter name or phase name is given.
+        """
+        _VALID = {"HStrain", "Size", "Mustrain", "Pref.Ori.", "Scale", "Extinction"}
+
+        params = [parameters] if isinstance(parameters, str) else list(parameters)
+        for p in params:
+            if p not in _VALID:
+                raise ValueError(
+                    f"Unknown HAP parameter '{p}'. "
+                    f"Valid options: {sorted(_VALID)}"
+                )
+
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        freeze_dict = {p: False for p in params}
+        for ph in targets:
+            ph.set_HAP_refinements(freeze_dict, histograms=[self.hist])
+            print(
+                f"Frozen {params} for phase '{ph.name}'"
+            )
+        self.gpx.save()
+
     def refine_preferential_orientation(
         self,
         model: str = "MD",
@@ -2613,9 +2665,60 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print("All parameters fixed.")
 
+    # ------------------------------------------------------------------
+    # Units lookup for print_refined_variables
+    # Keys are matched against the <var> token of the p:h:<var>:n name.
+    # Prefix matches (e.g. "Back;", "D1") are tried after exact matches.
+    # ------------------------------------------------------------------
+    _VAR_UNITS: dict[str, str] = {
+        # Instrument (CW)
+        "Lam": "Å",         "Lam1": "Å",        "Lam2": "Å",
+        "Zero": "deg",
+        "U": "deg²",        "V": "deg²",         "W": "deg²",
+        "X": "deg",         "Y": "deg",          "Z": "deg",
+        "SH/L": "—",        "Polariz.": "—",     "I(L2)/I(L1)": "—",
+        # HAP – scale / extinction
+        "Scale": "—",       "eA": "—",
+        # HAP – HStrain Dij
+        "D11": "Å⁻²",      "D22": "Å⁻²",       "D33": "Å⁻²",
+        "D12": "Å⁻²",      "D13": "Å⁻²",       "D23": "Å⁻²",
+        # HAP – Size (isotropic;i, uniaxial;u, generalized coefficients)
+        "Size;i": "Å",      "Size;u": "Å",       "Size;mx": "Å",
+        # HAP – Mustrain
+        "Mustrain;i": "µε", "Mustrain;u": "µε",  "Mustrain;mx": "µε",
+        # HAP – preferred orientation (March-Dollase ratio)
+        "MD": "—",
+        # Background coefficients  (prefix "Back;" matched below)
+        # Cell parameters
+        "a": "Å",           "b": "Å",            "c": "Å",
+        "alpha": "deg",     "beta": "deg",       "gamma": "deg",
+        # Atom parameters
+        "dAx": "frac",      "dAy": "frac",       "dAz": "frac",
+        "AUiso": "Å²",      "Afrac": "—",
+        "AU11": "Å²",       "AU22": "Å²",        "AU33": "Å²",
+        "AU12": "Å²",       "AU13": "Å²",        "AU23": "Å²",
+    }
+    _VAR_UNITS_PREFIX: list[tuple[str, str]] = [
+        ("Back;",     "cts"),   # background polynomial coefficients
+        ("Mustrain;", "µε"),    # generalised mustrain coefficients
+        ("Size;",     "Å"),     # generalised size coefficients
+        ("MD;",       "—"),     # March-Dollase per-reflection
+    ]
+
+    @staticmethod
+    def _var_units(var_token: str) -> str:
+        """Return the unit string for a GSAS-II <var> token."""
+        exact = BaseRefinement._VAR_UNITS.get(var_token)
+        if exact is not None:
+            return exact
+        for prefix, unit in BaseRefinement._VAR_UNITS_PREFIX:
+            if var_token.startswith(prefix):
+                return unit
+        return "—"
+
     def print_refined_variables(self) -> None:
-        """Print all currently refined variables with their values and esds."""
-        cov_data = self.gpx["Covariance"]["data"]
+        """Print all currently refined variables with their values, esds, units, and status."""
+        cov_data  = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
         variables = cov_data.get("variables", [])
         sigmas    = cov_data.get("sig", [])
@@ -2624,16 +2727,26 @@ class BaseRefinement(Scan):
             print("No refined variables found (run a refinement first).")
             return
 
-        print("\n" + "=" * 60)
+        # Build set of frozen variable name strings
+        controls = self.gpx["Controls"]["data"]
+        frozen_raw = controls.get("parmFrozen", {}).get("FrozenList", [])
+        frozen_set = {str(v) for v in frozen_raw}
+
+        print("\n" + "=" * 75)
         print("REFINED VARIABLES")
-        print("=" * 60)
-        print(f"  {'Parameter':<40} {'Value':>14} {'Esd':>14}")
-        print("  " + "-" * 68)
+        print("=" * 75)
+        print(f"  {'Parameter':<36} {'Value':>14} {'Esd':>14} {'Units':>8}  Status")
+        print("  " + "-" * 73)
         for i, var in enumerate(vary_list):
             val     = variables[i] if i < len(variables) else float("nan")
             sig     = sigmas[i]    if i < len(sigmas)    else None
             esd_str = f"{sig:.6g}" if sig is not None else "n/a"
-            print(f"  {var:<40} {val:>14.6g} {esd_str:>14}")
+            status  = "Frozen" if var in frozen_set else "Free"
+            # extract the <var> token from p:h:<var>:n
+            parts     = var.split(":")
+            var_token = parts[2] if len(parts) >= 3 else var
+            units     = self._var_units(var_token)
+            print(f"  {var:<36} {val:>14.6g} {esd_str:>14} {units:>8}  {status}")
         print(f"\n  Total refined parameters: {len(vary_list)}")
 
     def print_covariance_matrix(self) -> None:

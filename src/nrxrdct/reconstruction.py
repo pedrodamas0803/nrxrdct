@@ -428,12 +428,7 @@ class ReconstructedVolume:
         nx, ny = self.volume.shape[1], self.volume.shape[2]
         if self.mask is None:
             return [(ii, jj) for ii in range(nx) for jj in range(ny)]
-        return [
-            (ii, jj)
-            for ii in range(nx)
-            for jj in range(ny)
-            if self.mask[ii, jj]
-        ]
+        return [(ii, jj) for ii in range(nx) for jj in range(ny) if self.mask[ii, jj]]
 
     def write_xy_files(self) -> None:
         """Write one .xy file per active (unmasked) voxel sequentially, with a tqdm progress bar."""
@@ -448,7 +443,9 @@ class ReconstructedVolume:
             )
         t1 = time.time()
         print(60 * "=")
-        print(f"Finished writing {len(active)} xy files to {self.folder} in {t1-t0:.2f} s.")
+        print(
+            f"Finished writing {len(active)} xy files to {self.folder} in {t1-t0:.2f} s."
+        )
         print(60 * "=")
 
     def write_xy_files_parallel(self) -> None:
@@ -494,7 +491,9 @@ class ReconstructedVolume:
 
         print(f"Refined models in {time.time()-t0:.2f} s.")
 
-    def refine_models_parallel(self, refining_function: Callable[[Path, Path], Any]) -> None:
+    def refine_models_parallel(
+        self, refining_function: Callable[[Path, Path], Any]
+    ) -> None:
         """
         Run a GSAS-II refinement function on every voxel using a process pool.
 
@@ -539,7 +538,11 @@ class ReconstructedVolume:
 
         with concurrent.futures.ProcessPoolExecutor(NTHREADS) as pool:
             values = list(
-                tqdm(pool.map(_get_Rwp_ii_jj, args, chunksize=64), total=len(args), desc="Rwp map")
+                tqdm(
+                    pool.map(_get_Rwp_ii_jj, args, chunksize=64),
+                    total=len(args),
+                    desc="Rwp map",
+                )
             )
 
         result = np.zeros((nx, ny), dtype=np.float32)
@@ -634,16 +637,16 @@ class ReconstructedVolume:
                 )
             )
 
-        rwp_map  = np.zeros((nx, ny), dtype=np.float32)
-        a_map    = np.zeros((nx, ny), dtype=np.float32)
-        b_map    = np.zeros((nx, ny), dtype=np.float32)
-        c_map    = np.zeros((nx, ny), dtype=np.float32)
+        rwp_map = np.zeros((nx, ny), dtype=np.float32)
+        a_map = np.zeros((nx, ny), dtype=np.float32)
+        b_map = np.zeros((nx, ny), dtype=np.float32)
+        c_map = np.zeros((nx, ny), dtype=np.float32)
         size_map = np.zeros((nx, ny), dtype=np.float32)
         for (ii, jj), (rwp, a, b, c, sz) in zip(active, values):
-            rwp_map[ii, jj]  = rwp
-            a_map[ii, jj]    = a
-            b_map[ii, jj]    = b
-            c_map[ii, jj]    = c
+            rwp_map[ii, jj] = rwp
+            a_map[ii, jj] = a
+            b_map[ii, jj] = b
+            c_map[ii, jj] = c
             size_map[ii, jj] = sz
         print(f"Fetched all maps in {time.time()-t0:.2f} s.")
         return rwp_map, a_map, b_map, c_map, size_map
@@ -656,6 +659,7 @@ class ReconstructedVolume:
         n_array_jobs: int = 500,
         conda_env: str = "nrxrdct",
         conda_base: str = "",
+        python_executable: str = "",
         mem: str = "4G",
         time_limit: str = "02:00:00",
         partition: str = "all",
@@ -699,6 +703,14 @@ class ReconstructedVolume:
                 When provided, ``<conda_base>/etc/profile.d/conda.sh`` is sourced
                 before ``conda activate`` so the environment works in non-interactive
                 SLURM batch shells.  Leave empty to skip (default ``""``).
+            python_executable (str, optional): Absolute path to the Python binary
+                inside your conda environment, e.g.
+                ``"/path/to/envs/nrxrdct/bin/python"``.  When set, the conda
+                activation block is skipped entirely and this binary is used
+                directly — the most robust option on clusters where
+                ``conda activate`` is unreliable.  Find it with ``which python``
+                while your environment is active.  Leave empty to use conda
+                activation instead (default ``""``).
             mem (str, optional): Memory per job (default ``"4G"``).
             time_limit (str, optional): Wall-time limit (default ``"02:00:00"``).
             partition (str, optional): SLURM partition (default ``"all"``).
@@ -765,8 +777,7 @@ class ReconstructedVolume:
             "    main()\n"
         )
         worker_code = (
-            worker_template
-            .replace("VOLUME_HDF5", repr(volume_abs))
+            worker_template.replace("VOLUME_HDF5", repr(volume_abs))
             .replace("FOLDER_ABS", repr(folder_abs))
             .replace("SAMPLE_NAME", repr(self.name))
             .replace("NX, NY", f"{nx}, {ny}")
@@ -781,13 +792,23 @@ class ReconstructedVolume:
             f"#SBATCH --mem={mem}\n"
             f"#SBATCH --time={time_limit}\n"
             f"#SBATCH --partition={partition}\n"
-            f"#SBATCH --output={folder_abs}/slurm_%A_%a.out\n\n"
-            "# Conda environment activation\n"
-            + (f"source {conda_base}/etc/profile.d/conda.sh\n" if conda_base else "")
-            + f"conda activate {conda_env}\n\n"
-            f"python {str(worker_path.resolve())} \\\n"
-            "    --job-id $SLURM_ARRAY_TASK_ID \\\n"
-            f"    --n-jobs {n_array_jobs}\n"
+            f"#SBATCH --output={folder_abs}/slurm_logs/slurm_%A_%a.out\n\n"
+            + (
+                f"{python_executable} {str(worker_path.resolve())} \\\n"
+                if python_executable
+                else (
+                    "# Conda environment activation\n"
+                    + (
+                        f"source {conda_base}/etc/profile.d/conda.sh\n"
+                        if conda_base
+                        else ""
+                    )
+                    + f"conda activate {conda_env}\n\n"
+                    f"python {str(worker_path.resolve())} \\\n"
+                )
+            )
+            + "    --job-id $SLURM_ARRAY_TASK_ID \\\n"
+            + f"    --n-jobs {n_array_jobs}\n"
         )
 
         worker_path.write_text(worker_code)
@@ -848,10 +869,10 @@ def _get_all_maps_ii_jj(args: tuple) -> Tuple[float, float, float, float, float]
     try:
         gpx_filename = folder / "gpx_files" / f"{name}_{ii:04}_{jj:04}.gpx"
         g, hists, phases = _load_data_from_gpx(gpx_filename)
-        wR   = hists[0].get_wR()
+        wR = hists[0].get_wR()
         cell = phases[0].get_cell()
-        hap  = phases[0].data["Histograms"][hists[0].name]
-        sz   = hap["Size"]["Size"]
+        hap = phases[0].data["Histograms"][hists[0].name]
+        sz = hap["Size"]["Size"]
         return wR, cell["length_a"], cell["length_b"], cell["length_c"], sz
     except Exception:
         return np.nan, np.nan, np.nan, np.nan, np.nan

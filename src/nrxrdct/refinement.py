@@ -2489,6 +2489,58 @@ class BaseRefinement(Scan):
         for i, var in enumerate(vary_list):
             print(f"    {i:3d}  {var}")
 
+    def plot_covariance_matrix(
+        self, show: bool = True, figsize: tuple = (12, 9)
+    ) -> tuple:
+        """
+        Plot the correlation matrix (normalised covariance) as a heatmap.
+
+        The correlation matrix is derived by normalising the covariance matrix
+        so that diagonal entries are 1 and off-diagonal entries are Pearson
+        correlation coefficients in [-1, 1].
+
+        Args:
+            show (bool, optional): Call ``plt.show()`` after creating the figure
+                (default ``True``).
+            figsize (tuple of (float, float), optional): Figure size in inches as
+                ``(width, height)`` (default ``(12, 9)``).
+
+        Returns:
+            tuple: ``(fig, ax)`` — the :class:`matplotlib.figure.Figure` and
+            :class:`matplotlib.axes.Axes` objects so the caller can further
+            customise or save the plot.
+        """
+        cov_data = self.gpx["Covariance"]["data"]
+        vary_list = cov_data.get("varyList", [])
+        cov_matrix = cov_data.get("covMatrix")
+
+        if not vary_list or cov_matrix is None or not len(cov_matrix):
+            raise RuntimeError("No covariance data found (run a refinement first).")
+
+        sigmas = np.sqrt(np.diag(cov_matrix))
+        with np.errstate(invalid="ignore"):
+            corr = cov_matrix / np.outer(sigmas, sigmas)
+        corr = np.nan_to_num(corr)
+
+        n = len(vary_list)
+        fig, ax = plt.subplots(figsize=figsize)
+
+        im = ax.imshow(corr, vmin=-1, vmax=1, cmap="coolwarm", aspect="auto")
+        fig.colorbar(im, ax=ax, label="Correlation coefficient")
+
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(vary_list, rotation=90, fontsize=8)
+        ax.set_yticklabels(vary_list, fontsize=8)
+        ax.set_title("Correlation matrix")
+
+        fig.tight_layout()
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
     def print_atoms(self, phase: str | list[str] | None = None) -> None:
         """
         Print a table of all atoms in one or more phases with their current
@@ -2628,7 +2680,10 @@ class BaseRefinement(Scan):
                         )
 
     def plot_results(
-        self, image_path: Path = "calibration_plot.png", show: bool = True
+        self,
+        image_path: Path = "calibration_plot.png",
+        show: bool = True,
+        figsize: tuple = (12, 9),
     ) -> None:
         """
         Plot the Rietveld fit (observed / calculated / difference) and save to disk.
@@ -2636,13 +2691,15 @@ class BaseRefinement(Scan):
         Args:
             image_path (Path, optional): Output image file (default ``"calibration_plot.png"``).
             show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
+            figsize (tuple of (float, float), optional): Figure size in inches as
+                ``(width, height)`` (default ``(12, 9)``).
         """
         wR = self.hist.get_wR()
         print("\n" + "=" * 60)
         print("Generating calibration plot")
         print("=" * 60)
 
-        fig = plt.figure(figsize=(15, 10))
+        fig = plt.figure(figsize=figsize)
         gs = gridspec.GridSpec(
             2, 1, figure=fig, height_ratios=[3, 1], hspace=0.08, wspace=0.35
         )
@@ -2925,7 +2982,9 @@ class InstrumentCalibration(BaseRefinement):
             "  - U, V, SH/L remain fixed at 0 / 0.0001 for synchrotron and 2D detectors"
         )
 
-    def plot_calibration_results(self, show: bool = True) -> None:
+    def plot_calibration_results(
+        self, show: bool = True, figsize: tuple = (12, 9)
+    ) -> None:
         """
         Generate and save a five-panel calibration diagnostic figure.
 
@@ -2999,6 +3058,8 @@ class InstrumentCalibration(BaseRefinement):
         Args:
             show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
                 Set to ``False`` when running in a batch/headless environment.
+            figsize (tuple of (float, float), optional): Figure size in inches as
+                ``(width, height)`` (default ``(12, 9)``).
 
         Note:
             The output image is written to the path set by
@@ -3020,7 +3081,7 @@ class InstrumentCalibration(BaseRefinement):
         print("Generating calibration plot")
         print("=" * 60)
 
-        fig = plt.figure(figsize=(15, 10))
+        fig = plt.figure(figsize=figsize)
         gs = gridspec.GridSpec(
             3, 2, figure=fig, height_ratios=[3, 1, 1.2], hspace=0.08, wspace=0.35
         )

@@ -130,7 +130,7 @@ class BaseRefinement(Scan):
         self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
         self.hist = self.gpx.add_powder_histogram(
-            datafile=self.xy_file, iparams=self.param_file_init, phases="all"
+            datafile=self.xy_file, iparams=self.param_file, phases="all"
         )
         self.hist["data"][0]["Limits"] = [self.low_lim, self.high_lim]
         self.gpx.save()
@@ -427,7 +427,9 @@ class BaseRefinement(Scan):
         lam_val = self.hist["Instrument Parameters"][0]["Lam"][1]
         energy_kev = 12.398 / lam_val
         frozen_info = " (parameter frozen)" if freeze else ""
-        print(f"Wavelength refinement done: Lam = {lam_val:.8f} Å  ({energy_kev:.4f} keV){frozen_info}")
+        print(
+            f"Wavelength refinement done: Lam = {lam_val:.8f} Å  ({energy_kev:.4f} keV){frozen_info}"
+        )
 
     def print_instrument_parameters(self) -> None:
         """
@@ -605,7 +607,9 @@ class BaseRefinement(Scan):
         status = "free for refinement" if refine else "fixed"
         print(f"Absorption set to {absorption:.6f} ({status})")
 
-    def set_sample_parameter(self, parameter: str, value: float, freeze: bool = False) -> None:
+    def set_sample_parameter(
+        self, parameter: str, value: float, freeze: bool = False
+    ) -> None:
         """
         Set a sample parameter to a given value and optionally freeze it.
 

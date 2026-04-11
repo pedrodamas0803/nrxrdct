@@ -5,6 +5,7 @@ Functions cover reading and writing sinograms, reconstructed volumes, and
 integrated patterns (HDF5 / plain-text .xy), as well as generating GSAS-II
 instrument parameter files (``.instprm``).
 """
+
 import os
 from pathlib import Path
 
@@ -68,7 +69,9 @@ def get_array_from_file(
     return out
 
 
-def read_sinogram_from_file(input_file: Path, slicing: tuple | None = None) -> np.ndarray:
+def read_sinogram_from_file(
+    input_file: Path, slicing: tuple | None = None
+) -> np.ndarray:
     """
     Read a sinogram from an HDF5 file, optionally with sub-region slicing.
 
@@ -208,7 +211,6 @@ def write_starting_instrument_pars(
         return output_file
     with open(str(output_file), "w") as f:
         f.writelines(lines)
-    print(f"Starting instprm written to:\n  {str(output_file)}")
 
     return output_file
 

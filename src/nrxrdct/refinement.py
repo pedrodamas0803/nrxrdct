@@ -942,14 +942,51 @@ class BaseRefinement(Scan):
             self.gpx.do_refinements([{}])
             print(f"Refined {param} ({profile} profile)")
 
-    def free_and_refine_cell(self) -> None:
+    def free_and_refine_cell(
+        self,
+        phase: str | list[str] | None = None,
+        freeze_after: bool = False,
+    ) -> None:
         """
-        Frees and performs cell refinement. Tends to converge fast for higher symmetries provided that the spacegroup is correctly given.
-        """
+        Frees and performs cell refinement for one or more phases.
 
-        self.phase.set_refinements({"Cell": True})
+        Tends to converge fast for higher symmetries provided that the
+        spacegroup is correctly given.
+
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to
+                refine the unit cell for.  ``None`` (default) applies to all
+                phases in the project.  Names must match those passed to
+                :meth:`add_phase`.
+            freeze_after (bool, optional): If ``True``, fix the cell parameters
+                again after the refinement cycle so they are not varied in
+                subsequent steps (default ``False``).
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        for ph in targets:
+            ph.set_refinements({"Cell": True})
         self.gpx.save()
         self.gpx.do_refinements([{}])
+        for ph in targets:
+            print(f"Cell refined for phase '{ph.name}'")
+
+        if freeze_after:
+            for ph in targets:
+                ph.set_refinements({"Cell": False})
+            self.gpx.save()
+            print("Cell parameters frozen after refinement.")
 
     def refine_preferential_orientation(
         self,

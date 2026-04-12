@@ -1584,6 +1584,7 @@ class ReconstructedVolume:
         window: float,
         model: str = "pseudo_voigt",
         bg_method: str = "snip",
+        fit_mask: np.ndarray | None = None,
         n_array_jobs: int = 500,
         conda_env: str = "nrxrdct",
         conda_base: str = "",
@@ -1610,6 +1611,9 @@ class ReconstructedVolume:
                 if vol.mask is not None:
                     f["mask"] = vol.mask
 
+        When *fit_mask* is provided it is written to the same HDF5 file under
+        the key ``"fit_mask"`` automatically — no manual step required.
+
         Args:
             volume_hdf5 (Path): HDF5 file containing ``"volume"``, ``"tth"``,
                 and optionally ``"mask"``.
@@ -1620,6 +1624,11 @@ class ReconstructedVolume:
             bg_method (str): Background algorithm passed to
                 :func:`~nrxrdct.utils.calculate_xrd_baseline`
                 (default ``"snip"``).
+            fit_mask (np.ndarray or None): Boolean array of shape ``(nx, ny)``.
+                Only pixels that are truthy in *both* ``self.mask`` (if set)
+                and *fit_mask* are fitted.  Written to *volume_hdf5* under the
+                key ``"fit_mask"`` so the cluster workers can read it.
+                ``None`` fits all active pixels (default).
             n_array_jobs (int): Number of SLURM array elements
                 (default ``500``).
             conda_env (str): Conda environment name (default ``"nrxrdct"``).
@@ -1645,6 +1654,20 @@ class ReconstructedVolume:
         worker_path = self.folder / "worker_peak_fit.py"
         submit_path = self.folder / "submit_peak_fit.sh"
 
+        # ── Persist fit_mask to the HDF5 so workers can load it ──────────
+        if fit_mask is not None:
+            fit_mask = np.asarray(fit_mask)
+            if fit_mask.shape != (nx, ny):
+                raise ValueError(
+                    f"fit_mask shape {fit_mask.shape} does not match "
+                    f"volume spatial shape {(nx, ny)}."
+                )
+            with h5py.File(str(volume_hdf5), "a") as f:
+                if "fit_mask" in f:
+                    del f["fit_mask"]
+                f.create_dataset("fit_mask", data=fit_mask.astype(np.uint8))
+            print(f"fit_mask written → {volume_hdf5}  (key 'fit_mask')")
+
         worker_template = (
             "#!/usr/bin/env python\n"
             '"""SLURM array worker — fit a single peak for a chunk of voxels.\n\n'
@@ -1663,15 +1686,17 @@ class ReconstructedVolume:
             '    parser.add_argument("--n-jobs", type=int, required=True)\n'
             "    args = parser.parse_args()\n\n"
             "    with h5py.File(Path(VOLUME_HDF5), 'r') as h:\n"
-            '        volume = h["volume"][:]\n'
-            '        tth    = h["tth"][:]\n'
-            '        mask   = h["mask"][:] if "mask" in h else None\n\n'
+            '        volume   = h["volume"][:]\n'
+            '        tth      = h["tth"][:]\n'
+            '        mask     = h["mask"][:]     if "mask"     in h else None\n'
+            '        fit_mask = h["fit_mask"][:] if "fit_mask" in h else None\n\n'
             "    nx, ny = NX, NY\n"
             "    all_indexes = [\n"
             "        (ii, jj)\n"
             "        for ii in range(nx)\n"
             "        for jj in range(ny)\n"
-            "        if mask is None or mask[ii, jj]\n"
+            "        if (mask     is None or mask[ii, jj])\n"
+            "        and (fit_mask is None or fit_mask[ii, jj])\n"
             "    ]\n"
             "    chunk_size = -(-len(all_indexes) // args.n_jobs)\n"
             "    start      = args.job_id * chunk_size\n"

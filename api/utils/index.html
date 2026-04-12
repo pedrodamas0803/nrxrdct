@@ -320,14 +320,7 @@ print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nrxrdct/utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-396">396</a></span>
-<span class="normal"><a href="#__codelineno-0-397">397</a></span>
-<span class="normal"><a href="#__codelineno-0-398">398</a></span>
-<span class="normal"><a href="#__codelineno-0-399">399</a></span>
-<span class="normal"><a href="#__codelineno-0-400">400</a></span>
-<span class="normal"><a href="#__codelineno-0-401">401</a></span>
-<span class="normal"><a href="#__codelineno-0-402">402</a></span>
-<span class="normal"><a href="#__codelineno-0-403">403</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-403">403</a></span>
 <span class="normal"><a href="#__codelineno-0-404">404</a></span>
 <span class="normal"><a href="#__codelineno-0-405">405</a></span>
 <span class="normal"><a href="#__codelineno-0-406">406</a></span>
@@ -402,89 +395,96 @@ print(f"GSAS-II Absorption (μr) = {result['gsasii_absorption']:.4f}")</p>
 <span class="normal"><a href="#__codelineno-0-475">475</a></span>
 <span class="normal"><a href="#__codelineno-0-476">476</a></span>
 <span class="normal"><a href="#__codelineno-0-477">477</a></span>
-<span class="normal"><a href="#__codelineno-0-478">478</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-396" name="__codelineno-0-396"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_absorption_coefficient</span><span class="p">(</span>
-<a id="__codelineno-0-397" name="__codelineno-0-397"></a>    <span class="n">compound</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-398" name="__codelineno-0-398"></a>    <span class="n">density</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-399" name="__codelineno-0-399"></a>    <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="n">sample_diameter_mm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="n">geometry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;debye-scherrer&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-<a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="sd">    Estimate the GSAS-II absorption parameter for a powder sample using xraylib.</span>
-<a id="__codelineno-0-405" name="__codelineno-0-405"></a>
-<a id="__codelineno-0-406" name="__codelineno-0-406"></a><span class="sd">    The function computes the linear attenuation coefficient μ (cm⁻¹) from the</span>
-<a id="__codelineno-0-407" name="__codelineno-0-407"></a><span class="sd">    mass attenuation coefficient and density, then converts it to the</span>
-<a id="__codelineno-0-408" name="__codelineno-0-408"></a><span class="sd">    dimensionless parameter expected by GSAS-II for the chosen geometry.</span>
-<a id="__codelineno-0-409" name="__codelineno-0-409"></a>
-<a id="__codelineno-0-410" name="__codelineno-0-410"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">        compound (str): Chemical formula understood by xraylib, e.g. ``&quot;Fe2O3&quot;``,</span>
-<a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="sd">            ``&quot;LaB6&quot;``, ``&quot;Al&quot;``. Elements and simple compounds are supported; use</span>
-<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">            standard Hill notation (C first, H second, then alphabetical).</span>
-<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">        density (float): Sample density in g/cm³. For a packed powder bed this should</span>
-<a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">            be the effective (packing) density, not the crystallographic density.</span>
-<a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        energy_keV (float): Incident X-ray energy in keV.</span>
-<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">        sample_diameter_mm (float): Sample diameter (or thickness for flat-plate) in mm.</span>
-<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">            For a capillary this is the outer diameter; for a flat-plate it is the</span>
-<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">            thickness.</span>
-<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">        geometry (str, optional): Sample geometry (default ``&quot;debye-scherrer&quot;``).</span>
-<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">            ``&quot;debye-scherrer&quot;`` — cylindrical capillary in transmission; GSAS-II</span>
-<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">            expects the dimensionless product μr (μ in cm⁻¹ × radius in cm).</span>
-<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">            ``&quot;flat-plate&quot;`` — flat-plate geometry; GSAS-II expects μt</span>
-<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">            (μ in cm⁻¹ × thickness in cm).</span>
-<a id="__codelineno-0-425" name="__codelineno-0-425"></a>
-<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">        dict: A dictionary with keys ``&quot;mu_cm&quot;`` (float, μ in cm⁻¹),</span>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">            ``&quot;mu_mm&quot;`` (float, μ in mm⁻¹), ``&quot;mass_atten_cm2_g&quot;`` (float, μ/ρ</span>
-<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">            in cm²/g from xraylib), and ``&quot;gsasii_absorption&quot;`` (float,</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            dimensionless GSAS-II Absorption parameter μr or μt).</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">        xraylib&#39;s ``CS_Total_CP`` returns the *total* mass attenuation coefficient</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">        (photoelectric + Compton + Rayleigh) in cm²/g. For multi-phase samples the</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">        effective μ can be approximated as the volume-weighted average of the individual</span>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">        phase μ values.</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">    Example:</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">        &gt;&gt;&gt; result = calculate_absorption_coefficient(</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">        ...     compound=&quot;Al2O3&quot;, density=3.99, energy_keV=44.0,</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">        ...     sample_diameter_mm=0.3, geometry=&quot;debye-scherrer&quot;</span>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">        ... )</span>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">        &gt;&gt;&gt; print(f&quot;μ = {result[&#39;mu_cm&#39;]:.2f} cm⁻¹&quot;)</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">        &gt;&gt;&gt; print(f&quot;GSAS-II Absorption (μr) = {result[&#39;gsasii_absorption&#39;]:.4f}&quot;)</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a>    <span class="n">valid_geometries</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;debye-scherrer&quot;</span><span class="p">,</span> <span class="s2">&quot;flat-plate&quot;</span><span class="p">}</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a>    <span class="k">if</span> <span class="n">geometry</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_geometries</span><span class="p">:</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a>            <span class="sa">f</span><span class="s2">&quot;Unknown geometry &#39;</span><span class="si">{</span><span class="n">geometry</span><span class="si">}</span><span class="s2">&#39;. Valid options: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">valid_geometries</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="p">)</span>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="n">mass_atten</span> <span class="o">=</span> <span class="n">xraylib</span><span class="o">.</span><span class="n">CS_Total_CP</span><span class="p">(</span><span class="n">compound</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">)</span>  <span class="c1"># cm²/g</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a>    <span class="n">mu_cm</span> <span class="o">=</span> <span class="n">mass_atten</span> <span class="o">*</span> <span class="n">density</span>                              <span class="c1"># cm⁻¹</span>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="n">mu_mm</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">/</span> <span class="mf">10.0</span>                                      <span class="c1"># mm⁻¹</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a>    <span class="c1"># Convert sample_diameter_mm to cm for GSAS-II parameter</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a>    <span class="k">if</span> <span class="n">geometry</span> <span class="o">==</span> <span class="s2">&quot;debye-scherrer&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>        <span class="n">radius_cm</span> <span class="o">=</span> <span class="p">(</span><span class="n">sample_diameter_mm</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10.0</span>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a>        <span class="n">gsasii_absorption</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">*</span> <span class="n">radius_cm</span>                 <span class="c1"># μr, dimensionless</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a>    <span class="k">else</span><span class="p">:</span>  <span class="c1"># flat-plate</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a>        <span class="n">thickness_cm</span> <span class="o">=</span> <span class="n">sample_diameter_mm</span> <span class="o">/</span> <span class="mf">10.0</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a>        <span class="n">gsasii_absorption</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">*</span> <span class="n">thickness_cm</span>              <span class="c1"># μt, dimensionless</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Compound           : </span><span class="si">{</span><span class="n">compound</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Density            : </span><span class="si">{</span><span class="n">density</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> g/cm³&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy             : </span><span class="si">{</span><span class="n">energy_keV</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> keV&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;μ/ρ                : </span><span class="si">{</span><span class="n">mass_atten</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> cm²/g&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;μ                  : </span><span class="si">{</span><span class="n">mu_cm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> cm⁻¹  (</span><span class="si">{</span><span class="n">mu_mm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> mm⁻¹)&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry           : </span><span class="si">{</span><span class="n">geometry</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GSAS-II Absorption : </span><span class="si">{</span><span class="n">gsasii_absorption</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">  (μr)&quot;</span> <span class="k">if</span> <span class="n">geometry</span> <span class="o">==</span> <span class="s2">&quot;debye-scherrer&quot;</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a>          <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;GSAS-II Absorption : </span><span class="si">{</span><span class="n">gsasii_absorption</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">  (μt)&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a>    <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a>        <span class="s2">&quot;mu_cm&quot;</span><span class="p">:</span> <span class="n">mu_cm</span><span class="p">,</span>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a>        <span class="s2">&quot;mu_mm&quot;</span><span class="p">:</span> <span class="n">mu_mm</span><span class="p">,</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a>        <span class="s2">&quot;mass_atten_cm2_g&quot;</span><span class="p">:</span> <span class="n">mass_atten</span><span class="p">,</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a>        <span class="s2">&quot;gsasii_absorption&quot;</span><span class="p">:</span> <span class="n">gsasii_absorption</span><span class="p">,</span>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a>    <span class="p">}</span>
+<span class="normal"><a href="#__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#__codelineno-0-479">479</a></span>
+<span class="normal"><a href="#__codelineno-0-480">480</a></span>
+<span class="normal"><a href="#__codelineno-0-481">481</a></span>
+<span class="normal"><a href="#__codelineno-0-482">482</a></span>
+<span class="normal"><a href="#__codelineno-0-483">483</a></span>
+<span class="normal"><a href="#__codelineno-0-484">484</a></span>
+<span class="normal"><a href="#__codelineno-0-485">485</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_absorption_coefficient</span><span class="p">(</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="n">compound</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a>    <span class="n">density</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a>    <span class="n">sample_diameter_mm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a>    <span class="n">geometry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;debye-scherrer&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">    Estimate the GSAS-II absorption parameter for a powder sample using xraylib.</span>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">    The function computes the linear attenuation coefficient μ (cm⁻¹) from the</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">    mass attenuation coefficient and density, then converts it to the</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">    dimensionless parameter expected by GSAS-II for the chosen geometry.</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">        compound (str): Chemical formula understood by xraylib, e.g. ``&quot;Fe2O3&quot;``,</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">            ``&quot;LaB6&quot;``, ``&quot;Al&quot;``. Elements and simple compounds are supported; use</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">            standard Hill notation (C first, H second, then alphabetical).</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">        density (float): Sample density in g/cm³. For a packed powder bed this should</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">            be the effective (packing) density, not the crystallographic density.</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">        energy_keV (float): Incident X-ray energy in keV.</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">        sample_diameter_mm (float): Sample diameter (or thickness for flat-plate) in mm.</span>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">            For a capillary this is the outer diameter; for a flat-plate it is the</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">            thickness.</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">        geometry (str, optional): Sample geometry (default ``&quot;debye-scherrer&quot;``).</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">            ``&quot;debye-scherrer&quot;`` — cylindrical capillary in transmission; GSAS-II</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">            expects the dimensionless product μr (μ in cm⁻¹ × radius in cm).</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            ``&quot;flat-plate&quot;`` — flat-plate geometry; GSAS-II expects μt</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">            (μ in cm⁻¹ × thickness in cm).</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">        dict: A dictionary with keys ``&quot;mu_cm&quot;`` (float, μ in cm⁻¹),</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">            ``&quot;mu_mm&quot;`` (float, μ in mm⁻¹), ``&quot;mass_atten_cm2_g&quot;`` (float, μ/ρ</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">            in cm²/g from xraylib), and ``&quot;gsasii_absorption&quot;`` (float,</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">            dimensionless GSAS-II Absorption parameter μr or μt).</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">        xraylib&#39;s ``CS_Total_CP`` returns the *total* mass attenuation coefficient</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">        (photoelectric + Compton + Rayleigh) in cm²/g. For multi-phase samples the</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">        effective μ can be approximated as the volume-weighted average of the individual</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">        phase μ values.</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">    Example:</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">        &gt;&gt;&gt; result = calculate_absorption_coefficient(</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">        ...     compound=&quot;Al2O3&quot;, density=3.99, energy_keV=44.0,</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">        ...     sample_diameter_mm=0.3, geometry=&quot;debye-scherrer&quot;</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">        ... )</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">        &gt;&gt;&gt; print(f&quot;μ = {result[&#39;mu_cm&#39;]:.2f} cm⁻¹&quot;)</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">        &gt;&gt;&gt; print(f&quot;GSAS-II Absorption (μr) = {result[&#39;gsasii_absorption&#39;]:.4f}&quot;)</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>    <span class="n">valid_geometries</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;debye-scherrer&quot;</span><span class="p">,</span> <span class="s2">&quot;flat-plate&quot;</span><span class="p">}</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="k">if</span> <span class="n">geometry</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_geometries</span><span class="p">:</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>            <span class="sa">f</span><span class="s2">&quot;Unknown geometry &#39;</span><span class="si">{</span><span class="n">geometry</span><span class="si">}</span><span class="s2">&#39;. Valid options: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">valid_geometries</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>        <span class="p">)</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>    <span class="n">mass_atten</span> <span class="o">=</span> <span class="n">xraylib</span><span class="o">.</span><span class="n">CS_Total_CP</span><span class="p">(</span><span class="n">compound</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">)</span>  <span class="c1"># cm²/g</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>    <span class="n">mu_cm</span> <span class="o">=</span> <span class="n">mass_atten</span> <span class="o">*</span> <span class="n">density</span>                              <span class="c1"># cm⁻¹</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>    <span class="n">mu_mm</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">/</span> <span class="mf">10.0</span>                                      <span class="c1"># mm⁻¹</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="c1"># Convert sample_diameter_mm to cm for GSAS-II parameter</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="k">if</span> <span class="n">geometry</span> <span class="o">==</span> <span class="s2">&quot;debye-scherrer&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a>        <span class="n">radius_cm</span> <span class="o">=</span> <span class="p">(</span><span class="n">sample_diameter_mm</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10.0</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a>        <span class="n">gsasii_absorption</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">*</span> <span class="n">radius_cm</span>                 <span class="c1"># μr, dimensionless</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a>    <span class="k">else</span><span class="p">:</span>  <span class="c1"># flat-plate</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a>        <span class="n">thickness_cm</span> <span class="o">=</span> <span class="n">sample_diameter_mm</span> <span class="o">/</span> <span class="mf">10.0</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a>        <span class="n">gsasii_absorption</span> <span class="o">=</span> <span class="n">mu_cm</span> <span class="o">*</span> <span class="n">thickness_cm</span>              <span class="c1"># μt, dimensionless</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Compound           : </span><span class="si">{</span><span class="n">compound</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Density            : </span><span class="si">{</span><span class="n">density</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> g/cm³&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy             : </span><span class="si">{</span><span class="n">energy_keV</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> keV&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;μ/ρ                : </span><span class="si">{</span><span class="n">mass_atten</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> cm²/g&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;μ                  : </span><span class="si">{</span><span class="n">mu_cm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> cm⁻¹  (</span><span class="si">{</span><span class="n">mu_mm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> mm⁻¹)&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry           : </span><span class="si">{</span><span class="n">geometry</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GSAS-II Absorption : </span><span class="si">{</span><span class="n">gsasii_absorption</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">  (μr)&quot;</span> <span class="k">if</span> <span class="n">geometry</span> <span class="o">==</span> <span class="s2">&quot;debye-scherrer&quot;</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a>          <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;GSAS-II Absorption : </span><span class="si">{</span><span class="n">gsasii_absorption</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">  (μt)&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a>        <span class="s2">&quot;mu_cm&quot;</span><span class="p">:</span> <span class="n">mu_cm</span><span class="p">,</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a>        <span class="s2">&quot;mu_mm&quot;</span><span class="p">:</span> <span class="n">mu_mm</span><span class="p">,</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a>        <span class="s2">&quot;mass_atten_cm2_g&quot;</span><span class="p">:</span> <span class="n">mass_atten</span><span class="p">,</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>        <span class="s2">&quot;gsasii_absorption&quot;</span><span class="p">:</span> <span class="n">gsasii_absorption</span><span class="p">,</span>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a>    <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -568,14 +568,7 @@ passing directly to :func:<code>numpy.pad</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nrxrdct/utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-481">481</a></span>
-<span class="normal"><a href="#__codelineno-0-482">482</a></span>
-<span class="normal"><a href="#__codelineno-0-483">483</a></span>
-<span class="normal"><a href="#__codelineno-0-484">484</a></span>
-<span class="normal"><a href="#__codelineno-0-485">485</a></span>
-<span class="normal"><a href="#__codelineno-0-486">486</a></span>
-<span class="normal"><a href="#__codelineno-0-487">487</a></span>
-<span class="normal"><a href="#__codelineno-0-488">488</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-488">488</a></span>
 <span class="normal"><a href="#__codelineno-0-489">489</a></span>
 <span class="normal"><a href="#__codelineno-0-490">490</a></span>
 <span class="normal"><a href="#__codelineno-0-491">491</a></span>
@@ -590,29 +583,36 @@ passing directly to :func:<code>numpy.pad</code>.</p>
 <span class="normal"><a href="#__codelineno-0-500">500</a></span>
 <span class="normal"><a href="#__codelineno-0-501">501</a></span>
 <span class="normal"><a href="#__codelineno-0-502">502</a></span>
-<span class="normal"><a href="#__codelineno-0-503">503</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">    Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.</span>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">        input_shape (tuple): ``(height, width)`` of the array to be padded.</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">        desired_shape (tuple): ``(height, width)`` of the target shape; must be</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">            &gt;= *input_shape* in both dimensions.</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">        tuple: Padding widths ``((top, bottom), (left, right))`` suitable for</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">            passing directly to :func:`numpy.pad`.</span>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a>    <span class="n">y_in</span><span class="p">,</span> <span class="n">x_in</span> <span class="o">=</span> <span class="n">input_shape</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="n">y_des</span><span class="p">,</span> <span class="n">x_des</span> <span class="o">=</span> <span class="n">desired_shape</span>
+<span class="normal"><a href="#__codelineno-0-503">503</a></span>
+<span class="normal"><a href="#__codelineno-0-504">504</a></span>
+<span class="normal"><a href="#__codelineno-0-505">505</a></span>
+<span class="normal"><a href="#__codelineno-0-506">506</a></span>
+<span class="normal"><a href="#__codelineno-0-507">507</a></span>
+<span class="normal"><a href="#__codelineno-0-508">508</a></span>
+<span class="normal"><a href="#__codelineno-0-509">509</a></span>
+<span class="normal"><a href="#__codelineno-0-510">510</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">desired_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">    Compute symmetric ``np.pad`` widths to centre a 2-D array in a larger shape.</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">        input_shape (tuple): ``(height, width)`` of the array to be padded.</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">        desired_shape (tuple): ``(height, width)`` of the target shape; must be</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">            &gt;= *input_shape* in both dimensions.</span>
 <a id="__codelineno-0-496" name="__codelineno-0-496"></a>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="n">y_beg</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="n">y_end</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="n">x_beg</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">x_end</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a>    <span class="k">return</span> <span class="p">((</span><span class="n">y_beg</span><span class="p">,</span> <span class="n">y_end</span><span class="p">),</span> <span class="p">(</span><span class="n">x_beg</span><span class="p">,</span> <span class="n">x_end</span><span class="p">))</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a><span class="sd">        tuple: Padding widths ``((top, bottom), (left, right))`` suitable for</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="sd">            passing directly to :func:`numpy.pad`.</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">y_in</span><span class="p">,</span> <span class="n">x_in</span> <span class="o">=</span> <span class="n">input_shape</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="n">y_des</span><span class="p">,</span> <span class="n">x_des</span> <span class="o">=</span> <span class="n">desired_shape</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="n">y_beg</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="n">y_end</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y_des</span> <span class="o">-</span> <span class="n">y_in</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a>    <span class="n">x_beg</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a>    <span class="n">x_end</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">x_des</span> <span class="o">-</span> <span class="n">x_in</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a>    <span class="k">return</span> <span class="p">((</span><span class="n">y_beg</span><span class="p">,</span> <span class="n">y_end</span><span class="p">),</span> <span class="p">(</span><span class="n">x_beg</span><span class="p">,</span> <span class="n">x_end</span><span class="p">))</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1513,7 +1513,7 @@ pixels inside the circle.</p>
 
 
 <a href="#nrxrdct.utils.get_powder_xrd_peaks" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span> <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span> <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1537,6 +1537,18 @@ pixels inside the circle.</p>
               –
               <div class="doc-md-description">
                 <p>Path(s) to CIF file(s).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>names</code></b>
+                  (<code>list of str</code>, default:
+                      <code>None</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Phase names to use as dict keys, one per
+CIF file.  If None or shorter than cif_files, the name embedded in
+the CIF is used for any entry without a supplied name.</p>
               </div>
             </li>
             <li>
@@ -1666,72 +1678,86 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <span class="normal"><a href="#__codelineno-0-363">363</a></span>
 <span class="normal"><a href="#__codelineno-0-364">364</a></span>
 <span class="normal"><a href="#__codelineno-0-365">365</a></span>
-<span class="normal"><a href="#__codelineno-0-366">366</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span>
 <a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="n">cif_files</span><span class="p">,</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">    Return peak positions and hkl families for one or more CIF files.</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">        cif_files (path or list): Path(s) to CIF file(s).</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">        en_eV (float): X-ray energy in eV (default 100 keV).</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        tth_min (float, optional): Minimum 2theta in degrees (auto if None).</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">        tth_max (float, optional): Maximum 2theta in degrees (auto if None).</span>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        dict: Mapping of phase_name to DataFrame with columns</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">            h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</span>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a>        <span class="n">cif_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">cif_files</span><span class="p">]</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="n">wavelength</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">en2lam</span><span class="p">(</span><span class="n">en_eV</span><span class="p">)</span>  <span class="c1"># Å</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a>
-<a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="k">if</span> <span class="n">tth_min</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">tth_min</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">(</span><span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="mf">10.0</span><span class="p">)))</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">if</span> <span class="n">tth_max</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">tth_max</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">(</span><span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)))</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">    Return peak positions and hkl families for one or more CIF files.</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">        cif_files (path or list): Path(s) to CIF file(s).</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        names (list of str, optional): Phase names to use as dict keys, one per</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            CIF file.  If None or shorter than cif_files, the name embedded in</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">            the CIF is used for any entry without a supplied name.</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        en_eV (float): X-ray energy in eV (default 100 keV).</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        tth_min (float, optional): Minimum 2theta in degrees (auto if None).</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">        tth_max (float, optional): Maximum 2theta in degrees (auto if None).</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">        dict: Mapping of phase_name to DataFrame with columns</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">            h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="n">cif_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">cif_files</span><span class="p">]</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">if</span> <span class="n">names</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
 <a id="__codelineno-0-329" name="__codelineno-0-329"></a>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">wavelength</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">en2lam</span><span class="p">(</span><span class="n">en_eV</span><span class="p">)</span>  <span class="c1"># Å</span>
 <a id="__codelineno-0-331" name="__codelineno-0-331"></a>
-<a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">for</span> <span class="n">cif</span> <span class="ow">in</span> <span class="n">cif_files</span><span class="p">:</span>
-<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">mat</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Crystal</span><span class="o">.</span><span class="n">fromCIF</span><span class="p">(</span><span class="n">cif</span><span class="p">)</span>
-<a id="__codelineno-0-334" name="__codelineno-0-334"></a>        <span class="n">phase_name</span> <span class="o">=</span> <span class="n">mat</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-335" name="__codelineno-0-335"></a>
-<a id="__codelineno-0-336" name="__codelineno-0-336"></a>        <span class="n">pd_obj</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderDiffraction</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">en_eV</span><span class="p">)</span>
-<a id="__codelineno-0-337" name="__codelineno-0-337"></a>
-<a id="__codelineno-0-338" name="__codelineno-0-338"></a>        <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">pd_obj</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<a id="__codelineno-0-340" name="__codelineno-0-340"></a>            <span class="c1"># only keep active (non-extinct) reflections</span>
-<a id="__codelineno-0-341" name="__codelineno-0-341"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;active&quot;</span><span class="p">]:</span>
-<a id="__codelineno-0-342" name="__codelineno-0-342"></a>                <span class="k">continue</span>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a>            <span class="n">tth_peak</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># ang is in radians</span>
-<a id="__codelineno-0-345" name="__codelineno-0-345"></a>            <span class="c1"># d from Bragg&#39;s law: d = lambda / (2 * sin(theta))</span>
-<a id="__codelineno-0-346" name="__codelineno-0-346"></a>            <span class="n">d</span> <span class="o">=</span> <span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]))</span>  <span class="c1"># ang is theta in radians</span>
-<a id="__codelineno-0-347" name="__codelineno-0-347"></a>
-<a id="__codelineno-0-348" name="__codelineno-0-348"></a>            <span class="k">if</span> <span class="n">tth_min</span> <span class="o">&lt;=</span> <span class="n">tth_peak</span> <span class="o">&lt;=</span> <span class="n">tth_max</span><span class="p">:</span>
-<a id="__codelineno-0-349" name="__codelineno-0-349"></a>                <span class="n">h</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">l</span> <span class="o">=</span> <span class="n">hkl</span>
-<a id="__codelineno-0-350" name="__codelineno-0-350"></a>                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-351" name="__codelineno-0-351"></a>                    <span class="p">{</span>
-<a id="__codelineno-0-352" name="__codelineno-0-352"></a>                        <span class="s2">&quot;h&quot;</span><span class="p">:</span> <span class="n">h</span><span class="p">,</span>
-<a id="__codelineno-0-353" name="__codelineno-0-353"></a>                        <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
-<a id="__codelineno-0-354" name="__codelineno-0-354"></a>                        <span class="s2">&quot;l&quot;</span><span class="p">:</span> <span class="n">l</span><span class="p">,</span>
-<a id="__codelineno-0-355" name="__codelineno-0-355"></a>                        <span class="s2">&quot;hkl&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">h</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">l</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-356" name="__codelineno-0-356"></a>                        <span class="s2">&quot;tth&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">tth_peak</span><span class="p">),</span> <span class="mi">4</span><span class="p">),</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a>                        <span class="s2">&quot;d_hkl&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">d</span><span class="p">),</span> <span class="mi">4</span><span class="p">),</span>
-<a id="__codelineno-0-358" name="__codelineno-0-358"></a>                        <span class="s2">&quot;r&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;r&quot;</span><span class="p">]),</span>  <span class="c1"># |F|² structure factor</span>
-<a id="__codelineno-0-359" name="__codelineno-0-359"></a>                    <span class="p">}</span>
-<a id="__codelineno-0-360" name="__codelineno-0-360"></a>                <span class="p">)</span>
-<a id="__codelineno-0-361" name="__codelineno-0-361"></a>
-<a id="__codelineno-0-362" name="__codelineno-0-362"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-363" name="__codelineno-0-363"></a>        <span class="n">results</span><span class="p">[</span><span class="n">phase_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span>
-<a id="__codelineno-0-364" name="__codelineno-0-364"></a>
-<a id="__codelineno-0-365" name="__codelineno-0-365"></a>    <span class="n">_print_peaks_table</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a>    <span class="k">return</span> <span class="n">results</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">if</span> <span class="n">tth_min</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">tth_min</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">(</span><span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="mf">10.0</span><span class="p">)))</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>    <span class="k">if</span> <span class="n">tth_max</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>        <span class="n">tth_max</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">(</span><span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)))</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a>    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">cif</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cif_files</span><span class="p">):</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>        <span class="n">mat</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Crystal</span><span class="o">.</span><span class="n">fromCIF</span><span class="p">(</span><span class="n">cif</span><span class="p">)</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>        <span class="n">phase_name</span> <span class="o">=</span> <span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">names</span><span class="p">)</span> <span class="k">else</span> <span class="n">mat</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a>        <span class="n">pd_obj</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderDiffraction</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">en_eV</span><span class="p">)</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a>        <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a>        <span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">pd_obj</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>            <span class="c1"># only keep active (non-extinct) reflections</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;active&quot;</span><span class="p">]:</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a>                <span class="k">continue</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a>            <span class="n">tth_peak</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># ang is in radians</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a>            <span class="c1"># d from Bragg&#39;s law: d = lambda / (2 * sin(theta))</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a>            <span class="n">d</span> <span class="o">=</span> <span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]))</span>  <span class="c1"># ang is theta in radians</span>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a>            <span class="k">if</span> <span class="n">tth_min</span> <span class="o">&lt;=</span> <span class="n">tth_peak</span> <span class="o">&lt;=</span> <span class="n">tth_max</span><span class="p">:</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a>                <span class="n">h</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">l</span> <span class="o">=</span> <span class="n">hkl</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a>                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a>                    <span class="p">{</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a>                        <span class="s2">&quot;h&quot;</span><span class="p">:</span> <span class="n">h</span><span class="p">,</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a>                        <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a>                        <span class="s2">&quot;l&quot;</span><span class="p">:</span> <span class="n">l</span><span class="p">,</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a>                        <span class="s2">&quot;hkl&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">h</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">l</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>                        <span class="s2">&quot;tth&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">tth_peak</span><span class="p">),</span> <span class="mi">4</span><span class="p">),</span>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>                        <span class="s2">&quot;d_hkl&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">d</span><span class="p">),</span> <span class="mi">4</span><span class="p">),</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a>                        <span class="s2">&quot;r&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;r&quot;</span><span class="p">]),</span>  <span class="c1"># |F|² structure factor</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>                    <span class="p">}</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>                <span class="p">)</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="n">results</span><span class="p">[</span><span class="n">phase_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>    <span class="n">_print_peaks_table</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>    <span class="k">return</span> <span class="n">results</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

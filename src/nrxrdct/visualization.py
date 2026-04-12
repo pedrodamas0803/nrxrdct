@@ -19,13 +19,14 @@ Usage in a notebook cell
     visualize_slices_with_profile_jupyter(volume)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import ipywidgets as widgets
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import napari  # type: ignore
 import numpy as np
+import pandas as pd
 from IPython.display import display
 
 
@@ -332,7 +333,7 @@ def visualize_slices_with_profile(
     initial_slice: Optional[int] = None,
     z_values: Optional[np.ndarray] = None,
     z_label: str = "Z  (axis-0 index)",
-    phases: Optional[Dict[str, List[float]]] = None,
+    phases: Optional[Union[Dict[str, List[float]], Dict[str, pd.DataFrame]]] = None,
 ) -> napari.Viewer:
     """
     Visualize 2-D slices of a 3-D volume (parallel to axis-0) in napari.
@@ -357,11 +358,17 @@ def visualize_slices_with_profile(
             exactly ``volume.shape[0]`` elements. Defaults to integer slice indices.
         z_label (str, optional): Label for the X axis of the Z-profile plot.
             Default: "Z  (axis-0 index)".
-        phases (dict, optional): Mapping of phase name → list of peak positions
-            (in the same units as *z_values*). Each phase is shown as a row of
-            colored tick marks in a panel below the Z-profile plot. Example::
+        phases (dict, optional): Either a mapping of phase name → list of peak
+            positions (in the same units as *z_values*), or the
+            ``dict[str, pd.DataFrame]`` returned by ``get_powder_xrd_peaks``
+            (the ``tth`` column is used as tick positions).  Each phase is
+            shown as a row of colored tick marks in a panel below the Z-profile
+            plot. Example::
 
                 {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
+                # or:
+                peaks = get_powder_xrd_peaks(["au.cif", "fe.cif"])
+                phases=peaks
 
     Returns:
         napari.Viewer: The napari viewer instance.
@@ -513,7 +520,7 @@ def visualize_slices_with_profile_jupyter(
     z_values: Optional[np.ndarray] = None,
     z_label: str = "Z  (axis-0 index)",
     figsize: tuple = (12, 5),
-    phases: Optional[Dict[str, List[float]]] = None,
+    phases: Optional[Union[Dict[str, List[float]], Dict[str, pd.DataFrame]]] = None,
 ) -> None:
     """
     Display an interactive 2-D slice viewer with a Z-profile panel inside
@@ -540,11 +547,17 @@ def visualize_slices_with_profile_jupyter(
         z_label (str, optional): X-axis label of the Z-profile plot.
             Default: ``"Z  (axis-0 index)"``.
         figsize (tuple, optional): Overall figure size in inches. Default: (12, 5).
-        phases (dict, optional): Mapping of phase name → list of peak positions
-            (in the same units as *z_values*). Each phase is shown as a row of
-            colored tick marks below the profile plot. Example::
+        phases (dict, optional): Either a mapping of phase name → list of peak
+            positions (in the same units as *z_values*), or the
+            ``dict[str, pd.DataFrame]`` returned by ``get_powder_xrd_peaks``
+            (the ``tth`` column is used as tick positions).  Each phase is
+            shown as a row of colored tick marks below the profile plot.
+            Example::
 
                 {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
+                # or:
+                peaks = get_powder_xrd_peaks(["au.cif", "fe.cif"])
+                phases=peaks
 
     Note:
         Recommended cell magic is ``%matplotlib widget`` (ipympl backend) for a
@@ -845,7 +858,7 @@ _PHASE_COLORS: List[str] = [
 
 def _draw_phase_ticks(
     ax: plt.Axes,
-    phases: Dict[str, List[float]],
+    phases: Union[Dict[str, List[float]], Dict[str, pd.DataFrame]],
     z_axis: np.ndarray,
 ) -> None:
     """
@@ -857,10 +870,18 @@ def _draw_phase_ticks(
     Args:
         ax: The matplotlib axes to draw into (should be below the profile axes
             and share its x-axis).
-        phases: Mapping of phase name → list of peak positions in the same
-            units as *z_axis*.
+        phases: Either a mapping of phase name → list of peak positions (in the
+            same units as *z_axis*), or the ``dict[str, pd.DataFrame]`` returned
+            by ``get_powder_xrd_peaks`` — in which case the ``tth`` column is
+            used as the peak positions.
         z_axis: Physical x-coordinates used for the profile plot.
     """
+    # Normalise: accept the direct output of get_powder_xrd_peaks or get_fluo_lines
+    first = next(iter(phases.values()), None)
+    if isinstance(first, pd.DataFrame):
+        col = "tth" if "tth" in first.columns else "energy_keV"
+        phases = {name: df[col].tolist() for name, df in phases.items()}
+
     n_phases = len(phases)
     ax.set_facecolor("#161b22")
     for spine in ax.spines.values():

@@ -300,6 +300,7 @@ def simulate_powder_xrd_monophase(
 
 def get_powder_xrd_peaks(
     cif_files,
+    names: list[str] = None,
     en_eV: float = 100000,
     tth_min: float = None,
     tth_max: float = None,
@@ -309,6 +310,9 @@ def get_powder_xrd_peaks(
 
     Args:
         cif_files (path or list): Path(s) to CIF file(s).
+        names (list of str, optional): Phase names to use as dict keys, one per
+            CIF file.  If None or shorter than cif_files, the name embedded in
+            the CIF is used for any entry without a supplied name.
         en_eV (float): X-ray energy in eV (default 100 keV).
         tth_min (float, optional): Minimum 2theta in degrees (auto if None).
         tth_max (float, optional): Maximum 2theta in degrees (auto if None).
@@ -320,6 +324,9 @@ def get_powder_xrd_peaks(
     if not isinstance(cif_files, list):
         cif_files = [cif_files]
 
+    if names is None:
+        names = []
+
     wavelength = xu.en2lam(en_eV)  # Å
 
     if tth_min is None:
@@ -329,9 +336,9 @@ def get_powder_xrd_peaks(
 
     results = {}
 
-    for cif in cif_files:
+    for i, cif in enumerate(cif_files):
         mat = xu.materials.Crystal.fromCIF(cif)
-        phase_name = mat.name.replace(" ", "_")
+        phase_name = names[i] if i < len(names) else mat.name.replace(" ", "_")
 
         pd_obj = xu.simpack.PowderDiffraction(mat, en=en_eV)
 

@@ -8,6 +8,7 @@ and assemble the resulting data into sinogram arrays ready for reconstruction.
 
 import h5py
 import numpy as np
+import pandas as pd
 import xraylib
 from scipy.ndimage import median_filter
 from scipy.optimize import nnls
@@ -18,31 +19,39 @@ DEFAULT_LINES = ["Ka1", "Ka2", "Kb1", "Kb2", "La1", "Lb1", "Lg1"]
 
 
 def get_fluo_lines(
-    element, energy_range, lines: list[str] = DEFAULT_LINES, verbose=False
-) -> dict[str, float]:
+    elements,
+    energy_range,
+    names: list[str] = None,
+    lines: list[str] = DEFAULT_LINES,
+) -> dict[str, pd.DataFrame]:
     """
-    Return the XRF emission line energies for an element within a given energy range.
+    Return XRF emission line energies for one or more elements within a given
+    energy range.
 
     Args:
-        element (str): Chemical symbol (e.g. ``"Fe"``, ``"Cu"``).
-        energy_range (tuple): ``(emin, emax)`` energy window in keV; lines outside
-            this range are excluded.
-        lines (list, optional): Emission line names to query (default: Ka1, Ka2,
-            Kb1, Kb2, La1, Lb1, Lg1).
-        verbose (bool, optional): If ``True``, print each line name and energy to
-            stdout (default ``False``).
+        elements (str or list): Chemical symbol(s) (e.g. ``"Fe"`` or
+            ``["Fe", "Cu", "Zn"]``).
+        energy_range (tuple): ``(emin, emax)`` energy window in keV; lines
+            outside this range are excluded.
+        names (list of str, optional): Keys to use in the returned dict, one
+            per element.  If ``None`` or shorter than *elements*, the chemical
+            symbol is used for any entry without a supplied name.
+        lines (list, optional): Emission line names to query (default: Ka1,
+            Ka2, Kb1, Kb2, La1, Lb1, Lg1).
 
     Returns:
-        dict: Mapping of line name (str) to energy in keV (float) for lines that
-            fall within *energy_range*. Lines not available for the element are
-            silently skipped.
+        dict: Mapping of element name (or supplied name) to a
+        ``pd.DataFrame`` with columns ``line`` and ``energy_keV``, sorted by
+        energy.  Elements for which no lines fall within *energy_range* are
+        included with an empty DataFrame.
     """
+    if not isinstance(elements, list):
+        elements = [elements]
 
-    emin, emax = energy_range
-    Z = xraylib.SymbolToAtomicNumber(element)
+    if names is None:
+        names = []
 
-    line_name = lines
-    line_poss = [
+    line_consts = [
         xraylib.KA1_LINE,
         xraylib.KA2_LINE,
         xraylib.KB1_LINE,
@@ -51,24 +60,48 @@ def get_fluo_lines(
         xraylib.LB1_LINE,
         xraylib.LG1_LINE,
     ]
-    lines = {}
-    for name, line in zip(line_name, line_poss):
-        try:
-            en = xraylib.LineEnergy(Z, line)
-            if en > emax:
-                continue
-            elif en < emin:
-                continue
-            else:
-                lines[name] = en
-        except Exception:
-            print(f"Line {name} not available for {element}.")
-            continue
+    emin, emax = energy_range
 
-    if verbose:
-        for name, line in lines.items():
-            print(f"{element} {name}: {line:.4f} keV")
-    return lines
+    results = {}
+    for i, element in enumerate(elements):
+        key = names[i] if i < len(names) else element
+        Z = xraylib.SymbolToAtomicNumber(element)
+
+        rows = []
+        for line_name, line_const in zip(lines, line_consts):
+            try:
+                en = xraylib.LineEnergy(Z, line_const)
+            except Exception:
+                continue
+            if emin <= en <= emax:
+                rows.append({"line": line_name, "energy_keV": round(float(en), 4)})
+
+        df = pd.DataFrame(rows, columns=["line", "energy_keV"]).sort_values(
+            "energy_keV"
+        ).reset_index(drop=True)
+        results[key] = df
+
+    _print_fluo_table(results)
+    return results
+
+
+def _print_fluo_table(results: dict[str, pd.DataFrame]) -> None:
+    """Print a well-aligned summary of XRF line tables to stdout."""
+    col_fmts = {
+        "line":       ("{:>8}",  "{:>8}"),
+        "energy_keV": ("{:>14}", "{:>14.4f}"),
+    }
+    header = "".join(hfmt.format(col) for col, (hfmt, _) in col_fmts.items())
+    sep = "-" * len(header)
+
+    for element, df in results.items():
+        print(f"\n{element}  ({len(df)} lines)")
+        print(sep)
+        print(header)
+        print(sep)
+        for _, row in df.iterrows():
+            print("".join(rfmt.format(row[col]) for col, (_, rfmt) in col_fmts.items()))
+        print(sep)
 
 
 def get_fluo_roi(

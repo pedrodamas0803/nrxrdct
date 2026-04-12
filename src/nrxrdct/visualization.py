@@ -628,8 +628,8 @@ def visualize_slices_with_profile_jupyter(
     # ------------------------------------------------------------------
     # Figure layout
     # ------------------------------------------------------------------
-    fig = plt.figure(figsize=figsize, facecolor="#0e1117")
-    plt.close(fig)  # prevent ipympl from auto-displaying; we call display() explicitly
+    with plt.ioff():
+        fig = plt.figure(figsize=figsize, facecolor="#0e1117")
     fig.suptitle(name, color="#e6edf3", fontsize=12, fontweight="bold", y=0.98)
 
     gs = gridspec.GridSpec(

@@ -40,6 +40,8 @@ def visualize_volume(
     opacity: float = 1.0,
     scale: Optional[tuple] = None,
     add_axes: bool = True,
+    downsample: Optional[int] = None,
+    max_gb: float = 1.0,
 ) -> napari.Viewer:
     """
     Visualize a 3D NumPy array interactively using napari.
@@ -62,6 +64,12 @@ def visualize_volume(
             Useful when voxels are anisotropic (e.g. (4.0, 1.0, 1.0)).
             Default: None (isotropic).
         add_axes (bool): Whether to display the 3D axis widget. Default: True.
+        downsample (int, optional): Downsample factor applied uniformly along all
+            axes before sending data to the GPU (e.g. 2 → every other voxel).
+            When None (default) the factor is chosen automatically so that the
+            volume fits within `max_gb` of GPU memory.
+        max_gb (float): Maximum GPU memory in GB to target when auto-downsampling.
+            Default: 1.0.
 
     Returns:
         napari.Viewer: The napari viewer instance (keep a reference to prevent GC).
@@ -82,6 +90,26 @@ def visualize_volume(
             f"Expected a 3-D array, got shape {volume.shape}. "
             "For 4-D (multi-channel) data use napari directly."
         )
+
+    # --- auto-downsample to avoid GPU out-of-memory ---
+    bytes_per_voxel = np.dtype(np.float32).itemsize  # napari uploads as float32
+    volume_bytes = volume.size * bytes_per_voxel
+    max_bytes = max_gb * 1024**3
+
+    if downsample is None:
+        if volume_bytes > max_bytes:
+            downsample = int(np.ceil((volume_bytes / max_bytes) ** (1 / 3)))
+        else:
+            downsample = 1
+
+    if downsample > 1:
+        print(
+            f"[visualize_volume] Volume is {volume_bytes / 1024**3:.2f} GB — "
+            f"downsampling by {downsample}x to fit within {max_gb} GB GPU budget."
+        )
+        volume = volume[::downsample, ::downsample, ::downsample]
+        if scale is not None:
+            scale = tuple(s * downsample for s in scale)
 
     if contrast_limits is None:
         contrast_limits = (float(volume.min()), float(volume.max()))

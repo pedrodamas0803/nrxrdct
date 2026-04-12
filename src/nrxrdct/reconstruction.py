@@ -883,6 +883,300 @@ class ReconstructedVolume:
         fig.tight_layout()
         return fig if return_fig else None
 
+    def pick_and_refine_jupyter(
+        self,
+        refining_function: Callable[[Path, Path], Any] | None = None,
+        projection: str | int = "max",
+        colormap: str = "viridis",
+        contrast_limits: tuple | None = None,
+        figsize: tuple = (12, 5),
+        phases=None,
+        return_fig: bool = False,
+    ):
+        """
+        Interactive Jupyter picker: click a pixel on the projected map to
+        extract its diffraction spectrum, save it as a ``.xy`` file, and
+        optionally run a Rietveld refinement.
+
+        Layout
+        ------
+        * **Left panel** – 2-D projection (or single tth-slice) of the volume.
+          Click any pixel to select it; a crosshair marks the selection.
+        * **Right panel** – diffraction pattern at the selected pixel plotted
+          against the 2θ axis. When *phases* is supplied a tick row is drawn
+          below the profile.
+        * **Buttons** – "Save .xy" writes the spectrum to disk; "Save .xy &
+          Refine" also runs *refining_function* on that file.
+
+        Args:
+            refining_function (callable or None): Function with signature
+                ``f(xy_file: Path, gpx_file: Path)`` that performs the GSAS-II
+                refinement and saves results to *gpx_file*.  When ``None`` the
+                "Save .xy & Refine" button is disabled (default ``None``).
+            projection (str or int): How to collapse the tth axis into a 2-D
+                map.  ``"max"`` (default), ``"mean"``, or ``"sum"`` apply the
+                corresponding reduction; an integer is used as a tth-axis index
+                (single diffraction slice).
+            colormap (str): Matplotlib colormap for the map panel
+                (default ``"viridis"``).
+            contrast_limits (tuple or None): ``(vmin, vmax)`` for the map
+                image. Defaults to data min / max.
+            figsize (tuple): Figure size in inches (default ``(12, 5)``).
+            phases (dict or None): Phase peak positions forwarded to the
+                spectrum panel. Same format as
+                :func:`~nrxrdct.visualization.visualize_slices_with_profile_jupyter`:
+                a ``dict`` mapping phase name → list of 2θ positions (float)
+                or a ``pandas.DataFrame`` with a ``"tth"`` column.
+            return_fig (bool): If ``True``, return the
+                ``matplotlib.figure.Figure`` object (default ``False``).
+
+        Returns:
+            matplotlib.figure.Figure or None
+
+        Note:
+            The cell must use ``%matplotlib widget`` (ipympl backend) and have
+            ``ipywidgets`` installed::
+
+                %matplotlib widget
+                vol.pick_and_refine_jupyter(refining_function=my_refine)
+        """
+        try:
+            import ipywidgets as widgets
+            import matplotlib.gridspec as gridspec
+            import matplotlib.pyplot as plt
+            from IPython.display import display
+        except ImportError as exc:
+            raise ImportError(
+                "pick_and_refine_jupyter requires ipywidgets and ipympl.\n"
+                "Install them with:  pip install ipywidgets ipympl"
+            ) from exc
+
+        from .visualization import _draw_phase_ticks
+
+        n_tth, nx, ny = self.volume.shape
+
+        # ── 2-D projection map ────────────────────────────────────────────
+        if isinstance(projection, int):
+            if not (0 <= projection < n_tth):
+                raise ValueError(
+                    f"projection index {projection} out of range [0, {n_tth - 1}]."
+                )
+            map_2d = self.volume[projection]
+            proj_label = f"slice {projection}"
+        elif projection == "max":
+            map_2d = self.volume.max(axis=0)
+            proj_label = "max projection"
+        elif projection == "mean":
+            map_2d = self.volume.mean(axis=0)
+            proj_label = "mean projection"
+        elif projection == "sum":
+            map_2d = self.volume.sum(axis=0)
+            proj_label = "sum projection"
+        else:
+            raise ValueError(
+                f"projection must be 'max', 'mean', 'sum', or an int; got {projection!r}."
+            )
+
+        vmin_map, vmax_map = (
+            contrast_limits
+            if contrast_limits
+            else (float(map_2d.min()), float(map_2d.max()))
+        )
+
+        # ── Shared state ──────────────────────────────────────────────────
+        state: dict = {"ii": None, "jj": None}
+
+        # ── Figure & axes ─────────────────────────────────────────────────
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize, facecolor="#0e1117")
+        fig.suptitle(
+            f"{self.name}  —  pick a pixel to extract spectrum",
+            color="#e6edf3",
+            fontsize=12,
+            fontweight="bold",
+            y=0.98,
+        )
+
+        gs = gridspec.GridSpec(
+            1, 2,
+            figure=fig,
+            left=0.06, right=0.97, bottom=0.12, top=0.91, wspace=0.35,
+        )
+
+        ax_map = fig.add_subplot(gs[0], facecolor="#161b22")
+
+        if phases:
+            n_phases = len(phases)
+            gs_right = gridspec.GridSpecFromSubplotSpec(
+                2, 1,
+                subplot_spec=gs[1],
+                height_ratios=[5, max(1, n_phases)],
+                hspace=0.06,
+            )
+            ax_prof = fig.add_subplot(gs_right[0], facecolor="#161b22")
+            ax_ticks = fig.add_subplot(gs_right[1], facecolor="#161b22", sharex=ax_prof)
+            _draw_phase_ticks(ax_ticks, phases, self.tth)
+            ax_ticks.set_xlabel("2θ (°)", color="#8b949e", fontsize=8)
+            ax_prof.tick_params(colors="#8b949e", labelsize=7, axis="x", labelbottom=False)
+            ax_prof.tick_params(colors="#8b949e", labelsize=7, axis="y")
+        else:
+            ax_prof = fig.add_subplot(gs[1], facecolor="#161b22")
+            ax_prof.tick_params(colors="#8b949e", labelsize=7)
+            ax_prof.set_xlabel("2θ (°)", color="#8b949e", fontsize=8)
+
+        # Map panel styling
+        ax_map.tick_params(colors="#8b949e", labelsize=7)
+        for sp in ax_map.spines.values():
+            sp.set_edgecolor("#30363d")
+        ax_map.set_xlabel("j  (column)", color="#8b949e", fontsize=8)
+        ax_map.set_ylabel("i  (row)", color="#8b949e", fontsize=8)
+        ax_map.set_title(
+            f"Map ({proj_label})  —  click to pick pixel",
+            color="#8b949e", fontsize=9, pad=6,
+        )
+
+        ax_map.imshow(
+            map_2d,
+            cmap=colormap,
+            vmin=vmin_map,
+            vmax=vmax_map,
+            origin="upper",
+            interpolation="nearest",
+            aspect="auto",
+        )
+        (dot,) = ax_map.plot(
+            [], [], "o",
+            color="#ff4444", markersize=7,
+            markeredgecolor="white", markeredgewidth=0.9,
+        )
+        (hline,) = ax_map.plot([], [], color="#f0883e", linewidth=0.8, alpha=0.7)
+        (vline_img,) = ax_map.plot([], [], color="#f0883e", linewidth=0.8, alpha=0.7)
+
+        # Profile panel styling
+        for sp in ax_prof.spines.values():
+            sp.set_edgecolor("#30363d")
+        ax_prof.set_ylabel("Intensity", color="#8b949e", fontsize=8)
+        ax_prof.set_xlim(float(self.tth[0]), float(self.tth[-1]))
+        prof_title = ax_prof.set_title(
+            "Spectrum  —  select a pixel", color="#8b949e", fontsize=9, pad=6,
+        )
+        (profile_line,) = ax_prof.plot(
+            [], [], color="#58a6ff", linewidth=1.4, solid_capstyle="round",
+        )
+
+        # ── Widgets ───────────────────────────────────────────────────────
+        status_label = widgets.HTML(
+            value="<span style='color:#8b949e;font-size:12px'>No pixel selected.</span>",
+            layout=widgets.Layout(width="auto"),
+        )
+        btn_save = widgets.Button(
+            description="Save .xy",
+            button_style="info",
+            disabled=True,
+            layout=widgets.Layout(width="130px"),
+            icon="download",
+        )
+        btn_refine = widgets.Button(
+            description="Save .xy & Refine",
+            button_style="success",
+            disabled=True,
+            layout=widgets.Layout(width="180px"),
+            icon="cogs",
+            tooltip=(
+                "Provide a refining_function to enable."
+                if refining_function is None
+                else "Save spectrum and run Rietveld refinement."
+            ),
+        )
+
+        def _set_status(msg: str, color: str = "#8b949e") -> None:
+            status_label.value = (
+                f"<span style='color:{color};font-size:12px'>{msg}</span>"
+            )
+
+        def _redraw_profile(ii: int, jj: int) -> None:
+            profile = self.volume[:, ii, jj]
+            profile_line.set_xdata(self.tth)
+            profile_line.set_ydata(profile)
+            p_min, p_max = float(profile.min()), float(profile.max())
+            margin = max((p_max - p_min) * 0.05, 1e-9)
+            ax_prof.set_ylim(p_min - margin, p_max + margin)
+            prof_title.set_text(f"Spectrum  |  pixel  i={ii},  j={jj}")
+            # Crosshair on map
+            hline.set_xdata([0, ny - 1])
+            hline.set_ydata([ii, ii])
+            vline_img.set_xdata([jj, jj])
+            vline_img.set_ydata([0, nx - 1])
+            dot.set_xdata([jj])
+            dot.set_ydata([ii])
+            fig.canvas.draw_idle()
+
+        def on_click(event) -> None:
+            if event.inaxes is not ax_map or event.button != 1:
+                return
+            jj = int(np.clip(round(event.xdata), 0, ny - 1))
+            ii = int(np.clip(round(event.ydata), 0, nx - 1))
+            state["ii"] = ii
+            state["jj"] = jj
+            _redraw_profile(ii, jj)
+            btn_save.disabled = False
+            if refining_function is not None:
+                btn_refine.disabled = False
+            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            _set_status(
+                f"Selected pixel  i={ii}, j={jj}  →  {xy_path.name}", "#79c0ff"
+            )
+
+        fig.canvas.mpl_connect("button_press_event", on_click)
+
+        def on_save(_) -> None:
+            ii, jj = state["ii"], state["jj"]
+            if ii is None:
+                return
+            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            save_xy_file(
+                self.tth, self.volume[:, ii, jj], None, str(xy_path), verbose=False
+            )
+            _set_status(f"Saved  {xy_path}", "#7ee787")
+
+        def on_save_and_refine(_) -> None:
+            ii, jj = state["ii"], state["jj"]
+            if ii is None or refining_function is None:
+                return
+            btn_save.disabled = True
+            btn_refine.disabled = True
+            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            gpx_path = self.folder_models / f"{self.name}_{ii:04}_{jj:04}.gpx"
+            _set_status(f"Saving  {xy_path.name} …", "#f0883e")
+            save_xy_file(
+                self.tth, self.volume[:, ii, jj], None, str(xy_path), verbose=False
+            )
+            _set_status(f"Refining  {xy_path.name} …", "#f0883e")
+            try:
+                refining_function(xy_path, gpx_path)
+                _set_status(f"Done  —  {gpx_path.name}", "#7ee787")
+            except Exception as exc:
+                _set_status(f"Refinement failed: {exc}", "#ff7b72")
+            finally:
+                btn_save.disabled = False
+                if refining_function is not None:
+                    btn_refine.disabled = False
+
+        btn_save.on_click(on_save)
+        btn_refine.on_click(on_save_and_refine)
+
+        controls = widgets.VBox(
+            [
+                widgets.HBox([btn_save, btn_refine]),
+                status_label,
+            ],
+            layout=widgets.Layout(margin="6px 0 0 0"),
+        )
+        display(widgets.VBox([fig.canvas, controls]))
+
+        if return_fig:
+            return fig
+
     def write_slurm_scripts(
         self,
         volume_hdf5: Path,

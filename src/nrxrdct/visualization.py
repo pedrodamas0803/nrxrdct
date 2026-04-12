@@ -254,13 +254,14 @@ class ZProfilePlot:
             ax = self.fig.add_subplot(gs[0], facecolor="#161b22")
             ax_ticks = self.fig.add_subplot(gs[1], facecolor="#161b22", sharex=ax)
             ax.tick_params(colors="#8b949e", labelsize=8, labelbottom=False)
-            _draw_phase_ticks(ax_ticks, phases, self.z_axis)
+            self.vline_ticks = _draw_phase_ticks(ax_ticks, phases, self.z_axis)
             ax_ticks.set_xlabel(z_label, color="#8b949e", fontsize=9)
         else:
             self.fig.subplots_adjust(left=0.12, right=0.97, top=0.88, bottom=0.16)
             ax = self.fig.add_subplot(111, facecolor="#161b22")
             ax.tick_params(colors="#8b949e", labelsize=8)
             ax.set_xlabel(z_label, color="#8b949e", fontsize=9)
+            self.vline_ticks = None
 
         for spine in ax.spines.values():
             spine.set_edgecolor("#30363d")
@@ -305,7 +306,10 @@ class ZProfilePlot:
         self.line.set_xdata(self.z_axis)
         self.line.set_ydata(profile)
         self.ax.set_ylim(profile.min() * 0.95 - 1e-9, profile.max() * 1.05 + 1e-9)
-        self.vline.set_xdata([self.z_axis[current_z_idx], self.z_axis[current_z_idx]])
+        x_now = [self.z_axis[current_z_idx], self.z_axis[current_z_idx]]
+        self.vline.set_xdata(x_now)
+        if self.vline_ticks is not None:
+            self.vline_ticks.set_xdata(x_now)
         self.title.set_text(f"Z-profile  |  pixel  y={y},  x={x}")
         self.fig.canvas.draw_idle()
         plt.pause(0.01)
@@ -317,7 +321,10 @@ class ZProfilePlot:
         Args:
             z_idx (int): Current axis-0 slice index.
         """
-        self.vline.set_xdata([self.z_axis[z_idx], self.z_axis[z_idx]])
+        x_now = [self.z_axis[z_idx], self.z_axis[z_idx]]
+        self.vline.set_xdata(x_now)
+        if self.vline_ticks is not None:
+            self.vline_ticks.set_xdata(x_now)
         self.fig.canvas.draw_idle()
         plt.pause(0.005)
 
@@ -521,7 +528,8 @@ def visualize_slices_with_profile_jupyter(
     z_label: str = "Z  (axis-0 index)",
     figsize: tuple = (12, 5),
     phases: Optional[Union[Dict[str, List[float]], Dict[str, pd.DataFrame]]] = None,
-) -> None:
+    return_fig: bool = False,
+) -> Optional[plt.Figure]:
     """
     Display an interactive 2-D slice viewer with a Z-profile panel inside
     a Jupyter notebook.
@@ -621,6 +629,7 @@ def visualize_slices_with_profile_jupyter(
     # Figure layout
     # ------------------------------------------------------------------
     fig = plt.figure(figsize=figsize, facecolor="#0e1117")
+    plt.close(fig)  # prevent ipympl from auto-displaying; we call display() explicitly
     fig.suptitle(name, color="#e6edf3", fontsize=12, fontweight="bold", y=0.98)
 
     gs = gridspec.GridSpec(
@@ -688,7 +697,8 @@ def visualize_slices_with_profile_jupyter(
         ax_phase_ticks = fig.add_subplot(
             gs_right[1], facecolor="#161b22", sharex=ax_prof
         )
-        _draw_phase_ticks(ax_phase_ticks, phases, z_axis)
+        vline_ticks = _draw_phase_ticks(ax_phase_ticks, phases, z_axis)
+        vline_ticks.set_xdata([z_axis[initial_slice], z_axis[initial_slice]])
         ax_phase_ticks.set_xlabel(z_label, color="#8b949e", fontsize=8)
         ax_prof.tick_params(
             colors="#8b949e", labelsize=7, axis="x", labelbottom=False
@@ -698,6 +708,7 @@ def visualize_slices_with_profile_jupyter(
         ax_prof = fig.add_subplot(gs[1], facecolor="#161b22")
         ax_prof.tick_params(colors="#8b949e", labelsize=7)
         ax_prof.set_xlabel(z_label, color="#8b949e", fontsize=8)
+        vline_ticks = None
 
     ax_prof.set_title(
         "Z-profile  —  select a pixel", color="#8b949e", fontsize=9, pad=6
@@ -749,9 +760,15 @@ def visualize_slices_with_profile_jupyter(
     # ------------------------------------------------------------------
     # Helper
     # ------------------------------------------------------------------
+    def _sync_vlines(x_val: float) -> None:
+        xdata = [x_val, x_val]
+        vline_prof.set_xdata(xdata)
+        if vline_ticks is not None:
+            vline_ticks.set_xdata(xdata)
+
     def _redraw_slice(z_idx: int) -> None:
         img_display.set_data(volume[z_idx])
-        vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+        _sync_vlines(z_axis[z_idx])
         # Update crosshair title
         ax_img.set_title(
             f"Slice {z_idx}  |  {z_label} = {z_axis[z_idx]:.4g}",
@@ -768,7 +785,7 @@ def visualize_slices_with_profile_jupyter(
         p_min, p_max = profile.min(), profile.max()
         margin = max((p_max - p_min) * 0.05, 1e-9)
         ax_prof.set_ylim(p_min - margin, p_max + margin)
-        vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+        _sync_vlines(z_axis[z_idx])
         prof_title.set_text(f"Z-profile  |  pixel  y={y},  x={x}")
         # Crosshair on image
         hline.set_xdata([0, n_x - 1])
@@ -788,8 +805,7 @@ def visualize_slices_with_profile_jupyter(
         slice_info.value = _slice_info_text(z_idx, z_axis, z_label)
         _redraw_slice(z_idx)
         if state["y_sel"] is not None:
-            # Just move the vline; profile data stays the same
-            vline_prof.set_xdata([z_axis[z_idx], z_axis[z_idx]])
+            # _redraw_slice already moved the vlines; just refresh
             fig.canvas.draw_idle()
 
     slider.observe(on_slider_change, names="value")
@@ -832,6 +848,9 @@ def visualize_slices_with_profile_jupyter(
     )
 
     display(widgets.VBox([fig.canvas, controls]))
+
+    if return_fig:
+        return fig
 
     # Initial render
     _redraw_slice(initial_slice)
@@ -894,10 +913,15 @@ def _draw_phase_ticks(
 
     for i, (_, peaks) in enumerate(phases.items()):
         color = _PHASE_COLORS[i % len(_PHASE_COLORS)]
-        ax.vlines(peaks, i - 0.4, i + 0.4, colors=color, linewidth=1.2)
+        ax.vlines(peaks, i - 0.25, i + 0.25, colors=color, linewidth=1.2)
 
     ax.set_yticks(range(n_phases))
     ax.set_yticklabels(list(phases.keys()), color="#8b949e", fontsize=7)
+
+    vline = ax.axvline(
+        x=z_axis[0], color="#f0883e", linewidth=1.0, linestyle="--", alpha=0.85
+    )
+    return vline
 
 
 # ---------------------------------------------------------------------------

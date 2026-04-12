@@ -883,6 +883,150 @@ class ReconstructedVolume:
         fig.tight_layout()
         return fig if return_fig else None
 
+    def fit_peak_map(
+        self,
+        center: float,
+        window: float,
+        model: str = "pseudo_voigt",
+        bg_method: str = "snip",
+        bg_kwargs: dict | None = None,
+        n_workers: int | None = None,
+        plot: bool = False,
+        cmap: str = "viridis",
+        figsize: tuple | None = None,
+        return_fig: bool = False,
+    ) -> dict:
+        """
+        Fit a single diffraction peak for every active voxel and return
+        2-D parameter maps.
+
+        For each unmasked voxel the spectrum ``volume[:, ii, jj]`` is passed
+        to :func:`~nrxrdct.peakfit.fit_peak`.  The background is estimated
+        with ``pybaselines`` before fitting, so no prior background subtraction
+        is needed.  Failed fits return ``nan`` at that pixel.
+
+        Args:
+            center (float): Nominal peak centre in degrees 2θ.
+            window (float): Total fitting window width in degrees around
+                *center*.
+            model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,
+                ``"voigt"``, or ``"pseudo_voigt"`` (default).
+            bg_method (str): Background algorithm forwarded to
+                :func:`~nrxrdct.utils.calculate_xrd_baseline`.
+                Options: ``"snip"`` (default), ``"iasls"``, ``"aspls"``,
+                ``"arpls"``, ``"mor"``.
+            bg_kwargs (dict or None): Extra keyword arguments for the
+                background estimator.
+            n_workers (int or None): Number of worker threads.  ``None``
+                uses :data:`NTHREADS` (cpu_count − 2).
+            plot (bool): If ``True``, display a mosaic of all parameter maps
+                after fitting (default ``False``).
+            cmap (str): Matplotlib colormap used in the mosaic
+                (default ``"viridis"``).
+            figsize (tuple or None): ``(width, height)`` in inches for the
+                mosaic figure.  Defaults to ``(4 * ncols, 4 * nrows)``.
+            return_fig (bool): If ``True``, return the
+                ``matplotlib.figure.Figure`` alongside the maps dict.
+                Ignored when *plot* is ``False`` (default ``False``).
+
+        Returns:
+            dict[str, np.ndarray]: 2-D maps of shape ``(nx, ny)`` keyed by
+            parameter name.  Always present: ``"center"``, ``"amplitude"``,
+            ``"fwhm"``, ``"area"``, ``"residual"``, ``"success"``.
+            Model-specific: ``"sigma"`` (Gaussian / Voigt),
+            ``"gamma"`` (Lorentzian / Voigt), ``"eta"`` (pseudo-Voigt).
+            Masked pixels and failed fits contain ``nan``; the ``"success"``
+            map uses ``1.0`` / ``0.0``.
+            When *plot* is ``True`` and *return_fig* is ``True``, returns a
+            ``(maps, fig)`` tuple instead.
+
+        Example::
+
+            maps = vol.fit_peak_map(center=3.56, window=0.4, plot=True)
+        """
+        from .peakfit import fit_peak as _fit_peak
+
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        active = self._active_indices
+        workers = n_workers if n_workers is not None else NTHREADS
+
+        def _fit_one(idx: Tuple[int, int]) -> Tuple[int, int, dict]:
+            ii, jj = idx
+            return ii, jj, _fit_peak(
+                self.tth, self.volume[:, ii, jj],
+                center, window, model, bg_method, bg_kwargs,
+            )
+
+        collected: dict[str, np.ndarray] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for ii, jj, params in tqdm(
+                pool.map(_fit_one, active),
+                total=len(active),
+                desc=f"Fitting peak @ {center} °  [{model}]",
+            ):
+                for key, val in params.items():
+                    if key not in collected:
+                        collected[key] = np.full((nx, ny), np.nan, dtype=np.float32)
+                    collected[key][ii, jj] = float(val) if val is not None else np.nan
+
+        if not plot:
+            return collected
+
+        # ── Mosaic plot ───────────────────────────────────────────────────
+        import matplotlib.pyplot as plt
+
+        # Human-readable labels and preferred display order
+        label_map = {
+            "center":    f"Centre (°)",
+            "amplitude": "Amplitude",
+            "fwhm":      "FWHM (°)",
+            "area":      "Area",
+            "sigma":     "σ (°)",
+            "gamma":     "γ (°)",
+            "eta":       "η  (Lorentzian fraction)",
+            "residual":  "RMS residual",
+            "success":   "Success",
+        }
+        # Show keys in preferred order; put model-specific ones after the common set
+        order = ["center", "amplitude", "fwhm", "area",
+                 "sigma", "gamma", "eta", "residual", "success"]
+        keys = [k for k in order if k in collected] + \
+               [k for k in collected if k not in order]
+
+        n = len(keys)
+        ncols = 3
+        nrows = -(-n // ncols)  # ceiling division
+
+        if figsize is None:
+            figsize = (ncols * 4, nrows * 4)
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+        axes_flat = np.array(axes).flatten()
+
+        for idx, key in enumerate(keys):
+            ax = axes_flat[idx]
+            data = collected[key].astype(float)
+            if self.mask is not None:
+                data[self.mask == 0] = np.nan
+
+            finite = data[np.isfinite(data)]
+            vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+
+            im = ax.imshow(data, cmap=cmap, origin="lower", vmin=vmin, vmax=vmax)
+            ax.set_title(label_map.get(key, key))
+            ax.axis("off")
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+        for ax in axes_flat[n:]:
+            ax.set_visible(False)
+
+        fig.suptitle(
+            f"{self.name}  —  peak fit @ {center} °  [{model}]", fontsize=13
+        )
+        fig.tight_layout()
+
+        return (collected, fig) if return_fig else collected
+
     def pick_and_refine_jupyter(
         self,
         refining_function: Callable[[Path, Path], Any] | None = None,

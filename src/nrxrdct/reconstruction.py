@@ -955,6 +955,12 @@ class ReconstructedVolume:
 
         n_tth, nx, ny = self.volume.shape
 
+        # ── Output folders ────────────────────────────────────────────────
+        out_xy  = self.folder / "refinement_pixel" / "xy_files"
+        out_gpx = self.folder / "refinement_pixel" / "gpx_files"
+        out_xy.mkdir(parents=True, exist_ok=True)
+        out_gpx.mkdir(parents=True, exist_ok=True)
+
         # ── 2-D projection map ────────────────────────────────────────────
         if isinstance(projection, int):
             if not (0 <= projection < n_tth):
@@ -1122,7 +1128,7 @@ class ReconstructedVolume:
             btn_save.disabled = False
             if refining_function is not None:
                 btn_refine.disabled = False
-            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            xy_path = out_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
             _set_status(
                 f"Selected pixel  i={ii}, j={jj}  →  {xy_path.name}", "#79c0ff"
             )
@@ -1133,34 +1139,50 @@ class ReconstructedVolume:
             ii, jj = state["ii"], state["jj"]
             if ii is None:
                 return
-            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            xy_path = out_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
             save_xy_file(
                 self.tth, self.volume[:, ii, jj], None, str(xy_path), verbose=False
             )
             _set_status(f"Saved  {xy_path}", "#7ee787")
 
         def on_save_and_refine(_) -> None:
+            import io as _io
+            import sys
+            import traceback
+
             ii, jj = state["ii"], state["jj"]
             if ii is None or refining_function is None:
                 return
             btn_save.disabled = True
             btn_refine.disabled = True
-            xy_path = self.folder_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
-            gpx_path = self.folder_models / f"{self.name}_{ii:04}_{jj:04}.gpx"
+            xy_path = out_xy / f"{self.name}_{ii:04}_{jj:04}.xy"
+            gpx_path = out_gpx / f"{self.name}_{ii:04}_{jj:04}.gpx"
+            res_path = out_gpx / f"{self.name}_{ii:04}_{jj:04}.res"
             _set_status(f"Saving  {xy_path.name} …", "#f0883e")
             save_xy_file(
                 self.tth, self.volume[:, ii, jj], None, str(xy_path), verbose=False
             )
             _set_status(f"Refining  {xy_path.name} …", "#f0883e")
+            buf = _io.StringIO()
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = buf
+            status = "ok"
             try:
                 refining_function(xy_path, gpx_path)
-                _set_status(f"Done  —  {gpx_path.name}", "#7ee787")
             except Exception as exc:
-                _set_status(f"Refinement failed: {exc}", "#ff7b72")
+                traceback.print_exc()
+                status = str(exc)
             finally:
-                btn_save.disabled = False
-                if refining_function is not None:
-                    btn_refine.disabled = False
+                sys.stdout, sys.stderr = old_stdout, old_stderr
+            output = buf.getvalue()
+            res_path.write_text(output, encoding="utf-8")
+            if status == "ok":
+                _set_status(f"Done  —  {gpx_path.name}  (log → {res_path.name})", "#7ee787")
+            else:
+                _set_status(f"Refinement failed: {status}  (log → {res_path.name})", "#ff7b72")
+            btn_save.disabled = False
+            if refining_function is not None:
+                btn_refine.disabled = False
 
         btn_save.on_click(on_save)
         btn_refine.on_click(on_save_and_refine)

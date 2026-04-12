@@ -1513,7 +1513,7 @@ pixels inside the circle.</p>
 
 
 <a href="#nrxrdct.utils.get_powder_xrd_peaks" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span> <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span><span class="n">cif_files</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span> <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1552,13 +1552,13 @@ the CIF is used for any entry without a supplied name.</p>
               </div>
             </li>
             <li>
-              <b><code>en_eV</code></b>
+              <b><code>energy_keV</code></b>
                   (<code><span title="float">float</span></code>, default:
-                      <code>100000</code>
+                      <code>100.0</code>
 )
               –
               <div class="doc-md-description">
-                <p>X-ray energy in eV (default 100 keV).</p>
+                <p>X-ray energy in keV (default 100 keV).</p>
               </div>
             </li>
             <li>
@@ -1688,7 +1688,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <span class="normal"><a href="#__codelineno-0-373">373</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_powder_xrd_peaks</span><span class="p">(</span>
 <a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="n">cif_files</span><span class="p">,</span>
 <a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">en_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span>
 <a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="n">tth_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">tth_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
@@ -1700,7 +1700,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        names (list of str, optional): Phase names to use as dict keys, one per</span>
 <a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            CIF file.  If None or shorter than cif_files, the name embedded in</span>
 <a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">            the CIF is used for any entry without a supplied name.</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        en_eV (float): X-ray energy in eV (default 100 keV).</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        energy_keV (float): X-ray energy in keV (default 100 keV).</span>
 <a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        tth_min (float, optional): Minimum 2theta in degrees (auto if None).</span>
 <a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">        tth_max (float, optional): Maximum 2theta in degrees (auto if None).</span>
 <a id="__codelineno-0-319" name="__codelineno-0-319"></a>
@@ -1714,7 +1714,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">if</span> <span class="n">names</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
 <a id="__codelineno-0-329" name="__codelineno-0-329"></a>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">wavelength</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">en2lam</span><span class="p">(</span><span class="n">en_eV</span><span class="p">)</span>  <span class="c1"># Å</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">wavelength</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">en2lam</span><span class="p">(</span><span class="n">energy_keV</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>  <span class="c1"># Å</span>
 <a id="__codelineno-0-331" name="__codelineno-0-331"></a>
 <a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">if</span> <span class="n">tth_min</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">tth_min</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">(</span><span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="mf">10.0</span><span class="p">)))</span>
@@ -1727,7 +1727,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <a id="__codelineno-0-340" name="__codelineno-0-340"></a>        <span class="n">mat</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Crystal</span><span class="o">.</span><span class="n">fromCIF</span><span class="p">(</span><span class="n">cif</span><span class="p">)</span>
 <a id="__codelineno-0-341" name="__codelineno-0-341"></a>        <span class="n">phase_name</span> <span class="o">=</span> <span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">names</span><span class="p">)</span> <span class="k">else</span> <span class="n">mat</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-342" name="__codelineno-0-342"></a>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a>        <span class="n">pd_obj</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderDiffraction</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">en_eV</span><span class="p">)</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a>        <span class="n">pd_obj</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderDiffraction</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">energy_keV</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
 <a id="__codelineno-0-344" name="__codelineno-0-344"></a>
 <a id="__codelineno-0-345" name="__codelineno-0-345"></a>        <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
 <a id="__codelineno-0-346" name="__codelineno-0-346"></a>        <span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">pd_obj</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -1772,7 +1772,7 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 
 
 <a href="#nrxrdct.utils.simulate_powder_xrd_monophase" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">simulate_powder_xrd_monophase</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">cif_files</span><span class="p">,</span> <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">en_eV</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-07</span><span class="p">,</span> <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">simulate_powder_xrd_monophase</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">cif_files</span><span class="p">,</span> <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span> <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-07</span><span class="p">,</span> <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1819,13 +1819,13 @@ phase (default <code>True</code>).</p>
               </div>
             </li>
             <li>
-              <b><code>en_eV</code></b>
+              <b><code>energy_keV</code></b>
                   (<code><span title="float">float</span></code>, default:
-                      <code>100000</code>
+                      <code>100.0</code>
 )
               –
               <div class="doc-md-description">
-                <p>X-ray energy in eV (default 100 000 eV = 100 keV).</p>
+                <p>X-ray energy in keV (default 100 keV).</p>
               </div>
             </li>
             <li>
@@ -1933,7 +1933,7 @@ evaluated at <em>tth</em>.</p>
 <a id="__codelineno-0-252" name="__codelineno-0-252"></a>    <span class="n">tth</span><span class="p">,</span>
 <a id="__codelineno-0-253" name="__codelineno-0-253"></a>    <span class="n">cif_files</span><span class="p">,</span>
 <a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">en_eV</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">energy_keV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span>
 <a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="n">crystallite_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100e-9</span><span class="p">,</span>
 <a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">do_save</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
@@ -1946,7 +1946,7 @@ evaluated at <em>tth</em>.</p>
 <a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">            independently.</span>
 <a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">        do_plot (bool, optional): If ``True``, produce a matplotlib figure for each</span>
 <a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">            phase (default ``True``).</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">        en_eV (float, optional): X-ray energy in eV (default 100 000 eV = 100 keV).</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">        energy_keV (float, optional): X-ray energy in keV (default 100 keV).</span>
 <a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">        crystallite_size (float, optional): Gaussian crystallite size in metres used</span>
 <a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">            for peak broadening (default 100 nm).</span>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">        do_save (bool, optional): If ``True``, save each pattern to</span>
@@ -1962,7 +1962,7 @@ evaluated at <em>tth</em>.</p>
 <a id="__codelineno-0-281" name="__codelineno-0-281"></a>    <span class="k">for</span> <span class="n">cif</span> <span class="ow">in</span> <span class="n">cif_files</span><span class="p">:</span>
 <a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="n">mat</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Crystal</span><span class="o">.</span><span class="n">fromCIF</span><span class="p">(</span><span class="n">cif</span><span class="p">)</span>
 <a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="n">pwdr</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">Powder</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">crystallite_size_gauss</span><span class="o">=</span><span class="n">crystallite_size</span><span class="p">)</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="n">model</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderModel</span><span class="p">(</span><span class="n">pwdr</span><span class="p">,</span> <span class="n">I0</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">en_eV</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="n">model</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">simpack</span><span class="o">.</span><span class="n">PowderModel</span><span class="p">(</span><span class="n">pwdr</span><span class="p">,</span> <span class="n">I0</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">en</span><span class="o">=</span><span class="n">energy_keV</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
 <a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="n">intensity</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">tth</span><span class="p">)</span>
 <a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="n">model</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <a id="__codelineno-0-287" name="__codelineno-0-287"></a>

@@ -1003,16 +1003,21 @@ class ReconstructedVolume:
         fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
         axes_flat = np.array(axes).flatten()
 
+        # Colormap copy with a distinct colour for masked / failed pixels
+        import matplotlib.cm as _cm
+        cmap_obj = _cm.get_cmap(cmap).copy()
+        cmap_obj.set_bad(color="#aaaaaa")  # light grey for NaN / masked
+
         for idx, key in enumerate(keys):
             ax = axes_flat[idx]
             data = collected[key].astype(float)
             if self.mask is not None:
-                data[self.mask == 0] = np.nan
+                data[self.mask == 0] = np.nan  # force masked pixels to NaN
 
             finite = data[np.isfinite(data)]
             vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
 
-            im = ax.imshow(data, cmap=cmap, origin="lower", vmin=vmin, vmax=vmax)
+            im = ax.imshow(data, cmap=cmap_obj, origin="lower", vmin=vmin, vmax=vmax)
             ax.set_title(label_map.get(key, key))
             ax.axis("off")
             plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
@@ -1517,6 +1522,286 @@ class ReconstructedVolume:
         print(f"Submit script : {submit_path}")
         print(f"Submit with   : sbatch {submit_path}")
         return worker_path, submit_path
+
+    def write_slurm_scripts_peak_fit(
+        self,
+        volume_hdf5: Path,
+        center: float,
+        window: float,
+        model: str = "pseudo_voigt",
+        bg_method: str = "snip",
+        n_array_jobs: int = 500,
+        conda_env: str = "nrxrdct",
+        conda_base: str = "",
+        python_executable: str = "",
+        mem: str = "2G",
+        time_limit: str = "01:00:00",
+        partition: str = "all",
+    ) -> Tuple[Path, Path]:
+        """
+        Generate a SLURM array-job script and a matching Python worker for
+        cluster-side single-peak fitting of all voxels.
+
+        Each array element processes a contiguous chunk of active (unmasked)
+        voxels and writes its results to a ``peak_fit_results/chunk_NNNN.npz``
+        file.  Once all jobs have finished, call :meth:`load_peak_fit_maps` to
+        assemble the per-parameter 2-D maps.
+
+        The volume and 2θ axis must be saved to *volume_hdf5* in advance::
+
+            import h5py
+            with h5py.File("volume.h5", "a") as f:
+                f["volume"] = vol.volume
+                f["tth"]    = vol.tth
+                if vol.mask is not None:
+                    f["mask"] = vol.mask
+
+        Args:
+            volume_hdf5 (Path): HDF5 file containing ``"volume"``, ``"tth"``,
+                and optionally ``"mask"``.
+            center (float): Nominal peak centre in degrees 2θ.
+            window (float): Total fitting window width in degrees.
+            model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,
+                ``"voigt"``, or ``"pseudo_voigt"`` (default).
+            bg_method (str): Background algorithm passed to
+                :func:`~nrxrdct.utils.calculate_xrd_baseline`
+                (default ``"snip"``).
+            n_array_jobs (int): Number of SLURM array elements
+                (default ``500``).
+            conda_env (str): Conda environment name (default ``"nrxrdct"``).
+            conda_base (str): Path to the conda installation root.  When set,
+                ``<conda_base>/etc/profile.d/conda.sh`` is sourced before
+                ``conda activate``.  Leave empty to skip.
+            python_executable (str): Absolute path to the Python binary.
+                When set, the conda activation block is skipped entirely.
+                Leave empty to use conda activation instead.
+            mem (str): Memory per job (default ``"2G"``).
+            time_limit (str): Wall-time limit (default ``"01:00:00"``).
+            partition (str): SLURM partition (default ``"all"``).
+
+        Returns:
+            tuple: ``(worker_path, submit_path)`` — absolute paths to the
+                generated Python worker and the ``sbatch`` submission script.
+                Submit with ``sbatch <submit_path>``.
+        """
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        folder_abs = str(self.folder.resolve())
+        volume_abs = str(Path(volume_hdf5).resolve())
+        out_dir_abs = str((self.folder / "peak_fit_results").resolve())
+        worker_path = self.folder / "worker_peak_fit.py"
+        submit_path = self.folder / "submit_peak_fit.sh"
+
+        worker_template = (
+            "#!/usr/bin/env python\n"
+            '"""SLURM array worker — fit a single peak for a chunk of voxels.\n\n'
+            "Usage::\n\n"
+            "    python worker_peak_fit.py --job-id JOB_ID --n-jobs N_JOBS\n\n"
+            "*job_id* is SLURM_ARRAY_TASK_ID (0-indexed).\n"
+            '"""\n\n'
+            "import argparse\n"
+            "from pathlib import Path\n\n"
+            "import h5py\n"
+            "import numpy as np\n\n"
+            "from nrxrdct.peakfit import fit_peak\n\n\n"
+            "def main() -> None:\n"
+            "    parser = argparse.ArgumentParser()\n"
+            '    parser.add_argument("--job-id", type=int, required=True)\n'
+            '    parser.add_argument("--n-jobs", type=int, required=True)\n'
+            "    args = parser.parse_args()\n\n"
+            "    with h5py.File(Path(VOLUME_HDF5), 'r') as h:\n"
+            '        volume = h["volume"][:]\n'
+            '        tth    = h["tth"][:]\n'
+            '        mask   = h["mask"][:] if "mask" in h else None\n\n'
+            "    nx, ny = NX, NY\n"
+            "    all_indexes = [\n"
+            "        (ii, jj)\n"
+            "        for ii in range(nx)\n"
+            "        for jj in range(ny)\n"
+            "        if mask is None or mask[ii, jj]\n"
+            "    ]\n"
+            "    chunk_size = -(-len(all_indexes) // args.n_jobs)\n"
+            "    start      = args.job_id * chunk_size\n"
+            "    chunk      = all_indexes[start : start + chunk_size]\n"
+            "    if not chunk:\n"
+            "        return\n\n"
+            "    out_dir = Path(OUT_DIR)\n"
+            "    out_dir.mkdir(parents=True, exist_ok=True)\n\n"
+            "    rows = []\n"
+            "    for ii, jj in chunk:\n"
+            "        params = fit_peak(\n"
+            "            tth, volume[:, ii, jj],\n"
+            "            center=CENTER, window=WINDOW,\n"
+            "            model=MODEL, bg_method=BG_METHOD,\n"
+            "        )\n"
+            '        rows.append({"ii": float(ii), "jj": float(jj), **params})\n\n'
+            "    keys   = list(rows[0].keys())\n"
+            "    arrays = {k: np.array([r[k] for r in rows], dtype=np.float32)\n"
+            "              for k in keys}\n"
+            "    out_file = out_dir / f'chunk_{args.job_id:04d}.npz'\n"
+            "    np.savez(out_file, **arrays)\n"
+            '    print(f"Saved {len(rows)} results → {out_file}")\n\n\n'
+            'if __name__ == "__main__":\n'
+            "    main()\n"
+        )
+
+        worker_code = (
+            worker_template
+            .replace("VOLUME_HDF5", repr(volume_abs))
+            .replace("NX, NY",      f"{nx}, {ny}")
+            .replace("OUT_DIR",     repr(out_dir_abs))
+            .replace("CENTER",      repr(float(center)))
+            .replace("WINDOW",      repr(float(window)))
+            .replace("MODEL",       repr(model))
+            .replace("BG_METHOD",   repr(bg_method))
+        )
+
+        submit_script = (
+            "#!/bin/bash\n"
+            f"#SBATCH --job-name={self.name}_peak_fit\n"
+            f"#SBATCH --array=0-{n_array_jobs - 1}\n"
+            f"#SBATCH --mem={mem}\n"
+            f"#SBATCH --time={time_limit}\n"
+            f"#SBATCH --partition={partition}\n"
+            f"#SBATCH --output={folder_abs}/slurm_logs/slurm_%A_%a.out\n\n"
+            + (
+                f"{python_executable} {str(worker_path.resolve())} \\\n"
+                if python_executable
+                else (
+                    "# Conda environment activation\n"
+                    + (
+                        f"source {conda_base}/etc/profile.d/conda.sh\n"
+                        if conda_base
+                        else ""
+                    )
+                    + f"conda activate {conda_env}\n\n"
+                    f"python {str(worker_path.resolve())} \\\n"
+                )
+            )
+            + "    --job-id $SLURM_ARRAY_TASK_ID \\\n"
+            + f"    --n-jobs {n_array_jobs}\n"
+        )
+
+        worker_path.write_text(worker_code)
+        submit_path.write_text(submit_script)
+        print(f"Worker script  : {worker_path}")
+        print(f"Submit script  : {submit_path}")
+        print(f"Results folder : {out_dir_abs}")
+        print(f"Submit with    : sbatch {submit_path}")
+        print(f"Load results   : vol.load_peak_fit_maps()")
+        return worker_path, submit_path
+
+    def load_peak_fit_maps(
+        self,
+        plot: bool = False,
+        cmap: str = "viridis",
+        figsize: tuple | None = None,
+        return_fig: bool = False,
+    ) -> dict:
+        """
+        Assemble per-voxel peak-fit results from SLURM chunk files into 2-D
+        parameter maps.
+
+        Reads every ``peak_fit_results/chunk_*.npz`` file written by the
+        worker generated by :meth:`write_slurm_scripts_peak_fit` and
+        accumulates the results into arrays of shape ``(nx, ny)``.  Pixels
+        that were not processed (masked or missing) remain ``nan``.
+
+        Args:
+            plot (bool): If ``True``, display a mosaic of all maps after
+                loading (default ``False``).
+            cmap (str): Matplotlib colormap for the mosaic
+                (default ``"viridis"``).
+            figsize (tuple or None): Figure size in inches.  Defaults to
+                ``(4 * ncols, 4 * nrows)``.
+            return_fig (bool): If ``True`` and *plot* is ``True``, return
+                ``(maps, fig)`` instead of just *maps*.
+
+        Returns:
+            dict[str, np.ndarray]: Same format as :meth:`fit_peak_map`.
+
+        Raises:
+            FileNotFoundError: No chunk files found — jobs have not finished
+                or the output folder is missing.
+        """
+        out_dir = self.folder / "peak_fit_results"
+        chunk_files = sorted(out_dir.glob("chunk_*.npz"))
+        if not chunk_files:
+            raise FileNotFoundError(
+                f"No chunk files found in {out_dir}. "
+                "Run the SLURM jobs first (sbatch submit_peak_fit.sh)."
+            )
+
+        nx, ny = self.volume.shape[1], self.volume.shape[2]
+        maps: dict[str, np.ndarray] = {}
+
+        for chunk_file in tqdm(chunk_files, desc="Loading peak-fit chunks"):
+            data = np.load(chunk_file)
+            ii_arr = data["ii"].astype(int)
+            jj_arr = data["jj"].astype(int)
+            for key in data.files:
+                if key in ("ii", "jj"):
+                    continue
+                if key not in maps:
+                    maps[key] = np.full((nx, ny), np.nan, dtype=np.float32)
+                maps[key][ii_arr, jj_arr] = data[key]
+
+        if not plot:
+            return maps
+
+        # Re-use the same mosaic logic as fit_peak_map
+        import matplotlib.cm as _cm
+        import matplotlib.pyplot as plt
+
+        label_map = {
+            "center":    "Centre (°)",
+            "amplitude": "Amplitude",
+            "fwhm":      "FWHM (°)",
+            "area":      "Area",
+            "sigma":     "σ (°)",
+            "gamma":     "γ (°)",
+            "eta":       "η  (Lorentzian fraction)",
+            "residual":  "RMS residual",
+            "success":   "Success",
+        }
+        order = ["center", "amplitude", "fwhm", "area",
+                 "sigma", "gamma", "eta", "residual", "success"]
+        keys = [k for k in order if k in maps] + \
+               [k for k in maps if k not in order]
+
+        n = len(keys)
+        ncols = 3
+        nrows = -(-n // ncols)
+
+        if figsize is None:
+            figsize = (ncols * 4, nrows * 4)
+
+        cmap_obj = _cm.get_cmap(cmap).copy()
+        cmap_obj.set_bad(color="#aaaaaa")
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+        axes_flat = np.array(axes).flatten()
+
+        for idx, key in enumerate(keys):
+            ax = axes_flat[idx]
+            data = maps[key].astype(float)
+            if self.mask is not None:
+                data[self.mask == 0] = np.nan
+
+            finite = data[np.isfinite(data)]
+            vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+
+            im = ax.imshow(data, cmap=cmap_obj, origin="lower", vmin=vmin, vmax=vmax)
+            ax.set_title(label_map.get(key, key))
+            ax.axis("off")
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+        for ax in axes_flat[n:]:
+            ax.set_visible(False)
+
+        fig.suptitle(f"{self.name}  —  peak fit (SLURM results)", fontsize=13)
+        fig.tight_layout()
+
+        return (maps, fig) if return_fig else maps
 
 
 def _get_chi2_ii_jj(args: tuple) -> float:

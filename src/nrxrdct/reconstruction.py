@@ -890,6 +890,8 @@ class ReconstructedVolume:
         model: str = "pseudo_voigt",
         bg_method: str = "snip",
         bg_kwargs: dict | None = None,
+        fit_mask: np.ndarray | None = None,
+        output_h5: Path | str | None = None,
         n_workers: int | None = None,
         plot: bool = False,
         cmap: str = "viridis",
@@ -917,6 +919,18 @@ class ReconstructedVolume:
                 ``"arpls"``, ``"mor"``.
             bg_kwargs (dict or None): Extra keyword arguments for the
                 background estimator.
+            fit_mask (np.ndarray or None): Boolean array of shape ``(nx, ny)``.
+                When supplied, only pixels that are truthy in *both*
+                ``self.mask`` (if set) and *fit_mask* are fitted.  Pixels
+                outside *fit_mask* are left as ``nan`` in the output maps.
+                ``None`` fits all active pixels (default).
+            output_h5 (Path, str, or None): If provided, all parameter maps
+                are saved to this HDF5 file under a group named after the
+                peak centre (e.g. ``"peak_3.5600"``).  Fit metadata
+                (``center``, ``window``, ``model``, ``bg_method``) are stored
+                as group attributes.  The file is created if it does not exist
+                and the group is overwritten if it already does (default
+                ``None``).
             n_workers (int or None): Number of worker threads.  ``None``
                 uses :data:`NTHREADS` (cpu_count − 2).
             plot (bool): If ``True``, display a mosaic of all parameter maps
@@ -935,19 +949,40 @@ class ReconstructedVolume:
             ``"fwhm"``, ``"area"``, ``"residual"``, ``"success"``.
             Model-specific: ``"sigma"`` (Gaussian / Voigt),
             ``"gamma"`` (Lorentzian / Voigt), ``"eta"`` (pseudo-Voigt).
-            Masked pixels and failed fits contain ``nan``; the ``"success"``
-            map uses ``1.0`` / ``0.0``.
+            Pixels outside the effective mask and failed fits are ``nan``;
+            ``"success"`` uses ``1.0`` / ``0.0``.
             When *plot* is ``True`` and *return_fig* is ``True``, returns a
             ``(maps, fig)`` tuple instead.
 
         Example::
 
             maps = vol.fit_peak_map(center=3.56, window=0.4, plot=True)
+
+            # Fit only inside a phase region identified by a separate mask
+            maps = vol.fit_peak_map(center=3.56, window=0.4,
+                                    fit_mask=austenite_mask, plot=True)
         """
         from .peakfit import fit_peak as _fit_peak
 
         nx, ny = self.volume.shape[1], self.volume.shape[2]
-        active = self._active_indices
+
+        if fit_mask is not None:
+            fit_mask = np.asarray(fit_mask)
+            if fit_mask.shape != (nx, ny):
+                raise ValueError(
+                    f"fit_mask shape {fit_mask.shape} does not match "
+                    f"volume spatial shape {(nx, ny)}."
+                )
+            # Intersect with self.mask when both are present
+            if self.mask is not None:
+                effective = [(ii, jj) for ii, jj in self._active_indices
+                             if fit_mask[ii, jj]]
+            else:
+                effective = [(ii, jj) for ii in range(nx) for jj in range(ny)
+                             if fit_mask[ii, jj]]
+        else:
+            effective = self._active_indices
+
         workers = n_workers if n_workers is not None else NTHREADS
 
         def _fit_one(idx: Tuple[int, int]) -> Tuple[int, int, dict]:
@@ -960,14 +995,30 @@ class ReconstructedVolume:
         collected: dict[str, np.ndarray] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             for ii, jj, params in tqdm(
-                pool.map(_fit_one, active),
-                total=len(active),
+                pool.map(_fit_one, effective),
+                total=len(effective),
                 desc=f"Fitting peak @ {center} °  [{model}]",
             ):
                 for key, val in params.items():
                     if key not in collected:
                         collected[key] = np.full((nx, ny), np.nan, dtype=np.float32)
                     collected[key][ii, jj] = float(val) if val is not None else np.nan
+
+        # ── Save to HDF5 ─────────────────────────────────────────────────
+        if output_h5 is not None:
+            group_name = f"peak_{center:.4f}"
+            with h5py.File(str(output_h5), "a") as f:
+                if group_name in f:
+                    del f[group_name]
+                grp = f.create_group(group_name)
+                grp.attrs["center"]    = center
+                grp.attrs["window"]    = window
+                grp.attrs["model"]     = model
+                grp.attrs["bg_method"] = bg_method
+                grp.attrs["sample"]    = self.name
+                for key, arr in collected.items():
+                    grp.create_dataset(key, data=arr, compression="gzip")
+            print(f"Peak-fit maps saved → {output_h5}  (group '{group_name}')")
 
         if not plot:
             return collected
@@ -985,11 +1036,12 @@ class ReconstructedVolume:
             "gamma":     "γ (°)",
             "eta":       "η  (Lorentzian fraction)",
             "residual":  "RMS residual",
+            "r2":        "R²",
             "success":   "Success",
         }
         # Show keys in preferred order; put model-specific ones after the common set
         order = ["center", "amplitude", "fwhm", "area",
-                 "sigma", "gamma", "eta", "residual", "success"]
+                 "sigma", "gamma", "eta", "residual", "r2", "success"]
         keys = [k for k in order if k in collected] + \
                [k for k in collected if k not in order]
 
@@ -1012,7 +1064,9 @@ class ReconstructedVolume:
             ax = axes_flat[idx]
             data = collected[key].astype(float)
             if self.mask is not None:
-                data[self.mask == 0] = np.nan  # force masked pixels to NaN
+                data[self.mask == 0] = np.nan
+            if fit_mask is not None:
+                data[fit_mask == 0] = np.nan
 
             finite = data[np.isfinite(data)]
             vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)

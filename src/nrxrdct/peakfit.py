@@ -139,6 +139,7 @@ def fit_peak(
         * ``"area"``      – integrated peak area (intensity × °)
         * ``"residual"``  – RMS residual between background-subtracted data
           and fit (intensity units)
+        * ``"r2"``        – coefficient of determination R² of the fit
         * ``"success"``   – ``True`` if the optimiser converged
 
         Model-specific keys:
@@ -187,7 +188,7 @@ def fit_peak(
 
     _nan: dict = dict(
         center=np.nan, amplitude=np.nan, fwhm=np.nan, area=np.nan,
-        residual=np.nan, success=False,
+        residual=np.nan, r2=np.nan, success=False,
     )
 
     try:
@@ -265,12 +266,17 @@ def fit_peak(
     except Exception:
         return _nan
 
+    ss_res = float(np.sum((y_net - y_fit) ** 2))
+    ss_tot = float(np.sum((y_net - y_net.mean()) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else np.nan
+
     return dict(
         center=float(center + x0r),
         amplitude=float(A),
         fwhm=float(fwhm),
         area=float(area),
         residual=float(np.sqrt(np.mean((y_net - y_fit) ** 2))),
+        r2=r2,
         success=True,
         **{k: float(v) for k, v in extra.items()},
     )

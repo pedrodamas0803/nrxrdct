@@ -4,7 +4,11 @@ Preprocessing routines for XRD-CT detector images.
 Currently implements zinger (hot-pixel) removal using median filtering,
 with a parallelised wrapper for processing image stacks.
 """
-import os, time, concurrent.futures
+
+import concurrent.futures
+import os
+import time
+
 import numpy as np
 import scipy.ndimage as ndi
 
@@ -55,8 +59,10 @@ def dezinger(image, medsize: int = 3, nsigma: int = 5) -> np.ndarray:
     """
     t0 = time.time()
     N = image.shape[0]
+
     def dezing(im):
         return zinger_remove(im, medsize, nsigma)
+
     print(f"Will dezinger {N} images. Might take few seconds.")
     out_image = np.zeros_like(image)
     with concurrent.futures.ThreadPoolExecutor(NTHREAD) as pool:

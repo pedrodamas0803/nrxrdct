@@ -15,7 +15,7 @@ from scipy.optimize import nnls
 from skimage.measure import block_reduce
 from tqdm.auto import tqdm
 
-DEFAULT_LINES = ["Ka1", "Ka2", "Kb1", "Kb2", "La1", "Lb1", "Lg1"]
+from .constants import DEFAULT_LINES, _LINE_MAP
 
 
 def get_fluo_lines(
@@ -36,8 +36,9 @@ def get_fluo_lines(
         names (list of str, optional): Keys to use in the returned dict, one
             per element.  If ``None`` or shorter than *elements*, the chemical
             symbol is used for any entry without a supplied name.
-        lines (list, optional): Emission line names to query (default: Ka1,
-            Ka2, Kb1, Kb2, La1, Lb1, Lg1).
+        lines (list, optional): Emission line names to query.  Must be keys of
+            ``_LINE_MAP``; unknown names are silently skipped.  Defaults to
+            ``DEFAULT_LINES`` — all standard Siegbahn-named K, L, and M lines.
 
     Returns:
         dict: Mapping of element name (or supplied name) to a
@@ -51,15 +52,6 @@ def get_fluo_lines(
     if names is None:
         names = []
 
-    line_consts = [
-        xraylib.KA1_LINE,
-        xraylib.KA2_LINE,
-        xraylib.KB1_LINE,
-        xraylib.KB2_LINE,
-        xraylib.LA1_LINE,
-        xraylib.LB1_LINE,
-        xraylib.LG1_LINE,
-    ]
     emin, emax = energy_range
 
     results = {}
@@ -68,7 +60,10 @@ def get_fluo_lines(
         Z = xraylib.SymbolToAtomicNumber(element)
 
         rows = []
-        for line_name, line_const in zip(lines, line_consts):
+        for line_name in lines:
+            line_const = _LINE_MAP.get(line_name)
+            if line_const is None:
+                continue
             try:
                 en = xraylib.LineEnergy(Z, line_const)
             except Exception:
@@ -277,16 +272,6 @@ def get_fluo_full_spectra(
 # Spectrum fitting
 # ---------------------------------------------------------------------------
 
-_LINE_CONSTS = [
-    xraylib.KA1_LINE,
-    xraylib.KA2_LINE,
-    xraylib.KB1_LINE,
-    xraylib.KB2_LINE,
-    xraylib.LA1_LINE,
-    xraylib.LB1_LINE,
-    xraylib.LG1_LINE,
-]
-
 
 def _gaussian(x, center, sigma) -> np.ndarray:
     return np.exp(-0.5 * ((x - center) / sigma) ** 2)
@@ -318,7 +303,10 @@ def build_element_component(element, energy_axis, excitation_energy, fwhm_keV) -
     emin, emax = energy_axis[0], energy_axis[-1]
 
     component = np.zeros_like(energy_axis, dtype=np.float64)
-    for _, lconst in zip(DEFAULT_LINES, _LINE_CONSTS):
+    for line_name in DEFAULT_LINES:
+        lconst = _LINE_MAP.get(line_name)
+        if lconst is None:
+            continue
         try:
             en = xraylib.LineEnergy(Z, lconst)
             if not (emin <= en <= emax):

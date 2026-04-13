@@ -86,7 +86,9 @@ class HyperspectralNMF:
                 input are clipped to zero before fitting (default ``True``).
         """
         self.vol = volume
-        self.X = volume.transpose(1, 2, 0).reshape((volume.shape[1] * volume.shape[2], volume.shape[0]))
+        self.X = volume.transpose(1, 2, 0).reshape(
+            (volume.shape[1] * volume.shape[2], volume.shape[0])
+        )
         self.map_shape = (volume.shape[1], volume.shape[2])
         self.n_comp = n_components
         # self.comp_map = np.empty((self.n_comp, self.map_shape[0], self.map_shape[1]), dtype=float)

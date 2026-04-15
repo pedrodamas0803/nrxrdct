@@ -73,11 +73,6 @@ from scipy.special import kv
 # USER PARAMETERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Image output file ────────────────────────────────────────────────────────
-
-IMAGE_OUTPUT = "laue_simulation.png"
-
-
 # ── Synchrotron source ────────────────────────────────────────────────────────
 SOURCE_TYPE = "bending_magnet"  # 'bending_magnet' | 'wiggler' | 'undulator'
 
@@ -96,33 +91,72 @@ E_MIN_eV = 5_000  # Lower cut-off (eV)  – mirror/detector sensitivity
 E_MAX_eV = 27_000  # Upper cut-off (eV)  – mirror/detector efficiency
 
 # ── Crystal orientation – Bunge ZXZ Euler angles (degrees) ──────────────────
-# Phi=90 puts [001] along the beam (default, 4-fold symmetry in pattern).
-# Vary phi1 (in-plane) or Phi (tilt) to bring other families to Bragg condition.
-
-# 77.781  34.372 106.736
-PHI1_DEG = 77.781
-PHI_DEG = 34.372
-PHI2_DEG = 106.736
+# Bunge ZXZ: R = Rz(phi1) · Rx(Phi) · Rz(phi2),   G_lab = U @ G_crystal
+#
+# Physical setup (BM32 / ID01-style top-camera Laue):
+#   Beam along +x (LaueTools LT frame),  z vertical (up, ~ detector normal)
+#   Sample surface tilted 40 deg w.r.t. beam:
+#     -> surface normal at 50 deg from beam
+#     -> detector at z (xbet~0) has 2theta_centre = 90 - xbet ~ 90 deg
+#
+# Phi=90 puts crystal [001] along beam (+x): 4-fold symmetric Laue pattern.
+# Vary phi1 (in-plane) or Phi to bring other zone axes / families into condition.
+PHI1_DEG = 0.0
+PHI_DEG = 90.0
+PHI2_DEG = 0.0
 
 # ── Lattice ───────────────────────────────────────────────────────────────────
 A_LATTICE = 2.881  # Angstrom (same for BCC and B2)
 
-# ── Camera / detector model ───────────────────────────────────────────────────
-# Pixel detector (e.g. Dectris Eiger2 CdTe 9M: 3110x3269 @ 75 um)
-PIXEL_SIZE_MM = 0.0734  # Pixel pitch (mm) – same in H and V
-N_PIX_H = 2018  # Number of pixels, horizontal
-N_PIX_V = 2016  # Number of pixels, vertical
-
-# Detector placement
-DET_DIST_MM = 86.127  # Sample → detector centre (mm)
-TTH_CENTER_DEG = 82.0  # 2theta of the CENTRE of the detector (deg)
-# Can be any angle: 60, 70, 80, 90, 100, 110 ...
-NU_DEG = 3.528  # Out-of-plane tilt (elevation) of detector (deg)
-CHI_DEG = 0.236  # In-plane rotation of detector about its normal
+# ── Camera / detector model  (LaueTools calibration format) ─────────────────
+# Parameters match exactly the LaueTools CCD calibration dictionary:
+#   CCDCalibParameters: [dd, xcen, ycen, xbet, xgam]
+#
+# LaueTools LT2 lab frame (used here):
+#   y // ki  (beam along +y)
+#   z vertical up
+#   x horizontal (towards wall)
+#
+# dd   : distance from sample to detector reference point O (mm)
+#         = norm of vector IO
+# xcen : pixel X coordinate of point O (normal incidence / beam footprint)
+# ycen : pixel Y coordinate of point O
+# xbet : angle (deg) between IO and the z axis
+#         xbet ~ 0  => camera on top  (Z>0 geometry, 2theta_centre ~ 90 deg)
+#         xbet ~ 90 => transmission forward camera
+# xgam : in-plane rotation (deg) of the CCD array axes around the IO direction
+#
+# kf_direction: LaueTools geometry label
+#   'Z>0'  top/side reflection  (default, xbet small)
+#   'X>0'  transmission forward
+#   'X<0'  back-reflection
+#
+# These values come directly from your LaueTools calibration file.
+# Example from the sCMOS calibration shown:
+DD = 85.475  # dd    (mm)
+XCEN = 1040.26  # xcen  (pixels)
+YCEN = 1126.63  # ycen  (pixels)
+XBET = 0.447  # xbet  (degrees)
+XGAM = 0.333  # xgam  (degrees)
+PIXEL_SIZE_MM = 0.0734  # xpixelsize = ypixelsize (mm)
+N_PIX_H = 2018  # framedim[0]
+N_PIX_V = 2016  # framedim[1]
+KF_DIRECTION = "Z>0"  # kf_direction from calibration file
 
 # Spot rendering
-SPOT_SIGMA_PIX = 2.0  # Gaussian sigma of each spot (pixels)
+SPOT_SIGMA_PIX = 5.0  # Gaussian sigma of each spot (pixels)
 # Increase for mosaicity / divergence broadening
+
+# ── Beam direction ────────────────────────────────────────────────────────────
+# LaueTools frame (LT):
+#   x // ki  (beam along +x)             <- canonical LaueTools convention
+#   z  perpendicular to CCD, close to detector normal (vertical, pointing up)
+#   y  = z ^ x  (horizontal, towards the door)
+#
+# The internal LT2 frame used in LaueGeometry.py has y//ki, but all
+# PUBLIC LaueTools quantities (2theta, chi, UB matrix) are in the LT frame.
+# We work in LT throughout.
+KI_HAT = np.array([1.0, 0.0, 0.0])  # LT frame: beam along +x  (do not change)
 
 # ── Simulation ────────────────────────────────────────────────────────────────
 HMAX = 14
@@ -211,8 +245,8 @@ def euler_to_U(phi1, Phi, phi2):
 
 
 def beam_in_crystal(U):
-    """Crystal-frame direction of the incident beam (+y lab)."""
-    return U.T @ np.array([0.0, 1.0, 0.0])
+    """Crystal-frame direction of the incident beam (x in LT lab frame)."""
+    return U.T @ np.array([1.0, 0.0, 0.0])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -239,167 +273,344 @@ def is_superlattice(h, k, l):
 
 class Camera:
     """
-    Flat pixelated area detector.
+    Pixelated area detector fully compatible with LaueTools calibration files.
 
-    Coordinate system
-    -----------------
-    Lab frame : beam along +y, x horizontal (to the right), z vertical (up).
+    LaueTools LT2 lab frame
+    -----------------------
+    y  : along incident beam  (ki direction)
+    z  : vertical up
+    x  : horizontal (towards the wall, perpendicular to beam)
 
-    The detector centre is placed at angle TTH_CENTER_DEG (in the x-y plane)
-    and NU_DEG elevation (out of plane), at distance DET_DIST_MM from sample.
-    CHI_DEG rotates the detector about its own normal (0 = H axis in scattering plane).
+    Calibration parameters  (CCDCalibParameters = [dd, xcen, ycen, xbet, xgam])
+    ---------------------------------------------------------------------------
+    dd   : distance sample → detector reference point O  (mm)
+    xcen : pixel X of point O  (normal-incidence / beam-footprint pixel)
+    ycen : pixel Y of point O
+    xbet : angle (°) between the vector IO and the vertical z axis
+             xbet ≈ 0  →  camera directly above sample  (Z>0 geometry, 2θ ~ 90°)
+             xbet ≈ 90 →  transmission forward camera
+    xgam : in-plane rotation (°) of the CCD pixel axes around the IO direction
 
-    Pixel coordinates
-    -----------------
-    (col, row) with (0,0) at top-left corner.
-    Centre pixel: (N_PIX_H/2, N_PIX_V/2).
-    col increases to the right (along det_h axis).
-    row increases downward (opposite to det_v axis).
+    kf_direction : geometry label used by LaueTools
+        'Z>0'  top/side reflection  (most common, xbet small)
+        'X>0'  transmission (forward)
+        'X<0'  back-reflection
+
+    Pixel convention  (identical to LaueTools)
+    ------------------------------------------
+    (xcam=0, ycam=0) : top-left corner of the array
+    xcam increases to the right (columns)
+    ycam increases downward    (rows)
+    (xcen, ycen) : sub-pixel reference point where the detector normal
+                   intersects the pixel array.
+
+    The IO vector and detector normal
+    ----------------------------------
+    For Z>0 geometry:
+        beta  = pi/2 - xbet * pi/180
+        IO    = dd * [0,  cos(beta),  sin(beta)]
+              = dd * [0,  sin(xbet),  cos(xbet)]
+        normal = IO / |IO|
+
+    The two key functions mirror LaueTools exactly:
+        kf_to_pixel  : uflab (N×3)  →  (xcam, ycam)   [LaueTools: calc_xycam]
+        pixel_to_kf  : (xcam, ycam) →  uflab (N×3)    [LaueTools: calc_uflab]
     """
 
     def __init__(
         self,
-        pixel_mm=PIXEL_SIZE_MM,
+        dd=DD,
+        xcen=XCEN,
+        ycen=YCEN,
+        xbet=XBET,
+        xgam=XGAM,
+        pixelsize=PIXEL_SIZE_MM,
         n_pix_h=N_PIX_H,
         n_pix_v=N_PIX_V,
-        dist_mm=DET_DIST_MM,
-        tth_center=TTH_CENTER_DEG,
-        nu_deg=NU_DEG,
-        chi_deg=CHI_DEG,
+        kf_direction=KF_DIRECTION,
     ):
 
-        self.pixel_mm = float(pixel_mm)
+        self.dd = float(dd)
+        self.xcen = float(xcen)
+        self.ycen = float(ycen)
+        self.xbet = float(xbet)
+        self.xgam = float(xgam)
+        self.pixel_mm = float(pixelsize)
         self.Nh = int(n_pix_h)
         self.Nv = int(n_pix_v)
-        self.dist_mm = float(dist_mm)
-        self.tth_center = float(tth_center)
-        self.nu_deg = float(nu_deg)
-        self.chi_deg = float(chi_deg)
+        self.kf_direction = kf_direction
 
         self._build_geometry()
 
-    # ── geometry ──────────────────────────────────────────────────────────────
+    # ── internal geometry ──────────────────────────────────────────────────────
 
     def _build_geometry(self):
-        tth = np.radians(self.tth_center)
-        nu = np.radians(self.nu_deg)
-        chi = np.radians(self.chi_deg)
+        DEG = np.pi / 180.0
+        xbet = self.xbet
+        xgam = self.xgam
+        dd = self.dd
 
-        # Detector normal (unit vector from sample to detector centre)
-        self.normal = np.array(
-            [np.sin(tth) * np.cos(nu), np.cos(tth) * np.cos(nu), np.sin(nu)]
-        )
+        if self.kf_direction in ("Z>0", "Y>0", "Y<0"):
+            # Top / side reflection geometry (default)
+            # beta = pi/2 - xbet*DEG  (angle between IO and y axis)
+            self._cosbeta = np.cos(np.pi / 2 - xbet * DEG)  # = sin(xbet)
+            self._sinbeta = np.sin(np.pi / 2 - xbet * DEG)  # = cos(xbet)
+            # IO vector: points from sample I to detector reference point O
+            self.IOlab = dd * np.array([0.0, self._cosbeta, self._sinbeta])
 
-        # Detector centre in lab coordinates
-        self.centre = self.dist_mm * self.normal
+        elif self.kf_direction == "X>0":
+            # Transmission geometry
+            self._cosbeta = np.cos(-xbet * DEG)
+            self._sinbeta = np.sin(-xbet * DEG)
+            self.IOlab = dd * np.array([0.0, self._cosbeta, self._sinbeta])
 
-        # Primary detector axes (before chi rotation)
-        z_lab = np.array([0.0, 0.0, 1.0])
-        if abs(np.dot(self.normal, z_lab)) < 0.999:
-            dh = np.cross(self.normal, z_lab)
-            dh /= np.linalg.norm(dh)
-            dv = np.cross(self.normal, dh)
-            dv /= np.linalg.norm(dv)
+        elif self.kf_direction == "X<0":
+            # Back-reflection geometry
+            self._cosbeta = np.cos(-xbet * DEG)
+            self._sinbeta = np.sin(-xbet * DEG)
+            self.IOlab = dd * np.array([0.0, -self._cosbeta, self._sinbeta])
+
         else:
-            dh = np.array([1.0, 0.0, 0.0])
-            dv = np.cross(self.normal, dh)
-            dv /= np.linalg.norm(dv)
+            raise ValueError(f"Unknown kf_direction: {self.kf_direction!r}")
 
-        # Apply chi rotation about detector normal
-        if abs(chi) > 1e-10:
-            R = Rotation.from_rotvec(chi * self.normal).as_matrix()
-            dh = R @ dh
-            dv = R @ dv
-
-        self.det_h = dh  # horizontal axis (col increases along +det_h)
-        self.det_v = dv  # vertical axis   (row increases along -det_v)
-
+        # Detector unit normal
+        self.normal = self.IOlab / np.linalg.norm(self.IOlab)
+        # Precompute gam rotation coefficients (used in both directions)
+        self._cosgam = np.cos(-xgam * DEG)
+        self._singam = np.sin(-xgam * DEG)
         # Physical size
         self.size_h_mm = self.Nh * self.pixel_mm
         self.size_v_mm = self.Nv * self.pixel_mm
 
-    # ── projection ────────────────────────────────────────────────────────────
+    # ── forward projection: kf unit vector → pixel ────────────────────────────
+
+    def kf_to_pixel(self, uflab_arr):
+        """
+        Map scattered unit vectors to pixel coordinates.
+        Implements LaueTools calc_xycam() for Z>0 geometry.
+
+        Parameters
+        ----------
+        uflab_arr : (N, 3) array of unit scattered vectors in LT2 frame
+
+        Returns
+        -------
+        xcam, ycam : (N,) arrays of pixel coordinates (float, sub-pixel precision)
+                     Returns NaN for beams that miss the detector or go backward.
+        """
+        # Input is in LT frame (x // beam); camera internals use LT2 (y // beam)
+        # Convert LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
+        uf_lt = np.atleast_2d(np.array(uflab_arr, dtype=float))
+        norms = np.linalg.norm(uf_lt, axis=1, keepdims=True)
+        uf_lt = uf_lt / norms
+        uf = np.column_stack([-uf_lt[:, 1], uf_lt[:, 0], uf_lt[:, 2]])
+
+        scal = uf @ self.normal  # cos(angle between kf and detector normal)
+        valid = scal > 1e-8
+        normeIM = np.where(valid, self.dd / scal, np.nan)
+
+        IMlab = uf * normeIM[:, None]
+        OMlab = IMlab - self.IOlab
+
+        xca0 = OMlab[:, 0]
+        if abs(self._sinbeta) > 1e-8:
+            yca0 = OMlab[:, 1] / self._sinbeta
+        else:
+            yca0 = -OMlab[:, 2] / self._cosbeta
+
+        xcam1 = self._cosgam * xca0 + self._singam * yca0
+        ycam1 = -self._singam * xca0 + self._cosgam * yca0
+
+        xcam = self.xcen + xcam1 / self.pixel_mm
+        ycam = self.ycen + ycam1 / self.pixel_mm
+
+        xcam[~valid] = np.nan
+        ycam[~valid] = np.nan
+        return xcam, ycam
+
+    # ── inverse projection: pixel → kf unit vector ────────────────────────────
+
+    def pixel_to_kf(self, xcam_arr, ycam_arr):
+        """
+        Map pixel coordinates to scattered unit vectors.
+        Implements LaueTools calc_uflab() for Z>0 geometry.
+
+        Parameters
+        ----------
+        xcam_arr, ycam_arr : array-like of pixel coordinates
+
+        Returns
+        -------
+        uflab : (N, 3) unit scattered vectors in LT2 frame  (y // ki)
+        """
+        xcam1 = (np.asarray(xcam_arr, float) - self.xcen) * self.pixel_mm
+        ycam1 = (np.asarray(ycam_arr, float) - self.ycen) * self.pixel_mm
+
+        xca0 = self._cosgam * xcam1 - self._singam * ycam1
+        yca0 = self._singam * xcam1 + self._cosgam * ycam1
+
+        xO, yO, zO = self.IOlab
+        xM = xO + xca0
+        yM = yO + yca0 * self._sinbeta
+        zM = zO - yca0 * self._cosbeta
+
+        nIM = np.sqrt(xM**2 + yM**2 + zM**2)
+        uflab = np.array([xM, yM, zM]).T / nIM[:, None]
+        return uflab
+
+    # ── single-spot projection for simulation ────────────────────────────────
 
     def project(self, kf_hat):
         """
-        Intersect scattered beam kf_hat with detector plane.
-
-        Returns (col, row) in pixels, or None if beam misses detector.
-        col, row are float (sub-pixel precision).
+        Project one scattered beam direction (in LT frame, x // beam) onto
+        the detector.  Returns (xcam, ycam) in pixels, or None if beam misses.
         """
-        denom = float(np.dot(kf_hat, self.normal))
-        if denom < 1e-8:  # parallel or going away
+        # Convert LT -> LT2 for camera geometry
+        kf_lt = np.array(kf_hat, dtype=float)
+        kf_lt = kf_lt / np.linalg.norm(kf_lt)
+        kf = np.array([-kf_lt[1], kf_lt[0], kf_lt[2]])  # LT2 frame
+        scal = float(np.dot(kf, self.normal))
+        if scal < 1e-8:
             return None
-        t = float(np.dot(self.centre, self.normal)) / denom
-        if t <= 0:
-            return None
-        hit = t * kf_hat
-        delta = hit - self.centre
-        dx_mm = float(np.dot(delta, self.det_h))
-        dy_mm = float(np.dot(delta, self.det_v))
-        col = self.Nh / 2.0 + dx_mm / self.pixel_mm
-        row = self.Nv / 2.0 - dy_mm / self.pixel_mm  # row down = -det_v
-        if 0.0 <= col < self.Nh and 0.0 <= row < self.Nv:
-            return col, row
+        normeIM = self.dd / scal
+        IM = kf * normeIM
+        OM = IM - self.IOlab
+        xca0 = OM[0]
+        yca0 = (
+            OM[1] / self._sinbeta
+            if abs(self._sinbeta) > 1e-8
+            else -OM[2] / self._cosbeta
+        )
+        xcam1 = self._cosgam * xca0 + self._singam * yca0
+        ycam1 = -self._singam * xca0 + self._cosgam * yca0
+        xcam = self.xcen + xcam1 / self.pixel_mm
+        ycam = self.ycen + ycam1 / self.pixel_mm
+        if 0 <= xcam < self.Nh and 0 <= ycam < self.Nv:
+            return float(xcam), float(ycam)
         return None
 
-    def pixel_to_2theta(self, col, row):
+    # ── 2theta / chi from pixel ───────────────────────────────────────────────
+
+    def pixel_to_2theta_chi(self, xcam, ycam):
         """
-        Convert pixel position to 2theta (deg) and azimuth (deg) in lab frame.
-        Useful for axis labelling on detector images.
+        Compute 2theta and chi (degrees) from pixel position.
+
+        The camera geometry is computed in the LT2 frame (y // beam) which is
+        what LaueGeometry.py uses internally.  We then convert to the canonical
+        LaueTools LT frame (x // beam) before computing 2theta and chi:
+
+            LT2 -> LT :   x_LT = y_LT2,   y_LT = -x_LT2,   z_LT = z_LT2
+
+        In LT frame:
+            2theta = arccos(uf_x)
+            chi    = arctan2(uf_y, uf_z)
         """
-        ki_hat = np.array([0.0, 1.0, 0.0])
-        dx_mm = (col - self.Nh / 2.0) * self.pixel_mm
-        dy_mm = -(row - self.Nv / 2.0) * self.pixel_mm
-        hit = self.centre + dx_mm * self.det_h + dy_mm * self.det_v
-        hit_hat = hit / np.linalg.norm(hit)
-        tth = np.degrees(np.arccos(np.clip(np.dot(ki_hat, hit_hat), -1, 1)))
-        # azimuth: angle from +x in the plane perpendicular to ki
-        az = np.degrees(np.arctan2(hit_hat[2], hit_hat[0]))
-        return tth, az
+        uf_lt2 = self.pixel_to_kf([xcam], [ycam])[0]
+        # Convert LT2 -> LT
+        uf_lt = np.array([uf_lt2[1], -uf_lt2[0], uf_lt2[2]])
+        tth = np.degrees(np.arccos(np.clip(uf_lt[0], -1, 1)))
+        chi = np.degrees(np.arctan2(uf_lt[1], uf_lt[2] + 1e-17))
+        return tth, chi
+
+    # ── 2theta grid on detector ───────────────────────────────────────────────
+
+    def tth_grid(self, step=None):
+        """
+        Return a 2theta map over the whole detector (shape Nv x Nh).
+        Useful for contour overlays on detector images.
+        """
+        if step is None:
+            step = max(1, self.Nh // 40)
+        cs = np.arange(0, self.Nh, step)
+        rs = np.arange(0, self.Nv, step)
+        CC, RR = np.meshgrid(cs, rs)
+        uf = self.pixel_to_kf(CC.ravel(), RR.ravel())
+        TTH = np.degrees(np.arccos(np.clip(uf[:, 1], -1, 1))).reshape(CC.shape)
+        return CC, RR, TTH
+
+    # ── describe ──────────────────────────────────────────────────────────────
 
     def describe(self):
-        """Print a summary of the camera configuration."""
-        print(
-            f"  Camera : {self.Nh} x {self.Nv} pixels  "
-            f"({self.pixel_mm*1e3:.0f} µm pitch)"
-        )
-        print(f"  Physical size : {self.size_h_mm:.1f} x {self.size_v_mm:.1f} mm²")
-        print(f"  Sample-to-detector : {self.dist_mm:.1f} mm")
-        print(
-            f"  2theta centre : {self.tth_center:.2f}°   "
-            f"nu = {self.nu_deg:.2f}°   chi = {self.chi_deg:.2f}°"
-        )
-        # Angular range at corners
+        tth_cen, chi_cen = self.pixel_to_2theta_chi(self.xcen, self.ycen)
         corners = [
             (0, 0),
             (self.Nh - 1, 0),
             (0, self.Nv - 1),
             (self.Nh - 1, self.Nv - 1),
         ]
-        tths = [self.pixel_to_2theta(c, r)[0] for c, r in corners]
-        print(f"  Angular coverage : 2theta = {min(tths):.1f}° – {max(tths):.1f}°")
-        # Direct beam position
+        tths = [self.pixel_to_2theta_chi(c, r)[0] for c, r in corners]
+        print(
+            f"  Camera ({self.kf_direction}) : {self.Nh} x {self.Nv} px  "
+            f"pixel={self.pixel_mm*1e3:.1f} um"
+        )
+        print(f"  Physical size : {self.size_h_mm:.1f} x {self.size_v_mm:.1f} mm²")
+        print(f"  LaueTools calibration:")
+        print(f"    dd={self.dd:.3f} mm   xcen={self.xcen:.2f}   ycen={self.ycen:.2f}")
+        print(f"    xbet={self.xbet:.3f} deg   xgam={self.xgam:.3f} deg")
+        print(
+            f"  2theta at (xcen,ycen) : {tth_cen:.4f} deg  "
+            f"(= 90 - xbet = {90-self.xbet:.4f} deg)"
+        )
+        print(f"  chi   at (xcen,ycen) : {chi_cen:.4f} deg")
+        print(
+            f"  Angular coverage (corners): "
+            f"2theta = {min(tths):.1f} - {max(tths):.1f} deg"
+        )
+        # direct beam position
         ki_hat = np.array([0.0, 1.0, 0.0])
-        db_pix = self.project(ki_hat)
-        if db_pix:
-            print(f"  Direct beam would hit : col={db_pix[0]:.0f} row={db_pix[1]:.0f}")
+        db = self.project(ki_hat)
+        if db:
+            print(
+                f"  Direct beam footprint: xcam={db[0]:.1f}  ycam={db[1]:.1f}  "
+                f"(pixel; should match xcen,ycen for xbet~0)"
+            )
         else:
             print("  Direct beam does not hit this detector")
+
+    # ── load from LaueTools calibration dict or list ──────────────────────────
+
+    @classmethod
+    def from_lauetools(cls, calib, pixelsize=None, framedim=None, kf_direction="Z>0"):
+        """
+        Build a Camera from a LaueTools calibration.
+
+        Parameters
+        ----------
+        calib : list or array  [dd, xcen, ycen, xbet, xgam]
+                (= CCDCalibParameters in LaueTools)
+        pixelsize : float, mm  (= xpixelsize in LaueTools dict)
+        framedim  : (Nh, Nv)   (= framedim in LaueTools dict)
+        kf_direction : str     (= kf_direction in LaueTools dict)
+        """
+        dd, xcen, ycen, xbet, xgam = calib[:5]
+        px = pixelsize if pixelsize is not None else PIXEL_SIZE_MM
+        Nh, Nv = framedim if framedim is not None else (N_PIX_H, N_PIX_V)
+        return cls(
+            dd=dd,
+            xcen=xcen,
+            ycen=ycen,
+            xbet=xbet,
+            xgam=xgam,
+            pixelsize=px,
+            n_pix_h=int(Nh),
+            n_pix_v=int(Nv),
+            kf_direction=kf_direction,
+        )
 
     # ── synthetic image ────────────────────────────────────────────────────────
 
     def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=True):
         """
-        Render a synthetic detector image (float32 array, shape Nv x Nh).
-        Each spot is a 2D Gaussian with width sigma_pix.
+        Render a synthetic detector image (float32, shape Nv x Nh).
+        Each spot is a 2D Gaussian of width sigma_pix.
+        spot's 'pix' entry must be (xcam, ycam) in LaueTools convention.
         """
         img = np.zeros((self.Nv, self.Nh), dtype=np.float32)
         margin = int(5 * sigma_pix) + 1
         for s in spots:
             if s.get("pix") is None:
                 continue
-            c, r = s["pix"]
+            c, r = s["pix"]  # xcam, ycam
             ci, ri = int(round(c)), int(round(r))
             c0, c1 = max(0, ci - margin), min(self.Nh, ci + margin + 1)
             r0, r1 = max(0, ri - margin), min(self.Nv, ri + margin + 1)
@@ -436,7 +647,7 @@ def simulate_laue(
     """
     lam_lo = en2lam(E_max)
     lam_hi = en2lam(E_min)
-    ki_hat = np.array([0.0, 1.0, 0.0])
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
 
     spots = []
     for h in range(-hmax, hmax + 1):
@@ -470,10 +681,14 @@ def simulate_laue(
                 if pix is None:
                     continue
 
-                # 2theta and azimuth
-                cos2th = np.clip(np.dot(ki_hat, kf_hat), -1.0, 1.0)
+                # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
+                # 2theta = arccos(kf_x)   [kf_x = component along beam]
+                cos2th = np.clip(kf_hat[0], -1.0, 1.0)
                 tth = np.degrees(np.arccos(cos2th))
-                az = np.degrees(np.arctan2(kf_hat[2], kf_hat[0]))
+                # chi: LaueTools convention  chi = arctan2(kf_y, kf_z)
+                # y = z^x (horizontal), z up (close to detector normal)
+                chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+                az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
 
                 # Structure factor (energy-dependent)
                 F = crystal.StructureFactor(G_cry, en=E)
@@ -495,6 +710,7 @@ def simulate_laue(
                         "E": E,
                         "lambda": lam,
                         "tth": tth,
+                        "chi": chi,
                         "az": az,
                         "pix": pix,
                         "F2": F2,
@@ -585,8 +801,403 @@ def _ax_style(ax, title):
         sp.set_edgecolor("#1a1f2e")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 2θ / χ  AND  GNOMONIC PROJECTION PLOTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _uf_from_tth_chi(tth_deg, chi_deg):
+    """Scattered unit vector from 2theta, chi  (LaueTools LT2 frame)."""
+    tth = np.radians(tth_deg)
+    chi = np.radians(chi_deg)
+    return np.array(
+        [-np.sin(tth) * np.sin(chi), np.cos(tth), np.sin(tth) * np.cos(chi)]
+    )
+
+
+def _gnomonic(tth_deg, chi_deg):
+    """
+    Gnomonic projection of a scattered beam onto the plane perpendicular
+    to the forward beam direction (tangent plane at the north pole of the
+    unit sphere).
+
+        gX = -sin(2θ) sin χ  /  (1 + cos 2θ)
+        gY =  sin(2θ) cos χ  /  (1 + cos 2θ)
+
+    For 2θ < 90°  the point lies inside the unit circle (|g| < 1).
+    For 2θ = 90°  |g| = 1.
+    For 2θ > 90°  |g| > 1 (back-hemisphere).
+    Straight lines in gnomonic space = crystallographic zones.
+    """
+    tth = np.asarray(tth_deg, float)
+    chi = np.asarray(chi_deg, float)
+    denom = 1.0 + np.cos(np.radians(tth))
+    # guard against 2theta = 180 (denom = 0)
+    safe = np.where(np.abs(denom) > 1e-10, denom, np.nan)
+    gX = -np.sin(np.radians(tth)) * np.sin(np.radians(chi)) / safe
+    gY = np.sin(np.radians(tth)) * np.cos(np.radians(chi)) / safe
+    return gX, gY
+
+
+def _style_angular_ax(ax, title):
+    ax.set_facecolor("#080c14")
+    ax.set_title(title, color="#ccccee", fontsize=9, pad=5)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax.grid(True, ls=":", lw=0.35, color="#181e2e")
+
+
+def plot_2theta_chi(spots_bcc, spots_b2, out_path="laue_2theta_chi.png"):
+    """
+    Plot Laue patterns in angular space: two representations side-by-side
+    for each phase (BCC and B2):
+
+    Left column  – 2θ vs χ scatter plot  (LaueTools .cor file convention)
+    Right column – Gnomonic projection   (gX, gY)
+                   Straight lines = crystallographic zone axes
+                   Unit circle = 2θ = 90°
+
+    Spots are coloured by photon energy and sized by normalised intensity.
+    Fundamental reflections: circles (○).
+    B2 superlattice reflections: stars (★) in orange.
+
+    Parameters
+    ----------
+    spots_bcc, spots_b2 : lists of spot dicts from simulate_laue()
+    out_path            : output PNG path
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.gridspec as mgridspec
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    BG = "#080c14"
+    FG = "#ccccee"
+    COL_FUND = "#4fc3f7"
+    COL_SUPER = "#ff6633"
+
+    all_E = [s["E"] for s in spots_bcc + spots_b2]
+    E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
+    cmap = "plasma"
+
+    fig = plt.figure(figsize=(18, 12))
+    fig.patch.set_facecolor(BG)
+
+    gs = mgridspec.GridSpec(
+        2,
+        3,
+        width_ratios=[1, 1, 0.06],
+        height_ratios=[1, 1],
+        hspace=0.38,
+        wspace=0.28,
+        left=0.07,
+        right=0.93,
+        top=0.92,
+        bottom=0.07,
+    )
+
+    ax_bcc_ang = fig.add_subplot(gs[0, 0])
+    ax_bcc_gno = fig.add_subplot(gs[0, 1])
+    ax_b2_ang = fig.add_subplot(gs[1, 0])
+    ax_b2_gno = fig.add_subplot(gs[1, 1])
+    ax_cb = fig.add_subplot(gs[:, 2])
+
+    # ── helper: 2theta vs chi scatter ────────────────────────────────────────
+    def draw_tth_chi(ax, spots, title):
+        _style_angular_ax(ax, title)
+        ax.set_xlabel("χ  (degrees)", color="#7788aa", fontsize=8)
+        ax.set_ylabel("2θ  (degrees)", color="#7788aa", fontsize=8)
+        ax.axvline(0, color="#252b40", lw=0.8)
+
+        fund = [s for s in spots if not s["is_superlattice"]]
+        super_ = [s for s in spots if s["is_superlattice"]]
+
+        for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
+            if not subset:
+                continue
+            chis = [s["chi"] for s in subset]
+            tths = [s["tth"] for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz = [max(4, 80 * s["intensity"] ** 0.4) for s in subset]
+            ax.scatter(
+                chis,
+                tths,
+                s=sz,
+                c=Es,
+                cmap=cmap,
+                norm=E_norm,
+                alpha=0.80,
+                edgecolors=ec,
+                linewidths=0.35,
+                marker=mk,
+                zorder=3,
+            )
+
+        # Label 8 strongest fundamental spots
+        for s in sorted(fund, key=lambda x: -x["intensity"])[:8]:
+            h, k, l = s["hkl"]
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(s["chi"], s["tth"]),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaccff",
+                alpha=0.9,
+            )
+
+        # Label 4 strongest superlattice spots
+        for s in sorted(super_, key=lambda x: -x["intensity"])[:4]:
+            h, k, l = s["hkl"]
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(s["chi"], s["tth"]),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color=COL_SUPER,
+                alpha=0.9,
+            )
+
+        # Draw 2theta reference lines
+        all_tths = [s["tth"] for s in spots]
+        tth_min = max(0, min(all_tths) - 5) if all_tths else 60
+        tth_max = min(180, max(all_tths) + 5) if all_tths else 130
+        all_chis = [s["chi"] for s in spots]
+        chi_min = min(all_chis) - 5 if all_chis else -50
+        chi_max = max(all_chis) + 5 if all_chis else 50
+
+        for tth_ref in np.arange(round(tth_min / 10) * 10, tth_max + 1, 10):
+            ax.axhline(tth_ref, color="#1a2a3a", lw=0.6, ls="--", alpha=0.7, zorder=1)
+            ax.text(
+                chi_max + 0.5,
+                tth_ref,
+                f"{tth_ref:.0f}°",
+                color="#445566",
+                fontsize=6,
+                va="center",
+            )
+
+        ax.set_xlim(chi_min, chi_max)
+        ax.set_ylim(tth_min, tth_max)
+
+    # ── helper: gnomonic projection ───────────────────────────────────────────
+    def draw_gnomonic(ax, spots, title):
+        _style_angular_ax(ax, title)
+        ax.set_xlabel("gX  =  −sin2θ·sinχ / (1+cos2θ)", color="#7788aa", fontsize=7)
+        ax.set_ylabel("gY  =   sin2θ·cosχ / (1+cos2θ)", color="#7788aa", fontsize=7)
+        ax.set_aspect("equal")
+
+        fund = [s for s in spots if not s["is_superlattice"]]
+        super_ = [s for s in spots if s["is_superlattice"]]
+
+        for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
+            if not subset:
+                continue
+            gXs = [_gnomonic(s["tth"], s["chi"])[0] for s in subset]
+            gYs = [_gnomonic(s["tth"], s["chi"])[1] for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz = [max(4, 80 * s["intensity"] ** 0.4) for s in subset]
+            ax.scatter(
+                gXs,
+                gYs,
+                s=sz,
+                c=Es,
+                cmap=cmap,
+                norm=E_norm,
+                alpha=0.80,
+                edgecolors=ec,
+                linewidths=0.35,
+                marker=mk,
+                zorder=3,
+            )
+
+        # Label strongest fundamental spots
+        for s in sorted(fund, key=lambda x: -x["intensity"])[:8]:
+            h, k, l = s["hkl"]
+            gx, gy = _gnomonic(s["tth"], s["chi"])
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(gx, gy),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaccff",
+                alpha=0.9,
+            )
+
+        for s in sorted(super_, key=lambda x: -x["intensity"])[:4]:
+            h, k, l = s["hkl"]
+            gx, gy = _gnomonic(s["tth"], s["chi"])
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(gx, gy),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color=COL_SUPER,
+                alpha=0.9,
+            )
+
+        # Reference circles: 2theta = 60, 70, 80, 90, 100, 110, 120 deg
+        theta_circ = np.linspace(0, 2 * np.pi, 360)
+        for tth_ref in range(60, 131, 10):
+            gXc, gYc = _gnomonic(np.full(360, tth_ref), np.degrees(theta_circ))
+            # Only draw arc where spots exist
+            valid = np.isfinite(gXc) & np.isfinite(gYc)
+            if valid.any():
+                col = "#ffffaa" if tth_ref == 90 else "#1a2a3a"
+                lw = 0.9 if tth_ref == 90 else 0.5
+                ax.plot(
+                    gXc[valid],
+                    gYc[valid],
+                    color=col,
+                    lw=lw,
+                    ls="--",
+                    alpha=0.7,
+                    zorder=1,
+                )
+                # Label
+                ax.text(
+                    0,
+                    _gnomonic(tth_ref, 0)[1] + 0.02,
+                    f"{tth_ref}°",
+                    color="#445566" if tth_ref != 90 else "#ffffaa",
+                    fontsize=5.5,
+                    ha="center",
+                    va="bottom",
+                )
+
+        # Chi reference lines (radial lines at chi = 0, ±30, ±60, ±90 deg)
+        for chi_ref in [0, 30, -30, 60, -60, 90, -90]:
+            # Draw radial line from origin
+            r_max = 3.0
+            gx_r = r_max * (-np.sin(np.radians(chi_ref)))  # at 2theta=90 gX = -sin(chi)
+            gy_r = r_max * np.cos(np.radians(chi_ref))
+            ax.plot(
+                [0, gx_r],
+                [0, gy_r],
+                color="#1a2a3a",
+                lw=0.5,
+                ls=":",
+                alpha=0.6,
+                zorder=1,
+            )
+            if abs(chi_ref) <= 90:
+                ax.text(
+                    gx_r * 0.9,
+                    gy_r * 0.9,
+                    f"χ={chi_ref}°",
+                    color="#334455",
+                    fontsize=5.5,
+                    ha="center",
+                    va="center",
+                )
+
+        # Origin crosshair (forward beam)
+        ax.plot(0, 0, "+", color="#ffffaa", ms=8, mew=1.2, zorder=6)
+
+        # Auto-scale with margin
+        all_gx = [_gnomonic(s["tth"], s["chi"])[0] for s in spots]
+        all_gy = [_gnomonic(s["tth"], s["chi"])[1] for s in spots]
+        all_gx = [v for v in all_gx if np.isfinite(v)]
+        all_gy = [v for v in all_gy if np.isfinite(v)]
+        if all_gx and all_gy:
+            margin = 0.3
+            xmin, xmax = min(all_gx) - margin, max(all_gx) + margin
+            ymin, ymax = min(all_gy) - margin, max(all_gy) + margin
+            # Keep square
+            r = max(abs(xmin), abs(xmax), abs(ymin), abs(ymax)) + margin
+            ax.set_xlim(-r, r)
+            ax.set_ylim(-r, r)
+
+    # ── Draw all four panels ──────────────────────────────────────────────────
+    n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
+
+    draw_tth_chi(
+        ax_bcc_ang, spots_bcc, f"BCC  Im-3m   –   2θ vs χ   ({len(spots_bcc)} spots)"
+    )
+    draw_gnomonic(ax_bcc_gno, spots_bcc, f"BCC  Im-3m   –   Gnomonic projection")
+    draw_b2_title = (
+        f"B2   Pm-3m   –   2θ vs χ   "
+        f"({len(spots_b2)} spots, {n_super} superlattice)"
+    )
+    draw_tth_chi(ax_b2_ang, spots_b2, draw_b2_title)
+    draw_gnomonic(ax_b2_gno, spots_b2, f"B2   Pm-3m   –   Gnomonic projection")
+
+    # ── Shared legend ─────────────────────────────────────────────────────────
+    leg = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            lw=0,
+            mfc=COL_FUND,
+            mec=COL_FUND,
+            ms=7,
+            label="Fundamental (BCC & B2)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="*",
+            lw=0,
+            mfc=COL_SUPER,
+            mec=COL_SUPER,
+            ms=9,
+            label="B2 superlattice  (h+k+l odd)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="#ffffaa",
+            lw=1,
+            ls="--",
+            label="2θ = 90°  (gnomonic unit circle)",
+        ),
+    ]
+    fig.legend(
+        handles=leg,
+        loc="upper center",
+        ncol=3,
+        fontsize=8,
+        framealpha=0.25,
+        facecolor=BG,
+        labelcolor="white",
+        bbox_to_anchor=(0.5, 0.97),
+    )
+
+    # ── Colourbar ─────────────────────────────────────────────────────────────
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=E_norm)
+    sm.set_array([])
+    cb = fig.colorbar(sm, cax=ax_cb)
+    cb.set_label("E  (keV)", color="#8899aa", fontsize=8)
+    cb.ax.yaxis.set_tick_params(color="#8899aa", labelsize=7)
+    plt.setp(cb.ax.yaxis.get_ticklabels(), color="#8899aa")
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    fig.text(
+        0.5,
+        0.995,
+        "Laue pattern  –  AlCoCrFeNi  –  angular coordinates  "
+        "(LaueTools convention: beam ∥ y,  χ = arctan(−uf_x / uf_z))",
+        ha="center",
+        va="top",
+        fontsize=11,
+        color="white",
+        fontweight="bold",
+    )
+
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    print(f"  Angular plot saved -> {out_path}")
+    return out_path
+
+
 def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
 
+    # Central 2theta of detector (LaueTools: 90 - xbet)
+    tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
     n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
     all_E = [s["E"] for s in spots_bcc + spots_b2]
     E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
@@ -643,17 +1254,10 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
 
         # 2theta contours overlaid on detector image
         # Sample a grid of pixels, compute 2theta, contour
-        step = max(1, Nh // 20)
-        cs = np.arange(0, Nh, step)
-        rs = np.arange(0, Nv, step)
-        CC, RR = np.meshgrid(cs, rs)
-        TTH = np.zeros_like(CC, dtype=float)
-        for i in range(RR.shape[0]):
-            for j in range(CC.shape[1]):
-                TTH[i, j] = camera.pixel_to_2theta(CC[i, j], RR[i, j])[0]
+        CC, RR, TTH = camera.tth_grid(step=max(1, Nh // 20))
 
         # Contour levels around the centre 2theta
-        tc = camera.tth_center
+        tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
         levels = [tc - 20, tc - 10, tc, tc + 10, tc + 20]
         levels = [l for l in levels if TTH.min() < l < TTH.max()]
         if levels:
@@ -663,7 +1267,7 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
             ax.clabel(ct, fmt="%.0f°", fontsize=5, colors="#4466cc")
 
         # Direct beam marker (if on detector)
-        ki_hat = np.array([0.0, 1.0, 0.0])
+        ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
         db = camera.project(ki_hat)
         if db:
             ax.plot(*db, "x", color=COL_DB, ms=8, mew=1.3, zorder=8)
@@ -834,21 +1438,14 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
 
     # Centre and direct beam
     ax_scatter.plot(Nh / 2, Nv / 2, "+", color="#aaaaff", ms=8, mew=1, zorder=6)
-    ki_hat = np.array([0.0, 1.0, 0.0])
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
     db = camera.project(ki_hat)
     if db:
         ax_scatter.plot(*db, "x", color=COL_DB, ms=10, mew=1.5, zorder=7)
 
     # 2theta grid lines
-    step = max(1, Nh // 20)
-    cs_g = np.arange(0, Nh, step)
-    rs_g = np.arange(0, Nv, step)
-    CC, RR = np.meshgrid(cs_g, rs_g)
-    TTH_g = np.zeros_like(CC, dtype=float)
-    for i in range(RR.shape[0]):
-        for j in range(CC.shape[1]):
-            TTH_g[i, j] = camera.pixel_to_2theta(CC[i, j], RR[i, j])[0]
-    tc = camera.tth_center
+    CC, RR, TTH_g = camera.tth_grid(step=max(1, Nh // 20))
+    tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
     lvls = sorted({tc - 20, tc - 10, tc, tc + 10, tc + 20})
     lvls = [l for l in lvls if TTH_g.min() < l < TTH_g.max()]
     if lvls:
@@ -923,13 +1520,7 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
             alpha=0.70,
             label="B2 superlat.",
         )
-    ax_tth.axvline(
-        camera.tth_center,
-        color="#ffffaa",
-        lw=1,
-        ls="--",
-        label=f"Det. centre = {camera.tth_center:.0f}°",
-    )
+    ax_tth.axvline(tc, color="#ffffaa", lw=1, ls="--", label=f"Det. centre = {tc:.0f}°")
     ax_tth.set_xlabel("2theta  (deg)", color="#7788aa", fontsize=7)
     ax_tth.set_ylabel("Sum intensity", color="#7788aa", fontsize=7)
     ax_tth.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
@@ -942,14 +1533,22 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
     ax_geo.set_aspect("equal")
     ax_geo.axis("off")
 
-    # beam
+    # beam – draw from negative KI_HAT direction
+    ki_2d = np.array([KI_HAT[0], KI_HAT[1]])
+    if np.linalg.norm(ki_2d) > 1e-6:
+        ki_2d /= np.linalg.norm(ki_2d)
+    else:
+        ki_2d = np.array([0.0, 1.0])
     ax_geo.annotate(
         "",
         xy=(0, 0),
-        xytext=(-1.6, 0),
+        xytext=tuple(-1.6 * ki_2d),
         arrowprops=dict(arrowstyle="->", color=COL_DB, lw=2.2),
     )
-    ax_geo.text(-0.8, 0.14, "white beam", color=COL_DB, fontsize=7.5, ha="center")
+    ki_str = "".join([f"{v:+.2g}" if v != 0 else "" for v in KI_HAT])
+    ax_geo.text(
+        -0.8, 0.14, f"white beam ({ki_str})", color=COL_DB, fontsize=7.5, ha="center"
+    )
 
     # sample
     ax_geo.add_patch(
@@ -962,9 +1561,17 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
     ax_geo.text(0, -0.38, "crystal", color="#aabbdd", fontsize=7, ha="center")
 
     # detector: draw as a rotated rectangle representing its orientation
-    tth_c = np.radians(camera.tth_center)
-    det_dir = np.array([np.sin(tth_c), np.cos(tth_c)])  # centre direction (x,y)
-    det_perp = np.array([det_dir[1], -det_dir[0]])  # perpendicular
+    tth_c = np.radians(tc)
+    # In 2D schematic (x-y plane): rotate KI by tth_c to get detector direction
+    ki_2d_n = ki_2d  # already defined above (normalised 2D projection of KI_HAT)
+    c_tth, s_tth = np.cos(tth_c), np.sin(tth_c)
+    det_dir = np.array(
+        [
+            c_tth * ki_2d_n[0] - s_tth * ki_2d_n[1],
+            s_tth * ki_2d_n[0] + c_tth * ki_2d_n[1],
+        ]
+    )
+    det_perp = np.array([det_dir[1], -det_dir[0]])
 
     L = 1.4  # diagram scale
     half_det = 0.45
@@ -991,22 +1598,29 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
 
     # scattered beams at a few angles
     for tth_s, col_s, lbl in [
-        (camera.tth_center, "#ffffaa", f"2th={camera.tth_center:.0f}° (centre)"),
-        (camera.tth_center - 15, "#88ddaa", f"2th={camera.tth_center-15:.0f}°"),
-        (camera.tth_center + 15, "#ffaa66", f"2th={camera.tth_center+15:.0f}°"),
+        (tc, "#ffffaa", f"2th={tc:.0f}deg (centre)"),
+        (tc - 15, "#88ddaa", f"2th={tc-15:.0f}deg"),
+        (tc + 15, "#ffaa66", f"2th={tc+15:.0f}deg"),
     ]:
         if 5 < tth_s < 175:
             tr = np.radians(tth_s)
-            dx, dy = np.sin(tr), np.cos(tr)
+            c_s, s_s = np.cos(tr), np.sin(tr)
+            # Rotate KI_HAT by tth_s
+            kf_2d = np.array(
+                [
+                    c_s * ki_2d_n[0] - s_s * ki_2d_n[1],
+                    s_s * ki_2d_n[0] + c_s * ki_2d_n[1],
+                ]
+            )
             ax_geo.annotate(
                 "",
-                xy=(dx * L * 0.85, dy * L * 0.85),
+                xy=(kf_2d[0] * L * 0.85, kf_2d[1] * L * 0.85),
                 xytext=(0, 0),
                 arrowprops=dict(arrowstyle="->", color=col_s, lw=1.2),
             )
             ax_geo.text(
-                dx * L * 0.9 + 0.05,
-                dy * L * 0.9,
+                kf_2d[0] * L * 0.9 + 0.05,
+                kf_2d[1] * L * 0.9,
                 lbl,
                 color=col_s,
                 fontsize=5.5,
@@ -1014,17 +1628,25 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
                 va="center",
             )
 
-    # 2theta arc
-    arc = np.linspace(
-        np.radians(max(5, camera.tth_center - 25)),
-        np.radians(min(175, camera.tth_center + 25)),
+    # 2theta arc (around KI direction)
+    ki_angle = np.arctan2(ki_2d_n[1], ki_2d_n[0])  # angle of KI in 2D
+    arc_angles = np.linspace(
+        ki_angle + np.radians(max(5, tc - 25)),
+        ki_angle + np.radians(min(175, tc + 25)),
         80,
     )
-    ax_geo.plot(0.65 * np.sin(arc), 0.65 * np.cos(arc), color="#334455", lw=1, ls="--")
+    ax_geo.plot(
+        0.65 * np.cos(arc_angles),
+        0.65 * np.sin(arc_angles),
+        color="#334455",
+        lw=1,
+        ls="--",
+    )
+    mid_arc = ki_angle + np.radians(tc)
     ax_geo.text(
-        0.7 * np.sin(tth_c),
-        0.7 * np.cos(tth_c) + 0.12,
-        "2\u03b8",
+        0.75 * np.cos(mid_arc),
+        0.75 * np.sin(mid_arc),
+        "2θ",
         color="#556677",
         fontsize=9,
     )
@@ -1062,13 +1684,7 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
             zorder=4,
             label="B2 superlat.",
         )
-    ax_int.axvline(
-        camera.tth_center,
-        color="#ffffaa",
-        lw=0.8,
-        ls="--",
-        label=f"Centre {camera.tth_center:.0f}°",
-    )
+    ax_int.axvline(tc, color="#ffffaa", lw=0.8, ls="--", label=f"Centre {tc:.0f}°")
     ax_int.set_xlabel("2theta  (deg)", color="#7788aa", fontsize=7)
     ax_int.set_ylabel("I / I_max", color="#7788aa", fontsize=7)
     ax_int.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
@@ -1110,6 +1726,12 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
             False,
         ),
         (f"beam||[{bd[0]:.2g},{bd[1]:.2g},{bd[2]:.2g}]", 7, "#88aaff", False),
+        (
+            f"ki=[{KI_HAT[0]:.2g},{KI_HAT[1]:.2g},{KI_HAT[2]:.2g}] lab",
+            7,
+            "#88aaff",
+            False,
+        ),
         (f"a = {A_LATTICE} Ang", 7, "#88aaff", False),
         ("", 0, "", False),
         ("Camera ──────────────────", 7, "#334466", False),
@@ -1121,10 +1743,10 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
             "#88aaff",
             False,
         ),
-        (f"dist = {camera.dist_mm:.1f} mm", 7, "#88aaff", False),
-        (f"2th centre = {camera.tth_center:.1f} deg", 7, "#88aaff", False),
-        (f"nu = {camera.nu_deg:.1f} deg", 7, "#88aaff", False),
-        (f"chi = {camera.chi_deg:.1f} deg", 7, "#88aaff", False),
+        (f"dist = {camera.dd:.1f} mm", 7, "#88aaff", False),
+        (f"2th at (xcen,ycen) = {90-camera.xbet:.2f} deg", 7, "#88aaff", False),
+        (f"xbet = {camera.xbet:.3f} deg", 7, "#88aaff", False),
+        (f"xgam = {camera.xgam:.3f} deg", 7, "#88aaff", False),
         ("", 0, "", False),
         ("Results ─────────────────", 7, "#334466", False),
         (f"BCC : {len(spots_bcc)} spots", 8, "#4fc3f7", False),
@@ -1166,7 +1788,7 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
         f"White-Beam Laue  |  AlCoCrFeNi  |  {src_str}  "
         f"{E_MIN_eV/1e3:.0f}-{E_MAX_eV/1e3:.0f} keV  |  "
         f"beam || {bd_str}  |  "
-        f"2theta_centre = {camera.tth_center:.0f}deg  |  "
+        f"2theta_centre = {tc:.0f}deg  |  "
         f"{camera.Nh}x{camera.Nv} px  {camera.pixel_mm*1e3:.0f}um",
         ha="center",
         fontsize=11,
@@ -1174,8 +1796,9 @@ def plot_all(spots_bcc, spots_b2, crystal_bcc, camera, U):
         fontweight="bold",
     )
 
+    IMAGE_OUTPUT = "laue_white_synchrotron.png"
     plt.savefig(
-        IMAGE_OUTPUT, dpi=600, bbox_inches="tight", facecolor=fig.get_facecolor()
+        IMAGE_OUTPUT, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor()
     )
     print(f"\n  Figure saved -> {IMAGE_OUTPUT}")
 
@@ -1215,6 +1838,8 @@ def main():
     print(f"  Beam in crystal: [{bd[0]:.3f},{bd[1]:.3f},{bd[2]:.3f}]")
 
     print("\nCamera:")
+    # Build camera from LaueTools calibration parameters
+    # Alternatively use: cam = Camera.from_lauetools([dd,xcen,ycen,xbet,xgam], pixelsize, framedim)
     cam = Camera()
     cam.describe()
 
@@ -1249,8 +1874,11 @@ def main():
     print_bragg_table(A_LATTICE)
 
     print(f'\n{"-"*112}')
-    print("Rendering figure ...")
+    print("Rendering detector image figure ...")
     plot_all(spots_bcc, spots_b2, bcc, cam, U)
+
+    print("Rendering 2theta/chi angular plot ...")
+    plot_2theta_chi(spots_bcc, spots_b2)
 
 
 if __name__ == "__main__":

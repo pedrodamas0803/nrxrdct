@@ -280,124 +280,19 @@ def crystals_from_cifs(cif_sources, names=None, verbose=True):
     ]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DEMO
-# ─────────────────────────────────────────────────────────────────────────────
+def build_bcc(a=2.881):
+    lat = xu.materials.SGLattice(
+        229, a, atoms=["Al", "Co", "Cr", "Fe", "Ni"], pos=["2a"] * 5, occ=[0.2] * 5
+    )
+    return xu.materials.Crystal("BCC  Im-3m", lat)
 
-if __name__ == "__main__":
-    import numpy as np
 
-    print("=" * 60)
-    print("  crystal_from_cif  –  demonstration")
-    print("=" * 60)
-
-    # ── Example 1: BCC iron from inline CIF string ────────────────────────────
-    cif_bcc_fe = """
-data_alpha_Fe
-_chemical_name_mineral  'Iron'
-_chemical_formula_sum   'Fe'
-_cell_length_a           2.8664
-_cell_length_b           2.8664
-_cell_length_c           2.8664
-_cell_angle_alpha        90
-_cell_angle_beta         90
-_cell_angle_gamma        90
-_symmetry_space_group_name_H-M  'I m -3 m'
-_symmetry_Int_Tables_number     229
-
-loop_
-_atom_site_label
-_atom_site_type_symbol
-_atom_site_fract_x
-_atom_site_fract_y
-_atom_site_fract_z
-_atom_site_occupancy
-_atom_site_B_iso_or_equiv
-Fe1  Fe  0.0  0.0  0.0  1.0  0.32
-"""
-
-    print("\n[1] BCC Iron from CIF string")
-    fe_bcc = crystal_from_cif(cif_bcc_fe, name="alpha-Fe (BCC)")
-
-    # ── Example 2: Al₂O₃ corundum ─────────────────────────────────────────────
-    cif_al2o3 = """
-data_Al2O3
-_chemical_name_mineral  'Corundum'
-_chemical_formula_sum   'Al2 O3'
-_cell_length_a   4.7602
-_cell_length_b   4.7602
-_cell_length_c  12.9933
-_cell_angle_alpha   90.000
-_cell_angle_beta    90.000
-_cell_angle_gamma  120.000
-_symmetry_space_group_name_H-M  'R -3 c'
-_symmetry_Int_Tables_number     167
-
-loop_
-_atom_site_label
-_atom_site_type_symbol
-_atom_site_fract_x
-_atom_site_fract_y
-_atom_site_fract_z
-_atom_site_occupancy
-Al1  Al  0.00000  0.00000  0.35228  1.0
-O1   O   0.30624  0.00000  0.25000  1.0
-"""
-
-    print("\n[2] Corundum (Al₂O₃) from CIF string")
-    al2o3 = crystal_from_cif(cif_al2o3)
-
-    # ── Example 3: NaCl with partial occupancy demonstration ──────────────────
-    cif_nacl = """
-data_NaCl
-_chemical_formula_sum   'Na Cl'
-_cell_length_a   5.6402
-_cell_length_b   5.6402
-_cell_length_c   5.6402
-_cell_angle_alpha  90
-_cell_angle_beta   90
-_cell_angle_gamma  90
-_symmetry_space_group_name_H-M  'F m -3 m'
-_symmetry_Int_Tables_number     225
-
-loop_
-_atom_site_label
-_atom_site_type_symbol
-_atom_site_fract_x
-_atom_site_fract_y
-_atom_site_fract_z
-_atom_site_occupancy
-_atom_site_U_iso_or_equiv
-Na  Na  0.0  0.0  0.0  1.0  0.0118
-Cl  Cl  0.5  0.0  0.0  1.0  0.0179
-"""
-
-    print("\n[3] NaCl (Uiso -> Biso conversion handled automatically)")
-    nacl = crystal_from_cif(cif_nacl, name="NaCl rock-salt")
-
-    # ── Structure factor check ────────────────────────────────────────────────
-    print("\n  Structure factor check at 17 keV:")
-    for crystal, hkl in [(fe_bcc, (1, 1, 0)), (al2o3, (1, 0, 4)), (nacl, (2, 0, 0))]:
-        G = crystal.Q(*hkl)
-        F = crystal.StructureFactor(G, en=17000)
-        print(
-            f"    {crystal.name:25s}  |F({hkl[0]}{hkl[1]}{hkl[2]})| = {abs(F):.4f} e.u."
-        )
-
-    # ── Powder diffraction quick test ─────────────────────────────────────────
-    print("\n  Powder diffraction (Cu Kα, 20-100°):")
-    import xrayutilities as xu
-
-    tt = np.linspace(20, 100, 1000)
-    for crystal in [fe_bcc, al2o3, nacl]:
-        pm = xu.simpack.PowderModel(xu.simpack.Powder(crystal, 1.0), I0=1e6)
-        pat = pm.simulate(tt)
-        pm.close()
-        n_peaks = int(np.sum(np.diff((pat > pat.max() * 0.01).astype(int)) > 0))
-        print(
-            f"    {crystal.name:25s}  max I = {pat.max():.1f}   " f"peaks ~ {n_peaks}"
-        )
-
-    print("\n  All examples completed successfully.")
-    print("  To use with your own CIF file:")
-    print("    crystal = crystal_from_cif('path/to/your_file.cif')")
+def build_b2(a=2.881):
+    lat = xu.materials.SGLattice(
+        221,
+        a,
+        atoms=["Al", "Ni", "Co", "Cr", "Fe"],
+        pos=["1a", "1a", "1b", "1b", "1b"],
+        occ=[0.5, 0.5, 1 / 3, 1 / 3, 1 / 3],
+    )
+    return xu.materials.Crystal("B2   Pm-3m", lat)

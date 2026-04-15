@@ -1,0 +1,1312 @@
+import matplotlib.colors as mcolors
+import matplotlib.gridspec as mgridspec
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
+import xrayutilities as xu
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
+from scipy.spatial.transform import Rotation
+from scipy.special import kv
+
+from .simulation import (
+    A_LATTICE,
+    HARMONIC_WIDTH,
+    N_HARMONICS,
+    PHI1_DEG,
+    PHI2_DEG,
+    PHI_DEG,
+    E_FUNDAMENTAL_eV,
+    beam_in_crystal,
+    synchrotron_spectrum,
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PLOTTING
+# ─────────────────────────────────────────────────────────────────────────────
+
+BG = "#080c14"
+FG = "#ccccee"
+COL_BCC = "#4fc3f7"
+COL_SUP = "#ff6633"
+COL_DB = "#ffffaa"
+
+
+def _ax_style(ax, title):
+    ax.set_facecolor(BG)
+    ax.set_title(title, color=FG, fontsize=9, pad=5)
+    ax.tick_params(colors="#7788aa", labelsize=6)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2θ / χ  AND  GNOMONIC PROJECTION PLOTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _uf_from_tth_chi(tth_deg, chi_deg):
+    """Scattered unit vector from 2theta, chi  (LaueTools LT2 frame)."""
+    tth = np.radians(tth_deg)
+    chi = np.radians(chi_deg)
+    return np.array(
+        [-np.sin(tth) * np.sin(chi), np.cos(tth), np.sin(tth) * np.cos(chi)]
+    )
+
+
+def _gnomonic(tth_deg, chi_deg):
+    """
+    Gnomonic projection of a scattered beam onto the plane perpendicular
+    to the forward beam direction (tangent plane at the north pole of the
+    unit sphere).
+
+        gX = -sin(2θ) sin χ  /  (1 + cos 2θ)
+        gY =  sin(2θ) cos χ  /  (1 + cos 2θ)
+
+    For 2θ < 90°  the point lies inside the unit circle (|g| < 1).
+    For 2θ = 90°  |g| = 1.
+    For 2θ > 90°  |g| > 1 (back-hemisphere).
+    Straight lines in gnomonic space = crystallographic zones.
+    """
+    tth = np.asarray(tth_deg, float)
+    chi = np.asarray(chi_deg, float)
+    denom = 1.0 + np.cos(np.radians(tth))
+    # guard against 2theta = 180 (denom = 0)
+    safe = np.where(np.abs(denom) > 1e-10, denom, np.nan)
+    gX = -np.sin(np.radians(tth)) * np.sin(np.radians(chi)) / safe
+    gY = np.sin(np.radians(tth)) * np.cos(np.radians(chi)) / safe
+    return gX, gY
+
+
+def _style_angular_ax(ax, title):
+    ax.set_facecolor("#080c14")
+    ax.set_title(title, color="#ccccee", fontsize=9, pad=5)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax.grid(True, ls=":", lw=0.35, color="#181e2e")
+
+
+def plot_2theta_chi(
+    spots_bcc, spots_b2, E_MIN_eV=5_000, E_MAX_eV=27_000, out_path="laue_2theta_chi.png"
+):
+    """
+    Plot Laue patterns in angular space: two representations side-by-side
+    for each phase (BCC and B2):
+
+    Left column  – 2θ vs χ scatter plot  (LaueTools .cor file convention)
+    Right column – Gnomonic projection   (gX, gY)
+                   Straight lines = crystallographic zone axes
+                   Unit circle = 2θ = 90°
+
+    Spots are coloured by photon energy and sized by normalised intensity.
+    Fundamental reflections: circles (○).
+    B2 superlattice reflections: stars (★) in orange.
+
+    Parameters
+    ----------
+    spots_bcc, spots_b2 : lists of spot dicts from simulate_laue()
+    out_path            : output PNG path
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.gridspec as mgridspec
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    BG = "#080c14"
+    FG = "#ccccee"
+    COL_FUND = "#4fc3f7"
+    COL_SUPER = "#ff6633"
+
+    all_E = [s["E"] for s in spots_bcc + spots_b2]
+    E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
+    cmap = "plasma"
+
+    fig = plt.figure(figsize=(18, 12))
+    fig.patch.set_facecolor(BG)
+
+    gs = mgridspec.GridSpec(
+        2,
+        3,
+        width_ratios=[1, 1, 0.06],
+        height_ratios=[1, 1],
+        hspace=0.38,
+        wspace=0.28,
+        left=0.07,
+        right=0.93,
+        top=0.92,
+        bottom=0.07,
+    )
+
+    ax_bcc_ang = fig.add_subplot(gs[0, 0])
+    ax_bcc_gno = fig.add_subplot(gs[0, 1])
+    ax_b2_ang = fig.add_subplot(gs[1, 0])
+    ax_b2_gno = fig.add_subplot(gs[1, 1])
+    ax_cb = fig.add_subplot(gs[:, 2])
+
+    # ── helper: 2theta vs chi scatter ────────────────────────────────────────
+    def draw_tth_chi(ax, spots, title):
+        _style_angular_ax(ax, title)
+        ax.set_ylabel("χ  (degrees)", color="#7788aa", fontsize=8)
+        ax.set_xlabel("2θ  (degrees)", color="#7788aa", fontsize=8)
+        ax.axvline(0, color="#252b40", lw=0.8)
+
+        fund = [s for s in spots if not s["is_superlattice"]]
+        super_ = [s for s in spots if s["is_superlattice"]]
+
+        for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
+            if not subset:
+                continue
+            chis = [s["chi"] for s in subset]
+            tths = [s["tth"] for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz = [max(4, 80 * s["intensity"] ** 0.4) for s in subset]
+            ax.scatter(
+                tths,
+                chis,
+                s=sz,
+                c=Es,
+                cmap=cmap,
+                norm=E_norm,
+                alpha=0.80,
+                edgecolors=ec,
+                linewidths=0.35,
+                marker=mk,
+                zorder=3,
+            )
+
+        # Label 8 strongest fundamental spots
+        for s in sorted(fund, key=lambda x: -x["intensity"])[:8]:
+            h, k, l = s["hkl"]
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(s["tth"], s["chi"]),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaccff",
+                alpha=0.9,
+            )
+
+        # Label 4 strongest superlattice spots
+        for s in sorted(super_, key=lambda x: -x["intensity"])[:4]:
+            h, k, l = s["hkl"]
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(s["tth"], s["chi"]),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color=COL_SUPER,
+                alpha=0.9,
+            )
+
+        # Draw 2theta reference lines
+        all_tths = [s["tth"] for s in spots]
+        tth_min = max(0, min(all_tths) - 5) if all_tths else 60
+        tth_max = min(180, max(all_tths) + 5) if all_tths else 130
+        all_chis = [s["chi"] for s in spots]
+        chi_min = min(all_chis) - 5 if all_chis else -50
+        chi_max = max(all_chis) + 5 if all_chis else 50
+
+        for tth_ref in np.arange(round(tth_min / 10) * 10, tth_max + 1, 10):
+            ax.axvline(tth_ref, color="#1a2a3a", lw=0.6, ls="--", alpha=0.7, zorder=1)
+            ax.text(
+                tth_ref,
+                chi_max + 0.5,
+                f"{tth_ref:.0f}°",
+                color="#445566",
+                fontsize=6,
+                ha="center",
+            )
+
+        ax.set_ylim(chi_min, chi_max)
+        ax.set_xlim(tth_min, tth_max)
+
+    # ── helper: gnomonic projection ───────────────────────────────────────────
+    def draw_gnomonic(ax, spots, title):
+        _style_angular_ax(ax, title)
+        ax.set_xlabel("gX  =  −sin2θ·sinχ / (1+cos2θ)", color="#7788aa", fontsize=7)
+        ax.set_ylabel("gY  =   sin2θ·cosχ / (1+cos2θ)", color="#7788aa", fontsize=7)
+        ax.set_aspect("equal")
+
+        fund = [s for s in spots if not s["is_superlattice"]]
+        super_ = [s for s in spots if s["is_superlattice"]]
+
+        for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
+            if not subset:
+                continue
+            gXs = [_gnomonic(s["tth"], s["chi"])[0] for s in subset]
+            gYs = [_gnomonic(s["tth"], s["chi"])[1] for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz = [max(4, 80 * s["intensity"] ** 0.4) for s in subset]
+            ax.scatter(
+                gXs,
+                gYs,
+                s=sz,
+                c=Es,
+                cmap=cmap,
+                norm=E_norm,
+                alpha=0.80,
+                edgecolors=ec,
+                linewidths=0.35,
+                marker=mk,
+                zorder=3,
+            )
+
+        # Label strongest fundamental spots
+        for s in sorted(fund, key=lambda x: -x["intensity"])[:8]:
+            h, k, l = s["hkl"]
+            gx, gy = _gnomonic(s["tth"], s["chi"])
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(gx, gy),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaccff",
+                alpha=0.9,
+            )
+
+        for s in sorted(super_, key=lambda x: -x["intensity"])[:4]:
+            h, k, l = s["hkl"]
+            gx, gy = _gnomonic(s["tth"], s["chi"])
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(gx, gy),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color=COL_SUPER,
+                alpha=0.9,
+            )
+
+        # Reference circles: 2theta = 60, 70, 80, 90, 100, 110, 120 deg
+        theta_circ = np.linspace(0, 2 * np.pi, 360)
+        for tth_ref in range(60, 131, 10):
+            gXc, gYc = _gnomonic(np.full(360, tth_ref), np.degrees(theta_circ))
+            # Only draw arc where spots exist
+            valid = np.isfinite(gXc) & np.isfinite(gYc)
+            if valid.any():
+                col = "#ffffaa" if tth_ref == 90 else "#1a2a3a"
+                lw = 0.9 if tth_ref == 90 else 0.5
+                ax.plot(
+                    gXc[valid],
+                    gYc[valid],
+                    color=col,
+                    lw=lw,
+                    ls="--",
+                    alpha=0.7,
+                    zorder=1,
+                )
+                # Label
+                ax.text(
+                    0,
+                    _gnomonic(tth_ref, 0)[1] + 0.02,
+                    f"{tth_ref}°",
+                    color="#445566" if tth_ref != 90 else "#ffffaa",
+                    fontsize=5.5,
+                    ha="center",
+                    va="bottom",
+                )
+
+        # Chi reference lines (radial lines at chi = 0, ±30, ±60, ±90 deg)
+        for chi_ref in [0, 30, -30, 60, -60, 90, -90]:
+            # Draw radial line from origin
+            r_max = 3.0
+            gx_r = r_max * (-np.sin(np.radians(chi_ref)))  # at 2theta=90 gX = -sin(chi)
+            gy_r = r_max * np.cos(np.radians(chi_ref))
+            ax.plot(
+                [0, gx_r],
+                [0, gy_r],
+                color="#1a2a3a",
+                lw=0.5,
+                ls=":",
+                alpha=0.6,
+                zorder=1,
+            )
+            if abs(chi_ref) <= 90:
+                ax.text(
+                    gx_r * 0.9,
+                    gy_r * 0.9,
+                    f"χ={chi_ref}°",
+                    color="#334455",
+                    fontsize=5.5,
+                    ha="center",
+                    va="center",
+                )
+
+        # Origin crosshair (forward beam)
+        ax.plot(0, 0, "+", color="#ffffaa", ms=8, mew=1.2, zorder=6)
+
+        # Auto-scale with margin
+        all_gx = [_gnomonic(s["tth"], s["chi"])[0] for s in spots]
+        all_gy = [_gnomonic(s["tth"], s["chi"])[1] for s in spots]
+        all_gx = [v for v in all_gx if np.isfinite(v)]
+        all_gy = [v for v in all_gy if np.isfinite(v)]
+        if all_gx and all_gy:
+            margin = 0.3
+            xmin, xmax = min(all_gx) - margin, max(all_gx) + margin
+            ymin, ymax = min(all_gy) - margin, max(all_gy) + margin
+            # Keep square
+            r = max(abs(xmin), abs(xmax), abs(ymin), abs(ymax)) + margin
+            ax.set_xlim(-r, r)
+            ax.set_ylim(-r, r)
+
+    # ── Draw all four panels ──────────────────────────────────────────────────
+    n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
+
+    draw_tth_chi(
+        ax_bcc_ang, spots_bcc, f"BCC  Im-3m   –   2θ vs χ   ({len(spots_bcc)} spots)"
+    )
+    draw_gnomonic(ax_bcc_gno, spots_bcc, f"BCC  Im-3m   –   Gnomonic projection")
+    draw_b2_title = (
+        f"B2   Pm-3m   –   2θ vs χ   "
+        f"({len(spots_b2)} spots, {n_super} superlattice)"
+    )
+    draw_tth_chi(ax_b2_ang, spots_b2, draw_b2_title)
+    draw_gnomonic(ax_b2_gno, spots_b2, f"B2   Pm-3m   –   Gnomonic projection")
+
+    # ── Shared legend ─────────────────────────────────────────────────────────
+    leg = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            lw=0,
+            mfc=COL_FUND,
+            mec=COL_FUND,
+            ms=7,
+            label="Fundamental (BCC & B2)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="*",
+            lw=0,
+            mfc=COL_SUPER,
+            mec=COL_SUPER,
+            ms=9,
+            label="B2 superlattice  (h+k+l odd)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="#ffffaa",
+            lw=1,
+            ls="--",
+            label="2θ = 90°  (gnomonic unit circle)",
+        ),
+    ]
+    fig.legend(
+        handles=leg,
+        loc="upper center",
+        ncol=3,
+        fontsize=8,
+        framealpha=0.25,
+        facecolor=BG,
+        labelcolor="white",
+        bbox_to_anchor=(0.5, 0.97),
+    )
+
+    # ── Colourbar ─────────────────────────────────────────────────────────────
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=E_norm)
+    sm.set_array([])
+    cb = fig.colorbar(sm, cax=ax_cb)
+    cb.set_label("E  (keV)", color="#8899aa", fontsize=8)
+    cb.ax.yaxis.set_tick_params(color="#8899aa", labelsize=7)
+    plt.setp(cb.ax.yaxis.get_ticklabels(), color="#8899aa")
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    fig.text(
+        0.5,
+        0.995,
+        "Laue pattern  –  AlCoCrFeNi  –  angular coordinates  "
+        "(LaueTools convention: beam ∥ y,  χ = arctan(−uf_x / uf_z))",
+        ha="center",
+        va="top",
+        fontsize=11,
+        color="white",
+        fontweight="bold",
+    )
+
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    print(f"  Angular plot saved -> {out_path}")
+    return out_path
+
+
+def plot_all(
+    spots_bcc,
+    spots_b2,
+    crystal_bcc,
+    camera,
+    U,
+    E_MIN_eV=5_000,
+    E_MAX_eV=27_000,
+    KI_HAT=np.array([1.0, 0.0, 0.0]),
+    SOURCE_TYPE="bending_magnet",
+    E_CRIT_eV=20_000,
+):
+
+    # Central 2theta of detector (LaueTools: 90 - xbet)
+    tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
+    n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
+    all_E = [s["E"] for s in spots_bcc + spots_b2]
+    E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
+    cmap = "plasma"
+    cmap_obj = plt.get_cmap(cmap)
+
+    fig = plt.figure(figsize=(22, 13))
+    fig.patch.set_facecolor(BG)
+
+    gs = mgridspec.GridSpec(
+        2,
+        5,
+        width_ratios=[1.4, 1.4, 1, 1, 0.28],
+        height_ratios=[1, 1],
+        hspace=0.38,
+        wspace=0.28,
+        left=0.03,
+        right=0.97,
+        top=0.93,
+        bottom=0.06,
+    )
+
+    ax_img_bcc = fig.add_subplot(gs[0, 0])
+    ax_img_b2 = fig.add_subplot(gs[0, 1])
+    ax_spec = fig.add_subplot(gs[0, 2])
+    ax_sf = fig.add_subplot(gs[0, 3])
+    ax_scatter = fig.add_subplot(gs[1, 0])
+    ax_tth = fig.add_subplot(gs[1, 1])
+    ax_geo = fig.add_subplot(gs[1, 2])
+    ax_int = fig.add_subplot(gs[1, 3])
+    ax_info = fig.add_subplot(gs[:, 4])
+
+    Nh, Nv = camera.Nh, camera.Nv
+
+    # ── helper: draw one detector image ───────────────────────────────────────
+
+    draw_det_image(
+        ax_img_bcc, spots_bcc, f"BCC detector image  ({len(spots_bcc)} spots)"
+    )
+    draw_det_image(
+        ax_img_b2,
+        spots_b2,
+        f"B2 detector image  ({len(spots_b2)} spots,  " f"{n_super} superlattice)",
+    )
+
+    # ── Spectrum panel ─────────────────────────────────────────────────────────
+    _ax_style(ax_spec, f'Synchrotron spectrum  ({SOURCE_TYPE.replace("_"," ")})')
+    E_plot = np.linspace(max(500, E_MIN_eV * 0.4), E_MAX_eV * 1.1, 800)
+
+    if SOURCE_TYPE in ("bending_magnet", "wiggler"):
+        S = np.array([synchrotron_spectrum(E) for E in E_plot])
+        S /= S.max()
+        ax_spec.fill_between(E_plot / 1e3, S, alpha=0.18, color="#88aaff")
+        ax_spec.plot(
+            E_plot / 1e3,
+            S,
+            color="#88aaff",
+            lw=1.4,
+            label=f"Ec = {E_CRIT_eV/1e3:.1f} keV",
+        )
+        ax_spec.axvline(
+            0.83 * E_CRIT_eV / 1e3,
+            color="#88aaff",
+            ls="--",
+            lw=0.7,
+            alpha=0.5,
+            label=f"Peak ~0.83 Ec",
+        )
+    else:
+        S_tot = np.zeros(len(E_plot))
+        for n in range(1, 2 * N_HARMONICS, 2):
+            En = n * E_FUNDAMENTAL_eV
+            sig = En * HARMONIC_WIDTH
+            Sh = (1 / n) * np.exp(-0.5 * ((E_plot - En) / sig) ** 2)
+            S_tot += Sh
+            if n <= 9:
+                ax_spec.fill_between(
+                    E_plot / 1e3, Sh / Sh.max() * 0.7, alpha=0.12, color="#88aaff"
+                )
+        if S_tot.max() > 0:
+            S_tot /= S_tot.max()
+        ax_spec.plot(E_plot / 1e3, S_tot, color="#88aaff", lw=1.4)
+
+    # energy window
+    ax_spec.axvspan(E_MIN_eV / 1e3, E_MAX_eV / 1e3, alpha=0.07, color="white")
+    ax_spec.axvline(E_MIN_eV / 1e3, color="#888888", lw=0.7, ls="--")
+    ax_spec.axvline(E_MAX_eV / 1e3, color="#888888", lw=0.7, ls="--")
+
+    # spot energies as stems
+    if spots_bcc:
+        sw_arr = np.array([s["sw"] for s in spots_bcc])
+        sw_norm = sw_arr / sw_arr.max() if sw_arr.max() > 0 else sw_arr
+        ax_spec.vlines(
+            [s["E"] / 1e3 for s in spots_bcc],
+            0,
+            sw_norm,
+            color=COL_BCC,
+            lw=0.4,
+            alpha=0.35,
+        )
+
+    ax_spec.set_xlim(max(0.5, E_MIN_eV * 0.4 / 1e3), E_MAX_eV * 1.1 / 1e3)
+    ax_spec.set_ylim(0, 1.3)
+    ax_spec.set_xlabel("E  (keV)", color="#7788aa", fontsize=7)
+    ax_spec.set_ylabel("S(E)  (norm.)", color="#7788aa", fontsize=7)
+    ax_spec.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
+
+    # ── |F(E)| panel ──────────────────────────────────────────────────────────
+    _ax_style(ax_sf, "|F(G, E)|  vs energy  (BCC, top 4 spots)")
+    E_arr = np.linspace(E_MIN_eV, E_MAX_eV, 500)
+    plotted_E = []
+    for s in sorted(spots_bcc, key=lambda x: -x["intensity"])[:6]:
+        if any(abs(s["E"] - pe) < 1000 for pe in plotted_E):
+            continue
+        G = crystal_bcc.Q(*s["hkl"])
+        FE = crystal_bcc.StructureFactorForEnergy(G, E_arr)
+        col = cmap_obj(E_norm(s["E"] / 1e3))
+        h, k, l = s["hkl"]
+        ax_sf.plot(E_arr / 1e3, np.abs(FE), color=col, lw=1.1, label=f"({h}{k}{l})")
+        ax_sf.axvline(s["E"] / 1e3, color=col, lw=0.6, ls="--", alpha=0.4)
+        plotted_E.append(s["E"])
+    ax_sf.set_xlabel("E  (keV)", color="#7788aa", fontsize=7)
+    ax_sf.set_ylabel("|F|  (e.u.)", color="#7788aa", fontsize=7)
+    ax_sf.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
+
+    # ── Scatter plot col/row coloured by energy ────────────────────────────────
+    _ax_style(ax_scatter, "Spot map  (pixel coordinates, coloured by E)")
+    ax_scatter.set_facecolor("#04060e")
+    ax_scatter.set_xlim(0, Nh)
+    ax_scatter.set_ylim(Nv, 0)
+    ax_scatter.set_aspect("equal")
+    ax_scatter.set_xlabel("col  (pixel)", color="#7788aa", fontsize=7)
+    ax_scatter.set_ylabel("row  (pixel)", color="#7788aa", fontsize=7)
+
+    # Draw detector outline
+    ax_scatter.add_patch(
+        Rectangle((0, 0), Nh, Nv, fill=False, edgecolor="#334466", lw=0.8)
+    )
+
+    for spots_s, mk, ec in [
+        (spots_bcc, "o", COL_BCC),
+        ([s for s in spots_b2 if s["is_superlattice"]], "*", COL_SUP),
+    ]:
+        if not spots_s:
+            continue
+        cs = [s["pix"][0] for s in spots_s]
+        rs = [s["pix"][1] for s in spots_s]
+        Es = [s["E"] / 1e3 for s in spots_s]
+        sz = [max(3, 60 * s["intensity"] ** 0.4) for s in spots_s]
+        ax_scatter.scatter(
+            cs,
+            rs,
+            s=sz,
+            c=Es,
+            cmap=cmap,
+            norm=E_norm,
+            alpha=0.75,
+            edgecolors=ec,
+            linewidths=0.3,
+            marker=mk,
+            zorder=3,
+        )
+
+    # Centre and direct beam
+    ax_scatter.plot(Nh / 2, Nv / 2, "+", color="#aaaaff", ms=8, mew=1, zorder=6)
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+    db = camera.project(ki_hat)
+    if db:
+        ax_scatter.plot(*db, "x", color=COL_DB, ms=10, mew=1.5, zorder=7)
+
+    # 2theta grid lines
+    CC, RR, TTH_g = camera.tth_grid(step=max(1, Nh // 20))
+    tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
+    lvls = sorted({tc - 20, tc - 10, tc, tc + 10, tc + 20})
+    lvls = [l for l in lvls if TTH_g.min() < l < TTH_g.max()]
+    if lvls:
+        ct = ax_scatter.contour(
+            CC, RR, TTH_g, levels=lvls, colors="#1a2a44", linewidths=0.6, alpha=0.8
+        )
+        ax_scatter.clabel(ct, fmt="%.0f°", fontsize=5, colors="#3355aa")
+
+    leg_sc = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            lw=0,
+            mfc=COL_BCC,
+            mec=COL_BCC,
+            ms=5,
+            label="BCC fundamental",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="*",
+            lw=0,
+            mfc=COL_SUP,
+            mec=COL_SUP,
+            ms=7,
+            label="B2 superlattice",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="+",
+            lw=0,
+            color="#aaaaff",
+            ms=6,
+            mew=1,
+            label="Det. centre",
+        ),
+        Line2D(
+            [0], [0], marker="x", lw=0, color=COL_DB, ms=6, mew=1.3, label="Direct beam"
+        ),
+    ]
+    ax_scatter.legend(
+        handles=leg_sc,
+        fontsize=5.5,
+        framealpha=0.2,
+        facecolor=BG,
+        labelcolor="white",
+        loc="upper right",
+    )
+
+    # ── 2theta histogram ──────────────────────────────────────────────────────
+    _ax_style(ax_tth, "2theta distribution (intensity-weighted)")
+    bins = np.linspace(0, 180, 72)
+    if spots_bcc:
+        ax_tth.hist(
+            [s["tth"] for s in spots_bcc],
+            bins=bins,
+            weights=[s["intensity"] for s in spots_bcc],
+            color=COL_BCC,
+            alpha=0.55,
+            label="BCC fund.",
+        )
+    sup = [s for s in spots_b2 if s["is_superlattice"]]
+    if sup:
+        ax_tth.hist(
+            [s["tth"] for s in sup],
+            bins=bins,
+            weights=[s["intensity"] for s in sup],
+            color=COL_SUP,
+            alpha=0.70,
+            label="B2 superlat.",
+        )
+    ax_tth.axvline(tc, color="#ffffaa", lw=1, ls="--", label=f"Det. centre = {tc:.0f}°")
+    ax_tth.set_xlabel("2theta  (deg)", color="#7788aa", fontsize=7)
+    ax_tth.set_ylabel("Sum intensity", color="#7788aa", fontsize=7)
+    ax_tth.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
+
+    # ── Geometry schematic ────────────────────────────────────────────────────
+    _ax_style(ax_geo, "Geometry  (top view: x-y plane)")
+    ax_geo.set_facecolor("#04060e")
+    ax_geo.set_xlim(-1.7, 2.5)
+    ax_geo.set_ylim(-1.8, 1.8)
+    ax_geo.set_aspect("equal")
+    ax_geo.axis("off")
+
+    # beam – draw from negative KI_HAT direction
+    ki_2d = np.array([KI_HAT[0], KI_HAT[1]])
+    if np.linalg.norm(ki_2d) > 1e-6:
+        ki_2d /= np.linalg.norm(ki_2d)
+    else:
+        ki_2d = np.array([0.0, 1.0])
+    ax_geo.annotate(
+        "",
+        xy=(0, 0),
+        xytext=tuple(-1.6 * ki_2d),
+        arrowprops=dict(arrowstyle="->", color=COL_DB, lw=2.2),
+    )
+    ki_str = "".join([f"{v:+.2g}" if v != 0 else "" for v in KI_HAT])
+    ax_geo.text(
+        -0.8, 0.14, f"white beam ({ki_str})", color=COL_DB, fontsize=7.5, ha="center"
+    )
+
+    # sample
+    ax_geo.add_patch(
+        plt.Polygon(
+            [(-0.12, -0.22), (0.12, -0.22), (0.12, 0.22), (-0.12, 0.22)],
+            color="#445599",
+            zorder=3,
+        )
+    )
+    ax_geo.text(0, -0.38, "crystal", color="#aabbdd", fontsize=7, ha="center")
+
+    # detector: draw as a rotated rectangle representing its orientation
+    tth_c = np.radians(tc)
+    # In 2D schematic (x-y plane): rotate KI by tth_c to get detector direction
+    ki_2d_n = ki_2d  # already defined above (normalised 2D projection of KI_HAT)
+    c_tth, s_tth = np.cos(tth_c), np.sin(tth_c)
+    det_dir = np.array(
+        [
+            c_tth * ki_2d_n[0] - s_tth * ki_2d_n[1],
+            s_tth * ki_2d_n[0] + c_tth * ki_2d_n[1],
+        ]
+    )
+    det_perp = np.array([det_dir[1], -det_dir[0]])
+
+    L = 1.4  # diagram scale
+    half_det = 0.45
+    dc_diag = L * det_dir
+    p1 = dc_diag + half_det * det_perp
+    p2 = dc_diag - half_det * det_perp
+    ax_geo.plot(
+        [p1[0], p2[0]],
+        [p1[1], p2[1]],
+        color="#888899",
+        lw=6,
+        solid_capstyle="round",
+        alpha=0.75,
+    )
+    ax_geo.text(
+        dc_diag[0] + det_dir[0] * 0.22,
+        dc_diag[1] + det_dir[1] * 0.22,
+        "detector",
+        color="#888899",
+        fontsize=6.5,
+        ha="center",
+        va="center",
+    )
+
+    # scattered beams at a few angles
+    for tth_s, col_s, lbl in [
+        (tc, "#ffffaa", f"2th={tc:.0f}deg (centre)"),
+        (tc - 15, "#88ddaa", f"2th={tc-15:.0f}deg"),
+        (tc + 15, "#ffaa66", f"2th={tc+15:.0f}deg"),
+    ]:
+        if 5 < tth_s < 175:
+            tr = np.radians(tth_s)
+            c_s, s_s = np.cos(tr), np.sin(tr)
+            # Rotate KI_HAT by tth_s
+            kf_2d = np.array(
+                [
+                    c_s * ki_2d_n[0] - s_s * ki_2d_n[1],
+                    s_s * ki_2d_n[0] + c_s * ki_2d_n[1],
+                ]
+            )
+            ax_geo.annotate(
+                "",
+                xy=(kf_2d[0] * L * 0.85, kf_2d[1] * L * 0.85),
+                xytext=(0, 0),
+                arrowprops=dict(arrowstyle="->", color=col_s, lw=1.2),
+            )
+            ax_geo.text(
+                kf_2d[0] * L * 0.9 + 0.05,
+                kf_2d[1] * L * 0.9,
+                lbl,
+                color=col_s,
+                fontsize=5.5,
+                ha="left",
+                va="center",
+            )
+
+    # 2theta arc (around KI direction)
+    ki_angle = np.arctan2(ki_2d_n[1], ki_2d_n[0])  # angle of KI in 2D
+    arc_angles = np.linspace(
+        ki_angle + np.radians(max(5, tc - 25)),
+        ki_angle + np.radians(min(175, tc + 25)),
+        80,
+    )
+    ax_geo.plot(
+        0.65 * np.cos(arc_angles),
+        0.65 * np.sin(arc_angles),
+        color="#334455",
+        lw=1,
+        ls="--",
+    )
+    mid_arc = ki_angle + np.radians(tc)
+    ax_geo.text(
+        0.75 * np.cos(mid_arc),
+        0.75 * np.sin(mid_arc),
+        "2θ",
+        color="#556677",
+        fontsize=9,
+    )
+
+    # beam direction label
+    bd = beam_in_crystal(U)
+    ax_geo.text(
+        0,
+        -1.7,
+        f"beam \u2225 [{bd[0]:.2g},{bd[1]:.2g},{bd[2]:.2g}]  "
+        f"\u03c6\u2081={PHI1_DEG:.0f}\u00b0 \u03a6={PHI_DEG:.0f}\u00b0 "
+        f"\u03c6\u2082={PHI2_DEG:.0f}\u00b0",
+        color="#aaaacc",
+        fontsize=6.5,
+        ha="center",
+    )
+
+    # ── Intensity vs pixel column (horizontal cross-section) ──────────────────
+    _ax_style(ax_int, "Intensity vs. 2theta (all spots)")
+    if spots_bcc:
+        tths_b = [s["tth"] for s in spots_bcc]
+        intn_b = [s["intensity"] for s in spots_bcc]
+        Es_b = [s["E"] / 1e3 for s in spots_bcc]
+        ax_int.scatter(
+            tths_b, intn_b, s=6, c=Es_b, cmap=cmap, norm=E_norm, alpha=0.6, zorder=3
+        )
+    if sup:
+        ax_int.scatter(
+            [s["tth"] for s in sup],
+            [s["intensity"] for s in sup],
+            s=15,
+            color=COL_SUP,
+            marker="*",
+            alpha=0.85,
+            zorder=4,
+            label="B2 superlat.",
+        )
+    ax_int.axvline(tc, color="#ffffaa", lw=0.8, ls="--", label=f"Centre {tc:.0f}°")
+    ax_int.set_xlabel("2theta  (deg)", color="#7788aa", fontsize=7)
+    ax_int.set_ylabel("I / I_max", color="#7788aa", fontsize=7)
+    ax_int.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white")
+
+    # ── Colour bar ────────────────────────────────────────────────────────────
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=E_norm)
+    sm.set_array([])
+    cb_ax = fig.add_axes([0.805, 0.56, 0.008, 0.34])
+    cb = fig.colorbar(sm, cax=cb_ax)
+    cb.set_label("E  (keV)", color="#8899aa", fontsize=7)
+    cb.ax.yaxis.set_tick_params(color="#8899aa", labelsize=6)
+    plt.setp(cb.ax.yaxis.get_ticklabels(), color="#8899aa")
+
+    # ── Info panel ────────────────────────────────────────────────────────────
+    ax_info.set_facecolor("#0b0f1c")
+    ax_info.axis("off")
+    bd = beam_in_crystal(U)
+
+    src_detail = (
+        f"Ec={E_CRIT_eV/1e3:.1f} keV"
+        if SOURCE_TYPE in ("bending_magnet", "wiggler")
+        else f"E1={E_FUNDAMENTAL_eV/1e3:.1f} keV"
+    )
+
+    lines = [
+        ("AlCoCrFeNi  HEA", 12, "white", True),
+        ("White-Beam Laue Reflection", 9, "#aaaaff", True),
+        ("", 0, "", False),
+        ("Source ──────────────────", 7, "#334466", False),
+        (SOURCE_TYPE.replace("_", " "), 7, "#88aaff", False),
+        (src_detail, 7, "#88aaff", False),
+        (f"{E_MIN_eV/1e3:.0f}-{E_MAX_eV/1e3:.0f} keV window", 7, "#88aaff", False),
+        ("", 0, "", False),
+        ("Crystal ─────────────────", 7, "#334466", False),
+        (
+            f"phi1={PHI1_DEG:.1f} Phi={PHI_DEG:.1f} phi2={PHI2_DEG:.1f} deg",
+            7,
+            "#88aaff",
+            False,
+        ),
+        (f"beam||[{bd[0]:.2g},{bd[1]:.2g},{bd[2]:.2g}]", 7, "#88aaff", False),
+        (
+            f"ki=[{KI_HAT[0]:.2g},{KI_HAT[1]:.2g},{KI_HAT[2]:.2g}] lab",
+            7,
+            "#88aaff",
+            False,
+        ),
+        (f"a = {A_LATTICE} Ang", 7, "#88aaff", False),
+        ("", 0, "", False),
+        ("Camera ──────────────────", 7, "#334466", False),
+        (f"{camera.Nh} x {camera.Nv} pixels", 7, "#88aaff", False),
+        (f"pixel = {camera.pixel_mm*1e3:.0f} um", 7, "#88aaff", False),
+        (
+            f"size {camera.size_h_mm:.0f} x {camera.size_v_mm:.0f} mm^2",
+            7,
+            "#88aaff",
+            False,
+        ),
+        (f"dist = {camera.dd:.1f} mm", 7, "#88aaff", False),
+        (f"2th at (xcen,ycen) = {90-camera.xbet:.2f} deg", 7, "#88aaff", False),
+        (f"xbet = {camera.xbet:.3f} deg", 7, "#88aaff", False),
+        (f"xgam = {camera.xgam:.3f} deg", 7, "#88aaff", False),
+        ("", 0, "", False),
+        ("Results ─────────────────", 7, "#334466", False),
+        (f"BCC : {len(spots_bcc)} spots", 8, "#4fc3f7", False),
+        (f"B2  : {len(spots_b2)} spots", 8, "#ffb74d", False),
+        (f"  fund. : {len(spots_b2)-n_super}", 7, "#88aaff", False),
+        (f"  superl: {n_super}", 7, "#ff6633", False),
+        ("", 0, "", False),
+        ("Intensity ────────────────", 7, "#334466", False),
+        ("I=|F(Q,E)|^2*LP*S(E)", 7, "#88aaff", False),
+        ("Cromer-Mann+Henke f',f\"", 6, "#556677", False),
+        ("LP=(1+cos^2 2T)/(2s^2 c)", 6, "#556677", False),
+        ("Gaussian spot profile", 6, "#556677", False),
+    ]
+
+    y = 0.98
+    for txt, fs, col, bold in lines:
+        if txt == "":
+            y -= 0.010
+            continue
+        ax_info.text(
+            0.04,
+            y,
+            txt,
+            transform=ax_info.transAxes,
+            fontsize=fs,
+            color=col,
+            fontweight="bold" if bold else "normal",
+            va="top",
+            fontfamily="monospace",
+        )
+        y -= 0.030 if fs >= 9 else 0.024 if fs >= 7 else 0.020
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    bd_str = f"[{bd[0]:.2g},{bd[1]:.2g},{bd[2]:.2g}]"
+    src_str = SOURCE_TYPE.replace("_", " ")
+    fig.text(
+        0.5,
+        0.965,
+        f"White-Beam Laue  |  AlCoCrFeNi  |  {src_str}  "
+        f"{E_MIN_eV/1e3:.0f}-{E_MAX_eV/1e3:.0f} keV  |  "
+        f"beam || {bd_str}  |  "
+        f"2theta_centre = {tc:.0f}deg  |  "
+        f"{camera.Nh}x{camera.Nv} px  {camera.pixel_mm*1e3:.0f}um",
+        ha="center",
+        fontsize=11,
+        color="white",
+        fontweight="bold",
+    )
+
+    IMAGE_OUTPUT = "laue_white_synchrotron.png"
+    plt.savefig(
+        IMAGE_OUTPUT, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor()
+    )
+    print(f"\n  Figure saved -> {IMAGE_OUTPUT}")
+
+
+def plot_layer_contributions(
+    spots, stack, camera, out_path="/mnt/user-data/outputs/laue_layer_contributions.png"
+):
+    """
+    Visualise per-layer intensity contributions across the detector image
+    and in 2theta/chi space.
+
+    Produces a figure with one detector-image panel per layer, coloured by
+    each layer's fractional intensity contribution at that spot position.
+    A summary panel shows the dominant-layer map across the full detector.
+
+    Parameters
+    ----------
+    spots   : list of dicts from ``layer_contributions_spots()``
+    stack   : LayeredCrystal
+    camera  : Camera
+    out_path: str
+    """
+    import matplotlib.cm as mcm
+    import matplotlib.colors as mcolors
+    import matplotlib.gridspec as mgridspec
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    labels = [layer.label for layer in stack.layers]
+    n_layers = len(labels)
+
+    # Layer colours
+    layer_cols = [
+        "#4fc3f7",
+        "#ff9f43",
+        "#ff6b6b",
+        "#a29bfe",
+        "#55efc4",
+        "#fd79a8",
+        "#fdcb6e",
+    ][:n_layers]
+
+    BG = "#080c14"
+    fig = plt.figure(figsize=(5 * n_layers + 4, 10))
+    fig.patch.set_facecolor(BG)
+
+    gs = mgridspec.GridSpec(
+        2,
+        n_layers + 1,
+        height_ratios=[1, 1],
+        hspace=0.35,
+        wspace=0.25,
+        left=0.04,
+        right=0.97,
+        top=0.91,
+        bottom=0.06,
+    )
+
+    Nh, Nv = camera.Nh, camera.Nv
+
+    # ── Row 0: per-layer detector images ────────────────────────────────────
+    for li, (label, col) in enumerate(zip(labels, layer_cols)):
+        ax = fig.add_subplot(gs[0, li])
+        ax.set_facecolor("#04060e")
+        ax.set_xlim(0, Nh)
+        ax.set_ylim(Nv, 0)
+        ax.set_aspect("auto")
+        ax.set_title(f"{label}", color=col, fontsize=8, pad=4)
+        ax.set_xlabel("col", color="#7788aa", fontsize=6)
+        ax.set_ylabel("row", color="#7788aa", fontsize=6)
+        ax.tick_params(colors="#7788aa", labelsize=5)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+        # Scatter spots coloured by this layer's fractional contribution
+        xs = [s["pix"][0] for s in spots if label in s.get("layer_I_frac", {})]
+        ys = [s["pix"][1] for s in spots if label in s.get("layer_I_frac", {})]
+        cs = [
+            max(-1, min(1, s["layer_I_frac"][label]))
+            for s in spots
+            if label in s.get("layer_I_frac", {})
+        ]
+        sz = [
+            max(2, 40 * s["intensity"] ** 0.4)
+            for s in spots
+            if label in s.get("layer_I_frac", {})
+        ]
+
+        if xs:
+            sc = ax.scatter(
+                xs,
+                ys,
+                s=sz,
+                c=cs,
+                cmap="RdYlGn",
+                vmin=-0.2,
+                vmax=1.0,
+                alpha=0.85,
+                edgecolors="none",
+                zorder=3,
+            )
+            cbar = plt.colorbar(sc, ax=ax, fraction=0.04, pad=0.02)
+            cbar.set_label("I_frac", color="#7788aa", fontsize=5)
+            cbar.ax.tick_params(colors="#7788aa", labelsize=5)
+
+        # 2theta contour
+        CC, RR, TTH = camera.tth_grid(step=max(1, Nh // 15))
+        tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
+        lvls = [tc - 20, tc, tc + 20]
+        lvls = [l for l in lvls if TTH.min() < l < TTH.max()]
+        if lvls:
+            ax.contour(
+                CC, RR, TTH, levels=lvls, colors="#1a2a3a", linewidths=0.5, alpha=0.6
+            )
+
+    # ── Row 0 last panel: dominant-layer map ─────────────────────────────────
+    ax_dom = fig.add_subplot(gs[0, n_layers])
+    ax_dom.set_facecolor("#04060e")
+    ax_dom.set_xlim(0, Nh)
+    ax_dom.set_ylim(Nv, 0)
+    ax_dom.set_aspect("auto")
+    ax_dom.set_title("Dominant layer", color="#ccccee", fontsize=8, pad=4)
+    ax_dom.set_xlabel("col", color="#7788aa", fontsize=6)
+    ax_dom.tick_params(colors="#7788aa", labelsize=5)
+    for sp in ax_dom.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    for s in spots:
+        if "layer_I_frac" not in s:
+            continue
+        dom_idx = max(
+            range(n_layers), key=lambda i: s["layer_I_frac"].get(labels[i], -np.inf)
+        )
+        col = layer_cols[dom_idx]
+        sz = max(2, 50 * s["intensity"] ** 0.4)
+        ax_dom.scatter(
+            s["pix"][0],
+            s["pix"][1],
+            s=sz,
+            color=col,
+            alpha=0.8,
+            edgecolors="none",
+            zorder=3,
+        )
+
+    # Legend
+    from matplotlib.lines import Line2D
+
+    leg = [
+        Line2D([0], [0], marker="o", lw=0, mfc=layer_cols[i], ms=6, label=labels[i])
+        for i in range(n_layers)
+    ]
+    ax_dom.legend(
+        handles=leg,
+        fontsize=5.5,
+        framealpha=0.25,
+        facecolor=BG,
+        labelcolor="white",
+        loc="upper right",
+    )
+
+    # ── Row 1: 2theta/chi scatter per layer ──────────────────────────────────
+    tths_all = [s["tth"] for s in spots]
+    chis_all = [s["chi"] for s in spots]
+    tth_range = (min(tths_all) - 3, max(tths_all) + 3) if tths_all else (60, 130)
+    chi_range = (min(chis_all) - 3, max(chis_all) + 3) if chis_all else (-50, 50)
+
+    for li, (label, col) in enumerate(zip(labels, layer_cols)):
+        ax = fig.add_subplot(gs[1, li])
+        ax.set_facecolor("#04060e")
+        ax.set_xlim(*chi_range)
+        ax.set_ylim(*tth_range)
+        ax.set_xlabel("chi (deg)", color="#7788aa", fontsize=6)
+        ax.set_ylabel("2theta (deg)", color="#7788aa", fontsize=6)
+        ax.set_title(f"{label}  –  2theta/chi", color=col, fontsize=7, pad=4)
+        ax.tick_params(colors="#7788aa", labelsize=5)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+        ax.grid(True, ls=":", lw=0.3, color="#181e2e")
+        ax.axvline(0, color="#222244", lw=0.5)
+
+        xs = [s["chi"] for s in spots if label in s.get("layer_I_frac", {})]
+        ys = [s["tth"] for s in spots if label in s.get("layer_I_frac", {})]
+        cs = [
+            max(-0.2, min(1, s["layer_I_frac"][label]))
+            for s in spots
+            if label in s.get("layer_I_frac", {})
+        ]
+        sz = [
+            max(3, 40 * s["intensity"] ** 0.4)
+            for s in spots
+            if label in s.get("layer_I_frac", {})
+        ]
+        if xs:
+            ax.scatter(
+                xs,
+                ys,
+                s=sz,
+                c=cs,
+                cmap="RdYlGn",
+                vmin=-0.2,
+                vmax=1.0,
+                alpha=0.85,
+                edgecolors="none",
+                zorder=3,
+            )
+
+    # ── Row 1 last panel: intensity bar chart per layer ───────────────────────
+    ax_bar = fig.add_subplot(gs[1, n_layers])
+    ax_bar.set_facecolor("#04060e")
+    for sp in ax_bar.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax_bar.tick_params(colors="#7788aa", labelsize=7)
+
+    # Average fractional contribution of each layer across all spots
+    avg_fracs = {}
+    for label in labels:
+        fracs = [s["layer_I_frac"].get(label, 0) for s in spots if "layer_I_frac" in s]
+        avg_fracs[label] = np.mean(fracs) * 100 if fracs else 0.0
+
+    bars = ax_bar.barh(
+        labels, [avg_fracs[l] for l in labels], color=layer_cols, alpha=0.8
+    )
+    ax_bar.axvline(0, color="#555566", lw=0.7)
+    ax_bar.set_xlabel("Mean intensity fraction (%)", color="#7788aa", fontsize=7)
+    ax_bar.set_title("Mean layer contribution", color="#ccccee", fontsize=8, pad=4)
+    ax_bar.set_facecolor("#04060e")
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    fig.text(
+        0.5,
+        0.96,
+        f"Per-layer intensity decomposition  |  {stack.name}  |  "
+        f"{len(spots)} spots  |  Λ={stack.bilayer_thickness:.1f} Å × {stack.n_rep} rep",
+        ha="center",
+        fontsize=10,
+        color="white",
+        fontweight="bold",
+    )
+
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    print(f"  Figure -> {out_path}")
+    return out_path
+
+
+def draw_det_image(
+    ax, spots, camera, title, KI_HAT=np.array([1.0, 0.0, 0.0]), sigma=2.0, normalize=False
+):
+    img = camera.render(spots, sigma_pix=sigma, log_scale=True, normalize=normalize)
+
+    Nh, Nv = camera.Nh, camera.Nv
+    im = ax.imshow(
+        img.T,
+        origin="upper",
+        cmap="hot",
+        extent=[0, Nv, Nh, 0],
+        # aspect="auto",
+        interpolation="nearest",
+    )
+
+    # Axis labels in mm and pixels
+    ax.set_xlabel("row  (pixel)", color="#7788aa", fontsize=7)
+    ax.set_ylabel(
+        f"col  (pixel,  pitch={camera.pixel_mm*1e3:.0f} µm)",
+        color="#7788aa",
+        fontsize=7,
+    )
+
+    # 2theta contours overlaid on detector image
+    # Sample a grid of pixels, compute 2theta, contour
+    CC, RR, TTH = camera.tth_grid(step=max(1, Nh // 20))
+
+    # Contour levels around the centre 2theta
+    tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
+    levels = [tc - 20, tc - 10, tc, tc + 10, tc + 20]
+    levels = [l for l in levels if TTH.min() < l < TTH.max()]
+    if levels:
+        ct = ax.contour(
+            RR, CC, TTH, levels=levels, colors="#2244aa", linewidths=0.5, alpha=0.6
+        )
+        ax.clabel(ct, fmt="%.0f°", fontsize=5, colors="#4466cc")
+
+    # Direct beam marker (if on detector)
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+    db = camera.project(ki_hat)
+    if db:
+        ax.plot(db[1], db[0], "x", color=COL_DB, ms=8, mew=1.3, zorder=8)
+
+    # Centre cross
+    ax.plot(Nv / 2, Nh / 2, "+", color="#aaaaff", ms=6, mew=0.8, zorder=7)
+
+    _ax_style(ax, title)
+    ax.set_xlim(0, Nv)
+    ax.set_ylim(Nh, 0)
+
+    # Tick labels in mm
+    def mm_fmt_h(x, pos):
+        return f"{(x-Nv/2)*camera.pixel_mm:.0f}"
+
+    def mm_fmt_v(x, pos):
+        return f"{(x-Nh/2)*camera.pixel_mm:.0f}"
+
+    ax2h = ax.secondary_xaxis(
+        "top",
+        functions=(
+            lambda r: (r - Nv / 2) * camera.pixel_mm,
+            lambda m: m / camera.pixel_mm + Nv / 2,
+        ),
+    )
+    ax2v = ax.secondary_yaxis(
+        "right",
+        functions=(
+            lambda c: (c - Nh / 2) * camera.pixel_mm,
+            lambda m: m / camera.pixel_mm + Nh / 2,
+        ),
+    )
+    ax2h.set_xlabel("mm from centre", color="#7788aa", fontsize=6)
+    ax2v.set_ylabel("mm from centre", color="#7788aa", fontsize=6)
+    ax2h.tick_params(colors="#7788aa", labelsize=5)
+    ax2v.tick_params(colors="#7788aa", labelsize=5)
+    for sp in ax2h.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    for sp in ax2v.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    # Colorbar
+    cb = ax.get_figure().colorbar(im, ax=ax, location="left", pad=0.12, fraction=0.03)
+    cb.set_label(
+        "log intensity" if not normalize else "normalised log intensity",
+        color="#7788aa",
+        fontsize=6,
+    )
+    cb.ax.tick_params(colors="#7788aa", labelsize=5)
+    cb.outline.set_edgecolor("#1a1f2e")

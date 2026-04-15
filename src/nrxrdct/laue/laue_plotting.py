@@ -9,14 +9,7 @@ from matplotlib.patches import Rectangle
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
 
-from .simulation import (
-    A_LATTICE,
-    HARMONIC_WIDTH,
-    N_HARMONICS,
-    PHI1_DEG,
-    PHI2_DEG,
-    PHI_DEG,
-    E_FUNDAMENTAL_eV,
+from .simulation import (  # A_LATTICE,; HARMONIC_WIDTH,; N_HARMONICS,; PHI1_DEG,; PHI2_DEG,; PHI_DEG,; E_FUNDAMENTAL_eV,
     beam_in_crystal,
     synchrotron_spectrum,
 )
@@ -1222,7 +1215,13 @@ def plot_layer_contributions(
 
 
 def draw_det_image(
-    ax, spots, camera, title, KI_HAT=np.array([1.0, 0.0, 0.0]), sigma=2.0, normalize=False
+    ax,
+    spots,
+    camera,
+    title,
+    KI_HAT=np.array([1.0, 0.0, 0.0]),
+    sigma=2.0,
+    normalize=False,
 ):
     img = camera.render(spots, sigma_pix=sigma, log_scale=True, normalize=normalize)
 

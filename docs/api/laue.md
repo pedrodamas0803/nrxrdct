@@ -1,0 +1,3 @@
+# laue
+
+::: nrxrdct.laue

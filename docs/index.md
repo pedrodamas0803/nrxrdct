@@ -18,6 +18,7 @@
 8. **NMF decomposition** — non-negative matrix factorisation of hyperspectral volumes for phase mapping (`HyperspectralNMF`).
 9. **Utilities** — baseline fitting, powder pattern simulation, circular masking, peak listing from CIF files.
 10. **Visualisation** — napari-based interactive 3-D volume and slice viewers with live Z-profile extraction on pixel click.
+11. **Laue simulation** — white-beam Laue diffraction simulator (`Camera`, `simulate_laue`) with BCC/B2 crystal builders, synchrotron spectrum models, and plotting utilities for 2θ/χ and gnomonic projections.
 
 ---
 

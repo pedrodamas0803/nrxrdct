@@ -83,3 +83,4 @@ nav:
     - roi: api/roi.md
     - slurm_integration: api/slurm_integration.md
     - slurm_reconstruction: api/slurm_reconstruction.md
+    - laue: api/laue.md

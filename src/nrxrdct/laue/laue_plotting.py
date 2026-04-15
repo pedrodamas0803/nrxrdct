@@ -9,10 +9,12 @@ from matplotlib.patches import Rectangle
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
 
-from .simulation import (  # A_LATTICE,; HARMONIC_WIDTH,; N_HARMONICS,; PHI1_DEG,; PHI2_DEG,; PHI_DEG,; E_FUNDAMENTAL_eV,
-    beam_in_crystal,
-    synchrotron_spectrum,
-)
+from .simulation import beam_in_crystal, synchrotron_spectrum
+
+# from .simulation import (  # A_LATTICE,; HARMONIC_WIDTH,; N_HARMONICS,; PHI1_DEG,; PHI2_DEG,; PHI_DEG,; E_FUNDAMENTAL_eV,
+#     beam_in_crystal,
+#     synchrotron_spectrum,
+# )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PLOTTING

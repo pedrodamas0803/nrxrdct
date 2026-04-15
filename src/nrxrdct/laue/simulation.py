@@ -58,18 +58,9 @@ Orientation
   A Bragg-energy reference table is printed at runtime.
 """
 
-import matplotlib.colors as mcolors
-import matplotlib.gridspec as mgridspec
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import numpy as np
-import xrayutilities as xu
-from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
-
-from .layers import LayeredCrystal, or_kurdjumov_sachs, orientation_along_z
 
 # ─────────────────────────────────────────────────────────────────────────────
 # USER PARAMETERS
@@ -177,6 +168,21 @@ def en2lam(E_eV):
 
 def lam2en(l_ang):
     return HC / l_ang
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ORIENTATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def euler_to_U(phi1, Phi, phi2):
+    """Bunge ZXZ Euler angles (deg) -> 3x3 orientation matrix."""
+    return Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
+
+
+def beam_in_crystal(U):
+    """Crystal-frame direction of the incident beam (x in LT lab frame)."""
+    return U.T @ np.array([1.0, 0.0, 0.0])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -692,21 +698,6 @@ def simulate_laue(
             s["intensity"] = s["I_raw"] / imax
 
     return sorted(spots, key=lambda s: s["intensity"], reverse=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ORIENTATION
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def euler_to_U(phi1, Phi, phi2):
-    """Bunge ZXZ Euler angles (deg) -> 3x3 orientation matrix."""
-    return Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
-
-
-def beam_in_crystal(U):
-    """Crystal-frame direction of the incident beam (x in LT lab frame)."""
-    return U.T @ np.array([1.0, 0.0, 0.0])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

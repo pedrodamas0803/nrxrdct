@@ -204,15 +204,21 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
 
     Notes
     -----
-    The sample tilt is modelled as a rotation about **−y** (the horizontal axis
-    perpendicular to the beam) by ``sample_tilt_deg``:
+    The sample tilt is the **sample→lab** rotation about **+y** (horizontal
+    axis perpendicular to the beam) by ``sample_tilt_deg``:
 
-        R_tilt = Ry(−sample_tilt_deg)
+        R_tilt = Ry(+sample_tilt_deg)
 
     This maps the sample surface normal from +z (horizontal surface) to
-    (−sin θ, 0, cos θ) in the lab frame, which for θ = 40° gives a grazing
+    (sin θ, 0, cos θ) in the lab frame, which for θ = 40° gives a grazing
     angle of 40° with the beam and a specular 2θ of 80°, consistent with the
     BM32 Z>0 top-camera geometry.
+
+    This is the **inverse** of the LaueTools ``matstarlab_to_matstarsample3x3``
+    convention, which applies ``Rx_LT2(+omega)`` (rotation around x in the LT2
+    frame) as the lab→sample direction.  Because ``x_LT2 = −y_LT``, that
+    operation equals ``Ry_LT(−omega)`` (lab→sample), so the sample→lab
+    direction used here is ``Ry_LT(+omega)``.
 
     When Euler angles come from a LaueTools indexing result (grain_matrix /
     deviatoric matrix) they are already expressed in the lab frame; pass
@@ -221,7 +227,10 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
     U_sample = Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
     if sample_tilt_deg == 0.0:
         return U_sample
-    R_tilt = Rotation.from_euler("Y", -sample_tilt_deg, degrees=True).as_matrix()
+    # Rx_LT2(+omega) is the LaueTools lab→sample rotation (matstarlab_to_matstarsample3x3).
+    # x_LT2 = −y_LT, so Rx_LT2(omega) = Ry_LT(−omega).
+    # We need the inverse (sample→lab): Ry_LT(+omega).
+    R_tilt = Rotation.from_euler("Y", +sample_tilt_deg, degrees=True).as_matrix()
     return R_tilt @ U_sample
 
 
@@ -578,7 +587,7 @@ def simulate_laue_stack(
     """
     stack._update_offsets()
     source_kwargs = source_kwargs or {}
-    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT_DEFAULT, dtype=float)
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki /= np.linalg.norm(ki)
 
     lam_lo = en2lam(E_max_eV)
@@ -586,11 +595,11 @@ def simulate_laue_stack(
 
     def spectrum(E):
         if source == "bending_magnet":
-            return spectrum_bending_magnet(E, **source_kwargs)
+            return spectrum_bm(E, **source_kwargs)
         elif source == "wiggler":
             kw = dict(N_poles=source_kwargs.get("N_poles", 40))
             kw["Ec_eV"] = source_kwargs.get("Ec_eV", 20_000)
-            return spectrum_bending_magnet(E, **kw)
+            return spectrum_bm(E, **kw)
         elif source == "undulator":
             return spectrum_undulator(E, **source_kwargs)
         elif source == "flat":

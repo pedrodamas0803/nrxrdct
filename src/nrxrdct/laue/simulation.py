@@ -241,6 +241,106 @@ def is_superlattice(h, k, l):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def simulate_laue(
+    crystal,
+    U,
+    camera,
+    E_min=E_MIN_eV,
+    E_max=E_MAX_eV,
+    hmax=HMAX,
+    f2_thresh=F2_THRESHOLD,
+):
+    """
+    Enumerate Laue spots, project onto the camera, compute intensities.
+
+    Returns list of spot dicts sorted by descending normalised intensity.
+    Each dict: hkl, E, lambda, tth, az, pix=(col,row),
+               F2, LP, sw, intensity, is_superlattice
+    """
+    lam_lo = en2lam(E_max)
+    lam_hi = en2lam(E_min)
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+
+    spots = []
+    for h in range(-hmax, hmax + 1):
+        for k in range(-hmax, hmax + 1):
+            for l in range(-hmax, hmax + 1):
+                if h == 0 and k == 0 and l == 0:
+                    continue
+
+                G_cry = crystal.Q(h, k, l)
+                G_lab = U @ G_cry
+                Gm2 = float(np.dot(G_lab, G_lab))
+                kdG = float(np.dot(ki_hat, G_lab))
+
+                if kdG >= 0:
+                    continue
+
+                # Laue wavelength: lambda = -4*pi*(k_hat.G) / |G|^2
+                lam = -4.0 * np.pi * kdG / Gm2  # Angstrom
+                if not (lam_lo <= lam <= lam_hi):
+                    continue
+
+                E = lam2en(lam)
+
+                # Scattered beam direction
+                km = 2.0 * np.pi / lam
+                kf_vec = ki_hat * km + G_lab
+                kf_hat = kf_vec / np.linalg.norm(kf_vec)
+
+                # Project onto camera
+                pix = camera.project(kf_hat)
+                if pix is None:
+                    continue
+
+                # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
+                # 2theta = arccos(kf_x)   [kf_x = component along beam]
+                cos2th = np.clip(kf_hat[0], -1.0, 1.0)
+                tth = np.degrees(np.arccos(cos2th))
+                # chi: LaueTools convention  chi = arctan2(kf_y, kf_z)
+                # y = z^x (horizontal), z up (close to detector normal)
+                chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+                az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+
+                # Structure factor (energy-dependent)
+                F = crystal.StructureFactor(G_cry, en=E)
+                F2 = abs(F) ** 2
+                if F2 < f2_thresh:
+                    continue
+
+                LP = lorentz_pol(tth)
+                if LP == 0.0:
+                    continue
+
+                sw = synchrotron_spectrum(E)
+                if sw <= 0.0:
+                    continue
+
+                spots.append(
+                    {
+                        "hkl": (h, k, l),
+                        "E": E,
+                        "lambda": lam,
+                        "tth": tth,
+                        "chi": chi,
+                        "az": az,
+                        "pix": pix,
+                        "F2": F2,
+                        "LP": LP,
+                        "sw": sw,
+                        "I_raw": F2 * LP * sw,
+                        "is_superlattice": is_superlattice(h, k, l),
+                    }
+                )
+
+    if spots:
+        imax = max(s["I_raw"] for s in spots)
+        for s in spots:
+            s["intensity"] = s["I_raw"] / imax
+
+    return sorted(spots, key=lambda s: s["intensity"], reverse=True)
+
+
 def simulate_laue_stack(
     stack,
     camera,
@@ -467,6 +567,308 @@ def simulate_laue_stack(
     return spots
 
 
+def simulate_mixed_phases(
+    phases,
+    camera,
+    E_min_eV=5_000,
+    E_max_eV=80_000,
+    source="bending_magnet",
+    source_kwargs=None,
+    hmax=12,
+    f2_thresh=None,
+    normalise="volume",
+    verbose=True,
+):
+    """
+    Simulate a Laue pattern from a multi-phase sample with known volume
+    fractions.
+
+    Each phase scatters **independently** (incoherent between phases —
+    different grains, different orientations).  The contribution of each
+    phase is weighted by its volume fraction and unit-cell number density
+    before the spot lists are merged into one.
+
+    Intensity weighting
+    -------------------
+    The number of unit cells of phase p contributing to diffraction scales as:
+
+        N_uc_p  ∝  f_p / V_uc_p
+
+    where  f_p  is the volume fraction and  V_uc_p  is the unit-cell volume
+    (Å³).  This is the standard Rietveld weight used in powder diffraction
+    and is correct for any single-crystal Laue measurement of a multi-phase
+    polycrystal.
+
+    For a ``LayeredCrystal`` phase, V_uc_p is taken as the thickness-weighted
+    harmonic mean of the individual layer unit-cell volumes — i.e. the
+    effective number of unit cells per unit volume of the stack.
+
+    The ``normalise`` argument controls how the final intensities are scaled:
+      ``'volume'``   (default) — weight by f_p / V_uc_p  (physics-correct)
+      ``'fraction'`` — weight by f_p only (ignore V_uc differences)
+      ``'equal'``    — all phases equally weighted regardless of fraction
+      ``'none'``     — no rescaling; I_raw values are kept as-is from each
+                       phase's simulation
+
+    Parameters
+    ----------
+    phases : list of dicts or list of tuples
+        Each entry describes one phase.  Accepted formats:
+
+        **dict** (recommended)::
+
+            {
+              'crystal'         : xu.materials.Crystal  or  LayeredCrystal,
+              'U'               : np.ndarray (3×3) orientation matrix,
+              'volume_fraction' : float,          # must sum to 1 (normalised)
+              'label'           : str,            # optional, default crystal.name
+              'hmax'            : int,            # optional, overrides global hmax
+              'f2_thresh'       : float | None,   # optional, overrides global
+            }
+
+        **tuple** (short form)::
+
+            (crystal_or_stack, U, volume_fraction)
+            (crystal_or_stack, U, volume_fraction, label)
+
+    camera : Camera
+        Detector geometry (from laue_white_synchrotron.py).
+
+    E_min_eV, E_max_eV : float
+        Energy window (eV), applied to all phases.
+
+    source : str
+        Synchrotron source: ``'bending_magnet'``, ``'wiggler'``,
+        ``'undulator'``, or ``'flat'``.
+
+    source_kwargs : dict, optional
+        Forwarded to the spectrum function (e.g. ``{'Ec_eV': 20000}``).
+
+    hmax : int
+        Maximum Miller index (global default, overridable per phase).
+
+    f2_thresh : float | None
+        Minimum |F|² threshold (global default, overridable per phase).
+        ``None`` = auto-scale per phase.
+
+    normalise : str
+        Weighting mode: ``'volume'``, ``'fraction'``, ``'equal'``, ``'none'``.
+
+    verbose : bool
+
+    Returns
+    -------
+    spots : list of dicts
+        Merged, weighted, and renormalised spot list.  Each dict has all the
+        standard keys plus:
+
+          ``'phase_label'``      – which phase this spot belongs to
+          ``'volume_fraction'``  – f_p of that phase
+          ``'phase_weight'``     – the weight applied (f_p / V_uc_p or variant)
+          ``'intensity'``        – normalised 0–1 over the full mixed pattern
+          ``'intensity_phase'``  – normalised 0–1 within that phase alone
+
+    Raises
+    ------
+    ValueError
+        If volume fractions do not sum to approximately 1.0 (within ±0.01).
+
+    Examples
+    --------
+    >>> import xrayutilities as xu
+    >>> from simulate_laue_layered import simulate_mixed_phases
+    >>> from layered_structure_factor import orientation_along_z, or_kurdjumov_sachs
+    >>>
+    >>> Fe = xu.materials.Fe
+    >>> Cu = xu.materials.Cu
+    >>> U_Fe = orientation_along_z([0,0,1], Fe)
+    >>> U_Cu = U_Fe @ or_kurdjumov_sachs(Fe, Cu).T
+    >>>
+    >>> phases = [
+    ...     {'crystal': Fe, 'U': U_Fe, 'volume_fraction': 0.6, 'label': 'austenite'},
+    ...     {'crystal': Cu, 'U': U_Cu, 'volume_fraction': 0.4, 'label': 'Cu KS'},
+    ... ]
+    >>> spots = simulate_mixed_phases(phases, camera)
+    >>> plot_detector_image(spots, camera, colour_by='phase')
+
+    Notes
+    -----
+    Orientation relationship between phases does NOT produce interference
+    fringes here — use ``LayeredCrystal`` + ``simulate_laue_stack`` for that.
+    This function is for incoherent multi-grain mixtures (e.g. a polycrystal
+    with two phases, or a transformed microstructure).
+    """
+    import os
+    import sys
+
+    import numpy as np
+    import xrayutilities as xu
+
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+
+    from .layers import LayeredCrystal
+
+    source_kwargs = source_kwargs or {}
+
+    # ── Normalise phase list ──────────────────────────────────────────────────
+    parsed = []
+    for entry in phases:
+        if isinstance(entry, dict):
+            p = entry.copy()
+        elif isinstance(entry, (list, tuple)):
+            p = {}
+            p["crystal"] = entry[0]
+            p["U"] = entry[1]
+            p["volume_fraction"] = float(entry[2])
+            if len(entry) >= 4:
+                p["label"] = str(entry[3])
+        else:
+            raise TypeError(f"Each phase must be a dict or tuple, got {type(entry)}")
+        parsed.append(p)
+
+    # Default label
+    for p in parsed:
+        if "label" not in p:
+            c = p["crystal"]
+            p["label"] = c.name if hasattr(c, "name") else str(c)
+
+    # Check fractions
+    total_f = sum(float(p["volume_fraction"]) for p in parsed)
+    if abs(total_f - 1.0) > 0.01:
+        raise ValueError(
+            f"Volume fractions sum to {total_f:.4f}, expected 1.0. "
+            "Please normalise them."
+        )
+
+    # ── Compute effective unit-cell volume per phase ───────────────────────────
+    def eff_vuc(crystal_or_stack):
+        """Effective unit-cell volume (Å³) for weighting."""
+        if isinstance(crystal_or_stack, LayeredCrystal):
+            stk = crystal_or_stack
+            stk._update_offsets()
+            total_t = stk.total_thickness
+            if total_t < 1e-10:
+                return 1.0
+            # Thickness-weighted harmonic mean of layer V_uc values
+            # = effective V_uc per unit volume of the stack
+            w_sum = 0.0
+            for layer in stk.layers:
+                frac = layer.thickness / total_t
+                w_sum += frac / layer.crystal.lattice.UnitCellVolume()
+            return 1.0 / w_sum if w_sum > 1e-30 else 1.0
+        else:
+            return crystal_or_stack.lattice.UnitCellVolume()
+
+    # ── Load simulation helpers ────────────────────────────────────────────────
+    mod_src = open(os.path.join(_here, "laue_white_synchrotron.py")).read()
+    ns = {}
+    exec(compile(mod_src.split("\ndef main():")[0], "laue_sim", "exec"), ns)
+    _simulate_laue_single = ns["simulate_laue"]
+
+    # ── Simulate each phase ────────────────────────────────────────────────────
+    if verbose:
+        print(f"\n  Mixed-phase Laue simulation  ({len(parsed)} phases)")
+        print(f"  {'─'*52}")
+        print(f"  {'Phase':22s} {'f_vol':>6}  {'V_uc(Å³)':>10}  {'weight':>10}")
+
+    phase_results = []
+    for p in parsed:
+        crystal = p["crystal"]
+        U = np.asarray(p["U"], dtype=float)
+        f = float(p["volume_fraction"])
+        label = p["label"]
+        ph_hmax = int(p.get("hmax", hmax))
+        ph_f2 = p.get("f2_thresh", f2_thresh)
+
+        vuc = eff_vuc(crystal)
+
+        # Compute weight
+        if normalise == "volume":
+            weight = f / vuc
+        elif normalise == "fraction":
+            weight = f
+        elif normalise == "equal":
+            weight = 1.0 / len(parsed)
+        elif normalise == "none":
+            weight = 1.0
+        else:
+            raise ValueError(f"normalise must be 'volume','fraction','equal','none'")
+
+        if verbose:
+            print(f"  {label:22s} {f:6.3f}  {vuc:10.3f}  {weight:10.6f}")
+
+        # Simulate
+        if isinstance(crystal, LayeredCrystal):
+            spots_p = simulate_laue_stack(
+                crystal,
+                camera,
+                E_min_eV=E_min_eV,
+                E_max_eV=E_max_eV,
+                source=source,
+                source_kwargs=source_kwargs,
+                hmax=ph_hmax,
+                f2_thresh=ph_f2,
+                verbose=False,
+            )
+        else:
+            spots_p = _simulate_laue_single(
+                crystal,
+                U,
+                camera,
+                E_min=E_min_eV,
+                E_max=E_max_eV,
+                hmax=ph_hmax,
+                f2_thresh=(ph_f2 if ph_f2 is not None else 0.5),
+            )
+
+        if verbose:
+            print(f"    → {len(spots_p)} spots on camera")
+
+        # Tag each spot and apply weight to I_raw
+        for s in spots_p:
+            s["phase_label"] = label
+            s["volume_fraction"] = f
+            s["phase_weight"] = weight
+            s["I_raw_weighted"] = s["I_raw"] * weight
+
+        # Store per-phase normalised intensity (within this phase)
+        if spots_p:
+            imax_p = max(s["I_raw"] for s in spots_p)
+            for s in spots_p:
+                s["intensity_phase"] = s["I_raw"] / imax_p if imax_p > 0 else 0.0
+        else:
+            for s in spots_p:
+                s["intensity_phase"] = 0.0
+
+        phase_results.append((label, f, vuc, weight, spots_p))
+
+    # ── Merge and renormalise ──────────────────────────────────────────────────
+    all_spots = []
+    for _, _, _, _, spots_p in phase_results:
+        all_spots.extend(spots_p)
+
+    if all_spots:
+        imax = max(s["I_raw_weighted"] for s in all_spots)
+        for s in all_spots:
+            s["intensity"] = s["I_raw_weighted"] / imax if imax > 0 else 0.0
+
+    all_spots.sort(key=lambda s: s["intensity"], reverse=True)
+
+    if verbose:
+        print(f"  {'─'*52}")
+        print(f"  Total spots on camera : {len(all_spots)}")
+        for label, f, vuc, weight, spots_p in phase_results:
+            pct = len(spots_p) / max(len(all_spots), 1) * 100
+            print(
+                f"    {label:22s}: {len(spots_p):4d} spots  " f"({pct:.0f}% of total)"
+            )
+        print(f"  normalise = '{normalise}'")
+
+    return all_spots
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PER-LAYER INTENSITY DECOMPOSITION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -567,6 +969,9 @@ def layer_contributions_spots(spots, stack):
     return spots
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# REPORTING
+# ─────────────────────────────────────────────────────────────────────────────
 def print_layer_contributions(spots, n=15):
     """
     Pretty-print per-layer intensity contributions for the top N spots.
@@ -600,109 +1005,49 @@ def print_layer_contributions(spots, n=15):
         )
 
 
-def simulate_laue(
-    crystal,
-    U,
-    camera,
-    E_min=E_MIN_eV,
-    E_max=E_MAX_eV,
-    hmax=HMAX,
-    f2_thresh=F2_THRESHOLD,
-):
+def print_mixed_summary(spots, top_n=20):
     """
-    Enumerate Laue spots, project onto the camera, compute intensities.
+    Print a summary table of the strongest spots in a mixed-phase pattern,
+    grouped by phase.
 
-    Returns list of spot dicts sorted by descending normalised intensity.
-    Each dict: hkl, E, lambda, tth, az, pix=(col,row),
-               F2, LP, sw, intensity, is_superlattice
+    Parameters
+    ----------
+    spots : list of dicts from ``simulate_mixed_phases()``
+    top_n : int  number of strongest spots to list per phase
     """
-    lam_lo = en2lam(E_max)
-    lam_hi = en2lam(E_min)
-    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+    from collections import defaultdict
 
-    spots = []
-    for h in range(-hmax, hmax + 1):
-        for k in range(-hmax, hmax + 1):
-            for l in range(-hmax, hmax + 1):
-                if h == 0 and k == 0 and l == 0:
-                    continue
+    import numpy as np
 
-                G_cry = crystal.Q(h, k, l)
-                G_lab = U @ G_cry
-                Gm2 = float(np.dot(G_lab, G_lab))
-                kdG = float(np.dot(ki_hat, G_lab))
+    # Group by phase
+    by_phase = defaultdict(list)
+    for s in spots:
+        by_phase[s["phase_label"]].append(s)
 
-                if kdG >= 0:
-                    continue
+    print(f"\n  Mixed-phase Laue spot summary")
+    print(f"  Total spots: {len(spots)}")
 
-                # Laue wavelength: lambda = -4*pi*(k_hat.G) / |G|^2
-                lam = -4.0 * np.pi * kdG / Gm2  # Angstrom
-                if not (lam_lo <= lam <= lam_hi):
-                    continue
-
-                E = lam2en(lam)
-
-                # Scattered beam direction
-                km = 2.0 * np.pi / lam
-                kf_vec = ki_hat * km + G_lab
-                kf_hat = kf_vec / np.linalg.norm(kf_vec)
-
-                # Project onto camera
-                pix = camera.project(kf_hat)
-                if pix is None:
-                    continue
-
-                # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
-                # 2theta = arccos(kf_x)   [kf_x = component along beam]
-                cos2th = np.clip(kf_hat[0], -1.0, 1.0)
-                tth = np.degrees(np.arccos(cos2th))
-                # chi: LaueTools convention  chi = arctan2(kf_y, kf_z)
-                # y = z^x (horizontal), z up (close to detector normal)
-                chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-                az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-
-                # Structure factor (energy-dependent)
-                F = crystal.StructureFactor(G_cry, en=E)
-                F2 = abs(F) ** 2
-                if F2 < f2_thresh:
-                    continue
-
-                LP = lorentz_pol(tth)
-                if LP == 0.0:
-                    continue
-
-                sw = synchrotron_spectrum(E)
-                if sw <= 0.0:
-                    continue
-
-                spots.append(
-                    {
-                        "hkl": (h, k, l),
-                        "E": E,
-                        "lambda": lam,
-                        "tth": tth,
-                        "chi": chi,
-                        "az": az,
-                        "pix": pix,
-                        "F2": F2,
-                        "LP": LP,
-                        "sw": sw,
-                        "I_raw": F2 * LP * sw,
-                        "is_superlattice": is_superlattice(h, k, l),
-                    }
-                )
-
-    if spots:
-        imax = max(s["I_raw"] for s in spots)
-        for s in spots:
-            s["intensity"] = s["I_raw"] / imax
-
-    return sorted(spots, key=lambda s: s["intensity"], reverse=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# REPORTING
-# ─────────────────────────────────────────────────────────────────────────────
+    for label, phase_spots in by_phase.items():
+        f = phase_spots[0]["volume_fraction"]
+        w = phase_spots[0]["phase_weight"]
+        print(
+            f"\n  ── {label}  (f={f:.3f}  weight={w:.6f})"
+            f"  –  {len(phase_spots)} spots ──"
+        )
+        print(
+            f"  {'hkl':^10} {'E(keV)':>7} {'2th':>7} {'chi':>7} "
+            f"{'I/Imax':>8} {'I_phase':>8}  type"
+        )
+        print("  " + "─" * 68)
+        top = sorted(phase_spots, key=lambda s: s["intensity"], reverse=True)
+        for s in top[:top_n]:
+            h, k, l = s["hkl"]
+            tag = "superl." if s.get("is_superlattice") else "fund."
+            print(
+                f"  ({h:+d}{k:+d}{l:+d})  "
+                f"{s['E']/1e3:7.3f} {s['tth']:7.2f} {s['chi']:7.2f} "
+                f"{s['intensity']:8.4f} {s.get('intensity_phase',0):8.4f}  {tag}"
+            )
 
 
 def print_spot_table(title, spots, n=15):

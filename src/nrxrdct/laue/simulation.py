@@ -704,10 +704,6 @@ def simulate_mixed_phases(
     import numpy as np
     import xrayutilities as xu
 
-    _here = os.path.dirname(os.path.abspath(__file__))
-    if _here not in sys.path:
-        sys.path.insert(0, _here)
-
     from .layers import LayeredCrystal
 
     source_kwargs = source_kwargs or {}

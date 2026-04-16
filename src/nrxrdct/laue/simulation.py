@@ -757,11 +757,11 @@ def simulate_mixed_phases(
         else:
             return crystal_or_stack.lattice.UnitCellVolume()
 
-    # ── Load simulation helpers ────────────────────────────────────────────────
-    mod_src = open(os.path.join(_here, "laue_white_synchrotron.py")).read()
-    ns = {}
-    exec(compile(mod_src.split("\ndef main():")[0], "laue_sim", "exec"), ns)
-    _simulate_laue_single = ns["simulate_laue"]
+    # # ── Load simulation helpers ────────────────────────────────────────────────
+    # mod_src = open(os.path.join(_here, "laue_white_synchrotron.py")).read()
+    # ns = {}
+    # exec(compile(mod_src.split("\ndef main():")[0], "laue_sim", "exec"), ns)
+    # _simulate_laue_single = ns["simulate_laue"]
 
     # ── Simulate each phase ────────────────────────────────────────────────────
     if verbose:

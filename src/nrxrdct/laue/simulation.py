@@ -809,7 +809,7 @@ def simulate_mixed_phases(
                 verbose=False,
             )
         else:
-            spots_p = _simulate_laue_single(
+            spots_p = simulate_laue(
                 crystal,
                 U,
                 camera,

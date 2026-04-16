@@ -175,13 +175,59 @@ def lam2en(l_ang):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def euler_to_U(phi1, Phi, phi2):
-    """Bunge ZXZ Euler angles (deg) -> 3x3 orientation matrix."""
-    return Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
+def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
+    """
+    Bunge ZXZ Euler angles (deg) → 3×3 orientation matrix in the LT lab frame.
+
+    Bunge Euler angles describe the crystal orientation relative to the
+    **sample surface frame** (z = surface normal, x/y in the surface plane).
+    ``simulate_laue`` expects U in the **lab frame** (x // beam).  When the
+    sample is tilted on the stage the two frames differ by a rotation around
+    the horizontal axis (y in LT).
+
+    Parameters
+    ----------
+    phi1, Phi, phi2 : float
+        Bunge ZXZ Euler angles in degrees.
+    sample_tilt_deg : float, optional
+        Tilt of the sample surface relative to the horizontal plane (deg).
+        Positive = front edge of sample tilted downward so the surface faces
+        the incoming beam (standard reflection geometry).
+
+        - BM32 / ID01 Z>0 geometry, 40° grazing incidence → ``sample_tilt_deg=40``
+        - LaueTools refined UB matrix (already in lab frame) → ``sample_tilt_deg=0``
+
+    Returns
+    -------
+    U : ndarray, shape (3, 3)
+        Orientation matrix such that ``G_lab = U @ G_crystal``.
+
+    Notes
+    -----
+    The sample tilt is modelled as a rotation about **−y** (the horizontal axis
+    perpendicular to the beam) by ``sample_tilt_deg``:
+
+        R_tilt = Ry(−sample_tilt_deg)
+
+    This maps the sample surface normal from +z (horizontal surface) to
+    (−sin θ, 0, cos θ) in the lab frame, which for θ = 40° gives a grazing
+    angle of 40° with the beam and a specular 2θ of 80°, consistent with the
+    BM32 Z>0 top-camera geometry.
+
+    When Euler angles come from a LaueTools indexing result (grain_matrix /
+    deviatoric matrix) they are already expressed in the lab frame; pass
+    ``sample_tilt_deg=0`` (the default) in that case.
+    """
+    U_sample = Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
+    if sample_tilt_deg == 0.0:
+        return U_sample
+    R_tilt = Rotation.from_euler("Y", -sample_tilt_deg, degrees=True).as_matrix()
+    return R_tilt @ U_sample
 
 
 def beam_in_crystal(U):
-    """Crystal-frame direction of the incident beam (x in LT lab frame)."""
+    """Crystal-frame direction of the incident beam (x in LT lab frame).
+    U must already be in the lab frame (use sample_tilt_deg in euler_to_U)."""
     return U.T @ np.array([1.0, 0.0, 0.0])
 
 

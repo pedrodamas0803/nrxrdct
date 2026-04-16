@@ -16,11 +16,21 @@ class Camera:
     """
     Pixelated area detector fully compatible with LaueTools calibration files.
 
-    LaueTools LT2 lab frame
-    -----------------------
-    y  : along incident beam  (ki direction)
-    z  : vertical up
-    x  : horizontal (towards the wall, perpendicular to beam)
+    Public frame convention (LT frame)
+    -----------------------------------
+    All public methods (kf_to_pixel, pixel_to_kf, project) use the canonical
+    LaueTools LT frame:
+
+        x  : along incident beam  (ki direction)
+        z  : vertical up
+        y  : horizontal (= z ^ x, towards the wall)
+
+    Internally the camera geometry is computed in the LT2 frame (y // beam),
+    which is what LaueGeometry.py uses.  The LT ↔ LT2 conversion is handled
+    transparently inside each method:
+
+        LT → LT2 :  x_LT2 = −y_LT,   y_LT2 =  x_LT,  z_LT2 = z_LT
+        LT2 → LT :  x_LT  =  y_LT2,  y_LT  = −x_LT2, z_LT  = z_LT2
 
     Calibration parameters  (CCDCalibParameters = [dd, xcen, ycen, xbet, xgam])
     ---------------------------------------------------------------------------
@@ -45,17 +55,17 @@ class Camera:
     (xcen, ycen) : sub-pixel reference point where the detector normal
                    intersects the pixel array.
 
-    The IO vector and detector normal
-    ----------------------------------
+    The IO vector and detector normal  (in LT2 frame)
+    --------------------------------------------------
     For Z>0 geometry:
         beta  = pi/2 - xbet * pi/180
         IO    = dd * [0,  cos(beta),  sin(beta)]
               = dd * [0,  sin(xbet),  cos(xbet)]
         normal = IO / |IO|
 
-    The two key functions mirror LaueTools exactly:
-        kf_to_pixel  : uflab (N×3)  →  (xcam, ycam)   [LaueTools: calc_xycam]
-        pixel_to_kf  : (xcam, ycam) →  uflab (N×3)    [LaueTools: calc_uflab]
+    The two key public functions:
+        kf_to_pixel  : uflab (N×3, LT)  →  (xcam, ycam)   [LaueTools: calc_xycam]
+        pixel_to_kf  : (xcam, ycam)     →  uflab (N×3, LT) [LaueTools: calc_uflab]
     """
 
     def __init__(
@@ -132,14 +142,13 @@ class Camera:
 
         Parameters
         ----------
-        uflab_arr : (N, 3) array of unit scattered vectors in LT2 frame
+        uflab_arr : (N, 3) array of unit scattered vectors in LT frame (x // beam)
 
         Returns
         -------
         xcam, ycam : (N,) arrays of pixel coordinates (float, sub-pixel precision)
                      Returns NaN for beams that miss the detector or go backward.
         """
-        # Input is in LT frame (x // beam); camera internals use LT2 (y // beam)
         # Convert LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
         uf_lt = np.atleast_2d(np.array(uflab_arr, dtype=float))
         norms = np.linalg.norm(uf_lt, axis=1, keepdims=True)
@@ -182,7 +191,7 @@ class Camera:
 
         Returns
         -------
-        uflab : (N, 3) unit scattered vectors in LT2 frame  (y // ki)
+        uflab : (N, 3) unit scattered vectors in LT frame  (x // ki)
         """
         xcam1 = (np.asarray(xcam_arr, float) - self.xcen) * self.pixel_mm
         ycam1 = (np.asarray(ycam_arr, float) - self.ycen) * self.pixel_mm
@@ -196,7 +205,10 @@ class Camera:
         zM = zO - yca0 * self._cosbeta
 
         nIM = np.sqrt(xM**2 + yM**2 + zM**2)
-        uflab = np.array([xM, yM, zM]).T / nIM[:, None]
+        # Geometry is in LT2 frame (y // beam); convert to LT frame (x // beam):
+        # x_LT = y_LT2,  y_LT = -x_LT2,  z_LT = z_LT2
+        uflab_lt2 = np.array([xM, yM, zM]).T / nIM[:, None]
+        uflab = np.column_stack([uflab_lt2[:, 1], -uflab_lt2[:, 0], uflab_lt2[:, 2]])
         return uflab
 
     # ── single-spot projection for simulation ────────────────────────────────
@@ -236,19 +248,13 @@ class Camera:
         """
         Compute 2theta and chi (degrees) from pixel position.
 
-        The camera geometry is computed in the LT2 frame (y // beam) which is
-        what LaueGeometry.py uses internally.  We then convert to the canonical
-        LaueTools LT frame (x // beam) before computing 2theta and chi:
+        Uses pixel_to_kf to obtain the scattered unit vector in the LT frame
+        (x // beam), then:
 
-            LT2 -> LT :   x_LT = y_LT2,   y_LT = -x_LT2,   z_LT = z_LT2
-
-        In LT frame:
             2theta = arccos(uf_x)
             chi    = arctan2(uf_y, uf_z)
         """
-        uf_lt2 = self.pixel_to_kf([xcam], [ycam])[0]
-        # Convert LT2 -> LT
-        uf_lt = np.array([uf_lt2[1], -uf_lt2[0], uf_lt2[2]])
+        uf_lt = self.pixel_to_kf([xcam], [ycam])[0]
         tth = np.degrees(np.arccos(np.clip(uf_lt[0], -1, 1)))
         chi = np.degrees(np.arctan2(uf_lt[1], uf_lt[2] + 1e-17))
         return tth, chi
@@ -266,7 +272,7 @@ class Camera:
         rs = np.arange(0, self.Nv, step)
         CC, RR = np.meshgrid(cs, rs)
         uf = self.pixel_to_kf(CC.ravel(), RR.ravel())
-        TTH = np.degrees(np.arccos(np.clip(uf[:, 1], -1, 1))).reshape(CC.shape)
+        TTH = np.degrees(np.arccos(np.clip(uf[:, 0], -1, 1))).reshape(CC.shape)
         return CC, RR, TTH
 
     # ── describe ──────────────────────────────────────────────────────────────

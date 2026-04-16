@@ -251,11 +251,128 @@ def simulate_laue(
     f2_thresh=F2_THRESHOLD,
 ):
     """
-    Enumerate Laue spots, project onto the camera, compute intensities.
+    Simulate single-crystal white-beam Laue diffraction in reflection geometry.
 
-    Returns list of spot dicts sorted by descending normalised intensity.
-    Each dict: hkl, E, lambda, tth, az, pix=(col,row),
-               F2, LP, sw, intensity, is_superlattice
+    For every reciprocal-lattice vector G_hkl within the Miller-index shell
+    ``[-hmax, hmax]^3`` the function:
+
+    1. Rotates G from the crystal frame into the lab frame via the orientation
+       matrix ``U``:  ``G_lab = U @ G_cry``.
+    2. Applies the Laue condition to find the wavelength (and photon energy) at
+       which this reflection is excited::
+
+           lambda_hkl = -4*pi * (k_i_hat . G_lab) / |G_lab|^2
+
+       Reflections whose wavelength falls outside ``[E_min, E_max]`` are
+       skipped.
+    3. Computes the scattered-beam direction ``kf_hat`` and projects it onto
+       the detector plane via ``camera.project()``.  Reflections that miss the
+       active area are discarded.
+    4. Evaluates the spot intensity::
+
+           I_raw(hkl) = |F(G, E)|^2  *  LP(2theta)  *  S(E)
+
+       where:
+
+       - ``|F(G, E)|^2``  – kinematical structure factor squared (Cromer-Mann
+         ``f0`` plus Henke anomalous corrections ``f'``, ``f''`` via
+         *xrayutilities*).  Reflections below ``f2_thresh`` are dropped.
+       - ``LP(2theta)``   – Lorentz-polarisation factor for an unpolarised
+         beam::
+
+               LP = (1 + cos^2(2θ)) / (2 * sin^2(θ) * cos(θ))
+
+       - ``S(E)``         – synchrotron spectral weight at energy ``E``
+         (bending-magnet, wiggler, or undulator model set by the module-level
+         ``SOURCE_TYPE``).
+
+    5. Normalises all surviving ``I_raw`` values by the brightest spot so that
+       ``intensity`` lies in ``(0, 1]``.
+
+    Parameters
+    ----------
+    crystal : Crystal-like
+        An *xrayutilities*-compatible crystal object that exposes:
+
+        - ``crystal.Q(h, k, l)``  → reciprocal-lattice vector in crystal frame
+          (Å⁻¹, 2π convention).
+        - ``crystal.StructureFactor(G_cry, en=E)``  → complex structure factor
+          at energy ``E`` (eV).
+
+    U : array-like, shape (3, 3)
+        Orientation matrix mapping crystal-frame vectors to the LaueTools lab
+        frame (beam along ``+x``).  Typically obtained from
+        ``euler_to_U(phi1, Phi, phi2)`` or an indexing result.
+
+    camera : Camera
+        Detector geometry object (see ``camera.py``).  Must implement
+        ``camera.project(kf_hat)`` which returns ``(col, row)`` pixel
+        coordinates or ``None`` if the ray misses the detector.
+
+    E_min : float, optional
+        Low-energy cut-off of the white beam in eV.
+        Default: ``E_MIN_eV`` (5 000 eV).
+
+    E_max : float, optional
+        High-energy cut-off of the white beam in eV.
+        Default: ``E_MAX_eV`` (27 000 eV).
+
+    hmax : int, optional
+        Maximum absolute Miller index to enumerate.  The search space is a
+        cube ``[-hmax, hmax]^3`` (excluding 000).
+        Default: ``HMAX`` (14).
+
+    f2_thresh : float, optional
+        Minimum ``|F|^2`` threshold (arbitrary units, same scale as
+        *xrayutilities* output).  Reflections below this value are treated as
+        systematically absent or too weak and discarded before the LP / spectrum
+        weighting step.
+        Default: ``F2_THRESHOLD`` (0.5).
+
+    Returns
+    -------
+    list of dict
+        One dictionary per spot that satisfies all selection criteria, sorted
+        by **descending** ``intensity``.  Each dictionary contains:
+
+        ==================  ====================================================
+        Key                 Description
+        ==================  ====================================================
+        ``hkl``             ``(h, k, l)`` tuple of Miller indices.
+        ``E``               Photon energy at which the reflection is excited (eV).
+        ``lambda``          Corresponding wavelength (Å).
+        ``tth``             Bragg angle ``2θ`` (degrees), measured from the
+                            forward-beam direction ``+x``.
+        ``chi``             LaueTools χ angle (degrees):
+                            ``arctan2(kf_y, kf_z)``.
+        ``az``              Azimuthal angle (degrees):
+                            ``arctan2(kf_z, kf_y)``.
+        ``pix``             ``(col, row)`` pixel coordinate on the detector
+                            (LaueTools convention: ``xcam, ycam``).
+        ``F2``              ``|F(G, E)|^2``, structure factor squared.
+        ``LP``              Lorentz-polarisation factor.
+        ``sw``              Synchrotron spectral weight ``S(E)``.
+        ``I_raw``           Un-normalised intensity: ``F2 * LP * sw``.
+        ``intensity``       ``I_raw`` normalised to ``[0, 1]`` by the
+                            brightest spot in this simulation.
+        ``is_superlattice`` ``True`` when ``|h|+|k|+|l|`` is odd (B2-type
+                            superlattice reflection).
+        ==================  ====================================================
+
+        Returns an **empty list** if no reflection satisfies all criteria.
+
+    Notes
+    -----
+    * The incident beam is fixed along ``+x`` in the LaueTools lab frame
+      (``KI_HAT = [1, 0, 0]``).  Do not modify this without updating the
+      camera geometry accordingly.
+    * ``intensity`` is a *relative* quantity within a single call.  When
+      comparing patterns from different phases or orientations use ``I_raw``
+      and apply an external weighting (see ``simulate_mixed_phases``).
+    * The ``is_superlattice`` flag uses the BCC extinction rule
+      (``h+k+l`` odd → forbidden for BCC, but *allowed* for B2).  It is
+      provided as a convenience tag; the structure factor already accounts for
+      the actual systematic absences via ``crystal.StructureFactor``.
     """
     lam_lo = en2lam(E_max)
     lam_hi = en2lam(E_min)

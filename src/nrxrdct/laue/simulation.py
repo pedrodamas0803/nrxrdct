@@ -240,6 +240,154 @@ def beam_in_crystal(U):
     return U.T @ np.array([1.0, 0.0, 0.0])
 
 
+# LT2→LT passive rotation (coordinate-frame change, not a physical rotation)
+# LaueTools stores matstarlab in LT2 (y//beam, OR/XMAS frame).
+# simulate_laue works in LT (x//beam, LaueTools public frame).
+#   x_LT = y_LT2,  y_LT = -x_LT2,  z_LT = z_LT2
+_R_LT2_TO_LT = np.array([[0.0,  1.0, 0.0],
+                          [-1.0, 0.0, 0.0],
+                          [0.0,  0.0, 1.0]])
+
+
+def _build_B0(crystal):
+    """Return the 3×3 reference reciprocal-lattice matrix B0 (with 2π, crystal frame)."""
+    return np.column_stack([
+        crystal.Q(1, 0, 0),
+        crystal.Q(0, 1, 0),
+        crystal.Q(0, 0, 1),
+    ])
+
+
+def _matstarlab_to_F(matstarlab, crystal):
+    """
+    Internal: convert matstarlab (LT2, no 2π) → deformation gradient F (LT frame, with 2π).
+
+    F = U @ P  where U is pure rotation and P is the right-stretch tensor.
+    F maps crystal-frame reciprocal vectors to LT lab-frame vectors:
+        G_LT = F @ G_crystal   (with G_crystal = B0 @ [h,k,l])
+    """
+    B0 = _build_B0(crystal)
+    matstarlab_LT = _R_LT2_TO_LT @ (np.asarray(matstarlab, dtype=float) * 2.0 * np.pi)
+    return matstarlab_LT @ np.linalg.inv(B0)
+
+
+def U_from_matstarlab(matstarlab, crystal):
+    """
+    Convert a LaueTools ``matstarlab`` (LT2/OR frame, no 2π) into an effective
+    orientation matrix for ``simulate_laue`` (LT frame, with 2π from xrayutilities).
+
+    This function returns the **full deformation gradient** F = U @ P, which
+    combines the pure crystal rotation U with the right-stretch tensor P
+    (lattice distortion due to strain).  Passing F to ``simulate_laue`` gives
+    spot positions that account for both the orientation **and** any elastic
+    strain in the grain.
+
+    To separate rotation from strain use :func:`decompose_matstarlab`.
+
+    LaueTools defines (LT2 frame, no 2π)::
+
+        G_LT2 = matstarlab @ [h, k, l]
+
+    This function applies two corrections:
+
+    1. **Frame change LT2→LT**: ``x_LT = y_LT2``, ``y_LT = −x_LT2``, ``z_LT = z_LT2``
+    2. **2π rescaling**: LaueTools uses |G| = 1/d; xrayutilities uses |G| = 2π/d.
+
+    Parameters
+    ----------
+    matstarlab : array-like, shape (3, 3)
+        LaueTools grain matrix in LT2/OR frame (columns = a*, b*, c* in lab,
+        in Å⁻¹ **without** the 2π factor).
+    crystal : xu.materials.Crystal
+        Reference (unstrained) phase — same object passed to ``simulate_laue``.
+
+    Returns
+    -------
+    F : ndarray, shape (3, 3)
+        Deformation gradient in LT frame.  Pass directly to ``simulate_laue``
+        as the ``U`` argument to include strain in the spot geometry.
+        For a strain-free grain F is a pure rotation matrix.
+    """
+    return _matstarlab_to_F(matstarlab, crystal)
+
+
+def decompose_matstarlab(matstarlab, crystal):
+    """
+    Decompose a LaueTools ``matstarlab`` into pure rotation and elastic strain.
+
+    Uses the **right polar decomposition** of the deformation gradient F:
+
+    .. math::
+
+        F = U \\cdot P
+
+    where:
+
+    * **F** — full deformation gradient (LT frame) = what ``U_from_matstarlab`` returns
+    * **U** — pure rotation (orthogonal, det = +1): the rigid crystal orientation
+    * **P** — right-stretch tensor (symmetric positive-definite): the lattice distortion
+
+    The small-strain tensor is extracted from P as ``ε = P − I``.
+
+    Parameters
+    ----------
+    matstarlab : array-like, shape (3, 3)
+        LaueTools grain matrix in LT2/OR frame (no 2π).
+    crystal : xu.materials.Crystal
+        Reference (unstrained) crystal — same object passed to ``simulate_laue``.
+
+    Returns
+    -------
+    U : ndarray, shape (3, 3)
+        Pure rotation in LT frame (orthogonal, det ≈ +1).  Use this in
+        ``simulate_laue`` when you want rotation-only simulation (strain
+        effects on peak positions are ignored).
+    F : ndarray, shape (3, 3)
+        Full deformation gradient (= ``U_from_matstarlab`` output).  Use
+        this in ``simulate_laue`` to include strain in the spot geometry.
+    eps : ndarray, shape (3, 3)
+        Small-strain tensor in the crystal frame: ``ε = P − I``.
+        Diagonal entries are normal strains (ε₁₁, ε₂₂, ε₃₃);
+        off-diagonal entries are shear strains (engineering convention ×½).
+    eps_voigt : ndarray, shape (6,)
+        Voigt representation ``[ε₁₁, ε₂₂, ε₃₃, ε₂₃, ε₁₃, ε₁₂]``.
+
+    Notes
+    -----
+    * The decomposition is exact (no small-strain approximation).
+    * For strains ≲ 10⁻³ (typical elastic), P ≈ I and F ≈ U.
+    * The strain ε is expressed in the **crystal frame** (principal axes of P).
+      To express it in the lab frame: ``ε_lab = U @ ε @ U.T``.
+    * To check: ``np.allclose(U @ (eps + np.eye(3)) @ B0, F @ B0)`` should hold.
+
+    Example
+    -------
+    >>> U, F, eps, eps_v = decompose_matstarlab(matstarlab, crystal)
+    >>> spots_rot_only = simulate_laue(crystal, U, camera)   # rotation only
+    >>> spots_with_strain = simulate_laue(crystal, F, camera) # rotation + strain
+    >>> print("normal strains:", np.diag(eps))
+    >>> print("shear  strains:", eps[0,1], eps[0,2], eps[1,2])
+    """
+    from scipy.linalg import polar
+
+    F = _matstarlab_to_F(matstarlab, crystal)
+
+    # Right polar decomposition: F = U @ P
+    # U: orthogonal (rotation),  P: symmetric positive-definite (stretch)
+    U, P = polar(F, side="right")
+
+    # Small-strain tensor: ε = P − I  (exact for symmetric P)
+    eps = P - np.eye(3)
+
+    # Voigt: [e11, e22, e33, e23, e13, e12]
+    eps_voigt = np.array([
+        eps[0, 0], eps[1, 1], eps[2, 2],
+        eps[1, 2], eps[0, 2], eps[0, 1],
+    ])
+
+    return U, F, eps, eps_voigt
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SYNCHROTRON SPECTRA  (no bremsstrahlung)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,6 +437,193 @@ def lorentz_pol(tth_deg):
 
 def is_superlattice(h, k, l):
     return (abs(h) + abs(k) + abs(l)) % 2 == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STRAIN BROADENING
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Voigt index → symmetric (i,j) tensor index
+# Order: [ε₁₁, ε₂₂, ε₃₃, ε₂₃, ε₁₃, ε₁₂]
+_VOIGT_IJ = [(0, 0), (1, 1), (2, 2), (1, 2), (0, 2), (0, 1)]
+
+
+def strain_spot_jacobian(spots, crystal, U, camera, eps_step=1e-5):
+    """
+    Compute the 2×6 Jacobian ∂(xcam, ycam)/∂ε_voigt for each Laue spot.
+
+    For each reflection (hkl) in ``spots``, a small strain increment is applied
+    to each of the six independent tensor strain components (Voigt order:
+    ε₁₁, ε₂₂, ε₃₃, ε₂₃, ε₁₃, ε₁₂) and the resulting shift in pixel
+    coordinates is measured via finite differences.
+
+    **Physics note** — in white-beam Laue the incident wavelength adjusts
+    freely to satisfy the Laue condition.  A pure hydrostatic strain rescales
+    |G| but not its direction, so it does **not** shift the spot.  Only the
+    *deviatoric* part of the strain (which rotates G) moves spots.  The
+    Jacobian captures this automatically.
+
+    Parameters
+    ----------
+    spots : list of dict
+        Output of :func:`simulate_laue` (must contain ``'hkl'`` and ``'pix'``).
+    crystal : xu.materials.Crystal
+        Same crystal used to produce ``spots``.
+    U : ndarray, shape (3, 3)
+        Orientation matrix used to produce ``spots`` (LT frame).
+        Pass the **rotation-only** U from :func:`decompose_matstarlab`,
+        not the full deformation gradient F, so that strain perturbations
+        are applied on top of a clean orientation.
+    camera : Camera
+        Same camera used to produce ``spots``.
+    eps_step : float, optional
+        Finite-difference step size for each strain component (dimensionless).
+        Default 1e-5 is safe for typical elastic strains ~10⁻³.
+
+    Returns
+    -------
+    jacobians : dict  {(h,k,l): ndarray shape (2, 6)}
+        Maps each hkl tuple to its 2×6 Jacobian matrix J where::
+
+            [δxcam, δycam] ≈ J @ δε_voigt
+
+        Spots for which the perturbed beam misses the detector for one or
+        more components will have those columns set to zero.
+    """
+    ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+    U = np.asarray(U, dtype=float)
+    jacobians = {}
+
+    for s in spots:
+        if s.get("pix") is None:
+            continue
+        h, k, l = s["hkl"]
+        G_cry = crystal.Q(h, k, l)
+        pix0 = np.array(s["pix"], dtype=float)
+        J = np.zeros((2, 6))
+
+        for vi, (i, j) in enumerate(_VOIGT_IJ):
+            # Symmetric strain perturbation tensor
+            deps = np.zeros((3, 3))
+            deps[i, j] += eps_step
+            if i != j:
+                deps[j, i] += eps_step  # symmetrise off-diagonal
+
+            # Perturbed G in lab frame: G' = U @ (I + δε) @ G_cry
+            G_lab_p = U @ (np.eye(3) + deps) @ G_cry
+
+            # Re-apply Laue condition for perturbed G
+            Gm2 = float(G_lab_p @ G_lab_p)
+            kdG = float(ki_hat @ G_lab_p)
+            if kdG >= 0 or Gm2 < 1e-30:
+                continue
+            lam_p = -4.0 * np.pi * kdG / Gm2
+            km_p = 2.0 * np.pi / lam_p
+            kf_p = ki_hat * km_p + G_lab_p
+            kf_hat_p = kf_p / np.linalg.norm(kf_p)
+
+            pix_p = camera.project(kf_hat_p)
+            if pix_p is None:
+                continue
+
+            J[:, vi] = (np.array(pix_p) - pix0) / eps_step
+
+        jacobians[(h, k, l)] = J
+
+    return jacobians
+
+
+def strain_broadening(spots, crystal, U, camera,
+                      eps_voigt_std=1e-3, eps_cov=None, eps_step=1e-5):
+    """
+    Estimate the pixel-space broadening of each Laue spot due to strain.
+
+    Given a strain distribution characterised by a covariance matrix Σ_ε
+    (6×6 in Voigt space), the pixel-space covariance of a spot is:
+
+    .. math::
+
+        \\Sigma_{\\text{pix}} = J \\, \\Sigma_{\\varepsilon} \\, J^{\\top}
+
+    where J (2×6) is the strain Jacobian from :func:`strain_spot_jacobian`.
+    The broadening is reported as the RMS pixel spread (square root of the
+    largest eigenvalue of Σ_pix) and the full 2×2 pixel covariance, from
+    which the ellipse axes and orientation can be extracted.
+
+    Parameters
+    ----------
+    spots : list of dict
+        Output of :func:`simulate_laue`.
+    crystal : xu.materials.Crystal
+        Same crystal used to produce ``spots``.
+    U : ndarray, shape (3, 3)
+        Rotation-only orientation matrix (from :func:`decompose_matstarlab`).
+    camera : Camera
+        Same camera used to produce ``spots``.
+    eps_voigt_std : float or array-like, shape (6,), optional
+        Standard deviation of each Voigt strain component
+        [σ₁₁, σ₂₂, σ₃₃, σ₂₃, σ₁₃, σ₁₂].
+        If scalar, the same std is applied to all six components.
+        Ignored when ``eps_cov`` is provided.
+        Default: 1e-3 (typical elastic strain).
+    eps_cov : array-like, shape (6, 6), optional
+        Full 6×6 covariance matrix of the strain distribution (Voigt basis).
+        When provided, overrides ``eps_voigt_std``.
+    eps_step : float, optional
+        Finite-difference step for the Jacobian computation.
+
+    Returns
+    -------
+    list of dict
+        Copy of ``spots`` with three new keys added to each entry:
+
+        ``'sigma_strain_pix'`` : float
+            RMS broadening (pixels) = √(largest eigenvalue of Σ_pix).
+            This is the semi-major axis of the broadening ellipse.
+        ``'sigma_strain_minor'`` : float
+            Semi-minor axis of the broadening ellipse (pixels).
+        ``'cov_pix'`` : ndarray, shape (2, 2)
+            Full pixel-space covariance matrix.  Its eigenvectors give the
+            orientations of the broadening ellipse on the detector.
+
+    Notes
+    -----
+    * The broadening is relative to the spot centre; it does **not** include
+      the intrinsic diffraction spot width (set by ``sigma_pix`` in
+      :meth:`Camera.render`).
+    * To render spots with strain broadening included, pass
+      ``sigma_pix=sigma_strain_pix`` to :meth:`Camera.render`, or add it in
+      quadrature: ``sigma_total = sqrt(sigma_instrument² + sigma_strain²)``.
+    * The Jacobian approach is linear (first-order); it is accurate for
+      strain spreads ≪ 1 and fails if strain is so large that spots migrate
+      by more than ~10 px.
+    """
+    if eps_cov is not None:
+        Sigma_eps = np.asarray(eps_cov, dtype=float)
+    else:
+        std = np.broadcast_to(np.asarray(eps_voigt_std, dtype=float), (6,))
+        Sigma_eps = np.diag(std ** 2)
+
+    jacobians = strain_spot_jacobian(spots, crystal, U, camera, eps_step=eps_step)
+
+    result = []
+    for s in spots:
+        s = dict(s)
+        J = jacobians.get(s["hkl"])
+        if J is not None and np.any(J != 0):
+            cov_pix = J @ Sigma_eps @ J.T  # (2,2)
+            eigvals = np.linalg.eigvalsh(cov_pix)
+            eigvals = np.maximum(eigvals, 0.0)   # numerical guard
+            s["sigma_strain_pix"] = float(np.sqrt(eigvals.max()))
+            s["sigma_strain_minor"] = float(np.sqrt(eigvals.min()))
+            s["cov_pix"] = cov_pix
+        else:
+            s["sigma_strain_pix"] = 0.0
+            s["sigma_strain_minor"] = 0.0
+            s["cov_pix"] = np.zeros((2, 2))
+        result.append(s)
+
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

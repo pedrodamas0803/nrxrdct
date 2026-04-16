@@ -1311,3 +1311,243 @@ def draw_det_image(
     )
     cb.ax.tick_params(colors="#7788aa", labelsize=5)
     cb.outline.set_edgecolor("#1a1f2e")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STRAIN BROADENING PLOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+_VOIGT_LABELS = ["ε₁₁", "ε₂₂", "ε₃₃", "ε₂₃", "ε₁₃", "ε₁₂"]
+
+
+def plot_strain_broadening(
+    spots_b,
+    camera,
+    jacobians=None,
+    out_path="strain_broadening.png",
+    top_n=12,
+):
+    """
+    Three-panel summary of strain-induced spot broadening.
+
+    Panel A — Detector map
+        Each spot is drawn as an ellipse whose semi-axes come from the
+        eigenvalues of the 2×2 pixel-space covariance ``cov_pix``, coloured
+        by ``sigma_strain_pix`` (semi-major axis).
+
+    Panel B — σ_strain vs 2θ
+        Scatter plot of the major (solid) and minor (dashed) broadening
+        semi-axes versus 2θ for every spot.  The most-broadened spots are
+        labelled with their (hkl) index.
+
+    Panel C — Jacobian heat-map  *(only when* ``jacobians`` *is provided)*
+        Rows = top_n most-broadened spots; columns = the 6 Voigt strain
+        components.  Cell colour = |∂xcam/∂εᵢⱼ| or |∂ycam/∂εᵢⱼ|
+        (RMS of both rows of J), so you can read off which strain components
+        most affect which spots.
+
+    Parameters
+    ----------
+    spots_b : list of dict
+        Output of :func:`~nrxrdct.laue.simulation.strain_broadening`.
+        Must contain ``'cov_pix'``, ``'sigma_strain_pix'``,
+        ``'sigma_strain_minor'``, ``'pix'``, ``'tth'``, ``'hkl'``.
+    camera : Camera
+        Used for detector dimensions in Panel A.
+    jacobians : dict {(h,k,l): ndarray (2,6)}, optional
+        Output of :func:`~nrxrdct.laue.simulation.strain_spot_jacobian`.
+        When supplied, Panel C is drawn; otherwise it is replaced with a
+        colour-bar for Panel A.
+    out_path : str, optional
+        File path to save the figure.  ``None`` → do not save.
+    top_n : int, optional
+        Number of most-broadened spots to label / show in Panel C.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    from matplotlib.patches import Ellipse
+
+    has_jac = jacobians is not None
+    ncols = 3 if has_jac else 2
+    fig, axes = plt.subplots(
+        1, ncols,
+        figsize=(6 * ncols, 6),
+        gridspec_kw={"width_ratios": [2, 1.2, 1.4] if has_jac else [2, 1.2]},
+    )
+    fig.patch.set_facecolor(BG)
+    ax_det, ax_scatter = axes[0], axes[1]
+    ax_jac = axes[2] if has_jac else None
+
+    # ── colour scale (shared) ─────────────────────────────────────────────────
+    sigmas = [s["sigma_strain_pix"] for s in spots_b if s.get("pix") is not None]
+    vmax = max(sigmas) if sigmas else 1.0
+    cmap_s = "inferno"
+    norm_s = mcolors.Normalize(vmin=0, vmax=vmax)
+
+    # ── Panel A: detector map ─────────────────────────────────────────────────
+    ax_det.set_facecolor(BG)
+    ax_det.set_xlim(0, camera.Nh)
+    ax_det.set_ylim(camera.Nv, 0)          # pixel row increases downward
+    ax_det.set_aspect("equal")
+    ax_det.set_xlabel("xcam  (pixel)", color=FG, fontsize=8)
+    ax_det.set_ylabel("ycam  (pixel)", color=FG, fontsize=8)
+    ax_det.tick_params(colors="#7788aa", labelsize=6)
+    ax_det.set_title("Detector: strain broadening ellipses", color=FG, fontsize=9)
+    for sp in ax_det.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    for s in spots_b:
+        if s.get("pix") is None:
+            continue
+        xc, yc = s["pix"]
+        cov = s.get("cov_pix", np.zeros((2, 2)))
+        sigma_maj = s.get("sigma_strain_pix", 0.0)
+        col = plt.cm.get_cmap(cmap_s)(norm_s(sigma_maj))
+
+        if sigma_maj < 0.05:
+            # Too small to show as ellipse — draw a dot
+            ax_det.plot(xc, yc, ".", ms=2, color=col, alpha=0.7)
+            continue
+
+        # Compute ellipse orientation from eigenvectors of cov_pix
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        eigvals = np.maximum(eigvals, 0.0)
+        angle_deg = np.degrees(np.arctan2(eigvecs[1, -1], eigvecs[0, -1]))
+
+        ell = Ellipse(
+            xy=(xc, yc),
+            width=2 * np.sqrt(eigvals[-1]),   # 1-sigma semi-major (diameter)
+            height=2 * np.sqrt(eigvals[0]),   # 1-sigma semi-minor
+            angle=angle_deg,
+            linewidth=0.8,
+            edgecolor=col,
+            facecolor="none",
+            alpha=0.85,
+            zorder=3,
+        )
+        ax_det.add_patch(ell)
+        ax_det.plot(xc, yc, "+", ms=3, color=col, lw=0.5, alpha=0.6)
+
+    # Label top_n broadened spots
+    top_spots = sorted(
+        [s for s in spots_b if s.get("pix") is not None],
+        key=lambda s: -s.get("sigma_strain_pix", 0),
+    )[:top_n]
+    for s in top_spots:
+        h, k, l = s["hkl"]
+        xc, yc = s["pix"]
+        ax_det.annotate(
+            f"({h}{k}{l})",
+            xy=(xc, yc), xytext=(4, -4),
+            textcoords="offset points",
+            fontsize=5, color="#aaccff", alpha=0.9,
+        )
+
+    sm = plt.cm.ScalarMappable(cmap=cmap_s, norm=norm_s)
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax_det, fraction=0.03, pad=0.02)
+    cb.set_label("σ_strain  (px, semi-major)", color="#7788aa", fontsize=7)
+    cb.ax.tick_params(colors="#7788aa", labelsize=6)
+    cb.outline.set_edgecolor("#1a1f2e")
+
+    # ── Panel B: σ_strain vs 2θ ───────────────────────────────────────────────
+    ax_scatter.set_facecolor(BG)
+    ax_scatter.tick_params(colors="#7788aa", labelsize=6)
+    ax_scatter.set_xlabel("2θ  (degrees)", color=FG, fontsize=8)
+    ax_scatter.set_ylabel("broadening  (px, 1σ)", color=FG, fontsize=8)
+    ax_scatter.set_title("Broadening vs 2θ", color=FG, fontsize=9)
+    for sp in ax_scatter.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax_scatter.grid(True, ls=":", lw=0.3, color="#181e2e")
+
+    valid = [s for s in spots_b if s.get("pix") is not None]
+    tths = [s["tth"] for s in valid]
+    sig_maj = [s["sigma_strain_pix"] for s in valid]
+    sig_min = [s["sigma_strain_minor"] for s in valid]
+    cols = [plt.cm.get_cmap(cmap_s)(norm_s(v)) for v in sig_maj]
+
+    ax_scatter.scatter(tths, sig_maj, c=cols, s=18, zorder=3, label="semi-major σ")
+    ax_scatter.scatter(tths, sig_min, c=cols, s=8, marker="^", alpha=0.5,
+                       zorder=2, label="semi-minor σ")
+
+    # Connect major/minor for each spot
+    for t, sj, sn in zip(tths, sig_maj, sig_min):
+        ax_scatter.plot([t, t], [sn, sj], color="#334455", lw=0.4, zorder=1)
+
+    # Label the top_n most broadened
+    top_tth = sorted(valid, key=lambda s: -s["sigma_strain_pix"])[:top_n]
+    for s in top_tth:
+        h, k, l = s["hkl"]
+        ax_scatter.annotate(
+            f"({h}{k}{l})",
+            xy=(s["tth"], s["sigma_strain_pix"]),
+            xytext=(3, 2), textcoords="offset points",
+            fontsize=5, color="#aaccff",
+        )
+
+    ax_scatter.legend(fontsize=6, framealpha=0.2, facecolor=BG, labelcolor="white",
+                      loc="upper right")
+
+    # ── Panel C: Jacobian heat-map ────────────────────────────────────────────
+    if has_jac and ax_jac is not None:
+        ax_jac.set_facecolor(BG)
+        ax_jac.set_title(
+            "Strain sensitivity  |∂pix/∂εᵢⱼ|  (px per unit strain)",
+            color=FG, fontsize=8,
+        )
+        ax_jac.tick_params(colors="#7788aa", labelsize=6)
+        for sp in ax_jac.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+        top_hkl = [s["hkl"] for s in top_spots]
+        # Build heatmap matrix: rows = spots, cols = Voigt components
+        # Cell value = RMS of the two rows of J (xcam and ycam sensitivity)
+        heat = np.zeros((len(top_hkl), 6))
+        for ri, hkl in enumerate(top_hkl):
+            J = jacobians.get(hkl)
+            if J is not None:
+                heat[ri] = np.sqrt(0.5 * (J[0] ** 2 + J[1] ** 2))
+
+        im_j = ax_jac.imshow(
+            heat,
+            aspect="auto",
+            cmap="YlOrRd",
+            interpolation="nearest",
+        )
+        ax_jac.set_xticks(range(6))
+        ax_jac.set_xticklabels(_VOIGT_LABELS, fontsize=7, color=FG)
+        ax_jac.set_yticks(range(len(top_hkl)))
+        ax_jac.set_yticklabels(
+            [f"({h}{k}{l})" for h, k, l in top_hkl], fontsize=6, color=FG
+        )
+        ax_jac.set_xlabel("Voigt strain component", color=FG, fontsize=7)
+
+        # Annotate cells with the value
+        for ri in range(len(top_hkl)):
+            for ci in range(6):
+                v = heat[ri, ci]
+                if v > 0.01:
+                    ax_jac.text(
+                        ci, ri, f"{v:.1f}",
+                        ha="center", va="center",
+                        fontsize=5,
+                        color="white" if v > heat.max() * 0.6 else "black",
+                    )
+
+        cb_j = fig.colorbar(im_j, ax=ax_jac, fraction=0.05, pad=0.02)
+        cb_j.set_label("px / unit strain", color="#7788aa", fontsize=6)
+        cb_j.ax.tick_params(colors="#7788aa", labelsize=5)
+        cb_j.outline.set_edgecolor("#1a1f2e")
+
+    fig.suptitle("Laue spot broadening due to elastic strain", color=FG,
+                 fontsize=11, y=1.01)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Strain broadening plot saved → {out_path}")
+
+    return fig

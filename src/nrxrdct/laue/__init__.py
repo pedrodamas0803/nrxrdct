@@ -4,7 +4,7 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 
 from .camera import Camera
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
-from .laue_plotting import plot_2theta_chi, plot_all
+from .laue_plotting import plot_2theta_chi, plot_all, plot_strain_broadening
 from .simulation import (
     beam_in_crystal,
     decompose_matstarlab,
@@ -46,6 +46,7 @@ __all__ = [
     "print_bragg_table",
     "plot_2theta_chi",
     "plot_all",
+    "plot_strain_broadening",
     "crystal_from_cif",
     "crystals_from_cifs",
 ]

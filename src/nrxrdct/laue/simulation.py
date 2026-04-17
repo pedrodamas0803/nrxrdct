@@ -1364,19 +1364,57 @@ def simulate_laue_stack(
     if f2_thresh is None:
         f2_thresh = 0.0  # will be set after first structure factor call
 
-    # Superlattice wavevector along the stacking direction.
-    # Satellites sit at  G_hkl + m * q_SL  for integer m ≠ 0.
-    # Only meaningful when n_rep > 1 and max_satellites > 0.
-    Lambda = stack.bilayer_thickness
-    if stack.n_rep > 1 and max_satellites > 0 and Lambda > 1e-6:
-        q_SL = (2.0 * np.pi / Lambda) * stack.n_hat   # Å⁻¹, lab frame
-        sat_orders = [m for m in range(-max_satellites, max_satellites + 1) if m != 0]
-    else:
-        q_SL = None
-        sat_orders = []
+    # ── Fringe / satellite wavevectors ───────────────────────────────────────
+    # Thickness fringes and superlattice satellites both sit at
+    #     G_hkl + m * q_fringe * n̂    (m = ±1, ±2, ...)
+    # where q_fringe = 2π / t  and  t  is a relevant thickness.
+    #
+    # Two contributions:
+    #   1. Each individual finite layer produces fringes at  q = 2π / t_layer.
+    #      (This is the dominant effect for n_rep = 1, e.g. a single InGaN QW.)
+    #   2. The full bilayer period Λ produces superlattice satellites at
+    #      q = 2π / Λ  when n_rep > 1.
+    #
+    # Layers thicker than MAX_FRINGE_THICK_ANG are skipped: their fringe
+    # spacing 2π/t is so small that the corresponding λ falls far outside any
+    # realistic white-beam window and they never pass the Laue-condition check.
+    MAX_FRINGE_THICK_ANG = 10000.0  # 300 nm — tune if needed
+
+    fringe_q_vecs = []  # list of (q_vector_3d, description)
+    sat_orders = [m for m in range(-max_satellites, max_satellites + 1) if m != 0]
+
+    if max_satellites > 0:
+        # Per-layer thickness fringes
+        seen_t = set()
+        for lyr in stack.layers:
+            t = lyr.thickness
+            if t < 1e-6 or t > MAX_FRINGE_THICK_ANG:
+                continue
+            t_key = round(t, 2)
+            if t_key in seen_t:
+                continue
+            seen_t.add(t_key)
+            q_vec = (2.0 * np.pi / t) * stack.n_hat
+            fringe_q_vecs.append((q_vec, f"layer '{lyr.label}' (t={t/10:.1f} nm)"))
+
+        # Superlattice period (only if n_rep > 1 and Λ ≠ any single-layer t)
+        Lambda = stack.bilayer_thickness
+        if stack.n_rep > 1 and Lambda > 1e-6:
+            t_key = round(Lambda, 2)
+            if t_key not in seen_t:
+                q_vec = (2.0 * np.pi / Lambda) * stack.n_hat
+                fringe_q_vecs.append((q_vec, f"bilayer Λ={Lambda/10:.1f} nm"))
+
+    if verbose and fringe_q_vecs:
+        print("  Fringe / satellite periods to probe:")
+        for qv, desc in fringe_q_vecs:
+            t_nm = 2.0 * np.pi / np.linalg.norm(qv) / 10.0
+            print(
+                f"    {desc}  →  2π/t = {np.linalg.norm(qv):.4f} Å⁻¹  (t = {t_nm:.2f} nm)"
+            )
 
     # Deduplicated pixel set: avoid appending two spots within 0.5 px of each other.
-    seen_pix = set()   # set of (round(xcam), round(ycam))
+    seen_pix = set()  # set of (round(xcam), round(ycam))
 
     def _try_append(G_vec, hkl, sat_order, phase_label):
         """Evaluate the Laue condition + camera + F² for G_vec and append if valid."""
@@ -1403,7 +1441,7 @@ def simulate_laue_stack(
             return 0
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-        az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+        az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
         F_stack = stack.structure_factor(G_vec, energy_eV=E)
         F2 = abs(F_stack) ** 2
         if f2_thresh == 0.0:
@@ -1417,19 +1455,26 @@ def simulate_laue_stack(
         if sw <= 0.0:
             return 0
         seen_pix.add(pix_key)
-        spots.append({
-            "phase_label":    phase_label,
-            "hkl":            hkl,
-            "satellite_order": sat_order,
-            "G_lab":          G_vec.copy(),
-            "E": E, "lambda": lam,
-            "tth": tth, "chi": chi, "az": az,
-            "pix": pix,
-            "F2": F2, "F2_stack": F2,
-            "LP": LP, "sw": sw,
-            "I_raw": F2 * LP * sw,
-            "is_superlattice": (abs(hkl[0]) + abs(hkl[1]) + abs(hkl[2])) % 2 == 1,
-        })
+        spots.append(
+            {
+                "phase_label": phase_label,
+                "hkl": hkl,
+                "satellite_order": sat_order,
+                "G_lab": G_vec.copy(),
+                "E": E,
+                "lambda": lam,
+                "tth": tth,
+                "chi": chi,
+                "az": az,
+                "pix": pix,
+                "F2": F2,
+                "F2_stack": F2,
+                "LP": LP,
+                "sw": sw,
+                "I_raw": F2 * LP * sw,
+                "is_superlattice": (abs(hkl[0]) + abs(hkl[1]) + abs(hkl[2])) % 2 == 1,
+            }
+        )
         return 1
 
     spots = []
@@ -1446,14 +1491,18 @@ def simulate_laue_stack(
         u_key = (crystal.name, tuple(np.round(U, 4).ravel()))
         if u_key in seen_combos:
             if verbose:
-                print(f"  Skipping {label} (same crystal+orientation already enumerated)")
+                print(
+                    f"  Skipping {label} (same crystal+orientation already enumerated)"
+                )
             continue
         seen_combos.append(u_key)
 
         if verbose:
             n_sat_orders = len(sat_orders)
             sat_info = f", ±{max_satellites} satellite orders" if n_sat_orders else ""
-            print(f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True)
+            print(
+                f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True
+            )
 
         n_added = 0
         for h in range(-hmax, hmax + 1):
@@ -1468,13 +1517,14 @@ def simulate_laue_stack(
                     # ── Main Bragg peak (satellite order 0) ───────────────
                     n_added += _try_append(G_lab, (h, k, l), 0, label)
 
-                    # ── Superlattice satellites ───────────────────────────
-                    # Each satellite sits at G_hkl + m*(2π/Λ)*n̂ and satisfies
-                    # the Laue condition at its own wavelength within the white
-                    # beam energy window.
-                    for m in sat_orders:
-                        G_sat = G_lab + m * q_SL
-                        n_added += _try_append(G_sat, (h, k, l), m, label)
+                    # ── Thickness fringes / satellites ───────────────────
+                    # Each satellite sits at G_hkl + m*(2π/t)*n̂ for every
+                    # registered fringe period and satisfies the Laue condition
+                    # at its own wavelength within the white-beam energy window.
+                    for q_fringe_vec, _ in fringe_q_vecs:
+                        for m in sat_orders:
+                            G_sat = G_lab + m * q_fringe_vec
+                            n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")

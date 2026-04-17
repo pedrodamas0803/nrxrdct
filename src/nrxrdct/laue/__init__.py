@@ -4,7 +4,7 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 
 from .camera import Camera
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
-from .laue_plotting import plot_2theta_chi, plot_all, plot_compare_spots, plot_layer_scheme, plot_strain_broadening
+from .laue_plotting import plot_2theta_chi, plot_all, plot_compare_spots, plot_layer_scheme, plot_laue_stack_spots, plot_strain_broadening
 from .layers import (
     Layer,
     LayeredCrystal,
@@ -84,5 +84,6 @@ __all__ = [
     "plot_all",
     "plot_compare_spots",
     "plot_layer_scheme",
+    "plot_laue_stack_spots",
     "plot_strain_broadening",
 ]

@@ -1378,7 +1378,7 @@ def simulate_laue_stack(
     # Layers thicker than MAX_FRINGE_THICK_ANG are skipped: their fringe
     # spacing 2π/t is so small that the corresponding λ falls far outside any
     # realistic white-beam window and they never pass the Laue-condition check.
-    MAX_FRINGE_THICK_ANG = 10000.0  # 300 nm — tune if needed
+    MAX_FRINGE_THICK_ANG = 20000.0  # 2 µm — tune if needed
 
     fringe_q_vecs = []  # list of (q_vector_3d, description)
     sat_orders = [m for m in range(-max_satellites, max_satellites + 1) if m != 0]

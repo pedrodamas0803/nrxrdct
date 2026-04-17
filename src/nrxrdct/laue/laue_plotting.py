@@ -1990,3 +1990,224 @@ def plot_layer_scheme(
                     facecolor=fig.get_facecolor())
         print(f"  Layer scheme saved → {out_path}")
     return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYERED STACK SPOT MAP
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Marker cycle for phases — each new unique ``phase_label`` gets the next one.
+_PHASE_MARKERS = ["o", "s", "^", "D", "v", "p", "h", "X", "<", ">", "*"]
+
+#: Per-phase base colour palette (one hue per phase, used for the Bragg peaks).
+_PHASE_PALETTES = [
+    "Blues_r",
+    "Oranges_r",
+    "Greens_r",
+    "Purples_r",
+    "RdPu_r",
+    "YlOrBr_r",
+    "GnBu_r",
+    "PuRd_r",
+]
+
+
+def plot_laue_stack_spots(
+    spots,
+    *,
+    space: str = "angles",
+    n_label: int = 5,
+    size_scale: float = 80.0,
+    min_size: float = 8.0,
+    figsize=(9, 7),
+    ax=None,
+    out_path: str | None = "laue_stack_spots.png",
+):
+    """
+    Visualise the spot table from :func:`~nrxrdct.laue.simulate_laue_stack`.
+
+    Each phase (unique ``phase_label``) gets a distinct **marker shape**.
+    Within a phase, the **marker colour** encodes the satellite / fringe order:
+
+    * ``satellite_order = 0``   — Bragg peak:  brightest colour of the phase palette.
+    * ``satellite_order = ±m``  — fringe / superlattice satellite:  progressively
+      darker / more saturated shades along the same palette (negative and positive
+      orders share the same colour sequence, distinguished by the legend).
+
+    Marker *size* scales with normalised intensity.
+
+    Parameters
+    ----------
+    spots : list[dict]
+        Spot list returned by :func:`~nrxrdct.laue.simulate_laue_stack`.
+        Required keys: ``'phase_label'``, ``'satellite_order'``, ``'tth'``,
+        ``'chi'``, ``'pix'``, ``'intensity'``.
+    space : ``'angles'`` | ``'detector'``
+        Coordinate space to plot in.
+
+        * ``'angles'``   — x = 2θ (°), y = χ (°).
+        * ``'detector'`` — x = column pixel, y = row pixel.
+    n_label : int
+        Number of the strongest spots to annotate with ``(hkl)`` labels.
+    size_scale : float
+        Maximum marker area (``s`` kwarg in ``ax.scatter``).
+    min_size : float
+        Minimum marker area so that weak spots remain visible.
+    figsize : (float, float)
+        Figure size in inches (ignored if *ax* is supplied).
+    ax : matplotlib.axes.Axes, optional
+        Draw into an existing Axes; if *None* a new figure is created.
+    out_path : str or None
+        Save the figure to this path.  ``None`` → do not save.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax  : matplotlib.axes.Axes
+    """
+    if not spots:
+        raise ValueError("spots list is empty")
+
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    # ── Coordinate helper ─────────────────────────────────────────────────────
+    def _xy(s):
+        if space == "angles":
+            return float(s["tth"]), float(s["chi"])
+        pix = s.get("pix")
+        if pix is None:
+            return None, None
+        return float(pix[0]), float(pix[1])
+
+    # ── Gather phase / order metadata ─────────────────────────────────────────
+    # Preserve insertion order (phase order as they appear in the spot list)
+    phases = list(dict.fromkeys(s["phase_label"] for s in spots))
+    all_orders = sorted({s["satellite_order"] for s in spots})
+
+    phase_marker = {ph: _PHASE_MARKERS[i % len(_PHASE_MARKERS)]
+                    for i, ph in enumerate(phases)}
+
+    # Build colour lookup: (phase, order) → RGBA
+    # For each phase use a sequential palette; index 0 = Bragg, higher = fringes.
+    # Negative and positive orders with the same |m| share the same colour so
+    # that the legend stays compact.
+    abs_orders_sorted = sorted({abs(m) for m in all_orders})
+
+    def _phase_color(phase_idx, abs_order):
+        """Map phase + |satellite_order| → colour from the phase palette."""
+        cmap_name = _PHASE_PALETTES[phase_idx % len(_PHASE_PALETTES)]
+        cmap_fn = plt.get_cmap(cmap_name)
+        n = len(abs_orders_sorted)
+        if n == 1:
+            # Only one level → use brightest (low value in _r maps)
+            return cmap_fn(0.15)
+        # Map index 0 → 0.15 (bright), index n-1 → 0.85 (dark/saturated)
+        idx = abs_orders_sorted.index(abs_order)
+        t = 0.15 + 0.70 * idx / (n - 1)
+        return cmap_fn(t)
+
+    phase_order_color = {
+        (ph, abs_m): _phase_color(i, abs_m)
+        for i, ph in enumerate(phases)
+        for abs_m in abs_orders_sorted
+    }
+
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    # Group by (phase, satellite_order) so each group is one scatter call
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for s in spots:
+        xy = _xy(s)
+        if xy[0] is None:
+            continue
+        groups[(s["phase_label"], s["satellite_order"])].append((xy, s))
+
+    for (phase, order), members in sorted(groups.items(),
+                                          key=lambda kv: (phases.index(kv[0][0]),
+                                                          kv[0][1])):
+        xs = [m[0][0] for m in members]
+        ys = [m[0][1] for m in members]
+        sizes = [max(min_size, size_scale * m[1]["intensity"]) for m in members]
+        marker = phase_marker[phase]
+        color = phase_order_color[(phase, abs(order))]
+        ax.scatter(xs, ys, s=sizes, c=[color], marker=marker,
+                   linewidths=0.4, edgecolors="white", alpha=0.90, zorder=3)
+
+    # ── Annotate strongest spots ───────────────────────────────────────────────
+    valid = [s for s in spots if _xy(s)[0] is not None]
+    top_n = sorted(valid, key=lambda s: s["intensity"], reverse=True)[:n_label]
+    for s in top_n:
+        x, y = _xy(s)
+        h, k, l = s["hkl"]
+        m = s["satellite_order"]
+        lbl = f"({h}{k}{l})" if m == 0 else f"({h}{k}{l})\nm={m:+d}"
+        ax.text(x + 0.1, y + 0.1, lbl, color=FG, fontsize=6, va="bottom",
+                zorder=5)
+
+    # ── Legend ────────────────────────────────────────────────────────────────
+    legend_handles = []
+
+    # Phase markers (shape legend)
+    for ph in phases:
+        c = phase_order_color[(ph, 0)]          # Bragg colour for this phase
+        h = Line2D([0], [0], linestyle="none", marker=phase_marker[ph],
+                   color=c, markeredgecolor="white", markeredgewidth=0.5,
+                   markersize=7, label=ph)
+        legend_handles.append(h)
+
+    # Satellite-order colours (shared across all phases; use phase 0 colours)
+    ph0 = phases[0]
+    for abs_m in abs_orders_sorted:
+        if abs_m == 0:
+            lbl = "Bragg  (m=0)"
+        elif abs_m == 1:
+            lbl = "satellite  m=±1"
+        else:
+            lbl = f"satellite  m=±{abs_m}"
+        c = phase_order_color[(ph0, abs_m)]
+        h = Line2D([0], [0], linestyle="none", marker="o",
+                   color=c, markeredgecolor="white", markeredgewidth=0.5,
+                   markersize=7, label=lbl)
+        legend_handles.append(h)
+
+    ax.legend(
+        handles=legend_handles, loc="upper right", fontsize=7.5,
+        framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+        labelcolor=FG, handlelength=1.0, handleheight=1.0,
+        title="phase  /  order", title_fontsize=7.5,
+    )
+
+    # ── Axis labels & title ───────────────────────────────────────────────────
+    if space == "angles":
+        ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=8)
+        ax.set_ylabel("χ  (°)", color="#7788aa", fontsize=8)
+    else:
+        ax.set_xlabel("column  (px)", color="#7788aa", fontsize=8)
+        ax.set_ylabel("row  (px)", color="#7788aa", fontsize=8)
+        ax.invert_yaxis()
+
+    n_phases = len(phases)
+    n_sats = len([m for m in all_orders if m != 0])
+    ax.set_title(
+        f"Laue stack — {n_phases} phase{'s' if n_phases != 1 else ''}  |  "
+        f"{len(valid)} spots  |  {n_sats} satellite orders",
+        color=FG, fontsize=9, pad=6,
+    )
+
+    if standalone:
+        fig.tight_layout()
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Stack spot map saved → {out_path}")
+    return fig, ax

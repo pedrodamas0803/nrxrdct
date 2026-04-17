@@ -349,47 +349,64 @@ class Camera:
     def add_poisson_noise(
         self,
         image: "np.ndarray",
-        peak_counts: float = 1000,
+        peak_counts: float = 1000.0,
         rng: "np.random.Generator | int | None" = None,
     ) -> "np.ndarray":
         """
-        Apply Poissonian counting noise to a rendered detector image.
+        Simulate Poissonian photon-counting statistics on a detector image.
 
-        The image is first scaled so that its maximum pixel equals
-        *peak_counts* (the expected photon count at the brightest spot),
-        then each pixel is drawn independently from a Poisson distribution
-        with that expected value.
+        The image is treated as a map of *relative* intensities.  It is
+        scaled so that the brightest pixel has ``peak_counts`` expected
+        photons, then every pixel is sampled independently from a Poisson
+        distribution with its own expected count λᵢ:
+
+        .. math::
+
+            \\lambda_i = I_i \\cdot \\frac{\\text{peak\\_counts}}{\\max(I)}
+            \\qquad
+            n_i \\sim \\operatorname{Poisson}(\\lambda_i)
+
+        This reproduces the correct counting statistics: the noise standard
+        deviation at pixel *i* is :math:`\\sqrt{\\lambda_i}`, so bright spots
+        have more absolute noise but better signal-to-noise than dim pixels.
 
         .. note::
-            Pass a **linear** (non-log-scaled) image.  Use
-            ``camera.render(..., log_scale=False)`` to obtain the raw image
-            before calling this method.
+            Pass a **linear** (non-log-scaled) image so that relative
+            intensities are preserved.  Use
+            ``camera.render(spots, log_scale=False)`` before calling this
+            method, then optionally apply log-scaling to the returned noisy
+            image for display.
 
         Parameters
         ----------
         image : numpy.ndarray, shape (Nv, Nh)
-            Linear intensity image, e.g. from :meth:`render` with
-            ``log_scale=False``.  All values must be ≥ 0.
+            Linear intensity image from :meth:`render` (``log_scale=False``).
+            All values must be ≥ 0.
         peak_counts : float
-            Expected photon count at the brightest pixel.  Higher values
-            give lower relative noise (SNR ∝ √peak_counts).
+            Expected photon count at the brightest pixel.  Controls the
+            overall exposure level and therefore the noise level:
+            SNR ∝ √peak_counts.
         rng : numpy.random.Generator or int or None
-            Random-number source.  Pass an integer seed for reproducibility
-            or ``None`` (default) to use the global NumPy RNG.
+            Random-number source.  Pass an integer seed for reproducibility,
+            or ``None`` (default) to use a fresh default RNG.
 
         Returns
         -------
         noisy : numpy.ndarray, shape (Nv, Nh), dtype float32
-            Poisson-sampled image in units of photon counts.
+            Poisson-sampled photon-count image.
 
         Examples
         --------
         >>> img_linear = camera.render(spots, log_scale=False)
         >>> img_noisy  = camera.add_poisson_noise(img_linear, peak_counts=500)
+        >>> img_display = np.log1p(img_noisy / img_noisy.max() * 1000)
         """
         img = np.asarray(image, dtype=np.float64)
-        if img.max() > 0:
-            img = img * (peak_counts / img.max())
+        img_max = img.max()
+        if img_max > 0:
+            lam = img * (float(peak_counts) / img_max)
+        else:
+            lam = img.copy()
 
         if isinstance(rng, np.random.Generator):
             gen = rng
@@ -398,7 +415,7 @@ class Camera:
         else:
             gen = np.random.default_rng(int(rng))
 
-        noisy = gen.poisson(img).astype(np.float32)
+        noisy = gen.poisson(lam).astype(np.float32)
         return noisy
 
     def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=True, normalize=False):

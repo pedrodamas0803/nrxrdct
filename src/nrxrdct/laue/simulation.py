@@ -1276,6 +1276,7 @@ def simulate_laue_stack(
     hmax=12,
     f2_thresh=1.0,
     ki_hat=None,
+    max_satellites=5,
     verbose=True,
 ):
     """
@@ -1363,10 +1364,78 @@ def simulate_laue_stack(
     if f2_thresh is None:
         f2_thresh = 0.0  # will be set after first structure factor call
 
+    # Superlattice wavevector along the stacking direction.
+    # Satellites sit at  G_hkl + m * q_SL  for integer m ≠ 0.
+    # Only meaningful when n_rep > 1 and max_satellites > 0.
+    Lambda = stack.bilayer_thickness
+    if stack.n_rep > 1 and max_satellites > 0 and Lambda > 1e-6:
+        q_SL = (2.0 * np.pi / Lambda) * stack.n_hat   # Å⁻¹, lab frame
+        sat_orders = [m for m in range(-max_satellites, max_satellites + 1) if m != 0]
+    else:
+        q_SL = None
+        sat_orders = []
+
+    # Deduplicated pixel set: avoid appending two spots within 0.5 px of each other.
+    seen_pix = set()   # set of (round(xcam), round(ycam))
+
+    def _try_append(G_vec, hkl, sat_order, phase_label):
+        """Evaluate the Laue condition + camera + F² for G_vec and append if valid."""
+        nonlocal f2_thresh
+        Gm2 = float(np.dot(G_vec, G_vec))
+        if Gm2 < 1e-20:
+            return 0
+        kdG = float(np.dot(ki, G_vec))
+        if kdG >= 0:
+            return 0
+        lam = -4.0 * np.pi * kdG / Gm2
+        if not (lam_lo <= lam <= lam_hi):
+            return 0
+        E = lam2en(lam)
+        km = 2.0 * np.pi / lam
+        kf_vec = ki * km + G_vec
+        kf_hat = kf_vec / np.linalg.norm(kf_vec)
+        pix = camera.project(kf_hat)
+        if pix is None:
+            return 0
+        # Pixel-level deduplication
+        pix_key = (round(pix[0]), round(pix[1]))
+        if pix_key in seen_pix:
+            return 0
+        tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
+        chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+        az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+        F_stack = stack.structure_factor(G_vec, energy_eV=E)
+        F2 = abs(F_stack) ** 2
+        if f2_thresh == 0.0:
+            f2_thresh = max(1.0, F2 * 1e-3)
+        if F2 < f2_thresh:
+            return 0
+        LP = lorentz_pol(tth)
+        if LP == 0.0:
+            return 0
+        sw = spectrum(E)
+        if sw <= 0.0:
+            return 0
+        seen_pix.add(pix_key)
+        spots.append({
+            "phase_label":    phase_label,
+            "hkl":            hkl,
+            "satellite_order": sat_order,
+            "G_lab":          G_vec.copy(),
+            "E": E, "lambda": lam,
+            "tth": tth, "chi": chi, "az": az,
+            "pix": pix,
+            "F2": F2, "F2_stack": F2,
+            "LP": LP, "sw": sw,
+            "I_raw": F2 * LP * sw,
+            "is_superlattice": (abs(hkl[0]) + abs(hkl[1]) + abs(hkl[2])) % 2 == 1,
+        })
+        return 1
+
     spots = []
 
     # Deduplicate: if two layers share the exact same crystal AND orientation,
-    # we only enumerate once (the stack F already includes both contributions).
+    # enumerate once — the stack F already includes both contributions.
     seen_combos = []  # list of (crystal.name, U_rounded_tuple)
 
     for layer in stack.layers:
@@ -1374,18 +1443,17 @@ def simulate_laue_stack(
         U = layer.U
         label = layer.label
 
-        # Skip enumeration if this (crystal, orientation) was already done
         u_key = (crystal.name, tuple(np.round(U, 4).ravel()))
         if u_key in seen_combos:
             if verbose:
-                print(
-                    f"  Skipping {label} (same crystal+orientation already enumerated)"
-                )
+                print(f"  Skipping {label} (same crystal+orientation already enumerated)")
             continue
         seen_combos.append(u_key)
 
         if verbose:
-            print(f"  Enumerating {label} (hmax={hmax}) ...", end="", flush=True)
+            n_sat_orders = len(sat_orders)
+            sat_info = f", ±{max_satellites} satellite orders" if n_sat_orders else ""
+            print(f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True)
 
         n_added = 0
         for h in range(-hmax, hmax + 1):
@@ -1394,77 +1462,19 @@ def simulate_laue_stack(
                     if h == 0 and k == 0 and l == 0:
                         continue
 
-                    # G in lab frame from this phase
                     G_cry = crystal.Q(h, k, l)
                     G_lab = U @ G_cry
-                    Gm2 = float(np.dot(G_lab, G_lab))
-                    kdG = float(np.dot(ki, G_lab))
 
-                    if kdG >= 0:
-                        continue
+                    # ── Main Bragg peak (satellite order 0) ───────────────
+                    n_added += _try_append(G_lab, (h, k, l), 0, label)
 
-                    # Laue wavelength
-                    lam = -4.0 * np.pi * kdG / Gm2
-                    if not (lam_lo <= lam <= lam_hi):
-                        continue
-
-                    E = lam2en(lam)
-
-                    # Scattered beam direction (in LT2 frame for camera)
-                    km = 2.0 * np.pi / lam
-                    kf_vec = ki * km + G_lab  # in LT frame
-                    kf_hat = kf_vec / np.linalg.norm(kf_vec)
-
-                    # Camera projection (camera.project expects LT frame)
-                    pix = camera.project(kf_hat)
-                    if pix is None:
-                        continue
-
-                    # 2θ and χ  (LaueTools LT convention)
-                    tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
-                    chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-                    az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-
-                    # ── FULL STACK structure factor at this Q ─────────────
-                    F_stack = stack.structure_factor(G_lab, energy_eV=E)
-                    F2 = abs(F_stack) ** 2
-                    if f2_thresh == 0.0:
-                        # Auto-scale: first valid spot sets the threshold
-                        # Use 0.1% of the first computed |F|² as floor
-                        f2_thresh = max(1.0, F2 * 1e-3)
-                    if F2 < f2_thresh:
-                        continue
-
-                    # LP and spectrum
-                    LP = lorentz_pol(tth)
-                    if LP == 0.0:
-                        continue
-                    sw = spectrum(E)
-                    if sw <= 0.0:
-                        continue
-
-                    spots.append(
-                        {
-                            "phase_label": label,
-                            "hkl": (h, k, l),
-                            "G_lab": G_lab.copy(),
-                            "E": E,
-                            "lambda": lam,
-                            "tth": tth,
-                            "chi": chi,
-                            "az": az,
-                            "pix": pix,
-                            "F2": F2,
-                            "F2_stack": F2,
-                            "LP": LP,
-                            "sw": sw,
-                            "I_raw": F2 * LP * sw,
-                            # is_superlattice: True when h+k+l is odd
-                            # (meaningful for BCC-based phases; kept for compat.)
-                            "is_superlattice": (abs(h) + abs(k) + abs(l)) % 2 == 1,
-                        }
-                    )
-                    n_added += 1
+                    # ── Superlattice satellites ───────────────────────────
+                    # Each satellite sits at G_hkl + m*(2π/Λ)*n̂ and satisfies
+                    # the Laue condition at its own wavelength within the white
+                    # beam energy window.
+                    for m in sat_orders:
+                        G_sat = G_lab + m * q_SL
+                        n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")

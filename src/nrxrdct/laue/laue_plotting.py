@@ -1726,4 +1726,267 @@ def plot_compare_spots(
                     facecolor=fig.get_facecolor())
         print(f"  Compare-spots plot saved → {out_path}")
 
-    return fig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER SCHEME
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_layer_scheme(
+    stack,
+    figsize=(10, 7),
+    layer_width=2.2,
+    max_reps=6,
+    min_display_frac=0.01,
+    ax=None,
+    out_path=None,
+):
+    """
+    Render a schematic cross-section of a LayeredCrystal stack oriented in
+    the LaueTools lab frame (x = beam direction, z = vertical up).
+
+    The view is the XZ side-plane.  Each layer is drawn as a scaled
+    parallelogram whose normal is ``stack.n_hat`` projected onto XZ.
+    Layers too thin to label inside (< ``min_display_frac`` of total height)
+    are annotated with an external callout.
+
+    Parameters
+    ----------
+    stack : LayeredCrystal
+    figsize : (float, float)
+    layer_width : float
+        Half-width of the layer slabs in display units.
+    max_reps : int
+        Maximum number of bilayer repetitions to draw.  Stacks with more
+        repetitions show an ellipsis annotation.
+    min_display_frac : float
+        Layers thinner than this fraction of the drawn stack height have
+        their label placed outside with a leader line instead of inside.
+    ax : matplotlib Axes, optional
+        Draw into an existing Axes.  If None a new figure is created.
+    out_path : str, optional
+        Save figure to this path if provided.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.patches as mpatches
+
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
+    else:
+        fig = ax.figure
+    ax.set_facecolor(BG)
+
+    # ── Stacking direction projected onto XZ ─────────────────────────────────
+    nh = np.asarray(stack.n_hat, dtype=float)
+    nh_2d = np.array([nh[0], nh[2]])           # (x, z) display components
+    norm2d = np.linalg.norm(nh_2d)
+    if norm2d < 1e-6:                           # n_hat purely along y
+        nh_2d = np.array([0.0, 1.0])
+    else:
+        nh_2d /= norm2d
+    th_2d = np.array([-nh_2d[1], nh_2d[0]])   # tangent ⊥ nh_2d in XZ
+
+    # ── Build layer list (with repetitions) ──────────────────────────────────
+    stack._update_offsets()
+    n_reps_draw = min(stack.n_rep, max_reps)
+    layers_to_draw = []                         # [(Layer, z0_global_Å)]
+    for rep in range(n_reps_draw):
+        offset = rep * stack._bilayer_thickness
+        for layer, z0_local in zip(stack.layers, stack._z_offsets):
+            layers_to_draw.append((layer, offset + z0_local))
+
+    total_drawn = n_reps_draw * stack._bilayer_thickness
+    if total_drawn < 1e-9:
+        if standalone:
+            return fig, ax
+        return ax
+
+    # ── Scaling ───────────────────────────────────────────────────────────────
+    DISP_H = 5.0                                # total drawn height in display units
+    scale  = DISP_H / total_drawn               # Å → display units
+    W      = layer_width                        # slab half-width
+
+    # ── Colour map (unique layer labels) ─────────────────────────────────────
+    unique_labels = list(dict.fromkeys(lyr.label for lyr, _ in layers_to_draw))
+    palette = plt.cm.Set2(np.linspace(0.0, 0.85, max(len(unique_labels), 1)))
+    cmap = {lbl: palette[i] for i, lbl in enumerate(unique_labels)}
+
+    # ── Draw layers ───────────────────────────────────────────────────────────
+    callout_labels = []   # [(center_xy, text)] for thin-layer callouts
+
+    for layer, z0 in layers_to_draw:
+        s0 = z0 * scale
+        s1 = (z0 + layer.thickness) * scale
+        ds = s1 - s0
+        color = cmap[layer.label]
+
+        # Parallelogram corners in (x_display, z_display)
+        c0 = s0 * nh_2d - W * th_2d
+        c1 = s0 * nh_2d + W * th_2d
+        c2 = s1 * nh_2d + W * th_2d
+        c3 = s1 * nh_2d - W * th_2d
+        poly = plt.Polygon(
+            [c0, c1, c2, c3], closed=True,
+            facecolor=color, edgecolor="white", linewidth=0.7, alpha=0.88,
+            zorder=2,
+        )
+        ax.add_patch(poly)
+
+        cx = ((s0 + s1) * 0.5) * nh_2d          # centre of parallelogram
+        thick_nm = layer.thickness / 10.0
+        label_str = f"{layer.label}\n{thick_nm:.1f} nm"
+
+        # Text rotation matches the layer surface (parallel to th_2d)
+        rot = np.degrees(np.arctan2(th_2d[1], th_2d[0]))
+
+        if ds >= min_display_frac * DISP_H:
+            ax.text(
+                cx[0], cx[1], label_str,
+                ha="center", va="center", fontsize=7.5, fontweight="bold",
+                rotation=rot, rotation_mode="anchor",
+                color="black", zorder=3, clip_on=True,
+            )
+        else:
+            # Too thin to label inside — queue a callout
+            callout_labels.append((cx, label_str, color))
+
+    # Callouts for thin layers (placed to the right of the stack)
+    if callout_labels:
+        right_edge = W * th_2d   # XZ vector to the right edge of the slab
+        offset_step = 0.45
+        for i, (cx, txt, col) in enumerate(callout_labels):
+            tip   = cx + right_edge + np.array([0.15, 0.0])
+            label_xy = tip + np.array([0.35 + i * 0.0, i * offset_step - len(callout_labels) * offset_step * 0.4])
+            ax.annotate(
+                txt,
+                xy=tip, xytext=label_xy,
+                fontsize=7, color="black", fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.2", fc=col, ec="white", lw=0.5),
+                arrowprops=dict(arrowstyle="-", color="white", lw=0.8),
+                zorder=4,
+            )
+
+    # Clipped-reps marker
+    if stack.n_rep > max_reps:
+        tip_pos = total_drawn * scale * nh_2d
+        ax.text(
+            tip_pos[0] + 0.05, tip_pos[1] + 0.12,
+            f"⋮  ({stack.n_rep} repetitions total)",
+            color=FG, fontsize=8, va="bottom", zorder=4,
+        )
+
+    # ── Incident beam arrow ───────────────────────────────────────────────────
+    # The beam (+x) hits the last layer (largest z0 = surface-facing end).
+    surf_ctr  = total_drawn * scale * nh_2d
+    beam_tip  = surf_ctr - 0.2 * nh_2d              # slightly inset
+    beam_tail = beam_tip + np.array([-2.2, 0.0])     # beam comes from -x
+    ax.annotate(
+        "", xy=beam_tip, xytext=beam_tail,
+        arrowprops=dict(arrowstyle="->", color=COL_DB, lw=2.0, mutation_scale=14),
+        zorder=5,
+    )
+    mid_beam = 0.5 * (beam_tip + beam_tail)
+    ax.text(
+        mid_beam[0], mid_beam[1] + 0.18,
+        "incident beam  (+x)",
+        color=COL_DB, fontsize=8, ha="center", va="bottom",
+    )
+
+    # ── Surface-normal arrow ──────────────────────────────────────────────────
+    n_base = surf_ctr
+    n_tip  = surf_ctr + 1.2 * nh_2d
+    ax.annotate(
+        "", xy=n_tip, xytext=n_base,
+        arrowprops=dict(arrowstyle="->", color="white", lw=1.8, mutation_scale=12),
+        zorder=5,
+    )
+    ax.text(
+        n_tip[0] + 0.1 * nh_2d[0],
+        n_tip[1] + 0.12,
+        r"$\hat{n}$  (surface normal)",
+        color="white", fontsize=9, ha="center", va="bottom",
+    )
+
+    # ── Surface / substrate edge labels ──────────────────────────────────────
+    surf_edge_r = surf_ctr + (W + 0.12) * th_2d
+    subs_edge_r = 0 * nh_2d + (W + 0.12) * th_2d
+    ax.text(surf_edge_r[0], surf_edge_r[1], "surface ▶",
+            color="#aaaaaa", fontsize=7.5, va="center", ha="left")
+    ax.text(subs_edge_r[0], subs_edge_r[1], "substrate ▶",
+            color="#aaaaaa", fontsize=7.5, va="center", ha="left")
+
+    # ── Lab frame axes (bottom-left corner) ──────────────────────────────────
+    ax_len  = 0.80
+    # Find a comfortable lower-left position
+    all_pts = np.array([s * nh_2d + sign * W * th_2d
+                        for s in [0, total_drawn * scale]
+                        for sign in [-1, 1]])
+    x_min = all_pts[:, 0].min() - 2.8
+    z_min = all_pts[:, 1].min() - 0.5
+    orig  = np.array([x_min, z_min])
+
+    def _axis_arrow(direction, color, label, label_offset):
+        end = orig + ax_len * direction
+        ax.annotate(
+            "", xy=end, xytext=orig,
+            arrowprops=dict(arrowstyle="->", color=color, lw=1.6, mutation_scale=10),
+            zorder=6,
+        )
+        lp = end + label_offset
+        ax.text(lp[0], lp[1], label, color=color, fontsize=9,
+                fontweight="bold", ha="center", va="center")
+
+    _axis_arrow(np.array([1.0, 0.0]), "#4fc3f7", "x\n(beam)",   np.array([0.22, 0.0]))
+    _axis_arrow(np.array([0.0, 1.0]), "#ff9f43", "z\n(up)",     np.array([0.0,  0.22]))
+
+    # y-axis: out-of-plane, shown as ⊙
+    ax.plot(*orig, "o", color="#88cc88", ms=8, zorder=6)
+    ax.plot(*orig, ".", color="#88cc88", ms=3, zorder=7)
+    ax.text(orig[0] - 0.22, orig[1], "y\n(out)", color="#88cc88",
+            fontsize=9, fontweight="bold", ha="center", va="center")
+
+    # ── n_hat numeric annotation ──────────────────────────────────────────────
+    nh_str = (f"$\\hat{{n}}$ = [{nh[0]:+.3f},  {nh[1]:+.3f},  {nh[2]:+.3f}]"
+              + ("  (XZ projection)" if abs(nh[1]) > 1e-3 else ""))
+    ax.text(
+        0.5, 0.01, nh_str,
+        transform=ax.transAxes, color="#8899bb", fontsize=8,
+        ha="center", va="bottom",
+    )
+
+    # ── Legend ────────────────────────────────────────────────────────────────
+    handles = [
+        mpatches.Patch(facecolor=cmap[lbl], edgecolor="white", lw=0.5, label=lbl)
+        for lbl in unique_labels
+    ]
+    ax.legend(
+        handles=handles, loc="lower right", fontsize=8.5,
+        framealpha=0.45, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+        labelcolor="white", handlelength=1.2, handleheight=0.9,
+    )
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    total_nm    = stack.total_thickness / 10.0
+    reps_note   = (f"  [{n_reps_draw}/{stack.n_rep} reps shown]"
+                   if stack.n_rep > max_reps else "")
+    ax.set_title(
+        f"{stack.name}   —   total thickness {total_nm:.1f} nm{reps_note}",
+        color=FG, fontsize=9, pad=7,
+    )
+
+    # ── Final styling ─────────────────────────────────────────────────────────
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.autoscale_view()
+
+    fig.patch.set_facecolor(BG)
+    if standalone:
+        fig.tight_layout()
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Layer scheme saved → {out_path}")
+    return fig, ax

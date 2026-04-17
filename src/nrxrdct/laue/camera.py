@@ -346,6 +346,61 @@ class Camera:
 
     # ── synthetic image ────────────────────────────────────────────────────────
 
+    def add_poisson_noise(
+        self,
+        image: "np.ndarray",
+        peak_counts: float = 1000,
+        rng: "np.random.Generator | int | None" = None,
+    ) -> "np.ndarray":
+        """
+        Apply Poissonian counting noise to a rendered detector image.
+
+        The image is first scaled so that its maximum pixel equals
+        *peak_counts* (the expected photon count at the brightest spot),
+        then each pixel is drawn independently from a Poisson distribution
+        with that expected value.
+
+        .. note::
+            Pass a **linear** (non-log-scaled) image.  Use
+            ``camera.render(..., log_scale=False)`` to obtain the raw image
+            before calling this method.
+
+        Parameters
+        ----------
+        image : numpy.ndarray, shape (Nv, Nh)
+            Linear intensity image, e.g. from :meth:`render` with
+            ``log_scale=False``.  All values must be ≥ 0.
+        peak_counts : float
+            Expected photon count at the brightest pixel.  Higher values
+            give lower relative noise (SNR ∝ √peak_counts).
+        rng : numpy.random.Generator or int or None
+            Random-number source.  Pass an integer seed for reproducibility
+            or ``None`` (default) to use the global NumPy RNG.
+
+        Returns
+        -------
+        noisy : numpy.ndarray, shape (Nv, Nh), dtype float32
+            Poisson-sampled image in units of photon counts.
+
+        Examples
+        --------
+        >>> img_linear = camera.render(spots, log_scale=False)
+        >>> img_noisy  = camera.add_poisson_noise(img_linear, peak_counts=500)
+        """
+        img = np.asarray(image, dtype=np.float64)
+        if img.max() > 0:
+            img = img * (peak_counts / img.max())
+
+        if isinstance(rng, np.random.Generator):
+            gen = rng
+        elif rng is None:
+            gen = np.random.default_rng()
+        else:
+            gen = np.random.default_rng(int(rng))
+
+        noisy = gen.poisson(img).astype(np.float32)
+        return noisy
+
     def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=True, normalize=False):
         """
         Render a synthetic detector image (float32, shape Nv x Nh).

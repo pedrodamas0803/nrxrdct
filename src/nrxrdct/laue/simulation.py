@@ -1965,8 +1965,8 @@ def print_layer_contributions(spots, n=15):
     col_w = max(12, max(len(l) for l in labels))
 
     header = (
-        f"  {'phase':12s} {'hkl':^10} {'E(keV)':>7} "
-        f"{'2th':>6} {'I/Imax':>7}  "
+        f"  {'phase':12s} {'hkl':^10} {'order':>6} {'satellite':>10} "
+        f"{'E(keV)':>7} {'2th':>6} {'I/Imax':>7}  "
         + "  ".join(f"{l[:col_w]:>{col_w}}" for l in labels)
     )
     print(f"\n  Per-layer intensity fractions  (top {n} spots)")
@@ -1976,11 +1976,14 @@ def print_layer_contributions(spots, n=15):
 
     for s in spots[:n]:
         h, k, l = s["hkl"]
+        order = s.get("satellite_order", 0)
+        sat_tag = f"m={order:+d}" if order != 0 else "—"
         fracs = "  ".join(
             f"{s['layer_I_frac'].get(lbl, 0.)*100:>{col_w}.1f}%" for lbl in labels
         )
         print(
             f"  {s['phase_label']:12s} ({h:+d}{k:+d}{l:+d})  "
+            f"{order:>6d} {sat_tag:>10s} "
             f"{s['E']/1e3:7.3f} {s['tth']:6.1f} "
             f"{s['intensity']:7.4f}  {fracs}"
         )
@@ -2036,20 +2039,22 @@ def print_spot_table(title, spots, n=15):
     print(
         f"  {'hkl':^10} {'E(keV)':>7} {'lambda(A)':>9} {'2th(deg)':>9} "
         f"{'az(deg)':>8} {'col':>6} {'row':>6} "
-        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I/Imax':>7}  type"
+        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I/Imax':>7}  satellite  type"
     )
-    print("  " + "-" * 110)
+    print("  " + "-" * 122)
     for s in spots[:n]:
         h, k, l = s["hkl"]
         c, r = s["pix"]
-        tag = "superlat." if s["is_superlattice"] else "fund."
+        order = s.get("satellite_order", 0)
+        sat_col = f"m={order:+d}" if order != 0 else "—"
+        tag = "superlat." if s.get("is_superlattice") else "fund."
         print(
             f"  ({h:+2d}{k:+2d}{l:+2d})  "
             f"{s['E']/1e3:7.3f}  {s['lambda']:9.5f}  "
             f"{s['tth']:9.3f}  {s['az']:8.2f}  "
             f"{c:6.0f}  {r:6.0f}  "
             f"{s['F2']:8.2f}  {s['LP']:7.4f}  "
-            f"{s['sw']:7.4f}  {s['intensity']:7.4f}  {tag}"
+            f"{s['sw']:7.4f}  {s['intensity']:7.4f}  {sat_col:>9s}  {tag}"
         )
 
 

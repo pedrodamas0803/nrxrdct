@@ -288,13 +288,27 @@ class Layer:
         if d_spacing is not None:
             self.d = float(d_spacing)
         else:
-            # Find the component of the c lattice vector projected onto lab z
+            # Find the primitive real-space repeat along lab Z.
+            #
+            # The geometric sum in structure_factor() uses phase  φ = Q_z · d,
+            # so d must be the smallest positive z-component of any lattice
+            # vector when rotated to the lab frame.  Using only the c-vector
+            # z-projection (old code) is wrong for orientations where c is not
+            # along lab Z (e.g. [110] stacking via KS OR: c ⊥ Z → c_lab[2]≈0
+            # → fallback to lat.c, giving φ = 2π√2 at the [110] Bragg peak
+            # instead of the correct 2π).
             lat = crystal.lattice
-            c_vec = lat._ai[2]  # c real-space vector in crystal frame
-            c_lab = self.U @ c_vec  # rotate to lab frame
-            self.d = abs(c_lab[2])  # z-component = layer spacing
-            if self.d < 1e-6:
-                # Fallback: use full |c|
+            z_comps = []
+            for vec in lat._ai:          # rows: a1, a2, a3
+                v_lab = self.U @ np.asarray(vec, dtype=float)
+                z = abs(v_lab[2])
+                if z > 1e-6:
+                    z_comps.append(z)
+            if z_comps:
+                self.d = min(z_comps)
+            else:
+                # All three lattice vectors lie in the XY plane — degenerate;
+                # fall back to |c| as a safe non-zero value.
                 self.d = lat.c
 
     @property

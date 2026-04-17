@@ -1551,3 +1551,179 @@ def plot_strain_broadening(
         print(f"  Strain broadening plot saved → {out_path}")
 
     return fig
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPARE TWO SPOT TABLES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_compare_spots(
+    spots_a,
+    spots_b,
+    *,
+    space: str = "angles",
+    label_a: str = "Set A",
+    label_b: str = "Set B",
+    E_MIN_eV: float = 5_000,
+    E_MAX_eV: float = 27_000,
+    n_label: int = 8,
+    out_path: str | None = "compare_spots.png",
+):
+    """
+    Overlay two spot tables on a single axes for direct comparison.
+
+    Parameters
+    ----------
+    spots_a, spots_b : list of dict
+        Spot dicts from :func:`~nrxrdct.laue.simulation.simulate_laue` or
+        compatible sources.  Each dict must contain:
+
+        * ``'tth'``         – 2θ in degrees
+        * ``'chi'``         – χ in degrees
+        * ``'pix'``         – ``(col, row)`` pixel coordinate on the detector
+        * ``'E'``           – photon energy in eV
+        * ``'hkl'``         – Miller indices tuple ``(h, k, l)``
+        * ``'intensity'``   – normalised intensity [0, 1]
+        * ``'is_superlattice'`` – bool
+
+    space : ``'angles'`` | ``'detector'``
+        ``'angles'``   – x-axis = 2θ (degrees), y-axis = χ (degrees).
+        ``'detector'`` – x-axis = column pixel,  y-axis = row pixel.
+
+    label_a, label_b : str
+        Legend labels for the two spot sets.
+
+    E_MIN_eV, E_MAX_eV : float
+        Energy range for the shared colour-map.
+
+    n_label : int
+        Number of strongest spots in each set to annotate with (hkl).
+
+    out_path : str or None
+        File path for the saved PNG.  ``None`` → do not save.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    if space not in ("angles", "detector"):
+        raise ValueError(f"space must be 'angles' or 'detector', got {space!r}")
+
+    # ── colour maps: Set A = cool blues, Set B = warm oranges ────────────────
+    CMAP_A = "Blues"
+    CMAP_B = "Oranges"
+    E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    def _xy(s):
+        if space == "angles":
+            return s["tth"], s["chi"]
+        else:
+            pix = s.get("pix")
+            if pix is None:
+                return None, None
+            return float(pix[0]), float(pix[1])
+
+    def _draw(spots, cmap, marker):
+        valid = [s for s in spots if _xy(s)[0] is not None]
+        if not valid:
+            return
+
+        fund = [s for s in valid if not s.get("is_superlattice")]
+        super_ = [s for s in valid if s.get("is_superlattice")]
+
+        for subset, mk, alpha in [(fund, marker, 0.85), (super_, "*", 0.75)]:
+            if not subset:
+                continue
+            xs = [_xy(s)[0] for s in subset]
+            ys = [_xy(s)[1] for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz = [max(5, 90 * s["intensity"] ** 0.4) for s in subset]
+            ax.scatter(
+                xs, ys,
+                s=sz,
+                c=Es,
+                cmap=cmap,
+                norm=E_norm,
+                alpha=alpha,
+                marker=mk,
+                linewidths=0.4,
+                zorder=3,
+            )
+
+        # Annotate n_label strongest fundamental spots
+        top = sorted(fund, key=lambda s: -s["intensity"])[:n_label]
+        for s in top:
+            h, k, l = s["hkl"]
+            x, y = _xy(s)
+            ax.annotate(
+                f"({h}{k}{l})",
+                xy=(x, y),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaddff",
+                alpha=0.9,
+            )
+
+    _draw(spots_a, CMAP_A, "o")
+    _draw(spots_b, CMAP_B, "D")
+
+    # ── colour bars ───────────────────────────────────────────────────────────
+    sm_a = plt.cm.ScalarMappable(cmap=CMAP_A, norm=E_norm)
+    sm_b = plt.cm.ScalarMappable(cmap=CMAP_B, norm=E_norm)
+    sm_a.set_array([])
+    sm_b.set_array([])
+    cb_a = fig.colorbar(sm_a, ax=ax, pad=0.01, fraction=0.035, aspect=30)
+    cb_b = fig.colorbar(sm_b, ax=ax, pad=0.08, fraction=0.035, aspect=30)
+    for cb, lbl in [(cb_a, label_a), (cb_b, label_b)]:
+        cb.set_label(f"E  (keV)  [{lbl}]", color="#7788aa", fontsize=7)
+        cb.ax.tick_params(colors="#7788aa", labelsize=6)
+        cb.outline.set_edgecolor("#1a1f2e")
+
+    # ── legend ────────────────────────────────────────────────────────────────
+    legend_elements = [
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#5bc8f5",
+               markersize=7, label=f"{label_a} – fundamental", linewidth=0),
+        Line2D([0], [0], marker="*", color="w", markerfacecolor="#5bc8f5",
+               markersize=9, label=f"{label_a} – superlattice", linewidth=0),
+        Line2D([0], [0], marker="D", color="w", markerfacecolor="#f5a845",
+               markersize=7, label=f"{label_b} – fundamental", linewidth=0),
+        Line2D([0], [0], marker="*", color="w", markerfacecolor="#f5a845",
+               markersize=9, label=f"{label_b} – superlattice", linewidth=0),
+    ]
+    ax.legend(
+        handles=legend_elements,
+        facecolor="#0d1220",
+        edgecolor="#333355",
+        labelcolor=FG,
+        fontsize=7,
+        loc="upper right",
+    )
+
+    # ── axis labels & title ───────────────────────────────────────────────────
+    if space == "angles":
+        ax.set_xlabel("2θ  (degrees)", color="#7788aa", fontsize=9)
+        ax.set_ylabel("χ  (degrees)", color="#7788aa", fontsize=9)
+        title = f"Laue spot comparison — angular space ({label_a} vs {label_b})"
+    else:
+        ax.set_xlabel("Column  (pixel)", color="#7788aa", fontsize=9)
+        ax.set_ylabel("Row  (pixel)", color="#7788aa", fontsize=9)
+        ax.invert_yaxis()   # detector rows increase downward
+        title = f"Laue spot comparison — detector space ({label_a} vs {label_b})"
+
+    ax.set_title(title, color=FG, fontsize=10, pad=8)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Compare-spots plot saved → {out_path}")
+
+    return fig

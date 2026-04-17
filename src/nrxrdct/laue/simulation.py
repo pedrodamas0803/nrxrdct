@@ -626,6 +626,416 @@ def strain_broadening(spots, crystal, U, camera,
     return result
 
 
+def fit_strain_distribution(
+    jacobians,
+    sigma_meas_pix,
+    sigma_instrument,
+    mode="isotropic",
+    min_sensitivity=0.1,
+):
+    """
+    Estimate the strain distribution from measured Laue spot widths (inverse problem).
+
+    Solves for Σ_ε given the measured semi-major broadening of each spot:
+
+    .. math::
+
+        \\sigma_{\\text{meas},k}^2 = \\sigma_{\\text{inst}}^2
+                                   + \\lambda_{\\max}(J_k \\, \\Sigma_\\varepsilon \\, J_k^\\top)
+
+    Two modes are supported:
+
+    **isotropic** — single scalar σ_ε (Σ_ε = σ²I)
+        The equation becomes linear in σ²:
+
+        .. math::
+
+            y_k = \\sigma^2 \\cdot \\lambda_{\\max}(J_k J_k^\\top)
+
+        Solved by weighted least squares over all spots.
+
+    **diagonal** — six independent variances σᵢ² (Σ_ε = diag(σ₁²,…,σ₆²))
+        λ_max is non-linear in σᵢ², so the **trace** is used as a linear proxy:
+
+        .. math::
+
+            y_k \\approx \\sum_i \\sigma_i^2 \\, \\|J_{k,i}\\|^2
+
+        (exact when the two eigenvalues of J Σ Jᵀ are equal; conservative
+        otherwise, since trace ≥ λ_max).
+        Solved by non-negative least squares (:func:`scipy.optimize.nnls`).
+
+    Parameters
+    ----------
+    jacobians : dict  {(h,k,l): ndarray (2, 6)}
+        Output of :func:`strain_spot_jacobian`.
+    sigma_meas_pix : dict  {(h,k,l): float}
+        Measured semi-major spot width (pixels, 1σ) for each indexed
+        reflection, obtained by fitting a 2-D Gaussian to the experimental
+        detector image.  Only hkl keys present in both ``jacobians`` and
+        this dict are used.
+    sigma_instrument : float or dict or result dict from :func:`estimate_instrument_broadening`
+        Instrument broadening (pixels, 1σ), subtracted in quadrature per spot.
+        Three forms are accepted:
+
+        * **float** — the same value is applied to all spots.
+        * **dict {(h,k,l): float}** — per-spot instrumental width (e.g. the
+          ``'sigma_per_spot'`` entry from :func:`estimate_instrument_broadening`).
+        * **result dict** — the full dict returned by
+          :func:`estimate_instrument_broadening`; the ``'sigma_per_spot'`` field
+          is extracted automatically.  For spots not covered by the calibrant,
+          the scalar ``'sigma_instrument'`` fallback is used.
+    mode : {'isotropic', 'diagonal'}
+        Fitting model.  ``'isotropic'`` fits a single σ_ε;
+        ``'diagonal'`` fits all six Voigt variances independently.
+    min_sensitivity : float, optional
+        Minimum RMS Jacobian magnitude (px per unit strain) required for a
+        spot to be included.  Spots with ``sqrt(mean(J**2)) < min_sensitivity``
+        are insensitive to strain and are excluded.  Default: 0.1.
+
+    Returns
+    -------
+    result : dict with keys:
+
+        ``'sigma_eps'`` : float
+            Isotropic RMS strain (scalar).  For ``mode='isotropic'`` this is
+            the direct fit result; for ``mode='diagonal'`` it is
+            ``sqrt(mean(eps_voigt_std**2))``.
+        ``'eps_voigt_std'`` : ndarray, shape (6,)
+            Per-component standard deviation
+            [σ₁₁, σ₂₂, σ₃₃, σ₂₃, σ₁₃, σ₁₂].
+            For ``mode='isotropic'`` all six entries are equal.
+        ``'Sigma_eps'`` : ndarray, shape (6, 6)
+            Fitted covariance matrix (diagonal for both modes).
+            Pass directly to :func:`strain_broadening` as ``eps_cov``.
+        ``'residuals_pix'`` : ndarray
+            Per-spot residual: measured − predicted broadening (pixels).
+        ``'hkl_used'`` : list of tuples
+            hkl indices of the spots that entered the fit.
+        ``'n_spots'`` : int
+            Number of spots used.
+        ``'mode'`` : str
+            The mode that was used.
+
+    Raises
+    ------
+    ValueError
+        If fewer than 2 spots survive the sensitivity cut.
+
+    Notes
+    -----
+    * Feed the returned ``'Sigma_eps'`` to :func:`strain_broadening` to verify
+      the fit: the predicted ``sigma_strain_pix`` values should match
+      ``sigma_meas_pix - sigma_instrument`` (in quadrature).
+    * For ``mode='diagonal'``, the system is underdetermined if fewer than
+      6 spots are available.  In that case, prefer ``mode='isotropic'``.
+    * Negative excess variance (``sigma_meas < sigma_instrument``) is clamped
+      to zero rather than treated as an error.
+
+    Example
+    -------
+    >>> # Calibrate instrument broadening from a strain-free reference
+    >>> res_cal = estimate_instrument_broadening(spots_cal, sigma_meas_cal,
+    ...                                          mode='linear_tth')
+    >>>
+    >>> # Measure spot widths from experimental image (e.g. with a 2-D Gaussian fit)
+    >>> sigma_meas = {(1,1,0): 4.2, (2,0,0): 3.8, (1,1,2): 5.1, ...}
+    >>> J = strain_spot_jacobian(spots, crystal, U, camera)
+    >>>
+    >>> # Pass the calibration result directly — per-spot σ_inst is applied
+    >>> res = fit_strain_distribution(J, sigma_meas, sigma_instrument=res_cal)
+    >>> print(f"σ_ε = {res['sigma_eps']:.2e}")
+    >>> spots_check = strain_broadening(spots, crystal, U, camera,
+    ...                                 eps_cov=res['Sigma_eps'])
+    """
+    from scipy.optimize import nnls
+
+    # ── Resolve sigma_instrument → per-spot lookup + scalar fallback ─────────
+    if isinstance(sigma_instrument, dict):
+        if "sigma_per_spot" in sigma_instrument:
+            # Full result dict from estimate_instrument_broadening
+            _per_spot = sigma_instrument["sigma_per_spot"]
+            _fallback = float(sigma_instrument.get("sigma_instrument", 0.0))
+        else:
+            # Plain {hkl: float} dict
+            _per_spot = sigma_instrument
+            _fallback = float(np.median(list(sigma_instrument.values()))) if sigma_instrument else 0.0
+    else:
+        _per_spot = {}
+        _fallback = float(sigma_instrument)
+
+    def _sig_inst(hkl):
+        return _per_spot.get(tuple(hkl), _fallback)
+
+    # ── Collect common hkl keys, apply sensitivity filter ────────────────────
+    common = set(jacobians.keys()) & set(sigma_meas_pix.keys())
+
+    rows = []   # (hkl, J, sigma_meas, sigma_inst)
+    for hkl in common:
+        J = jacobians[hkl]
+        if J is None or not np.any(J != 0):
+            continue
+        rms_J = np.sqrt(np.mean(J ** 2))
+        if rms_J < min_sensitivity:
+            continue
+        rows.append((hkl, J, float(sigma_meas_pix[hkl]), _sig_inst(hkl)))
+
+    if len(rows) < 2:
+        raise ValueError(
+            f"Only {len(rows)} spot(s) survived the sensitivity cut "
+            f"(min_sensitivity={min_sensitivity} px/unit strain). "
+            "Lower min_sensitivity or provide more measured spots."
+        )
+
+    hkl_used = [r[0] for r in rows]
+
+    # ── Per-spot excess variance: y_k = max(0, σ_meas_k² − σ_inst_k²) ───────
+    sig_inst2_arr = np.array([r[3] ** 2 for r in rows])
+    y = np.array([
+        max(0.0, r[2] ** 2 - r[3] ** 2)
+        for r in rows
+    ])
+
+    Js = [r[1] for r in rows]
+
+    # ── Mode: isotropic ───────────────────────────────────────────────────────
+    if mode == "isotropic":
+        # y_k = σ² · λ_max(J_k J_kᵀ)
+        x = np.array([np.linalg.eigvalsh(J @ J.T).max() for J in Js])
+        # Weighted least squares: σ² = (xᵀy) / (xᵀx)
+        denom = float(x @ x)
+        if denom < 1e-30:
+            raise ValueError("All Jacobian sensitivities are zero.")
+        sigma_eps2 = max(0.0, float(x @ y) / denom)
+        sigma_eps = float(np.sqrt(sigma_eps2))
+        eps_voigt_std = np.full(6, sigma_eps)
+        Sigma_eps = np.eye(6) * sigma_eps2
+
+        # Residuals
+        predicted = np.sqrt(sig_inst2_arr + x * sigma_eps2)
+        residuals = np.array([r[2] for r in rows]) - predicted
+
+    # ── Mode: diagonal ────────────────────────────────────────────────────────
+    elif mode == "diagonal":
+        # y_k ≈ Σᵢ σᵢ² · ‖J_k[:,i]‖²   (trace proxy)
+        # A[k, i] = J_k[0,i]² + J_k[1,i]²
+        A = np.array([J[0] ** 2 + J[1] ** 2 for J in Js])  # (n_spots, 6)
+        v, _ = nnls(A, y)                                    # v[i] = σᵢ²
+        eps_voigt_std = np.sqrt(v)
+        Sigma_eps = np.diag(v)
+        sigma_eps = float(np.sqrt(np.mean(v)))
+
+        # Residuals (using trace proxy for consistency)
+        predicted = np.sqrt(sig_inst2_arr + A @ v)
+        residuals = np.array([r[2] for r in rows]) - predicted
+
+    else:
+        raise ValueError(f"mode must be 'isotropic' or 'diagonal', got {mode!r}")
+
+    return {
+        "sigma_eps":      sigma_eps,
+        "eps_voigt_std":  eps_voigt_std,
+        "Sigma_eps":      Sigma_eps,
+        "residuals_pix":  residuals,
+        "hkl_used":       hkl_used,
+        "n_spots":        len(rows),
+        "mode":           mode,
+    }
+
+
+def estimate_instrument_broadening(
+    spots,
+    sigma_meas_pix,
+    mode="constant",
+    tth_range=None,
+    chi_range=None,
+    min_spots=3,
+):
+    """
+    Estimate the instrumental spot broadening from a calibrant measurement.
+
+    For a strain-free calibrant (e.g. Si, CeO₂, LaB₆), all measured spot
+    widths arise from instrumental contributions only (beam divergence, detector
+    point-spread, geometric aberrations).  This function fits a model
+    σ_instrument(2θ, χ) to those widths.
+
+    The returned scalar ``'sigma_instrument'`` (or the callable model) can be
+    passed directly to :func:`fit_strain_distribution` to subtract the
+    instrumental baseline before fitting strain.
+
+    Parameters
+    ----------
+    spots : list of dicts
+        Simulated spots for the **calibrant** crystal, from :func:`simulate_laue`.
+        Must contain ``'hkl'``, ``'two_theta'``, and ``'chi'`` keys.
+    sigma_meas_pix : dict  {(h, k, l): float}
+        Measured semi-major spot width (pixels, 1σ) for each indexed reflection
+        of the calibrant, obtained by fitting a 2-D Gaussian to the detector image.
+    mode : {'constant', 'linear_tth', 'quadratic_tth'}
+        Model for the angular dependence of instrumental broadening:
+
+        ``'constant'``
+            Single value for all spots: median of the measured widths.
+            Robust to outliers; use when the detector is well-focused.
+
+        ``'linear_tth'``
+            σ_inst(2θ) = a + b · 2θ (degrees).
+            Captures defocus that increases with scattering angle.
+
+        ``'quadratic_tth'``
+            σ_inst(2θ) = a + b · 2θ + c · 2θ².
+            Fits a second-order trend; requires ≥ 5 spots.
+
+    tth_range : (float, float), optional
+        Only include spots with 2θ in this range (degrees).
+        Useful to exclude regions where the model fit is unreliable.
+    chi_range : (float, float), optional
+        Only include spots with χ in this range (degrees).
+    min_spots : int, optional
+        Minimum number of matching spots required. Default: 3.
+
+    Returns
+    -------
+    result : dict with keys:
+
+        ``'sigma_instrument'`` : float
+            Scalar estimate of σ_instrument (pixels).
+            For ``'constant'`` mode: the median.
+            For parametric modes: the median of the fitted values at each spot.
+        ``'model'`` : callable  f(tth_deg) → float
+            Model function for σ_instrument as a function of 2θ (degrees).
+            Always returned; for ``'constant'`` mode it returns the same scalar
+            for any input.
+        ``'params'`` : ndarray
+            Fitted polynomial coefficients [a] or [a, b] or [a, b, c].
+        ``'sigma_per_spot'`` : dict  {(h,k,l): float}
+            Model-predicted σ_instrument for each spot used in the fit.
+        ``'residuals_pix'`` : ndarray
+            Measured − fitted σ_instrument per spot (pixels).
+        ``'rmse_pix'`` : float
+            Root-mean-square of residuals (pixels).
+        ``'hkl_used'`` : list of tuples
+            hkl of the spots that entered the fit.
+        ``'n_spots'`` : int
+            Number of spots used.
+        ``'mode'`` : str
+            The mode that was used.
+
+    Raises
+    ------
+    ValueError
+        If fewer than ``min_spots`` spots match (wrong hkl, out of range filters,
+        or too few calibrant reflections on the detector).
+
+    Notes
+    -----
+    * Robust to a few outlier spots in ``'constant'`` mode (median used).
+    * For parametric modes the fit is an ordinary least-squares polynomial;
+      strongly deviant spots can be manually excluded via ``tth_range``.
+    * The model is evaluated at 2θ only.  If broadening has a strong χ
+      dependence (e.g. astigmatism), measure and apply it separately.
+    * A good calibrant should have sharp, well-separated spots with low
+      absorption and no texture — Si (powder or single crystal cut along
+      low-index direction), CeO₂, LaB₆, or Al₂O₃ are common choices.
+
+    Example
+    -------
+    >>> # Simulate calibrant spots
+    >>> si = crystal_from_cif('silicon.cif')
+    >>> U_si = np.eye(3)  # known orientation
+    >>> spots_cal = simulate_laue(si, U_si, camera)
+    >>>
+    >>> # Measure widths from experiment
+    >>> sigma_meas_cal = {(1,1,1): 2.3, (2,2,0): 2.8, (3,1,1): 3.1,
+    ...                   (4,0,0): 3.5, (3,3,1): 3.4}
+    >>>
+    >>> res = estimate_instrument_broadening(
+    ...     spots_cal, sigma_meas_cal, mode='linear_tth')
+    >>> print(f"σ_inst(2θ=30°) = {res['model'](30):.2f} px")
+    >>>
+    >>> # Use in strain fitting
+    >>> sigma_inst_fn = res['model']   # or res['sigma_instrument'] (scalar)
+    >>> J = strain_spot_jacobian(spots_sample, crystal, U, camera)
+    >>> # Build per-spot sigma_instrument dict for fit_strain_distribution:
+    >>> sigma_inst_per_spot = {
+    ...     hkl: sigma_inst_fn(spots_sample_dict[hkl]['two_theta'])
+    ...     for hkl in J}
+    """
+    # ── Build a lookup: hkl → (two_theta, chi) from simulated spots ──────────
+    spot_info = {}
+    for s in spots:
+        hkl = tuple(s["hkl"])
+        spot_info[hkl] = (float(s["two_theta"]), float(s["chi"]))
+
+    # ── Intersect with measured keys ──────────────────────────────────────────
+    common = set(spot_info.keys()) & set(sigma_meas_pix.keys())
+
+    rows = []  # (hkl, tth, chi, sigma_meas)
+    for hkl in common:
+        tth, chi = spot_info[hkl]
+        if tth_range is not None and not (tth_range[0] <= tth <= tth_range[1]):
+            continue
+        if chi_range is not None and not (chi_range[0] <= chi <= chi_range[1]):
+            continue
+        rows.append((hkl, tth, chi, float(sigma_meas_pix[hkl])))
+
+    if len(rows) < min_spots:
+        raise ValueError(
+            f"Only {len(rows)} calibrant spot(s) matched (need ≥ {min_spots}). "
+            "Check that sigma_meas_pix keys match the hkl in spots, "
+            "or relax tth_range / chi_range."
+        )
+
+    hkl_used = [r[0] for r in rows]
+    tth_arr = np.array([r[1] for r in rows])
+    sigma_arr = np.array([r[3] for r in rows])
+
+    # ── Fit model ─────────────────────────────────────────────────────────────
+    if mode == "constant":
+        params = np.array([float(np.median(sigma_arr))])
+
+        def model(_tth_deg):
+            return float(params[0])
+
+    elif mode in ("linear_tth", "quadratic_tth"):
+        deg = 1 if mode == "linear_tth" else 2
+        if len(rows) < deg + 2:
+            raise ValueError(
+                f"mode='{mode}' requires ≥ {deg + 2} spots, got {len(rows)}."
+            )
+        params = np.polyfit(tth_arr, sigma_arr, deg)
+
+        def model(tth_deg, _p=params):
+            return float(np.polyval(_p, tth_deg))
+
+    else:
+        raise ValueError(
+            f"mode must be 'constant', 'linear_tth', or 'quadratic_tth', got {mode!r}"
+        )
+
+    # ── Evaluate model at each spot ───────────────────────────────────────────
+    fitted = np.array([model(t) for t in tth_arr])
+    residuals = sigma_arr - fitted
+    rmse = float(np.sqrt(np.mean(residuals ** 2)))
+
+    sigma_per_spot = {hkl: float(model(tth)) for hkl, tth, *_ in rows}
+
+    # Scalar summary: median of fitted values (constant mode → same as params[0])
+    sigma_instrument = float(np.median(fitted))
+
+    return {
+        "sigma_instrument": sigma_instrument,
+        "model":            model,
+        "params":           params,
+        "sigma_per_spot":   sigma_per_spot,
+        "residuals_pix":    residuals,
+        "rmse_pix":         rmse,
+        "hkl_used":         hkl_used,
+        "n_spots":          len(rows),
+        "mode":             mode,
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CORE LAUE SIMULATION
 # ─────────────────────────────────────────────────────────────────────────────

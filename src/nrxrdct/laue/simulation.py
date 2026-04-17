@@ -1446,7 +1446,10 @@ def simulate_laue_stack(
         F2 = abs(F_stack) ** 2
         if f2_thresh == 0.0:
             f2_thresh = max(1.0, F2 * 1e-3)
-        if F2 < f2_thresh:
+        # Satellites are intrinsically weaker than Bragg peaks (F² ∝ N instead
+        # of N²), so apply a relaxed threshold for fringe / satellite spots.
+        effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
+        if F2 < effective_thresh:
             return 0
         LP = lorentz_pol(tth)
         if LP == 0.0:
@@ -1518,12 +1521,19 @@ def simulate_laue_stack(
                     n_added += _try_append(G_lab, (h, k, l), 0, label)
 
                     # ── Thickness fringes / satellites ───────────────────
-                    # Each satellite sits at G_hkl + m*(2π/t)*n̂ for every
-                    # registered fringe period and satisfies the Laue condition
-                    # at its own wavelength within the white-beam energy window.
+                    # The Laue interference function for a slab of N unit cells
+                    # has F_slab = sin(N·φ/2)/sin(φ/2).  At integer multiples
+                    # Δqₙ = m·(2π/t) the function is ZERO (dark fringes between
+                    # Bragg peaks).  The observable MAXIMA (bright fringes) sit
+                    # at approximately Δqₙ ≈ (|m|+½)·(2π/t):
+                    #
+                    #   m=±1 → first  fringe at ≈ ±1.5·(2π/t)
+                    #   m=±2 → second fringe at ≈ ±2.5·(2π/t)
+                    #   …
                     for q_fringe_vec, _ in fringe_q_vecs:
                         for m in sat_orders:
-                            G_sat = G_lab + m * q_fringe_vec
+                            frac = m + 0.5 if m > 0 else m - 0.5
+                            G_sat = G_lab + frac * q_fringe_vec
                             n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:

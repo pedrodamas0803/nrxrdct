@@ -272,44 +272,53 @@ class Layer:
     crystal     : xu.materials.Crystal
     U           : (3,3) orientation matrix   G_lab = U @ G_crystal
     n_cells     : int   number of unit cells along the stacking direction
+    n_hat       : array-like (3,), optional
+        Unit vector in the **lab frame** that defines the stacking / growth
+        direction (the sample-surface normal).  Defaults to ``[0, 0, 1]``
+        (lab Z), which is correct when ``U`` was obtained from
+        ``orientation_along_z``.  When ``U`` comes from a Laue indexation
+        result, pass the growth-direction vector explicitly:
+        ``n_hat = U @ growth_dir_crystal``  (e.g. ``U @ [0,0,1]`` for GaN
+        grown along its c-axis).
     d_spacing   : float, optional
         Repeat distance along the stacking direction (Å).
-        If None, the component of the c lattice vector along lab-z is used,
-        or the smallest d-spacing relevant to the zone axis.
+        If ``None``, computed as the primitive lattice repeat along ``n_hat``.
     label       : str, optional   name for this layer
     """
 
-    def __init__(self, crystal, U, n_cells, d_spacing=None, label=None):
+    def __init__(self, crystal, U, n_cells, n_hat=None, d_spacing=None, label=None):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
         self.n_cells = int(n_cells)
         self.label = label or crystal.name
 
+        if n_hat is None:
+            self.n_hat = np.array([0., 0., 1.])
+        else:
+            nh = np.asarray(n_hat, dtype=float)
+            self.n_hat = nh / np.linalg.norm(nh)
+
         if d_spacing is not None:
             self.d = float(d_spacing)
         else:
-            # Find the primitive real-space repeat along lab Z.
+            # Find the primitive real-space repeat along the stacking direction
+            # n_hat.  The geometric sum uses phase φ = (Q · n_hat) · d, so d
+            # must equal the smallest positive projection of any lattice vector
+            # onto n_hat.
             #
-            # The geometric sum in structure_factor() uses phase  φ = Q_z · d,
-            # so d must be the smallest positive z-component of any lattice
-            # vector when rotated to the lab frame.  Using only the c-vector
-            # z-projection (old code) is wrong for orientations where c is not
-            # along lab Z (e.g. [110] stacking via KS OR: c ⊥ Z → c_lab[2]≈0
-            # → fallback to lat.c, giving φ = 2π√2 at the [110] Bragg peak
-            # instead of the correct 2π).
+            # This is correct for any stacking orientation:
+            #   [001] stacking (n_hat = Z):   d = c_param
+            #   [110] stacking (n_hat = U@[110]):  d = a/√2  for cubic
+            #   U from Laue indexation + growth dir [001]:
+            #       n_hat = U @ [0,0,1],  d = projection of c onto n_hat
             lat = crystal.lattice
-            z_comps = []
+            proj = []
             for vec in lat._ai:          # rows: a1, a2, a3
                 v_lab = self.U @ np.asarray(vec, dtype=float)
-                z = abs(v_lab[2])
-                if z > 1e-6:
-                    z_comps.append(z)
-            if z_comps:
-                self.d = min(z_comps)
-            else:
-                # All three lattice vectors lie in the XY plane — degenerate;
-                # fall back to |c| as a safe non-zero value.
-                self.d = lat.c
+                p = abs(float(np.dot(v_lab, self.n_hat)))
+                if p > 1e-6:
+                    proj.append(p)
+            self.d = min(proj) if proj else lat.c
 
     @property
     def thickness(self):
@@ -320,14 +329,16 @@ class Layer:
         """
         Kinematical structure factor of this layer at scattering vector Q_lab.
 
-        F_layer(Q) = F_uc(Q_crystal) · Σ_{n=0}^{N-1} exp(i Q_z (z0 + n·d))
-                   = F_uc(Q_crystal) · exp(i Q_z z0) · geo_sum(Q_z·d, N)
+        F_layer(Q) = F_uc(Q_crystal) · Σ_{n=0}^{N-1} exp(i (Q·n̂)(z0 + n·d))
+
+        The phase uses the projection of Q onto the stacking direction ``n_hat``
+        (not Q_z), so the result is correct for any sample orientation.
 
         Parameters
         ----------
         Q_lab    : array-like (3,)   scattering vector in lab frame  (Å⁻¹)
         energy_eV: float             photon energy  (eV)
-        z0       : float             cumulative z-offset of this layer  (Å)
+        z0       : float             cumulative offset along n_hat (Å)
 
         Returns
         -------
@@ -343,9 +354,9 @@ class Layer:
         if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
             return 0.0 + 0j  # Q outside Cromer-Mann range
 
-        # Geometric sum along z
-        Qz = Q[2]
-        phi = Qz * self.d
+        # Projection of Q onto the stacking direction
+        Qn = float(np.dot(Q, self.n_hat))
+        phi = Qn * self.d
 
         phi_mod = phi % (2.0 * np.pi)
         if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
@@ -353,7 +364,7 @@ class Layer:
         else:
             geo_sum = (1.0 - np.exp(1j * self.n_cells * phi)) / (1.0 - np.exp(1j * phi))
 
-        phase_z0 = np.exp(1j * Qz * z0)
+        phase_z0 = np.exp(1j * Qn * z0)
         return F_uc * phase_z0 * geo_sum
 
     def __repr__(self):
@@ -373,29 +384,50 @@ class LayeredCrystal:
     A stack of crystalline layers with specified orientations,
     optionally repeated as a superlattice.
 
-    The stacking direction is always the lab +z axis.
+    The stacking direction is a lab-frame unit vector ``n_hat`` (default
+    ``[0, 0, 1]``, i.e. lab Z).  All phase calculations use the projection
+    ``Q · n_hat`` rather than ``Q_z``, so the structure factor is correct
+    regardless of how the sample sits on the diffractometer.
 
-    Example
-    -------
+    Parameters
+    ----------
+    name : str, optional
+    stacking_direction : array-like (3,), optional
+        Unit vector in the **lab frame** defining the growth / stacking
+        direction (sample-surface normal).
+
+        - When all ``U`` matrices come from ``orientation_along_z``, the
+          stacking direction is lab Z and the default ``[0, 0, 1]`` is correct.
+        - When ``U`` comes from a Laue indexation result, pass the actual
+          growth direction:  ``stacking_direction = U @ growth_dir_crystal``
+          (e.g. ``U @ [0, 0, 1]`` for GaN grown along its c-axis).
+
+    Example — using orientation_along_z (default n_hat = Z)
+    --------------------------------------------------------
     >>> stack = LayeredCrystal(name='Fe/Cu KS superlattice')
     >>> stack.add_layer(Fe, U_Fe, n_cells=20, label='Fe')
     >>> stack.add_layer(Cu, U_Cu, n_cells=20, label='Cu')
-    >>> stack.set_repetitions(10)          # 10 bilayer repetitions
-    >>>
-    >>> # Structure factor at a single Q
-    >>> F = stack.structure_factor([0, 0, 3.09], energy_eV=17000)
-    >>>
-    >>> # Intensity along a qz scan
-    >>> qz   = np.linspace(1.0, 6.0, 4000)
-    >>> Q_arr = np.column_stack([np.zeros((len(qz), 2)), qz])
-    >>> I     = stack.intensity(Q_arr, energy_eV=17000)
+    >>> stack.set_repetitions(10)
+
+    Example — using a U matrix from Laue indexation (GaN grown along c)
+    --------------------------------------------------------------------
+    >>> n_hat = U_GaN @ np.array([0., 0., 1.])   # growth dir in lab frame
+    >>> stack = LayeredCrystal(name='GaN/InGaN', stacking_direction=n_hat)
+    >>> stack.add_layer(GaN,   U_GaN,   n_cells=1000, label='GaN')
+    >>> stack.add_layer(InGaN, U_InGaN, n_cells=50,   label='InGaN')
     """
 
-    def __init__(self, name="layered_crystal"):
+    def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
         self.layers = []  # list of Layer objects (one bilayer unit)
         self.n_rep = 1  # number of bilayer repetitions
-        self._z_offsets = []  # cumulative z of each layer in one bilayer
+        self._z_offsets = []  # cumulative offsets along n_hat
+
+        if stacking_direction is None:
+            self.n_hat = np.array([0., 0., 1.])
+        else:
+            nh = np.asarray(stacking_direction, dtype=float)
+            self.n_hat = nh / np.linalg.norm(nh)
 
     # ── Building the stack ────────────────────────────────────────────────────
 
@@ -411,7 +443,8 @@ class LayeredCrystal:
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
         """
-        layer = Layer(crystal, U, n_cells, d_spacing=d_spacing, label=label)
+        layer = Layer(crystal, U, n_cells,
+                      n_hat=self.n_hat, d_spacing=d_spacing, label=label)
         self.layers.append(layer)
         self._update_offsets()
         return self
@@ -454,7 +487,7 @@ class LayeredCrystal:
         where S_rep is the geometric factor for N_rep repetitions of the
         bilayer with period Λ:
 
-            S_rep(Q) = Σ_{m=0}^{N_rep-1} exp(i m Q_z Λ)
+            S_rep(Q) = Σ_{m=0}^{N_rep-1} exp(i m (Q·n̂) Λ)
 
         Parameters
         ----------
@@ -467,7 +500,7 @@ class LayeredCrystal:
         """
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
-        Qz = Q[2]
+        Qn = float(np.dot(Q, self.n_hat))   # projection onto stacking direction
 
         # Sum over layers within one bilayer
         F_bilayer = 0.0 + 0j
@@ -476,7 +509,7 @@ class LayeredCrystal:
 
         # Geometric sum over N_rep bilayer repetitions
         Lambda = self._bilayer_thickness
-        phi_rep = Qz * Lambda
+        phi_rep = Qn * Lambda
         phi_mod = phi_rep % (2.0 * np.pi)
         if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
             S_rep = self.n_rep + 0j
@@ -532,8 +565,10 @@ class LayeredCrystal:
         """Print a summary of the stack."""
         self._update_offsets()
         Lambda = self._bilayer_thickness
+        nh = self.n_hat
         print(f"\n  LayeredCrystal: '{self.name}'")
         print(f"  {'─'*52}")
+        print(f"  Stacking direction (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]")
         print(f"  Layers in bilayer unit:")
         for i, (layer, z0) in enumerate(zip(self.layers, self._z_offsets)):
             lat = layer.crystal.lattice

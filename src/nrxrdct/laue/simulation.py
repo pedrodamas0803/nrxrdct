@@ -244,18 +244,18 @@ def beam_in_crystal(U):
 # LaueTools stores matstarlab in LT2 (y//beam, OR/XMAS frame).
 # simulate_laue works in LT (x//beam, LaueTools public frame).
 #   x_LT = y_LT2,  y_LT = -x_LT2,  z_LT = z_LT2
-_R_LT2_TO_LT = np.array([[0.0,  1.0, 0.0],
-                          [-1.0, 0.0, 0.0],
-                          [0.0,  0.0, 1.0]])
+_R_LT2_TO_LT = np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
 
 def _build_B0(crystal):
     """Return the 3×3 reference reciprocal-lattice matrix B0 (with 2π, crystal frame)."""
-    return np.column_stack([
-        crystal.Q(1, 0, 0),
-        crystal.Q(0, 1, 0),
-        crystal.Q(0, 0, 1),
-    ])
+    return np.column_stack(
+        [
+            crystal.Q(1, 0, 0),
+            crystal.Q(0, 1, 0),
+            crystal.Q(0, 0, 1),
+        ]
+    )
 
 
 def _matstarlab_to_F(matstarlab, crystal):
@@ -380,10 +380,16 @@ def decompose_matstarlab(matstarlab, crystal):
     eps = P - np.eye(3)
 
     # Voigt: [e11, e22, e33, e23, e13, e12]
-    eps_voigt = np.array([
-        eps[0, 0], eps[1, 1], eps[2, 2],
-        eps[1, 2], eps[0, 2], eps[0, 1],
-    ])
+    eps_voigt = np.array(
+        [
+            eps[0, 0],
+            eps[1, 1],
+            eps[2, 2],
+            eps[1, 2],
+            eps[0, 2],
+            eps[0, 1],
+        ]
+    )
 
     return U, F, eps, eps_voigt
 
@@ -533,8 +539,9 @@ def strain_spot_jacobian(spots, crystal, U, camera, eps_step=1e-5):
     return jacobians
 
 
-def strain_broadening(spots, crystal, U, camera,
-                      eps_voigt_std=1e-3, eps_cov=None, eps_step=1e-5):
+def strain_broadening(
+    spots, crystal, U, camera, eps_voigt_std=1e-3, eps_cov=None, eps_step=1e-5
+):
     """
     Estimate the pixel-space broadening of each Laue spot due to strain.
 
@@ -602,7 +609,7 @@ def strain_broadening(spots, crystal, U, camera,
         Sigma_eps = np.asarray(eps_cov, dtype=float)
     else:
         std = np.broadcast_to(np.asarray(eps_voigt_std, dtype=float), (6,))
-        Sigma_eps = np.diag(std ** 2)
+        Sigma_eps = np.diag(std**2)
 
     jacobians = strain_spot_jacobian(spots, crystal, U, camera, eps_step=eps_step)
 
@@ -613,7 +620,7 @@ def strain_broadening(spots, crystal, U, camera,
         if J is not None and np.any(J != 0):
             cov_pix = J @ Sigma_eps @ J.T  # (2,2)
             eigvals = np.linalg.eigvalsh(cov_pix)
-            eigvals = np.maximum(eigvals, 0.0)   # numerical guard
+            eigvals = np.maximum(eigvals, 0.0)  # numerical guard
             s["sigma_strain_pix"] = float(np.sqrt(eigvals.max()))
             s["sigma_strain_minor"] = float(np.sqrt(eigvals.min()))
             s["cov_pix"] = cov_pix
@@ -759,7 +766,11 @@ def fit_strain_distribution(
         else:
             # Plain {hkl: float} dict
             _per_spot = sigma_instrument
-            _fallback = float(np.median(list(sigma_instrument.values()))) if sigma_instrument else 0.0
+            _fallback = (
+                float(np.median(list(sigma_instrument.values())))
+                if sigma_instrument
+                else 0.0
+            )
     else:
         _per_spot = {}
         _fallback = float(sigma_instrument)
@@ -770,12 +781,12 @@ def fit_strain_distribution(
     # ── Collect common hkl keys, apply sensitivity filter ────────────────────
     common = set(jacobians.keys()) & set(sigma_meas_pix.keys())
 
-    rows = []   # (hkl, J, sigma_meas, sigma_inst)
+    rows = []  # (hkl, J, sigma_meas, sigma_inst)
     for hkl in common:
         J = jacobians[hkl]
         if J is None or not np.any(J != 0):
             continue
-        rms_J = np.sqrt(np.mean(J ** 2))
+        rms_J = np.sqrt(np.mean(J**2))
         if rms_J < min_sensitivity:
             continue
         rows.append((hkl, J, float(sigma_meas_pix[hkl]), _sig_inst(hkl)))
@@ -791,10 +802,7 @@ def fit_strain_distribution(
 
     # ── Per-spot excess variance: y_k = max(0, σ_meas_k² − σ_inst_k²) ───────
     sig_inst2_arr = np.array([r[3] ** 2 for r in rows])
-    y = np.array([
-        max(0.0, r[2] ** 2 - r[3] ** 2)
-        for r in rows
-    ])
+    y = np.array([max(0.0, r[2] ** 2 - r[3] ** 2) for r in rows])
 
     Js = [r[1] for r in rows]
 
@@ -820,7 +828,7 @@ def fit_strain_distribution(
         # y_k ≈ Σᵢ σᵢ² · ‖J_k[:,i]‖²   (trace proxy)
         # A[k, i] = J_k[0,i]² + J_k[1,i]²
         A = np.array([J[0] ** 2 + J[1] ** 2 for J in Js])  # (n_spots, 6)
-        v, _ = nnls(A, y)                                    # v[i] = σᵢ²
+        v, _ = nnls(A, y)  # v[i] = σᵢ²
         eps_voigt_std = np.sqrt(v)
         Sigma_eps = np.diag(v)
         sigma_eps = float(np.sqrt(np.mean(v)))
@@ -833,13 +841,13 @@ def fit_strain_distribution(
         raise ValueError(f"mode must be 'isotropic' or 'diagonal', got {mode!r}")
 
     return {
-        "sigma_eps":      sigma_eps,
-        "eps_voigt_std":  eps_voigt_std,
-        "Sigma_eps":      Sigma_eps,
-        "residuals_pix":  residuals,
-        "hkl_used":       hkl_used,
-        "n_spots":        len(rows),
-        "mode":           mode,
+        "sigma_eps": sigma_eps,
+        "eps_voigt_std": eps_voigt_std,
+        "Sigma_eps": Sigma_eps,
+        "residuals_pix": residuals,
+        "hkl_used": hkl_used,
+        "n_spots": len(rows),
+        "mode": mode,
     }
 
 
@@ -1016,7 +1024,7 @@ def estimate_instrument_broadening(
     # ── Evaluate model at each spot ───────────────────────────────────────────
     fitted = np.array([model(t) for t in tth_arr])
     residuals = sigma_arr - fitted
-    rmse = float(np.sqrt(np.mean(residuals ** 2)))
+    rmse = float(np.sqrt(np.mean(residuals**2)))
 
     sigma_per_spot = {hkl: float(model(tth)) for hkl, tth, *_ in rows}
 
@@ -1025,14 +1033,14 @@ def estimate_instrument_broadening(
 
     return {
         "sigma_instrument": sigma_instrument,
-        "model":            model,
-        "params":           params,
-        "sigma_per_spot":   sigma_per_spot,
-        "residuals_pix":    residuals,
-        "rmse_pix":         rmse,
-        "hkl_used":         hkl_used,
-        "n_spots":          len(rows),
-        "mode":             mode,
+        "model": model,
+        "params": params,
+        "sigma_per_spot": sigma_per_spot,
+        "residuals_pix": residuals,
+        "rmse_pix": rmse,
+        "hkl_used": hkl_used,
+        "n_spots": len(rows),
+        "mode": mode,
     }
 
 
@@ -1262,7 +1270,7 @@ def simulate_laue_stack(
     stack,
     camera,
     E_min_eV=5_000,
-    E_max_eV=80_000,
+    E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
     hmax=12,
@@ -1282,9 +1290,9 @@ def simulate_laue_stack(
     Parameters
     ----------
     stack : LayeredCrystal
-        The layered structure (from layered_structure_factor.py).
+        The layered structure (from layers.py).
     camera : Camera
-        Detector geometry (from laue_white_synchrotron.py).
+        Detector geometry (from camera.py).
     E_min_eV, E_max_eV : float
         Energy window  (eV).
     source : str
@@ -1488,7 +1496,7 @@ def simulate_mixed_phases(
     phases,
     camera,
     E_min_eV=5_000,
-    E_max_eV=80_000,
+    E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
     hmax=12,

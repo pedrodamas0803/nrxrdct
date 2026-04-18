@@ -2669,6 +2669,7 @@ def plot_tth_chi_overlay(
     camera,
     spots=None,
     *,
+    frame: str = "tth_chi",
     tth_range=None,
     chi_range=None,
     n_tth: int = 600,
@@ -2683,12 +2684,21 @@ def plot_tth_chi_overlay(
     out_path: str | None = None,
 ):
     """
-    Overlay simulated spot positions on a detector image, both in 2θ / χ space.
+    Overlay simulated spot positions on a detector image.
 
-    The detector image is first warped from pixel coordinates into an evenly-
-    spaced 2θ / χ grid using :func:`warp_image_to_tth_chi`, then displayed
-    with :func:`matplotlib.axes.Axes.imshow`.  Simulated spots (from any
-    ``simulate_laue*`` function) are scatter-plotted on top in the same frame.
+    Two display frames are available via the *frame* parameter:
+
+    * ``'tth_chi'`` *(default)* — the detector image is warped from pixel
+      coordinates into an evenly-spaced 2θ / χ grid using
+      :func:`warp_image_to_tth_chi`, and simulated spots are overlaid at
+      their angular positions.
+    * ``'detector'`` — the raw pixel image is displayed without any
+      remapping.  Simulated spots are projected to detector pixel coordinates
+      (using the ``'pix'`` key when present, or back-projected from their
+      2θ / χ angles via :meth:`~Camera.kf_to_pixel`).
+
+    Hovering over a spot in either frame shows the same tooltip (hkl, 2θ,
+    χ, energy, intensity, reflection type, phase).
 
     Parameters
     ----------
@@ -2701,12 +2711,15 @@ def plot_tth_chi_overlay(
         :func:`~nrxrdct.laue.simulate_laue_stack`, or
         :func:`~nrxrdct.laue.simulate_mixed_phases`.
         Required keys: ``'tth'``, ``'chi'``.
+    frame : ``'tth_chi'`` | ``'detector'``
+        Coordinate frame for the display (see above).
     tth_range, chi_range : (float, float), optional
-        Angular range to display.  Defaults to full detector coverage.
+        Angular range to display (*tth_chi* frame only).
+        Defaults to full detector coverage.
     n_tth, n_chi : int
-        Warp output resolution.
+        Warp output resolution (*tth_chi* frame only).
     log_scale : bool
-        Apply ``log1p`` scaling to the warped image before display.
+        Apply ``log1p`` scaling to the image before display.
     cmap : str
         Matplotlib colormap for the image.
     spot_marker : str
@@ -2726,43 +2739,89 @@ def plot_tth_chi_overlay(
     -------
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
-    warped : ndarray  (the remapped image array)
+    display_image : ndarray
+        The image array that was actually plotted — the warped 2θ / χ grid
+        when ``frame='tth_chi'``, or the (optionally log-scaled) raw pixel
+        image when ``frame='detector'``.
     """
-    # ── Warp ─────────────────────────────────────────────────────────────────
-    warped, tth_ax, chi_ax = warp_image_to_tth_chi(
-        image, camera,
-        tth_range=tth_range, chi_range=chi_range,
-        n_tth=n_tth, n_chi=n_chi,
-    )
-
-    # ── Display image ─────────────────────────────────────────────────────────
-    display = np.where(np.isnan(warped), 0.0, warped)
-    if log_scale and display.max() > 0:
-        display = np.log1p(display / display.max() * 1000.0)
-    display[np.isnan(warped)] = np.nan
+    if frame not in ("tth_chi", "detector"):
+        raise ValueError(f"frame must be 'tth_chi' or 'detector', got {frame!r}")
 
     fig, ax = plt.subplots(figsize=figsize)
     fig.patch.set_facecolor(BG)
     ax.set_facecolor("#000000")
 
-    extent = [tth_ax[0], tth_ax[-1], chi_ax[0], chi_ax[-1]]
-    im = ax.imshow(
-        display,
-        origin="lower",
-        aspect="auto",
-        extent=extent,
-        cmap=cmap,
-        interpolation="nearest",
-    )
+    # ── Image ─────────────────────────────────────────────────────────────────
+    if frame == "tth_chi":
+        warped, tth_ax, chi_ax = warp_image_to_tth_chi(
+            image, camera,
+            tth_range=tth_range, chi_range=chi_range,
+            n_tth=n_tth, n_chi=n_chi,
+        )
+        display = np.where(np.isnan(warped), 0.0, warped)
+        if log_scale and display.max() > 0:
+            display = np.log1p(display / display.max() * 1000.0)
+        display[np.isnan(warped)] = np.nan
+        extent = [tth_ax[0], tth_ax[-1], chi_ax[0], chi_ax[-1]]
+        im = ax.imshow(display, origin="lower", aspect="auto",
+                       extent=extent, cmap=cmap, interpolation="nearest")
+        ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=9)
+        ax.set_ylabel("χ  (°)", color="#7788aa", fontsize=9)
+        frame_label = "2θ / χ frame"
+    else:  # 'detector'
+        raw = np.asarray(image, dtype=np.float64)
+        display = raw.copy()
+        if log_scale and display.max() > 0:
+            display = np.log1p(display / display.max() * 1000.0)
+        # imshow with pixel-coordinate extent; origin='upper' so row 0 is at top
+        im = ax.imshow(display, origin="upper", aspect="equal",
+                       extent=[0, camera.Nh, camera.Nv, 0],
+                       cmap=cmap, interpolation="nearest")
+        ax.set_xlabel("x  (px)", color="#7788aa", fontsize=9)
+        ax.set_ylabel("y  (px)", color="#7788aa", fontsize=9)
+        frame_label = "detector frame"
+
     cb = fig.colorbar(im, ax=ax, pad=0.02, fraction=0.025)
     cb.set_label("log intensity" if log_scale else "intensity",
                  color=FG, fontsize=8)
     cb.ax.tick_params(colors="#7788aa", labelsize=7)
 
     # ── Overlay spots ─────────────────────────────────────────────────────────
+    lc = {}
+    unique = []
     if spots:
-        tths = np.array([s["tth"] for s in spots])
-        chis = np.array([s["chi"] for s in spots])
+        if frame == "tth_chi":
+            xs = np.array([s["tth"] for s in spots])
+            ys = np.array([s["chi"] for s in spots])
+        else:
+            # Prefer pre-computed pixel positions; fall back to projection
+            xs_list, ys_list = [], []
+            for s in spots:
+                pix = s.get("pix")
+                if pix is not None:
+                    xs_list.append(pix[0])
+                    ys_list.append(pix[1])
+                else:
+                    tth_r = np.radians(s["tth"])
+                    chi_r = np.radians(s["chi"])
+                    st = np.sin(tth_r)
+                    kf = np.array([[np.cos(tth_r),
+                                    st * np.sin(chi_r),
+                                    st * np.cos(chi_r)]])
+                    xc, yc = camera.kf_to_pixel(kf)
+                    xs_list.append(float(xc[0]))
+                    ys_list.append(float(yc[0]))
+            xs = np.array(xs_list)
+            ys = np.array(ys_list)
+            # Drop spots that project off the detector
+            on_det = (
+                np.isfinite(xs) & np.isfinite(ys)
+                & (xs >= 0) & (xs < camera.Nh)
+                & (ys >= 0) & (ys < camera.Nv)
+            )
+            spots = [s for s, ok in zip(spots, on_det) if ok]
+            xs = xs[on_det]
+            ys = ys[on_det]
 
         if spot_color is not None:
             colors = spot_color
@@ -2783,22 +2842,13 @@ def plot_tth_chi_overlay(
         else:
             colors = "#ff4444"
 
-        ax.scatter(
-            tths, chis,
-            c=colors,
-            s=spot_size,
-            marker=spot_marker,
-            linewidths=0.9,
-            zorder=4,
-            label="simulated spots",
-        )
+        ax.scatter(xs, ys, c=colors, s=spot_size, marker=spot_marker,
+                   linewidths=0.9, zorder=4, label="simulated spots")
 
-        # ── Hover tooltip ─────────────────────────────────────────────────────
-        _attach_hover_tooltip(fig, ax, spots, tths, chis)
+        # Hover tooltip — pass axes coordinates (tth/chi or xcam/ycam)
+        _attach_hover_tooltip(fig, ax, spots, xs, ys)
 
     # ── Axes styling ──────────────────────────────────────────────────────────
-    ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=9)
-    ax.set_ylabel("χ  (°)", color="#7788aa", fontsize=9)
     ax.tick_params(colors="#7788aa", labelsize=7)
     for sp in ax.spines.values():
         sp.set_edgecolor("#1a1f2e")
@@ -2806,12 +2856,12 @@ def plot_tth_chi_overlay(
     n_spots = len(spots) if spots else 0
     hover_hint = "   (hover for details)" if n_spots else ""
     ax.set_title(
-        f"Detector image — 2θ / χ frame"
+        f"Detector image — {frame_label}"
         + (f"   |   {n_spots} simulated spots{hover_hint}" if n_spots else ""),
         color=FG, fontsize=9, pad=6,
     )
 
-    if spots and spot_color is None and color_spots_by == "phase":
+    if spots and spot_color is None and color_spots_by == "phase" and unique:
         from matplotlib.lines import Line2D
         handles = [
             Line2D([0], [0], linestyle="none", marker=spot_marker,
@@ -2828,4 +2878,4 @@ def plot_tth_chi_overlay(
                     facecolor=fig.get_facecolor())
         print(f"  Overlay saved → {out_path}")
 
-    return fig, ax, warped
+    return fig, ax, display

@@ -15,6 +15,7 @@ from .layers import (
     or_pitsch,
     orientation_along_z,
     pseudomorphic_d_spacing,
+    nitride_elastic_constants,
 )
 from .simulation import (
     BM32_KB,
@@ -86,6 +87,7 @@ __all__ = [
     "or_baker_nutting",
     "or_pitsch",
     "pseudomorphic_d_spacing",
+    "nitride_elastic_constants",
     # Plotting
     "plot_2theta_chi",
     "plot_all",

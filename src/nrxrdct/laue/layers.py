@@ -76,8 +76,8 @@ Usage
 """
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 import xrayutilities as xu
+from scipy.spatial.transform import Rotation
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ORIENTATION UTILITIES
@@ -262,6 +262,58 @@ def or_pitsch(crystal_bcc, crystal_fcc):
 # EPITAXIAL STRAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Elastic stiffness constants (GPa) for common wurtzite III-nitrides.
+# Sources: Wright (1997) PRB 55, 6250  /  Vurgaftman & Meyer (2003) JAP 94, 3675.
+# All values for the hexagonal (wurtzite) phase; C44 included for completeness
+# but not needed for the biaxial strain formula.
+_NITRIDE_ELASTIC = {
+    #          C11    C12    C13    C33    C44
+    "GaN": (390.0, 145.0, 106.0, 398.0, 105.0),
+    "InN": (223.0, 115.0, 92.0, 224.0, 48.0),
+    "AlN": (396.0, 137.0, 108.0, 373.0, 116.0),
+}
+
+
+def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str = "GaN"):
+    """
+    Elastic stiffness constants for a binary or ternary III-nitride (GPa).
+
+    For ternary alloys the constants are linearly interpolated between the
+    two binary end-members (Vegard's law approximation).
+
+    Parameters
+    ----------
+    material : ``'GaN'`` | ``'InN'`` | ``'AlN'``
+        First end-member (or the only material when ``x=0``).
+    x : float, optional
+        Alloy fraction of ``material`` in the ternary (default 0).
+        Example: for In₀.₂Ga₀.₈N pass
+        ``material='InN', x=0.2, end_material='GaN'``.
+    end_material : ``'GaN'`` | ``'InN'`` | ``'AlN'``, optional
+        Second end-member (default ``'GaN'``).
+
+    Returns
+    -------
+    dict with keys ``'C11'``, ``'C12'``, ``'C13'``, ``'C33'``, ``'C44'``
+    (all in GPa).
+
+    Examples
+    --------
+    >>> c = nitride_elastic_constants('GaN')
+    >>> c = nitride_elastic_constants('InN', x=0.20, end_material='GaN')
+    >>> d, eps_par, eps_perp = pseudomorphic_d_spacing(
+    ...     InGaN, GaN.lattice.a, C13=c['C13'], C33=c['C33'])
+    """
+    for m in (material, end_material):
+        if m not in _NITRIDE_ELASTIC:
+            raise ValueError(
+                f"Unknown nitride {m!r}.  Available: {list(_NITRIDE_ELASTIC)}"
+            )
+    keys = ("C11", "C12", "C13", "C33", "C44")
+    v1 = _NITRIDE_ELASTIC[material]
+    v2 = _NITRIDE_ELASTIC[end_material]
+    return {k: x * a + (1.0 - x) * b for k, a, b in zip(keys, v1, v2)}
+
 
 def pseudomorphic_d_spacing(
     crystal_film,
@@ -352,12 +404,12 @@ def pseudomorphic_d_spacing(
     _is_hexagonal = (
         abs(lat.a - lat.b) < 1e-4
         and abs(lat.alpha - 90.0) < 0.5
-        and abs(lat.beta  - 90.0) < 0.5
+        and abs(lat.beta - 90.0) < 0.5
         and abs(lat.gamma - 120.0) < 0.5
     )
     if _is_hexagonal:
         g_norm = growth_dir / np.linalg.norm(growth_dir)
-        c_axis = np.array([0., 0., 1.])
+        c_axis = np.array([0.0, 0.0, 1.0])
         if abs(abs(float(np.dot(g_norm, c_axis))) - 1.0) > 1e-3:
             raise ValueError(
                 f"pseudomorphic_d_spacing: growth_dir={growth_dir.tolist()} is not "
@@ -385,7 +437,7 @@ def pseudomorphic_d_spacing(
     d_bulk = min(projs_along_g) if projs_along_g else float(lat.c)
     a_film = min(projs_inplane) if projs_inplane else float(lat.a)
 
-    eps_par  = (a_sub - a_film) / a_film
+    eps_par = (a_sub - a_film) / a_film
     eps_perp = -2.0 * (C13 / C33) * eps_par
     d_strained = d_bulk * (1.0 + eps_perp)
 
@@ -426,8 +478,17 @@ class Layer:
     label       : str, optional   name for this layer
     """
 
-    def __init__(self, crystal, U, n_cells, n_hat=None,
-                 d_spacing=None, label=None, absorption_limit=False):
+    def __init__(
+        self,
+        crystal,
+        U,
+        n_cells,
+        n_hat=None,
+        d_spacing=None,
+        label=None,
+        absorption_limit=False,
+        cos_beam=None,
+    ):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
         self.n_cells = int(n_cells)
@@ -438,10 +499,20 @@ class Layer:
         self.absorption_limit = bool(absorption_limit)
 
         if n_hat is None:
-            self.n_hat = np.array([0., 0., 1.])
+            self.n_hat = np.array([0.0, 0.0, 1.0])
         else:
             nh = np.asarray(n_hat, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
+
+        # cos(angle between incident beam and sample surface normal).
+        # Set explicitly from LayeredCrystal.beam_angle_deg so the absorption
+        # correction uses the physical goniometer angle rather than n_hat[0],
+        # which varies with the U matrix and is not a reliable measure of the
+        # true beam–surface geometry.
+        if cos_beam is not None:
+            self._cos_beam = float(np.clip(cos_beam, 1e-3, 1.0))
+        else:
+            self._cos_beam = None   # falls back to abs(n_hat[0]) in _effective_n_cells
 
         if d_spacing is not None:
             self.d = float(d_spacing)
@@ -458,7 +529,7 @@ class Layer:
             #       n_hat = U @ [0,0,1],  d = projection of c onto n_hat
             lat = crystal.lattice
             proj = []
-            for vec in lat._ai:          # rows: a1, a2, a3
+            for vec in lat._ai:  # rows: a1, a2, a3
                 v_lab = self.U @ np.asarray(vec, dtype=float)
                 p = abs(float(np.dot(v_lab, self.n_hat)))
                 if p > 1e-6:
@@ -497,7 +568,7 @@ class Layer:
         Returns ``self.n_cells`` unchanged if the material lookup fails or if
         the absorption depth exceeds the real layer thickness.
         """
-        _HC_ANG = 12398.419843   # hc in eV·Å
+        _HC_ANG = 12398.419843  # hc in eV·Å
 
         try:
             # Prefer the crystal's own delta_beta if available
@@ -515,14 +586,18 @@ class Layer:
                 return self.n_cells
 
             lam_ang = _HC_ANG / energy_eV
-            mu = 4.0 * np.pi * beta / lam_ang   # Å⁻¹
+            mu = 4.0 * np.pi * beta / lam_ang  # Å⁻¹
             if mu <= 0:
                 return self.n_cells
 
-            # cos of angle between beam (LT x-axis) and surface normal (n_hat)
-            # Clamped to avoid zero (grazing incidence → n_eff = 1 minimum)
-            cos_alpha = abs(float(self.n_hat[0]))
-            cos_alpha = max(cos_alpha, 1e-3)
+            # cos of angle between incident beam and surface normal.
+            # Use the explicit value set from LayeredCrystal.beam_angle_deg when
+            # available (physical goniometer angle, constant for all measurements).
+            # Fall back to abs(n_hat[0]) only if no explicit angle was provided.
+            if self._cos_beam is not None:
+                cos_alpha = self._cos_beam
+            else:
+                cos_alpha = max(abs(float(self.n_hat[0])), 1e-3)
 
             n_eff = int(min(self.n_cells, cos_alpha / (mu * self.d)))
             return max(n_eff, 1)
@@ -564,7 +639,11 @@ class Layer:
         phi = Qn * self.d
 
         # Effective cell count: limited by absorption depth for buffer layers
-        n_eff = self._effective_n_cells(energy_eV) if self.absorption_limit else self.n_cells
+        n_eff = (
+            self._effective_n_cells(energy_eV)
+            if self.absorption_limit
+            else self.n_cells
+        )
 
         phi_mod = phi % (2.0 * np.pi)
         if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
@@ -626,7 +705,8 @@ class LayeredCrystal:
 
     """
 
-    def __init__(self, name="layered_crystal", stacking_direction=None):
+    def __init__(self, name="layered_crystal", stacking_direction=None,
+                 beam_angle_deg=None):
         self.name = name
         self.buffer_layers = []   # non-repeating layers (substrate, buffer) — bottom of stack
         self.layers = []          # repeating unit (MQW bilayer)
@@ -635,10 +715,20 @@ class LayeredCrystal:
         self._z_offsets = []
 
         if stacking_direction is None:
-            self.n_hat = np.array([0., 0., 1.])
+            self.n_hat = np.array([0.0, 0.0, 1.0])
         else:
             nh = np.asarray(stacking_direction, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
+
+        # Angle between the incident beam and the sample surface normal (degrees).
+        # This is a property of the goniometer setup — it is the same for every
+        # measurement regardless of which crystal or U matrix is used.
+        # When set, all buffer layers use cos(beam_angle_deg) for the absorption
+        # depth calculation instead of abs(n_hat[0]).
+        if beam_angle_deg is not None:
+            self._cos_beam = float(np.cos(np.radians(beam_angle_deg)))
+        else:
+            self._cos_beam = None
 
     # ── Building the stack ────────────────────────────────────────────────────
 
@@ -659,9 +749,16 @@ class LayeredCrystal:
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
         """
-        layer = Layer(crystal, U, n_cells,
-                      n_hat=self.n_hat, d_spacing=d_spacing, label=label,
-                      absorption_limit=True)
+        layer = Layer(
+            crystal,
+            U,
+            n_cells,
+            n_hat=self.n_hat,
+            d_spacing=d_spacing,
+            label=label,
+            absorption_limit=True,
+            cos_beam=self._cos_beam,
+        )
         self.buffer_layers.append(layer)
         self._update_offsets()
         return self
@@ -682,8 +779,9 @@ class LayeredCrystal:
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
         """
-        layer = Layer(crystal, U, n_cells,
-                      n_hat=self.n_hat, d_spacing=d_spacing, label=label)
+        layer = Layer(
+            crystal, U, n_cells, n_hat=self.n_hat, d_spacing=d_spacing, label=label
+        )
         self.layers.append(layer)
         self._update_offsets()
         return self
@@ -747,7 +845,8 @@ class LayeredCrystal:
         mismatch.
         """
         d_strained, eps_par, eps_perp = pseudomorphic_d_spacing(
-            crystal, a_substrate, C13, C33, growth_dir)
+            crystal, a_substrate, C13, C33, growth_dir
+        )
         lbl = label or crystal.name
         print(
             f"  {lbl}: ε_∥ = {eps_par:+.4f}  ε_⊥ = {eps_perp:+.4f}"
@@ -934,16 +1033,29 @@ class LayeredCrystal:
                 f"a={lat.a:.4f}  b={lat.b:.4f}  c={lat.c:.4f} Å"
             )
 
-        beam_angle_deg = np.degrees(np.arccos(np.clip(abs(float(nh[0])), 0.0, 1.0)))
         print(f"\n  LayeredCrystal: '{self.name}'")
         print(f"  {'─'*W}")
-        print(f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
-              f"   beam angle = {beam_angle_deg:.1f}°")
+        n_hat_angle = np.degrees(np.arccos(np.clip(abs(float(nh[0])), 0.0, 1.0)))
+        if self._cos_beam is not None:
+            explicit_angle = np.degrees(np.arccos(self._cos_beam))
+            print(
+                f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
+                f"   n_hat angle = {n_hat_angle:.1f}°"
+            )
+            print(f"  Beam–surface angle (explicit): {explicit_angle:.1f}°"
+                  f"   [used for absorption correction]")
+        else:
+            print(
+                f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
+                f"   beam angle = {n_hat_angle:.1f}° (from n_hat)"
+            )
 
         # Buffer layers
         if self.buffer_layers:
-            print(f"\n  Buffer layers  (non-repeating, {len(self.buffer_layers)} layer"
-                  f"{'s' if len(self.buffer_layers) != 1 else ''}):")
+            print(
+                f"\n  Buffer layers  (non-repeating, {len(self.buffer_layers)} layer"
+                f"{'s' if len(self.buffer_layers) != 1 else ''}):"
+            )
             for i, (layer, z0) in enumerate(
                 zip(self.buffer_layers, self._buffer_z_offsets)
             ):
@@ -971,198 +1083,3 @@ class LayeredCrystal:
             f"  = {self.total_thickness/10:.2f} nm"
         )
         print(f"  {'─'*W}")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DEMO / SELF-TEST
-# ─────────────────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    print("=" * 60)
-    print("  layered_structure_factor.py  –  demonstration")
-    print("=" * 60)
-
-    # ── Materials ─────────────────────────────────────────────────────────────
-    Fe = xu.materials.Fe  # BCC, a = 2.8665 Å, SG 229
-
-    Cr_lat = xu.materials.SGLattice(229, 2.884, atoms=["Cr"], pos=["2a"])
-    Cr = xu.materials.Crystal("Cr", Cr_lat)
-
-    Cu = xu.materials.Cu  # FCC, a = 3.6150 Å, SG 225
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Example 1: Fe/Cr superlattice (BCC/BCC, [001] || z for both)
-    # ─────────────────────────────────────────────────────────────────────────
-    print("\n[1] Fe/Cr BCC superlattice  –  [001] stacking, no OR needed")
-
-    # Both BCC with similar lattice parameters -> trivial OR (same orientation)
-    U_Fe_001 = orientation_along_z([0, 0, 1], Fe)
-    U_Cr_001 = orientation_along_z([0, 0, 1], Cr)
-
-    stack_FeCr = LayeredCrystal(name="Fe20/Cr20 × 10  [001]")
-    stack_FeCr.add_layer(Fe, U_Fe_001, n_cells=20, label="Fe")
-    stack_FeCr.add_layer(Cr, U_Cr_001, n_cells=20, label="Cr")
-    stack_FeCr.set_repetitions(10)
-    stack_FeCr.describe()
-
-    # Scan along qz (BCC [001] rod)
-    qz = np.linspace(0.5, 5.5, 5000)
-    Q_scan = np.column_stack([np.zeros((len(qz), 2)), qz])
-    I_FeCr = stack_FeCr.intensity(Q_scan, energy_eV=17000)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Example 2: Fe/Cu with Kurdjumov-Sachs OR
-    # ─────────────────────────────────────────────────────────────────────────
-    print("\n[2] Fe(BCC) / Cu(FCC) – Kurdjumov-Sachs orientation relationship")
-    print("    (111)_Fe ∥ (110)_Cu   AND   [1-10]_Fe ∥ [11-2]_Cu")
-
-    # Stack along [110]_Fe (i.e. the plane that is parallel in KS)
-    # crystal_to_cartesian is imported from this module
-    U_Fe_110 = orientation_along_z([1, 1, 0], Fe, up_crystal=[0, 0, 1])
-    R_KS = or_kurdjumov_sachs(Fe, Cu)
-    # U_Cu = U_Fe @ R_OR.T  because:
-    #   G_lab = U @ G_crystal, so U_Cu @ v_Cu = U_Fe @ v_Fe (same lab direction)
-    #   R_OR maps Fe-crystal-frame -> Cu-crystal-frame: v_Cu = R_OR @ v_Fe
-    #   => U_Cu @ R_OR @ v_Fe = U_Fe @ v_Fe  =>  U_Cu = U_Fe @ R_OR.T
-    U_Cu_KS = U_Fe_110 @ R_KS.T
-
-    # Verify OR directly on R_OR (not on U-rotated lab vectors,
-    # which are additionally constrained by the stacking direction):
-    #   R_OR maps Fe crystal frame -> Cu crystal frame
-    #   Primary:   R_OR @ v1_Fe  should be parallel to v1_Cu
-    #   Secondary: R_OR @ v2_Fe  should be parallel to v2_Cu
-    def _check_or(R, crystal_A, dir_A, crystal_B, dir_B, label):
-        vA = crystal_to_cartesian(dir_A, crystal_A)
-        vA /= np.linalg.norm(vA)
-        vB = crystal_to_cartesian(dir_B, crystal_B)
-        vB /= np.linalg.norm(vB)
-        mapped = R @ vA
-        ang = np.degrees(np.arccos(np.clip(np.dot(mapped, vB), -1, 1)))
-        print(f"  OR check {label}: {ang:.4f}° (should be 0°)")
-
-    _check_or(R_KS, Fe, [1, 1, 1], Cu, [1, 1, 0], "[111]_Fe || [110]_Cu  (primary)")
-    _check_or(
-        R_KS, Fe, [1, -1, 0], Cu, [1, -1, -2], "[1-10]_Fe || [1-1-2]_Cu (secondary)"
-    )
-
-    # d-spacing along stacking direction
-    d_Fe = Fe.lattice.a / np.sqrt(2)  # d(110)
-    d_Cu = Cu.lattice.a / np.sqrt(2)  # d(110)
-
-    stack_FeCu = LayeredCrystal(name="Fe15/Cu15 × 8  KS-OR  [110] stacking")
-    stack_FeCu.add_layer(Fe, U_Fe_110, n_cells=15, d_spacing=d_Fe, label="Fe  [110]")
-    stack_FeCu.add_layer(Cu, U_Cu_KS, n_cells=15, d_spacing=d_Cu, label="Cu  [110]_KS")
-    stack_FeCu.set_repetitions(8)
-    stack_FeCu.describe()
-
-    I_FeCu = stack_FeCu.intensity(Q_scan, energy_eV=17000)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Example 3: Layer contribution analysis at a specific Q
-    # ─────────────────────────────────────────────────────────────────────────
-    print("\n[3] Layer contribution analysis at qz = 3.09 Å⁻¹")
-    Q_pt = np.array([0.0, 0.0, 3.09])
-    contribs = stack_FeCr.layer_contributions(Q_pt, energy_eV=17000)
-    for lbl, F in contribs.items():
-        print(
-            f"    {lbl:25s}  |F| = {abs(F):10.3f}  "
-            f"phase = {np.angle(F)*180/np.pi:+7.2f}°"
-        )
-    F_total = stack_FeCr.structure_factor(Q_pt, energy_eV=17000)
-    print(
-        f"    {'TOTAL':25s}  |F| = {abs(F_total):10.3f}  "
-        f"|F|² = {abs(F_total)**2:.1f}"
-    )
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Plot
-    # ─────────────────────────────────────────────────────────────────────────
-    fig, axes = plt.subplots(2, 1, figsize=(12, 9))
-    fig.patch.set_facecolor("#0d1117")
-
-    for ax, I, stack, title, col in [
-        (
-            axes[0],
-            I_FeCr,
-            stack_FeCr,
-            "Fe/Cr BCC superlattice  [001]  –  20/20 cells × 10 rep",
-            "#4fc3f7",
-        ),
-        (
-            axes[1],
-            I_FeCu,
-            stack_FeCu,
-            "Fe(BCC)/Cu(FCC)  KS-OR  [110] stacking  –  15/15 cells × 8 rep",
-            "#ff9f43",
-        ),
-    ]:
-        ax.set_facecolor("#080c14")
-        ax.semilogy(qz, I, color=col, lw=0.7)
-
-        # Mark bilayer satellite positions
-        Lambda = stack.bilayer_thickness
-        Qz_main = 2 * np.pi / stack.layers[0].d  # approx main Bragg peak
-        for m in range(-5, 6):
-            Qz_sat = Qz_main + m * 2 * np.pi / Lambda
-            if qz[0] < Qz_sat < qz[-1]:
-                ax.axvline(Qz_sat, color="white", lw=0.5, alpha=0.3, ls="--")
-                if m == 0:
-                    ax.text(
-                        Qz_sat,
-                        I.max() * 0.5,
-                        " main",
-                        color="white",
-                        fontsize=6,
-                        va="center",
-                    )
-                else:
-                    ax.text(
-                        Qz_sat,
-                        I.max() * 0.1,
-                        f" {m:+d}",
-                        color="#aaaaaa",
-                        fontsize=5.5,
-                        va="center",
-                    )
-
-        ax.set_xlabel("q_z  (Å⁻¹)", color="#7788aa", fontsize=9)
-        ax.set_ylabel("|F(Q)|²  (arb.)", color="#7788aa", fontsize=9)
-        ax.set_title(title, color="#ccccee", fontsize=9, pad=5)
-        ax.set_xlim(qz[0], qz[-1])
-        ax.tick_params(colors="#7788aa", labelsize=8)
-        for sp in ax.spines.values():
-            sp.set_edgecolor("#1a1f2e")
-        ax.grid(True, which="both", ls=":", lw=0.3, color="#1a1f2e")
-
-        info = (
-            f"Λ = {Lambda:.2f} Å  |  "
-            f"2π/Λ = {2*np.pi/Lambda:.4f} Å⁻¹  |  "
-            f"E = 17 keV"
-        )
-        ax.text(
-            0.99,
-            0.97,
-            info,
-            transform=ax.transAxes,
-            ha="right",
-            va="top",
-            color="#888899",
-            fontsize=7,
-        )
-
-    plt.tight_layout()
-    out = "/mnt/user-data/outputs/layered_structure_factor.png"
-    plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-    print(f"\n  Figure saved -> {out}")
-    print("\n  Done. Import with:")
-    print(
-        "    from layered_structure_factor import "
-        "LayeredCrystal, or_kurdjumov_sachs, "
-        "or_nishiyama_wassermann, or_baker_nutting, "
-        "or_from_directions, orientation_along_z"
-    )

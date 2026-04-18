@@ -259,6 +259,140 @@ def or_pitsch(crystal_bcc, crystal_fcc):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# EPITAXIAL STRAIN
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def pseudomorphic_d_spacing(
+    crystal_film,
+    a_substrate,
+    C13: float,
+    C33: float,
+    growth_dir=(0, 0, 1),
+) -> float:
+    """
+    Out-of-plane repeat distance for a pseudomorphic (coherently strained) film.
+
+    Assuming biaxial in-plane stress with a free surface perpendicular to the
+    growth direction, the out-of-plane strain is:
+
+    .. math::
+
+        \\varepsilon_\\perp = -\\frac{2C_{13}}{C_{33}}\\,\\varepsilon_\\parallel
+        \\qquad
+        \\varepsilon_\\parallel = \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
+
+    The strained repeat along ``growth_dir`` is then
+    :math:`d = d_{\\text{bulk}}(1 + \\varepsilon_\\perp)`.
+
+    This formula is exact for hexagonal **c-axis** growth and for cubic
+    **[001]** growth (substitute :math:`C_{12}/C_{11}` for
+    :math:`C_{13}/C_{33}`).
+
+    .. warning::
+
+        **Not valid for non-c-axis hexagonal or off-axis cubic growth.**
+        For semipolar / non-polar orientations (e.g. GaN grown along
+        [2,-2,0], [1,1,-2,3], etc.) the in-plane strain is anisotropic and
+        the correct out-of-plane response requires rotating the full
+        elastic stiffness tensor into the growth frame.  Calling this
+        function with a non-c-axis ``growth_dir`` for a hexagonal crystal
+        will raise ``ValueError``.
+
+    Parameters
+    ----------
+    crystal_film : xu.materials.Crystal
+        Bulk (relaxed) film crystal.
+    a_substrate : float  or  xu.materials.Crystal
+        In-plane lattice parameter of the template / substrate (Å).
+        If a Crystal is passed its ``.lattice.a`` is used.
+    C13, C33 : float
+        Elastic stiffness constants in any consistent units (GPa or Pa).
+
+        * Hexagonal c-axis growth  → :math:`C_{13}`, :math:`C_{33}`
+        * Cubic [001] growth       → :math:`C_{12}`, :math:`C_{11}`
+    growth_dir : array-like (3,), optional
+        Miller direction of the stacking / growth axis in the **film's crystal
+        frame** (default: ``(0, 0, 1)``).
+        For hexagonal crystals only ``(0, 0, 1)`` (c-axis) is supported.
+
+    Returns
+    -------
+    d_strained : float
+        Strained repeat along ``growth_dir`` (Å).  Pass directly as
+        ``d_spacing`` to :meth:`LayeredCrystal.add_layer`.
+    eps_par : float
+        In-plane strain :math:`\\varepsilon_\\parallel` (positive = tensile).
+    eps_perp : float
+        Out-of-plane strain :math:`\\varepsilon_\\perp`.
+
+    Examples
+    --------
+    GaN/InGaN LED — pseudomorphic InGaN well on GaN buffer::
+
+        d_InGaN, eps_par, eps_perp = pseudomorphic_d_spacing(
+            InGaN, GaN.lattice.a, C13=92.0, C33=224.0)
+        stack.add_layer(InGaN, U_InGaN, n_cells=n_InGaN,
+                        d_spacing=d_InGaN, label="InGaN (strained)")
+    """
+    # Resolve substrate in-plane parameter
+    if hasattr(a_substrate, "lattice"):
+        a_sub = float(a_substrate.lattice.a)
+    else:
+        a_sub = float(a_substrate)
+
+    lat = crystal_film.lattice
+    A = lat._ai  # rows are direct lattice vectors in Cartesian (Å)
+
+    growth_dir = np.asarray(growth_dir, dtype=float)
+
+    # Guard: for hexagonal lattices (a == b, γ == 120°) only c-axis growth is
+    # supported.  Non-c-axis hexagonal growth requires a rotated compliance
+    # tensor calculation that this scalar formula cannot provide.
+    _is_hexagonal = (
+        abs(lat.a - lat.b) < 1e-4
+        and abs(lat.alpha - 90.0) < 0.5
+        and abs(lat.beta  - 90.0) < 0.5
+        and abs(lat.gamma - 120.0) < 0.5
+    )
+    if _is_hexagonal:
+        g_norm = growth_dir / np.linalg.norm(growth_dir)
+        c_axis = np.array([0., 0., 1.])
+        if abs(abs(float(np.dot(g_norm, c_axis))) - 1.0) > 1e-3:
+            raise ValueError(
+                f"pseudomorphic_d_spacing: growth_dir={growth_dir.tolist()} is not "
+                f"the c-axis for a hexagonal crystal.  For non-c-axis hexagonal "
+                f"orientations (semipolar / non-polar) the scalar biaxial formula "
+                f"ε_⊥ = -2(C₁₃/C₃₃)·ε_∥ is not valid.  Provide d_spacing manually "
+                f"from a full elastic-tensor calculation."
+            )
+
+    g_cart = A.T @ growth_dir
+    g_cart /= np.linalg.norm(g_cart)
+
+    # Bulk repeat along growth direction
+    projs_along_g = []
+    projs_inplane = []
+    for vec in A:
+        along = abs(float(np.dot(vec, g_cart)))
+        if along > 1e-6:
+            projs_along_g.append(along)
+        inplane_vec = vec - np.dot(vec, g_cart) * g_cart
+        inplane_len = float(np.linalg.norm(inplane_vec))
+        if inplane_len > 1e-6:
+            projs_inplane.append(inplane_len)
+
+    d_bulk = min(projs_along_g) if projs_along_g else float(lat.c)
+    a_film = min(projs_inplane) if projs_inplane else float(lat.a)
+
+    eps_par  = (a_sub - a_film) / a_film
+    eps_perp = -2.0 * (C13 / C33) * eps_par
+    d_strained = d_bulk * (1.0 + eps_perp)
+
+    return float(d_strained), float(eps_par), float(eps_perp)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LAYER
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -553,6 +687,74 @@ class LayeredCrystal:
         self.layers.append(layer)
         self._update_offsets()
         return self
+
+    def add_pseudomorphic_layer(
+        self,
+        crystal,
+        U,
+        n_cells,
+        a_substrate,
+        C13: float,
+        C33: float,
+        growth_dir=(0, 0, 1),
+        label=None,
+    ):
+        """
+        Append a pseudomorphically strained layer to the repeating unit.
+
+        The out-of-plane repeat distance is computed from the biaxial strain
+        state imposed by the in-plane lattice constraint:
+
+        .. math::
+
+            d = d_{\\text{bulk}}\\left(1 - \\frac{2C_{13}}{C_{33}}\\,
+            \\varepsilon_\\parallel\\right)
+            \\qquad
+            \\varepsilon_\\parallel =
+            \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
+
+        Equivalent to calling :func:`pseudomorphic_d_spacing` then
+        :meth:`add_layer` with the computed ``d_spacing``.
+
+        Parameters
+        ----------
+        crystal : xu.materials.Crystal
+            Bulk (relaxed) film crystal.
+        U : (3,3) ndarray
+            Orientation matrix for this layer.
+        n_cells : int
+            Number of unit cells along the stacking direction.
+        a_substrate : float  or  xu.materials.Crystal
+            In-plane lattice parameter of the template (Å), or a Crystal
+            whose ``.lattice.a`` is used.
+        C13, C33 : float
+            Elastic stiffness constants (GPa).
+
+            * Hexagonal c-axis growth → :math:`C_{13}`, :math:`C_{33}`
+            * Cubic [001] growth      → :math:`C_{12}`, :math:`C_{11}`
+        growth_dir : array-like (3,), optional
+            Growth direction in the **film's crystal frame**.
+            Default: ``(0, 0, 1)`` (c-axis).
+        label : str, optional
+
+        Returns
+        -------
+        self  (for method chaining)
+
+        Notes
+        -----
+        The strain values are printed on addition so you can verify the
+        mismatch.
+        """
+        d_strained, eps_par, eps_perp = pseudomorphic_d_spacing(
+            crystal, a_substrate, C13, C33, growth_dir)
+        lbl = label or crystal.name
+        print(
+            f"  {lbl}: ε_∥ = {eps_par:+.4f}  ε_⊥ = {eps_perp:+.4f}"
+            f"  d_bulk → {d_strained / (1 + eps_perp):.4f} Å"
+            f"  d_strained = {d_strained:.4f} Å"
+        )
+        return self.add_layer(crystal, U, n_cells, d_spacing=d_strained, label=lbl)
 
     def set_repetitions(self, n):
         """Set the number of times the repeating unit (MQW bilayer) is stacked."""

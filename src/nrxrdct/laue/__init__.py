@@ -14,6 +14,7 @@ from .layers import (
     or_nishiyama_wassermann,
     or_pitsch,
     orientation_along_z,
+    pseudomorphic_d_spacing,
 )
 from .simulation import (
     BM32_KB,
@@ -84,6 +85,7 @@ __all__ = [
     "or_nishiyama_wassermann",
     "or_baker_nutting",
     "or_pitsch",
+    "pseudomorphic_d_spacing",
     # Plotting
     "plot_2theta_chi",
     "plot_all",

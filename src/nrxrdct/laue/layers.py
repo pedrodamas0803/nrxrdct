@@ -286,11 +286,16 @@ class Layer:
     label       : str, optional   name for this layer
     """
 
-    def __init__(self, crystal, U, n_cells, n_hat=None, d_spacing=None, label=None):
+    def __init__(self, crystal, U, n_cells, n_hat=None, d_spacing=None, label=None,
+                 absorption_limit=False):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
         self.n_cells = int(n_cells)
         self.label = label or crystal.name
+        # When True, structure_factor uses an energy-dependent effective thickness
+        # min(real thickness, 1/μ) to model Beer-Lambert absorption depth.
+        # Set automatically for buffer layers by LayeredCrystal.add_buffer_layer.
+        self.absorption_limit = bool(absorption_limit)
 
         if n_hat is None:
             self.n_hat = np.array([0., 0., 1.])
@@ -322,8 +327,53 @@ class Layer:
 
     @property
     def thickness(self):
-        """Total layer thickness in Å."""
+        """Total layer thickness in Å (always the real physical thickness)."""
         return self.n_cells * self.d
+
+    def _effective_n_cells(self, energy_eV: float) -> int:
+        """
+        Effective number of unit cells after Beer-Lambert absorption limiting.
+
+        Uses the normal-incidence absorption depth  t_eff = 1 / μ  where
+
+            μ = 4π β / λ     (Å⁻¹)
+
+        and β is the imaginary refractive-index decrement of the material at
+        ``energy_eV``.  This is a conservative (upper-bound) estimate; the
+        true depth in reflection geometry is  t_eff · sin θ,  which is always
+        smaller.
+
+        Returns ``self.n_cells`` unchanged if the material lookup fails or if
+        absorption is negligible (t_eff ≥ real thickness).
+        """
+        _HC_ANG = 12398.419843   # hc in eV·Å
+
+        try:
+            # Prefer the crystal's own delta_beta if available
+            if hasattr(self.crystal, "delta_beta"):
+                _, beta = self.crystal.delta_beta(energy_eV)
+            else:
+                # Fall back to element density → Amorphous proxy
+                elem = getattr(xu.materials.elements, self.crystal.name, None)
+                if elem is None or not getattr(elem, "density", 0):
+                    return self.n_cells
+                mat = xu.materials.Amorphous(self.crystal.name, elem.density)
+                _, beta = mat.delta_beta(energy_eV)
+
+            if not (beta > 0):
+                return self.n_cells
+
+            lam_ang = _HC_ANG / energy_eV
+            mu = 4.0 * np.pi * beta / lam_ang   # Å⁻¹
+            if mu <= 0:
+                return self.n_cells
+
+            t_eff = 1.0 / mu                     # Å, normal-incidence approximation
+            n_eff = int(min(self.n_cells, t_eff / self.d))
+            return max(n_eff, 1)
+
+        except Exception:
+            return self.n_cells
 
     def structure_factor(self, Q_lab, energy_eV, z0=0.0):
         """
@@ -358,11 +408,14 @@ class Layer:
         Qn = float(np.dot(Q, self.n_hat))
         phi = Qn * self.d
 
+        # Effective cell count: limited by absorption depth for buffer layers
+        n_eff = self._effective_n_cells(energy_eV) if self.absorption_limit else self.n_cells
+
         phi_mod = phi % (2.0 * np.pi)
         if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
-            geo_sum = self.n_cells + 0j
+            geo_sum = n_eff + 0j
         else:
-            geo_sum = (1.0 - np.exp(1j * self.n_cells * phi)) / (1.0 - np.exp(1j * phi))
+            geo_sum = (1.0 - np.exp(1j * n_eff * phi)) / (1.0 - np.exp(1j * phi))
 
         phase_z0 = np.exp(1j * Qn * z0)
         return F_uc * phase_z0 * geo_sum
@@ -451,7 +504,8 @@ class LayeredCrystal:
         label     : str, optional
         """
         layer = Layer(crystal, U, n_cells,
-                      n_hat=self.n_hat, d_spacing=d_spacing, label=label)
+                      n_hat=self.n_hat, d_spacing=d_spacing, label=label,
+                      absorption_limit=True)
         self.buffer_layers.append(layer)
         self._update_offsets()
         return self

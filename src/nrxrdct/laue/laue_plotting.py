@@ -2260,6 +2260,116 @@ def plot_laue_stack_spots(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SHARED HOVER-TOOLTIP HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _fmt_hkl(h, k, l):
+    """Format Miller indices with overbars for negatives."""
+    def _idx(n):
+        return f"{abs(n)}\u0305" if n < 0 else str(n)
+    return f"({_idx(h)} {_idx(k)} {_idx(l)})"
+
+
+def _spot_label(s):
+    """Build the multi-line tooltip string for a single spot dict."""
+    h, k, l = s["hkl"]
+
+    sat_order = s.get("satellite_order", None)
+    is_sl = s.get("is_superlattice", False)
+    if sat_order is not None and sat_order != 0:
+        refl_type = f"satellite  m={sat_order:+d}"
+    elif is_sl:
+        refl_type = "superstructure"
+    else:
+        refl_type = "Bragg peak"
+
+    phase = s.get("phase_label", None)
+
+    W = 7
+    sep = "\u2500" * 22
+    lines = [f" hkl   {_fmt_hkl(h, k, l)}"]
+    if phase is not None:
+        lines.append(f" phase  {phase}")
+    lines += [
+        sep,
+        f" {'2θ':<{W}} {s['tth']:.3f}°",
+        f" {'χ':<{W}} {s['chi']:.3f}°",
+        f" {'E':<{W}} {s['E']:.1f} eV",
+        f" {'I':<{W}} {s['intensity']:.4f}",
+        sep,
+        f" {'type':<{W}} {refl_type}",
+    ]
+    return "\n".join(lines)
+
+
+def _attach_hover_tooltip(fig, ax, spots, tths, chis):
+    """
+    Attach a hover tooltip to *ax* for the given spot list.
+
+    *tths* and *chis* must be numpy arrays whose indices correspond 1-to-1
+    with *spots*.  The tooltip is implemented via ``motion_notify_event``
+    and requires no extra dependencies beyond matplotlib.
+    """
+    annot = ax.annotate(
+        "",
+        xy=(0, 0),
+        xytext=(14, 14),
+        textcoords="offset points",
+        bbox=dict(
+            boxstyle="round,pad=0.5",
+            facecolor="#1a1f2e",
+            edgecolor="#4fc3f7",
+            linewidth=0.8,
+            alpha=0.92,
+        ),
+        arrowprops=dict(arrowstyle="->", color="#4fc3f7", lw=0.8),
+        color=FG,
+        fontsize=7.5,
+        fontfamily="monospace",
+        visible=False,
+        zorder=10,
+    )
+
+    _hit_radius_pts = 8.0
+
+    def _on_motion(event):
+        if event.inaxes is not ax:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        xy_disp = ax.transData.transform(np.column_stack([tths, chis]))
+        mouse_disp = np.array([event.x, event.y])
+        dists = np.linalg.norm(xy_disp - mouse_disp, axis=1)
+
+        pts_to_px = fig.dpi / 72.0
+        threshold_px = _hit_radius_pts * pts_to_px
+
+        idx = int(np.argmin(dists))
+        if dists[idx] > threshold_px:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        annot.xy = (tths[idx], chis[idx])
+        annot.set_text(_spot_label(spots[idx]))
+
+        x_frac = (tths[idx] - ax.get_xlim()[0]) / (ax.get_xlim()[1] - ax.get_xlim()[0])
+        offset_x = -14 - 140 if x_frac > 0.75 else 14
+        annot.xyann = (offset_x, 14)
+
+        if not annot.get_visible():
+            annot.set_visible(True)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", _on_motion)
+    return annot
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # INTERACTIVE 2θ / χ SCATTER WITH HOVER TOOLTIPS
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -2268,6 +2378,7 @@ def plot_interactive_tth_chi(
     spots,
     *,
     color_by: str = "energy",
+    i_thresh: float = 0.01,
     size_scale: float = 120.0,
     min_size: float = 10.0,
     figsize=(9, 7),
@@ -2298,6 +2409,12 @@ def plot_interactive_tth_chi(
         ``'tth'``, ``'chi'``, ``'hkl'``, ``'E'``, ``'intensity'``.
         Optional: ``'satellite_order'``, ``'is_superlattice'``,
         ``'phase_label'``.
+    i_thresh : float
+        Minimum intensity threshold as a fraction of the brightest **Bragg
+        peak** (``satellite_order == 0``).  Spots with
+        ``intensity < i_thresh * I_bragg_max`` are dropped before plotting.
+        Default: ``0.01`` (1 % of the strongest Bragg peak).
+        Pass ``0.0`` to show all spots.
     color_by : ``'energy'`` | ``'intensity'`` | ``'phase'``
         Quantity mapped to spot colour:
 
@@ -2327,6 +2444,23 @@ def plot_interactive_tth_chi(
     """
     if not spots:
         raise ValueError("spots list is empty")
+
+    # ── Intensity threshold — relative to brightest Bragg peak ────────────────
+    if i_thresh > 0.0:
+        bragg_spots = [s for s in spots if s.get("satellite_order", 0) == 0
+                       and not s.get("is_superlattice", False)]
+        if bragg_spots:
+            i_bragg_max = max(s["intensity"] for s in bragg_spots)
+        else:
+            i_bragg_max = max(s["intensity"] for s in spots)
+        cutoff = i_thresh * i_bragg_max
+        spots = [s for s in spots if s["intensity"] >= cutoff]
+        if not spots:
+            raise ValueError(
+                f"No spots survive the intensity threshold "
+                f"(i_thresh={i_thresh}, cutoff={cutoff:.4f}).  "
+                f"Lower i_thresh or pass i_thresh=0.0 to show all."
+            )
 
     # ── Colour mapping ────────────────────────────────────────────────────────
     if color_by == "energy":
@@ -2402,115 +2536,8 @@ def plot_interactive_tth_chi(
         color=FG, fontsize=9, pad=6,
     )
 
-    # ── Tooltip annotation (hidden until hover) ───────────────────────────────
-    annot = ax.annotate(
-        "",
-        xy=(0, 0),
-        xytext=(14, 14),
-        textcoords="offset points",
-        bbox=dict(
-            boxstyle="round,pad=0.5",
-            facecolor="#1a1f2e",
-            edgecolor="#4fc3f7",
-            linewidth=0.8,
-            alpha=0.92,
-        ),
-        arrowprops=dict(
-            arrowstyle="->",
-            color="#4fc3f7",
-            lw=0.8,
-        ),
-        color=FG,
-        fontsize=7.5,
-        fontfamily="monospace",
-        visible=False,
-        zorder=10,
-    )
-
-    # ── Tooltip text builder ──────────────────────────────────────────────────
-    def _fmt_hkl(h, k, l):
-        """Format Miller indices in conventional crystallographic notation."""
-        def _idx(n):
-            return f"{abs(n)}\u0305" if n < 0 else str(n)   # overbar for negatives
-        return f"({_idx(h)} {_idx(k)} {_idx(l)})"
-
-    def _spot_label(s):
-        h, k, l = s["hkl"]
-
-        # ── Reflection type ───────────────────────────────────────────────────
-        sat_order = s.get("satellite_order", None)
-        is_sl = s.get("is_superlattice", False)
-        if sat_order is not None and sat_order != 0:
-            refl_type = f"satellite  m={sat_order:+d}"
-        elif is_sl:
-            refl_type = "superstructure"
-        else:
-            refl_type = "Bragg peak"
-
-        # ── Phase ─────────────────────────────────────────────────────────────
-        phase = s.get("phase_label", None)
-
-        # ── Assemble lines (fixed-width key column for alignment) ─────────────
-        W = 7   # key column width
-        sep = "\u2500" * 22   # ─────── horizontal rule
-        lines = [
-            f" hkl   {_fmt_hkl(h, k, l)}",
-        ]
-        if phase is not None:
-            lines.append(f" phase  {phase}")
-        lines += [
-            sep,
-            f" {'2θ':<{W}} {s['tth']:.3f}°",
-            f" {'χ':<{W}} {s['chi']:.3f}°",
-            f" {'E':<{W}} {s['E']:.1f} eV",
-            f" {'I':<{W}} {s['intensity']:.4f}",
-            sep,
-            f" {'type':<{W}} {refl_type}",
-        ]
-        return "\n".join(lines)
-
-    # ── Hover event handler ───────────────────────────────────────────────────
-    _hit_radius_pts = 8.0  # points — tune if needed
-
-    def _on_motion(event):
-        if event.inaxes is not ax:
-            if annot.get_visible():
-                annot.set_visible(False)
-                fig.canvas.draw_idle()
-            return
-
-        # Transform data coords → display coords for all points
-        xy_disp = ax.transData.transform(np.column_stack([tths, chis]))
-        mouse_disp = np.array([event.x, event.y])
-        dists = np.linalg.norm(xy_disp - mouse_disp, axis=1)
-
-        # Find the nearest point within the hit radius
-        # Convert hit radius from points to display pixels
-        pts_to_px = fig.dpi / 72.0
-        threshold_px = _hit_radius_pts * pts_to_px
-
-        idx = int(np.argmin(dists))
-        if dists[idx] > threshold_px:
-            if annot.get_visible():
-                annot.set_visible(False)
-                fig.canvas.draw_idle()
-            return
-
-        # Reposition annotation and update text
-        annot.xy = (tths[idx], chis[idx])
-        annot.set_text(_spot_label(spots[idx]))
-
-        # Flip tooltip to the left if near the right edge
-        x_frac = (tths[idx] - ax.get_xlim()[0]) / (ax.get_xlim()[1] - ax.get_xlim()[0])
-        offset_x = -14 - 140 if x_frac > 0.75 else 14
-        offset_y = 14
-        annot.xyann = (offset_x, offset_y)
-
-        if not annot.get_visible():
-            annot.set_visible(True)
-        fig.canvas.draw_idle()
-
-    fig.canvas.mpl_connect("motion_notify_event", _on_motion)
+    # ── Hover tooltip ─────────────────────────────────────────────────────────
+    _attach_hover_tooltip(fig, ax, spots, tths, chis)
 
     if out_path:
         import atexit
@@ -2521,3 +2548,284 @@ def plot_interactive_tth_chi(
 
     fig.tight_layout()
     return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DETECTOR IMAGE → 2θ / χ WARP
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def warp_image_to_tth_chi(
+    image,
+    camera,
+    *,
+    tth_range=None,
+    chi_range=None,
+    n_tth: int = 600,
+    n_chi: int = 600,
+    interp_order: int = 1,
+):
+    """
+    Remap a detector image from pixel space into an evenly-spaced 2θ / χ grid.
+
+    For each point (2θ, χ) in the output grid the corresponding scattered
+    unit vector is computed, projected back onto the detector via
+    :meth:`~nrxrdct.laue.Camera.kf_to_pixel`, and the source image is
+    sampled by bilinear interpolation.  Output pixels that map outside the
+    detector active area are set to ``NaN``.
+
+    Parameters
+    ----------
+    image : array-like, shape (Nv, Nh)
+        Detector image in pixel space (e.g. from :meth:`~Camera.render` or
+        a real experimental frame loaded as a numpy array).
+    camera : Camera
+        Detector geometry used for the forward/inverse projections.
+    tth_range : (float, float), optional
+        2θ range in degrees ``(tth_min, tth_max)``.  Defaults to the range
+        covered by the four detector corners.
+    chi_range : (float, float), optional
+        χ range in degrees ``(chi_min, chi_max)``.  Defaults to the range
+        covered by the four detector corners.
+    n_tth, n_chi : int
+        Number of output pixels along the 2θ and χ axes.
+    interp_order : int
+        Interpolation order passed to :func:`scipy.ndimage.map_coordinates`
+        (0 = nearest, 1 = bilinear (default), 3 = cubic).
+
+    Returns
+    -------
+    warped : ndarray, shape (n_chi, n_tth)
+        Remapped image.  NaN where the output pixel falls outside the detector.
+    tth_ax : ndarray, shape (n_tth,)
+        2θ values of the output columns (degrees).
+    chi_ax : ndarray, shape (n_chi,)
+        χ values of the output rows (degrees).
+    """
+    from scipy.ndimage import map_coordinates
+
+    image = np.asarray(image, dtype=np.float64)
+
+    # ── Auto-range from detector corners ─────────────────────────────────────
+    corner_px = np.array([
+        [0,              0],
+        [camera.Nh - 1,  0],
+        [0,              camera.Nv - 1],
+        [camera.Nh - 1,  camera.Nv - 1],
+        [camera.xcen,    camera.ycen],
+    ])
+    ufs = camera.pixel_to_kf(corner_px[:, 0], corner_px[:, 1])
+    tths_c = np.degrees(np.arccos(np.clip(ufs[:, 0], -1.0, 1.0)))
+    chis_c = np.degrees(np.arctan2(ufs[:, 1], ufs[:, 2] + 1e-17))
+
+    if tth_range is None:
+        tth_range = (float(tths_c.min()), float(tths_c.max()))
+    if chi_range is None:
+        chi_range = (float(chis_c.min()), float(chis_c.max()))
+
+    # ── Output grid ───────────────────────────────────────────────────────────
+    tth_ax = np.linspace(tth_range[0], tth_range[1], n_tth)
+    chi_ax = np.linspace(chi_range[0], chi_range[1], n_chi)
+
+    # meshgrid: rows = chi, cols = tth  →  shape (n_chi, n_tth)
+    TTH, CHI = np.meshgrid(tth_ax, chi_ax)
+    tth_r = np.radians(TTH.ravel())
+    chi_r = np.radians(CHI.ravel())
+
+    # kf unit vectors in LT frame (x // beam):
+    #   kf = [cos 2θ,  sin 2θ · sin χ,  sin 2θ · cos χ]
+    sin_tth = np.sin(tth_r)
+    kf_arr = np.column_stack([
+        np.cos(tth_r),
+        sin_tth * np.sin(chi_r),
+        sin_tth * np.cos(chi_r),
+    ])
+
+    # ── Back-project to detector pixels ──────────────────────────────────────
+    xcam, ycam = camera.kf_to_pixel(kf_arr)
+
+    valid = (
+        np.isfinite(xcam) & np.isfinite(ycam)
+        & (xcam >= 0) & (xcam < camera.Nh)
+        & (ycam >= 0) & (ycam < camera.Nv)
+    )
+
+    # map_coordinates expects [row, col] = [ycam, xcam]
+    coords = np.array([
+        np.where(valid, ycam, 0.0),
+        np.where(valid, xcam, 0.0),
+    ])
+
+    warped_flat = map_coordinates(
+        image, coords, order=interp_order, mode="constant", cval=0.0
+    )
+    warped_flat[~valid] = np.nan
+
+    return warped_flat.reshape(n_chi, n_tth), tth_ax, chi_ax
+
+
+def plot_tth_chi_overlay(
+    image,
+    camera,
+    spots=None,
+    *,
+    tth_range=None,
+    chi_range=None,
+    n_tth: int = 600,
+    n_chi: int = 600,
+    log_scale: bool = True,
+    cmap: str = "gray",
+    spot_marker: str = "+",
+    spot_size: float = 60.0,
+    spot_color: str | None = None,
+    color_spots_by: str = "phase",
+    figsize=(10, 7),
+    out_path: str | None = None,
+):
+    """
+    Overlay simulated spot positions on a detector image, both in 2θ / χ space.
+
+    The detector image is first warped from pixel coordinates into an evenly-
+    spaced 2θ / χ grid using :func:`warp_image_to_tth_chi`, then displayed
+    with :func:`matplotlib.axes.Axes.imshow`.  Simulated spots (from any
+    ``simulate_laue*`` function) are scatter-plotted on top in the same frame.
+
+    Parameters
+    ----------
+    image : array-like, shape (Nv, Nh)
+        Detector image in pixel space.
+    camera : Camera
+        Detector geometry.
+    spots : list[dict], optional
+        Spot list from :func:`~nrxrdct.laue.simulate_laue`,
+        :func:`~nrxrdct.laue.simulate_laue_stack`, or
+        :func:`~nrxrdct.laue.simulate_mixed_phases`.
+        Required keys: ``'tth'``, ``'chi'``.
+    tth_range, chi_range : (float, float), optional
+        Angular range to display.  Defaults to full detector coverage.
+    n_tth, n_chi : int
+        Warp output resolution.
+    log_scale : bool
+        Apply ``log1p`` scaling to the warped image before display.
+    cmap : str
+        Matplotlib colormap for the image.
+    spot_marker : str
+        Marker style for simulated spots (default ``'+'``).
+    spot_size : float
+        Marker size for simulated spots.
+    spot_color : str or None
+        Single colour for all spots.  When ``None``, colours are assigned
+        per ``color_spots_by``.
+    color_spots_by : ``'phase'`` | ``'order'`` | ``'energy'``
+        How to colour spots when ``spot_color`` is ``None``.
+    figsize : (float, float)
+    out_path : str or None
+        Save figure to this path if provided.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax  : matplotlib.axes.Axes
+    warped : ndarray  (the remapped image array)
+    """
+    # ── Warp ─────────────────────────────────────────────────────────────────
+    warped, tth_ax, chi_ax = warp_image_to_tth_chi(
+        image, camera,
+        tth_range=tth_range, chi_range=chi_range,
+        n_tth=n_tth, n_chi=n_chi,
+    )
+
+    # ── Display image ─────────────────────────────────────────────────────────
+    display = np.where(np.isnan(warped), 0.0, warped)
+    if log_scale and display.max() > 0:
+        display = np.log1p(display / display.max() * 1000.0)
+    display[np.isnan(warped)] = np.nan
+
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor("#000000")
+
+    extent = [tth_ax[0], tth_ax[-1], chi_ax[0], chi_ax[-1]]
+    im = ax.imshow(
+        display,
+        origin="lower",
+        aspect="auto",
+        extent=extent,
+        cmap=cmap,
+        interpolation="nearest",
+    )
+    cb = fig.colorbar(im, ax=ax, pad=0.02, fraction=0.025)
+    cb.set_label("log intensity" if log_scale else "intensity",
+                 color=FG, fontsize=8)
+    cb.ax.tick_params(colors="#7788aa", labelsize=7)
+
+    # ── Overlay spots ─────────────────────────────────────────────────────────
+    if spots:
+        tths = np.array([s["tth"] for s in spots])
+        chis = np.array([s["chi"] for s in spots])
+
+        if spot_color is not None:
+            colors = spot_color
+        elif color_spots_by == "phase":
+            labels = [s.get("phase_label", "sim") for s in spots]
+            unique = list(dict.fromkeys(labels))
+            tab10 = plt.get_cmap("tab10")
+            lc = {lb: tab10(i / max(len(unique) - 1, 1)) for i, lb in enumerate(unique)}
+            colors = [lc[lb] for lb in labels]
+        elif color_spots_by == "order":
+            orders = np.array([s.get("satellite_order", 0) for s in spots])
+            norm = mcolors.Normalize(vmin=orders.min(), vmax=orders.max())
+            colors = plt.get_cmap("coolwarm")(norm(orders))
+        elif color_spots_by == "energy":
+            energies = np.array([s["E"] / 1e3 for s in spots])
+            norm = mcolors.Normalize(vmin=energies.min(), vmax=energies.max())
+            colors = plt.get_cmap("plasma")(norm(energies))
+        else:
+            colors = "#ff4444"
+
+        ax.scatter(
+            tths, chis,
+            c=colors,
+            s=spot_size,
+            marker=spot_marker,
+            linewidths=0.9,
+            zorder=4,
+            label="simulated spots",
+        )
+
+        # ── Hover tooltip ─────────────────────────────────────────────────────
+        _attach_hover_tooltip(fig, ax, spots, tths, chis)
+
+    # ── Axes styling ──────────────────────────────────────────────────────────
+    ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=9)
+    ax.set_ylabel("χ  (°)", color="#7788aa", fontsize=9)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    n_spots = len(spots) if spots else 0
+    hover_hint = "   (hover for details)" if n_spots else ""
+    ax.set_title(
+        f"Detector image — 2θ / χ frame"
+        + (f"   |   {n_spots} simulated spots{hover_hint}" if n_spots else ""),
+        color=FG, fontsize=9, pad=6,
+    )
+
+    if spots and spot_color is None and color_spots_by == "phase":
+        from matplotlib.lines import Line2D
+        handles = [
+            Line2D([0], [0], linestyle="none", marker=spot_marker,
+                   color=lc[lb], markersize=7, label=lb)
+            for lb in unique
+        ]
+        ax.legend(handles=handles, loc="upper right", fontsize=7.5,
+                  framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+                  labelcolor=FG)
+
+    fig.tight_layout()
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Overlay saved → {out_path}")
+
+    return fig, ax, warped

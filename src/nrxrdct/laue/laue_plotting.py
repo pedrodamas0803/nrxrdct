@@ -2677,6 +2677,7 @@ def plot_tth_chi_overlay(
     spot_size: float = 60.0,
     spot_color: str | None = None,
     color_spots_by: str = "phase",
+    i_thresh: float = 0.01,
     figsize=(10, 7),
     out_path: str | None = None,
 ):
@@ -2728,6 +2729,10 @@ def plot_tth_chi_overlay(
         per ``color_spots_by``.
     color_spots_by : ``'phase'`` | ``'order'`` | ``'energy'``
         How to colour spots when ``spot_color`` is ``None``.
+    i_thresh : float
+        Minimum intensity as a fraction of the brightest Bragg peak
+        (``satellite_order == 0``).  Spots below the cutoff are not
+        overlaid.  Default: ``0.01`` (1 %).  Pass ``0.0`` to show all spots.
     figsize : (float, float)
     out_path : str or None
         Save figure to this path if provided.
@@ -2743,6 +2748,12 @@ def plot_tth_chi_overlay(
     """
     if frame not in ("tth_chi", "detector"):
         raise ValueError(f"frame must be 'tth_chi' or 'detector', got {frame!r}")
+
+    # ── Intensity threshold ───────────────────────────────────────────────────
+    if spots and i_thresh > 0.0:
+        bragg = [s for s in spots if s.get("satellite_order", 0) == 0]
+        i_ref = max(s["intensity"] for s in bragg) if bragg else max(s["intensity"] for s in spots)
+        spots = [s for s in spots if s["intensity"] >= i_thresh * i_ref]
 
     fig, ax = plt.subplots(figsize=figsize)
     fig.patch.set_facecolor(BG)

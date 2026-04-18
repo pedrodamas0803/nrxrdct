@@ -503,16 +503,24 @@ def kb_reflectivity(
     k = 2.0 * np.pi / lam_ang          # Å⁻¹
 
     # Optical constants via xrayutilities
+    # xu.materials.Rh is an Element object, which has no delta_beta method.
+    # Wrap it in Amorphous (which accepts element name + density) to get δ, β.
     try:
         mat = getattr(xu.materials, material, None)
-        if mat is None:
-            # Try as an amorphous material (falls back to element lookup)
-            mat = xu.materials.Amorphous(material, 1.0)
+        if mat is None or not hasattr(mat, "delta_beta"):
+            # Element objects don't have delta_beta — create an Amorphous proxy
+            elem = getattr(xu.materials.elements, material, None)
+            if elem is None:
+                return 1.0   # unknown material: assume perfect (no correction)
+            density = getattr(elem, "density", None)
+            if not density:
+                return 1.0
+            mat = xu.materials.Amorphous(material, density)
         delta, beta = mat.delta_beta(energy_eV)
     except Exception:
-        # Fallback: compute δ from Thomson scattering (no dispersion correction)
-        # δ ≈ (r_e / 2π) λ² ρ_e  — rough approximation when xu lookup fails
-        return 0.0
+        # If xrayutilities fails for any reason, skip the correction rather
+        # than zeroing out all spectral weights (which produces 0 spots).
+        return 1.0
 
     n_sq = (1.0 - delta + 1j * beta) ** 2  # n²
 

@@ -1888,14 +1888,11 @@ def plot_layer_scheme(
         else:
             label_str = f"{layer.label}\n{thick_nm:.1f} nm"
 
-        # Text rotation matches the layer surface (parallel to th_2d)
-        rot = np.degrees(np.arctan2(th_2d[1], th_2d[0]))
-
         if ds >= min_display_frac * DISP_H:
             ax.text(
                 cx[0], cx[1], label_str,
                 ha="center", va="center", fontsize=7.5, fontweight="bold",
-                rotation=rot, rotation_mode="anchor",
+                rotation=0, rotation_mode="anchor",
                 color="black", zorder=3, clip_on=True,
             )
         else:
@@ -2018,11 +2015,11 @@ def plot_layer_scheme(
     )
 
     # ── Title ─────────────────────────────────────────────────────────────────
-    total_nm    = stack.total_thickness / 10.0
+    total_um    = stack.total_thickness / 1e4
     reps_note   = (f"  [{n_reps_draw}/{stack.n_rep} reps shown]"
                    if stack.n_rep > max_reps else "")
     ax.set_title(
-        f"{stack.name}   —   total thickness {total_nm:.1f} nm{reps_note}",
+        f"{stack.name}   —   total thickness {total_um:.3f} µm{reps_note}",
         color=FG, fontsize=9, pad=7,
     )
 

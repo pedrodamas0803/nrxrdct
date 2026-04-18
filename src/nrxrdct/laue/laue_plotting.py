@@ -1793,30 +1793,51 @@ def plot_layer_scheme(
     stack._update_offsets()
     n_reps_draw = min(stack.n_rep, max_reps)
 
-    # (Layer, z0_global_Å, is_buffer)
-    layers_to_draw = []
+    mqw_drawn_ang = n_reps_draw * stack._bilayer_thickness
+    has_mqw = bool(stack.layers) and mqw_drawn_ang > 1e-9
+    has_buf = bool(stack.buffer_layers)
 
-    # Buffer layers — always drawn once
-    for layer, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
-        layers_to_draw.append((layer, z0, True))
-
-    # Repeating unit — drawn n_reps_draw times above the buffer
-    z_mqw_start = stack._buffer_thickness
-    for rep in range(n_reps_draw):
-        offset = z_mqw_start + rep * stack._bilayer_thickness
-        for layer, z0_local in zip(stack.layers, stack._z_offsets):
-            layers_to_draw.append((layer, offset + z0_local, False))
-
-    total_drawn = stack._buffer_thickness + n_reps_draw * stack._bilayer_thickness
-    if total_drawn < 1e-9:
+    if not has_mqw and not has_buf:
         if standalone:
             return fig, ax
         return ax
 
     # ── Scaling ───────────────────────────────────────────────────────────────
-    DISP_H = 5.0                                # total drawn height in display units
-    scale  = DISP_H / total_drawn               # Å → display units
-    W      = layer_width                        # slab half-width
+    DISP_H = 5.0   # display height reserved for the MQW region (display units)
+    W      = layer_width
+
+    if has_mqw:
+        scale = DISP_H / mqw_drawn_ang          # Å → display units (MQW only)
+        # Buffer layers are drawn at a fixed height = thickest MQW layer
+        max_mqw_ang = max(lyr.thickness for lyr in stack.layers)
+        buf_disp_h  = max_mqw_ang * scale
+    else:
+        # No MQW — fall back to normal scaling for buffer-only stacks
+        scale      = DISP_H / stack._buffer_thickness
+        buf_disp_h = None   # use real thickness
+
+    # ── Build (layer, s0_disp, s1_disp, is_buffer) list ──────────────────────
+    # Display positions are computed independently for buffers (fixed height)
+    # and MQW layers (real scale).
+    layers_to_draw = []   # (layer, s0, s1, is_buffer)
+
+    # Buffer layers stacked from z_disp=0, each at a fixed display height
+    z_disp = 0.0
+    for layer in stack.buffer_layers:
+        h = buf_disp_h if buf_disp_h is not None else layer.thickness * scale
+        layers_to_draw.append((layer, z_disp, z_disp + h, True))
+        z_disp += h
+
+    s_mqw_start_disp = z_disp   # where the MQW region begins in display space
+
+    # MQW repeating layers at real scale above the buffer region
+    for rep in range(n_reps_draw):
+        for layer, z0_local in zip(stack.layers, stack._z_offsets):
+            s0 = s_mqw_start_disp + (rep * stack._bilayer_thickness + z0_local) * scale
+            s1 = s0 + layer.thickness * scale
+            layers_to_draw.append((layer, s0, s1, False))
+
+    total_disp_h = s_mqw_start_disp + (mqw_drawn_ang * scale if has_mqw else 0.0)
 
     # ── Colour map (unique layer labels) ─────────────────────────────────────
     unique_labels = list(dict.fromkeys(t[0].label for t in layers_to_draw))
@@ -1824,21 +1845,18 @@ def plot_layer_scheme(
     cmap = {lbl: palette[i] for i, lbl in enumerate(unique_labels)}
 
     # ── Draw MQW boundary marker ──────────────────────────────────────────────
-    if stack.buffer_layers and stack.layers:
-        s_boundary = stack._buffer_thickness * scale
-        pt_l = s_boundary * nh_2d - W * th_2d
-        pt_r = s_boundary * nh_2d + W * th_2d
+    if has_buf and has_mqw:
+        pt_l = s_mqw_start_disp * nh_2d - W * th_2d
+        pt_r = s_mqw_start_disp * nh_2d + W * th_2d
         ax.plot(
             [pt_l[0], pt_r[0]], [pt_l[1], pt_r[1]],
             color="#ffdd55", linewidth=1.8, linestyle="--", zorder=4,
         )
 
     # ── Draw layers ───────────────────────────────────────────────────────────
-    callout_labels = []   # [(center_xy, text)] for thin-layer callouts
+    callout_labels = []   # [(center_xy, text, color)] for thin-layer callouts
 
-    for layer, z0, is_buffer in layers_to_draw:
-        s0 = z0 * scale
-        s1 = (z0 + layer.thickness) * scale
+    for layer, s0, s1, is_buffer in layers_to_draw:
         ds = s1 - s0
         color = cmap[layer.label]
 
@@ -1847,7 +1865,6 @@ def plot_layer_scheme(
         c1 = s0 * nh_2d + W * th_2d
         c2 = s1 * nh_2d + W * th_2d
         c3 = s1 * nh_2d - W * th_2d
-        # Buffer layers get a subtly different edge style to distinguish them
         edge_lw    = 1.2 if is_buffer else 0.7
         edge_color = "#ffdd55" if is_buffer else "white"
         poly = plt.Polygon(
@@ -1857,9 +1874,19 @@ def plot_layer_scheme(
         )
         ax.add_patch(poly)
 
-        cx = ((s0 + s1) * 0.5) * nh_2d          # centre of parallelogram
+        cx = ((s0 + s1) * 0.5) * nh_2d   # centre of parallelogram
         thick_nm = layer.thickness / 10.0
-        label_str = f"{layer.label}\n{thick_nm:.1f} nm"
+
+        # Buffer layers show actual thickness and flag as not to scale
+        if is_buffer:
+            thick_um = layer.thickness / 1e4
+            if thick_um >= 0.1:
+                thick_str = f"{thick_um:.2f} µm"
+            else:
+                thick_str = f"{thick_nm:.1f} nm"
+            label_str = f"{layer.label}\n{thick_str}\n(not to scale)"
+        else:
+            label_str = f"{layer.label}\n{thick_nm:.1f} nm"
 
         # Text rotation matches the layer surface (parallel to th_2d)
         rot = np.degrees(np.arctan2(th_2d[1], th_2d[0]))
@@ -1893,7 +1920,7 @@ def plot_layer_scheme(
 
     # Clipped-reps marker
     if stack.n_rep > max_reps:
-        tip_pos = total_drawn * scale * nh_2d
+        tip_pos = total_disp_h * nh_2d
         ax.text(
             tip_pos[0] + 0.05, tip_pos[1] + 0.12,
             f"⋮  ({stack.n_rep} repetitions total)",
@@ -1902,7 +1929,7 @@ def plot_layer_scheme(
 
     # ── Incident beam arrow ───────────────────────────────────────────────────
     # The beam (+x) hits the last layer (largest z0 = surface-facing end).
-    surf_ctr  = total_drawn * scale * nh_2d
+    surf_ctr  = total_disp_h * nh_2d
     beam_tip  = surf_ctr - 0.2 * nh_2d              # slightly inset
     beam_tail = beam_tip + np.array([-2.2, 0.0])     # beam comes from -x
     ax.annotate(
@@ -1944,7 +1971,7 @@ def plot_layer_scheme(
     ax_len  = 0.80
     # Find a comfortable lower-left position
     all_pts = np.array([s * nh_2d + sign * W * th_2d
-                        for s in [0, total_drawn * scale]
+                        for s in [0, total_disp_h]
                         for sign in [-1, 1]])
     x_min = all_pts[:, 0].min() - 2.8
     z_min = all_pts[:, 1].min() - 0.5

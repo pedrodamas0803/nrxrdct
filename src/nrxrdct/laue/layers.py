@@ -274,29 +274,25 @@ class Layer:
     n_cells     : int   number of unit cells along the stacking direction
     n_hat       : array-like (3,), optional
         Unit vector in the **lab frame** that defines the stacking / growth
-        direction.  Defaults to ``[0, 0, 1]`` (lab Z), which is correct when
-        ``U`` was obtained from ``orientation_along_z``.  When ``U`` comes
-        from a Laue indexation result, pass the growth-direction vector
-        explicitly: ``n_hat = U @ growth_dir_crystal``.
-    surface_normal : array-like (3,), optional
-        Unit vector in the **lab frame** perpendicular to the physical sample
-        surface.  This is determined by how the sample is physically mounted
-        on the diffractometer — it is **independent** of the crystallographic
-        stacking direction and must be provided whenever the two differ (e.g.
-        semipolar / non-polar epitaxial films).
+        direction (= sample-surface normal).  Defaults to ``[0, 0, 1]``
+        (lab Z), which is correct when ``U`` was obtained from
+        ``orientation_along_z``.  When ``U`` comes from a Laue indexation
+        result, pass the growth-direction vector explicitly:
+        ``n_hat = U @ growth_dir_crystal / np.linalg.norm(...)``.
 
-        Defaults to ``n_hat`` (correct for c-plane or any geometry where the
-        growth direction is perpendicular to the wafer surface).
-
-        Used only when ``absorption_limit=True`` to correct the Beer-Lambert
-        depth for the angle between the stacking direction and the surface.
+        The growth direction always coincides with the sample-surface normal
+        (the plane given as ``growth_crystal`` is parallel to the sample
+        surface).  The angle between the incident beam (LT-frame x-axis,
+        ``[1,0,0]``) and this vector is therefore fixed by the sample
+        mounting and is used to correct the Beer-Lambert absorption depth
+        when ``absorption_limit=True``.
     d_spacing   : float, optional
         Repeat distance along the stacking direction (Å).
         If ``None``, computed as the primitive lattice repeat along ``n_hat``.
     label       : str, optional   name for this layer
     """
 
-    def __init__(self, crystal, U, n_cells, n_hat=None, surface_normal=None,
+    def __init__(self, crystal, U, n_cells, n_hat=None,
                  d_spacing=None, label=None, absorption_limit=False):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
@@ -312,12 +308,6 @@ class Layer:
         else:
             nh = np.asarray(n_hat, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
-
-        if surface_normal is None:
-            self.surface_normal = self.n_hat.copy()
-        else:
-            sn = np.asarray(surface_normal, dtype=float)
-            self.surface_normal = sn / np.linalg.norm(sn)
 
         if d_spacing is not None:
             self.d = float(d_spacing)
@@ -350,25 +340,28 @@ class Layer:
         """
         Effective number of unit cells after Beer-Lambert absorption limiting.
 
-        The beam is assumed to enter the sample approximately along the
-        **surface normal** (normal-incidence approximation).  The 1/e
-        absorption depth along that direction is ``1 / μ``, where
+        The incident beam travels along the LT-frame x-axis ``[1,0,0]``.
+        The sample-surface normal coincides with the stacking direction
+        ``n_hat`` (the growth-crystal plane is always parallel to the wafer
+        surface).  The angle α between beam and surface normal is therefore
+        fixed by the sample mounting:
 
-            μ = 4π β / λ     (Å⁻¹)
+            cos α = |n̂ · x̂| = |n_hat[0]|
 
-        When the stacking direction ``n_hat`` is tilted relative to the
-        surface normal (e.g. semipolar / non-polar epitaxy), advancing one
-        unit cell (distance *d* along ``n_hat``) only advances
-        ``d · |n̂ · n̂_surf|`` along the beam path.  The effective cell count
-        is therefore:
+        The 1/e absorption depth *along the surface normal* is ``1/μ``.
+        Projecting onto the stacking direction (same as the surface normal
+        here) and accounting for the oblique path gives the effective number
+        of unit cells:
 
-            n_eff = 1 / (μ · d · |n̂ · n̂_surf|)
+            n_eff = |n_hat[0]| / (μ · d)
 
-        For c-plane geometry ``n̂ = n̂_surf`` and the expression reduces to
-        the earlier ``1 / (μ · d)``.
+        For a beam at near-normal incidence (|n_hat[0]| → 1) this reduces to
+        the usual ``1/(μ·d)``.  For a highly tilted surface (|n_hat[0]| → 0,
+        grazing incidence) the beam spends a long path per unit depth and
+        n_eff → 0 (the layer is fully opaque).
 
         Returns ``self.n_cells`` unchanged if the material lookup fails or if
-        absorption is negligible (t_eff ≥ real thickness).
+        the absorption depth exceeds the real layer thickness.
         """
         _HC_ANG = 12398.419843   # hc in eV·Å
 
@@ -392,14 +385,12 @@ class Layer:
             if mu <= 0:
                 return self.n_cells
 
-            # Tilt correction: cos of angle between stacking direction and
-            # surface normal.  Clamp away from zero to avoid division by zero
-            # for near-parallel (grazing) geometry.
-            cos_tilt = abs(float(np.dot(self.n_hat, self.surface_normal)))
-            cos_tilt = max(cos_tilt, 1e-3)   # clip at ~89° tilt
+            # cos of angle between beam (LT x-axis) and surface normal (n_hat)
+            # Clamped to avoid zero (grazing incidence → n_eff = 1 minimum)
+            cos_alpha = abs(float(self.n_hat[0]))
+            cos_alpha = max(cos_alpha, 1e-3)
 
-            # Effective cells along n_hat limited by the 1/e depth along n_surf
-            n_eff = int(min(self.n_cells, 1.0 / (mu * self.d * cos_tilt)))
+            n_eff = int(min(self.n_cells, cos_alpha / (mu * self.d)))
             return max(n_eff, 1)
 
         except Exception:
@@ -499,24 +490,9 @@ class LayeredCrystal:
     >>> stack.add_layer(GaN,   U_GaN,   n_cells=1000, label='GaN')
     >>> stack.add_layer(InGaN, U_InGaN, n_cells=50,   label='InGaN')
 
-    Example — semipolar GaN (stacking ≠ surface normal)
-    ----------------------------------------------------
-    The physical surface normal is determined by the substrate cut; the
-    stacking direction is set by the growth direction in the crystal frame.
-    These two vectors differ for semipolar / non-polar orientations.
-
-    >>> growth_crystal = np.array([1., 1., -2., 2.])   # (11-22) direction
-    >>> n_hat = U_GaN @ growth_crystal_cart             # stacking in lab frame
-    >>> n_hat /= np.linalg.norm(n_hat)
-    >>> # surface normal = lab Z (substrate mounted flat on stage)
-    >>> n_surf = np.array([0., 0., 1.])
-    >>> stack = LayeredCrystal(name='semipolar LED',
-    ...                        stacking_direction=n_hat,
-    ...                        surface_normal=n_surf)
     """
 
-    def __init__(self, name="layered_crystal", stacking_direction=None,
-                 surface_normal=None):
+    def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
         self.buffer_layers = []   # non-repeating layers (substrate, buffer) — bottom of stack
         self.layers = []          # repeating unit (MQW bilayer)
@@ -529,12 +505,6 @@ class LayeredCrystal:
         else:
             nh = np.asarray(stacking_direction, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
-
-        if surface_normal is None:
-            self.surface_normal = self.n_hat.copy()
-        else:
-            sn = np.asarray(surface_normal, dtype=float)
-            self.surface_normal = sn / np.linalg.norm(sn)
 
     # ── Building the stack ────────────────────────────────────────────────────
 
@@ -556,8 +526,7 @@ class LayeredCrystal:
         label     : str, optional
         """
         layer = Layer(crystal, U, n_cells,
-                      n_hat=self.n_hat, surface_normal=self.surface_normal,
-                      d_spacing=d_spacing, label=label,
+                      n_hat=self.n_hat, d_spacing=d_spacing, label=label,
                       absorption_limit=True)
         self.buffer_layers.append(layer)
         self._update_offsets()
@@ -763,14 +732,11 @@ class LayeredCrystal:
                 f"a={lat.a:.4f}  b={lat.b:.4f}  c={lat.c:.4f} Å"
             )
 
-        sn = self.surface_normal
+        beam_angle_deg = np.degrees(np.arccos(np.clip(abs(float(nh[0])), 0.0, 1.0)))
         print(f"\n  LayeredCrystal: '{self.name}'")
         print(f"  {'─'*W}")
-        print(f"  Stacking direction (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]")
-        if not np.allclose(sn, nh, atol=1e-6):
-            tilt_deg = np.degrees(np.arccos(np.clip(abs(float(np.dot(nh, sn))), 0, 1)))
-            print(f"  Surface normal    (lab): [{sn[0]:+.4f}, {sn[1]:+.4f}, {sn[2]:+.4f}]"
-                  f"   tilt = {tilt_deg:.2f}°")
+        print(f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
+              f"   beam angle = {beam_angle_deg:.1f}°")
 
         # Buffer layers
         if self.buffer_layers:

@@ -968,6 +968,72 @@ def fit_strain_distribution(
     }
 
 
+def measure_spot_widths(
+    spots,
+    meas,
+    window: int = 9,
+):
+    """
+    Fit a 2-D Gaussian to each simulated spot position in a detector image
+    and return the measured 1σ widths as a dict compatible with
+    :func:`estimate_instrument_broadening`.
+
+    Parameters
+    ----------
+    spots : list of dicts
+        Spot list from any ``simulate_laue*`` function.
+        Required keys: ``'hkl'``, ``'pix'`` (pixel position as (xcam, ycam)).
+    meas : ndarray, shape (Nv, Nh)
+        Detector image (raw counts).
+    window : int
+        Half-width of the fitting sub-window in pixels.  A ``2*window × 2*window``
+        patch centred on each spot is extracted for the Gaussian fit.
+        Default: 9.
+
+    Returns
+    -------
+    sigma_meas_pix : dict  {(h, k, l): float}
+        Measured 1σ spot width in pixels (mean of σ_x and σ_y from the
+        2-D Gaussian fit) for each indexed reflection.
+        Spots whose fit fails or whose window falls outside the detector are
+        silently skipped.
+        Pass directly to :func:`estimate_instrument_broadening` as
+        ``sigma_meas_pix``.
+    """
+    from .segmentation import auto_init_gaussian_mixture_global, fit_gaussian_mixture_2d
+
+    meas = np.asarray(meas)
+    nv, nh = meas.shape
+    sigma_meas_pix = {}
+
+    for spot in spots:
+        hkl = spot.get("hkl")
+        pix = spot.get("pix")
+        if hkl is None or pix is None:
+            continue
+
+        key = tuple(int(x) for x in hkl)
+        xcen, ycen = round(pix[0]), round(pix[1])
+
+        # Skip spots whose window would reach outside the detector
+        if (ycen - window < 0 or ycen + window >= nv
+                or xcen - window < 0 or xcen + window >= nh):
+            continue
+
+        pk = meas[ycen - window: ycen + window,
+                  xcen - window: xcen + window]
+
+        try:
+            init = auto_init_gaussian_mixture_global(pk, n_components=1)
+            popt = fit_gaussian_mixture_2d(pk, 1, init)[0]
+            sigma_x, sigma_y = popt[3], popt[4]
+            sigma_meas_pix[key] = float(np.mean([sigma_x, sigma_y]))
+        except Exception:
+            continue
+
+    return sigma_meas_pix
+
+
 def estimate_instrument_broadening(
     spots,
     sigma_meas_pix,

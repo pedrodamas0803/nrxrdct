@@ -21,6 +21,7 @@ from .simulation import (
     decompose_matstarlab,
     en2lam,
     estimate_instrument_broadening,
+    measure_spot_widths,
     euler_to_U,
     fit_strain_distribution,
     is_superlattice,
@@ -61,6 +62,7 @@ __all__ = [
     "decompose_matstarlab",
     "beam_in_crystal",
     # Strain analysis
+    "measure_spot_widths",
     "estimate_instrument_broadening",
     "fit_strain_distribution",
     "strain_spot_jacobian",

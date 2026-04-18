@@ -146,8 +146,8 @@ def plot_2theta_chi(
         ax.set_xlabel("2θ  (degrees)", color="#7788aa", fontsize=8)
         ax.axvline(0, color="#252b40", lw=0.8)
 
-        fund = [s for s in spots if not s["is_superlattice"]]
-        super_ = [s for s in spots if s["is_superlattice"]]
+        fund = [s for s in spots if not s.get("is_superlattice", False)]
+        super_ = [s for s in spots if s.get("is_superlattice", False)]
 
         for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
             if not subset:
@@ -225,8 +225,8 @@ def plot_2theta_chi(
         ax.set_ylabel("gY  =   sin2θ·cosχ / (1+cos2θ)", color="#7788aa", fontsize=7)
         ax.set_aspect("equal")
 
-        fund = [s for s in spots if not s["is_superlattice"]]
-        super_ = [s for s in spots if s["is_superlattice"]]
+        fund = [s for s in spots if not s.get("is_superlattice", False)]
+        super_ = [s for s in spots if s.get("is_superlattice", False)]
 
         for subset, mk, ec in [(fund, "o", COL_FUND), (super_, "*", COL_SUPER)]:
             if not subset:
@@ -349,7 +349,7 @@ def plot_2theta_chi(
             ax.set_ylim(-r, r)
 
     # ── Draw all four panels ──────────────────────────────────────────────────
-    n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
+    n_super = sum(1 for s in spots_b2 if s.get("is_superlattice", False))
 
     draw_tth_chi(
         ax_bcc_ang, spots_bcc, f"BCC  Im-3m   –   2θ vs χ   ({len(spots_bcc)} spots)"
@@ -445,7 +445,7 @@ def plot_all(
 
     # Central 2theta of detector (LaueTools: 90 - xbet)
     tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
-    n_super = sum(1 for s in spots_b2 if s["is_superlattice"])
+    n_super = sum(1 for s in spots_b2 if s.get("is_superlattice", False))
     all_E = [s["E"] for s in spots_bcc + spots_b2]
     E_norm = mcolors.Normalize(vmin=E_MIN_eV / 1e3, vmax=E_MAX_eV / 1e3)
     cmap = "plasma"
@@ -586,7 +586,7 @@ def plot_all(
 
     for spots_s, mk, ec in [
         (spots_bcc, "o", COL_BCC),
-        ([s for s in spots_b2 if s["is_superlattice"]], "*", COL_SUP),
+        ([s for s in spots_b2 if s.get("is_superlattice", False)], "*", COL_SUP),
     ]:
         if not spots_s:
             continue
@@ -682,7 +682,7 @@ def plot_all(
             alpha=0.55,
             label="BCC fund.",
         )
-    sup = [s for s in spots_b2 if s["is_superlattice"]]
+    sup = [s for s in spots_b2 if s.get("is_superlattice", False)]
     if sup:
         ax_tth.hist(
             [s["tth"] for s in sup],
@@ -2276,11 +2276,8 @@ def _spot_label(s):
     h, k, l = s["hkl"]
 
     sat_order = s.get("satellite_order", None)
-    is_sl = s.get("is_superlattice", False)
     if sat_order is not None and sat_order != 0:
         refl_type = f"satellite  m={sat_order:+d}"
-    elif is_sl:
-        refl_type = "superstructure"
     else:
         refl_type = "Bragg peak"
 

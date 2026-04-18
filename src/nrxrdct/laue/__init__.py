@@ -24,7 +24,6 @@ from .simulation import (
     measure_spot_widths,
     euler_to_U,
     fit_strain_distribution,
-    is_superlattice,
     kb_reflectivity,
     lam2en,
     lorentz_pol,
@@ -69,7 +68,6 @@ __all__ = [
     "strain_broadening",
     # Physics helpers
     "lorentz_pol",
-    "is_superlattice",
     # Camera / detector
     "Camera",
     # Simulation

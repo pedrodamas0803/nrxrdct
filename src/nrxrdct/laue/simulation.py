@@ -558,9 +558,6 @@ def lorentz_pol(tth_deg):
     return abs((1 + np.cos(r) ** 2) / (2 * s**2 * c))
 
 
-def is_superlattice(h, k, l):
-    return (abs(h) + abs(k) + abs(l)) % 2 == 1
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STRAIN BROADENING
@@ -1347,8 +1344,6 @@ def simulate_laue(
         ``I_raw``           Un-normalised intensity: ``F2 * LP * sw``.
         ``intensity``       ``I_raw`` normalised to ``[0, 1]`` by the
                             brightest spot in this simulation.
-        ``is_superlattice`` ``True`` when ``|h|+|k|+|l|`` is odd (B2-type
-                            superlattice reflection).
         ==================  ====================================================
 
         Returns an **empty list** if no reflection satisfies all criteria.
@@ -1361,10 +1356,6 @@ def simulate_laue(
     * ``intensity`` is a *relative* quantity within a single call.  When
       comparing patterns from different phases or orientations use ``I_raw``
       and apply an external weighting (see ``simulate_mixed_phases``).
-    * The ``is_superlattice`` flag uses the BCC extinction rule
-      (``h+k+l`` odd → forbidden for BCC, but *allowed* for B2).  It is
-      provided as a convenience tag; the structure factor already accounts for
-      the actual systematic absences via ``crystal.StructureFactor``.
     """
     lam_lo = en2lam(E_max)
     lam_hi = en2lam(E_min)
@@ -1440,7 +1431,6 @@ def simulate_laue(
                         "LP": LP,
                         "sw": sw,
                         "I_raw": F2 * LP * sw,
-                        "is_superlattice": is_superlattice(h, k, l),
                     }
                 )
 
@@ -1678,7 +1668,6 @@ def simulate_laue_stack(
                 "LP": LP,
                 "sw": sw,
                 "I_raw": F2 * LP * sw,
-                "is_superlattice": (abs(hkl[0]) + abs(hkl[1]) + abs(hkl[2])) % 2 == 1,
             }
         )
         return 1
@@ -2247,11 +2236,10 @@ def print_mixed_summary(spots, top_n=20):
         top = sorted(phase_spots, key=lambda s: s["intensity"], reverse=True)
         for s in top[:top_n]:
             h, k, l = s["hkl"]
-            tag = "superl." if s.get("is_superlattice") else "fund."
             print(
                 f"  ({h:+d}{k:+d}{l:+d})  "
                 f"{s['E']/1e3:7.3f} {s['tth']:7.2f} {s['chi']:7.2f} "
-                f"{s['intensity']:8.4f} {s.get('intensity_phase',0):8.4f}  {tag}"
+                f"{s['intensity']:8.4f} {s.get('intensity_phase',0):8.4f}"
             )
 
 
@@ -2260,22 +2248,21 @@ def print_spot_table(title, spots, n=15):
     print(
         f"  {'hkl':^10} {'E(keV)':>7} {'lambda(A)':>9} {'2th(deg)':>9} "
         f"{'az(deg)':>8} {'col':>6} {'row':>6} "
-        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I/Imax':>7}  satellite  type"
+        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I/Imax':>7}  satellite"
     )
-    print("  " + "-" * 122)
+    print("  " + "-" * 110)
     for s in spots[:n]:
         h, k, l = s["hkl"]
         c, r = s["pix"]
         order = s.get("satellite_order", 0)
         sat_col = f"m={order:+d}" if order != 0 else "—"
-        tag = "superlat." if s.get("is_superlattice") else "fund."
         print(
             f"  ({h:+2d}{k:+2d}{l:+2d})  "
             f"{s['E']/1e3:7.3f}  {s['lambda']:9.5f}  "
             f"{s['tth']:9.3f}  {s['az']:8.2f}  "
             f"{c:6.0f}  {r:6.0f}  "
             f"{s['F2']:8.2f}  {s['LP']:7.4f}  "
-            f"{s['sw']:7.4f}  {s['intensity']:7.4f}  {sat_col:>9s}  {tag}"
+            f"{s['sw']:7.4f}  {s['intensity']:7.4f}  {sat_col:>9s}"
         )
 
 

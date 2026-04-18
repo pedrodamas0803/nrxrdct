@@ -421,29 +421,65 @@ class Camera:
     def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=True, normalize=False):
         """
         Render a synthetic detector image (float32, shape Nv x Nh).
-        Each spot is a 2D Gaussian of width sigma_pix.
-        spot's 'pix' entry must be (xcam, ycam) in LaueTools convention.
+
+        Each spot is drawn as an isotropic 2-D Gaussian.  The width can be
+        fixed for all spots or vary with 2θ via a broadening model.
 
         Parameters
         ----------
+        spots : list of dicts
+            Spot list from any ``simulate_laue*`` function.
+            Required keys: ``'pix'`` (xcam, ycam), ``'intensity'``.
+            The key ``'tth'`` (degrees) is required when *sigma_pix* is a
+            callable or a broadening result dict.
+        sigma_pix : float | callable | dict
+            Controls the Gaussian σ (pixels) for each spot:
+
+            * **float** *(default)*  — fixed width for every spot.
+            * **callable** ``f(tth_deg) → float``  — per-spot width as a
+              function of 2θ.  Pass the ``'model'`` callable returned by
+              :func:`~nrxrdct.laue.estimate_instrument_broadening`.
+            * **dict** — the full result dict from
+              :func:`~nrxrdct.laue.estimate_instrument_broadening`; the
+              ``'model'`` key is extracted automatically.
+
+        log_scale : bool
+            Apply ``log1p`` compression before returning.
         normalize : bool
-            If True, divide the image by its maximum value so intensities
-            are in [0, 1] before any log scaling.
+            Divide by the image maximum before any log scaling so that
+            intensities are in ``[0, 1]``.
         """
+        # Resolve broadening model
+        if isinstance(sigma_pix, dict):
+            _model = sigma_pix["model"]
+            _fixed_sigma = None
+        elif callable(sigma_pix):
+            _model = sigma_pix
+            _fixed_sigma = None
+        else:
+            _model = None
+            _fixed_sigma = float(sigma_pix)
+
         img = np.zeros((self.Nv, self.Nh), dtype=np.float32)
-        margin = int(5 * sigma_pix) + 1
         for s in spots:
             if s.get("pix") is None:
                 continue
+
+            sigma = _model(s["tth"]) if _model is not None else _fixed_sigma
+            if not (sigma > 0):
+                continue
+
             c, r = s["pix"]  # xcam, ycam
             ci, ri = int(round(c)), int(round(r))
+            margin = int(5 * sigma) + 1
             c0, c1 = max(0, ci - margin), min(self.Nh, ci + margin + 1)
             r0, r1 = max(0, ri - margin), min(self.Nv, ri + margin + 1)
             if c0 >= c1 or r0 >= r1:
                 continue
             yy, xx = np.mgrid[r0:r1, c0:c1]
-            gauss = np.exp(-((xx - c) ** 2 + (yy - r) ** 2) / (2 * sigma_pix**2))
+            gauss = np.exp(-((xx - c) ** 2 + (yy - r) ** 2) / (2 * sigma ** 2))
             img[r0:r1, c0:c1] += s["intensity"] * gauss
+
         if normalize and img.max() > 0:
             img = img / img.max()
         if log_scale and img.max() > 0:

@@ -8,6 +8,7 @@ from .laue_plotting import plot_2theta_chi, plot_all, plot_compare_spots, plot_i
 from .layers import (
     Layer,
     LayeredCrystal,
+    d_spacing_hkl,
     or_baker_nutting,
     or_from_directions,
     or_kurdjumov_sachs,
@@ -86,6 +87,7 @@ __all__ = [
     "or_nishiyama_wassermann",
     "or_baker_nutting",
     "or_pitsch",
+    "d_spacing_hkl",
     "pseudomorphic_d_spacing",
     "nitride_elastic_constants",
     # Plotting

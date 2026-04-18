@@ -59,8 +59,8 @@ Usage
 
     # Build the stack: 20 Fe unit cells / 20 Cu unit cells, 5 repetitions
     stack = LayeredCrystal()
-    stack.add_layer(Fe, U_Fe, n_cells=20, label='Fe')
-    stack.add_layer(Cu, U_Cu, n_cells=20, label='Cu')
+    stack.add_layer(Fe, U_Fe, thickness=57.4, label='Fe')   # ~20 cells × 2.87 Å
+    stack.add_layer(Cu, U_Cu, thickness=72.6, label='Cu')   # ~20 cells × 3.63 Å
     stack.set_repetitions(5)
 
     # Compute |F(Q)|² along a scan
@@ -315,6 +315,46 @@ def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str =
     return {k: x * a + (1.0 - x) * b for k, a, b in zip(keys, v1, v2)}
 
 
+def d_spacing_hkl(crystal, h, k, l):
+    """
+    Interplanar spacing of the ``(hkl)`` family for *crystal*.
+
+    Uses the reciprocal lattice directly, so it is valid for any crystal
+    system (cubic, hexagonal, orthorhombic, triclinic, …):
+
+    .. math::
+
+        d_{hkl} = \\frac{2\\pi}{|\\mathbf{G}_{hkl}|}
+        \\qquad
+        \\mathbf{G}_{hkl} = h\\,\\mathbf{b}_1 + k\\,\\mathbf{b}_2 + l\\,\\mathbf{b}_3
+
+    where :math:`\\mathbf{b}_i` are the reciprocal-lattice basis vectors in
+    the xrayutilities convention (:math:`\\mathbf{b}_i \\cdot \\mathbf{a}_j =
+    2\\pi\\,\\delta_{ij}`).
+
+    Parameters
+    ----------
+    crystal : xu.materials.Crystal
+    h, k, l : int or float
+        Miller indices.
+
+    Returns
+    -------
+    float
+        d-spacing in Å.
+
+    Examples
+    --------
+    >>> import xrayutilities as xu
+    >>> GaN = xu.materials.GaN
+    >>> d_spacing_hkl(GaN, 0, 0, 2)   # GaN 002 reflection
+    2.593...
+    """
+    b1, b2, b3 = crystal.lattice._bi   # reciprocal vectors, Å⁻¹ (2π convention)
+    G = h * np.asarray(b1) + k * np.asarray(b2) + l * np.asarray(b3)
+    return float(2 * np.pi / np.linalg.norm(G))
+
+
 def pseudomorphic_d_spacing(
     crystal_film,
     a_substrate,
@@ -384,7 +424,7 @@ def pseudomorphic_d_spacing(
 
         d_InGaN, eps_par, eps_perp = pseudomorphic_d_spacing(
             InGaN, GaN.lattice.a, C13=92.0, C33=224.0)
-        stack.add_layer(InGaN, U_InGaN, n_cells=n_InGaN,
+        stack.add_layer(InGaN, U_InGaN, thickness=n_InGaN * d_InGaN,
                         d_spacing=d_InGaN, label="InGaN (strained)")
     """
     # Resolve substrate in-plane parameter
@@ -457,7 +497,7 @@ class Layer:
     ----------
     crystal     : xu.materials.Crystal
     U           : (3,3) orientation matrix   G_lab = U @ G_crystal
-    n_cells     : int   number of unit cells along the stacking direction
+    thickness   : float   physical thickness of the layer in Å
     n_hat       : array-like (3,), optional
         Unit vector in the **lab frame** that defines the stacking / growth
         direction (= sample-surface normal).  Defaults to ``[0, 0, 1]``
@@ -482,7 +522,7 @@ class Layer:
         self,
         crystal,
         U,
-        n_cells,
+        thickness,
         n_hat=None,
         d_spacing=None,
         label=None,
@@ -490,7 +530,6 @@ class Layer:
     ):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
-        self.n_cells = int(n_cells)
         self.label = label or crystal.name
         # When True, structure_factor uses an energy-dependent effective thickness
         # min(real thickness, 1/μ) to model Beer-Lambert absorption depth.
@@ -524,6 +563,8 @@ class Layer:
                 if p > 1e-6:
                     proj.append(p)
             self.d = min(proj) if proj else lat.c
+
+        self.n_cells = max(1, round(float(thickness) / self.d))
 
     @property
     def thickness(self):
@@ -640,8 +681,8 @@ class Layer:
 
     def __repr__(self):
         return (
-            f"Layer('{self.label}', {self.n_cells} cells × "
-            f"{self.d:.4f} Å = {self.thickness:.2f} Å)"
+            f"Layer('{self.label}', {self.thickness:.2f} Å"
+            f" ({self.n_cells} cells × {self.d:.4f} Å))"
         )
 
 
@@ -676,16 +717,16 @@ class LayeredCrystal:
     Example — using orientation_along_z (default n_hat = Z)
     --------------------------------------------------------
     >>> stack = LayeredCrystal(name='Fe/Cu KS superlattice')
-    >>> stack.add_layer(Fe, U_Fe, n_cells=20, label='Fe')
-    >>> stack.add_layer(Cu, U_Cu, n_cells=20, label='Cu')
+    >>> stack.add_layer(Fe, U_Fe, thickness=57.4, label='Fe')
+    >>> stack.add_layer(Cu, U_Cu, thickness=72.6, label='Cu')
     >>> stack.set_repetitions(10)
 
     Example — using a U matrix from Laue indexation (GaN grown along c)
     --------------------------------------------------------------------
     >>> n_hat = U_GaN @ np.array([0., 0., 1.])   # growth dir in lab frame
     >>> stack = LayeredCrystal(name='GaN/InGaN', stacking_direction=n_hat)
-    >>> stack.add_layer(GaN,   U_GaN,   n_cells=1000, label='GaN')
-    >>> stack.add_layer(InGaN, U_InGaN, n_cells=50,   label='InGaN')
+    >>> stack.add_layer(GaN,   U_GaN,   thickness=51800.0, label='GaN')    # ~1000 cells
+    >>> stack.add_layer(InGaN, U_InGaN, thickness=259.0,   label='InGaN')  # ~50 cells
 
     """
 
@@ -705,7 +746,7 @@ class LayeredCrystal:
 
     # ── Building the stack ────────────────────────────────────────────────────
 
-    def add_buffer_layer(self, crystal, U, n_cells, d_spacing=None, label=None):
+    def add_buffer_layer(self, crystal, U, thickness, d_spacing=None, label=None):
         """
         Append a **non-repeating** layer at the bottom of the stack (substrate
         side), below the repeating MQW / bilayer unit.
@@ -718,14 +759,14 @@ class LayeredCrystal:
         ----------
         crystal   : xu.materials.Crystal
         U         : (3,3) orientation matrix   G_lab = U @ G_crystal
-        n_cells   : int   number of unit cells along the stacking direction
+        thickness : float   physical thickness of the layer in Å
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
         """
         layer = Layer(
             crystal,
             U,
-            n_cells,
+            thickness,
             n_hat=self.n_hat,
             d_spacing=d_spacing,
             label=label,
@@ -735,7 +776,7 @@ class LayeredCrystal:
         self._update_offsets()
         return self
 
-    def add_layer(self, crystal, U, n_cells, d_spacing=None, label=None):
+    def add_layer(self, crystal, U, thickness, d_spacing=None, label=None):
         """
         Append a layer to the **repeating** unit (MQW / bilayer).
 
@@ -747,12 +788,12 @@ class LayeredCrystal:
         ----------
         crystal   : xu.materials.Crystal
         U         : (3,3) orientation matrix
-        n_cells   : int   number of unit cells along stacking direction
+        thickness : float   physical thickness of the layer in Å
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
         """
         layer = Layer(
-            crystal, U, n_cells, n_hat=self.n_hat, d_spacing=d_spacing, label=label
+            crystal, U, thickness, n_hat=self.n_hat, d_spacing=d_spacing, label=label
         )
         self.layers.append(layer)
         self._update_offsets()
@@ -762,7 +803,7 @@ class LayeredCrystal:
         self,
         crystal,
         U,
-        n_cells,
+        thickness,
         a_substrate,
         C13: float,
         C33: float,
@@ -792,8 +833,8 @@ class LayeredCrystal:
             Bulk (relaxed) film crystal.
         U : (3,3) ndarray
             Orientation matrix for this layer.
-        n_cells : int
-            Number of unit cells along the stacking direction.
+        thickness : float
+            Physical thickness of the layer in Å.
         a_substrate : float  or  xu.materials.Crystal
             In-plane lattice parameter of the template (Å), or a Crystal
             whose ``.lattice.a`` is used.
@@ -825,7 +866,7 @@ class LayeredCrystal:
             f"  d_bulk → {d_strained / (1 + eps_perp):.4f} Å"
             f"  d_strained = {d_strained:.4f} Å"
         )
-        return self.add_layer(crystal, U, n_cells, d_spacing=d_strained, label=lbl)
+        return self.add_layer(crystal, U, thickness, d_spacing=d_strained, label=lbl)
 
     def set_repetitions(self, n):
         """Set the number of times the repeating unit (MQW bilayer) is stacked."""

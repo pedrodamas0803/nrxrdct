@@ -1949,11 +1949,16 @@ def plot_layer_scheme(
         arrowprops=dict(arrowstyle="->", color="white", lw=1.8, mutation_scale=12),
         zorder=5,
     )
+    nh_label = (
+        r"$\hat{n}$"
+        f"  [{nh[0]:+.2f}, {nh[1]:+.2f}, {nh[2]:+.2f}]"
+        "\n(stacking direction)"
+    )
     ax.text(
         n_tip[0] + 0.1 * nh_2d[0],
         n_tip[1] + 0.12,
-        r"$\hat{n}$  (surface normal)",
-        color="white", fontsize=9, ha="center", va="bottom",
+        nh_label,
+        color="white", fontsize=8, ha="center", va="bottom",
     )
 
     # ── Surface / substrate edge labels ──────────────────────────────────────

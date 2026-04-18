@@ -487,7 +487,6 @@ class Layer:
         d_spacing=None,
         label=None,
         absorption_limit=False,
-        cos_beam=None,
     ):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
@@ -503,16 +502,6 @@ class Layer:
         else:
             nh = np.asarray(n_hat, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
-
-        # cos(angle between incident beam and sample surface normal).
-        # Set explicitly from LayeredCrystal.beam_angle_deg so the absorption
-        # correction uses the physical goniometer angle rather than n_hat[0],
-        # which varies with the U matrix and is not a reliable measure of the
-        # true beam–surface geometry.
-        if cos_beam is not None:
-            self._cos_beam = float(np.clip(cos_beam, 1e-3, 1.0))
-        else:
-            self._cos_beam = None   # falls back to abs(n_hat[0]) in _effective_n_cells
 
         if d_spacing is not None:
             self.d = float(d_spacing)
@@ -590,14 +579,9 @@ class Layer:
             if mu <= 0:
                 return self.n_cells
 
-            # cos of angle between incident beam and surface normal.
-            # Use the explicit value set from LayeredCrystal.beam_angle_deg when
-            # available (physical goniometer angle, constant for all measurements).
-            # Fall back to abs(n_hat[0]) only if no explicit angle was provided.
-            if self._cos_beam is not None:
-                cos_alpha = self._cos_beam
-            else:
-                cos_alpha = max(abs(float(self.n_hat[0])), 1e-3)
+            # cos of angle between beam (LT x-axis) and surface normal (n_hat)
+            # Clamped to avoid zero (grazing incidence → n_eff = 1 minimum)
+            cos_alpha = max(abs(float(self.n_hat[0])), 1e-3)
 
             n_eff = int(min(self.n_cells, cos_alpha / (mu * self.d)))
             return max(n_eff, 1)
@@ -705,8 +689,7 @@ class LayeredCrystal:
 
     """
 
-    def __init__(self, name="layered_crystal", stacking_direction=None,
-                 beam_angle_deg=None):
+    def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
         self.buffer_layers = []   # non-repeating layers (substrate, buffer) — bottom of stack
         self.layers = []          # repeating unit (MQW bilayer)
@@ -719,16 +702,6 @@ class LayeredCrystal:
         else:
             nh = np.asarray(stacking_direction, dtype=float)
             self.n_hat = nh / np.linalg.norm(nh)
-
-        # Angle between the incident beam and the sample surface normal (degrees).
-        # This is a property of the goniometer setup — it is the same for every
-        # measurement regardless of which crystal or U matrix is used.
-        # When set, all buffer layers use cos(beam_angle_deg) for the absorption
-        # depth calculation instead of abs(n_hat[0]).
-        if beam_angle_deg is not None:
-            self._cos_beam = float(np.cos(np.radians(beam_angle_deg)))
-        else:
-            self._cos_beam = None
 
     # ── Building the stack ────────────────────────────────────────────────────
 
@@ -757,7 +730,6 @@ class LayeredCrystal:
             d_spacing=d_spacing,
             label=label,
             absorption_limit=True,
-            cos_beam=self._cos_beam,
         )
         self.buffer_layers.append(layer)
         self._update_offsets()
@@ -1033,22 +1005,11 @@ class LayeredCrystal:
                 f"a={lat.a:.4f}  b={lat.b:.4f}  c={lat.c:.4f} Å"
             )
 
+        beam_angle_deg = np.degrees(np.arccos(np.clip(abs(float(nh[0])), 0.0, 1.0)))
         print(f"\n  LayeredCrystal: '{self.name}'")
         print(f"  {'─'*W}")
-        n_hat_angle = np.degrees(np.arccos(np.clip(abs(float(nh[0])), 0.0, 1.0)))
-        if self._cos_beam is not None:
-            explicit_angle = np.degrees(np.arccos(self._cos_beam))
-            print(
-                f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
-                f"   n_hat angle = {n_hat_angle:.1f}°"
-            )
-            print(f"  Beam–surface angle (explicit): {explicit_angle:.1f}°"
-                  f"   [used for absorption correction]")
-        else:
-            print(
-                f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
-                f"   beam angle = {n_hat_angle:.1f}° (from n_hat)"
-            )
+        print(f"  Stacking / surface normal (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]"
+              f"   beam angle = {beam_angle_deg:.1f}°")
 
         # Buffer layers
         if self.buffer_layers:

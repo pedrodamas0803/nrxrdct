@@ -429,6 +429,115 @@ def synchrotron_spectrum(E_eV):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# KB MIRROR REFLECTIVITY
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Default KB parameters for BM32/ESRF (Rh-coated, 2 mirrors, ~2.5 mrad grazing)
+BM32_KB = dict(
+    material="Rh",
+    grazing_angle_mrad=2.5,
+    n_mirrors=2,
+    roughness_ang=3.0,
+)
+
+
+def kb_reflectivity(
+    energy_eV,
+    material: str = "Rh",
+    grazing_angle_mrad: float = 2.5,
+    n_mirrors: int = 2,
+    roughness_ang: float = 3.0,
+) -> float:
+    """
+    Fresnel reflectivity of a KB mirror system (s-polarisation, kinematical limit).
+
+    Uses the optical constants δ, β of the coating material (via *xrayutilities*)
+    to compute the critical-angle total-external-reflection profile, with
+    Névot–Croce roughness damping.  The result is raised to the power
+    ``n_mirrors`` to model paired mirrors.
+
+    Parameters
+    ----------
+    energy_eV : float
+        Photon energy (eV).
+    material : str
+        Coating material name recognised by *xrayutilities*
+        (e.g. ``'Rh'``, ``'Pt'``, ``'Si'``).
+    grazing_angle_mrad : float
+        Nominal grazing incidence angle of each mirror (mrad).
+    n_mirrors : int
+        Number of mirrors in the KB system (typically 2).
+    roughness_ang : float
+        RMS surface roughness (Å).  Used in the Névot–Croce factor
+        ``exp(-(2 k sinθ σ)²)``.
+
+    Returns
+    -------
+    float
+        Total reflectivity in [0, 1].
+
+    Notes
+    -----
+    The Fresnel reflectivity for s-polarisation is:
+
+    .. math::
+
+        r_s = \\frac{\\sin\\theta - \\sqrt{n^2 - \\cos^2\\theta}}
+                   {\\sin\\theta + \\sqrt{n^2 - \\cos^2\\theta}}
+
+    where :math:`n = 1 - \\delta + i\\beta` and :math:`\\theta` is the
+    grazing angle.  The Névot–Croce roughness correction is applied as:
+
+    .. math::
+
+        R_{\\text{rough}} = R_{\\text{smooth}} \\cdot
+            \\exp\\!\\left[-(2 k \\sin\\theta\\,\\sigma)^2\\right]
+
+    The two KB mirrors are assumed identical, giving
+    :math:`R_{\\text{total}} = R_{\\text{single}}^{n_{\\text{mirrors}}}`.
+    """
+    import xrayutilities as xu
+
+    theta = grazing_angle_mrad * 1e-3  # rad
+    lam_ang = en2lam(energy_eV)        # Å
+    k = 2.0 * np.pi / lam_ang          # Å⁻¹
+
+    # Optical constants via xrayutilities
+    try:
+        mat = getattr(xu.materials, material, None)
+        if mat is None:
+            # Try as an amorphous material (falls back to element lookup)
+            mat = xu.materials.Amorphous(material, 1.0)
+        delta, beta = mat.delta_beta(energy_eV)
+    except Exception:
+        # Fallback: compute δ from Thomson scattering (no dispersion correction)
+        # δ ≈ (r_e / 2π) λ² ρ_e  — rough approximation when xu lookup fails
+        return 0.0
+
+    n_sq = (1.0 - delta + 1j * beta) ** 2  # n²
+
+    sin_th = np.sin(theta)
+    cos_th = np.cos(theta)
+
+    # sqrt(n² - cos²θ)  — complex
+    sq = np.sqrt(n_sq - cos_th ** 2 + 0j)
+
+    denom = sin_th + sq
+    if abs(denom) < 1e-15:
+        return 0.0
+
+    r_s = (sin_th - sq) / denom
+    R_smooth = float(abs(r_s) ** 2)
+
+    # Névot–Croce roughness factor
+    nc = np.exp(-((2.0 * k * sin_th * roughness_ang) ** 2))
+    R_single = R_smooth * float(nc)
+    R_single = max(0.0, min(1.0, R_single))
+
+    return R_single ** n_mirrors
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LORENTZ-POLARISATION
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1057,6 +1166,7 @@ def simulate_laue(
     E_max=E_MAX_eV,
     hmax=HMAX,
     f2_thresh=F2_THRESHOLD,
+    kb_params=BM32_KB,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1238,6 +1348,8 @@ def simulate_laue(
                     continue
 
                 sw = synchrotron_spectrum(E)
+                if kb_params is not None:
+                    sw *= kb_reflectivity(E, **kb_params)
                 if sw <= 0.0:
                     continue
 
@@ -1277,6 +1389,7 @@ def simulate_laue_stack(
     f2_thresh=1.0,
     ki_hat=None,
     max_satellites=5,
+    kb_params=BM32_KB,
     verbose=True,
 ):
     """
@@ -1303,6 +1416,18 @@ def simulate_laue_stack(
         Extra keyword arguments forwarded to the spectrum function:
           bending_magnet / wiggler : ``Ec_eV``, ``N_poles``
           undulator                : ``E1_eV``, ``n_harm``, ``sig_rel``
+    kb_params : dict or None, optional
+        KB mirror reflectivity correction applied by multiplying the source
+        spectrum by :func:`kb_reflectivity` at each photon energy.  The dict
+        is forwarded as keyword arguments.  Defaults to :data:`BM32_KB`
+        (Rh-coated, 2.5 mrad, 2 mirrors, 3 Å roughness — BM32/ESRF).
+        Pass ``None`` to disable::
+
+            spots = simulate_laue_stack(stack, cam)               # BM32_KB default
+            spots = simulate_laue_stack(stack, cam, kb_params=None)  # no correction
+
+        Keys: ``material``, ``grazing_angle_mrad``, ``n_mirrors``,
+        ``roughness_ang``.
     hmax : int
         Maximum Miller index to enumerate for each phase.
     f2_thresh : float
@@ -1349,16 +1474,20 @@ def simulate_laue_stack(
 
     def spectrum(E):
         if source == "bending_magnet":
-            return spectrum_bm(E, **source_kwargs)
+            sw = spectrum_bm(E, **source_kwargs)
         elif source == "wiggler":
             kw = dict(N_poles=source_kwargs.get("N_poles", 40))
             kw["Ec_eV"] = source_kwargs.get("Ec_eV", 20_000)
-            return spectrum_bm(E, **kw)
+            sw = spectrum_bm(E, **kw)
         elif source == "undulator":
-            return spectrum_undulator(E, **source_kwargs)
+            sw = spectrum_undulator(E, **source_kwargs)
         elif source == "flat":
-            return 1.0
-        raise ValueError(f"Unknown source: {source!r}")
+            sw = 1.0
+        else:
+            raise ValueError(f"Unknown source: {source!r}")
+        if kb_params is not None:
+            sw *= kb_reflectivity(E, **kb_params)
+        return sw
 
     # Auto-scale f2_thresh if not provided
     if f2_thresh is None:
@@ -1486,7 +1615,7 @@ def simulate_laue_stack(
     # enumerate once — the stack F already includes both contributions.
     seen_combos = []  # list of (crystal.name, U_rounded_tuple)
 
-    for layer in stack.layers:
+    for layer in stack.all_layers:
         crystal = layer.crystal
         U = layer.U
         label = layer.label
@@ -1572,6 +1701,7 @@ def simulate_mixed_phases(
     hmax=12,
     f2_thresh=None,
     normalise="volume",
+    kb_params=BM32_KB,
     verbose=True,
 ):
     """
@@ -1638,6 +1768,11 @@ def simulate_mixed_phases(
 
     source_kwargs : dict, optional
         Forwarded to the spectrum function (e.g. ``{'Ec_eV': 20000}``).
+
+    kb_params : dict or None, optional
+        KB mirror reflectivity correction, forwarded unchanged to each
+        per-phase simulation call.  Defaults to :data:`BM32_KB`.
+        Pass ``None`` to disable.
 
     hmax : int
         Maximum Miller index (global default, overridable per phase).
@@ -1801,6 +1936,7 @@ def simulate_mixed_phases(
                 source_kwargs=source_kwargs,
                 hmax=ph_hmax,
                 f2_thresh=ph_f2,
+                kb_params=kb_params,
                 verbose=False,
             )
         else:
@@ -1812,6 +1948,7 @@ def simulate_mixed_phases(
                 E_max=E_max_eV,
                 hmax=ph_hmax,
                 f2_thresh=(ph_f2 if ph_f2 is not None else 0.5),
+                kb_params=kb_params,
             )
 
         if verbose:

@@ -419,9 +419,11 @@ class LayeredCrystal:
 
     def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
-        self.layers = []  # list of Layer objects (one bilayer unit)
-        self.n_rep = 1  # number of bilayer repetitions
-        self._z_offsets = []  # cumulative offsets along n_hat
+        self.buffer_layers = []   # non-repeating layers (substrate, buffer) — bottom of stack
+        self.layers = []          # repeating unit (MQW bilayer)
+        self.n_rep = 1            # number of bilayer repetitions
+        self._buffer_z_offsets = []
+        self._z_offsets = []
 
         if stacking_direction is None:
             self.n_hat = np.array([0., 0., 1.])
@@ -431,9 +433,36 @@ class LayeredCrystal:
 
     # ── Building the stack ────────────────────────────────────────────────────
 
+    def add_buffer_layer(self, crystal, U, n_cells, d_spacing=None, label=None):
+        """
+        Append a **non-repeating** layer at the bottom of the stack (substrate
+        side), below the repeating MQW / bilayer unit.
+
+        Buffer layers are always added in order from deepest to shallowest:
+        the first call places the layer closest to the substrate, subsequent
+        calls place layers closer to the surface.
+
+        Parameters
+        ----------
+        crystal   : xu.materials.Crystal
+        U         : (3,3) orientation matrix   G_lab = U @ G_crystal
+        n_cells   : int   number of unit cells along the stacking direction
+        d_spacing : float, optional   stacking repeat distance (Å)
+        label     : str, optional
+        """
+        layer = Layer(crystal, U, n_cells,
+                      n_hat=self.n_hat, d_spacing=d_spacing, label=label)
+        self.buffer_layers.append(layer)
+        self._update_offsets()
+        return self
+
     def add_layer(self, crystal, U, n_cells, d_spacing=None, label=None):
         """
-        Append a layer to the repeating unit cell (bilayer).
+        Append a layer to the **repeating** unit (MQW / bilayer).
+
+        Layers are stacked in the order they are added; the first call
+        places the layer at the bottom of the unit, the last at the top.
+        The full unit is then repeated ``n_rep`` times above the buffer layers.
 
         Parameters
         ----------
@@ -450,12 +479,21 @@ class LayeredCrystal:
         return self
 
     def set_repetitions(self, n):
-        """Set the number of times the bilayer unit is repeated."""
+        """Set the number of times the repeating unit (MQW bilayer) is stacked."""
         self.n_rep = int(n)
         return self
 
     def _update_offsets(self):
-        """Recompute cumulative z-offsets of each layer within one bilayer."""
+        """Recompute cumulative z-offsets for buffer layers and the repeating unit."""
+        # Buffer layers: z = 0 at deepest point, increasing toward surface
+        self._buffer_z_offsets = []
+        z = 0.0
+        for layer in self.buffer_layers:
+            self._buffer_z_offsets.append(z)
+            z += layer.thickness
+        self._buffer_thickness = z
+
+        # Repeating unit offsets (relative to the start of the MQW section)
         self._z_offsets = []
         z = 0.0
         for layer in self.layers:
@@ -464,15 +502,26 @@ class LayeredCrystal:
         self._bilayer_thickness = z
 
     @property
+    def buffer_thickness(self):
+        """Total thickness of all non-repeating buffer layers (Å)."""
+        self._update_offsets()
+        return self._buffer_thickness
+
+    @property
     def bilayer_thickness(self):
-        """Thickness of one repeating unit (Å)."""
+        """Thickness of one repeating MQW unit (Å)."""
         self._update_offsets()
         return self._bilayer_thickness
 
     @property
     def total_thickness(self):
-        """Total stack thickness (Å)."""
-        return self.n_rep * self.bilayer_thickness
+        """Total stack thickness: buffer + n_rep × bilayer (Å)."""
+        return self.buffer_thickness + self.n_rep * self.bilayer_thickness
+
+    @property
+    def all_layers(self):
+        """All layers in stack order: buffer layers then repeating unit layers."""
+        return self.buffer_layers + self.layers
 
     # ── Structure factor ──────────────────────────────────────────────────────
 
@@ -480,14 +529,24 @@ class LayeredCrystal:
         """
         Total kinematical structure factor of the stack at Q_lab.
 
-        For a superlattice with N_rep repetitions of the bilayer unit:
+        The stack is divided into two sections:
 
-            F_total(Q) = [ Σ_layers  F_layer(Q, z0_l) ] · S_rep(Q)
+        1. **Buffer layers** (non-repeating, at the bottom):
 
-        where S_rep is the geometric factor for N_rep repetitions of the
-        bilayer with period Λ:
+               F_buf(Q) = Σ_j  F_layer_j(Q, z0_j)
 
-            S_rep(Q) = Σ_{m=0}^{N_rep-1} exp(i m (Q·n̂) Λ)
+        2. **Repeating unit** (MQW / bilayer, sitting on top of the buffer):
+
+               F_MQW(Q) = exp(i·Qₙ·z_buf) · F_unit(Q) · S_rep(Q)
+
+           where ``z_buf`` is the total buffer thickness,
+           ``F_unit`` is the single-bilayer structure factor, and
+
+               S_rep(Q) = Σ_{m=0}^{N_rep-1} exp(i·m·Qₙ·Λ)
+
+           is the superlattice geometric factor.
+
+        The total structure factor is ``F_buf + F_MQW``.
 
         Parameters
         ----------
@@ -500,25 +559,36 @@ class LayeredCrystal:
         """
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
-        Qn = float(np.dot(Q, self.n_hat))   # projection onto stacking direction
+        Qn = float(np.dot(Q, self.n_hat))
 
-        # Sum over layers within one bilayer
-        F_bilayer = 0.0 + 0j
-        for layer, z0 in zip(self.layers, self._z_offsets):
-            F_bilayer += layer.structure_factor(Q, energy_eV, z0=z0)
+        # ── Buffer layers (non-repeating) ─────────────────────────────────────
+        F_total = 0.0 + 0j
+        for layer, z0 in zip(self.buffer_layers, self._buffer_z_offsets):
+            F_total += layer.structure_factor(Q, energy_eV, z0=z0)
 
-        # Geometric sum over N_rep bilayer repetitions
-        Lambda = self._bilayer_thickness
-        phi_rep = Qn * Lambda
-        phi_mod = phi_rep % (2.0 * np.pi)
-        if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
-            S_rep = self.n_rep + 0j
-        else:
-            S_rep = (1.0 - np.exp(1j * self.n_rep * phi_rep)) / (
-                1.0 - np.exp(1j * phi_rep)
-            )
+        # ── Repeating unit (MQW) ──────────────────────────────────────────────
+        if self.layers:
+            F_unit = 0.0 + 0j
+            for layer, z0 in zip(self.layers, self._z_offsets):
+                F_unit += layer.structure_factor(Q, energy_eV, z0=z0)
 
-        return F_bilayer * S_rep
+            # Phase to shift MQW to its z position above the buffer
+            phase_buf = np.exp(1j * Qn * self._buffer_thickness)
+
+            # Geometric sum over N_rep repetitions of the bilayer
+            Lambda = self._bilayer_thickness
+            phi_rep = Qn * Lambda
+            phi_mod = phi_rep % (2.0 * np.pi)
+            if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
+                S_rep = self.n_rep + 0j
+            else:
+                S_rep = (1.0 - np.exp(1j * self.n_rep * phi_rep)) / (
+                    1.0 - np.exp(1j * phi_rep)
+                )
+
+            F_total += phase_buf * F_unit * S_rep
+
+        return F_total
 
     def intensity(self, Q_arr, energy_eV):
         """
@@ -540,7 +610,11 @@ class LayeredCrystal:
 
     def layer_contributions(self, Q_lab, energy_eV):
         """
-        Return the individual structure factor contribution of each layer type.
+        Return the individual structure factor contribution of each layer.
+
+        Buffer layers are included at their absolute z positions.  Repeating
+        unit layers are included for the *first* repetition only (z0 relative
+        to the start of the MQW section), without the superlattice factor.
 
         Parameters
         ----------
@@ -554,8 +628,11 @@ class LayeredCrystal:
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
         result = {}
-        for layer, z0 in zip(self.layers, self._z_offsets):
+        for layer, z0 in zip(self.buffer_layers, self._buffer_z_offsets):
             F = layer.structure_factor(Q, energy_eV, z0=z0)
+            result[layer.label] = result.get(layer.label, 0j) + F
+        for layer, z0 in zip(self.layers, self._z_offsets):
+            F = layer.structure_factor(Q, energy_eV, z0=self._buffer_thickness + z0)
             result[layer.label] = result.get(layer.label, 0j) + F
         return result
 
@@ -564,31 +641,56 @@ class LayeredCrystal:
     def describe(self):
         """Print a summary of the stack."""
         self._update_offsets()
-        Lambda = self._bilayer_thickness
         nh = self.n_hat
-        print(f"\n  LayeredCrystal: '{self.name}'")
-        print(f"  {'─'*52}")
-        print(f"  Stacking direction (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]")
-        print(f"  Layers in bilayer unit:")
-        for i, (layer, z0) in enumerate(zip(self.layers, self._z_offsets)):
+        W = 56
+
+        def _layer_row(i, layer, z0_abs):
             lat = layer.crystal.lattice
             print(
-                f"    [{i}] {layer.label:20s}  "
-                f"{layer.n_cells:4d} cells × {layer.d:.4f} Å = "
-                f"{layer.thickness:8.3f} Å   (z0 = {z0:.3f} Å)"
+                f"    [{i}] {layer.label:22s} "
+                f"{layer.n_cells:5d} cells × {layer.d:.4f} Å"
+                f" = {layer.thickness:9.3f} Å   z = {z0_abs:.1f} Å"
             )
             print(
                 f"         SG {lat.space_group}  "
-                f"a={lat.a:.4f} b={lat.b:.4f} c={lat.c:.4f} Å"
+                f"a={lat.a:.4f}  b={lat.b:.4f}  c={lat.c:.4f} Å"
             )
-        print(f"  Bilayer period Λ = {Lambda:.4f} Å")
-        print(f"  Repetitions      = {self.n_rep}")
+
+        print(f"\n  LayeredCrystal: '{self.name}'")
+        print(f"  {'─'*W}")
+        print(f"  Stacking direction (lab): [{nh[0]:+.4f}, {nh[1]:+.4f}, {nh[2]:+.4f}]")
+
+        # Buffer layers
+        if self.buffer_layers:
+            print(f"\n  Buffer layers  (non-repeating, {len(self.buffer_layers)} layer"
+                  f"{'s' if len(self.buffer_layers) != 1 else ''}):")
+            for i, (layer, z0) in enumerate(
+                zip(self.buffer_layers, self._buffer_z_offsets)
+            ):
+                _layer_row(i, layer, z0)
+        else:
+            print(f"\n  Buffer layers: none")
+
+        # Repeating unit
+        if self.layers:
+            print(
+                f"\n  Repeating unit  (× {self.n_rep},"
+                f" starts at z = {self._buffer_thickness:.1f} Å):"
+            )
+            for i, (layer, z0) in enumerate(zip(self.layers, self._z_offsets)):
+                _layer_row(i, layer, self._buffer_thickness + z0)
+            Lambda = self._bilayer_thickness
+            print(f"    Bilayer period  Λ = {Lambda:.4f} Å")
+            if Lambda > 1e-6:
+                print(f"    Satellite spacing 2π/Λ = {2*np.pi/Lambda:.5f} Å⁻¹")
+        else:
+            print(f"\n  Repeating unit: none")
+
         print(
-            f"  Total thickness  = {self.total_thickness:.2f} Å  "
-            f"= {self.total_thickness/10:.2f} nm"
+            f"\n  Total thickness = {self.total_thickness:.2f} Å"
+            f"  = {self.total_thickness/10:.2f} nm"
         )
-        print(f"  Satellite spacing 2π/Λ = {2*np.pi/Lambda:.5f} Å⁻¹")
-        print(f"  {'─'*52}")
+        print(f"  {'─'*W}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

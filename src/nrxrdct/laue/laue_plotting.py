@@ -1792,13 +1792,22 @@ def plot_layer_scheme(
     # ── Build layer list (with repetitions) ──────────────────────────────────
     stack._update_offsets()
     n_reps_draw = min(stack.n_rep, max_reps)
-    layers_to_draw = []                         # [(Layer, z0_global_Å)]
-    for rep in range(n_reps_draw):
-        offset = rep * stack._bilayer_thickness
-        for layer, z0_local in zip(stack.layers, stack._z_offsets):
-            layers_to_draw.append((layer, offset + z0_local))
 
-    total_drawn = n_reps_draw * stack._bilayer_thickness
+    # (Layer, z0_global_Å, is_buffer)
+    layers_to_draw = []
+
+    # Buffer layers — always drawn once
+    for layer, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
+        layers_to_draw.append((layer, z0, True))
+
+    # Repeating unit — drawn n_reps_draw times above the buffer
+    z_mqw_start = stack._buffer_thickness
+    for rep in range(n_reps_draw):
+        offset = z_mqw_start + rep * stack._bilayer_thickness
+        for layer, z0_local in zip(stack.layers, stack._z_offsets):
+            layers_to_draw.append((layer, offset + z0_local, False))
+
+    total_drawn = stack._buffer_thickness + n_reps_draw * stack._bilayer_thickness
     if total_drawn < 1e-9:
         if standalone:
             return fig, ax
@@ -1810,14 +1819,24 @@ def plot_layer_scheme(
     W      = layer_width                        # slab half-width
 
     # ── Colour map (unique layer labels) ─────────────────────────────────────
-    unique_labels = list(dict.fromkeys(lyr.label for lyr, _ in layers_to_draw))
+    unique_labels = list(dict.fromkeys(t[0].label for t in layers_to_draw))
     palette = plt.cm.Set2(np.linspace(0.0, 0.85, max(len(unique_labels), 1)))
     cmap = {lbl: palette[i] for i, lbl in enumerate(unique_labels)}
+
+    # ── Draw MQW boundary marker ──────────────────────────────────────────────
+    if stack.buffer_layers and stack.layers:
+        s_boundary = stack._buffer_thickness * scale
+        pt_l = s_boundary * nh_2d - W * th_2d
+        pt_r = s_boundary * nh_2d + W * th_2d
+        ax.plot(
+            [pt_l[0], pt_r[0]], [pt_l[1], pt_r[1]],
+            color="#ffdd55", linewidth=1.8, linestyle="--", zorder=4,
+        )
 
     # ── Draw layers ───────────────────────────────────────────────────────────
     callout_labels = []   # [(center_xy, text)] for thin-layer callouts
 
-    for layer, z0 in layers_to_draw:
+    for layer, z0, is_buffer in layers_to_draw:
         s0 = z0 * scale
         s1 = (z0 + layer.thickness) * scale
         ds = s1 - s0
@@ -1828,10 +1847,13 @@ def plot_layer_scheme(
         c1 = s0 * nh_2d + W * th_2d
         c2 = s1 * nh_2d + W * th_2d
         c3 = s1 * nh_2d - W * th_2d
+        # Buffer layers get a subtly different edge style to distinguish them
+        edge_lw    = 1.2 if is_buffer else 0.7
+        edge_color = "#ffdd55" if is_buffer else "white"
         poly = plt.Polygon(
             [c0, c1, c2, c3], closed=True,
-            facecolor=color, edgecolor="white", linewidth=0.7, alpha=0.88,
-            zorder=2,
+            facecolor=color, edgecolor=edge_color, linewidth=edge_lw,
+            alpha=0.88, zorder=2,
         )
         ax.add_patch(poly)
 
@@ -2210,4 +2232,268 @@ def plot_laue_stack_spots(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         print(f"  Stack spot map saved → {out_path}")
+    return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INTERACTIVE 2θ / χ SCATTER WITH HOVER TOOLTIPS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_interactive_tth_chi(
+    spots,
+    *,
+    color_by: str = "energy",
+    size_scale: float = 120.0,
+    min_size: float = 10.0,
+    figsize=(9, 7),
+    out_path: str | None = None,
+):
+    """
+    Interactive 2θ / χ scatter plot with per-spot hover tooltips.
+
+    Hovering the mouse over a marker displays a tooltip containing:
+
+    * Miller indices ``(hkl)``
+    * 2θ and χ in degrees
+    * Photon energy (eV)
+    * Normalised intensity
+    * Whether the reflection is a **Bragg peak**, **superlattice / superstructure**
+      reflection, or a **satellite fringe** (with order *m*)
+    * Phase label (when present)
+
+    The function works with spot lists from all three simulation functions:
+    :func:`~nrxrdct.laue.simulate_laue`,
+    :func:`~nrxrdct.laue.simulate_laue_stack`, and
+    :func:`~nrxrdct.laue.simulate_mixed_phases`.
+
+    Parameters
+    ----------
+    spots : list[dict]
+        Spot list from any ``simulate_laue*`` function.  Required keys:
+        ``'tth'``, ``'chi'``, ``'hkl'``, ``'E'``, ``'intensity'``.
+        Optional: ``'satellite_order'``, ``'is_superlattice'``,
+        ``'phase_label'``.
+    color_by : ``'energy'`` | ``'intensity'`` | ``'phase'``
+        Quantity mapped to spot colour:
+
+        * ``'energy'``    — photon energy (plasma colormap)
+        * ``'intensity'`` — normalised intensity (viridis colormap)
+        * ``'phase'``     — phase label (tab10; requires ``'phase_label'`` key)
+    size_scale : float
+        Maximum marker area (``s`` in ``scatter``).
+    min_size : float
+        Minimum marker area so that weak spots remain visible.
+    figsize : (float, float)
+        Figure size in inches.
+    out_path : str or None
+        If given, save a **static** PNG snapshot on figure close.
+        ``None`` (default) → do not save.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax  : matplotlib.axes.Axes
+
+    Notes
+    -----
+    The interactive hover is implemented with matplotlib's built-in event
+    system (no extra dependencies).  Call ``plt.show()`` after this function
+    to display the interactive window.
+    """
+    if not spots:
+        raise ValueError("spots list is empty")
+
+    # ── Colour mapping ────────────────────────────────────────────────────────
+    if color_by == "energy":
+        cvals = np.array([s["E"] / 1e3 for s in spots])
+        norm = mcolors.Normalize(vmin=cvals.min(), vmax=cvals.max())
+        cmap = plt.get_cmap("plasma")
+        colors = [cmap(norm(v)) for v in cvals]
+        cbar_label = "Energy  (keV)"
+    elif color_by == "intensity":
+        cvals = np.array([s["intensity"] for s in spots])
+        norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
+        cmap = plt.get_cmap("viridis")
+        colors = [cmap(norm(v)) for v in cvals]
+        cbar_label = "Normalised intensity"
+    elif color_by == "phase":
+        labels = [s.get("phase_label", "unknown") for s in spots]
+        unique_labels = list(dict.fromkeys(labels))
+        tab10 = plt.get_cmap("tab10")
+        label_color = {lb: tab10(i / max(len(unique_labels) - 1, 1))
+                       for i, lb in enumerate(unique_labels)}
+        colors = [label_color[lb] for lb in labels]
+        cvals = None
+        cbar_label = None
+    else:
+        raise ValueError(f"color_by must be 'energy', 'intensity', or 'phase'")
+
+    sizes = np.array([max(min_size, size_scale * s["intensity"]) for s in spots])
+    tths = np.array([s["tth"] for s in spots])
+    chis = np.array([s["chi"] for s in spots])
+
+    # ── Figure & axes ─────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=9)
+    ax.set_ylabel("χ  (°)", color="#7788aa", fontsize=9)
+
+    # ── Scatter ───────────────────────────────────────────────────────────────
+    ax.scatter(
+        tths, chis,
+        s=sizes,
+        c=colors,
+        marker="o",
+        linewidths=0.4,
+        edgecolors="#ffffff44",
+        alpha=0.90,
+        zorder=3,
+        picker=False,   # we handle picking manually via motion_notify_event
+    )
+
+    # ── Colorbar (energy / intensity modes) ───────────────────────────────────
+    if cvals is not None:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax, pad=0.02, fraction=0.03)
+        cb.set_label(cbar_label, color=FG, fontsize=8)
+        cb.ax.tick_params(colors="#7788aa", labelsize=7)
+    elif color_by == "phase":
+        # Phase legend patches
+        from matplotlib.patches import Patch
+        handles = [Patch(color=label_color[lb], label=lb)
+                   for lb in unique_labels]
+        ax.legend(handles=handles, loc="upper right", fontsize=7.5,
+                  framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+                  labelcolor=FG)
+
+    # ── Title ─────────────────────────────────────────────────────────────────
+    ax.set_title(
+        f"2θ / χ map  —  {len(spots)} spots   (hover for details)",
+        color=FG, fontsize=9, pad=6,
+    )
+
+    # ── Tooltip annotation (hidden until hover) ───────────────────────────────
+    annot = ax.annotate(
+        "",
+        xy=(0, 0),
+        xytext=(14, 14),
+        textcoords="offset points",
+        bbox=dict(
+            boxstyle="round,pad=0.5",
+            facecolor="#1a1f2e",
+            edgecolor="#4fc3f7",
+            linewidth=0.8,
+            alpha=0.92,
+        ),
+        arrowprops=dict(
+            arrowstyle="->",
+            color="#4fc3f7",
+            lw=0.8,
+        ),
+        color=FG,
+        fontsize=7.5,
+        fontfamily="monospace",
+        visible=False,
+        zorder=10,
+    )
+
+    # ── Tooltip text builder ──────────────────────────────────────────────────
+    def _fmt_hkl(h, k, l):
+        """Format Miller indices in conventional crystallographic notation."""
+        def _idx(n):
+            return f"{abs(n)}\u0305" if n < 0 else str(n)   # overbar for negatives
+        return f"({_idx(h)} {_idx(k)} {_idx(l)})"
+
+    def _spot_label(s):
+        h, k, l = s["hkl"]
+
+        # ── Reflection type ───────────────────────────────────────────────────
+        sat_order = s.get("satellite_order", None)
+        is_sl = s.get("is_superlattice", False)
+        if sat_order is not None and sat_order != 0:
+            refl_type = f"satellite  m={sat_order:+d}"
+        elif is_sl:
+            refl_type = "superstructure"
+        else:
+            refl_type = "Bragg peak"
+
+        # ── Phase ─────────────────────────────────────────────────────────────
+        phase = s.get("phase_label", None)
+
+        # ── Assemble lines (fixed-width key column for alignment) ─────────────
+        W = 7   # key column width
+        sep = "\u2500" * 22   # ─────── horizontal rule
+        lines = [
+            f" hkl   {_fmt_hkl(h, k, l)}",
+        ]
+        if phase is not None:
+            lines.append(f" phase  {phase}")
+        lines += [
+            sep,
+            f" {'2θ':<{W}} {s['tth']:.3f}°",
+            f" {'χ':<{W}} {s['chi']:.3f}°",
+            f" {'E':<{W}} {s['E']:.1f} eV",
+            f" {'I':<{W}} {s['intensity']:.4f}",
+            sep,
+            f" {'type':<{W}} {refl_type}",
+        ]
+        return "\n".join(lines)
+
+    # ── Hover event handler ───────────────────────────────────────────────────
+    _hit_radius_pts = 8.0  # points — tune if needed
+
+    def _on_motion(event):
+        if event.inaxes is not ax:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        # Transform data coords → display coords for all points
+        xy_disp = ax.transData.transform(np.column_stack([tths, chis]))
+        mouse_disp = np.array([event.x, event.y])
+        dists = np.linalg.norm(xy_disp - mouse_disp, axis=1)
+
+        # Find the nearest point within the hit radius
+        # Convert hit radius from points to display pixels
+        pts_to_px = fig.dpi / 72.0
+        threshold_px = _hit_radius_pts * pts_to_px
+
+        idx = int(np.argmin(dists))
+        if dists[idx] > threshold_px:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        # Reposition annotation and update text
+        annot.xy = (tths[idx], chis[idx])
+        annot.set_text(_spot_label(spots[idx]))
+
+        # Flip tooltip to the left if near the right edge
+        x_frac = (tths[idx] - ax.get_xlim()[0]) / (ax.get_xlim()[1] - ax.get_xlim()[0])
+        offset_x = -14 - 140 if x_frac > 0.75 else 14
+        offset_y = 14
+        annot.xyann = (offset_x, offset_y)
+
+        if not annot.get_visible():
+            annot.set_visible(True)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", _on_motion)
+
+    if out_path:
+        import atexit
+        atexit.register(
+            lambda: fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                                facecolor=fig.get_facecolor())
+        )
+
+    fig.tight_layout()
     return fig, ax

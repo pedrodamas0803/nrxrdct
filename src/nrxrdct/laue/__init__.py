@@ -4,7 +4,7 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 
 from .camera import Camera
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
-from .laue_plotting import plot_2theta_chi, plot_all, plot_compare_spots, plot_layer_scheme, plot_laue_stack_spots, plot_strain_broadening
+from .laue_plotting import plot_2theta_chi, plot_all, plot_compare_spots, plot_interactive_tth_chi, plot_layer_scheme, plot_laue_stack_spots, plot_strain_broadening
 from .layers import (
     Layer,
     LayeredCrystal,
@@ -16,6 +16,7 @@ from .layers import (
     orientation_along_z,
 )
 from .simulation import (
+    BM32_KB,
     beam_in_crystal,
     decompose_matstarlab,
     en2lam,
@@ -23,6 +24,7 @@ from .simulation import (
     euler_to_U,
     fit_strain_distribution,
     is_superlattice,
+    kb_reflectivity,
     lam2en,
     lorentz_pol,
     print_bragg_table,
@@ -45,6 +47,9 @@ __all__ = [
     "spectrum_bm",
     "spectrum_undulator",
     "synchrotron_spectrum",
+    # KB mirror optics
+    "kb_reflectivity",
+    "BM32_KB",
     # Crystal builders
     "build_bcc",
     "build_b2",
@@ -83,6 +88,7 @@ __all__ = [
     "plot_2theta_chi",
     "plot_all",
     "plot_compare_spots",
+    "plot_interactive_tth_chi",
     "plot_layer_scheme",
     "plot_laue_stack_spots",
     "plot_strain_broadening",

@@ -499,8 +499,8 @@ def kb_reflectivity(
     import xrayutilities as xu
 
     theta = grazing_angle_mrad * 1e-3  # rad
-    lam_ang = en2lam(energy_eV)        # Å
-    k = 2.0 * np.pi / lam_ang          # Å⁻¹
+    lam_ang = en2lam(energy_eV)  # Å
+    k = 2.0 * np.pi / lam_ang  # Å⁻¹
 
     # Optical constants via xrayutilities
     # xu.materials.Rh is an Element object, which has no delta_beta method.
@@ -511,7 +511,7 @@ def kb_reflectivity(
             # Element objects don't have delta_beta — create an Amorphous proxy
             elem = getattr(xu.materials.elements, material, None)
             if elem is None:
-                return 1.0   # unknown material: assume perfect (no correction)
+                return 1.0  # unknown material: assume perfect (no correction)
             density = getattr(elem, "density", None)
             if not density:
                 return 1.0
@@ -528,7 +528,7 @@ def kb_reflectivity(
     cos_th = np.cos(theta)
 
     # sqrt(n² - cos²θ)  — complex
-    sq = np.sqrt(n_sq - cos_th ** 2 + 0j)
+    sq = np.sqrt(n_sq - cos_th**2 + 0j)
 
     denom = sin_th + sq
     if abs(denom) < 1e-15:
@@ -542,7 +542,7 @@ def kb_reflectivity(
     R_single = R_smooth * float(nc)
     R_single = max(0.0, min(1.0, R_single))
 
-    return R_single ** n_mirrors
+    return R_single**n_mirrors
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1090,7 +1090,7 @@ def estimate_instrument_broadening(
     spot_info = {}
     for s in spots:
         hkl = tuple(s["hkl"])
-        spot_info[hkl] = (float(s["two_theta"]), float(s["chi"]))
+        spot_info[hkl] = (float(s["tth"]), float(s["chi"]))
 
     # ── Intersect with measured keys ──────────────────────────────────────────
     common = set(spot_info.keys()) & set(sigma_meas_pix.keys())

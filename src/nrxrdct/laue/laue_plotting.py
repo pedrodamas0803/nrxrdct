@@ -3154,18 +3154,19 @@ def plot_laue_comparison(
         )
 
     # ── Satellite toggle checkbox ─────────────────────────────────────────────
-    # Place it in the reserved axes strip on the far right
+    # Place it in the reserved axes strip on the far right.
+    # Store the widget on the figure so it is not garbage-collected.
     chk_ax = fig.add_axes([0.91, 0.46, 0.08, 0.08], facecolor="#1a1f2e")
-    chk = CheckButtons(chk_ax, ["satellites"], [sc_sat is not None])
-    chk.labels[0].set_color(FG)
-    chk.labels[0].set_fontsize(8)
+    fig._sat_chk = CheckButtons(chk_ax, ["satellites"], [sc_sat is not None])
+    fig._sat_chk.labels[0].set_color(FG)
+    fig._sat_chk.labels[0].set_fontsize(8)
 
     def _toggle_sat(_):
         if sc_sat is not None:
             sc_sat.set_visible(not sc_sat.get_visible())
         fig.canvas.draw_idle()
 
-    chk.on_clicked(_toggle_sat)
+    fig._sat_chk.on_clicked(_toggle_sat)
 
     n_spots = len(spots_all)
     ax_sim.set_title(

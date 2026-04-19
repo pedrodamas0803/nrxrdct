@@ -2266,6 +2266,62 @@ def print_spot_table(title, spots, n=15):
         )
 
 
+def print_hkl_family(spots: list, h: int, k: int, l: int, n: int = 5) -> None:
+    """
+    Print all spots whose Miller indices are integer multiples of (h, k, l).
+
+    Searches for spots with hkl = m*(h, k, l) for m = 1, 2, …, n, covering
+    both positive and negative orders (m and -m).
+
+    Parameters
+    ----------
+    spots : list[dict]
+        Spot list from any ``simulate_laue*`` function.
+    h, k, l : int
+        Base Miller indices of the family.
+    n : int
+        Highest multiple to include (default 5).  Checks ±1·hkl … ±n·hkl.
+    """
+    h0, k0, l0 = int(h), int(k), int(l)
+    targets = set()
+    for m in range(1, n + 1):
+        targets.add(( m * h0,  m * k0,  m * l0))
+        targets.add((-m * h0, -m * k0, -m * l0))
+
+    matches = [s for s in spots if tuple(int(x) for x in s["hkl"]) in targets]
+    matches.sort(key=lambda s: (
+        abs(round(s["hkl"][0] / h0)) if h0 else
+        abs(round(s["hkl"][1] / k0)) if k0 else
+        abs(round(s["hkl"][2] / l0)),
+        s["tth"],
+    ))
+
+    title = f"({h0:+d}{k0:+d}{l0:+d}) family  [multiples 1 … {n}]"
+    print(f"\n  ── {title} ──  ({len(matches)} spots found)")
+    if not matches:
+        return
+
+    print(
+        f"  {'hkl':^10} {'E(keV)':>7} {'lambda(A)':>9} {'2th(deg)':>9} "
+        f"{'az(deg)':>8} {'col':>6} {'row':>6} "
+        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I_raw':>11} {'I/Imax':>7}  satellite"
+    )
+    print("  " + "-" * 124)
+    for s in matches:
+        hh, kk, ll = s["hkl"]
+        c, r = s["pix"]
+        order = s.get("satellite_order", 0)
+        sat_col = f"m={order:+d}" if order != 0 else "—"
+        print(
+            f"  ({hh:+2d}{kk:+2d}{ll:+2d})  "
+            f"{s['E']/1e3:7.3f}  {s['lambda']:9.5f}  "
+            f"{s['tth']:9.3f}  {s['az']:8.2f}  "
+            f"{c:6.0f}  {r:6.0f}  "
+            f"{s['F2']:8.2f}  {s['LP']:7.4f}  "
+            f"{s['sw']:7.4f}  {s['I_raw']:11.3e}  {s['intensity']:7.4f}  {sat_col:>9s}"
+        )
+
+
 def print_bragg_table(a):
     print("\n  ── Bragg-energy reference: E for 2theta=90° (side detector) ──")
     print(f"  {'(hkl)':^7} {'d (A)':>8} {'E at 90deg (keV)':>18}")

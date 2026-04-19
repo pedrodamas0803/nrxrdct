@@ -1085,3 +1085,247 @@ class LayeredCrystal:
             f"  = {self.total_thickness/10:.2f} nm"
         )
         print(f"  {'─'*W}")
+
+    def plot_lattice_parameter(
+        self,
+        param: str = "c",
+        unit: str = "A",
+        ax=None,
+        figsize=(8, 4),
+    ):
+        """
+        Plot a lattice parameter profile through the stack depth.
+
+        Draws a step function showing how *param* (``'a'``, ``'b'``, or
+        ``'c'``) varies with depth, with buffer layers at the bottom and the
+        surface at the top.  The repeating MQW unit is unrolled across all
+        ``n_rep`` repetitions.
+
+        Parameters
+        ----------
+        param : ``'a'`` | ``'b'`` | ``'c'``
+            Which lattice parameter to plot.
+        unit : ``'A'`` | ``'nm'``
+            Display unit for the depth axis (Å or nm).
+        ax : matplotlib.axes.Axes, optional
+            Draw into an existing axes; a new figure is created if ``None``.
+        figsize : (float, float)
+
+        Returns
+        -------
+        fig, ax
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+
+        if param not in ("a", "b", "c"):
+            raise ValueError(f"param must be 'a', 'b', or 'c', got {param!r}")
+        if unit not in ("A", "nm"):
+            raise ValueError(f"unit must be 'A' or 'nm', got {unit!r}")
+
+        self._update_offsets()
+        scale = 0.1 if unit == "nm" else 1.0
+        unit_label = "nm" if unit == "nm" else "Å"
+
+        # Build full layer sequence with absolute z offsets (bottom = 0)
+        # Each entry: (z_start, z_end, layer)
+        segments = []
+        z = 0.0
+        for layer in self.buffer_layers:
+            segments.append((z, z + layer.thickness, layer))
+            z += layer.thickness
+        for _ in range(self.n_rep):
+            for layer in self.layers:
+                segments.append((z, z + layer.thickness, layer))
+                z += layer.thickness
+
+        # Collect unique phase labels for the legend
+        seen_labels = {}
+        colors_cycle = plt.get_cmap("tab10")
+        color_idx = 0
+
+        standalone = ax is None
+        if standalone:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.figure
+
+        for z0, z1, layer in segments:
+            val = getattr(layer.crystal.lattice, param)
+            y0 = z0 * scale
+            y1 = z1 * scale
+            lbl = layer.label
+
+            if lbl not in seen_labels:
+                seen_labels[lbl] = colors_cycle(color_idx / 9)
+                color_idx = (color_idx + 1) % 10
+            col = seen_labels[lbl]
+
+            # Horizontal bar: lattice parameter value across the layer depth range
+            ax.hlines(val, y0, y1, colors=col, linewidths=2.5)
+            # Vertical connectors between adjacent layers
+            ax.vlines(y0, val, val, colors=col, linewidths=1.0, linestyles="dotted")
+
+        # Draw vertical connectors between adjacent steps
+        for i in range(1, len(segments)):
+            _, _, layer_prev = segments[i - 1]
+            z_curr, _, layer_curr  = segments[i]
+            val_prev = getattr(layer_prev.crystal.lattice, param)
+            val_curr = getattr(layer_curr.crystal.lattice, param)
+            z_joint = z_curr * scale
+            ax.vlines(z_joint, min(val_prev, val_curr), max(val_prev, val_curr),
+                      colors="#555555", linewidths=0.8, linestyles="--")
+
+        # Legend
+        handles = [
+            mpatches.Patch(color=col, label=lbl)
+            for lbl, col in seen_labels.items()
+        ]
+        ax.legend(handles=handles, fontsize=8, loc="best",
+                  framealpha=0.4, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+                  labelcolor="#ccccee")
+
+        ax.set_xlabel(f"depth  ({unit_label})", fontsize=9)
+        ax.set_ylabel(f"lattice parameter {param}  (Å)", fontsize=9)
+        ax.set_title(
+            f"{self.name}  —  lattice parameter {param} profile",
+            fontsize=10,
+        )
+        ax.set_xlim(0, self.total_thickness * scale)
+
+        if standalone:
+            fig.tight_layout()
+
+        return fig, ax
+
+    def plot_strain_profile(
+        self,
+        param: str = "c",
+        reference=None,
+        unit: str = "A",
+        ax=None,
+        figsize=(8, 4),
+    ):
+        """
+        Plot the strain profile of a lattice parameter through the stack depth.
+
+        Strain is defined as
+
+        .. math::
+
+            \\varepsilon = \\frac{p_{\\text{layer}} - p_{\\text{ref}}}{p_{\\text{ref}}}
+
+        where *p* is the chosen lattice parameter (``'a'``, ``'b'``, or
+        ``'c'``).
+
+        Parameters
+        ----------
+        param : ``'a'`` | ``'b'`` | ``'c'``
+            Lattice parameter to use.
+        reference : float, xu.materials.Crystal, or None
+            Reference value for zero strain.
+
+            * **float** — use this value directly (Å).
+            * **Crystal** — use ``crystal.lattice.<param>``.
+            * **None** *(default)* — use the lattice parameter of the first
+              buffer layer; if there are no buffer layers, use the first
+              repeating layer.
+        unit : ``'A'`` | ``'nm'``
+            Display unit for the depth axis.
+        ax : matplotlib.axes.Axes, optional
+        figsize : (float, float)
+
+        Returns
+        -------
+        fig, ax
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+
+        if param not in ("a", "b", "c"):
+            raise ValueError(f"param must be 'a', 'b', or 'c', got {param!r}")
+        if unit not in ("A", "nm"):
+            raise ValueError(f"unit must be 'A' or 'nm', got {unit!r}")
+
+        self._update_offsets()
+        scale = 0.1 if unit == "nm" else 1.0
+        unit_label = "nm" if unit == "nm" else "Å"
+
+        # Resolve reference value
+        if reference is None:
+            ref_layer = (self.buffer_layers or self.layers)[0]
+            p_ref = getattr(ref_layer.crystal.lattice, param)
+        elif isinstance(reference, (int, float)):
+            p_ref = float(reference)
+        else:
+            # Assume xu.materials.Crystal-like object
+            p_ref = float(getattr(reference.lattice, param))
+
+        # Build full layer sequence (same logic as plot_lattice_parameter)
+        segments = []
+        z = 0.0
+        for layer in self.buffer_layers:
+            segments.append((z, z + layer.thickness, layer))
+            z += layer.thickness
+        for _ in range(self.n_rep):
+            for layer in self.layers:
+                segments.append((z, z + layer.thickness, layer))
+                z += layer.thickness
+
+        seen_labels = {}
+        colors_cycle = plt.get_cmap("tab10")
+        color_idx = 0
+
+        standalone = ax is None
+        if standalone:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.figure
+
+        for z0, z1, layer in segments:
+            p_val = getattr(layer.crystal.lattice, param)
+            strain = (p_val - p_ref) / p_ref
+            y0 = z0 * scale
+            y1 = z1 * scale
+            lbl = layer.label
+
+            if lbl not in seen_labels:
+                seen_labels[lbl] = colors_cycle(color_idx / 9)
+                color_idx = (color_idx + 1) % 10
+            col = seen_labels[lbl]
+
+            ax.hlines(strain, y0, y1, colors=col, linewidths=2.5)
+
+        # Vertical connectors between adjacent steps
+        for i in range(1, len(segments)):
+            _, _, layer_prev = segments[i - 1]
+            z_curr, _, layer_curr = segments[i]
+            s_prev = (getattr(layer_prev.crystal.lattice, param) - p_ref) / p_ref
+            s_curr = (getattr(layer_curr.crystal.lattice, param) - p_ref) / p_ref
+            ax.vlines(z_curr * scale, min(s_prev, s_curr), max(s_prev, s_curr),
+                      colors="#555555", linewidths=0.8, linestyles="--")
+
+        # Zero-strain reference line
+        ax.axhline(0.0, color="#888888", linewidth=0.8, linestyle=":")
+
+        handles = [
+            mpatches.Patch(color=col, label=lbl)
+            for lbl, col in seen_labels.items()
+        ]
+        ax.legend(handles=handles, fontsize=8, loc="best",
+                  framealpha=0.4, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+                  labelcolor="#ccccee")
+
+        ref_str = f"{p_ref:.4f} Å"
+        ax.set_xlabel(f"depth  ({unit_label})", fontsize=9)
+        ax.set_ylabel(f"ε_{param}  =  (p − p_ref) / p_ref", fontsize=9)
+        ax.set_title(
+            f"{self.name}  —  strain profile  [{param},  ref = {ref_str}]",
+            fontsize=10,
+        )
+        ax.set_xlim(0, self.total_thickness * scale)
+
+        if standalone:
+            fig.tight_layout()
+
+        return fig, ax

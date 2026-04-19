@@ -2993,7 +2993,7 @@ def plot_laue_comparison(
         wspace=0.08,
     )
     ax_exp = fig.add_subplot(gs[0, 0])
-    ax_sim = fig.add_subplot(gs[0, 1])
+    ax_sim = fig.add_subplot(gs[0, 1], sharex=ax_exp, sharey=ax_exp)
     ax_cb  = fig.add_subplot(gs[0, 2])   # checkbox lives here
     ax_cb.set_axis_off()
 
@@ -3063,6 +3063,8 @@ def plot_laue_comparison(
         for ax in (ax_exp, ax_sim):
             ax.set_xlabel("x  (px)", color="#7788aa", fontsize=9)
         ax_exp.set_ylabel("y  (px)", color="#7788aa", fontsize=9)
+    # Hide redundant y tick labels on the shared right panel
+    plt.setp(ax_sim.get_yticklabels(), visible=False)
 
     ax_exp.set_title("Experiment", color=FG, fontsize=9, pad=6)
     ax_sim.set_title("Simulation", color=FG, fontsize=9, pad=6)

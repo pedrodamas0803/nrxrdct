@@ -2892,3 +2892,289 @@ def plot_tth_chi_overlay(
         print(f"  Overlay saved → {out_path}")
 
     return fig, ax, display
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SIDE-BY-SIDE EXPERIMENT / SIMULATION COMPARISON
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_laue_comparison(
+    exp_image,
+    sim_image,
+    camera,
+    spots=None,
+    *,
+    frame: str = "tth_chi",
+    tth_range=None,
+    chi_range=None,
+    n_tth: int = 600,
+    n_chi: int = 600,
+    cmap: str = "gray",
+    spot_marker: str = "+",
+    spot_size: float = 60.0,
+    spot_color=None,
+    color_spots_by: str = "phase",
+    i_thresh: float = 0.01,
+    figsize=(18, 7),
+    out_path: str | None = None,
+):
+    """
+    Side-by-side comparison of an experimental Laue image and a simulated one,
+    with simulated spot positions overlaid on the right panel.
+
+    Parameters
+    ----------
+    exp_image : array-like, shape (Nv, Nh)
+        Experimental detector image.
+    sim_image : array-like, shape (Nv, Nh)
+        Simulated detector image from :meth:`~Camera.render`.
+    camera : Camera
+        Detector geometry (shared by both panels).
+    spots : list[dict], optional
+        Spot list from any ``simulate_laue*`` function.  Overlaid on the
+        right (simulation) panel only.
+    frame : ``'tth_chi'`` | ``'detector'``
+        Display coordinate frame.
+
+        * ``'tth_chi'`` — both images are warped to an evenly-spaced 2θ / χ
+          grid; spots are placed at their angular coordinates.
+        * ``'detector'`` — raw pixel images; spots projected via their
+          ``'pix'`` key or back-projected from 2θ / χ.
+    tth_range, chi_range : (float, float), optional
+        Angular display range (*tth_chi* frame only).
+    n_tth, n_chi : int
+        Warp resolution (*tth_chi* frame only).
+    cmap : str
+        Matplotlib colormap (applied to both panels).
+    spot_marker : str
+        Marker style for simulated spots (default ``'+'``).
+    spot_size : float
+        Marker size.
+    spot_color : str or None
+        Fixed colour for all spots.  ``None`` → colour by ``color_spots_by``.
+    color_spots_by : ``'phase'`` | ``'order'`` | ``'energy'``
+        Colouring scheme when *spot_color* is ``None``.
+    i_thresh : float
+        Minimum ``I/Imax`` to show a spot (0 = show all).  Spots with
+        ``intensity < i_thresh`` are hidden.  The toggle button shows /
+        hides satellite spots on top of this threshold.
+    figsize : (float, float)
+    out_path : str or None
+        Save figure to this path if provided.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax_exp : matplotlib.axes.Axes   — left (experimental) panel
+    ax_sim : matplotlib.axes.Axes   — right (simulation) panel
+    """
+    from matplotlib.widgets import CheckButtons
+
+    if frame not in ("tth_chi", "detector"):
+        raise ValueError(f"frame must be 'tth_chi' or 'detector', got {frame!r}")
+
+    # ── Apply intensity threshold ─────────────────────────────────────────────
+    spots_all = list(spots) if spots else []
+    if spots_all and i_thresh > 0.0:
+        i_ref = max(s["intensity"] for s in spots_all)
+        spots_all = [s for s in spots_all if s["intensity"] >= i_thresh * i_ref]
+
+    # Split into Bragg and satellite lists
+    spots_bragg = [s for s in spots_all if s.get("satellite_order", 0) == 0]
+    spots_sat   = [s for s in spots_all if s.get("satellite_order", 0) != 0]
+
+    # ── Figure layout ─────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize, facecolor=BG)
+    # Reserve a thin strip on the right for the checkbox widget
+    gs = mgridspec.GridSpec(
+        1, 3,
+        figure=fig,
+        width_ratios=[1, 1, 0.12],
+        wspace=0.08,
+    )
+    ax_exp = fig.add_subplot(gs[0, 0])
+    ax_sim = fig.add_subplot(gs[0, 1])
+    ax_cb  = fig.add_subplot(gs[0, 2])   # checkbox lives here
+    ax_cb.set_axis_off()
+
+    for ax in (ax_exp, ax_sim):
+        ax.set_facecolor("#000000")
+        ax.tick_params(colors="#7788aa", labelsize=7)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+    # ── Helper: prepare one image for display ─────────────────────────────────
+    def _prepare(raw_arr):
+        """Return (display_array, extent) ready for imshow."""
+        arr = np.asarray(raw_arr, dtype=np.float64)
+        if frame == "tth_chi":
+            warped, tth_ax, chi_ax = warp_image_to_tth_chi(
+                arr, camera,
+                tth_range=tth_range, chi_range=chi_range,
+                n_tth=n_tth, n_chi=n_chi,
+            )
+            ext = [tth_ax[0], tth_ax[-1], chi_ax[0], chi_ax[-1]]
+            return warped, ext
+        else:
+            ext = [0, camera.Nh, camera.Nv, 0]
+            return arr, ext
+
+    exp_disp, ext = _prepare(exp_image)
+    sim_disp, _   = _prepare(sim_image)
+
+    # ── Build LogNorm for simulation panel ───────────────────────────────────
+    def _lognorm(arr):
+        vals = arr[np.isfinite(arr) & (arr > 0)]
+        if vals.size == 0:
+            return mcolors.Normalize(vmin=0, vmax=1)
+        return mcolors.LogNorm(vmin=vals.min(), vmax=vals.max())
+
+    origin = "lower" if frame == "tth_chi" else "upper"
+    aspect = "auto"  if frame == "tth_chi" else "equal"
+
+    # Experimental panel — simple linear log1p scaling
+    exp_plot = np.where(np.isfinite(exp_disp) & (exp_disp > 0), exp_disp, np.nan)
+    exp_log  = np.log1p(exp_plot)
+    im_exp = ax_exp.imshow(
+        exp_log, origin=origin, aspect=aspect, extent=ext,
+        cmap=cmap, interpolation="nearest",
+    )
+    cb_exp = fig.colorbar(im_exp, ax=ax_exp, pad=0.02, fraction=0.04)
+    cb_exp.set_label("log₁₊(intensity)", color=FG, fontsize=7)
+    cb_exp.ax.tick_params(colors="#7788aa", labelsize=6)
+
+    # Simulation panel — LogNorm
+    sim_plot = np.where(np.isfinite(sim_disp) & (sim_disp > 0), sim_disp, np.nan)
+    sim_norm = _lognorm(sim_plot)
+    im_sim = ax_sim.imshow(
+        sim_plot, origin=origin, aspect=aspect, extent=ext,
+        cmap=cmap, norm=sim_norm, interpolation="nearest",
+    )
+    cb_sim = fig.colorbar(im_sim, ax=ax_sim, pad=0.02, fraction=0.04)
+    cb_sim.set_label("intensity (LogNorm)", color=FG, fontsize=7)
+    cb_sim.ax.tick_params(colors="#7788aa", labelsize=6)
+
+    # ── Axis labels ───────────────────────────────────────────────────────────
+    if frame == "tth_chi":
+        for ax in (ax_exp, ax_sim):
+            ax.set_xlabel("2θ  (°)", color="#7788aa", fontsize=9)
+        ax_exp.set_ylabel("χ  (°)", color="#7788aa", fontsize=9)
+    else:
+        for ax in (ax_exp, ax_sim):
+            ax.set_xlabel("x  (px)", color="#7788aa", fontsize=9)
+        ax_exp.set_ylabel("y  (px)", color="#7788aa", fontsize=9)
+
+    ax_exp.set_title("Experiment", color=FG, fontsize=9, pad=6)
+    ax_sim.set_title("Simulation", color=FG, fontsize=9, pad=6)
+
+    # ── Helper: compute (xs, ys) in display coordinates for a spot list ───────
+    def _spot_coords(slist):
+        if not slist:
+            return np.array([]), np.array([]), slist
+        if frame == "tth_chi":
+            xs = np.array([s["tth"] for s in slist])
+            ys = np.array([s["chi"] for s in slist])
+            return xs, ys, slist
+        else:
+            xs_l, ys_l = [], []
+            for s in slist:
+                pix = s.get("pix")
+                if pix is not None:
+                    xs_l.append(pix[0]); ys_l.append(pix[1])
+                else:
+                    tth_r = np.radians(s["tth"]); chi_r = np.radians(s["chi"])
+                    st = np.sin(tth_r)
+                    kf = np.array([[np.cos(tth_r), st * np.sin(chi_r), st * np.cos(chi_r)]])
+                    xc, yc = camera.kf_to_pixel(kf)
+                    xs_l.append(float(xc[0])); ys_l.append(float(yc[0]))
+            xs = np.array(xs_l); ys = np.array(ys_l)
+            on_det = (
+                np.isfinite(xs) & np.isfinite(ys)
+                & (xs >= 0) & (xs < camera.Nh)
+                & (ys >= 0) & (ys < camera.Nv)
+            )
+            return xs[on_det], ys[on_det], [s for s, ok in zip(slist, on_det) if ok]
+
+    # ── Colour helper ─────────────────────────────────────────────────────────
+    _tab10 = plt.get_cmap("tab10")
+    _all_labels = list(dict.fromkeys(
+        s.get("phase_label", "sim") for s in spots_all
+    ))
+    _lc = {lb: _tab10(i / max(len(_all_labels) - 1, 1))
+           for i, lb in enumerate(_all_labels)}
+
+    def _colors(slist):
+        if spot_color is not None:
+            return spot_color
+        if color_spots_by == "phase":
+            return [_lc[s.get("phase_label", "sim")] for s in slist]
+        if color_spots_by == "order":
+            ords = np.array([s.get("satellite_order", 0) for s in slist])
+            nm = mcolors.Normalize(vmin=ords.min(), vmax=ords.max())
+            return plt.get_cmap("coolwarm")(nm(ords))
+        if color_spots_by == "energy":
+            en = np.array([s["E"] / 1e3 for s in slist])
+            nm = mcolors.Normalize(vmin=en.min(), vmax=en.max())
+            return plt.get_cmap("plasma")(nm(en))
+        return "#ff4444"
+
+    # ── Draw Bragg spots (always visible) ────────────────────────────────────
+    xb, yb, sb = _spot_coords(spots_bragg)
+    if sb:
+        ax_sim.scatter(
+            xb, yb, c=_colors(sb),
+            s=spot_size, marker=spot_marker, linewidths=0.9, zorder=4,
+        )
+        _attach_hover_tooltip(fig, ax_sim, sb, xb, yb)
+
+    # ── Draw satellite spots (toggleable) ─────────────────────────────────────
+    xs, ys, ss = _spot_coords(spots_sat)
+    sc_sat = None
+    if ss:
+        sc_sat = ax_sim.scatter(
+            xs, ys, c=_colors(ss),
+            s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
+            zorder=3, alpha=0.75,
+        )
+        _attach_hover_tooltip(fig, ax_sim, ss, xs, ys)
+
+    # ── Phase legend ──────────────────────────────────────────────────────────
+    if spots_all and spot_color is None and color_spots_by == "phase" and _all_labels:
+        handles = [
+            Line2D([0], [0], linestyle="none", marker=spot_marker,
+                   color=_lc[lb], markersize=7, label=lb)
+            for lb in _all_labels
+        ]
+        ax_sim.legend(
+            handles=handles, loc="upper right", fontsize=7,
+            framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+            labelcolor=FG,
+        )
+
+    # ── Satellite toggle checkbox ─────────────────────────────────────────────
+    # Place it in the reserved axes strip on the far right
+    chk_ax = fig.add_axes([0.91, 0.46, 0.08, 0.08], facecolor="#1a1f2e")
+    chk = CheckButtons(chk_ax, ["satellites"], [sc_sat is not None])
+    chk.labels[0].set_color(FG)
+    chk.labels[0].set_fontsize(8)
+
+    def _toggle_sat(_):
+        if sc_sat is not None:
+            sc_sat.set_visible(not sc_sat.get_visible())
+        fig.canvas.draw_idle()
+
+    chk.on_clicked(_toggle_sat)
+
+    n_spots = len(spots_all)
+    ax_sim.set_title(
+        f"Simulation  |  {n_spots} spots  (hover for details)",
+        color=FG, fontsize=9, pad=6,
+    )
+
+    fig.tight_layout(rect=[0, 0, 0.90, 1.0])
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Comparison saved → {out_path}")
+
+    return fig, ax_exp, ax_sim

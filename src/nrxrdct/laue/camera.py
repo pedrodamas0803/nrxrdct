@@ -444,10 +444,13 @@ class Camera:
               ``'model'`` key is extracted automatically.
 
         log_scale : bool
-            Apply ``log1p`` compression before returning.
+            Apply ``log1p`` compression before returning.  Applied to the
+            raw accumulated intensities so that the dynamic range between
+            weak and strong spots is preserved.
         normalize : bool
-            Divide by the image maximum before any log scaling so that
-            intensities are in ``[0, 1]``.
+            Divide by the image maximum after all other processing so that
+            the final image is in ``[0, 1]``.  Useful for display; leave
+            ``False`` to keep physical intensity units.
         """
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
@@ -480,8 +483,8 @@ class Camera:
             gauss = np.exp(-((xx - c) ** 2 + (yy - r) ** 2) / (2 * sigma ** 2))
             img[r0:r1, c0:c1] += s["intensity"] * gauss
 
+        if log_scale:
+            img = np.log1p(img)
         if normalize and img.max() > 0:
             img = img / img.max()
-        if log_scale and img.max() > 0:
-            img = np.log1p(img / img.max() * 1000)
         return img

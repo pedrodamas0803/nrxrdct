@@ -2176,7 +2176,7 @@ def print_layer_contributions(spots, n=15):
 
     header = (
         f"  {'phase':12s} {'hkl':^10} {'order':>6} {'satellite':>10} "
-        f"{'E(keV)':>7} {'2th':>6} {'I/Imax':>7}  "
+        f"{'E(keV)':>7} {'2th':>6} {'I_raw':>11} {'I/Imax':>7}  "
         + "  ".join(f"{l[:col_w]:>{col_w}}" for l in labels)
     )
     print(f"\n  Per-layer intensity fractions  (top {n} spots)")
@@ -2195,7 +2195,7 @@ def print_layer_contributions(spots, n=15):
             f"  {s['phase_label']:12s} ({h:+d}{k:+d}{l:+d})  "
             f"{order:>6d} {sat_tag:>10s} "
             f"{s['E']/1e3:7.3f} {s['tth']:6.1f} "
-            f"{s['intensity']:7.4f}  {fracs}"
+            f"{s['I_raw']:11.3e} {s['intensity']:7.4f}  {fracs}"
         )
 
 
@@ -2230,16 +2230,16 @@ def print_mixed_summary(spots, top_n=20):
         )
         print(
             f"  {'hkl':^10} {'E(keV)':>7} {'2th':>7} {'chi':>7} "
-            f"{'I/Imax':>8} {'I_phase':>8}  type"
+            f"{'I_raw':>11} {'I/Imax':>8} {'I_phase':>8}  type"
         )
-        print("  " + "─" * 68)
+        print("  " + "─" * 82)
         top = sorted(phase_spots, key=lambda s: s["intensity"], reverse=True)
         for s in top[:top_n]:
             h, k, l = s["hkl"]
             print(
                 f"  ({h:+d}{k:+d}{l:+d})  "
                 f"{s['E']/1e3:7.3f} {s['tth']:7.2f} {s['chi']:7.2f} "
-                f"{s['intensity']:8.4f} {s.get('intensity_phase',0):8.4f}"
+                f"{s['I_raw']:11.3e} {s['intensity']:8.4f} {s.get('intensity_phase',0):8.4f}"
             )
 
 
@@ -2248,9 +2248,9 @@ def print_spot_table(title, spots, n=15):
     print(
         f"  {'hkl':^10} {'E(keV)':>7} {'lambda(A)':>9} {'2th(deg)':>9} "
         f"{'az(deg)':>8} {'col':>6} {'row':>6} "
-        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I/Imax':>7}  satellite"
+        f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I_raw':>11} {'I/Imax':>7}  satellite"
     )
-    print("  " + "-" * 110)
+    print("  " + "-" * 124)
     for s in spots[:n]:
         h, k, l = s["hkl"]
         c, r = s["pix"]
@@ -2262,7 +2262,7 @@ def print_spot_table(title, spots, n=15):
             f"{s['tth']:9.3f}  {s['az']:8.2f}  "
             f"{c:6.0f}  {r:6.0f}  "
             f"{s['F2']:8.2f}  {s['LP']:7.4f}  "
-            f"{s['sw']:7.4f}  {s['intensity']:7.4f}  {sat_col:>9s}"
+            f"{s['sw']:7.4f}  {s['I_raw']:11.3e}  {s['intensity']:7.4f}  {sat_col:>9s}"
         )
 
 

@@ -418,18 +418,19 @@ class Camera:
         noisy = gen.poisson(lam).astype(np.float32)
         return noisy
 
-    def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=True, normalize=False):
+    def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=False, normalize=False):
         """
         Render a synthetic detector image (float32, shape Nv x Nh).
 
-        Each spot is drawn as an isotropic 2-D Gaussian.  The width can be
-        fixed for all spots or vary with 2θ via a broadening model.
+        Each spot is drawn as an isotropic 2-D Gaussian weighted by ``I_raw``
+        (the un-normalised kinematical intensity).  By default the image is
+        returned in raw intensity units with no scaling applied.
 
         Parameters
         ----------
         spots : list of dicts
             Spot list from any ``simulate_laue*`` function.
-            Required keys: ``'pix'`` (xcam, ycam), ``'intensity'``.
+            Required keys: ``'pix'`` (xcam, ycam), ``'I_raw'``.
             The key ``'tth'`` (degrees) is required when *sigma_pix* is a
             callable or a broadening result dict.
         sigma_pix : float | callable | dict
@@ -444,13 +445,10 @@ class Camera:
               ``'model'`` key is extracted automatically.
 
         log_scale : bool
-            Apply ``log1p`` compression before returning.  Applied to the
-            raw accumulated intensities so that the dynamic range between
-            weak and strong spots is preserved.
+            Apply ``log1p`` compression before returning (default ``False``).
         normalize : bool
-            Divide by the image maximum after all other processing so that
-            the final image is in ``[0, 1]``.  Useful for display; leave
-            ``False`` to keep physical intensity units.
+            Divide by the image maximum after all other processing
+            (default ``False``).
         """
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
@@ -463,7 +461,7 @@ class Camera:
             _model = None
             _fixed_sigma = float(sigma_pix)
 
-        img = np.zeros((self.Nv, self.Nh), dtype=np.float32)
+        img = np.zeros((self.Nv, self.Nh), dtype=np.float64)
         for s in spots:
             if s.get("pix") is None:
                 continue
@@ -481,10 +479,10 @@ class Camera:
                 continue
             yy, xx = np.mgrid[r0:r1, c0:c1]
             gauss = np.exp(-((xx - c) ** 2 + (yy - r) ** 2) / (2 * sigma ** 2))
-            img[r0:r1, c0:c1] += s["intensity"] * gauss
+            img[r0:r1, c0:c1] += s["I_raw"] * gauss
 
         if log_scale:
             img = np.log1p(img)
         if normalize and img.max() > 0:
             img = img / img.max()
-        return img
+        return img.astype(np.float32)

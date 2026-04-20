@@ -1772,6 +1772,320 @@ def simulate_laue_stack(
     return spots
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DARWIN (DYNAMICAL) LAUE SIMULATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Classical electron radius (Å)
+_R_E_ANG: float = 2.8179403227e-5
+
+
+def _darwin_n_eff(
+    F_abs: float,
+    lam: float,
+    tth_deg: float,
+    V_uc: float,
+    n_cells: int,
+    d: float,
+) -> float:
+    """
+    Darwin primary-extinction corrected effective cell count.
+
+    Replaces the kinematical factor N with
+
+        N_eff = N_ext × tanh(N / N_ext)
+
+    where the extinction length in unit cells is
+
+        N_ext = ξ / d ,   ξ = V_uc sin θ / (rₑ λ |F_H|)
+
+    * N ≪ N_ext  →  N_eff ≈ N          (kinematical, thin crystal)
+    * N ≫ N_ext  →  N_eff ≈ N_ext      (dynamical saturation, thick crystal)
+    """
+    if F_abs < 1e-10 or d < 1e-6:
+        return float(n_cells)
+    sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
+    xi = V_uc * sin_th / (_R_E_ANG * lam * F_abs)   # extinction depth (Å)
+    N_ext = xi / d
+    if N_ext < 1e-6:
+        return 1.0
+    return float(N_ext * np.tanh(float(n_cells) / N_ext))
+
+
+def simulate_laue_darwin(
+    stack,
+    camera,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    hmax: int = HMAX,
+    f2_thresh: float = F2_THRESHOLD,
+    ki_hat=None,
+    kb_params=BM32_KB,
+    verbose: bool = True,
+):
+    """
+    White-beam Laue simulation with Darwin (dynamical diffraction) intensities.
+
+    Spot **positions** are identical to :func:`simulate_laue_stack` — they
+    come from the same Laue condition and camera geometry.  The difference is
+    in how the **intensity** of each spot is computed.
+
+    Kinematical vs Darwin
+    ---------------------
+    The kinematical model gives
+
+        I ∝ |F_uc|² × N²
+
+    which diverges for thick perfect-crystal regions (substrate).  The Darwin
+    model corrects this with the *primary extinction* factor:
+
+        N_eff = N_ext × tanh(N / N_ext)
+
+        N_ext = V_uc sin θ / (rₑ λ |F_uc|) / d    [extinction length, unit cells]
+
+    so that thin layers remain kinematical (N_eff ≈ N) while thick regions
+    saturate at N_ext.
+
+    For a multilayer stack the amplitudes from all layers are summed
+    **coherently** (same phase relationship as the kinematical model), so
+    superlattice satellites and fringe patterns are preserved:
+
+        F_total(G) = F_buffer(G) + exp(i Qₙ z_buf) · F_unit(G) · S_rep(Qₙ Λ)
+
+        F_layer_i(G) = F_uc_i × N_eff_i × exp(i Qₙ z_i)
+
+    Absorption limiting (Beer-Lambert) is applied on top of extinction:
+    the effective cell count is ``min(N_eff_darwin, N_eff_absorption)``.
+
+    Alloys
+    ------
+    Any ``xu.materials.Crystal``-compatible object can be used as the layer
+    crystal, including alloys created with xrayutilities (e.g.
+    ``xu.materials.HexagonalAlloy``, VCA compositions, etc.).  The
+    composition enters through the structure factor ``F_uc`` and the unit-cell
+    volume ``V_uc``.
+
+    Parameters
+    ----------
+    stack : LayeredCrystal
+        Same input as :func:`simulate_laue_stack`.
+    camera : Camera
+    E_min_eV, E_max_eV : float
+    source : str   ``'bending_magnet'`` | ``'wiggler'`` | ``'undulator'`` | ``'flat'``
+    source_kwargs : dict, optional
+    hmax : int
+    f2_thresh : float
+        Minimum Darwin-corrected |F_total|² to keep a spot.
+    ki_hat : array-like (3,) or None
+    kb_params : dict or None
+    verbose : bool
+
+    Returns
+    -------
+    spots : list[dict]
+        Same keys as :func:`simulate_laue_stack` plus:
+
+        ``'N_eff'``   – list of Darwin N_eff per layer (same order as
+                        buffer_layers + n_rep × layers)
+        ``'N_ext'``   – list of extinction lengths (unit cells) per layer
+        ``'F2_darwin'`` – |F_total_darwin|²  (Darwin-corrected structure factor)
+    """
+    stack._update_offsets()
+    source_kwargs = source_kwargs or {}
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki /= np.linalg.norm(ki)
+
+    lam_lo = en2lam(E_max_eV)
+    lam_hi = en2lam(E_min_eV)
+
+    def _spectrum(E: float) -> float:
+        if source == "bending_magnet":
+            sw = spectrum_bm(E, **source_kwargs)
+        elif source == "wiggler":
+            kw = dict(N_poles=source_kwargs.get("N_poles", 40),
+                      Ec_eV=source_kwargs.get("Ec_eV", 20_000))
+            sw = spectrum_bm(E, **kw)
+        elif source == "undulator":
+            sw = spectrum_undulator(E, **source_kwargs)
+        elif source == "flat":
+            sw = 1.0
+        else:
+            raise ValueError(f"Unknown source: {source!r}")
+        if kb_params is not None:
+            sw *= kb_reflectivity(E, **kb_params)
+        return float(sw)
+
+    # ── Precompute per-layer absorption-limited N for quick lookup ────────────
+    # Key: id(layer) → callable(E) → int
+    # (absorption depends on energy; defer to _effective_n_cells)
+
+    # ── Deduplicate orientations for enumeration ──────────────────────────────
+    seen_combos: list = []
+    enum_layers: list = []
+    for layer in stack.all_layers:
+        u_key = (layer.crystal.name, tuple(np.round(layer.U, 4).ravel()))
+        if u_key not in seen_combos:
+            seen_combos.append(u_key)
+            enum_layers.append(layer)
+
+    seen_pix: set = set()
+    spots: list = []
+
+    for enum_layer in enum_layers:
+        U = enum_layer.U
+        crystal = enum_layer.crystal
+        label = enum_layer.label
+
+        if verbose:
+            print(f"  Enumerating {label} (hmax={hmax}) ...", end="", flush=True)
+
+        n_added = 0
+
+        for h in range(-hmax, hmax + 1):
+            for k in range(-hmax, hmax + 1):
+                for l in range(-hmax, hmax + 1):
+                    if h == 0 and k == 0 and l == 0:
+                        continue
+
+                    G_cry = crystal.Q(h, k, l)
+                    G_lab = U @ G_cry
+                    Gm2 = float(np.dot(G_lab, G_lab))
+                    if Gm2 < 1e-20:
+                        continue
+                    kdG = float(np.dot(ki, G_lab))
+                    if kdG >= 0:
+                        continue
+
+                    lam = -4.0 * np.pi * kdG / Gm2
+                    if not (lam_lo <= lam <= lam_hi):
+                        continue
+
+                    E = lam2en(lam)
+                    km = 2.0 * np.pi / lam
+                    kf_vec = ki * km + G_lab
+                    kf_hat = kf_vec / np.linalg.norm(kf_vec)
+                    pix = camera.project(kf_hat)
+                    if pix is None:
+                        continue
+
+                    pix_key = (round(pix[0]), round(pix[1]))
+                    if pix_key in seen_pix:
+                        continue
+
+                    tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
+                    chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+                    az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+                    Qn  = float(np.dot(G_lab, stack.n_hat))
+
+                    # ── Darwin coherent structure factor ──────────────────────
+                    # Buffer layers (non-repeating)
+                    F_buf = 0.0 + 0j
+                    n_eff_buf, n_ext_buf = [], []
+                    for lyr, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
+                        Q_cry_l = lyr.U.T @ G_lab
+                        F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E)
+                        if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                            n_eff_buf.append(0.0); n_ext_buf.append(np.inf)
+                            continue
+                        F_abs = abs(F_uc)
+                        V_uc  = lyr.crystal.lattice.UnitCellVolume()
+                        # Darwin extinction limit
+                        N_d  = _darwin_n_eff(F_abs, lam, tth, V_uc, lyr.n_cells, lyr.d)
+                        # Absorption limit (Beer-Lambert, only for buffer layers)
+                        N_a  = float(lyr._effective_n_cells(E))
+                        N_eff = min(N_d, N_a)
+                        # Extinction length for diagnostics
+                        sin_th = max(abs(np.sin(np.radians(tth / 2.0))), 1e-6)
+                        N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam * max(F_abs, 1e-30))
+                                   / lyr.d)
+                        n_eff_buf.append(N_eff); n_ext_buf.append(N_ext_l)
+                        F_buf += F_uc * N_eff * np.exp(1j * Qn * z0)
+
+                    # Repeating unit (one period, then multiply by S_rep)
+                    F_unit = 0.0 + 0j
+                    n_eff_unit, n_ext_unit = [], []
+                    for lyr, z0_rel in zip(stack.layers, stack._z_offsets):
+                        Q_cry_l = lyr.U.T @ G_lab
+                        F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E)
+                        if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                            n_eff_unit.append(0.0); n_ext_unit.append(np.inf)
+                            continue
+                        F_abs = abs(F_uc)
+                        V_uc  = lyr.crystal.lattice.UnitCellVolume()
+                        N_d   = _darwin_n_eff(F_abs, lam, tth, V_uc, lyr.n_cells, lyr.d)
+                        sin_th = max(abs(np.sin(np.radians(tth / 2.0))), 1e-6)
+                        N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam * max(F_abs, 1e-30))
+                                   / lyr.d)
+                        n_eff_unit.append(N_d); n_ext_unit.append(N_ext_l)
+                        F_unit += F_uc * N_d * np.exp(1j * Qn * z0_rel)
+
+                    # Superlattice geometric factor S_rep
+                    if stack.layers:
+                        z_buf  = stack._buffer_thickness
+                        Lambda = stack._bilayer_thickness
+                        phi_rep = Qn * Lambda
+                        phi_mod = phi_rep % (2.0 * np.pi)
+                        if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
+                            S_rep = float(stack.n_rep) + 0j
+                        else:
+                            S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
+                                     / (1.0 - np.exp(1j * phi_rep)))
+                        F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
+                    else:
+                        F_mqw = 0.0 + 0j
+
+                    F_total = F_buf + F_mqw
+                    F2 = abs(F_total) ** 2
+                    if F2 < f2_thresh:
+                        continue
+
+                    LP = lorentz_pol(tth)
+                    if LP == 0.0:
+                        continue
+                    sw = _spectrum(E)
+                    if sw <= 0.0:
+                        continue
+
+                    seen_pix.add(pix_key)
+                    n_added += 1
+                    spots.append({
+                        "phase_label": label,
+                        "hkl":         (h, k, l),
+                        "satellite_order": 0,
+                        "G_lab":       G_lab.copy(),
+                        "E":           E,
+                        "lambda":      lam,
+                        "tth":         tth,
+                        "chi":         chi,
+                        "az":          az,
+                        "pix":         pix,
+                        "F2":          F2,
+                        "F2_darwin":   F2,
+                        "LP":          LP,
+                        "sw":          sw,
+                        "I_raw":       F2 * LP * sw,
+                        "N_eff":       n_eff_buf + n_eff_unit,
+                        "N_ext":       n_ext_buf + n_ext_unit,
+                    })
+
+        if verbose:
+            print(f" {n_added} spots")
+
+    if spots:
+        imax = max(s["I_raw"] for s in spots)
+        for s in spots:
+            s["intensity"] = s["I_raw"] / imax
+
+    spots.sort(key=lambda s: s["intensity"], reverse=True)
+
+    if verbose:
+        print(f"  Total spots (Darwin): {len(spots)}")
+
+    return spots
+
+
 def simulate_mixed_phases(
     phases,
     camera,

@@ -21,6 +21,7 @@ from .layers import (
 from .simulation import (
     BM32_KB,
     beam_in_crystal,
+    simulate_laue_darwin,
     decompose_matstarlab,
     en2lam,
     estimate_instrument_broadening,
@@ -76,6 +77,7 @@ __all__ = [
     # Simulation
     "simulate_laue",
     "simulate_laue_stack",
+    "simulate_laue_darwin",
     "print_spot_table",
     "print_bragg_table",
     # Layered structures

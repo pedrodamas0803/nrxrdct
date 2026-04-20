@@ -1823,6 +1823,7 @@ def simulate_laue_darwin(
     f2_thresh: float = F2_THRESHOLD,
     ki_hat=None,
     kb_params=BM32_KB,
+    max_satellites: int = 5,
     verbose: bool = True,
 ):
     """
@@ -1880,6 +1881,10 @@ def simulate_laue_darwin(
         Minimum Darwin-corrected |F_total|² to keep a spot.
     ki_hat : array-like (3,) or None
     kb_params : dict or None
+    max_satellites : int, optional
+        Number of satellite / fringe orders to probe on each side of every
+        Bragg peak (default 5).  Probes orders ±1 … ±max_satellites.
+        Set to 0 to skip satellite calculation entirely.
     verbose : bool
 
     Returns
@@ -1917,9 +1922,160 @@ def simulate_laue_darwin(
             sw *= kb_reflectivity(E, **kb_params)
         return float(sw)
 
-    # ── Precompute per-layer absorption-limited N for quick lookup ────────────
-    # Key: id(layer) → callable(E) → int
-    # (absorption depends on energy; defer to _effective_n_cells)
+    # ── Fringe / satellite wavevectors ────────────────────────────────────────
+    # Same logic as simulate_laue_stack: probe G_hkl + frac * q_fringe
+    # where frac = m ± 0.5  (bright-fringe maxima between dark zeros).
+    MAX_FRINGE_THICK_ANG = 20_000.0
+    fringe_q_vecs: list = []
+    sat_orders = [m for m in range(-max_satellites, max_satellites + 1) if m != 0]
+
+    if max_satellites > 0 and stack.layers:
+        seen_t: set = set()
+        for lyr in stack.layers:
+            t = lyr.thickness
+            if t < 1e-6 or t > MAX_FRINGE_THICK_ANG:
+                continue
+            t_key = round(t, 2)
+            if t_key in seen_t:
+                continue
+            seen_t.add(t_key)
+            q_vec = (2.0 * np.pi / t) * np.asarray(stack.n_hat)
+            fringe_q_vecs.append((q_vec, f"layer '{lyr.label}' (t={t/10:.1f} nm)"))
+
+        Lambda = stack.bilayer_thickness
+        if stack.n_rep > 1 and Lambda > 1e-6:
+            t_key = round(Lambda, 2)
+            if t_key not in seen_t:
+                q_vec = (2.0 * np.pi / Lambda) * np.asarray(stack.n_hat)
+                fringe_q_vecs.append((q_vec, f"bilayer Λ={Lambda/10:.1f} nm"))
+
+    if verbose and fringe_q_vecs:
+        print("  Fringe / satellite periods to probe:")
+        for qv, desc in fringe_q_vecs:
+            t_nm = 2.0 * np.pi / np.linalg.norm(qv) / 10.0
+            print(f"    {desc}  →  2π/t = {np.linalg.norm(qv):.4f} Å⁻¹  (t = {t_nm:.2f} nm)")
+
+    # ── Darwin amplitude helper ───────────────────────────────────────────────
+    def _darwin_amp(G_vec, E_ev, lam_ang, tth_deg):
+        """
+        Compute the Darwin-corrected coherent amplitude F_total for G_vec.
+
+        Returns (F_total, n_eff_list, n_ext_list).
+        """
+        Qn = float(np.dot(G_vec, stack.n_hat))
+
+        F_buf = 0.0 + 0j
+        n_eff_b, n_ext_b = [], []
+        for lyr, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
+            Q_cry_l = lyr.U.T @ G_vec
+            F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E_ev)
+            if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                n_eff_b.append(0.0); n_ext_b.append(np.inf)
+                continue
+            F_abs = abs(F_uc)
+            V_uc  = lyr.crystal.lattice.UnitCellVolume()
+            N_d   = _darwin_n_eff(F_abs, lam_ang, tth_deg, V_uc, lyr.n_cells, lyr.d)
+            N_a   = float(lyr._effective_n_cells(E_ev))
+            N_eff = min(N_d, N_a)
+            sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
+            N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
+            n_eff_b.append(N_eff); n_ext_b.append(N_ext_l)
+            F_buf += F_uc * N_eff * np.exp(1j * Qn * z0)
+
+        F_unit = 0.0 + 0j
+        n_eff_u, n_ext_u = [], []
+        for lyr, z0_rel in zip(stack.layers, stack._z_offsets):
+            Q_cry_l = lyr.U.T @ G_vec
+            F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E_ev)
+            if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                n_eff_u.append(0.0); n_ext_u.append(np.inf)
+                continue
+            F_abs = abs(F_uc)
+            V_uc  = lyr.crystal.lattice.UnitCellVolume()
+            N_d   = _darwin_n_eff(F_abs, lam_ang, tth_deg, V_uc, lyr.n_cells, lyr.d)
+            sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
+            N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
+            n_eff_u.append(N_d); n_ext_u.append(N_ext_l)
+            F_unit += F_uc * N_d * np.exp(1j * Qn * z0_rel)
+
+        if stack.layers:
+            z_buf   = stack._buffer_thickness
+            Lambda  = stack._bilayer_thickness
+            phi_rep = Qn * Lambda
+            phi_mod = phi_rep % (2.0 * np.pi)
+            if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
+                S_rep = float(stack.n_rep) + 0j
+            else:
+                S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
+                         / (1.0 - np.exp(1j * phi_rep)))
+            F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
+        else:
+            F_mqw = 0.0 + 0j
+
+        return F_buf + F_mqw, n_eff_b + n_eff_u, n_ext_b + n_ext_u
+
+    # ── Try-append closure ────────────────────────────────────────────────────
+    seen_pix: set = set()
+    spots: list = []
+
+    def _try_darwin(G_vec, hkl, sat_order, phase_label):
+        Gm2 = float(np.dot(G_vec, G_vec))
+        if Gm2 < 1e-20:
+            return 0
+        kdG = float(np.dot(ki, G_vec))
+        if kdG >= 0:
+            return 0
+        lam = -4.0 * np.pi * kdG / Gm2
+        if not (lam_lo <= lam <= lam_hi):
+            return 0
+        E = lam2en(lam)
+        km = 2.0 * np.pi / lam
+        kf_vec = ki * km + G_vec
+        kf_hat = kf_vec / np.linalg.norm(kf_vec)
+        pix = camera.project(kf_hat)
+        if pix is None:
+            return 0
+        pix_key = (round(pix[0]), round(pix[1]))
+        if pix_key in seen_pix:
+            return 0
+        tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
+        chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+        az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+
+        F_total, n_effs, n_exts = _darwin_amp(G_vec, E, lam, tth)
+        F2 = abs(F_total) ** 2
+        # Satellites are weaker — use relaxed threshold
+        effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
+        if F2 < effective_thresh:
+            return 0
+        LP = lorentz_pol(tth)
+        if LP == 0.0:
+            return 0
+        sw = _spectrum(E)
+        if sw <= 0.0:
+            return 0
+
+        seen_pix.add(pix_key)
+        spots.append({
+            "phase_label":    phase_label,
+            "hkl":            hkl,
+            "satellite_order": sat_order,
+            "G_lab":          G_vec.copy(),
+            "E":              E,
+            "lambda":         lam,
+            "tth":            tth,
+            "chi":            chi,
+            "az":             az,
+            "pix":            pix,
+            "F2":             F2,
+            "F2_darwin":      F2,
+            "LP":             LP,
+            "sw":             sw,
+            "I_raw":          F2 * LP * sw,
+            "N_eff":          n_effs,
+            "N_ext":          n_exts,
+        })
+        return 1
 
     # ── Deduplicate orientations for enumeration ──────────────────────────────
     seen_combos: list = []
@@ -1930,16 +2086,14 @@ def simulate_laue_darwin(
             seen_combos.append(u_key)
             enum_layers.append(layer)
 
-    seen_pix: set = set()
-    spots: list = []
-
     for enum_layer in enum_layers:
         U = enum_layer.U
         crystal = enum_layer.crystal
         label = enum_layer.label
 
+        sat_info = f", ±{max_satellites} satellite orders" if fringe_q_vecs else ""
         if verbose:
-            print(f"  Enumerating {label} (hmax={hmax}) ...", end="", flush=True)
+            print(f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True)
 
         n_added = 0
 
@@ -1949,126 +2103,17 @@ def simulate_laue_darwin(
                     if h == 0 and k == 0 and l == 0:
                         continue
 
-                    G_cry = crystal.Q(h, k, l)
-                    G_lab = U @ G_cry
-                    Gm2 = float(np.dot(G_lab, G_lab))
-                    if Gm2 < 1e-20:
-                        continue
-                    kdG = float(np.dot(ki, G_lab))
-                    if kdG >= 0:
-                        continue
+                    G_lab = U @ crystal.Q(h, k, l)
 
-                    lam = -4.0 * np.pi * kdG / Gm2
-                    if not (lam_lo <= lam <= lam_hi):
-                        continue
+                    # Main Bragg peak
+                    n_added += _try_darwin(G_lab, (h, k, l), 0, label)
 
-                    E = lam2en(lam)
-                    km = 2.0 * np.pi / lam
-                    kf_vec = ki * km + G_lab
-                    kf_hat = kf_vec / np.linalg.norm(kf_vec)
-                    pix = camera.project(kf_hat)
-                    if pix is None:
-                        continue
-
-                    pix_key = (round(pix[0]), round(pix[1]))
-                    if pix_key in seen_pix:
-                        continue
-
-                    tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
-                    chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-                    az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-                    Qn  = float(np.dot(G_lab, stack.n_hat))
-
-                    # ── Darwin coherent structure factor ──────────────────────
-                    # Buffer layers (non-repeating)
-                    F_buf = 0.0 + 0j
-                    n_eff_buf, n_ext_buf = [], []
-                    for lyr, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
-                        Q_cry_l = lyr.U.T @ G_lab
-                        F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E)
-                        if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
-                            n_eff_buf.append(0.0); n_ext_buf.append(np.inf)
-                            continue
-                        F_abs = abs(F_uc)
-                        V_uc  = lyr.crystal.lattice.UnitCellVolume()
-                        # Darwin extinction limit
-                        N_d  = _darwin_n_eff(F_abs, lam, tth, V_uc, lyr.n_cells, lyr.d)
-                        # Absorption limit (Beer-Lambert, only for buffer layers)
-                        N_a  = float(lyr._effective_n_cells(E))
-                        N_eff = min(N_d, N_a)
-                        # Extinction length for diagnostics
-                        sin_th = max(abs(np.sin(np.radians(tth / 2.0))), 1e-6)
-                        N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam * max(F_abs, 1e-30))
-                                   / lyr.d)
-                        n_eff_buf.append(N_eff); n_ext_buf.append(N_ext_l)
-                        F_buf += F_uc * N_eff * np.exp(1j * Qn * z0)
-
-                    # Repeating unit (one period, then multiply by S_rep)
-                    F_unit = 0.0 + 0j
-                    n_eff_unit, n_ext_unit = [], []
-                    for lyr, z0_rel in zip(stack.layers, stack._z_offsets):
-                        Q_cry_l = lyr.U.T @ G_lab
-                        F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E)
-                        if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
-                            n_eff_unit.append(0.0); n_ext_unit.append(np.inf)
-                            continue
-                        F_abs = abs(F_uc)
-                        V_uc  = lyr.crystal.lattice.UnitCellVolume()
-                        N_d   = _darwin_n_eff(F_abs, lam, tth, V_uc, lyr.n_cells, lyr.d)
-                        sin_th = max(abs(np.sin(np.radians(tth / 2.0))), 1e-6)
-                        N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam * max(F_abs, 1e-30))
-                                   / lyr.d)
-                        n_eff_unit.append(N_d); n_ext_unit.append(N_ext_l)
-                        F_unit += F_uc * N_d * np.exp(1j * Qn * z0_rel)
-
-                    # Superlattice geometric factor S_rep
-                    if stack.layers:
-                        z_buf  = stack._buffer_thickness
-                        Lambda = stack._bilayer_thickness
-                        phi_rep = Qn * Lambda
-                        phi_mod = phi_rep % (2.0 * np.pi)
-                        if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
-                            S_rep = float(stack.n_rep) + 0j
-                        else:
-                            S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
-                                     / (1.0 - np.exp(1j * phi_rep)))
-                        F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
-                    else:
-                        F_mqw = 0.0 + 0j
-
-                    F_total = F_buf + F_mqw
-                    F2 = abs(F_total) ** 2
-                    if F2 < f2_thresh:
-                        continue
-
-                    LP = lorentz_pol(tth)
-                    if LP == 0.0:
-                        continue
-                    sw = _spectrum(E)
-                    if sw <= 0.0:
-                        continue
-
-                    seen_pix.add(pix_key)
-                    n_added += 1
-                    spots.append({
-                        "phase_label": label,
-                        "hkl":         (h, k, l),
-                        "satellite_order": 0,
-                        "G_lab":       G_lab.copy(),
-                        "E":           E,
-                        "lambda":      lam,
-                        "tth":         tth,
-                        "chi":         chi,
-                        "az":          az,
-                        "pix":         pix,
-                        "F2":          F2,
-                        "F2_darwin":   F2,
-                        "LP":          LP,
-                        "sw":          sw,
-                        "I_raw":       F2 * LP * sw,
-                        "N_eff":       n_eff_buf + n_eff_unit,
-                        "N_ext":       n_ext_buf + n_ext_unit,
-                    })
+                    # Thickness fringes / superlattice satellites
+                    for q_fringe_vec, _ in fringe_q_vecs:
+                        for m in sat_orders:
+                            frac = m + 0.5 if m > 0 else m - 0.5
+                            G_sat = G_lab + frac * q_fringe_vec
+                            n_added += _try_darwin(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")
@@ -2082,6 +2127,11 @@ def simulate_laue_darwin(
 
     if verbose:
         print(f"  Total spots (Darwin): {len(spots)}")
+        if stack.layers and stack.n_rep > 1:
+            print(
+                f"  Superlattice satellite 2π/Λ = "
+                f"{2*np.pi/stack.bilayer_thickness:.5f} Å⁻¹"
+            )
 
     return spots
 

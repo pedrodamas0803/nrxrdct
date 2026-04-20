@@ -3120,24 +3120,32 @@ def plot_laue_comparison(
             return plt.get_cmap("plasma")(nm(en))
         return "#ff4444"
 
-    # ── Draw Bragg spots (always visible) ────────────────────────────────────
+    # ── Draw Bragg spots on both panels (always visible) ─────────────────────
     xb, yb, sb = _spot_coords(spots_bragg)
     if sb:
-        ax_sim.scatter(
-            xb, yb, c=_colors(sb),
-            s=spot_size, marker=spot_marker, linewidths=0.9, zorder=4,
-        )
+        for _ax in (ax_exp, ax_sim):
+            _ax.scatter(
+                xb, yb, c=_colors(sb),
+                s=spot_size, marker=spot_marker, linewidths=0.9, zorder=4,
+            )
+        _attach_hover_tooltip(fig, ax_exp, sb, xb, yb)
         _attach_hover_tooltip(fig, ax_sim, sb, xb, yb)
 
-    # ── Draw satellite spots (toggleable) ─────────────────────────────────────
+    # ── Draw satellite spots on both panels (toggleable) ──────────────────────
     xs, ys, ss = _spot_coords(spots_sat)
-    sc_sat = None
+    sc_sat_exp = sc_sat_sim = None
     if ss:
-        sc_sat = ax_sim.scatter(
+        sc_sat_exp = ax_exp.scatter(
             xs, ys, c=_colors(ss),
             s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
             zorder=3, alpha=0.75,
         )
+        sc_sat_sim = ax_sim.scatter(
+            xs, ys, c=_colors(ss),
+            s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
+            zorder=3, alpha=0.75,
+        )
+        _attach_hover_tooltip(fig, ax_exp, ss, xs, ys)
         _attach_hover_tooltip(fig, ax_sim, ss, xs, ys)
 
     # ── Phase legend ──────────────────────────────────────────────────────────
@@ -3154,16 +3162,16 @@ def plot_laue_comparison(
         )
 
     # ── Satellite toggle checkbox ─────────────────────────────────────────────
-    # Place it in the reserved axes strip on the far right.
     # Store the widget on the figure so it is not garbage-collected.
     chk_ax = fig.add_axes([0.91, 0.46, 0.08, 0.08], facecolor="#1a1f2e")
-    fig._sat_chk = CheckButtons(chk_ax, ["satellites"], [sc_sat is not None])
+    fig._sat_chk = CheckButtons(chk_ax, ["satellites"], [sc_sat_sim is not None])
     fig._sat_chk.labels[0].set_color(FG)
     fig._sat_chk.labels[0].set_fontsize(8)
 
     def _toggle_sat(_):
-        if sc_sat is not None:
-            sc_sat.set_visible(not sc_sat.get_visible())
+        for sc in (sc_sat_exp, sc_sat_sim):
+            if sc is not None:
+                sc.set_visible(not sc.get_visible())
         fig.canvas.draw_idle()
 
     fig._sat_chk.on_clicked(_toggle_sat)

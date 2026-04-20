@@ -152,7 +152,7 @@ SPOT_SIGMA_PIX = 5.0  # Gaussian sigma of each spot (pixels)
 KI_HAT = np.array([1.0, 0.0, 0.0])  # LT frame: beam along +x  (do not change)
 
 # ── Simulation ────────────────────────────────────────────────────────────────
-HMAX = 14
+HMAX = 12
 F2_THRESHOLD = 0.5
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1235,6 +1235,8 @@ def simulate_laue(
     camera,
     E_min=E_MIN_eV,
     E_max=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
     hmax=HMAX,
     f2_thresh=F2_THRESHOLD,
     kb_params=BM32_KB,
@@ -1360,6 +1362,24 @@ def simulate_laue(
     lam_lo = en2lam(E_max)
     lam_hi = en2lam(E_min)
     ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
+    source_kwargs = source_kwargs or {}
+
+    def _spectrum(E):
+        if source == "bending_magnet":
+            sw = spectrum_bm(E, **source_kwargs)
+        elif source == "wiggler":
+            kw = dict(N_poles=source_kwargs.get("N_poles", 40),
+                      Ec_eV=source_kwargs.get("Ec_eV", 20_000))
+            sw = spectrum_bm(E, **kw)
+        elif source == "undulator":
+            sw = spectrum_undulator(E, **source_kwargs)
+        elif source == "flat":
+            sw = 1.0
+        else:
+            raise ValueError(f"Unknown source: {source!r}")
+        if kb_params is not None:
+            sw *= kb_reflectivity(E, **kb_params)
+        return sw
 
     spots = []
     for h in range(-hmax, hmax + 1):
@@ -1412,9 +1432,7 @@ def simulate_laue(
                 if LP == 0.0:
                     continue
 
-                sw = synchrotron_spectrum(E)
-                if kb_params is not None:
-                    sw *= kb_reflectivity(E, **kb_params)
+                sw = _spectrum(E)
                 if sw <= 0.0:
                     continue
 
@@ -1449,8 +1467,8 @@ def simulate_laue_stack(
     E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
-    hmax=12,
-    f2_thresh=1.0,
+    hmax=HMAX,
+    f2_thresh=F2_THRESHOLD,
     ki_hat=None,
     max_satellites=5,
     kb_params=BM32_KB,
@@ -1761,7 +1779,7 @@ def simulate_mixed_phases(
     E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
-    hmax=12,
+    hmax=HMAX,
     f2_thresh=None,
     normalise="volume",
     kb_params=BM32_KB,
@@ -2009,8 +2027,10 @@ def simulate_mixed_phases(
                 camera,
                 E_min=E_min_eV,
                 E_max=E_max_eV,
+                source=source,
+                source_kwargs=source_kwargs,
                 hmax=ph_hmax,
-                f2_thresh=(ph_f2 if ph_f2 is not None else 0.5),
+                f2_thresh=(ph_f2 if ph_f2 is not None else F2_THRESHOLD),
                 kb_params=kb_params,
             )
 

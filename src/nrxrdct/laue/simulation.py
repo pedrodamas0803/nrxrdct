@@ -240,6 +240,44 @@ def beam_in_crystal(U):
     return U.T @ np.array([1.0, 0.0, 0.0])
 
 
+def rotate_U_about_axis(U, angle_deg, axis: str = "z"):
+    """
+    Rotate an orientation matrix by *angle_deg* about a lab-frame axis.
+
+    Parameters
+    ----------
+    U : array-like, shape (3, 3)
+        Orientation matrix in the lab frame (``G_lab = U @ G_crystal``).
+    angle_deg : float
+        Rotation angle in degrees.  Positive = right-hand rule about the axis.
+    axis : ``'x'`` | ``'y'`` | ``'z'``
+        Lab-frame axis to rotate about.  ``'z'`` is the surface normal in the
+        standard BM32 / LT geometry; ``'x'`` is along the beam; ``'y'`` is
+        horizontal and perpendicular to the beam.
+
+    Returns
+    -------
+    U_rot : ndarray, shape (3, 3)
+        Rotated orientation matrix: ``U_rot = R(axis, angle_deg) @ U``.
+
+    Examples
+    --------
+    Rotate a GaN (001) orientation by 30° around the surface normal (z)::
+
+        U0  = orientation_along_z(GaN, [0, 0, 1], [1, 0, 0])
+        U30 = rotate_U_about_axis(U0, 30.0, axis='z')
+
+    Tilt by 2° around the beam direction (x) to simulate a small miscut::
+
+        U_tilt = rotate_U_about_axis(U0, 2.0, axis='x')
+    """
+    axis = axis.lower().strip()
+    if axis not in ("x", "y", "z"):
+        raise ValueError(f"axis must be 'x', 'y', or 'z', got {axis!r}")
+    R = Rotation.from_euler(axis.upper(), angle_deg, degrees=True).as_matrix()
+    return R @ np.asarray(U, dtype=float)
+
+
 # LT2→LT passive rotation (coordinate-frame change, not a physical rotation)
 # LaueTools stores matstarlab in LT2 (y//beam, OR/XMAS frame).
 # simulate_laue works in LT (x//beam, LaueTools public frame).

@@ -58,6 +58,7 @@ from .simulation import (
     strain_spot_jacobian,
     synchrotron_spectrum,
     U_from_matstarlab,
+    rotate_U_about_axis,
 )
 
 __all__ = [
@@ -81,6 +82,7 @@ __all__ = [
     "U_from_matstarlab",
     "decompose_matstarlab",
     "beam_in_crystal",
+    "rotate_U_about_axis",
     # Strain analysis
     "measure_spot_widths",
     "estimate_instrument_broadening",

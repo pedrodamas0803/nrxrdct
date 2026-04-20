@@ -1,17 +1,19 @@
 # laue
 
 White-beam synchrotron Laue diffraction simulation — single crystals, mixed phases,
-and coherent layered superlattices.
+coherent layered superlattices, and dynamical (Darwin) intensity correction.
 
 The module covers the full simulation pipeline:
 
 1. **Crystal construction** — from built-in helpers or CIF files.
 2. **Orientation** — Bunge Euler angles, LaueTools `matstarlab`, or explicit rotation matrices.
 3. **Camera / detector** — LaueTools-compatible pixelated area detector.
-4. **Simulation** — single crystal (`simulate_laue`) or coherent layer stack (`simulate_laue_stack`).
-5. **Layered structures** — `LayeredCrystal` for superlattice / multilayer stacks.
+4. **Simulation** — single crystal (`simulate_laue`), coherent layer stack (`simulate_laue_stack`),
+   or Darwin-corrected multilayer (`simulate_laue_darwin`).
+5. **Layered structures** — `LayeredCrystal` for superlattice / multilayer stacks with
+   pseudomorphic strain, elastic constants, and lattice-parameter / strain profiling.
 6. **Strain analysis** — spot Jacobians, strain broadening, instrument broadening fitting.
-7. **Plotting** — 2θ/χ maps, detector images, strain-broadening overlays.
+7. **Plotting** — 2θ/χ maps, detector images, comparison panels, strain-broadening overlays.
 
 ---
 
@@ -39,9 +41,13 @@ The module covers the full simulation pipeline:
 
 ::: nrxrdct.laue.simulate_laue_stack
 
+::: nrxrdct.laue.simulate_laue_darwin
+
 ::: nrxrdct.laue.print_spot_table
 
 ::: nrxrdct.laue.print_bragg_table
+
+::: nrxrdct.laue.print_hkl_family
 
 ---
 
@@ -50,6 +56,12 @@ The module covers the full simulation pipeline:
 ::: nrxrdct.laue.LayeredCrystal
 
 ::: nrxrdct.laue.Layer
+
+::: nrxrdct.laue.d_spacing_hkl
+
+::: nrxrdct.laue.pseudomorphic_d_spacing
+
+::: nrxrdct.laue.nitride_elastic_constants
 
 ---
 
@@ -93,6 +105,8 @@ The module covers the full simulation pipeline:
 
 ::: nrxrdct.laue.strain_broadening
 
+::: nrxrdct.laue.measure_spot_widths
+
 ::: nrxrdct.laue.estimate_instrument_broadening
 
 ::: nrxrdct.laue.fit_strain_distribution
@@ -107,7 +121,9 @@ The module covers the full simulation pipeline:
 
 ::: nrxrdct.laue.lam2en
 
-::: nrxrdct.laue.is_superlattice
+::: nrxrdct.laue.kb_reflectivity
+
+::: nrxrdct.laue.BM32_KB
 
 ---
 
@@ -117,4 +133,18 @@ The module covers the full simulation pipeline:
 
 ::: nrxrdct.laue.plot_all
 
+::: nrxrdct.laue.plot_compare_spots
+
+::: nrxrdct.laue.plot_laue_comparison
+
+::: nrxrdct.laue.plot_interactive_tth_chi
+
+::: nrxrdct.laue.plot_tth_chi_overlay
+
+::: nrxrdct.laue.plot_layer_scheme
+
+::: nrxrdct.laue.plot_laue_stack_spots
+
 ::: nrxrdct.laue.plot_strain_broadening
+
+::: nrxrdct.laue.warp_image_to_tth_chi

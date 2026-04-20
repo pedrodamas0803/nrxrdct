@@ -3013,10 +3013,22 @@ def plot_laue_comparison(
                 tth_range=tth_range, chi_range=chi_range,
                 n_tth=n_tth, n_chi=n_chi,
             )
-            ext = [tth_ax[0], tth_ax[-1], chi_ax[0], chi_ax[-1]]
+            # Extend by half a pixel so that axis values (pixel centres) align
+            # with the markers placed at (tth, chi) coordinates.
+            dt = (tth_ax[-1] - tth_ax[0]) / max(len(tth_ax) - 1, 1)
+            dc = (chi_ax[-1] - chi_ax[0]) / max(len(chi_ax) - 1, 1)
+            ext = [
+                tth_ax[0] - dt / 2, tth_ax[-1] + dt / 2,
+                chi_ax[0] - dc / 2, chi_ax[-1] + dc / 2,
+            ]
             return warped, ext
         else:
-            ext = [0, camera.Nh, camera.Nv, 0]
+            # Use pixel-centre convention: array pixel [r, c] has its centre at
+            # data coordinate (c, r).  The default matplotlib imshow extent
+            # [-0.5, Nh-0.5, Nv-0.5, -0.5] achieves this.  Without this
+            # correction every pixel centre would be shifted +0.5 px in x and y
+            # relative to the scatter markers plotted at (xcam, ycam).
+            ext = [-0.5, camera.Nh - 0.5, camera.Nv - 0.5, -0.5]
             return arr, ext
 
     exp_disp, ext = _prepare(exp_image)

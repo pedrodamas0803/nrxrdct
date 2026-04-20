@@ -73,7 +73,9 @@ nav:
     - SLURM / HPC Integration: user-guide/slurm.md
     - GPU Support: user-guide/gpu.md
     - Diffraction and Laue Theory: user-guide/laue_theory.md
-    - Laue Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
+    - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
+    - Layered Structures: user-guide/laue_layered_structures.md
+    - Darwin Model (Thick Layers): user-guide/laue_darwin.md
   - Examples:
     - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:

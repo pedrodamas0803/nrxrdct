@@ -571,66 +571,75 @@ class Layer:
         """Total layer thickness in Å (always the real physical thickness)."""
         return self.n_cells * self.d
 
-    def _effective_n_cells(self, energy_eV: float) -> int:
+    def _linear_mu(self, energy_eV: float) -> float:
+        """
+        Linear absorption coefficient μ (Å⁻¹) for this material at *energy_eV*.
+
+        Returns ``0.0`` if material data are unavailable or absorption is zero.
+        """
+        _HC_ANG = 12398.419843
+        try:
+            if hasattr(self.crystal, "delta_beta"):
+                _, beta = self.crystal.delta_beta(energy_eV)
+            else:
+                elem = getattr(xu.materials.elements, self.crystal.name, None)
+                if elem is None or not getattr(elem, "density", 0):
+                    return 0.0
+                mat = xu.materials.Amorphous(self.crystal.name, elem.density)
+                _, beta = mat.delta_beta(energy_eV)
+            if not (beta > 0):
+                return 0.0
+            lam_ang = _HC_ANG / energy_eV
+            mu = 4.0 * np.pi * beta / lam_ang
+            return float(mu) if mu > 0 else 0.0
+        except Exception:
+            return 0.0
+
+    def _effective_n_cells(self, energy_eV: float, kf_hat=None) -> int:
         """
         Effective number of unit cells after Beer-Lambert absorption limiting.
 
-        The incident beam travels along the LT-frame x-axis ``[1,0,0]``.
-        The sample-surface normal coincides with the stacking direction
-        ``n_hat`` (the growth-crystal plane is always parallel to the wafer
-        surface).  The angle α between beam and surface normal is therefore
-        fixed by the sample mounting:
+        With only the incident beam considered (``kf_hat=None``):
 
-            cos α = |n̂ · x̂| = |n_hat[0]|
+            n_eff = cos_in / (μ · d)
 
-        The 1/e absorption depth *along the surface normal* is ``1/μ``.
-        Projecting onto the stacking direction (same as the surface normal
-        here) and accounting for the oblique path gives the effective number
-        of unit cells:
+            cos_in = |n̂ · x̂| = |n_hat[0]|
 
-            n_eff = |n_hat[0]| / (μ · d)
+        When the diffracted-beam direction ``kf_hat`` is supplied, the
+        **two-beam** formula accounts for both the incident and exit paths
+        through the layer:
 
-        For a beam at near-normal incidence (|n_hat[0]| → 1) this reduces to
-        the usual ``1/(μ·d)``.  For a highly tilted surface (|n_hat[0]| → 0,
-        grazing incidence) the beam spends a long path per unit depth and
-        n_eff → 0 (the layer is fully opaque).
+            n_eff = cos_in · cos_out / (μ · d · (cos_in + cos_out))
+
+            cos_out = |n̂ · k̂_f|
+
+        This is equivalent to using an effective linear attenuation
+
+            μ_eff = μ · (1/cos_in + 1/cos_out)
+
+        which is the standard symmetric absorption correction used in
+        surface-diffraction and thin-film rocking-curve analysis.
 
         Returns ``self.n_cells`` unchanged if the material lookup fails or if
         the absorption depth exceeds the real layer thickness.
         """
-        _HC_ANG = 12398.419843  # hc in eV·Å
-
-        try:
-            # Prefer the crystal's own delta_beta if available
-            if hasattr(self.crystal, "delta_beta"):
-                _, beta = self.crystal.delta_beta(energy_eV)
-            else:
-                # Fall back to element density → Amorphous proxy
-                elem = getattr(xu.materials.elements, self.crystal.name, None)
-                if elem is None or not getattr(elem, "density", 0):
-                    return self.n_cells
-                mat = xu.materials.Amorphous(self.crystal.name, elem.density)
-                _, beta = mat.delta_beta(energy_eV)
-
-            if not (beta > 0):
-                return self.n_cells
-
-            lam_ang = _HC_ANG / energy_eV
-            mu = 4.0 * np.pi * beta / lam_ang  # Å⁻¹
-            if mu <= 0:
-                return self.n_cells
-
-            # cos of angle between beam (LT x-axis) and surface normal (n_hat)
-            # Clamped to avoid zero (grazing incidence → n_eff = 1 minimum)
-            cos_alpha = max(abs(float(self.n_hat[0])), 1e-3)
-
-            n_eff = int(min(self.n_cells, cos_alpha / (mu * self.d)))
-            return max(n_eff, 1)
-
-        except Exception:
+        mu = self._linear_mu(energy_eV)
+        if mu <= 0:
             return self.n_cells
 
-    def structure_factor(self, Q_lab, energy_eV, z0=0.0):
+        cos_in = max(abs(float(self.n_hat[0])), 1e-3)
+
+        if kf_hat is not None:
+            kf = np.asarray(kf_hat, dtype=float)
+            cos_out = max(abs(float(np.dot(self.n_hat, kf))), 1e-3)
+            n_eff = int(min(self.n_cells,
+                           cos_in * cos_out / (mu * self.d * (cos_in + cos_out))))
+        else:
+            n_eff = int(min(self.n_cells, cos_in / (mu * self.d)))
+
+        return max(n_eff, 1)
+
+    def structure_factor(self, Q_lab, energy_eV, z0=0.0, kf_hat=None):
         """
         Kinematical structure factor of this layer at scattering vector Q_lab.
 
@@ -663,9 +672,10 @@ class Layer:
         Qn = float(np.dot(Q, self.n_hat))
         phi = Qn * self.d
 
-        # Effective cell count: limited by absorption depth for buffer layers
+        # Effective cell count: limited by absorption depth for buffer layers.
+        # kf_hat enables the two-beam (incident + exit) correction.
         n_eff = (
-            self._effective_n_cells(energy_eV)
+            self._effective_n_cells(energy_eV, kf_hat=kf_hat)
             if self.absorption_limit
             else self.n_cells
         )
@@ -915,7 +925,7 @@ class LayeredCrystal:
 
     # ── Structure factor ──────────────────────────────────────────────────────
 
-    def structure_factor(self, Q_lab, energy_eV):
+    def structure_factor(self, Q_lab, energy_eV, kf_hat=None):
         """
         Total kinematical structure factor of the stack at Q_lab.
 
@@ -923,7 +933,10 @@ class LayeredCrystal:
 
         1. **Buffer layers** (non-repeating, at the bottom):
 
-               F_buf(Q) = Σ_j  F_layer_j(Q, z0_j)
+               F_buf(Q) = Σ_j  T_above_j · F_layer_j(Q, z0_j)
+
+           where ``T_above_j`` is the amplitude attenuation from all layers
+           above layer *j* (both the MQW block and the shallower buffer layers).
 
         2. **Repeating unit** (MQW / bilayer, sitting on top of the buffer):
 
@@ -942,6 +955,16 @@ class LayeredCrystal:
         ----------
         Q_lab    : array-like (3,)   scattering vector in lab frame  (Å⁻¹)
         energy_eV: float             photon energy  (eV)
+        kf_hat   : array-like (3,) or None
+            Unit vector of the diffracted beam in the lab frame.  When
+            provided, the **exit-path** absorption through each overlying layer
+            is included via the two-beam transmission factor
+
+                T = exp(−μ · t · (1/cos_in + 1/cos_out))
+
+            where ``cos_in = |n̂ · x̂|`` and ``cos_out = |n̂ · k̂_f|``.
+            If ``None``, only the incident-path (one-beam) correction already
+            embedded in each buffer layer's ``_effective_n_cells`` is applied.
 
         Returns
         -------
@@ -951,16 +974,41 @@ class LayeredCrystal:
         Q = np.asarray(Q_lab, dtype=float)
         Qn = float(np.dot(Q, self.n_hat))
 
+        # ── Overlying-layer transmission helper ───────────────────────────────
+        def _T_slab(lyr, thickness):
+            """Amplitude transmission exp(-μ·t·(1/cos_in + 1/cos_out))."""
+            if kf_hat is None:
+                return 1.0
+            mu = lyr._linear_mu(energy_eV)
+            if mu <= 0:
+                return 1.0
+            kf = np.asarray(kf_hat, dtype=float)
+            cos_in  = max(abs(float(self.n_hat[0])), 1e-3)
+            cos_out = max(abs(float(np.dot(self.n_hat, kf))), 1e-3)
+            return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
+
+        # Attenuation from the full MQW block (sits above all buffer layers)
+        T_mqw = 1.0
+        for lyr in self.layers:
+            T_mqw *= _T_slab(lyr, lyr.thickness * self.n_rep)
+
         # ── Buffer layers (non-repeating) ─────────────────────────────────────
         F_total = 0.0 + 0j
-        for layer, z0 in zip(self.buffer_layers, self._buffer_z_offsets):
-            F_total += layer.structure_factor(Q, energy_eV, z0=z0)
+        for i, (layer, z0) in enumerate(zip(self.buffer_layers, self._buffer_z_offsets)):
+            # Attenuation from: MQW above + all buffer layers shallower than i
+            T_above = T_mqw
+            for j in range(i + 1, len(self.buffer_layers)):
+                T_above *= _T_slab(self.buffer_layers[j],
+                                   self.buffer_layers[j].thickness)
+            F_total += T_above * layer.structure_factor(Q, energy_eV, z0=z0,
+                                                        kf_hat=kf_hat)
 
         # ── Repeating unit (MQW) ──────────────────────────────────────────────
         if self.layers:
             F_unit = 0.0 + 0j
             for layer, z0 in zip(self.layers, self._z_offsets):
-                F_unit += layer.structure_factor(Q, energy_eV, z0=z0)
+                F_unit += layer.structure_factor(Q, energy_eV, z0=z0,
+                                                 kf_hat=kf_hat)
 
             # Phase to shift MQW to its z position above the buffer
             phase_buf = np.exp(1j * Qn * self._buffer_thickness)

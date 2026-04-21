@@ -1691,7 +1691,7 @@ def simulate_laue_stack(
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-        F_stack = stack.structure_factor(G_vec, energy_eV=E)
+        F_stack = stack.structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
         F2 = abs(F_stack) ** 2
         if f2_thresh == 0.0:
             f2_thresh = max(1.0, F2 * 1e-3)
@@ -1994,17 +1994,44 @@ def simulate_laue_darwin(
             print(f"    {desc}  →  2π/t = {np.linalg.norm(qv):.4f} Å⁻¹  (t = {t_nm:.2f} nm)")
 
     # ── Darwin amplitude helper ───────────────────────────────────────────────
-    def _darwin_amp(G_vec, E_ev, lam_ang, tth_deg):
+    def _darwin_amp(G_vec, E_ev, lam_ang, tth_deg, kf_hat=None):
         """
         Compute the Darwin-corrected coherent amplitude F_total for G_vec.
+
+        kf_hat : unit vector of the diffracted beam (lab frame).  When given,
+        the two-beam absorption correction and overlying-layer attenuation are
+        applied to each buffer layer's contribution.
 
         Returns (F_total, n_eff_list, n_ext_list).
         """
         Qn = float(np.dot(G_vec, stack.n_hat))
 
+        # ── Overlying-layer transmission helper ───────────────────────────────
+        def _T_slab(lyr, thickness):
+            if kf_hat is None:
+                return 1.0
+            mu = lyr._linear_mu(E_ev)
+            if mu <= 0:
+                return 1.0
+            kf = np.asarray(kf_hat, dtype=float)
+            cos_in  = max(abs(float(stack.n_hat[0])), 1e-3)
+            cos_out = max(abs(float(np.dot(stack.n_hat, kf))), 1e-3)
+            return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
+
+        # Attenuation from the full MQW block (sits above all buffer layers)
+        T_mqw = 1.0
+        for lyr in stack.layers:
+            T_mqw *= _T_slab(lyr, lyr.thickness * stack.n_rep)
+
         F_buf = 0.0 + 0j
         n_eff_b, n_ext_b = [], []
-        for lyr, z0 in zip(stack.buffer_layers, stack._buffer_z_offsets):
+        for i, (lyr, z0) in enumerate(zip(stack.buffer_layers, stack._buffer_z_offsets)):
+            # Attenuation from MQW + all buffer layers shallower than i
+            T_above = T_mqw
+            for j in range(i + 1, len(stack.buffer_layers)):
+                T_above *= _T_slab(stack.buffer_layers[j],
+                                   stack.buffer_layers[j].thickness)
+
             Q_cry_l = lyr.U.T @ G_vec
             F_uc = lyr.crystal.StructureFactor(Q_cry_l, en=E_ev)
             if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
@@ -2013,12 +2040,12 @@ def simulate_laue_darwin(
             F_abs = abs(F_uc)
             V_uc  = lyr.crystal.lattice.UnitCellVolume()
             N_d   = _darwin_n_eff(F_abs, lam_ang, tth_deg, V_uc, lyr.n_cells, lyr.d)
-            N_a   = float(lyr._effective_n_cells(E_ev))
+            N_a   = float(lyr._effective_n_cells(E_ev, kf_hat=kf_hat))
             N_eff = min(N_d, N_a)
             sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
             N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
             n_eff_b.append(N_eff); n_ext_b.append(N_ext_l)
-            F_buf += F_uc * N_eff * np.exp(1j * Qn * z0)
+            F_buf += T_above * F_uc * N_eff * np.exp(1j * Qn * z0)
 
         F_unit = 0.0 + 0j
         n_eff_u, n_ext_u = [], []
@@ -2080,7 +2107,7 @@ def simulate_laue_darwin(
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
 
-        F_total, n_effs, n_exts = _darwin_amp(G_vec, E, lam, tth)
+        F_total, n_effs, n_exts = _darwin_amp(G_vec, E, lam, tth, kf_hat=kf_hat)
         F2 = abs(F_total) ** 2
         # Satellites are weaker — use relaxed threshold
         effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh

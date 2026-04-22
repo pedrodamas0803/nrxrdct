@@ -1263,6 +1263,140 @@ def estimate_instrument_broadening(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SPECTRUM HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
+    """
+    Build and return a scalar spectrum-weight function  ``sw(E_eV) -> float``.
+
+    This factory is called once per simulation run.  For ``'shadow4'`` and
+    ``'tabulated'`` sources it pre-computes a linear interpolator so that
+    per-spot evaluation is O(1) regardless of the source complexity.
+
+    Parameters
+    ----------
+    source : str
+        One of:
+
+        * ``'bending_magnet'`` — Kim 1989 analytical BM spectrum (fast).
+        * ``'wiggler'`` — same formula scaled by number of poles (fast).
+        * ``'undulator'`` — Gaussian harmonic model (fast).
+        * ``'flat'`` — uniform weight of 1.0 (fast, for testing).
+        * ``'shadow4'`` — full optical-chain Monte Carlo via Shadow4 + xraylib.
+          Traces SBM32 → M1 (Ir) → M2 (Ir) → KB (Rh) and returns absolute
+          flux [ph/s/eV] at the sample.  **KB reflectivity is included** in
+          the output; pass ``kb_params=None`` (or it will be silently ignored).
+          Slow — runs once per simulation call.  Accepted ``source_kwargs``:
+
+            ``nrays``         — number of Monte Carlo rays (default 1 000 000).
+            ``n_energy_bins`` — histogram bins for the output (default 250).
+
+        * ``'tabulated'`` — arbitrary pre-computed spectrum supplied as arrays.
+          **KB reflectivity must already be included** in the flux values.
+          Required ``source_kwargs`` keys:
+
+            ``energy_eV`` — 1-D array of photon energies (eV).
+            ``flux``      — 1-D array of spectral weights (any units; only the
+                           relative shape matters).
+
+          Typical use: pass the ``flux_at_sample`` array returned by
+          :func:`~nrxrdct.laue.beamline.simulate_bm32_pink_beam_spectrum`::
+
+              result = simulate_bm32_pink_beam_spectrum(nrays=500_000, plot=False)
+              spots  = simulate_laue_stack(
+                  stack, cam,
+                  source='tabulated',
+                  source_kwargs={
+                      'energy_eV': result['energy_eV'],
+                      'flux':      result['flux_at_sample'],
+                  },
+                  kb_params=None,   # already included
+              )
+
+    source_kwargs : dict or None
+        Extra arguments for the chosen source (see above).
+    kb_params : dict or None
+        Forwarded to :func:`kb_reflectivity` for **analytical sources only**.
+        Silently ignored for ``'shadow4'`` and ``'tabulated'`` because mirror
+        reflectivity is already embedded in those spectra.
+
+    Returns
+    -------
+    fn : callable ``(E_eV: float) -> float``
+        Spectrum weight at photon energy *E_eV*.  Values are normalised so that
+        ``max(fn) ≈ 1``; only relative weights matter for spot intensities.
+    """
+    source_kwargs = source_kwargs or {}
+
+    # ── Interpolated sources (pre-compute once) ───────────────────────────────
+    if source == "shadow4":
+        try:
+            from .beamline import simulate_bm32_pink_beam_spectrum
+        except ImportError as exc:
+            raise ImportError(
+                "source='shadow4' requires the shadow4, xraylib, srxraylib, and syned "
+                "packages.\nInstall with:  pip install shadow4 xraylib srxraylib"
+            ) from exc
+        nrays = int(source_kwargs.get("nrays", 1_000_000))
+        n_bins = int(source_kwargs.get("n_energy_bins", 250))
+        result = simulate_bm32_pink_beam_spectrum(
+            nrays=nrays, n_energy_bins=n_bins, plot=False, save_fig=None
+        )
+        e_arr = result["energy_eV"]
+        f_arr = result["flux_at_sample"]
+        # KB reflectivity already included — ignore kb_params
+
+    elif source == "tabulated":
+        if "energy_eV" not in source_kwargs or "flux" not in source_kwargs:
+            raise ValueError(
+                "source='tabulated' requires source_kwargs to contain "
+                "'energy_eV' and 'flux' arrays."
+            )
+        e_arr = np.asarray(source_kwargs["energy_eV"], dtype=float)
+        f_arr = np.asarray(source_kwargs["flux"], dtype=float)
+        # KB reflectivity assumed already included — ignore kb_params
+
+    if source in ("shadow4", "tabulated"):
+        from scipy.interpolate import interp1d
+        f_max = f_arr.max()
+        if f_max <= 0:
+            raise ValueError("Spectrum flux array is all-zero or negative.")
+        _interp = interp1d(
+            e_arr, f_arr / f_max,
+            kind="linear", bounds_error=False, fill_value=0.0,
+        )
+        return lambda E: float(_interp(E))
+
+    # ── Analytical sources ────────────────────────────────────────────────────
+    def _sw(E):
+        if source == "bending_magnet":
+            sw = spectrum_bm(E, **source_kwargs)
+        elif source == "wiggler":
+            kw = {
+                "N_poles": source_kwargs.get("N_poles", 40),
+                "Ec_eV":   source_kwargs.get("Ec_eV", 20_000),
+            }
+            sw = spectrum_bm(E, **kw)
+        elif source == "undulator":
+            sw = spectrum_undulator(E, **source_kwargs)
+        elif source == "flat":
+            return 1.0
+        else:
+            raise ValueError(
+                f"Unknown source {source!r}.  "
+                "Choose from: 'bending_magnet', 'wiggler', 'undulator', "
+                "'flat', 'shadow4', 'tabulated'."
+            )
+        if kb_params is not None:
+            sw *= kb_reflectivity(E, **kb_params)
+        return float(sw)
+
+    return _sw
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CORE LAUE SIMULATION
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1346,6 +1480,18 @@ def simulate_laue(
         High-energy cut-off of the white beam in eV.
         Default: ``E_MAX_eV`` (27 000 eV).
 
+    source : str, optional
+        Synchrotron source model.  See :func:`_make_spectrum_fn` for the full
+        list (``'bending_magnet'``, ``'wiggler'``, ``'undulator'``, ``'flat'``,
+        ``'shadow4'``, ``'tabulated'``).  Default: ``'bending_magnet'``.
+
+    source_kwargs : dict or None, optional
+        Extra arguments for the chosen source (see :func:`_make_spectrum_fn`).
+
+    kb_params : dict or None, optional
+        KB mirror reflectivity correction (see :func:`kb_reflectivity`).
+        Ignored for ``'shadow4'`` and ``'tabulated'`` sources.
+
     hmax : int, optional
         Maximum absolute Miller index to enumerate.  The search space is a
         cube ``[-hmax, hmax]^3`` (excluding 000).
@@ -1402,22 +1548,7 @@ def simulate_laue(
     ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
     source_kwargs = source_kwargs or {}
 
-    def _spectrum(E):
-        if source == "bending_magnet":
-            sw = spectrum_bm(E, **source_kwargs)
-        elif source == "wiggler":
-            kw = dict(N_poles=source_kwargs.get("N_poles", 40),
-                      Ec_eV=source_kwargs.get("Ec_eV", 20_000))
-            sw = spectrum_bm(E, **kw)
-        elif source == "undulator":
-            sw = spectrum_undulator(E, **source_kwargs)
-        elif source == "flat":
-            sw = 1.0
-        else:
-            raise ValueError(f"Unknown source: {source!r}")
-        if kb_params is not None:
-            sw *= kb_reflectivity(E, **kb_params)
-        return sw
+    _spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
 
     spots = []
     for h in range(-hmax, hmax + 1):
@@ -1530,18 +1661,35 @@ def simulate_laue_stack(
     E_min_eV, E_max_eV : float
         Energy window  (eV).
     source : str
-        Synchrotron source model: ``'bending_magnet'``, ``'wiggler'``,
-        ``'undulator'``, or ``'flat'`` (uniform spectrum).
+        Synchrotron source model.  See :func:`_make_spectrum_fn` for full
+        details.  Summary:
+
+        * ``'bending_magnet'`` *(default)* — Kim 1989 analytical formula, fast.
+        * ``'wiggler'`` — same formula × N poles.
+        * ``'undulator'`` — Gaussian harmonic model.
+        * ``'flat'`` — uniform weight, useful for testing.
+        * ``'shadow4'`` — full Monte Carlo via Shadow4 + xraylib tracing
+          SBM32 → M1 (Ir) → M2 (Ir) → KB (Rh).  Runs once per call; slow
+          (~1–2 min for 1 M rays).  Pass ``kb_params=None``.
+        * ``'tabulated'`` — arbitrary pre-computed spectrum supplied via
+          ``source_kwargs``.  Pass ``kb_params=None``.
+
     source_kwargs : dict, optional
-        Extra keyword arguments forwarded to the spectrum function:
-          bending_magnet / wiggler : ``Ec_eV``, ``N_poles``
-          undulator                : ``E1_eV``, ``n_harm``, ``sig_rel``
+        Extra arguments for the chosen source:
+
+        * ``'bending_magnet'`` / ``'wiggler'`` : ``Ec_eV``, ``N_poles``
+        * ``'undulator'``                       : ``E1_eV``, ``n_harm``, ``sig_rel``
+        * ``'shadow4'``                         : ``nrays`` (default 1 000 000),
+          ``n_energy_bins`` (default 250)
+        * ``'tabulated'``                       : ``energy_eV`` (array), ``flux`` (array)
+
     kb_params : dict or None, optional
         KB mirror reflectivity correction applied by multiplying the source
         spectrum by :func:`kb_reflectivity` at each photon energy.  The dict
         is forwarded as keyword arguments.  Defaults to :data:`BM32_KB`
         (Rh-coated, 2.5 mrad, 2 mirrors, 3 Å roughness — BM32/ESRF).
-        Pass ``None`` to disable::
+        Pass ``None`` to disable, and **must** be ``None`` for ``'shadow4'``
+        and ``'tabulated'`` sources (reflectivity already included)::
 
             spots = simulate_laue_stack(stack, cam)               # BM32_KB default
             spots = simulate_laue_stack(stack, cam, kb_params=None)  # no correction
@@ -1592,22 +1740,7 @@ def simulate_laue_stack(
     lam_lo = en2lam(E_max_eV)
     lam_hi = en2lam(E_min_eV)
 
-    def spectrum(E):
-        if source == "bending_magnet":
-            sw = spectrum_bm(E, **source_kwargs)
-        elif source == "wiggler":
-            kw = dict(N_poles=source_kwargs.get("N_poles", 40))
-            kw["Ec_eV"] = source_kwargs.get("Ec_eV", 20_000)
-            sw = spectrum_bm(E, **kw)
-        elif source == "undulator":
-            sw = spectrum_undulator(E, **source_kwargs)
-        elif source == "flat":
-            sw = 1.0
-        else:
-            raise ValueError(f"Unknown source: {source!r}")
-        if kb_params is not None:
-            sw *= kb_reflectivity(E, **kb_params)
-        return sw
+    spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
 
     # Auto-scale f2_thresh if not provided
     if f2_thresh is None:
@@ -1912,7 +2045,10 @@ def simulate_laue_darwin(
         Same input as :func:`simulate_laue_stack`.
     camera : Camera
     E_min_eV, E_max_eV : float
-    source : str   ``'bending_magnet'`` | ``'wiggler'`` | ``'undulator'`` | ``'flat'``
+    source : str
+        See :func:`simulate_laue_stack` and :func:`_make_spectrum_fn` for the
+        full list (``'bending_magnet'``, ``'wiggler'``, ``'undulator'``,
+        ``'flat'``, ``'shadow4'``, ``'tabulated'``).
     source_kwargs : dict, optional
     hmax : int
     f2_thresh : float
@@ -1943,22 +2079,7 @@ def simulate_laue_darwin(
     lam_lo = en2lam(E_max_eV)
     lam_hi = en2lam(E_min_eV)
 
-    def _spectrum(E: float) -> float:
-        if source == "bending_magnet":
-            sw = spectrum_bm(E, **source_kwargs)
-        elif source == "wiggler":
-            kw = dict(N_poles=source_kwargs.get("N_poles", 40),
-                      Ec_eV=source_kwargs.get("Ec_eV", 20_000))
-            sw = spectrum_bm(E, **kw)
-        elif source == "undulator":
-            sw = spectrum_undulator(E, **source_kwargs)
-        elif source == "flat":
-            sw = 1.0
-        else:
-            raise ValueError(f"Unknown source: {source!r}")
-        if kb_params is not None:
-            sw *= kb_reflectivity(E, **kb_params)
-        return float(sw)
+    _spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
 
     # ── Fringe / satellite wavevectors ────────────────────────────────────────
     # Same logic as simulate_laue_stack: probe G_hkl + frac * q_fringe
@@ -2273,16 +2394,26 @@ def simulate_mixed_phases(
         Energy window (eV), applied to all phases.
 
     source : str
-        Synchrotron source: ``'bending_magnet'``, ``'wiggler'``,
-        ``'undulator'``, or ``'flat'``.
+        Synchrotron source model, forwarded to each per-phase simulation.
+        Accepts all options supported by :func:`simulate_laue_stack`:
+        ``'bending_magnet'``, ``'wiggler'``, ``'undulator'``, ``'flat'``,
+        ``'shadow4'``, or ``'tabulated'``.
+
+        For ``'shadow4'``, the Monte Carlo simulation is run **once** here
+        and the resulting spectrum is passed to every phase as
+        ``'tabulated'``, so the cost is paid only once regardless of how
+        many phases are in the mix.
 
     source_kwargs : dict, optional
-        Forwarded to the spectrum function (e.g. ``{'Ec_eV': 20000}``).
+        Forwarded to the spectrum function.  For ``'shadow4'``, accepts
+        ``nrays`` and ``n_energy_bins`` (see :func:`_make_spectrum_fn`).
+        For ``'tabulated'``, must contain ``'energy_eV'`` and ``'flux'``.
 
     kb_params : dict or None, optional
         KB mirror reflectivity correction, forwarded unchanged to each
         per-phase simulation call.  Defaults to :data:`BM32_KB`.
-        Pass ``None`` to disable.
+        Pass ``None`` to disable, and **must** be ``None`` for
+        ``'shadow4'`` and ``'tabulated'`` sources.
 
     hmax : int
         Maximum Miller index (global default, overridable per phase).
@@ -2347,6 +2478,22 @@ def simulate_mixed_phases(
     from .layers import LayeredCrystal
 
     source_kwargs = source_kwargs or {}
+
+    # ── Pre-compute spectrum for interpolated sources (pay the cost once) ─────
+    # For 'shadow4' the Monte Carlo run takes ~1-2 min; running it once per
+    # phase would multiply that cost by the number of phases.  Instead, run it
+    # here, then switch source to 'tabulated' so every sub-call gets a free
+    # interpolation.  The same logic applies when the caller already passes
+    # 'tabulated' — we just pass those arrays through unchanged.
+    if source in ("shadow4", "tabulated"):
+        _fn = _make_spectrum_fn(source, source_kwargs, kb_params)
+        # Evaluate on a dense grid covering the energy window so the per-phase
+        # simulate_laue / simulate_laue_stack calls get a fine interpolator.
+        _e_grid = np.linspace(E_min_eV, E_max_eV, 500)
+        _f_grid = np.array([_fn(e) for e in _e_grid])
+        source = "tabulated"
+        source_kwargs = {"energy_eV": _e_grid, "flux": _f_grid}
+        kb_params = None   # already embedded in _f_grid
 
     # ── Normalise phase list ──────────────────────────────────────────────────
     parsed = []

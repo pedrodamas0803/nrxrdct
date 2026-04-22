@@ -40,24 +40,22 @@ Install:
     pip install shadow4 xraylib srxraylib matplotlib numpy scipy
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.interpolate import interp1d
-
-from shadow4.sources.s4_electron_beam import S4ElectronBeam
-from shadow4.sources.bending_magnet.s4_bending_magnet import S4BendingMagnet
-from shadow4.sources.bending_magnet.s4_bending_magnet_light_source import (
-    S4BendingMagnetLightSource,
-)
 from shadow4.beamline.optical_elements.mirrors.s4_ellipsoid_mirror import (
     S4EllipsoidMirror,
     S4EllipsoidMirrorElement,
 )
-from shadow4.beamline.s4_optical_element_decorators import SurfaceCalculation, Direction
+from shadow4.beamline.s4_optical_element_decorators import Direction, SurfaceCalculation
 from shadow4.physical_models.prerefl.prerefl import PreRefl
+from shadow4.sources.bending_magnet.s4_bending_magnet import S4BendingMagnet
+from shadow4.sources.bending_magnet.s4_bending_magnet_light_source import (
+    S4BendingMagnetLightSource,
+)
+from shadow4.sources.s4_electron_beam import S4ElectronBeam
 from syned.beamline.element_coordinates import ElementCoordinates
 from syned.beamline.shape import Rectangle
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +100,7 @@ def make_bm32_source(nrays=1_000_000):
     bm = S4BendingMagnet(
         radius=23.588,
         magnetic_field=0.857,
-        length=0.1,
+        length=0.063,
         emin=5_000.0,
         emax=35_000.0,
         ng_e=200,

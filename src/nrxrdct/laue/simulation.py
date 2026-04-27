@@ -1608,6 +1608,8 @@ def simulate_laue(
                 spots.append(
                     {
                         "hkl": (h, k, l),
+                        "satellite_order": 0,
+                        "is_superlattice": False,
                         "E": E,
                         "lambda": lam,
                         "tth": tth,
@@ -1711,21 +1713,26 @@ def simulate_laue_stack(
         Incident beam direction in the LaueTools LT frame (x // beam).
         Default: [1, 0, 0].
     structure_model : {'coherent', 'average'}, optional
-        Controls how the MQW repeating unit structure factor is evaluated:
+        Controls how the MQW repeating unit structure factor is evaluated
+        and which crystals are used to enumerate candidate G vectors.
 
-        * ``'coherent'`` *(default)* — full coherent sum with all phase
-          factors ``exp(i Qₙ z_rel)`` within the period and ``S_rep`` over
-          ``N_rep`` periods.  Reproduces superlattice satellites and
-          thickness fringes at their physically correct relative intensities.
-        * ``'average'`` — sums ``F_uc_i × N_eff_i`` over one bilayer period
-          **without** the intra-period depth phases ``exp(i Qₙ z_rel)``,
-          then multiplies by the same ``S_rep`` geometric series.  Buffer
-          layer phases are always preserved.  The result uses the effective
-          average composition of the period as the "unit cell" scattering
-          amplitude; satellite positions and ``N_rep``-dependent peak widths
-          are identical to the coherent model, but the relative intensities
-          between satellite orders reflect the average composition rather
-          than the layer-ordering interference.
+        * ``'coherent'`` — full layer-by-layer coherent sum: each layer
+          contributes ``F_uc_i × N_eff_i × exp(i Qₙ z_rel_i)`` within the
+          period, multiplied by ``S_rep`` over ``N_rep`` periods.  G vectors
+          are enumerated from **every** unique crystal in the stack, so
+          slightly displaced GaN and InGaN Bragg peaks appear separately.
+          Reproduces superlattice satellites and thickness fringes at their
+          physically correct relative intensities.
+        * ``'average'`` *(default)* — treats the MQW period as a single
+          effective material.  G vectors are enumerated **only from the
+          buffer layers** (or the first MQW layer if no buffers exist), so
+          only one set of Bragg positions is produced — matching what is seen
+          in a monochromatic scan.  The structure factor per period is the
+          composition-weighted sum ``Σ F_uc_i × N_eff_i`` (no intra-period
+          ``exp(i Qₙ z_rel)`` phases), then multiplied by ``S_rep``.
+          Satellite positions and ``N_rep``-dependent peak widths are
+          identical to the coherent model; intensities reflect the average
+          composition rather than the layer-ordering interference.
 
         Note: strained d-spacings (from :meth:`add_pseudomorphic_layer`)
         enter through ``N_eff = thickness / d_strained`` in both modes.
@@ -1870,6 +1877,7 @@ def simulate_laue_stack(
                 "phase_label": phase_label,
                 "hkl": hkl,
                 "satellite_order": sat_order,
+                "is_superlattice": sat_order != 0,
                 "G_lab": G_vec.copy(),
                 "E": E,
                 "lambda": lam,
@@ -1888,11 +1896,22 @@ def simulate_laue_stack(
 
     spots = []
 
+    # In average mode enumerate G vectors from buffer layers only.
+    # MQW layers are not enumerated separately — their contribution is already
+    # folded into the average_structure_factor via S_rep.  Enumerating them
+    # separately would produce duplicate Bragg peaks at the slightly displaced
+    # InGaN G positions, which is exactly what the average model is meant to
+    # avoid.  Fall back to the first MQW layer if there are no buffer layers.
+    if structure_model == "average":
+        _enum_pool = stack.buffer_layers if stack.buffer_layers else stack.layers[:1]
+    else:
+        _enum_pool = stack.all_layers
+
     # Deduplicate: if two layers share the exact same crystal AND orientation,
     # enumerate once — the stack F already includes both contributions.
     seen_combos = []  # list of (crystal.name, U_rounded_tuple)
 
-    for layer in stack.all_layers:
+    for layer in _enum_pool:
         crystal = layer.crystal
         U = layer.U
         label = layer.label
@@ -2087,11 +2106,11 @@ def simulate_laue_darwin(
         Set to 0 to skip satellite calculation entirely.
     structure_model : {'coherent', 'average'}, optional
         See :func:`simulate_laue_stack` for full description.  In
-        ``'average'`` mode the intra-period ``exp(i Qₙ z_rel)`` phases are
-        dropped but ``S_rep`` is kept, so satellites appear at the correct
-        positions with intensities reflecting the average-composition unit
-        cell.  Darwin-corrected ``N_eff`` values are still computed and
-        reported in the returned ``'N_eff'`` key.
+        ``'average'`` mode G vectors are enumerated from buffer layers only,
+        intra-period ``exp(i Qₙ z_rel)`` phases are dropped, and ``S_rep``
+        is kept — producing a single average Bragg peak with satellites, as
+        seen in a monochromatic scan.  Darwin-corrected ``N_eff`` values are
+        still computed and reported in the returned ``'N_eff'`` key.
     verbose : bool
 
     Returns
@@ -2285,6 +2304,7 @@ def simulate_laue_darwin(
             "phase_label":    phase_label,
             "hkl":            hkl,
             "satellite_order": sat_order,
+            "is_superlattice": sat_order != 0,
             "G_lab":          G_vec.copy(),
             "E":              E,
             "lambda":         lam,
@@ -2303,9 +2323,16 @@ def simulate_laue_darwin(
         return 1
 
     # ── Deduplicate orientations for enumeration ──────────────────────────────
+    # In average mode enumerate from buffer layers only (same reason as in
+    # simulate_laue_stack: avoids duplicate peaks from displaced InGaN G vectors).
+    if structure_model == "average":
+        _enum_pool = stack.buffer_layers if stack.buffer_layers else stack.layers[:1]
+    else:
+        _enum_pool = stack.all_layers
+
     seen_combos: list = []
     enum_layers: list = []
-    for layer in stack.all_layers:
+    for layer in _enum_pool:
         u_key = (layer.crystal.name, tuple(np.round(layer.U, 4).ravel()))
         if u_key not in seen_combos:
             seen_combos.append(u_key)
@@ -2466,8 +2493,13 @@ def simulate_mixed_phases(
         Weighting mode: ``'volume'``, ``'fraction'``, ``'equal'``, ``'none'``.
     structure_model : {'coherent', 'average'}, optional
         Forwarded to :func:`simulate_laue_stack` for any ``LayeredCrystal``
-        phase.  See that function for full description.  Ignored for plain
-        ``xu.materials.Crystal`` phases (handled by :func:`simulate_laue`).
+        phase.  ``'average'`` *(default)* enumerates G vectors from buffer
+        layers only and uses the composition-weighted average MQW structure
+        factor, matching the single-peak-plus-satellites appearance of a
+        monochromatic scan.  ``'coherent'`` enumerates every crystal
+        separately and preserves full inter-layer interference.  Ignored for
+        plain ``xu.materials.Crystal`` phases (handled by
+        :func:`simulate_laue`).
     verbose : bool
 
     Returns

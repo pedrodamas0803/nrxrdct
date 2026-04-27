@@ -1641,6 +1641,7 @@ def simulate_laue_stack(
     ki_hat=None,
     max_satellites=5,
     kb_params=BM32_KB,
+    structure_model="coherent",
     verbose=True,
 ):
     """
@@ -1824,7 +1825,10 @@ def simulate_laue_stack(
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-        F_stack = stack.structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
+        if structure_model == "average":
+            F_stack = stack.average_structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
+        else:
+            F_stack = stack.structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
         F2 = abs(F_stack) ** 2
         if f2_thresh == 0.0:
             f2_thresh = max(1.0, F2 * 1e-3)
@@ -1995,6 +1999,7 @@ def simulate_laue_darwin(
     ki_hat=None,
     kb_params=BM32_KB,
     max_satellites: int = 5,
+    structure_model: str = "coherent",
     verbose: bool = True,
 ):
     """
@@ -2166,7 +2171,8 @@ def simulate_laue_darwin(
             sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
             N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
             n_eff_b.append(N_eff); n_ext_b.append(N_ext_l)
-            F_buf += T_above * F_uc * N_eff * np.exp(1j * Qn * z0)
+            phase = 1.0 if structure_model == "average" else np.exp(1j * Qn * z0)
+            F_buf += T_above * F_uc * N_eff * phase
 
         F_unit = 0.0 + 0j
         n_eff_u, n_ext_u = [], []
@@ -2182,19 +2188,23 @@ def simulate_laue_darwin(
             sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
             N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
             n_eff_u.append(N_d); n_ext_u.append(N_ext_l)
-            F_unit += F_uc * N_d * np.exp(1j * Qn * z0_rel)
+            phase = 1.0 if structure_model == "average" else np.exp(1j * Qn * z0_rel)
+            F_unit += F_uc * N_d * phase
 
         if stack.layers:
-            z_buf   = stack._buffer_thickness
-            Lambda  = stack._bilayer_thickness
-            phi_rep = Qn * Lambda
-            phi_mod = phi_rep % (2.0 * np.pi)
-            if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
-                S_rep = float(stack.n_rep) + 0j
+            if structure_model == "average":
+                F_mqw = F_unit * stack.n_rep
             else:
-                S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
-                         / (1.0 - np.exp(1j * phi_rep)))
-            F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
+                z_buf   = stack._buffer_thickness
+                Lambda  = stack._bilayer_thickness
+                phi_rep = Qn * Lambda
+                phi_mod = phi_rep % (2.0 * np.pi)
+                if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
+                    S_rep = float(stack.n_rep) + 0j
+                else:
+                    S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
+                             / (1.0 - np.exp(1j * phi_rep)))
+                F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
         else:
             F_mqw = 0.0 + 0j
 
@@ -2333,6 +2343,7 @@ def simulate_mixed_phases(
     f2_thresh=None,
     normalise="volume",
     kb_params=BM32_KB,
+    structure_model="coherent",
     verbose=True,
 ):
     """
@@ -2594,6 +2605,7 @@ def simulate_mixed_phases(
                 hmax=ph_hmax,
                 f2_thresh=ph_f2,
                 kb_params=kb_params,
+                structure_model=structure_model,
                 verbose=False,
             )
         else:

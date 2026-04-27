@@ -8,21 +8,11 @@ Full optical chain (polychromatic / pink-beam mode):
     -> M1  (Ir bent cylinder, 26 m, 3.062 mrad, vertical focus)
     -> M2  (Ir bent cylinder, 30 m, 2.563 mrad, vertical focus)
     -> KB_V + KB_H reflectivity applied analytically
-       Rh coating (post-2023), grazing angle 2.2 mrad (estimated)
+       Ir coating, grazing angle 2.8 mrad (original design value)
     -> final spectrum at sample  (observable range: 5-33 keV)
 
 All distances/angles from the official ESRF BM32 optics page:
 https://www.esrf.fr/home/UsersAndScience/Experiments/CRG/BM32/Beamline/optics.html
-
-Note on KB grazing angle
-------------------------
-The original Ir KB mirrors (pre-2023) operated at 2.8 mrad.
-After the 2023 replacement with Rh-coated mirrors, the angle was
-reduced. 2.8 mrad with Rh cuts the spectrum off at ~23 keV, which
-is inconsistent with the observed 5-33 keV range at BM32.
-A grazing angle of ~2.2 mrad with Rh gives a 0.1%-flux cutoff at
-~34 keV, matching observations. Use G_KB = 2.2e-3 rad as best
-estimate until the exact value is confirmed with the BM32 local team.
 
 Design note — why KB is handled analytically
 ---------------------------------------------
@@ -83,10 +73,6 @@ def _ir_reflectivity(energies_eV, grazing_mrad, roughness_A=3.0):
     return _reflectivity(energies_eV, "Ir", 22.56, grazing_mrad, roughness_A)
 
 
-def _rh_reflectivity(energies_eV, grazing_mrad, roughness_A=3.0):
-    """Rh coating (density 12.41 g/cm3)."""
-    return _reflectivity(energies_eV, "Rh", 12.41, grazing_mrad, roughness_A)
-
 
 # ── source ───────────────────────────────────────────────────────────────────
 
@@ -145,13 +131,13 @@ def make_bent_cylinder_mirror(name, p_focus, q_focus, grazing_rad, aperture):
     )
 
 
-def make_rh_kb_mirror(name, p_focus, q_focus, grazing_rad, aperture):
+def make_ir_kb_mirror(name, p_focus, q_focus, grazing_rad, aperture):
     """
-    Rh-coated fixed-curvature ELLIPSOIDAL KB mirror (KB_V and KB_H at BM32).
+    Ir-coated fixed-curvature ELLIPSOIDAL KB mirror (KB_V and KB_H at BM32).
 
     The BM32 KB mirrors (installed 2012) are fixed-curvature elliptical mirrors,
     not bent, so is_cylinder=False (full ellipsoid).
-    Coating: Rh, 12.41 g/cm3.
+    Coating: Ir, 22.56 g/cm3.
     """
     return S4EllipsoidMirror(
         name=name,
@@ -164,8 +150,8 @@ def make_rh_kb_mirror(name, p_focus, q_focus, grazing_rad, aperture):
         f_reflec=1,
         f_refl=5,
         file_refl="",
-        coating_material="Rh",
-        coating_density=12.41,
+        coating_material="Ir",
+        coating_density=22.56,
         coating_roughness=3.0,
     )
 
@@ -232,10 +218,7 @@ def simulate_bm32_pink_beam_spectrum(
 
     G_M1 = 3.062181698459972e-3  # rad  M1 grazing angle
     G_M2 = 2.5627372258861216e-3  # rad  M2 grazing angle
-    G_KB = 2.2e-3  # rad  KB grazing angle (Rh, post-2023 estimate)
-    # Original Ir KB used 2.8 mrad; Rh at 2.8 mrad
-    # cuts off at ~23 keV, inconsistent with observed
-    # 5-33 keV range. 2.2 mrad gives ~34 keV cutoff.
+    G_KB = 2.8e-3  # rad  KB grazing angle (Ir coating, original design value)
 
     # Mirror apertures in local frame: Rectangle(x_sag_left, x_sag_right,
     #                                             y_tan_bottom, y_tan_top)  [m]
@@ -248,7 +231,7 @@ def simulate_bm32_pink_beam_spectrum(
     APT_KB1 = Rectangle(-0.010, 0.010, -0.150, 0.150)  # 20 mm x 300 mm
     APT_KB2 = Rectangle(-0.010, 0.010, -0.075, 0.075)  # 20 mm x 150 mm
 
-    E_RANGE = (5_000, 35_000)  # eV — covers full Rh KB spectrum (5-33 keV)
+    E_RANGE = (5_000, 35_000)  # eV — covers full Ir KB spectrum (5-33 keV)
 
     # ── 1. Source ───────────────────────────────────────────────────────
     print("[1/4] Sampling SBM32 source rays ...")
@@ -323,12 +306,12 @@ def simulate_bm32_pink_beam_spectrum(
     # ── 4. KB reflectivity (analytic, Rh coating) ──────────────────────
     # KB1 (vertical):   L=0.3 m,  at 44.645 m, p=9.275 m from SL2, q=0.355 m to sample
     # KB2 (horizontal): L=0.15 m, at 44.880 m, p=9.510 m from SL2, q=0.120 m to sample
-    # Both Rh coated (post-2023), grazing angle 2.2 mrad (estimated)
-    print("[4/4] Applying KB1 + KB2 Rh reflectivity analytically ...")
+    # Both Ir coated, grazing angle 2.8 mrad (original design value)
+    print("[4/4] Applying KB1 + KB2 Ir reflectivity analytically ...")
     e_centers = np.linspace(E_RANGE[0], E_RANGE[1], n_energy_bins)
     R_m1 = _ir_reflectivity(e_centers, G_M1 * 1e3)  # Ir, M1 (3.062 mrad)
     R_m2 = _ir_reflectivity(e_centers, G_M2 * 1e3)  # Ir, M2 (2.563 mrad)
-    R_kb = _rh_reflectivity(e_centers, G_KB * 1e3)  # Rh, KB1 or KB2
+    R_kb = _ir_reflectivity(e_centers, G_KB * 1e3)  # Ir, KB1 or KB2 (2.8 mrad)
     R_kb2 = R_kb**2  # KB1 × KB2
 
     # ── Histograms — counts × norm_factor = ph/s per bin ───────────────
@@ -341,7 +324,7 @@ def simulate_bm32_pink_beam_spectrum(
     en, sp_m1 = _hist(e_m1, i_m1)
     en, sp_m2 = _hist(e_m2, i_m2)
 
-    # Apply KB reflectivity (Rh × 2) to the M2 spectrum
+    # Apply KB reflectivity (Ir × 2) to the M2 spectrum
     sp_sample = sp_m2 * interp1d(e_centers, R_kb2, bounds_error=False, fill_value=0.0)(
         en
     )
@@ -373,7 +356,7 @@ def simulate_bm32_pink_beam_spectrum(
                 "royalblue",
                 1.5,
             ),
-            (sp_sample / dE_eV, "At sample (×KB1×KB2 Rh 2.2 mrad)", "crimson", 2.0),
+            (sp_sample / dE_eV, "At sample (×KB1×KB2 Ir 2.8 mrad)", "crimson", 2.0),
         ]:
             ax1.plot(en / 1e3, sp, label=lbl, color=col, lw=lw)
 
@@ -392,7 +375,7 @@ def simulate_bm32_pink_beam_spectrum(
         ax1.set_xlabel("Photon energy (keV)")
         ax1.set_ylabel("Spectral flux  (ph/s/eV)")
         ax1.set_title(
-            "BM32 pink-beam spectrum\nM1/M2: Ir bent cylinder  |  KB: Rh (2.2 mrad, post-2023)"
+            "BM32 pink-beam spectrum\nM1/M2: Ir bent cylinder  |  KB: Ir (2.8 mrad)"
         )
         ax1.legend(fontsize=8)
         ax1.grid(True, alpha=0.3)
@@ -416,7 +399,7 @@ def simulate_bm32_pink_beam_spectrum(
         ax2.plot(
             e_centers / 1e3,
             R_kb,
-            label="KB1 or KB2 (Rh, 2.2 mrad)",
+            label="KB1 or KB2 (Ir, 2.8 mrad)",
             color="orange",
             lw=1.5,
         )
@@ -441,7 +424,7 @@ def simulate_bm32_pink_beam_spectrum(
         ax2.set_xlabel("Photon energy (keV)")
         ax2.set_ylabel("Reflectivity")
         ax2.set_title(
-            "Mirror reflectivities\n(Ir: M1/M2  |  Rh 2.2 mrad: KB1/KB2, post-2023)"
+            "Mirror reflectivities\n(Ir: M1/M2  |  Ir 2.8 mrad: KB1/KB2)"
         )
         ax2.legend(fontsize=8)
         ax2.grid(True, alpha=0.3)

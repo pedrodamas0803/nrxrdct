@@ -1028,6 +1028,88 @@ class LayeredCrystal:
 
         return F_total
 
+    def average_structure_factor(self, Q_lab, energy_eV, kf_hat=None):
+        """
+        Structure factor of the thickness-weighted average unit cell at Q_lab.
+
+        Instead of summing layer amplitudes with their relative depth phases
+        (the coherent model), this method sums ``F_uc_i × N_eff_i`` over all
+        layers **without** the inter-layer phase factors
+        ``exp(i Q_n z_{0,i})``.  The result is the *structural envelope* of
+        the diffraction pattern: the intensity it predicts at any Q is the
+        maximum each satellite could reach if all unit cells happened to
+        scatter perfectly in phase.
+
+        This approximation is useful to:
+
+        * predict which satellite positions carry significant scattering power
+          based on the average composition, before running the slower coherent
+          simulation;
+        * compare the coherent fringe pattern against its envelope to isolate
+          which features arise from constructive interference vs. from the unit
+          cell structure factor.
+
+        All absorption corrections (Beer-Lambert two-beam depth limit,
+        overlying-layer attenuation) are applied identically to
+        :meth:`structure_factor`.
+
+        Parameters
+        ----------
+        Q_lab : array-like (3,)
+            Scattering vector in the lab frame (Å⁻¹).
+        energy_eV : float
+            Photon energy (eV).
+        kf_hat : array-like (3,) or None
+            Diffracted beam unit vector for the two-beam absorption correction.
+
+        Returns
+        -------
+        F : complex  (electron units)
+        """
+        self._update_offsets()
+        Q = np.asarray(Q_lab, dtype=float)
+
+        # ── Overlying-layer transmission (identical to structure_factor) ──────
+        def _T_slab(lyr, thickness):
+            if kf_hat is None:
+                return 1.0
+            mu = lyr._linear_mu(energy_eV)
+            if mu <= 0:
+                return 1.0
+            kf = np.asarray(kf_hat, dtype=float)
+            cos_in  = max(abs(float(self.n_hat[0])), 1e-3)
+            cos_out = max(abs(float(np.dot(self.n_hat, kf))), 1e-3)
+            return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
+
+        T_mqw = 1.0
+        for lyr in self.layers:
+            T_mqw *= _T_slab(lyr, lyr.thickness * self.n_rep)
+
+        # ── Buffer layers — sum F_uc × N_eff (no phase offset) ───────────────
+        F_total = 0.0 + 0j
+        for i, layer in enumerate(self.buffer_layers):
+            T_above = T_mqw
+            for j in range(i + 1, len(self.buffer_layers)):
+                T_above *= _T_slab(self.buffer_layers[j],
+                                   self.buffer_layers[j].thickness)
+            Q_cry = layer.U.T @ Q
+            F_uc = layer.crystal.StructureFactor(Q_cry, en=energy_eV)
+            if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                continue
+            n_eff = (layer._effective_n_cells(energy_eV, kf_hat=kf_hat)
+                     if layer.absorption_limit else layer.n_cells)
+            F_total += T_above * F_uc * n_eff
+
+        # ── Repeating unit (MQW) — all n_rep repetitions, no phase ───────────
+        for layer in self.layers:
+            Q_cry = layer.U.T @ Q
+            F_uc = layer.crystal.StructureFactor(Q_cry, en=energy_eV)
+            if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                continue
+            F_total += F_uc * layer.n_cells * self.n_rep
+
+        return F_total
+
     def intensity(self, Q_arr, energy_eV):
         """
         Compute |F(Q)|² for an array of Q-points.

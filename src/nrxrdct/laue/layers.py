@@ -883,6 +883,46 @@ class LayeredCrystal:
         self.n_rep = int(n)
         return self
 
+    def set_U(self, U) -> "LayeredCrystal":
+        """
+        Replace the orientation matrix of layers in the stack.
+
+        Two calling forms:
+
+        **Global** — apply one ``U`` to every layer::
+
+            stack.set_U(U)
+
+        **Per-material** — supply a dict mapping crystal name to ``U``; only
+        layers whose ``crystal.name`` matches a key are updated::
+
+            stack.set_U({'GaN': U_GaN, 'InGaN': U_InGaN})
+
+        Layers whose material is not listed in the dict are left unchanged.
+        Useful for modelling domain variants or orientation relationships
+        between different materials in the same stack without rebuilding it.
+
+        Parameters
+        ----------
+        U : array-like (3, 3) or dict[str, array-like (3, 3)]
+            A single orientation matrix applied to all layers, or a mapping
+            ``{crystal_name: U_matrix}``.
+
+        Returns
+        -------
+        self  (for method chaining)
+        """
+        if isinstance(U, dict):
+            U_map = {name: np.asarray(mat, dtype=float) for name, mat in U.items()}
+            for layer in self.buffer_layers + self.layers:
+                if layer.crystal.name in U_map:
+                    layer.U = U_map[layer.crystal.name].copy()
+        else:
+            U_mat = np.asarray(U, dtype=float)
+            for layer in self.buffer_layers + self.layers:
+                layer.U = U_mat.copy()
+        return self
+
     def _update_offsets(self):
         """Recompute cumulative z-offsets for buffer layers and the repeating unit."""
         # Buffer layers: z = 0 at deepest point, increasing toward surface

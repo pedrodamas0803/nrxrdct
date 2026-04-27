@@ -1641,7 +1641,7 @@ def simulate_laue_stack(
     ki_hat=None,
     max_satellites=5,
     kb_params=BM32_KB,
-    structure_model="coherent",
+    structure_model="average",
     verbose=True,
 ):
     """
@@ -1710,6 +1710,27 @@ def simulate_laue_stack(
     ki_hat : array-like (3,), optional
         Incident beam direction in the LaueTools LT frame (x // beam).
         Default: [1, 0, 0].
+    structure_model : {'coherent', 'average'}, optional
+        Controls how the MQW repeating unit structure factor is evaluated:
+
+        * ``'coherent'`` *(default)* — full coherent sum with all phase
+          factors ``exp(i Qₙ z_rel)`` within the period and ``S_rep`` over
+          ``N_rep`` periods.  Reproduces superlattice satellites and
+          thickness fringes at their physically correct relative intensities.
+        * ``'average'`` — sums ``F_uc_i × N_eff_i`` over one bilayer period
+          **without** the intra-period depth phases ``exp(i Qₙ z_rel)``,
+          then multiplies by the same ``S_rep`` geometric series.  Buffer
+          layer phases are always preserved.  The result uses the effective
+          average composition of the period as the "unit cell" scattering
+          amplitude; satellite positions and ``N_rep``-dependent peak widths
+          are identical to the coherent model, but the relative intensities
+          between satellite orders reflect the average composition rather
+          than the layer-ordering interference.
+
+        Note: strained d-spacings (from :meth:`add_pseudomorphic_layer`)
+        enter through ``N_eff = thickness / d_strained`` in both modes.
+        The unit-cell structure factor amplitude ``F_uc`` uses the bulk
+        crystal in both cases.
     verbose : bool
 
     Returns
@@ -1999,7 +2020,7 @@ def simulate_laue_darwin(
     ki_hat=None,
     kb_params=BM32_KB,
     max_satellites: int = 5,
-    structure_model: str = "coherent",
+    structure_model: str = "average",
     verbose: bool = True,
 ):
     """
@@ -2064,6 +2085,13 @@ def simulate_laue_darwin(
         Number of satellite / fringe orders to probe on each side of every
         Bragg peak (default 5).  Probes orders ±1 … ±max_satellites.
         Set to 0 to skip satellite calculation entirely.
+    structure_model : {'coherent', 'average'}, optional
+        See :func:`simulate_laue_stack` for full description.  In
+        ``'average'`` mode the intra-period ``exp(i Qₙ z_rel)`` phases are
+        dropped but ``S_rep`` is kept, so satellites appear at the correct
+        positions with intensities reflecting the average-composition unit
+        cell.  Darwin-corrected ``N_eff`` values are still computed and
+        reported in the returned ``'N_eff'`` key.
     verbose : bool
 
     Returns
@@ -2171,8 +2199,9 @@ def simulate_laue_darwin(
             sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
             N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
             n_eff_b.append(N_eff); n_ext_b.append(N_ext_l)
-            phase = 1.0 if structure_model == "average" else np.exp(1j * Qn * z0)
-            F_buf += T_above * F_uc * N_eff * phase
+            # Buffer layers always keep their depth phase — they are not part
+            # of the periodic unit and their z0 offsets are fixed.
+            F_buf += T_above * F_uc * N_eff * np.exp(1j * Qn * z0)
 
         F_unit = 0.0 + 0j
         n_eff_u, n_ext_u = [], []
@@ -2188,23 +2217,23 @@ def simulate_laue_darwin(
             sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
             N_ext_l = (V_uc * sin_th / (_R_E_ANG * lam_ang * max(F_abs, 1e-30)) / lyr.d)
             n_eff_u.append(N_d); n_ext_u.append(N_ext_l)
+            # Average mode: drop intra-period z_rel phases to produce the
+            # structural envelope of one bilayer period.  S_rep is still
+            # applied below so satellite peaks appear at the correct positions.
             phase = 1.0 if structure_model == "average" else np.exp(1j * Qn * z0_rel)
             F_unit += F_uc * N_d * phase
 
         if stack.layers:
-            if structure_model == "average":
-                F_mqw = F_unit * stack.n_rep
+            z_buf   = stack._buffer_thickness
+            Lambda  = stack._bilayer_thickness
+            phi_rep = Qn * Lambda
+            phi_mod = phi_rep % (2.0 * np.pi)
+            if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
+                S_rep = float(stack.n_rep) + 0j
             else:
-                z_buf   = stack._buffer_thickness
-                Lambda  = stack._bilayer_thickness
-                phi_rep = Qn * Lambda
-                phi_mod = phi_rep % (2.0 * np.pi)
-                if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
-                    S_rep = float(stack.n_rep) + 0j
-                else:
-                    S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
-                             / (1.0 - np.exp(1j * phi_rep)))
-                F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
+                S_rep = ((1.0 - np.exp(1j * stack.n_rep * phi_rep))
+                         / (1.0 - np.exp(1j * phi_rep)))
+            F_mqw = np.exp(1j * Qn * z_buf) * F_unit * S_rep
         else:
             F_mqw = 0.0 + 0j
 
@@ -2343,7 +2372,7 @@ def simulate_mixed_phases(
     f2_thresh=None,
     normalise="volume",
     kb_params=BM32_KB,
-    structure_model="coherent",
+    structure_model="average",
     verbose=True,
 ):
     """
@@ -2435,7 +2464,10 @@ def simulate_mixed_phases(
 
     normalise : str
         Weighting mode: ``'volume'``, ``'fraction'``, ``'equal'``, ``'none'``.
-
+    structure_model : {'coherent', 'average'}, optional
+        Forwarded to :func:`simulate_laue_stack` for any ``LayeredCrystal``
+        phase.  See that function for full description.  Ignored for plain
+        ``xu.materials.Crystal`` phases (handled by :func:`simulate_laue`).
     verbose : bool
 
     Returns

@@ -1068,6 +1068,7 @@ class LayeredCrystal:
         """
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
+        Qn = float(np.dot(Q, self.n_hat))
 
         # ── Overlying-layer transmission (identical to structure_factor) ──────
         def _T_slab(lyr, thickness):
@@ -1085,9 +1086,12 @@ class LayeredCrystal:
         for lyr in self.layers:
             T_mqw *= _T_slab(lyr, lyr.thickness * self.n_rep)
 
-        # ── Buffer layers — sum F_uc × N_eff (no phase offset) ───────────────
+        # ── Buffer layers — coherent sum with depth phase offsets ─────────────
+        # Buffer layers are not part of the periodic unit; their positions are
+        # fixed and their phase offsets must be kept even in average mode.
         F_total = 0.0 + 0j
-        for i, layer in enumerate(self.buffer_layers):
+        for i, (layer, z0) in enumerate(
+                zip(self.buffer_layers, self._buffer_z_offsets)):
             T_above = T_mqw
             for j in range(i + 1, len(self.buffer_layers)):
                 T_above *= _T_slab(self.buffer_layers[j],
@@ -1098,15 +1102,32 @@ class LayeredCrystal:
                 continue
             n_eff = (layer._effective_n_cells(energy_eV, kf_hat=kf_hat)
                      if layer.absorption_limit else layer.n_cells)
-            F_total += T_above * F_uc * n_eff
+            F_total += T_above * F_uc * n_eff * np.exp(1j * Qn * z0)
 
-        # ── Repeating unit (MQW) — all n_rep repetitions, no phase ───────────
-        for layer in self.layers:
-            Q_cry = layer.U.T @ Q
-            F_uc = layer.crystal.StructureFactor(Q_cry, en=energy_eV)
-            if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
-                continue
-            F_total += F_uc * layer.n_cells * self.n_rep
+        # ── Repeating MQW unit — average over the period, keep S_rep ─────────
+        # Sum F_uc_i × N_cells_i over one bilayer period WITHOUT intra-period
+        # phase factors (z_rel).  The inter-period interference is still
+        # captured by the geometric series S_rep, so satellite peaks appear at
+        # the correct positions with N_rep²-enhanced intensities.
+        if self.layers:
+            F_unit = 0.0 + 0j
+            for layer in self.layers:
+                Q_cry = layer.U.T @ Q
+                F_uc = layer.crystal.StructureFactor(Q_cry, en=energy_eV)
+                if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
+                    continue
+                F_unit += F_uc * layer.n_cells
+
+            z_buf   = self._buffer_thickness
+            Lambda  = self._bilayer_thickness
+            phi_rep = Qn * Lambda
+            phi_mod = phi_rep % (2.0 * np.pi)
+            if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
+                S_rep = float(self.n_rep) + 0j
+            else:
+                S_rep = ((1.0 - np.exp(1j * self.n_rep * phi_rep))
+                         / (1.0 - np.exp(1j * phi_rep)))
+            F_total += np.exp(1j * Qn * z_buf) * F_unit * S_rep
 
         return F_total
 

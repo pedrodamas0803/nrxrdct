@@ -59,6 +59,7 @@ from .simulation import (
     synchrotron_spectrum,
     U_from_matstarlab,
     rotate_U_about_axis,
+    rotate_U_about_crystal_axis,
 )
 
 __all__ = [
@@ -83,6 +84,7 @@ __all__ = [
     "decompose_matstarlab",
     "beam_in_crystal",
     "rotate_U_about_axis",
+    "rotate_U_about_crystal_axis",
     # Strain analysis
     "measure_spot_widths",
     "estimate_instrument_broadening",

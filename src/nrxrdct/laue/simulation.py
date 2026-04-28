@@ -278,6 +278,58 @@ def rotate_U_about_axis(U, angle_deg, axis: str = "z"):
     return R @ np.asarray(U, dtype=float)
 
 
+def rotate_U_about_crystal_axis(
+    U: np.ndarray,
+    angle_deg: float,
+    crystal_axis: np.ndarray,
+) -> np.ndarray:
+    """
+    Rotate an orientation matrix by *angle_deg* about a crystal-frame axis.
+
+    The rotation axis is specified in the **crystal frame** and is first
+    mapped into the lab frame via ``U`` before the rotation is applied.
+    This is the natural way to express rotations such as "60° about the
+    c-axis [0001]" or "180° about an in-plane direction [1, 0, 0]".
+
+    Parameters
+    ----------
+    U : array-like, shape (3, 3)
+        Orientation matrix in the lab frame (``G_lab = U @ G_crystal``).
+    angle_deg : float
+        Rotation angle in degrees.  Positive = right-hand rule about the
+        crystal axis as expressed in the lab frame.
+    crystal_axis : array-like, shape (3,)
+        Rotation axis in the **crystal frame** (does not need to be a unit
+        vector; it is normalised internally).  Examples:
+
+        * ``[0, 0, 1]`` — $c$-axis (for hexagonal / tetragonal crystals)
+        * ``[1, 0, 0]`` — $a$-axis
+        * ``[1, 1, 0]`` — diagonal in-plane direction
+
+    Returns
+    -------
+    U_rot : ndarray, shape (3, 3)
+        Rotated orientation matrix.
+
+    Examples
+    --------
+    60° rotation about the GaN $c$-axis (rotational domain variant)::
+
+        U_domain = rotate_U_about_crystal_axis(U, 60.0, [0, 0, 1])
+
+    180° flip about the in-plane $a$-axis::
+
+        U_flip = rotate_U_about_crystal_axis(U, 180.0, [1, 0, 0])
+    """
+    U = np.asarray(U, dtype=float)
+    axis_cry = np.asarray(crystal_axis, dtype=float)
+    axis_cry = axis_cry / np.linalg.norm(axis_cry)
+    axis_lab = U @ axis_cry
+    axis_lab = axis_lab / np.linalg.norm(axis_lab)
+    R = Rotation.from_rotvec(np.radians(angle_deg) * axis_lab).as_matrix()
+    return R @ U
+
+
 # LT2→LT passive rotation (coordinate-frame change, not a physical rotation)
 # LaueTools stores matstarlab in LT2 (y//beam, OR/XMAS frame).
 # simulate_laue works in LT (x//beam, LaueTools public frame).

@@ -72,20 +72,40 @@ def segment_image(
     im_array: np.ndarray,
     kernel_size: int = 3,
     sigma: float = 0.1,
-    iterations: int = 2,
-    threshold: float = 0,
+    iterations: int = 1,
+    threshold: float = None,
 ):
     """
     Segment image into a boolean mask.
 
-    If input is 3D, reduce by max(axis=0).
-    If threshold == 0: use sk.filters.threshold_triangle.
-    Then: mask = im >= threshold, binary opening, gaussian filter on mask.
+    Parameters
+    ----------
+    im_array : ndarray
+        2-D intensity image, or 3-D stack reduced by max(axis=0).
+    kernel_size : int
+        Side length of the square structuring element used for binary opening.
+    sigma : float
+        Gaussian smoothing applied to the binary mask before returning.
+        Set to 0 to skip. Note: smoothing is applied to the float representation
+        of the mask and then thresholded at 0.5 so the output remains boolean.
+    iterations : int
+        Number of binary-opening iterations. Each iteration with a 3×3 element
+        erodes features by ~1 pixel per side; spots smaller than roughly
+        ``(2*iterations + 1)² `` pixels may be completely erased. Default 1
+        (single pass) to preserve small spots. Set to 0 to disable opening.
+    threshold : float or None
+        Intensity threshold. If None (default), the triangle auto-threshold
+        from ``skimage.filters.threshold_triangle`` is used.
+
+    Returns
+    -------
+    mask : ndarray of bool
+        Boolean segmentation mask, same spatial shape as the input.
     """
     if im_array.ndim != 2:
         im_array = im_array.max(axis=0)
 
-    if threshold == 0:
+    if threshold is None:
         thrs = sk.filters.threshold_triangle(im_array)
     else:
         thrs = threshold
@@ -99,7 +119,9 @@ def segment_image(
             iterations=iterations,
         )
     if sigma > 0:
-        mask = ndi.gaussian_filter(mask, sigma=sigma)
+        # gaussian_filter returns float; threshold back to bool so callers
+        # that check dtype (e.g. label_segmented_image) receive the right type
+        mask = ndi.gaussian_filter(mask.astype(np.float32), sigma=sigma) > 0.5
     return mask
 
 
@@ -580,9 +602,9 @@ def write_h5_spotsfile(
                         region.image_intensity.max()
                     )
 
-            except RuntimeError as e:
+            except RuntimeError as exc:
                 r2 = 0
-                print(f"Runtime error at spot {ii}")
+                print(f"Runtime error at spot {ii}: {exc}")
                 hout[f"spot_{ii:04d}_0/r_squared"] = r2
                 continue
 
@@ -612,8 +634,13 @@ def get_spot_limits(image_array, ycen, xcen, d):
 
 def convert_spotsfile2peaklist(h5path: str):
     """
-    Read the spots HDF5 file and return lists of peak quantities
-    for spots with r_squared >= 0.9.
+    Read the spots HDF5 file and return an (N, 9) array of peak quantities
+    for spots with r_squared >= 0.9, sorted by descending peak intensity.
+
+    Columns: peak_X, peak_Y, peak_I (Isub), peak_fwaxmaj, peak_fwaxmin,
+             peak_inclination, Xdev, Ydev, peak_bkg.
+
+    Returns an empty (0, 9) array if no spots pass the quality threshold.
     """
     peak_X = []
     peak_Y = []
@@ -643,6 +670,9 @@ def convert_spotsfile2peaklist(h5path: str):
             Ydev.append(hin[f"{key}/Ydev"][()])
             peak_bkg.append(hin[f"{key}/peak_bkg"][()])
             Ipixmax.append(hin[f"{key}/Ipixmax"][()])
+
+    if not peak_X:
+        return np.empty((0, 9), dtype=np.float64)
 
     peaklist = np.stack(
         [

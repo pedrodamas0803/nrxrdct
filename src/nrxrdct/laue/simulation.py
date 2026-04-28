@@ -485,7 +485,7 @@ def decompose_matstarlab(matstarlab, crystal):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SYNCHROTRON SPECTRA  (no bremsstrahlung)
+# SYNCHROTRON SPECTRA
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -524,8 +524,8 @@ def synchrotron_spectrum(E_eV):
 
 #: Default KB parameters for BM32/ESRF (Rh-coated, 2 mirrors, ~2.5 mrad grazing)
 BM32_KB = dict(
-    material="Rh",
-    grazing_angle_mrad=2.5,
+    material="Ir",
+    grazing_angle_mrad=2.8,
     n_mirrors=2,
     roughness_ang=3.0,
 )
@@ -533,8 +533,8 @@ BM32_KB = dict(
 
 def kb_reflectivity(
     energy_eV,
-    material: str = "Rh",
-    grazing_angle_mrad: float = 2.5,
+    material: str = "Ir",
+    grazing_angle_mrad: float = 2.8,
     n_mirrors: int = 2,
     roughness_ang: float = 3.0,
 ) -> float:
@@ -1948,14 +1948,18 @@ def simulate_laue_stack(
 
     spots = []
 
-    # In average mode enumerate G vectors from buffer layers only.
-    # MQW layers are not enumerated separately — their contribution is already
-    # folded into the average_structure_factor via S_rep.  Enumerating them
-    # separately would produce duplicate Bragg peaks at the slightly displaced
-    # InGaN G positions, which is exactly what the average model is meant to
-    # avoid.  Fall back to the first MQW layer if there are no buffer layers.
+    # In average mode enumerate G vectors from buffer layers plus the first MQW
+    # layer.  Adding the first MQW layer ensures that film reflections are always
+    # found even when the only buffer layer is a dissimilar substrate (e.g.
+    # sapphire): sapphire G vectors are at completely different positions from
+    # GaN/InGaN G vectors, so enumerating from the substrate alone would yield
+    # zero film spots.  The crystal+orientation deduplication below then
+    # removes any duplicate if the GaN buffer and first MQW layer share the
+    # same species and U matrix.  InGaN (second MQW layer) is intentionally
+    # excluded so only one set of Bragg positions is produced — matching what
+    # is seen in a monochromatic scan.
     if structure_model == "average":
-        _enum_pool = stack.buffer_layers if stack.buffer_layers else stack.layers[:1]
+        _enum_pool = stack.buffer_layers + stack.layers[:1]
     else:
         _enum_pool = stack.all_layers
 
@@ -2375,10 +2379,14 @@ def simulate_laue_darwin(
         return 1
 
     # ── Deduplicate orientations for enumeration ──────────────────────────────
-    # In average mode enumerate from buffer layers only (same reason as in
-    # simulate_laue_stack: avoids duplicate peaks from displaced InGaN G vectors).
+    # In average mode enumerate from buffer layers plus the first MQW layer.
+    # Same reasoning as simulate_laue_stack: a dissimilar substrate (sapphire,
+    # SrTiO3 …) has G vectors at completely different positions from the film,
+    # so substrate-only enumeration would miss all film reflections.  Adding
+    # the first MQW layer guarantees that film G vectors are always probed.
+    # Crystal+orientation deduplication below removes any true duplicate.
     if structure_model == "average":
-        _enum_pool = stack.buffer_layers if stack.buffer_layers else stack.layers[:1]
+        _enum_pool = stack.buffer_layers + stack.layers[:1]
     else:
         _enum_pool = stack.all_layers
 

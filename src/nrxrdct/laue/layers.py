@@ -625,7 +625,11 @@ class Layer:
         """
         mu = self._linear_mu(energy_eV)
         if mu <= 0:
-            return self.n_cells
+            # Absorption lookup failed (e.g. custom CIF crystal, older xrayutilities).
+            # Fall back to a conservative 1e-3 Å⁻¹ rather than returning raw n_cells:
+            # for thick substrates raw n_cells would be ~10⁶ and would dominate the
+            # stack structure factor, setting auto-scaled thresholds far too high.
+            mu = 1e-3  # Å⁻¹ — conservative hard-X-ray value; keeps n_eff physically sane
 
         cos_in = max(abs(float(self.n_hat[0])), 1e-3)
 

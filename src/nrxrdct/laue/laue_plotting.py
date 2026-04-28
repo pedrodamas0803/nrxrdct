@@ -2070,6 +2070,8 @@ def plot_laue_stack_spots(
     n_label: int = 5,
     size_scale: float = 80.0,
     min_size: float = 8.0,
+    show_divergence: bool = True,
+    divergence_nsigma: float = 2.0,
     figsize=(9, 7),
     ax=None,
     out_path: str | None = "laue_stack_spots.png",
@@ -2104,6 +2106,16 @@ def plot_laue_stack_spots(
         Maximum marker area (``s`` kwarg in ``ax.scatter``).
     min_size : float
         Minimum marker area so that weak spots remain visible.
+    show_divergence : bool
+        When ``True`` (default), draw a divergence-broadening ellipse around
+        each spot that carries the keys added by
+        :func:`~nrxrdct.laue.beam_divergence_ellipses`.  Ellipses are shown
+        at the ``divergence_nsigma``-σ confidence level.  No ellipses are
+        drawn for spots with zero broadening (i.e. when the simulation was
+        run without divergence parameters).
+    divergence_nsigma : float
+        Size of the drawn ellipse in units of σ.  Default ``2.0`` (≈ 86 %
+        enclosed probability in 2-D).
     figsize : (float, float)
         Figure size in inches (ignored if *ax* is supplied).
     ax : matplotlib.axes.Axes, optional
@@ -2193,6 +2205,46 @@ def plot_laue_stack_spots(
         color = phase_order_color[(phase, abs(order))]
         ax.scatter(xs, ys, s=sizes, c=[color], marker=marker,
                    linewidths=0.4, edgecolors="white", alpha=0.90, zorder=3)
+
+    # ── Divergence ellipses ───────────────────────────────────────────────────
+    # Drawn when the spot list carries the broadening keys added by
+    # beam_divergence_ellipses() and at least one spot has non-zero sigma.
+    if show_divergence:
+        from matplotlib.patches import Ellipse
+
+        if space == "angles":
+            _sig_maj_key = "sigma_major_ang_deg"
+            _sig_min_key = "sigma_minor_ang_deg"
+            _ang_key     = "ellipse_angle_ang_deg"
+        else:
+            _sig_maj_key = "sigma_major_px"
+            _sig_min_key = "sigma_minor_px"
+            _ang_key     = "ellipse_angle_px_deg"
+
+        for s in spots:
+            sig_maj = s.get(_sig_maj_key, 0.0)
+            if sig_maj <= 0.0:
+                continue
+            sig_min = s.get(_sig_min_key, 0.0)
+            angle   = s.get(_ang_key, 0.0)
+            x, y    = _xy(s)
+            if x is None:
+                continue
+            ph  = s["phase_label"]
+            ord_ = s["satellite_order"]
+            col = phase_order_color[(ph, abs(ord_))]
+            ell = Ellipse(
+                xy=(x, y),
+                width=2.0 * divergence_nsigma * sig_maj,
+                height=2.0 * divergence_nsigma * sig_min,
+                angle=angle,
+                linewidth=0.7,
+                edgecolor=col,
+                facecolor="none",
+                alpha=0.55,
+                zorder=2,
+            )
+            ax.add_patch(ell)
 
     # ── Annotate strongest spots ───────────────────────────────────────────────
     valid = [s for s in spots if _xy(s)[0] is not None]

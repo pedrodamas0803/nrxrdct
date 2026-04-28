@@ -32,6 +32,7 @@ from .layers import (
 )
 from .simulation import (
     BM32_KB,
+    beam_divergence_ellipses,
     beam_in_crystal,
     decompose_matstarlab,
     en2lam,
@@ -63,6 +64,8 @@ from .simulation import (
 )
 
 __all__ = [
+    # Beam divergence broadening
+    "beam_divergence_ellipses",
     # Energy / wavelength conversion
     "en2lam",
     "lam2en",

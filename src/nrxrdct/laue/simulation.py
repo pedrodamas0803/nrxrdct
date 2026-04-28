@@ -1464,6 +1464,8 @@ def simulate_laue(
     hmax=HMAX,
     f2_thresh=F2_THRESHOLD,
     kb_params=BM32_KB,
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1680,7 +1682,9 @@ def simulate_laue(
         for s in spots:
             s["intensity"] = s["I_raw"] / imax
 
-    return sorted(spots, key=lambda s: s["intensity"], reverse=True)
+    spots = sorted(spots, key=lambda s: s["intensity"], reverse=True)
+    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad)
+    return spots
 
 
 def simulate_laue_stack(
@@ -1696,6 +1700,8 @@ def simulate_laue_stack(
     max_satellites=5,
     kb_params=BM32_KB,
     structure_model="average",
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
     verbose=True,
 ):
     """
@@ -1790,6 +1796,14 @@ def simulate_laue_stack(
         enter through ``N_eff = thickness / d_strained`` in both modes.
         The unit-cell structure factor amplitude ``F_uc`` uses the bulk
         crystal in both cases.
+    sigma_h_mrad : float, optional
+        Horizontal beam divergence 1σ (mrad).  When non-zero,
+        :func:`beam_divergence_ellipses` is called automatically and every
+        spot receives broadening keys (``cov_px``, ``sigma_major_px``, …).
+        Typical BM32/ESRF value: 2–3 mrad.  Default: 0 (no broadening).
+    sigma_v_mrad : float, optional
+        Vertical beam divergence 1σ (mrad).
+        Typical BM32/ESRF value: 0.2–0.5 mrad.  Default: 0.
     verbose : bool
 
     Returns
@@ -2029,6 +2043,8 @@ def simulate_laue_stack(
             s["intensity"] = s["I_raw"] / imax
 
     spots.sort(key=lambda s: s["intensity"], reverse=True)
+    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad,
+                             ki_hat=ki if ki_hat is not None else None)
 
     if verbose:
         print(f"  Total spots on detector: {len(spots)}")
@@ -2098,6 +2114,8 @@ def simulate_laue_darwin(
     kb_params=BM32_KB,
     max_satellites: int = 5,
     structure_model: str = "average",
+    sigma_h_mrad: float = 0.0,
+    sigma_v_mrad: float = 0.0,
     verbose: bool = True,
 ):
     """
@@ -2445,6 +2463,7 @@ def simulate_laue_darwin(
             s["intensity"] = s["I_raw"] / imax
 
     spots.sort(key=lambda s: s["intensity"], reverse=True)
+    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki)
 
     if verbose:
         print(f"  Total spots (Darwin): {len(spots)}")
@@ -2799,6 +2818,174 @@ def simulate_mixed_phases(
         print(f"  normalise = '{normalise}'")
 
     return all_spots
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BEAM DIVERGENCE BROADENING
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def beam_divergence_ellipses(
+    spots: list,
+    camera,
+    sigma_h_mrad: float = 0.0,
+    sigma_v_mrad: float = 0.0,
+    ki_hat=None,
+) -> list:
+    """
+    Add per-spot detector broadening from beam angular divergence.
+
+    For each spot the pixel-space Jacobian  J = ∂(x_pix, y_pix) / ∂(δ_h, δ_v)
+    is estimated numerically by perturbing the incident beam direction by a
+    small angle in the horizontal and vertical lab directions.  The divergence
+    covariance is then propagated as:
+
+        C_pix = J @ diag(σ_h², σ_v²) @ J^T
+
+    A second Jacobian  J_pa = ∂(2θ, χ) / ∂(x_pix, y_pix) maps the result
+    into angle space.  Both representations are stored in each spot dict.
+
+    New keys written to every spot
+    --------------------------------
+    ``cov_px``              (2, 2) ndarray  pixel covariance (px²)
+    ``sigma_major_px``      float           semi-major axis, 1σ (px)
+    ``sigma_minor_px``      float           semi-minor axis, 1σ (px)
+    ``ellipse_angle_px_deg``float           major-axis angle, CCW from +x (°)
+    ``cov_ang``             (2, 2) ndarray  angle covariance in (2θ, χ) (deg²)
+    ``sigma_major_ang_deg`` float           semi-major axis, 1σ (°)
+    ``sigma_minor_ang_deg`` float           semi-minor axis, 1σ (°)
+    ``ellipse_angle_ang_deg``float          major-axis angle in (2θ, χ) space (°)
+    ``sigma_tth_deg``       float           marginal 1σ along 2θ (°)
+    ``sigma_chi_deg``       float           marginal 1σ along χ  (°)
+
+    Parameters
+    ----------
+    spots        : list of dicts from :func:`simulate_laue_stack` etc.
+    camera       : Camera
+    sigma_h_mrad : float   horizontal (in-plane) beam divergence 1σ (mrad).
+                   Typical BM32/ESRF: 2–3 mrad.
+    sigma_v_mrad : float   vertical beam divergence 1σ (mrad).
+                   Typical BM32/ESRF: 0.2–0.5 mrad.
+    ki_hat       : array-like (3,), optional
+                   Incident beam direction (LT frame, x // beam).
+                   Default: ``[1, 0, 0]``.
+
+    Returns
+    -------
+    spots  (modified in-place and returned for chaining)
+
+    Notes
+    -----
+    The Jacobian is evaluated with a 0.5 mrad central-difference step, which
+    is well within the linear regime for typical Laue geometries.  Spots whose
+    G vector does not satisfy the Laue condition after perturbation (e.g. near
+    the energy-window boundary) are assigned zero broadening for that direction.
+    """
+    _zero2 = np.zeros((2, 2))
+    _zero_keys = {
+        "cov_px": _zero2, "sigma_major_px": 0.0, "sigma_minor_px": 0.0,
+        "ellipse_angle_px_deg": 0.0,
+        "cov_ang": _zero2, "sigma_major_ang_deg": 0.0, "sigma_minor_ang_deg": 0.0,
+        "ellipse_angle_ang_deg": 0.0, "sigma_tth_deg": 0.0, "sigma_chi_deg": 0.0,
+    }
+
+    if sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0:
+        for s in spots:
+            s.update(_zero_keys)
+        return spots
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki /= np.linalg.norm(ki)
+
+    # Horizontal and vertical perturbation directions perpendicular to ki.
+    # For a beam along x:  ê_h ≈ ŷ (horizontal),  ê_v ≈ ẑ (vertical).
+    z_hat = np.array([0.0, 0.0, 1.0])
+    cross_zk = np.cross(z_hat, ki)
+    if np.linalg.norm(cross_zk) > 1e-6:
+        e_h = cross_zk / np.linalg.norm(cross_zk)
+    else:
+        e_h = np.array([0.0, 1.0, 0.0])
+    e_v = np.cross(ki, e_h)
+    e_v /= np.linalg.norm(e_v)
+
+    sigma_h = sigma_h_mrad * 1e-3  # rad
+    sigma_v = sigma_v_mrad * 1e-3  # rad
+    _H = 5e-4  # 0.5 mrad central-difference step (rad)
+
+    def _perturbed_pix(G, e, delta):
+        ki_p = ki + delta * e
+        ki_p /= np.linalg.norm(ki_p)
+        Gm2 = float(np.dot(G, G))
+        kdG = float(np.dot(ki_p, G))
+        if kdG >= 0:
+            return None
+        lam = -4.0 * np.pi * kdG / Gm2
+        kf = (2.0 * np.pi / lam) * ki_p + G
+        return camera.project(kf / np.linalg.norm(kf))
+
+    def _pix_to_angles(x, y):
+        ufs = camera.pixel_to_kf(np.array([x]), np.array([y]))
+        tth = float(np.degrees(np.arccos(np.clip(ufs[0, 0], -1.0, 1.0))))
+        chi = float(np.degrees(np.arctan2(float(ufs[0, 1]), float(ufs[0, 2]) + 1e-17)))
+        return tth, chi
+
+    def _ellipse_params(cov):
+        """Return (sigma_major, sigma_minor, angle_deg) from a 2×2 covariance."""
+        try:
+            eigvals, eigvecs = np.linalg.eigh(cov)
+            eigvals = np.maximum(eigvals, 0.0)
+            idx = int(np.argmax(eigvals))
+            sig_maj = float(np.sqrt(eigvals[idx]))
+            sig_min = float(np.sqrt(eigvals[1 - idx]))
+            v = eigvecs[:, idx]
+            ang = float(np.degrees(np.arctan2(v[1], v[0])))
+            return sig_maj, sig_min, ang
+        except Exception:
+            return 0.0, 0.0, 0.0
+
+    for s in spots:
+        G = np.asarray(s["G_lab"], dtype=float)
+        pix0 = np.asarray(s["pix"], dtype=float)
+
+        # ── Beam-divergence pixel Jacobian ────────────────────────────────
+        J_div = np.zeros((2, 2))
+        for col, e in enumerate([e_h, e_v]):
+            pp = _perturbed_pix(G, e, +_H)
+            pm = _perturbed_pix(G, e, -_H)
+            if pp is not None and pm is not None:
+                J_div[:, col] = (np.asarray(pp) - np.asarray(pm)) / (2.0 * _H)
+
+        D_beam = np.diag([sigma_h ** 2, sigma_v ** 2])
+        cov_px = J_div @ D_beam @ J_div.T
+        s["cov_px"] = cov_px
+        s["sigma_major_px"], s["sigma_minor_px"], s["ellipse_angle_px_deg"] = (
+            _ellipse_params(cov_px)
+        )
+
+        # ── Pixel→angle Jacobian ──────────────────────────────────────────
+        try:
+            _dp = 1.0  # 1-pixel step
+            J_pa = np.zeros((2, 2))
+            tp, cp = _pix_to_angles(pix0[0] + _dp, pix0[1])
+            tm, cm = _pix_to_angles(pix0[0] - _dp, pix0[1])
+            J_pa[0, 0] = (tp - tm) / (2 * _dp)   # ∂tth/∂x
+            J_pa[1, 0] = (cp - cm) / (2 * _dp)   # ∂chi/∂x
+            tp, cp = _pix_to_angles(pix0[0], pix0[1] + _dp)
+            tm, cm = _pix_to_angles(pix0[0], pix0[1] - _dp)
+            J_pa[0, 1] = (tp - tm) / (2 * _dp)   # ∂tth/∂y
+            J_pa[1, 1] = (cp - cm) / (2 * _dp)   # ∂chi/∂y
+            cov_ang = J_pa @ cov_px @ J_pa.T
+        except Exception:
+            cov_ang = _zero2.copy()
+
+        s["cov_ang"] = cov_ang
+        s["sigma_major_ang_deg"], s["sigma_minor_ang_deg"], s["ellipse_angle_ang_deg"] = (
+            _ellipse_params(cov_ang)
+        )
+        s["sigma_tth_deg"] = float(np.sqrt(max(cov_ang[0, 0], 0.0)))
+        s["sigma_chi_deg"] = float(np.sqrt(max(cov_ang[1, 1], 0.0)))
+
+    return spots
 
 
 # ─────────────────────────────────────────────────────────────────────────────

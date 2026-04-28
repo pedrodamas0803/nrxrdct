@@ -58,6 +58,7 @@ from .simulation import (
     E_MIN_eV,
     F2_THRESHOLD,
     HMAX,
+    precompute_allowed_hkl,
     simulate_laue,
     simulate_laue_stack,
     simulate_mixed_phases,
@@ -411,6 +412,7 @@ def laue_residuals(
     top_n_obs: int | None = None,
     top_n_sim: int | None = None,
     geometry_only: bool = False,
+    allowed_hkl=None,
 ) -> np.ndarray:
     """
     Pixel-space residual vector for single-crystal orientation refinement.
@@ -470,6 +472,7 @@ def laue_residuals(
         source=source, source_kwargs=source_kwargs,
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
+        allowed_hkl=allowed_hkl,
     )
 
     obs_use = np.asarray(obs_xy, dtype=float)
@@ -501,6 +504,7 @@ def laue_stack_residuals(
     top_n_obs: int | None = None,
     top_n_sim: int | None = None,
     geometry_only: bool = False,
+    allowed_hkl=None,
 ) -> np.ndarray:
     """
     Pixel-space residual vector for a layered crystal — single global rotation.
@@ -557,6 +561,7 @@ def laue_stack_residuals(
         structure_model=structure_model,
         verbose=False,
         geometry_only=geometry_only,
+        allowed_hkl=allowed_hkl,
     )
 
     obs_use = np.asarray(obs_xy, dtype=float)
@@ -589,6 +594,7 @@ def laue_mixed_residuals(
     top_n_obs: int | None = None,
     top_n_sim: int | None = None,
     geometry_only: bool = False,
+    allowed_hkl=None,
 ) -> np.ndarray:
     """
     Pixel-space residual vector for a multi-phase Laue pattern.
@@ -648,6 +654,7 @@ def laue_mixed_residuals(
         structure_model=structure_model,
         verbose=False,
         geometry_only=geometry_only,
+        allowed_hkl=allowed_hkl,
     )
 
     obs_use = np.asarray(obs_xy, dtype=float)
@@ -747,6 +754,13 @@ def fit_orientation(
     if verbose:
         print(f"fit_orientation: {N_obs} observed spots")
 
+    # Precompute which (hkl) are structurally allowed once — avoids calling
+    # crystal.StructureFactor on every optimizer iteration.
+    _allowed = (
+        precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        if geometry_only else None
+    )
+
     fun = partial(
         laue_residuals,
         crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0,
@@ -754,7 +768,7 @@ def fit_orientation(
         source=source, source_kwargs=source_kwargs,
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=geometry_only,
+        geometry_only=False, allowed_hkl=_allowed,
     )
 
     opt = least_squares(
@@ -771,7 +785,7 @@ def fit_orientation(
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
-        geometry_only=geometry_only,
+        allowed_hkl=_allowed,
     )
     n_sim = len(_extract_sim_xy(final_spots))
 
@@ -874,6 +888,25 @@ def fit_orientation_stack(
             f"{len(stack.all_layers)} layers"
         )
 
+    # Precompute allowed hkl for each unique crystal in the enumeration pool
+    # (buffer layers + first MQW layer for "average" model) so that _try_append
+    # inside simulate_laue_stack never calls the stack structure factor during
+    # fitting.  Keyed by id(crystal) for per-layer lookup.
+    if geometry_only:
+        _enum_pool = (
+            stack.buffer_layers + stack.layers[:1]
+            if structure_model == "average"
+            else stack.all_layers
+        )
+        _allowed = {
+            id(layer.crystal): precompute_allowed_hkl(
+                layer.crystal, hmax, f2_thresh=f2_thresh
+            )
+            for layer in _enum_pool
+        }
+    else:
+        _allowed = None
+
     fun = partial(
         laue_stack_residuals,
         stack=stack, camera=camera, obs_xy=obs_use,
@@ -883,7 +916,7 @@ def fit_orientation_stack(
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=geometry_only,
+        geometry_only=False, allowed_hkl=_allowed,
     )
 
     try:
@@ -913,7 +946,7 @@ def fit_orientation_stack(
         source=source, source_kwargs=source_kwargs,
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
-        geometry_only=geometry_only,
+        allowed_hkl=_allowed,
     )
     n_sim = len(_extract_sim_xy(final_spots))
 
@@ -1035,6 +1068,17 @@ def fit_orientation_mixed(
             f"{N_phases} phases, {mode}"
         )
 
+    # Precompute per-crystal allowed hkl sets once; keyed by id(crystal) so
+    # simulate_mixed_phases can look up the right set for each phase.
+    if geometry_only:
+        _f2 = f2_thresh if f2_thresh is not None else F2_THRESHOLD
+        _allowed: dict | None = {
+            id(p["crystal"]): precompute_allowed_hkl(p["crystal"], hmax, f2_thresh=_f2)
+            for p in phases_work
+        }
+    else:
+        _allowed = None
+
     fun = partial(
         laue_mixed_residuals,
         phases=phases_work, camera=camera, obs_xy=obs_use,
@@ -1044,7 +1088,7 @@ def fit_orientation_mixed(
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=geometry_only,
+        geometry_only=False, allowed_hkl=_allowed,
     )
 
     try:
@@ -1092,7 +1136,7 @@ def fit_orientation_mixed(
         source=source, source_kwargs=source_kwargs,
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
-        geometry_only=geometry_only,
+        allowed_hkl=_allowed,
     )
     n_sim = len(_extract_sim_xy(final_spots))
 

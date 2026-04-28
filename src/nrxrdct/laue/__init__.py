@@ -68,6 +68,7 @@ from .segmentation import (
 from .simulation import (
     BM32_KB,
     beam_divergence_ellipses,
+    precompute_allowed_hkl,
     beam_in_crystal,
     decompose_matstarlab,
     en2lam,
@@ -134,6 +135,7 @@ __all__ = [
     # Camera / detector
     "Camera",
     # Simulation
+    "precompute_allowed_hkl",
     "simulate_laue",
     "simulate_laue_stack",
     "simulate_laue_darwin",

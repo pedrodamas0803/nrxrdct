@@ -1453,6 +1453,69 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def precompute_allowed_hkl(
+    crystal,
+    hmax: int = HMAX,
+    E_ref_eV: float | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+) -> frozenset:
+    """
+    Return the frozenset of (h, k, l) tuples whose structure factor exceeds
+    ``f2_thresh`` at a single reference energy.
+
+    Evaluates ``crystal.StructureFactor`` once per (hkl) triple — a one-time
+    cost of ``(2*hmax+1)³`` calls.  The result can then be passed as
+    ``allowed_hkl`` to :func:`simulate_laue` or :func:`simulate_laue_stack`
+    to skip all per-spot structure factor calls during fitting while still
+    respecting systematic absences (the extinction rules encoded in the space
+    group / Wyckoff positions show up as ``|F|² = 0``).
+
+    For a :class:`~nrxrdct.laue.layers.LayeredCrystal`, the union of allowed
+    sets across all unique constituent crystals is returned.
+
+    Parameters
+    ----------
+    crystal   : Crystal or LayeredCrystal
+    hmax      : int     Must match the ``hmax`` used in the simulation.
+    E_ref_eV  : float   Reference photon energy (eV).  Defaults to the
+                        midpoint of the default energy window
+                        ``(E_MIN_eV + E_MAX_eV) / 2``.
+    f2_thresh : float   Same threshold used in the simulation.
+
+    Returns
+    -------
+    frozenset of (int, int, int)
+        Immutable, hashable set; safe to share across threads.
+    """
+    from .layers import LayeredCrystal
+
+    if isinstance(crystal, LayeredCrystal):
+        allowed: set = set()
+        seen_names: set = set()
+        for layer in crystal.all_layers:
+            if layer.crystal.name not in seen_names:
+                seen_names.add(layer.crystal.name)
+                allowed |= precompute_allowed_hkl(
+                    layer.crystal, hmax, E_ref_eV, f2_thresh
+                )
+        return frozenset(allowed)
+
+    if E_ref_eV is None:
+        E_ref_eV = (E_MIN_eV + E_MAX_eV) / 2.0
+
+    allowed = set()
+    for h in range(-hmax, hmax + 1):
+        for k in range(-hmax, hmax + 1):
+            for l in range(-hmax, hmax + 1):
+                if h == 0 and k == 0 and l == 0:
+                    continue
+                G_cry = crystal.Q(h, k, l)
+                F2 = abs(crystal.StructureFactor(G_cry, en=E_ref_eV)) ** 2
+                if F2 >= f2_thresh:
+                    allowed.add((h, k, l))
+    return frozenset(allowed)
+
+
 def simulate_laue(
     crystal,
     U,
@@ -1470,6 +1533,7 @@ def simulate_laue(
     sigma_beam_v_nm=0.0,
     n_hat_sample=None,
     geometry_only=False,
+    allowed_hkl=None,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1657,7 +1721,11 @@ def simulate_laue(
                 if sw <= 0.0:
                     continue
 
-                if geometry_only:
+                if allowed_hkl is not None:
+                    if (h, k, l) not in allowed_hkl:
+                        continue
+                    F2 = 1.0
+                elif geometry_only:
                     F2 = 1.0
                 else:
                     # Structure factor (energy-dependent)
@@ -1719,6 +1787,7 @@ def simulate_laue_stack(
     n_hat_sample=None,
     verbose=True,
     geometry_only=False,
+    allowed_hkl=None,
 ):
     """
     Compute Laue spots for a ``LayeredCrystal`` stack projected onto ``camera``.
@@ -1909,6 +1978,10 @@ def simulate_laue_stack(
     # Deduplicated pixel set: avoid appending two spots within 0.5 px of each other.
     seen_pix = set()  # set of (round(xcam), round(ycam))
 
+    # Per-layer allowed hkl set — reassigned in the outer layer loop so that
+    # _try_append always sees the set that matches the crystal being enumerated.
+    _layer_allowed_hkl = None
+
     def _try_append(G_vec, hkl, sat_order, phase_label):
         """Evaluate the Laue condition + camera + F² for G_vec and append if valid."""
         nonlocal f2_thresh
@@ -1941,7 +2014,11 @@ def simulate_laue_stack(
         sw = spectrum(E)
         if sw <= 0.0:
             return 0
-        if geometry_only:
+        if _layer_allowed_hkl is not None:
+            if hkl not in _layer_allowed_hkl:
+                return 0
+            F2 = 1.0
+        elif geometry_only:
             F2 = 1.0
         else:
             if structure_model == "average":
@@ -2007,6 +2084,8 @@ def simulate_laue_stack(
         crystal = layer.crystal
         U = layer.U
         label = layer.label
+        # Update the closure variable so _try_append uses this layer's allowed set.
+        _layer_allowed_hkl = allowed_hkl.get(id(crystal)) if isinstance(allowed_hkl, dict) else allowed_hkl
 
         u_key = (crystal.name, tuple(np.round(U, 4).ravel()))
         if u_key in seen_combos:
@@ -2524,6 +2603,7 @@ def simulate_mixed_phases(
     n_hat_sample=None,
     verbose=True,
     geometry_only=False,
+    allowed_hkl=None,
 ):
     """
     Simulate a Laue pattern from a multi-phase sample with known volume
@@ -2780,6 +2860,13 @@ def simulate_mixed_phases(
         if verbose:
             print(f"  {label:22s} {f:6.3f}  {vuc:10.3f}  {weight:10.6f}")
 
+        # Resolve per-phase allowed_hkl: dict keyed by id(crystal) takes priority,
+        # then a bare frozenset is used for all phases, then None falls through.
+        _phase_allowed = (
+            allowed_hkl.get(id(crystal)) if isinstance(allowed_hkl, dict)
+            else allowed_hkl
+        )
+
         # Simulate
         if isinstance(crystal, LayeredCrystal):
             spots_p = simulate_laue_stack(
@@ -2795,6 +2882,7 @@ def simulate_mixed_phases(
                 structure_model=structure_model,
                 verbose=False,
                 geometry_only=geometry_only,
+                allowed_hkl=_phase_allowed,
             )
         else:
             spots_p = simulate_laue(
@@ -2809,6 +2897,7 @@ def simulate_mixed_phases(
                 f2_thresh=(ph_f2 if ph_f2 is not None else F2_THRESHOLD),
                 kb_params=kb_params,
                 geometry_only=geometry_only,
+                allowed_hkl=_phase_allowed,
             )
 
         if verbose:
@@ -3314,10 +3403,10 @@ def print_spot_table(title, spots, n=15):
     print(f"\n  ── {title} ──  ({len(spots)} total spots on camera)")
     print(
         f"  {'hkl':^10} {'E(keV)':>7} {'lambda(A)':>9} {'2th(deg)':>9} "
-        f"{'az(deg)':>8} {'col':>6} {'row':>6} "
+        f"{'az(deg)':>8} {'col':>9} {'row':>9} "
         f"{'|F|^2':>8} {'LP':>7} {'S(E)':>7} {'I_raw':>11} {'I/Imax':>7}  satellite"
     )
-    print("  " + "-" * 124)
+    print("  " + "-" * 130)
     for s in spots[:n]:
         h, k, l = s["hkl"]
         c, r = s["pix"]
@@ -3327,7 +3416,7 @@ def print_spot_table(title, spots, n=15):
             f"  ({h:+2d}{k:+2d}{l:+2d})  "
             f"{s['E']/1e3:7.3f}  {s['lambda']:9.5f}  "
             f"{s['tth']:9.3f}  {s['az']:8.2f}  "
-            f"{c:6.0f}  {r:6.0f}  "
+            f"{c:9.3f}  {r:9.3f}  "
             f"{s['F2']:8.2f}  {s['LP']:7.4f}  "
             f"{s['sw']:7.4f}  {s['I_raw']:11.3e}  {s['intensity']:7.4f}  {sat_col:>9s}"
         )

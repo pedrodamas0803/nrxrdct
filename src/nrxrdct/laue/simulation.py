@@ -1967,6 +1967,11 @@ def simulate_laue_stack(
     # enumerate once — the stack F already includes both contributions.
     seen_combos = []  # list of (crystal.name, U_rounded_tuple)
 
+    # Buffer layers (substrate, thick intermediate layers) are non-repeating and
+    # have no finite-thickness interference.  Satellites computed as
+    # G_substrate + m·q_fringe_film are physically meaningless and are skipped.
+    _buffer_set = set(id(l) for l in stack.buffer_layers)
+
     for layer in _enum_pool:
         crystal = layer.crystal
         U = layer.U
@@ -1981,8 +1986,11 @@ def simulate_laue_stack(
             continue
         seen_combos.append(u_key)
 
+        # Satellites are only meaningful around film (repeating-unit) G vectors.
+        layer_has_satellites = id(layer) not in _buffer_set and bool(fringe_q_vecs)
+
         if verbose:
-            n_sat_orders = len(sat_orders)
+            n_sat_orders = len(sat_orders) if layer_has_satellites else 0
             sat_info = f", ±{max_satellites} satellite orders" if n_sat_orders else ""
             print(
                 f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True
@@ -2002,20 +2010,14 @@ def simulate_laue_stack(
                     n_added += _try_append(G_lab, (h, k, l), 0, label)
 
                     # ── Thickness fringes / satellites ───────────────────
-                    # The Laue interference function for a slab of N unit cells
-                    # has F_slab = sin(N·φ/2)/sin(φ/2).  At integer multiples
-                    # Δqₙ = m·(2π/t) the function is ZERO (dark fringes between
-                    # Bragg peaks).  The observable MAXIMA (bright fringes) sit
-                    # at approximately Δqₙ ≈ (|m|+½)·(2π/t):
-                    #
-                    #   m=±1 → first  fringe at ≈ ±1.5·(2π/t)
-                    #   m=±2 → second fringe at ≈ ±2.5·(2π/t)
-                    #   …
-                    for q_fringe_vec, _ in fringe_q_vecs:
-                        for m in sat_orders:
-                            frac = m + 0.5 if m > 0 else m - 0.5
-                            G_sat = G_lab + frac * q_fringe_vec
-                            n_added += _try_append(G_sat, (h, k, l), m, label)
+                    # Only evaluated for repeating-unit (MQW) layers.
+                    # Buffer / substrate layers give Bragg peaks only.
+                    if layer_has_satellites:
+                        for q_fringe_vec, _ in fringe_q_vecs:
+                            for m in sat_orders:
+                                frac = m + 0.5 if m > 0 else m - 0.5
+                                G_sat = G_lab + frac * q_fringe_vec
+                                n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")
@@ -2398,12 +2400,17 @@ def simulate_laue_darwin(
             seen_combos.append(u_key)
             enum_layers.append(layer)
 
+    # Buffer layers provide Bragg peaks only — satellites around substrate
+    # G vectors combined with film fringe q vectors are physically meaningless.
+    _buffer_set = set(id(l) for l in stack.buffer_layers)
+
     for enum_layer in enum_layers:
         U = enum_layer.U
         crystal = enum_layer.crystal
         label = enum_layer.label
 
-        sat_info = f", ±{max_satellites} satellite orders" if fringe_q_vecs else ""
+        layer_has_satellites = id(enum_layer) not in _buffer_set and bool(fringe_q_vecs)
+        sat_info = f", ±{max_satellites} satellite orders" if layer_has_satellites else ""
         if verbose:
             print(f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True)
 
@@ -2420,12 +2427,14 @@ def simulate_laue_darwin(
                     # Main Bragg peak
                     n_added += _try_darwin(G_lab, (h, k, l), 0, label)
 
-                    # Thickness fringes / superlattice satellites
-                    for q_fringe_vec, _ in fringe_q_vecs:
-                        for m in sat_orders:
-                            frac = m + 0.5 if m > 0 else m - 0.5
-                            G_sat = G_lab + frac * q_fringe_vec
-                            n_added += _try_darwin(G_sat, (h, k, l), m, label)
+                    # Thickness fringes / superlattice satellites —
+                    # buffer / substrate layers give Bragg peaks only.
+                    if layer_has_satellites:
+                        for q_fringe_vec, _ in fringe_q_vecs:
+                            for m in sat_orders:
+                                frac = m + 0.5 if m > 0 else m - 0.5
+                                G_sat = G_lab + frac * q_fringe_vec
+                                n_added += _try_darwin(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")

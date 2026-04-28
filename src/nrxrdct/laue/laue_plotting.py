@@ -1728,6 +1728,206 @@ def plot_compare_spots(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MEASURED vs SIMULATED COMPARISON
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_measured_vs_simulated(
+    peaklist,
+    spots,
+    *,
+    image=None,
+    camera=None,
+    n_label: int = 8,
+    E_min_eV: float = 5_000,
+    E_max_eV: float = 27_000,
+    out_path: str | None = "measured_vs_simulated.png",
+):
+    """
+    Side-by-side comparison of segmented measured spots and simulated Laue spots
+    in detector pixel coordinates.
+
+    Parameters
+    ----------
+    peaklist : ndarray, shape (N, 9)
+        Output of :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+        Columns: peak_X (col), peak_Y (row), peak_I, peak_fwaxmaj, peak_fwaxmin,
+        peak_inclination, Xdev, Ydev, peak_bkg.
+
+    spots : list of dict
+        Output of :func:`~nrxrdct.laue.simulation.simulate_laue` or compatible
+        functions.  Each dict must contain ``'pix'`` (col, row), ``'E'``,
+        ``'intensity'``, and ``'hkl'``.
+
+    image : ndarray of shape (Nv, Nh) or None
+        Optional raw detector image shown as a background on both panels.
+        Displayed with a logarithmic normalisation and the ``'inferno'``
+        colormap.
+
+    camera : Camera or None
+        When provided, ``camera.Nh`` and ``camera.Nv`` are used to set fixed
+        axis limits.  If ``None``, limits are derived from the data extent.
+
+    n_label : int
+        Number of strongest simulated spots to annotate with their (hkl) Miller
+        indices on the right panel.
+
+    E_min_eV, E_max_eV : float
+        Energy range for the simulated-spot colour scale (keV).
+
+    out_path : str or None
+        Path to save the PNG figure.  ``None`` → do not save.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    peaklist = np.asarray(peaklist, dtype=float)
+
+    fig, (ax_m, ax_s) = plt.subplots(
+        1, 2, figsize=(14, 6), sharex=False, sharey=False
+    )
+    fig.patch.set_facecolor(BG)
+
+    for ax in (ax_m, ax_s):
+        ax.set_facecolor(BG)
+        ax.tick_params(colors="#7788aa", labelsize=6)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+        ax.set_xlabel("Column  (pixel)", color="#7788aa", fontsize=9)
+        ax.set_ylabel("Row  (pixel)", color="#7788aa", fontsize=9)
+
+    # ── background image (both panels) ───────────────────────────────────────
+    if image is not None:
+        img = np.asarray(image, dtype=float)
+        vmin = max(img[img > 0].min(), 1.0) if np.any(img > 0) else 1.0
+        norm_img = mcolors.LogNorm(vmin=vmin, vmax=img.max())
+        for ax in (ax_m, ax_s):
+            ax.imshow(
+                img,
+                origin="upper",
+                cmap="inferno",
+                norm=norm_img,
+                aspect="equal",
+                interpolation="nearest",
+                alpha=0.6,
+                zorder=1,
+            )
+
+    # ── measured spots (left panel) ──────────────────────────────────────────
+    if peaklist.shape[0] > 0:
+        col_m = peaklist[:, 0]
+        row_m = peaklist[:, 1]
+        I_m = peaklist[:, 2]
+        I_norm = I_m / I_m.max() if I_m.max() > 0 else np.ones_like(I_m)
+        sz_m = np.clip(20 + 200 * I_norm**0.4, 5, 300)
+        sc_m = ax_m.scatter(
+            col_m, row_m,
+            s=sz_m,
+            c=I_norm,
+            cmap="viridis",
+            vmin=0,
+            vmax=1,
+            alpha=0.85,
+            marker="o",
+            linewidths=0.3,
+            edgecolors="#ffffff44",
+            zorder=3,
+        )
+        cb_m = fig.colorbar(sc_m, ax=ax_m, pad=0.02, fraction=0.035, aspect=30)
+        cb_m.set_label("Normalised intensity  (measured)", color="#7788aa", fontsize=7)
+        cb_m.ax.tick_params(colors="#7788aa", labelsize=6)
+        cb_m.outline.set_edgecolor("#1a1f2e")
+
+    ax_m.set_title("Measured  (segmentation)", color=FG, fontsize=10, pad=6)
+
+    # ── simulated spots (right panel) ────────────────────────────────────────
+    valid = [s for s in spots if s.get("pix") is not None]
+    if valid:
+        E_norm = mcolors.Normalize(vmin=E_min_eV / 1e3, vmax=E_max_eV / 1e3)
+
+        fund = [s for s in valid if not s.get("is_superlattice")]
+        super_ = [s for s in valid if s.get("is_superlattice")]
+
+        for subset, marker, alpha in [(fund, "o", 0.85), (super_, "*", 0.75)]:
+            if not subset:
+                continue
+            col_s = [float(s["pix"][0]) for s in subset]
+            row_s = [float(s["pix"][1]) for s in subset]
+            Es = [s["E"] / 1e3 for s in subset]
+            sz_s = [max(5, 90 * s["intensity"] ** 0.4) for s in subset]
+            ax_s.scatter(
+                col_s, row_s,
+                s=sz_s,
+                c=Es,
+                cmap="plasma",
+                norm=E_norm,
+                alpha=alpha,
+                marker=marker,
+                linewidths=0.4,
+                edgecolors="#ffffff33",
+                zorder=3,
+            )
+
+        # colour bar for energy
+        sm = plt.cm.ScalarMappable(cmap="plasma", norm=E_norm)
+        sm.set_array([])
+        cb_s = fig.colorbar(sm, ax=ax_s, pad=0.02, fraction=0.035, aspect=30)
+        cb_s.set_label("E  (keV)  [simulated]", color="#7788aa", fontsize=7)
+        cb_s.ax.tick_params(colors="#7788aa", labelsize=6)
+        cb_s.outline.set_edgecolor("#1a1f2e")
+
+        # HKL labels on n_label strongest fundamental spots
+        top = sorted(fund, key=lambda s: -s["intensity"])[:n_label]
+        for s in top:
+            h, k, l = s["hkl"]
+            ax_s.annotate(
+                f"({h}{k}{l})",
+                xy=(float(s["pix"][0]), float(s["pix"][1])),
+                xytext=(3, 2),
+                textcoords="offset points",
+                fontsize=5.5,
+                color="#aaddff",
+                alpha=0.9,
+                zorder=4,
+            )
+
+    ax_s.set_title("Simulated", color=FG, fontsize=10, pad=6)
+
+    # ── axis limits ──────────────────────────────────────────────────────────
+    if camera is not None:
+        for ax in (ax_m, ax_s):
+            ax.set_xlim(0, camera.Nh)
+            ax.set_ylim(camera.Nv, 0)   # rows increase downward
+    else:
+        # derive from data; rows still increase downward
+        all_cols, all_rows = [], []
+        if peaklist.shape[0] > 0:
+            all_cols.extend(peaklist[:, 0].tolist())
+            all_rows.extend(peaklist[:, 1].tolist())
+        for s in valid:
+            all_cols.append(float(s["pix"][0]))
+            all_rows.append(float(s["pix"][1]))
+        if all_cols:
+            margin = 50
+            c0, c1 = min(all_cols) - margin, max(all_cols) + margin
+            r0, r1 = min(all_rows) - margin, max(all_rows) + margin
+            for ax in (ax_m, ax_s):
+                ax.set_xlim(c0, c1)
+                ax.set_ylim(r1, r0)   # inverted
+
+    fig.suptitle("Measured vs Simulated — detector space", color=FG, fontsize=11, y=1.01)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Measured-vs-simulated plot saved → {out_path}")
+
+    return fig
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LAYER SCHEME
 # ─────────────────────────────────────────────────────────────────────────────
 

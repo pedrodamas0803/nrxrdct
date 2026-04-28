@@ -1469,6 +1469,7 @@ def simulate_laue(
     sigma_beam_h_nm=0.0,
     sigma_beam_v_nm=0.0,
     n_hat_sample=None,
+    geometry_only=False,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1648,12 +1649,6 @@ def simulate_laue(
                 chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
                 az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
 
-                # Structure factor (energy-dependent)
-                F = crystal.StructureFactor(G_cry, en=E)
-                F2 = abs(F) ** 2
-                if F2 < f2_thresh:
-                    continue
-
                 LP = lorentz_pol(tth)
                 if LP == 0.0:
                     continue
@@ -1661,6 +1656,15 @@ def simulate_laue(
                 sw = _spectrum(E)
                 if sw <= 0.0:
                     continue
+
+                if geometry_only:
+                    F2 = 1.0
+                else:
+                    # Structure factor (energy-dependent)
+                    F = crystal.StructureFactor(G_cry, en=E)
+                    F2 = abs(F) ** 2
+                    if F2 < f2_thresh:
+                        continue
 
                 spots.append(
                     {
@@ -1714,6 +1718,7 @@ def simulate_laue_stack(
     sigma_beam_v_nm=0.0,
     n_hat_sample=None,
     verbose=True,
+    geometry_only=False,
 ):
     """
     Compute Laue spots for a ``LayeredCrystal`` stack projected onto ``camera``.
@@ -1930,24 +1935,25 @@ def simulate_laue_stack(
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-        if structure_model == "average":
-            F_stack = stack.average_structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
-        else:
-            F_stack = stack.structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
-        F2 = abs(F_stack) ** 2
-        if f2_thresh == 0.0:
-            f2_thresh = max(1.0, F2 * 1e-3)
-        # Satellites are intrinsically weaker than Bragg peaks (F² ∝ N instead
-        # of N²), so apply a relaxed threshold for fringe / satellite spots.
-        effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
-        if F2 < effective_thresh:
-            return 0
         LP = lorentz_pol(tth)
         if LP == 0.0:
             return 0
         sw = spectrum(E)
         if sw <= 0.0:
             return 0
+        if geometry_only:
+            F2 = 1.0
+        else:
+            if structure_model == "average":
+                F_stack = stack.average_structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
+            else:
+                F_stack = stack.structure_factor(G_vec, energy_eV=E, kf_hat=kf_hat)
+            F2 = abs(F_stack) ** 2
+            if f2_thresh == 0.0:
+                f2_thresh = max(1.0, F2 * 1e-3)
+            effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
+            if F2 < effective_thresh:
+                return 0
         seen_pix.add(pix_key)
         spots.append(
             {
@@ -2517,6 +2523,7 @@ def simulate_mixed_phases(
     sigma_beam_v_nm=0.0,
     n_hat_sample=None,
     verbose=True,
+    geometry_only=False,
 ):
     """
     Simulate a Laue pattern from a multi-phase sample with known volume
@@ -2787,6 +2794,7 @@ def simulate_mixed_phases(
                 kb_params=kb_params,
                 structure_model=structure_model,
                 verbose=False,
+                geometry_only=geometry_only,
             )
         else:
             spots_p = simulate_laue(
@@ -2800,6 +2808,7 @@ def simulate_mixed_phases(
                 hmax=ph_hmax,
                 f2_thresh=(ph_f2 if ph_f2 is not None else F2_THRESHOLD),
                 kb_params=kb_params,
+                geometry_only=geometry_only,
             )
 
         if verbose:

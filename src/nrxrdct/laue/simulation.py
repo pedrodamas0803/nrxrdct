@@ -1466,6 +1466,9 @@ def simulate_laue(
     kb_params=BM32_KB,
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
+    sigma_beam_h_mm=0.0,
+    sigma_beam_v_mm=0.0,
+    n_hat_sample=None,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1683,7 +1686,12 @@ def simulate_laue(
             s["intensity"] = s["I_raw"] / imax
 
     spots = sorted(spots, key=lambda s: s["intensity"], reverse=True)
-    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad)
+    beam_divergence_ellipses(
+        spots, camera, sigma_h_mrad, sigma_v_mrad,
+        sigma_beam_h_mm=sigma_beam_h_mm,
+        sigma_beam_v_mm=sigma_beam_v_mm,
+        n_hat_sample=n_hat_sample,
+    )
     return spots
 
 
@@ -1702,6 +1710,9 @@ def simulate_laue_stack(
     structure_model="average",
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
+    sigma_beam_h_mm=0.0,
+    sigma_beam_v_mm=0.0,
+    n_hat_sample=None,
     verbose=True,
 ):
     """
@@ -2043,7 +2054,12 @@ def simulate_laue_stack(
             s["intensity"] = s["I_raw"] / imax
 
     spots.sort(key=lambda s: s["intensity"], reverse=True)
-    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki)
+    beam_divergence_ellipses(
+        spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki,
+        sigma_beam_h_mm=sigma_beam_h_mm,
+        sigma_beam_v_mm=sigma_beam_v_mm,
+        n_hat_sample=n_hat_sample,
+    )
 
     if verbose:
         print(f"  Total spots on detector: {len(spots)}")
@@ -2115,6 +2131,9 @@ def simulate_laue_darwin(
     structure_model: str = "average",
     sigma_h_mrad: float = 0.0,
     sigma_v_mrad: float = 0.0,
+    sigma_beam_h_mm: float = 0.0,
+    sigma_beam_v_mm: float = 0.0,
+    n_hat_sample=None,
     verbose: bool = True,
 ):
     """
@@ -2462,7 +2481,12 @@ def simulate_laue_darwin(
             s["intensity"] = s["I_raw"] / imax
 
     spots.sort(key=lambda s: s["intensity"], reverse=True)
-    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki)
+    beam_divergence_ellipses(
+        spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki,
+        sigma_beam_h_mm=sigma_beam_h_mm,
+        sigma_beam_v_mm=sigma_beam_v_mm,
+        n_hat_sample=n_hat_sample,
+    )
 
     if verbose:
         print(f"  Total spots (Darwin): {len(spots)}")
@@ -2489,6 +2513,9 @@ def simulate_mixed_phases(
     structure_model="average",
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
+    sigma_beam_h_mm=0.0,
+    sigma_beam_v_mm=0.0,
+    n_hat_sample=None,
     verbose=True,
 ):
     """
@@ -2807,7 +2834,12 @@ def simulate_mixed_phases(
             s["intensity"] = s["I_raw_weighted"] / imax if imax > 0 else 0.0
 
     all_spots.sort(key=lambda s: s["intensity"], reverse=True)
-    beam_divergence_ellipses(all_spots, camera, sigma_h_mrad, sigma_v_mrad)
+    beam_divergence_ellipses(
+        all_spots, camera, sigma_h_mrad, sigma_v_mrad,
+        sigma_beam_h_mm=sigma_beam_h_mm,
+        sigma_beam_v_mm=sigma_beam_v_mm,
+        n_hat_sample=n_hat_sample,
+    )
 
     if verbose:
         print(f"  {'─'*52}")
@@ -2833,23 +2865,44 @@ def beam_divergence_ellipses(
     sigma_h_mrad: float = 0.0,
     sigma_v_mrad: float = 0.0,
     ki_hat=None,
+    sigma_beam_h_mm: float = 0.0,
+    sigma_beam_v_mm: float = 0.0,
+    n_hat_sample=None,
 ) -> list:
     """
-    Add per-spot detector broadening from beam angular divergence.
+    Add per-spot detector broadening from beam angular divergence and geometric
+    footprint elongation due to a tilted sample surface.
 
-    For each spot the pixel-space Jacobian  J = ∂(x_pix, y_pix) / ∂(δ_h, δ_v)
-    is estimated numerically by perturbing the incident beam direction by a
-    small angle in the horizontal and vertical lab directions.  The divergence
-    covariance is then propagated as:
+    Two independent broadening mechanisms are modelled and combined:
 
-        C_pix = J @ diag(σ_h², σ_v²) @ J^T
+    1. **Angular divergence** — the incident beam has an angular spread
+       (σ_h, σ_v).  Each k̂_i direction satisfying the Laue condition maps
+       the G-vector to a slightly different pixel.  The pixel-space Jacobian
+       J_div = ∂pix/∂(δ_h, δ_v) is estimated by central differences on the
+       perturbed beam direction.
 
-    A second Jacobian  J_pa = ∂(2θ, χ) / ∂(x_pix, y_pix) maps the result
-    into angle space.  Both representations are stored in each spot dict.
+    2. **Geometric footprint** — the beam illuminates a finite area on the
+       sample surface.  When the surface is tilted relative to the beam (as
+       in reflection geometry), the footprint is elongated by 1/sin(α_inc).
+       Each illuminated point scatters from a displaced origin, shifting the
+       pixel hit via geometric parallax.  The sample-plane Jacobian is
+       computed analytically:
+
+           δr_sample = δr_beam − k̂_i (δr_beam · n̂_sample) / (k̂_i · n̂_sample)
+
+       and the resulting pixel shift is evaluated by central differences on
+       the camera ray-intersection formula for a displaced source.
+
+    The two pixel covariances add:
+
+        C_total = C_divergence + C_footprint
+
+    A second Jacobian  J_pa = ∂(2θ, χ)/∂pix  maps the combined result into
+    angle space.  Both representations are stored in each spot dict.
 
     New keys written to every spot
     --------------------------------
-    ``cov_px``              (2, 2) ndarray  pixel covariance (px²)
+    ``cov_px``              (2, 2) ndarray  total pixel covariance (px²)
     ``sigma_major_px``      float           semi-major axis, 1σ (px)
     ``sigma_minor_px``      float           semi-minor axis, 1σ (px)
     ``ellipse_angle_px_deg``float           major-axis angle, CCW from +x (°)
@@ -2862,15 +2915,25 @@ def beam_divergence_ellipses(
 
     Parameters
     ----------
-    spots        : list of dicts from :func:`simulate_laue_stack` etc.
-    camera       : Camera
-    sigma_h_mrad : float   horizontal (in-plane) beam divergence 1σ (mrad).
-                   Typical BM32/ESRF: 2–3 mrad.
-    sigma_v_mrad : float   vertical beam divergence 1σ (mrad).
-                   Typical BM32/ESRF: 0.2–0.5 mrad.
-    ki_hat       : array-like (3,), optional
-                   Incident beam direction (LT frame, x // beam).
-                   Default: ``[1, 0, 0]``.
+    spots         : list of dicts from :func:`simulate_laue_stack` etc.
+    camera        : Camera
+    sigma_h_mrad  : float  horizontal beam divergence 1σ (mrad).
+                    Typical BM32/ESRF: 2–3 mrad.
+    sigma_v_mrad  : float  vertical beam divergence 1σ (mrad).
+                    Typical BM32/ESRF: 0.2–0.5 mrad.
+    ki_hat        : array-like (3,), optional
+                    Incident beam direction (LT frame, x // beam).
+                    Default: ``[1, 0, 0]``.
+    sigma_beam_h_mm : float  horizontal (in-plane) beam size 1σ at the sample
+                    (mm).  Footprint broadening requires ``n_hat_sample``.
+    sigma_beam_v_mm : float  vertical beam size 1σ at the sample (mm).
+    n_hat_sample  : array-like (3,), optional
+                    Unit normal to the sample surface in the LT frame.
+                    Required to activate footprint broadening.  For a sample
+                    with its surface normal pointing toward the detector (
+                    typical reflection geometry with ~45° sample tilt) use
+                    e.g. ``[0, 0, 1]`` for a horizontal flat sample or the
+                    crystal normal obtained from the orientation matrix.
 
     Returns
     -------
@@ -2878,10 +2941,10 @@ def beam_divergence_ellipses(
 
     Notes
     -----
-    The Jacobian is evaluated with a 0.5 mrad central-difference step, which
-    is well within the linear regime for typical Laue geometries.  Spots whose
-    G vector does not satisfy the Laue condition after perturbation (e.g. near
-    the energy-window boundary) are assigned zero broadening for that direction.
+    The divergence Jacobian is evaluated with a 0.5 mrad central-difference
+    step; the footprint Jacobian with a 10 µm step.  Spots whose G vector
+    does not satisfy the Laue condition after perturbation are assigned zero
+    broadening for that direction.
     """
     _zero2 = np.zeros((2, 2))
     _zero_keys = {
@@ -2891,7 +2954,12 @@ def beam_divergence_ellipses(
         "ellipse_angle_ang_deg": 0.0, "sigma_tth_deg": 0.0, "sigma_chi_deg": 0.0,
     }
 
-    if sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0:
+    _no_divergence = sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0
+    _no_footprint = (
+        (sigma_beam_h_mm <= 0.0 and sigma_beam_v_mm <= 0.0)
+        or n_hat_sample is None
+    )
+    if _no_divergence and _no_footprint:
         for s in spots:
             s.update(_zero_keys)
         return spots
@@ -2899,7 +2967,7 @@ def beam_divergence_ellipses(
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki /= np.linalg.norm(ki)
 
-    # Horizontal and vertical perturbation directions perpendicular to ki.
+    # Horizontal and vertical directions perpendicular to ki.
     # For a beam along x:  ê_h ≈ ŷ (horizontal),  ê_v ≈ ẑ (vertical).
     z_hat = np.array([0.0, 0.0, 1.0])
     cross_zk = np.cross(z_hat, ki)
@@ -2914,6 +2982,22 @@ def beam_divergence_ellipses(
     sigma_v = sigma_v_mrad * 1e-3  # rad
     _H = 5e-4  # 0.5 mrad central-difference step (rad)
 
+    # ── Footprint: directions in the sample plane per mm of beam offset ────────
+    # A point at δr_beam = δh·ê_h + δv·ê_v in the beam cross-section hits the
+    # sample at δr_sample = δr_beam − k̂_i·(δr_beam·n̂)/(k̂_i·n̂), giving a
+    # 3-vector footprint direction per mm of beam displacement.
+    do_footprint = not _no_footprint
+    if do_footprint:
+        n_s = np.asarray(n_hat_sample, dtype=float)
+        n_s = n_s / np.linalg.norm(n_s)
+        ki_dot_n = float(np.dot(ki, n_s))
+        if abs(ki_dot_n) < 1e-3:  # beam nearly parallel to surface
+            do_footprint = False
+        else:
+            drs_dh = e_h - ki * float(np.dot(e_h, n_s)) / ki_dot_n  # (mm/mm)
+            drs_dv = e_v - ki * float(np.dot(e_v, n_s)) / ki_dot_n
+            _S = 0.01  # 10 µm central-difference step (mm)
+
     def _perturbed_pix(G, e, delta):
         ki_p = ki + delta * e
         ki_p /= np.linalg.norm(ki_p)
@@ -2924,6 +3008,30 @@ def beam_divergence_ellipses(
         lam = -4.0 * np.pi * kdG / Gm2
         kf = (2.0 * np.pi / lam) * ki_p + G
         return camera.project(kf / np.linalg.norm(kf))
+
+    def _project_from_source(kf_hat_lt, src_lt):
+        """Project kf_hat onto the detector for a source displaced from origin."""
+        # LT → LT2: x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
+        kf_lt2 = np.array([-kf_hat_lt[1], kf_hat_lt[0], kf_hat_lt[2]])
+        src_lt2 = np.array([-src_lt[1], src_lt[0], src_lt[2]])
+        scal = float(np.dot(kf_lt2, camera.normal))
+        if scal < 1e-8:
+            return None
+        dd_eff = camera.dd - float(np.dot(src_lt2, camera.normal))
+        IM = src_lt2 + kf_lt2 * (dd_eff / scal)
+        OM = IM - camera.IOlab
+        xca0 = float(OM[0])
+        yca0 = (
+            float(OM[1]) / camera._sinbeta
+            if abs(camera._sinbeta) > 1e-8
+            else -float(OM[2]) / camera._cosbeta
+        )
+        xcam1 = camera._cosgam * xca0 + camera._singam * yca0
+        ycam1 = -camera._singam * xca0 + camera._cosgam * yca0
+        return np.array([
+            camera.xcen + xcam1 / camera.pixel_mm,
+            camera.ycen + ycam1 / camera.pixel_mm,
+        ])
 
     def _pix_to_angles(x, y):
         ufs = camera.pixel_to_kf(np.array([x]), np.array([y]))
@@ -2951,14 +3059,34 @@ def beam_divergence_ellipses(
 
         # ── Beam-divergence pixel Jacobian ────────────────────────────────
         J_div = np.zeros((2, 2))
-        for col, e in enumerate([e_h, e_v]):
-            pp = _perturbed_pix(G, e, +_H)
-            pm = _perturbed_pix(G, e, -_H)
-            if pp is not None and pm is not None:
-                J_div[:, col] = (np.asarray(pp) - np.asarray(pm)) / (2.0 * _H)
+        if not _no_divergence:
+            for col, e in enumerate([e_h, e_v]):
+                pp = _perturbed_pix(G, e, +_H)
+                pm = _perturbed_pix(G, e, -_H)
+                if pp is not None and pm is not None:
+                    J_div[:, col] = (np.asarray(pp) - np.asarray(pm)) / (2.0 * _H)
 
         D_beam = np.diag([sigma_h ** 2, sigma_v ** 2])
-        cov_px = J_div @ D_beam @ J_div.T
+        cov_div = J_div @ D_beam @ J_div.T
+
+        # ── Footprint pixel Jacobian ──────────────────────────────────────
+        # k̂_f is the same for all source positions (same G, same λ).
+        cov_fp = _zero2.copy()
+        if do_footprint:
+            lam_s = float(s["lam"])
+            kf_vec = (2.0 * np.pi / lam_s) * ki + G
+            kf_hat_s = kf_vec / np.linalg.norm(kf_vec)
+            J_fp = np.zeros((2, 2))
+            for col, d_src in enumerate([drs_dh, drs_dv]):
+                pp = _project_from_source(kf_hat_s, +_S * d_src)
+                pm = _project_from_source(kf_hat_s, -_S * d_src)
+                if pp is not None and pm is not None:
+                    J_fp[:, col] = (pp - pm) / (2.0 * _S)
+            D_fp = np.diag([sigma_beam_h_mm ** 2, sigma_beam_v_mm ** 2])
+            cov_fp = J_fp @ D_fp @ J_fp.T
+
+        # ── Combined pixel covariance ─────────────────────────────────────
+        cov_px = cov_div + cov_fp
         s["cov_px"] = cov_px
         s["sigma_major_px"], s["sigma_minor_px"], s["ellipse_angle_px_deg"] = (
             _ellipse_params(cov_px)

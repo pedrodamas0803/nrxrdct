@@ -1466,8 +1466,8 @@ def simulate_laue(
     kb_params=BM32_KB,
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
-    sigma_beam_h_mm=0.0,
-    sigma_beam_v_mm=0.0,
+    sigma_beam_h_nm=0.0,
+    sigma_beam_v_nm=0.0,
     n_hat_sample=None,
 ):
     """
@@ -1688,8 +1688,8 @@ def simulate_laue(
     spots = sorted(spots, key=lambda s: s["intensity"], reverse=True)
     beam_divergence_ellipses(
         spots, camera, sigma_h_mrad, sigma_v_mrad,
-        sigma_beam_h_mm=sigma_beam_h_mm,
-        sigma_beam_v_mm=sigma_beam_v_mm,
+        sigma_beam_h_nm=sigma_beam_h_nm,
+        sigma_beam_v_nm=sigma_beam_v_nm,
         n_hat_sample=n_hat_sample,
     )
     return spots
@@ -1710,8 +1710,8 @@ def simulate_laue_stack(
     structure_model="average",
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
-    sigma_beam_h_mm=0.0,
-    sigma_beam_v_mm=0.0,
+    sigma_beam_h_nm=0.0,
+    sigma_beam_v_nm=0.0,
     n_hat_sample=None,
     verbose=True,
 ):
@@ -2056,8 +2056,8 @@ def simulate_laue_stack(
     spots.sort(key=lambda s: s["intensity"], reverse=True)
     beam_divergence_ellipses(
         spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki,
-        sigma_beam_h_mm=sigma_beam_h_mm,
-        sigma_beam_v_mm=sigma_beam_v_mm,
+        sigma_beam_h_nm=sigma_beam_h_nm,
+        sigma_beam_v_nm=sigma_beam_v_nm,
         n_hat_sample=n_hat_sample,
     )
 
@@ -2131,8 +2131,8 @@ def simulate_laue_darwin(
     structure_model: str = "average",
     sigma_h_mrad: float = 0.0,
     sigma_v_mrad: float = 0.0,
-    sigma_beam_h_mm: float = 0.0,
-    sigma_beam_v_mm: float = 0.0,
+    sigma_beam_h_nm: float = 0.0,
+    sigma_beam_v_nm: float = 0.0,
     n_hat_sample=None,
     verbose: bool = True,
 ):
@@ -2483,8 +2483,8 @@ def simulate_laue_darwin(
     spots.sort(key=lambda s: s["intensity"], reverse=True)
     beam_divergence_ellipses(
         spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki,
-        sigma_beam_h_mm=sigma_beam_h_mm,
-        sigma_beam_v_mm=sigma_beam_v_mm,
+        sigma_beam_h_nm=sigma_beam_h_nm,
+        sigma_beam_v_nm=sigma_beam_v_nm,
         n_hat_sample=n_hat_sample,
     )
 
@@ -2513,8 +2513,8 @@ def simulate_mixed_phases(
     structure_model="average",
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
-    sigma_beam_h_mm=0.0,
-    sigma_beam_v_mm=0.0,
+    sigma_beam_h_nm=0.0,
+    sigma_beam_v_nm=0.0,
     n_hat_sample=None,
     verbose=True,
 ):
@@ -2836,8 +2836,8 @@ def simulate_mixed_phases(
     all_spots.sort(key=lambda s: s["intensity"], reverse=True)
     beam_divergence_ellipses(
         all_spots, camera, sigma_h_mrad, sigma_v_mrad,
-        sigma_beam_h_mm=sigma_beam_h_mm,
-        sigma_beam_v_mm=sigma_beam_v_mm,
+        sigma_beam_h_nm=sigma_beam_h_nm,
+        sigma_beam_v_nm=sigma_beam_v_nm,
         n_hat_sample=n_hat_sample,
     )
 
@@ -2865,8 +2865,8 @@ def beam_divergence_ellipses(
     sigma_h_mrad: float = 0.0,
     sigma_v_mrad: float = 0.0,
     ki_hat=None,
-    sigma_beam_h_mm: float = 0.0,
-    sigma_beam_v_mm: float = 0.0,
+    sigma_beam_h_nm: float = 0.0,
+    sigma_beam_v_nm: float = 0.0,
     n_hat_sample=None,
 ) -> list:
     """
@@ -2924,9 +2924,9 @@ def beam_divergence_ellipses(
     ki_hat        : array-like (3,), optional
                     Incident beam direction (LT frame, x // beam).
                     Default: ``[1, 0, 0]``.
-    sigma_beam_h_mm : float  horizontal (in-plane) beam size 1σ at the sample
-                    (mm).  Footprint broadening requires ``n_hat_sample``.
-    sigma_beam_v_mm : float  vertical beam size 1σ at the sample (mm).
+    sigma_beam_h_nm : float  horizontal (in-plane) beam size 1σ at the sample
+                    (nm).  Footprint broadening requires ``n_hat_sample``.
+    sigma_beam_v_nm : float  vertical beam size 1σ at the sample (nm).
     n_hat_sample  : array-like (3,), optional
                     Unit normal to the sample surface in the LT frame.
                     Required to activate footprint broadening.  For a sample
@@ -2956,7 +2956,7 @@ def beam_divergence_ellipses(
 
     _no_divergence = sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0
     _no_footprint = (
-        (sigma_beam_h_mm <= 0.0 and sigma_beam_v_mm <= 0.0)
+        (sigma_beam_h_nm <= 0.0 and sigma_beam_v_nm <= 0.0)
         or n_hat_sample is None
     )
     if _no_divergence and _no_footprint:
@@ -3082,7 +3082,7 @@ def beam_divergence_ellipses(
                 pm = _project_from_source(kf_hat_s, -_S * d_src)
                 if pp is not None and pm is not None:
                     J_fp[:, col] = (pp - pm) / (2.0 * _S)
-            D_fp = np.diag([sigma_beam_h_mm ** 2, sigma_beam_v_mm ** 2])
+            D_fp = np.diag([(sigma_beam_h_nm * 1e-6) ** 2, (sigma_beam_v_nm * 1e-6) ** 2])
             cov_fp = J_fp @ D_fp @ J_fp.T
 
         # ── Combined pixel covariance ─────────────────────────────────────

@@ -4,6 +4,18 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 
 from .camera import Camera
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
+from .interactive import OrientationState, interactive_orientation
+from .fitting import (
+    MixedFitResult,
+    OrientationFitResult,
+    StackFitResult,
+    fit_orientation,
+    fit_orientation_mixed,
+    fit_orientation_stack,
+    laue_mixed_residuals,
+    laue_residuals,
+    laue_stack_residuals,
+)
 from .laue_plotting import (
     plot_2theta_chi,
     plot_all,
@@ -121,6 +133,19 @@ __all__ = [
     "d_spacing_hkl",
     "pseudomorphic_d_spacing",
     "nitride_elastic_constants",
+    # Interactive orientation tool
+    "OrientationState",
+    "interactive_orientation",
+    # Orientation fitting
+    "OrientationFitResult",
+    "StackFitResult",
+    "MixedFitResult",
+    "laue_residuals",
+    "laue_stack_residuals",
+    "laue_mixed_residuals",
+    "fit_orientation",
+    "fit_orientation_stack",
+    "fit_orientation_mixed",
     # Plotting
     "plot_2theta_chi",
     "plot_all",

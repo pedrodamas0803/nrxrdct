@@ -2043,8 +2043,7 @@ def simulate_laue_stack(
             s["intensity"] = s["I_raw"] / imax
 
     spots.sort(key=lambda s: s["intensity"], reverse=True)
-    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad,
-                             ki_hat=ki if ki_hat is not None else None)
+    beam_divergence_ellipses(spots, camera, sigma_h_mrad, sigma_v_mrad, ki_hat=ki)
 
     if verbose:
         print(f"  Total spots on detector: {len(spots)}")
@@ -2488,6 +2487,8 @@ def simulate_mixed_phases(
     normalise="volume",
     kb_params=BM32_KB,
     structure_model="average",
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
     verbose=True,
 ):
     """
@@ -2806,6 +2807,7 @@ def simulate_mixed_phases(
             s["intensity"] = s["I_raw_weighted"] / imax if imax > 0 else 0.0
 
     all_spots.sort(key=lambda s: s["intensity"], reverse=True)
+    beam_divergence_ellipses(all_spots, camera, sigma_h_mrad, sigma_v_mrad)
 
     if verbose:
         print(f"  {'─'*52}")

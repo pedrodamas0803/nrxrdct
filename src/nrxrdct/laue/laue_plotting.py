@@ -2207,44 +2207,21 @@ def plot_laue_stack_spots(
                    linewidths=0.4, edgecolors="white", alpha=0.90, zorder=3)
 
     # ── Divergence ellipses ───────────────────────────────────────────────────
-    # Drawn when the spot list carries the broadening keys added by
-    # beam_divergence_ellipses() and at least one spot has non-zero sigma.
     if show_divergence:
-        from matplotlib.patches import Ellipse
-
-        if space == "angles":
-            _sig_maj_key = "sigma_major_ang_deg"
-            _sig_min_key = "sigma_minor_ang_deg"
-            _ang_key     = "ellipse_angle_ang_deg"
-        else:
-            _sig_maj_key = "sigma_major_px"
-            _sig_min_key = "sigma_minor_px"
-            _ang_key     = "ellipse_angle_px_deg"
-
-        for s in spots:
-            sig_maj = s.get(_sig_maj_key, 0.0)
-            if sig_maj <= 0.0:
-                continue
-            sig_min = s.get(_sig_min_key, 0.0)
-            angle   = s.get(_ang_key, 0.0)
-            x, y    = _xy(s)
-            if x is None:
-                continue
-            ph  = s["phase_label"]
-            ord_ = s["satellite_order"]
-            col = phase_order_color[(ph, abs(ord_))]
-            ell = Ellipse(
-                xy=(x, y),
-                width=2.0 * divergence_nsigma * sig_maj,
-                height=2.0 * divergence_nsigma * sig_min,
-                angle=angle,
-                linewidth=0.7,
-                edgecolor=col,
-                facecolor="none",
-                alpha=0.55,
-                zorder=2,
-            )
-            ax.add_patch(ell)
+        frame = "tth_chi" if space == "angles" else "detector"
+        div_spots, div_xs, div_ys = [], [], []
+        for s in valid:
+            x, y = _xy(s)
+            if x is not None:
+                div_spots.append(s)
+                div_xs.append(x)
+                div_ys.append(y)
+        if div_spots:
+            cols = [phase_order_color[(s["phase_label"], abs(s["satellite_order"]))]
+                    for s in div_spots]
+            _draw_divergence_ellipses(ax, div_spots,
+                                      np.array(div_xs), np.array(div_ys),
+                                      frame, divergence_nsigma, cols)
 
     # ── Annotate strongest spots ───────────────────────────────────────────────
     valid = [s for s in spots if _xy(s)[0] is not None]
@@ -2314,6 +2291,58 @@ def plot_laue_stack_spots(
                     facecolor=fig.get_facecolor())
         print(f"  Stack spot map saved → {out_path}")
     return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SHARED DIVERGENCE-ELLIPSE HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _draw_divergence_ellipses(ax, spots, xs, ys, frame, nsigma, colors):
+    """
+    Add per-spot broadening ellipses to *ax*.
+
+    Uses the keys written by :func:`~nrxrdct.laue.beam_divergence_ellipses`:
+    angle-space keys for ``frame='tth_chi'``, pixel-space keys for
+    ``frame='detector'``.  Spots with zero broadening are silently skipped.
+
+    Parameters
+    ----------
+    ax     : Axes
+    spots  : list of spot dicts (aligned with xs/ys)
+    xs, ys : 1-D arrays of centre coordinates in display units
+    frame  : ``'tth_chi'`` | ``'detector'``
+    nsigma : float  — ellipse scale in σ units
+    colors : list or str  — edge colours, one per spot or a single string
+    """
+    from matplotlib.patches import Ellipse
+
+    if frame == "tth_chi":
+        _maj = "sigma_major_ang_deg"
+        _min = "sigma_minor_ang_deg"
+        _ang = "ellipse_angle_ang_deg"
+    else:
+        _maj = "sigma_major_px"
+        _min = "sigma_minor_px"
+        _ang = "ellipse_angle_px_deg"
+
+    single_color = isinstance(colors, str)
+    for i, (s, x, y) in enumerate(zip(spots, xs, ys)):
+        sig_maj = s.get(_maj, 0.0)
+        if not sig_maj > 0.0:
+            continue
+        col = colors if single_color else colors[i]
+        ax.add_patch(Ellipse(
+            xy=(x, y),
+            width=2.0 * nsigma * sig_maj,
+            height=2.0 * nsigma * s.get(_min, sig_maj),
+            angle=s.get(_ang, 0.0),
+            linewidth=0.7,
+            edgecolor=col,
+            facecolor="none",
+            alpha=0.55,
+            zorder=2,
+        ))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2735,6 +2764,8 @@ def plot_tth_chi_overlay(
     spot_color: str | None = None,
     color_spots_by: str = "phase",
     i_thresh: float = 0.01,
+    show_divergence: bool = True,
+    divergence_nsigma: float = 2.0,
     figsize=(10, 7),
     out_path: str | None = None,
 ):
@@ -2909,6 +2940,9 @@ def plot_tth_chi_overlay(
 
         ax.scatter(xs, ys, c=colors, s=spot_size, marker=spot_marker,
                    linewidths=0.9, zorder=4, label="simulated spots")
+        if show_divergence:
+            _draw_divergence_ellipses(ax, spots, xs, ys, frame,
+                                      divergence_nsigma, colors)
 
         # Hover tooltip — pass axes coordinates (tth/chi or xcam/ycam)
         _attach_hover_tooltip(fig, ax, spots, xs, ys)
@@ -2967,6 +3001,8 @@ def plot_laue_comparison(
     spot_color=None,
     color_spots_by: str = "phase",
     i_thresh: float = 0.01,
+    show_divergence: bool = True,
+    divergence_nsigma: float = 2.0,
     figsize=(18, 7),
     out_path: str | None = None,
 ):
@@ -3187,11 +3223,15 @@ def plot_laue_comparison(
     # ── Draw Bragg spots on both panels (always visible) ─────────────────────
     xb, yb, sb = _spot_coords(spots_bragg)
     if sb:
+        cb = _colors(sb)
         for _ax in (ax_exp, ax_sim):
             _ax.scatter(
-                xb, yb, c=_colors(sb),
+                xb, yb, c=cb,
                 s=spot_size, marker=spot_marker, linewidths=0.9, zorder=4,
             )
+            if show_divergence:
+                _draw_divergence_ellipses(_ax, sb, xb, yb, frame,
+                                          divergence_nsigma, cb)
         _attach_hover_tooltip(fig, ax_exp, sb, xb, yb)
         _attach_hover_tooltip(fig, ax_sim, sb, xb, yb)
 
@@ -3199,16 +3239,21 @@ def plot_laue_comparison(
     xs, ys, ss = _spot_coords(spots_sat)
     sc_sat_exp = sc_sat_sim = None
     if ss:
+        cs = _colors(ss)
         sc_sat_exp = ax_exp.scatter(
-            xs, ys, c=_colors(ss),
+            xs, ys, c=cs,
             s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
             zorder=3, alpha=0.75,
         )
         sc_sat_sim = ax_sim.scatter(
-            xs, ys, c=_colors(ss),
+            xs, ys, c=cs,
             s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
             zorder=3, alpha=0.75,
         )
+        if show_divergence:
+            for _ax in (ax_exp, ax_sim):
+                _draw_divergence_ellipses(_ax, ss, xs, ys, frame,
+                                          divergence_nsigma, cs)
         _attach_hover_tooltip(fig, ax_exp, ss, xs, ys)
         _attach_hover_tooltip(fig, ax_sim, ss, xs, ys)
 

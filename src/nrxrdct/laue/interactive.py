@@ -237,16 +237,19 @@ def interactive_orientation(
     #   row 0   : detector plot (left) + info text (right)
     #   rows 1-3: crystal-axis sliders ([100], [010], [001])
     #   row 4   : buttons (Reset / Set as U₀ / Accept)
-    #   row 5   : "Center at hkl" text-boxes + button
+    #   "Center at hkl" preset buttons are rendered as ipywidgets below the figure
     fig = plt.figure(figsize=figsize, facecolor=_BG)
-    fig.canvas.manager.set_window_title("Laue — interactive orientation")
+    try:
+        fig.canvas.manager.set_window_title("Laue — interactive orientation")
+    except Exception:
+        pass
 
     gs = gridspec.GridSpec(
-        6, 2,
+        5, 2,
         figure=fig,
         left=0.05, right=0.98, bottom=0.03, top=0.96,
         hspace=0.12, wspace=0.06,
-        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075, 0.075],
+        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075],
         width_ratios=[2.6, 1.0],
     )
 
@@ -256,7 +259,6 @@ def interactive_orientation(
     ax_sb   = fig.add_subplot(gs[2, 0])
     ax_sc   = fig.add_subplot(gs[3, 0])
     ax_ph   = fig.add_subplot(gs[4, 0])
-    ax_ph2  = fig.add_subplot(gs[5, 0])
     gs_info_bottom = fig.add_subplot(gs[1:, 1])
     gs_info_bottom.set_visible(False)
 
@@ -355,9 +357,10 @@ def interactive_orientation(
         btn.label.set_color(clr)
         btn.label.set_fontsize(9)
 
-    # ── "Center at hkl" preset buttons ───────────────────────────────────────
-    # Each button centers the crystal so that the corresponding reflection
-    # points toward the detector centre (minimum-arc rotation of U0).
+    # ── "Center at hkl" preset planes ────────────────────────────────────────
+    # Buttons are rendered as ipywidgets below the figure (not in the mpl
+    # canvas) so they work reliably in remote Jupyter environments where
+    # matplotlib canvas click events can be silently dropped.
     # Planes: cubic axes + cubic diagonal + hexagonal first- and second-order
     # prismatic planes in 3-index notation.
     _presets: list[tuple[str, tuple[int, int, int]]] = [
@@ -368,23 +371,6 @@ def interactive_orientation(
         ("-110", (-1, 1,  0)),   # hex first-order prism  {10-10}
         ("110",  (1,  1,  0)),   # hex second-order prism {11-20}
     ]
-
-    bb2 = ax_ph2.get_position()
-    ax_ph2.remove()
-    n_pre = len(_presets)
-    gap   = 0.006
-    bw_pre = (bb2.width - gap * (n_pre - 1)) / n_pre
-
-    _center_buttons: list[Button] = []
-    for i, (lbl, _) in enumerate(_presets):
-        ax_bi = fig.add_axes([
-            bb2.x0 + i * (bw_pre + gap),
-            bb2.y0, bw_pre, bb2.height,
-        ])
-        btn_i = Button(ax_bi, lbl, color="#1a2535", hovercolor="#243045")
-        btn_i.label.set_color(_ACCENT)
-        btn_i.label.set_fontsize(8)
-        _center_buttons.append(btn_i)
 
     # ── Update ────────────────────────────────────────────────────────────────
     def _do_update() -> None:
@@ -551,10 +537,34 @@ def interactive_orientation(
     btn_reset.on_clicked(_cb_reset)
     btn_setu0.on_clicked(_cb_setu0)
     btn_accept.on_clicked(_cb_accept)
-    for _btn, (_, _hkl) in zip(_center_buttons, _presets):
-        _btn.on_clicked(_make_center_cb(_hkl))
 
     _do_update()
     plt.show()
+
+    # ── ipywidgets "Center at hkl" row (displayed below the figure) ──────────
+    # Uses Jupyter comms rather than canvas mouse events, so it works reliably
+    # on remote Jupyter-Slurm setups where mpl Button clicks can be dropped.
+    try:
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+
+        _ipy_btns = []
+        for _lbl, _hkl in _presets:
+            _b = ipw.Button(
+                description=_lbl,
+                layout=ipw.Layout(width="70px", height="28px"),
+                style={"button_color": "#1a2535", "font_size": "12px"},
+            )
+            _b.on_click(_make_center_cb(_hkl))
+            _ipy_btns.append(_b)
+
+        _ipy_display(ipw.HBox(
+            [ipw.Label("Center at hkl:", layout=ipw.Layout(width="110px",
+                                                            align_self="center"))]
+            + _ipy_btns,
+            layout=ipw.Layout(margin="4px 0 0 0"),
+        ))
+    except ImportError:
+        pass  # not in Jupyter or ipywidgets not installed
 
     return state

@@ -62,7 +62,6 @@ _GRAY  = "#4a5070"
 _OBS   = "#ffffff"
 _SIM   = "#ff6b35"
 _MATCH = "#44dd66"
-_MISS  = "#dd4444"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -337,23 +336,34 @@ def interactive_orientation(
         n_matched = 0
         rms_px    = float("nan")
 
+        # Reset all observed markers to white
+        sc_obs.set_edgecolors([_OBS] * len(obs_use))
+
         if len(sim_xy) > 0 and len(obs_use) > 0:
             row_ind, col_ind, dist_px = _match_spots(obs_use, sim_xy, max_match_px)
             ok_mask   = dist_px < max_match_px
             n_matched = int(ok_mask.sum())
             if n_matched > 0:
                 rms_px = float(np.sqrt((dist_px[ok_mask] ** 2).mean()))
-            for r, c, d, ok in zip(row_ind, col_ind, dist_px, ok_mask):
-                _lines.append(ax_det.plot(
-                    [obs_use[r, 0], sim_xy[c, 0]],
-                    [obs_use[r, 1], sim_xy[c, 1]],
-                    color=_MATCH if ok else _MISS,
-                    lw=0.6, alpha=0.55, zorder=3,
-                )[0])
+
+            # Green edge on matched observed spots; green line to simulated partner.
+            # Unmatched pairs get no line — long red lines across the detector are
+            # misleading when obs > sim (unmatched obs have no simulated counterpart).
+            edge_colors = [_OBS] * len(obs_use)
+            for r, c, ok in zip(row_ind, col_ind, ok_mask):
+                if ok:
+                    edge_colors[r] = _MATCH
+                    _lines.append(ax_det.plot(
+                        [obs_use[r, 0], sim_xy[c, 0]],
+                        [obs_use[r, 1], sim_xy[c, 1]],
+                        color=_MATCH, lw=0.7, alpha=0.6, zorder=3,
+                    )[0])
+            sc_obs.set_edgecolors(edge_colors)
 
         euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
-        rate  = n_matched / max(len(obs_use), 1)
+        # Rate relative to the smaller of obs/sim — fairer when top_n_sim < n_obs
+        rate  = n_matched / max(min(len(obs_use), len(sim_xy)), 1)
 
         _info_txt.set_text(
             f"Orientation\n"

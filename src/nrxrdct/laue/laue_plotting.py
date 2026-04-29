@@ -1742,6 +1742,8 @@ def plot_measured_vs_simulated(
     E_min_eV: float = 5_000,
     E_max_eV: float = 27_000,
     figsize: tuple = (14, 6),
+    show_arrows: bool = True,
+    max_match_dist: float = 50.0,
     out_path: str | None = None,
 ):
     """
@@ -1778,6 +1780,17 @@ def plot_measured_vs_simulated(
 
     figsize : tuple of (float, float)
         Figure size in inches passed to ``plt.subplots``.  Default ``(14, 6)``.
+
+    show_arrows : bool
+        When ``True`` (default), draw displacement arrows on the simulated panel
+        from each simulated spot to its nearest measured spot.  Arrows are
+        coloured by displacement distance; a mean-displacement annotation and
+        colour bar are added automatically.
+
+    max_match_dist : float
+        Maximum nearest-neighbour distance in pixels below which a simulated
+        spot is matched to a measured spot and an arrow is drawn.
+        Default ``50.0`` pixels.
 
     out_path : str or None
         Path to save the PNG figure.  ``None`` (default) → do not save.
@@ -1897,6 +1910,57 @@ def plot_measured_vs_simulated(
             )
 
     ax_s.set_title("Simulated", color=FG, fontsize=10, pad=6)
+
+    # ── displacement arrows: simulated → nearest measured ────────────────────
+    if show_arrows and peaklist.shape[0] > 0 and valid:
+        sim_xy = np.array([[float(s["pix"][0]), float(s["pix"][1])] for s in valid])
+        meas_xy = peaklist[:, :2]  # (N_meas, 2): col, row
+
+        # Brute-force nearest-neighbour
+        diff = sim_xy[:, None, :] - meas_xy[None, :, :]  # (N_sim, N_meas, 2)
+        dist_mat = np.linalg.norm(diff, axis=-1)          # (N_sim, N_meas)
+        nn_idx = np.argmin(dist_mat, axis=1)               # (N_sim,)
+        nn_dist = dist_mat[np.arange(len(sim_xy)), nn_idx] # (N_sim,)
+
+        mask = nn_dist <= max_match_dist
+        if mask.any():
+            x0 = sim_xy[mask, 0]
+            y0 = sim_xy[mask, 1]
+            dx = meas_xy[nn_idx[mask], 0] - x0   # measured − simulated
+            dy = meas_xy[nn_idx[mask], 1] - y0
+            dists = nn_dist[mask]
+
+            vmax_cb = float(np.percentile(dists, 95)) or 1.0
+            dist_norm = mcolors.Normalize(vmin=0, vmax=vmax_cb)
+            qv = ax_s.quiver(
+                x0, y0, dx, dy, dists,
+                cmap="RdYlGn_r",
+                norm=dist_norm,
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                units="dots",
+                width=2.0,
+                headwidth=5,
+                headlength=6,
+                alpha=0.9,
+                zorder=5,
+            )
+            cb_q = fig.colorbar(qv, ax=ax_s, pad=0.14, fraction=0.035, aspect=30)
+            cb_q.set_label("Displacement  (pixel)", color="#7788aa", fontsize=7)
+            cb_q.ax.tick_params(colors="#7788aa", labelsize=6)
+            cb_q.outline.set_edgecolor("#1a1f2e")
+
+            mean_d = dists.mean()
+            ax_s.text(
+                0.02, 0.02,
+                f"mean Δ = {mean_d:.2f} px  (n={mask.sum()})",
+                transform=ax_s.transAxes,
+                color="#aaddff",
+                fontsize=7,
+                va="bottom",
+                zorder=6,
+            )
 
     # ── axis limits ──────────────────────────────────────────────────────────
     if camera is not None:

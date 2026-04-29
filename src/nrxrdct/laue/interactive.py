@@ -61,7 +61,8 @@ _OBS   = "#ffffff"   # observed spots
 _SIM   = "#ff6b35"   # simulated spots
 _MATCH = "#44dd66"   # matched pair lines
 _MISS  = "#dd4444"   # unmatched pair lines
-_ACCENT = "#4fc3f7"
+_ACCENT  = "#4fc3f7"   # lab sliders
+_CRYSTAL = "#ffb347"   # crystal-axis sliders
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +129,8 @@ def interactive_orientation(
     top_n_sim: int = 80,
     rot_range_deg: float = 20.0,
     z_rot_range_deg: float = 180.0,
-    figsize: tuple = (14, 9),
+    crystal_rot_range_deg: float = 20.0,
+    figsize: tuple = (14, 11),
 ) -> OrientationState:
     """
     Open an interactive window to manually set the starting orientation U0.
@@ -157,12 +159,17 @@ def interactive_orientation(
     top_n_sim : int
         Maximum number of simulated spots displayed.
     rot_range_deg : float
-        Half-range of the X and Y rotation sliders (degrees).
+        Half-range of the lab X and Y rotation sliders (degrees).
     z_rot_range_deg : float
-        Half-range of the Z (in-plane) rotation slider (degrees).
+        Half-range of the lab Z (in-plane) rotation slider (degrees).
         Defaults to 180° so the full azimuthal range is reachable in one
         drag, which is important for non-cubic crystals where the correct
         orientation can be anywhere in 0–360°.
+    crystal_rot_range_deg : float
+        Half-range of the three crystal-axis rotation sliders (degrees).
+        The [001] crystal slider (c-axis) automatically inherits
+        ``z_rot_range_deg`` so the full in-plane range is available in
+        the crystal frame too.
 
     Returns
     -------
@@ -237,17 +244,18 @@ def interactive_orientation(
     fig = plt.figure(figsize=figsize, facecolor=_BG)
     fig.canvas.manager.set_window_title("Laue — interactive orientation")
 
-    # 6 rows × 2 cols
-    #   row 0 : detector plot (left) + info text (right)
-    #   rows 1-3 : sliders (left only)
-    #   row 4 : buttons (Reset / Set as U₀ / Accept)
-    #   row 5 : "center at hkl" text-boxes + button
+    # 9 rows × 2 cols
+    #   row 0   : detector plot (left) + info text (right)
+    #   rows 1-3: lab-frame sliders  (x=beam, y=horiz, z=vert)
+    #   rows 4-6: crystal-axis sliders ([100], [010], [001])
+    #   row 7   : buttons (Reset / Set as U₀ / Accept)
+    #   row 8   : "center at hkl" text-boxes + button
     gs = gridspec.GridSpec(
-        6, 2,
+        9, 2,
         figure=fig,
         left=0.05, right=0.98, bottom=0.03, top=0.96,
-        hspace=0.12, wspace=0.06,
-        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075, 0.075],
+        hspace=0.10, wspace=0.06,
+        height_ratios=[1.0, 0.045, 0.045, 0.045, 0.045, 0.045, 0.045, 0.075, 0.075],
         width_ratios=[2.6, 1.0],
     )
 
@@ -256,9 +264,12 @@ def interactive_orientation(
     ax_sx   = fig.add_subplot(gs[1, 0])
     ax_sy   = fig.add_subplot(gs[2, 0])
     ax_sz   = fig.add_subplot(gs[3, 0])
+    ax_sa   = fig.add_subplot(gs[4, 0])
+    ax_sb   = fig.add_subplot(gs[5, 0])
+    ax_sc   = fig.add_subplot(gs[6, 0])
     # Buttons/textboxes are placed manually inside placeholder bounding boxes.
-    ax_ph   = fig.add_subplot(gs[4, 0])   # placeholder for button row
-    ax_ph2  = fig.add_subplot(gs[5, 0])   # placeholder for hkl row
+    ax_ph   = fig.add_subplot(gs[7, 0])   # placeholder for button row
+    ax_ph2  = fig.add_subplot(gs[8, 0])   # placeholder for hkl row
     gs_info_bottom = fig.add_subplot(gs[1:, 1])
     gs_info_bottom.set_visible(False)
 
@@ -341,9 +352,9 @@ def interactive_orientation(
         track_color=_BG,
     )
 
-    s_x = Slider(ax_sx, "Rot X  (beam)",  **_slider_kw)
-    s_y = Slider(ax_sy, "Rot Y  (horiz)", **_slider_kw)
-    s_z = Slider(ax_sz, "Rot Z  (vert)",
+    s_x = Slider(ax_sx, "Lab  x  (beam)",  **_slider_kw)
+    s_y = Slider(ax_sy, "Lab  y  (horiz)", **_slider_kw)
+    s_z = Slider(ax_sz, "Lab  z  (vert)",
                  valmin=-z_rot_range_deg, valmax=+z_rot_range_deg,
                  valinit=0.0, color=_ACCENT, track_color=_BG)
 
@@ -351,6 +362,30 @@ def interactive_orientation(
         s.label.set_color(_FG)
         s.label.set_fontsize(9)
         s.valtext.set_color(_ACCENT)
+        s.valtext.set_fontsize(8)
+        for ax_s in (s.ax,):
+            ax_s.set_facecolor(_BG2)
+            for sp in ax_s.spines.values():
+                sp.set_edgecolor(_GRAY)
+
+    # ── Crystal-axis sliders ──────────────────────────────────────────────────
+    _cry_kw = dict(
+        valmin=-crystal_rot_range_deg,
+        valmax=+crystal_rot_range_deg,
+        valinit=0.0,
+        color=_CRYSTAL,
+        track_color=_BG,
+    )
+    s_ca = Slider(ax_sa, "Cry [100]  (a)", **_cry_kw)
+    s_cb = Slider(ax_sb, "Cry [010]  (b)", **_cry_kw)
+    s_cc = Slider(ax_sc, "Cry [001]  (c)",
+                  valmin=-z_rot_range_deg, valmax=+z_rot_range_deg,
+                  valinit=0.0, color=_CRYSTAL, track_color=_BG)
+
+    for s in (s_ca, s_cb, s_cc):
+        s.label.set_color(_FG)
+        s.label.set_fontsize(9)
+        s.valtext.set_color(_CRYSTAL)
         s.valtext.set_fontsize(8)
         for ax_s in (s.ax,):
             ax_s.set_facecolor(_BG2)
@@ -412,11 +447,30 @@ def interactive_orientation(
 
     # ── Update ────────────────────────────────────────────────────────────────
     def _do_update() -> None:
-        rv  = np.radians([s_x.val, s_y.val, s_z.val])
-        R   = Rotation.from_euler("xyz", rv).as_matrix()
-        U   = R @ state.U0
-        state.U      = U
-        state.rotvec = rv
+        # 1. Lab-frame rotation (applied in fixed lab frame)
+        rv_lab = np.radians([s_x.val, s_y.val, s_z.val])
+        U = Rotation.from_euler("xyz", rv_lab).as_matrix() @ state.U0
+
+        # 2. Crystal-axis rotations (axes expressed in crystal frame of U,
+        #    then mapped to lab frame — same logic as rotate_U_about_crystal_axis)
+        for angle_deg, cry_ax in (
+            (s_ca.val, np.array([1., 0., 0.])),
+            (s_cb.val, np.array([0., 1., 0.])),
+            (s_cc.val, np.array([0., 0., 1.])),
+        ):
+            if angle_deg == 0.0:
+                continue
+            ax_lab = U @ cry_ax          # map crystal axis to lab frame
+            ax_lab /= np.linalg.norm(ax_lab)
+            U = Rotation.from_rotvec(
+                np.radians(angle_deg) * ax_lab
+            ).as_matrix() @ U
+
+        state.U = U
+
+        # Total rotation magnitude from U0 (accounts for both slider groups)
+        dR  = U @ np.linalg.inv(state.U0)
+        dw  = float(np.degrees(Rotation.from_matrix(dR).magnitude()))
 
         # Simulate
         spots  = _simulate(U)
@@ -452,7 +506,6 @@ def interactive_orientation(
 
         # Info text
         euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
-        dw    = float(np.degrees(np.linalg.norm(rv)))
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
         rate  = n_matched / max(len(obs_use), 1)
 
@@ -482,17 +535,19 @@ def interactive_orientation(
         _do_update()
 
     # ── Button callbacks ──────────────────────────────────────────────────────
+    _all_sliders = (s_x, s_y, s_z, s_ca, s_cb, s_cc)
+
     def _cb_reset(event) -> None:
         """Restore the very first U0 and zero all sliders."""
         state.U0 = state._U0_orig.copy()
-        for s in (s_x, s_y, s_z):
-            s.reset()          # triggers on_changed → _do_update
+        for s in _all_sliders:
+            s.reset()
 
     def _cb_setu0(event) -> None:
-        """Bake current slider angles into U0, then zero the sliders."""
+        """Bake current U (lab + crystal deltas) into U0, then zero all sliders."""
         state.U0 = state.U.copy()
-        for s in (s_x, s_y, s_z):
-            s.reset()          # triggers on_changed → _do_update
+        for s in _all_sliders:
+            s.reset()
 
     def _cb_accept(event) -> None:
         state.accepted = True
@@ -514,14 +569,31 @@ def interactive_orientation(
             "fit_orientation(crystal, camera, obs_xy, state.U)"
         )
 
+    # ── Track TextBox values in a mutable dict ────────────────────────────────
+    # In Jupyter (ipympl) tb.text is only committed after Enter or focus-loss.
+    # Tracking via callbacks makes the button work even when clicked directly
+    # after typing without pressing Enter.
+    _hkl: dict = {"h": 0, "k": 0, "l": 0}
+
+    def _make_hkl_cb(key):
+        def _cb(text):
+            try:
+                _hkl[key] = int(float(text))
+            except ValueError:
+                pass
+        return _cb
+
+    for _tb, _key in ((tb_h, "h"), (tb_k, "k"), (tb_l, "l")):
+        _cb_fn = _make_hkl_cb(_key)
+        _tb.on_submit(_cb_fn)
+        try:
+            _tb.on_text_change(_cb_fn)   # real-time; not available in all versions
+        except AttributeError:
+            pass
+
     # ── "Center at hkl" callback ──────────────────────────────────────────────
     def _cb_center_hkl(_event) -> None:
-        try:
-            h = int(float(tb_h.text))
-            k = int(float(tb_k.text))
-            l = int(float(tb_l.text))
-        except ValueError:
-            return
+        h, k, l = _hkl["h"], _hkl["k"], _hkl["l"]
         if h == 0 and k == 0 and l == 0:
             return
 
@@ -568,12 +640,11 @@ def interactive_orientation(
 
         # Bake result into U0 and reset sliders so they start from zero again
         state.U0 = R_ctr @ state.U
-        for s in (s_x, s_y, s_z):
+        for s in _all_sliders:
             s.reset()   # triggers _on_slider → _do_update
 
-    s_x.on_changed(_on_slider)
-    s_y.on_changed(_on_slider)
-    s_z.on_changed(_on_slider)
+    for _s in _all_sliders:
+        _s.on_changed(_on_slider)
     btn_reset.on_clicked(_cb_reset)
     btn_setu0.on_clicked(_cb_setu0)
     btn_accept.on_clicked(_cb_accept)

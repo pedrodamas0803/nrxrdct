@@ -38,7 +38,7 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.widgets import Slider, Button
+from matplotlib.widgets import Slider, Button, TextBox
 from scipy.spatial.transform import Rotation
 
 from .simulation import (
@@ -127,6 +127,7 @@ def interactive_orientation(
     top_n_obs: int | None = None,
     top_n_sim: int = 80,
     rot_range_deg: float = 20.0,
+    z_rot_range_deg: float = 180.0,
     figsize: tuple = (14, 9),
 ) -> OrientationState:
     """
@@ -156,7 +157,12 @@ def interactive_orientation(
     top_n_sim : int
         Maximum number of simulated spots displayed.
     rot_range_deg : float
-        Half-range of each rotation slider (degrees).
+        Half-range of the X and Y rotation sliders (degrees).
+    z_rot_range_deg : float
+        Half-range of the Z (in-plane) rotation slider (degrees).
+        Defaults to 180° so the full azimuthal range is reachable in one
+        drag, which is important for non-cubic crystals where the correct
+        orientation can be anywhere in 0–360°.
 
     Returns
     -------
@@ -231,16 +237,17 @@ def interactive_orientation(
     fig = plt.figure(figsize=figsize, facecolor=_BG)
     fig.canvas.manager.set_window_title("Laue — interactive orientation")
 
-    # 5 rows × 2 cols
+    # 6 rows × 2 cols
     #   row 0 : detector plot (left) + info text (right)
     #   rows 1-3 : sliders (left only)
-    #   row 4 : buttons (left only)
+    #   row 4 : buttons (Reset / Set as U₀ / Accept)
+    #   row 5 : "center at hkl" text-boxes + button
     gs = gridspec.GridSpec(
-        5, 2,
+        6, 2,
         figure=fig,
         left=0.05, right=0.98, bottom=0.03, top=0.96,
         hspace=0.12, wspace=0.06,
-        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075],
+        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075, 0.075],
         width_ratios=[2.6, 1.0],
     )
 
@@ -249,8 +256,9 @@ def interactive_orientation(
     ax_sx   = fig.add_subplot(gs[1, 0])
     ax_sy   = fig.add_subplot(gs[2, 0])
     ax_sz   = fig.add_subplot(gs[3, 0])
-    # Buttons are placed manually inside the gs[4,0] bounding box.
-    ax_ph   = fig.add_subplot(gs[4, 0])   # placeholder — will be removed
+    # Buttons/textboxes are placed manually inside placeholder bounding boxes.
+    ax_ph   = fig.add_subplot(gs[4, 0])   # placeholder for button row
+    ax_ph2  = fig.add_subplot(gs[5, 0])   # placeholder for hkl row
     gs_info_bottom = fig.add_subplot(gs[1:, 1])
     gs_info_bottom.set_visible(False)
 
@@ -333,9 +341,11 @@ def interactive_orientation(
         track_color=_BG,
     )
 
-    s_x = Slider(ax_sx, "Rot X  (beam)", **_slider_kw)
+    s_x = Slider(ax_sx, "Rot X  (beam)",  **_slider_kw)
     s_y = Slider(ax_sy, "Rot Y  (horiz)", **_slider_kw)
-    s_z = Slider(ax_sz, "Rot Z  (vert)", **_slider_kw)
+    s_z = Slider(ax_sz, "Rot Z  (vert)",
+                 valmin=-z_rot_range_deg, valmax=+z_rot_range_deg,
+                 valinit=0.0, color=_ACCENT, track_color=_BG)
 
     for s in (s_x, s_y, s_z):
         s.label.set_color(_FG)
@@ -367,6 +377,38 @@ def interactive_orientation(
     for btn, clr in ((btn_reset, _FG), (btn_setu0, _ACCENT), (btn_accept, _MATCH)):
         btn.label.set_color(clr)
         btn.label.set_fontsize(9)
+
+    # ── "Center at hkl" row ───────────────────────────────────────────────────
+    bb2  = ax_ph2.get_position()
+    ax_ph2.remove()
+
+    # layout: [label gap][h box][k box][l box][  Center button  ]
+    tw   = bb2.width * 0.10   # width of each index text box
+    gap  = 0.006
+    bw_c = bb2.width - 3 * tw - 4 * gap   # remaining width for the button
+    bh2  = bb2.height
+    by2  = bb2.y0
+    tx0  = bb2.x0
+
+    ax_tb_h  = fig.add_axes([tx0,                    by2, tw,   bh2])
+    ax_tb_k  = fig.add_axes([tx0 +   tw + gap,       by2, tw,   bh2])
+    ax_tb_l  = fig.add_axes([tx0 + 2*tw + 2*gap,     by2, tw,   bh2])
+    ax_b_ctr = fig.add_axes([tx0 + 3*tw + 3*gap,     by2, bw_c, bh2])
+
+    _tb_kw = dict(color=_BG2, hovercolor="#1a1f35")
+    tb_h = TextBox(ax_tb_h, "h", initial="0", **_tb_kw)
+    tb_k = TextBox(ax_tb_k, "k", initial="0", **_tb_kw)
+    tb_l = TextBox(ax_tb_l, "l", initial="0", **_tb_kw)
+    btn_center = Button(ax_b_ctr, "Center at hkl", color="#1a2535",
+                        hovercolor="#243045")
+
+    for tb in (tb_h, tb_k, tb_l):
+        tb.label.set_color(_FG)
+        tb.label.set_fontsize(9)
+        tb.text_disp.set_color(_ACCENT)
+        tb.text_disp.set_fontsize(9)
+    btn_center.label.set_color(_ACCENT)
+    btn_center.label.set_fontsize(9)
 
     # ── Update ────────────────────────────────────────────────────────────────
     def _do_update() -> None:
@@ -472,12 +514,70 @@ def interactive_orientation(
             "fit_orientation(crystal, camera, obs_xy, state.U)"
         )
 
+    # ── "Center at hkl" callback ──────────────────────────────────────────────
+    def _cb_center_hkl(_event) -> None:
+        try:
+            h = int(float(tb_h.text))
+            k = int(float(tb_k.text))
+            l = int(float(tb_l.text))
+        except ValueError:
+            return
+        if h == 0 and k == 0 and l == 0:
+            return
+
+        _xtal = crystal.all_layers[0].crystal if _is_stack else crystal
+        G_cry = _xtal.Q(h, k, l)
+        g_norm = np.linalg.norm(G_cry)
+        if g_norm < 1e-12:
+            return
+        # Current G direction in lab frame (use state.U = U0 + slider delta)
+        G_lab = state.U @ (G_cry / g_norm)
+        G_lab /= np.linalg.norm(G_lab)
+
+        # Target: G_lab must be parallel to (d_hat − ki_hat) so that the
+        # diffracted beam points toward the detector centre.
+        # camera.IOlab is in LT2 frame (y // beam); convert to LT (x // beam):
+        #   x_LT = y_LT2,  y_LT = −x_LT2,  z_LT = z_LT2
+        IO_LT2 = camera.IOlab
+        IO_LT  = np.array([IO_LT2[1], -IO_LT2[0], IO_LT2[2]])
+        d_hat  = IO_LT / np.linalg.norm(IO_LT)
+        ki_hat = np.array([1.0, 0.0, 0.0])
+        target = d_hat - ki_hat
+        t_norm = np.linalg.norm(target)
+        if t_norm < 1e-12:
+            return
+        target_hat = target / t_norm
+
+        # Minimum-arc rotation: G_lab → target_hat
+        ax_r = np.cross(G_lab, target_hat)
+        sin_a = np.linalg.norm(ax_r)
+        cos_a = float(np.dot(G_lab, target_hat))
+        if sin_a < 1e-10:
+            R_ctr = np.eye(3) if cos_a > 0 else (
+                lambda v: Rotation.from_rotvec(np.pi * v).as_matrix()
+            )(
+                np.cross(G_lab, [0., 0., 1.]
+                         if abs(G_lab[2]) < 0.9 else [0., 1., 0.])
+                / np.linalg.norm(np.cross(G_lab, [0., 0., 1.]
+                                          if abs(G_lab[2]) < 0.9 else [0., 1., 0.]))
+            )
+        else:
+            R_ctr = Rotation.from_rotvec(
+                np.arctan2(sin_a, cos_a) * (ax_r / sin_a)
+            ).as_matrix()
+
+        # Bake result into U0 and reset sliders so they start from zero again
+        state.U0 = R_ctr @ state.U
+        for s in (s_x, s_y, s_z):
+            s.reset()   # triggers _on_slider → _do_update
+
     s_x.on_changed(_on_slider)
     s_y.on_changed(_on_slider)
     s_z.on_changed(_on_slider)
     btn_reset.on_clicked(_cb_reset)
     btn_setu0.on_clicked(_cb_setu0)
     btn_accept.on_clicked(_cb_accept)
+    btn_center.on_clicked(_cb_center_hkl)
 
     # Initial render
     _do_update()

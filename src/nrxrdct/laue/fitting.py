@@ -693,6 +693,8 @@ def fit_orientation(
     gtol: float = 1e-8,
     max_nfev: int = 500,
     geometry_only: bool = True,
+    z_scan_step_deg: float | None = None,
+    z_axis: np.ndarray | None = None,
     verbose: bool = False,
 ) -> OrientationFitResult:
     """
@@ -735,6 +737,24 @@ def fit_orientation(
     ftol, xtol, gtol : float      Convergence tolerances forwarded to
                                   ``least_squares``.
     max_nfev     : int            Maximum number of residual evaluations.
+    z_scan_step_deg : float or None
+                                  When not ``None``, perform a coarse grid
+                                  search over in-plane rotations before the
+                                  local refinement.  The starting orientation
+                                  ``U0`` is rotated around ``z_axis`` in steps
+                                  of ``z_scan_step_deg`` degrees from 0° to
+                                  360°.  The candidate with the lowest residual
+                                  cost is used as the starting point for
+                                  ``least_squares``.  Useful for non-cubic
+                                  crystals where Euler-angle initialisation may
+                                  land in the wrong basin.  Typical values:
+                                  10–30° for a fast scan, 2–5° for a fine one.
+    z_axis       : (3,) array or None
+                                  Unit vector (in the LaueTools lab frame) to
+                                  rotate around during the scan.  Defaults to
+                                  the lab Z axis ``[0, 0, 1]`` (vertical).
+                                  Pass the crystal c-axis direction (in the lab
+                                  frame) for a structure-aware scan.
     verbose      : bool           Print a one-line summary after convergence.
 
     Returns
@@ -745,7 +765,8 @@ def fit_orientation(
 
             spots = simulate_laue(crystal, result.U, camera, ...)
     """
-    U0 = np.asarray(U0, dtype=float)
+    U0_input = np.asarray(U0, dtype=float)   # preserve original for result.U0
+    U0 = U0_input.copy()
     obs_use = np.asarray(obs_xy, dtype=float)
     if top_n_obs is not None:
         obs_use = obs_use[:top_n_obs]
@@ -760,6 +781,44 @@ def fit_orientation(
         precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
         if geometry_only else None
     )
+
+    # ── coarse Z-rotation scan (optional) ────────────────────────────────────
+    if z_scan_step_deg is not None:
+        _ax = np.asarray(z_axis if z_axis is not None else [0.0, 0.0, 1.0],
+                         dtype=float)
+        _ax = _ax / np.linalg.norm(_ax)
+        angles_deg = np.arange(0.0, 360.0, float(z_scan_step_deg))
+
+        _scan_kwargs = dict(
+            crystal=crystal, camera=camera, obs_xy=obs_use,
+            E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs,
+            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
+            geometry_only=False, allowed_hkl=_allowed,
+        )
+
+        best_cost = np.inf
+        best_U0 = U0.copy()
+        best_angle = 0.0
+
+        for alpha in angles_deg:
+            R_z = Rotation.from_rotvec(np.radians(alpha) * _ax).as_matrix()
+            U_trial = R_z @ U0
+            res = laue_residuals(np.zeros(3), U0=U_trial, **_scan_kwargs)
+            cost = float(np.dot(res, res))
+            if cost < best_cost:
+                best_cost = cost
+                best_U0 = U_trial.copy()
+                best_angle = alpha
+
+        if verbose:
+            print(
+                f"  Z-scan ({len(angles_deg)} steps, Δ={z_scan_step_deg}°): "
+                f"best angle = {best_angle:.1f}°, "
+                f"cost = {best_cost:.2f}"
+            )
+        U0 = best_U0
 
     fun = partial(
         laue_residuals,
@@ -790,7 +849,7 @@ def fit_orientation(
     n_sim = len(_extract_sim_xy(final_spots))
 
     result = OrientationFitResult(
-        U=U_final, U0=U0.copy(), rotvec=opt.x.copy(),
+        U=U_final, U0=U0_input, rotvec=opt.x.copy(),
         cost=float(opt.cost), rms_px=rms_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),

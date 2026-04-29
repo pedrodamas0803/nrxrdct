@@ -1,7 +1,7 @@
 """
 Interactive Laue orientation tool
 ===================================
-Provides a matplotlib-based GUI for manually setting the starting
+Provides an ipywidgets-based GUI for manually setting the starting
 orientation U0 by rotating simulated spots to match the observed
 (segmented) spots.
 
@@ -28,22 +28,20 @@ Typical workflow
 
 Backend note
 ------------
-Requires an interactive matplotlib backend.  In a Jupyter notebook run::
+Requires ``%matplotlib widget`` (ipympl) and ``ipywidgets`` in Jupyter::
 
-    %matplotlib widget     # (ipympl) — recommended
-    # or
-    %matplotlib qt         # Qt backend for a separate window
+    %matplotlib widget
 
-In a plain Python script any GUI backend works (Qt, Tk, …).
+All interactive controls (sliders, buttons) are rendered as native
+ipywidgets so they work reliably on remote Jupyter-Slurm servers where
+matplotlib canvas click events can be silently dropped.
 """
 
 from __future__ import annotations
 
-import threading
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.widgets import Slider, Button
 from scipy.spatial.transform import Rotation
 
 from .simulation import (
@@ -56,17 +54,15 @@ from .simulation import (
 )
 from .fitting import _extract_sim_xy, _match_spots
 
-# ── colour palette ────────────────────────────────────────────────────────────
-_BG      = "#080c14"
-_BG2     = "#0d1220"
-_FG      = "#ccccee"
-_GRAY    = "#4a5070"
-_OBS     = "#ffffff"
-_SIM     = "#ff6b35"
-_MATCH   = "#44dd66"
-_MISS    = "#dd4444"
-_ACCENT  = "#4fc3f7"
-_CRYSTAL = "#ffb347"   # crystal-axis sliders
+# ── colour palette (figure only) ─────────────────────────────────────────────
+_BG    = "#080c14"
+_BG2   = "#0d1220"
+_FG    = "#ccccee"
+_GRAY  = "#4a5070"
+_OBS   = "#ffffff"
+_SIM   = "#ff6b35"
+_MATCH = "#44dd66"
+_MISS  = "#dd4444"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -133,15 +129,14 @@ def interactive_orientation(
     top_n_sim: int = 80,
     rot_range_deg: float = 20.0,
     c_rot_range_deg: float = 180.0,
-    figsize: tuple = (14, 9),
+    figsize: tuple = (14, 6),
 ) -> OrientationState:
     """
-    Open an interactive window to manually align the crystal orientation.
+    Open an interactive widget to manually align the crystal orientation.
 
-    Three sliders rotate the crystal around its own [100], [010], and [001]
-    axes (crystal frame).  This is the natural parameterisation for non-cubic
-    crystals: tilts around the a/b axes change the sample normal direction
-    while the [001] slider sweeps the full in-plane azimuth.
+    The matplotlib figure shows the detector image; all controls (sliders,
+    buttons) are rendered as ipywidgets below the figure so they work on
+    remote Jupyter-Slurm servers.
 
     Parameters
     ----------
@@ -157,33 +152,17 @@ def interactive_orientation(
         Half-range of the [100] and [010] crystal-axis sliders (degrees).
     c_rot_range_deg : float
         Half-range of the [001] crystal-axis slider (degrees).  Defaults to
-        180° so the full azimuthal range is accessible in one drag — important
-        for non-cubic crystals where the correct in-plane angle can be anywhere
-        in 0–360°.
+        180° so the full azimuthal range is accessible in one drag.
 
     Returns
     -------
     OrientationState
         ``state.U``  — final orientation (pass to :func:`fit_orientation`).
         ``state.accepted`` — True if "✓ Accept" was clicked.
-
-    Controls
-    --------
-    Cry [100] / [010]
-        Tilt the crystal around its a/b axes.
-    Cry [001]
-        Rotate in-plane around the c-axis.
-    Set as U₀
-        Bake current slider values into U₀ and reset to zero — use this
-        iteratively for large rotations.
-    Reset
-        Restore the original U₀ and zero all sliders.
-    Center at hkl
-        Type Miller indices h k l and click to rotate the crystal so that
-        the hkl reflection points toward the detector centre.
-    ✓ Accept
-        Print the final U matrix and Euler angles; set ``state.accepted=True``.
     """
+    import ipywidgets as ipw
+    from IPython.display import display as _ipy_display
+
     from .layers import LayeredCrystal as _LC
 
     # ── Stack detection ───────────────────────────────────────────────────────
@@ -232,12 +211,7 @@ def interactive_orientation(
                 hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
             )
 
-    # ── Figure layout ─────────────────────────────────────────────────────────
-    # 6 rows × 2 cols
-    #   row 0   : detector plot (left) + info text (right)
-    #   rows 1-3: crystal-axis sliders ([100], [010], [001])
-    #   row 4   : buttons (Reset / Set as U₀ / Accept)
-    #   "Center at hkl" preset buttons are rendered as ipywidgets below the figure
+    # ── Figure: detector + info panel only (no widget rows) ──────────────────
     fig = plt.figure(figsize=figsize, facecolor=_BG)
     try:
         fig.canvas.manager.set_window_title("Laue — interactive orientation")
@@ -245,24 +219,16 @@ def interactive_orientation(
         pass
 
     gs = gridspec.GridSpec(
-        5, 2,
+        1, 2,
         figure=fig,
-        left=0.05, right=0.98, bottom=0.03, top=0.96,
-        hspace=0.12, wspace=0.06,
-        height_ratios=[1.0, 0.055, 0.055, 0.055, 0.075],
+        left=0.05, right=0.98, bottom=0.06, top=0.96,
+        wspace=0.06,
         width_ratios=[2.6, 1.0],
     )
 
     ax_det  = fig.add_subplot(gs[0, 0])
     ax_info = fig.add_subplot(gs[0, 1])
-    ax_sa   = fig.add_subplot(gs[1, 0])
-    ax_sb   = fig.add_subplot(gs[2, 0])
-    ax_sc   = fig.add_subplot(gs[3, 0])
-    ax_ph   = fig.add_subplot(gs[4, 0])
-    gs_info_bottom = fig.add_subplot(gs[1:, 1])
-    gs_info_bottom.set_visible(False)
 
-    # ── Detector axes ─────────────────────────────────────────────────────────
     for ax in (ax_det, ax_info):
         ax.set_facecolor(_BG2)
         ax.tick_params(colors=_GRAY, labelsize=7)
@@ -311,7 +277,6 @@ def interactive_orientation(
     ax_det.legend(loc="upper right", fontsize=7,
                   facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
 
-    # ── Info panel ────────────────────────────────────────────────────────────
     ax_info.set_axis_off()
     _info_txt = ax_info.text(
         0.06, 0.98, "",
@@ -320,68 +285,32 @@ def interactive_orientation(
         linespacing=1.55,
     )
 
-    # ── Crystal-axis sliders ──────────────────────────────────────────────────
-    _cry_kw = dict(valinit=0.0, color=_CRYSTAL, track_color=_BG)
-
-    s_ca = Slider(ax_sa, "Cry [100]  (a)",
-                  valmin=-rot_range_deg, valmax=+rot_range_deg, **_cry_kw)
-    s_cb = Slider(ax_sb, "Cry [010]  (b)",
-                  valmin=-rot_range_deg, valmax=+rot_range_deg, **_cry_kw)
-    s_cc = Slider(ax_sc, "Cry [001]  (c)",
-                  valmin=-c_rot_range_deg, valmax=+c_rot_range_deg, **_cry_kw)
-
-    for s in (s_ca, s_cb, s_cc):
-        s.label.set_color(_FG)
-        s.label.set_fontsize(9)
-        s.valtext.set_color(_CRYSTAL)
-        s.valtext.set_fontsize(8)
-        s.ax.set_facecolor(_BG2)
-        for sp in s.ax.spines.values():
-            sp.set_edgecolor(_GRAY)
-
-    # ── Buttons ───────────────────────────────────────────────────────────────
-    bb  = ax_ph.get_position()
-    ax_ph.remove()
-    bw  = (bb.width - 0.015) / 3
-    bh  = bb.height
-
-    ax_b_reset  = fig.add_axes([bb.x0,                  bb.y0, bw, bh])
-    ax_b_setu0  = fig.add_axes([bb.x0 + bw + 0.005,     bb.y0, bw, bh])
-    ax_b_accept = fig.add_axes([bb.x0 + 2*bw + 0.010,   bb.y0, bw, bh])
-
-    btn_reset  = Button(ax_b_reset,  "Reset",     color=_BG2,     hovercolor="#1a1f35")
-    btn_setu0  = Button(ax_b_setu0,  "Set as U₀", color="#1a2535", hovercolor="#243045")
-    btn_accept = Button(ax_b_accept, "✓  Accept",  color="#0d2515", hovercolor="#174025")
-
-    for btn, clr in ((btn_reset, _FG), (btn_setu0, _ACCENT), (btn_accept, _MATCH)):
-        btn.label.set_color(clr)
-        btn.label.set_fontsize(9)
-
-    # ── "Center at hkl" preset planes ────────────────────────────────────────
-    # Buttons are rendered as ipywidgets below the figure (not in the mpl
-    # canvas) so they work reliably in remote Jupyter environments where
-    # matplotlib canvas click events can be silently dropped.
-    # Planes: cubic axes + cubic diagonal + hexagonal first- and second-order
-    # prismatic planes in 3-index notation.
-    _presets: list[tuple[str, tuple[int, int, int]]] = [
-        ("100",  (1,  0,  0)),
-        ("010",  (0,  1,  0)),
-        ("001",  (0,  0,  1)),
-        ("111",  (1,  1,  1)),
-        ("-110", (-1, 1,  0)),   # hex first-order prism  {10-10}
-        ("110",  (1,  1,  0)),   # hex second-order prism {11-20}
-    ]
+    # ── ipywidgets sliders ────────────────────────────────────────────────────
+    _sk = dict(
+        step=0.02,
+        readout_format=".2f",
+        continuous_update=False,
+        style={"description_width": "110px"},
+        layout=ipw.Layout(width="98%"),
+    )
+    s_ca = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
+                           description="Cry [100]  (a)", **_sk)
+    s_cb = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
+                           description="Cry [010]  (b)", **_sk)
+    s_cc = ipw.FloatSlider(value=0.0, min=-c_rot_range_deg, max=+c_rot_range_deg,
+                           description="Cry [001]  (c)", **_sk)
 
     # ── Update ────────────────────────────────────────────────────────────────
+    # _updating flag prevents re-entrant calls when we programmatically reset
+    # slider values (each .value assignment would otherwise fire _on_slider).
+    _updating = [False]
+
     def _do_update() -> None:
-        # Compose crystal-axis rotations sequentially.
-        # Each axis is expressed in the crystal frame and mapped to the lab
-        # frame via the current U — identical to rotate_U_about_crystal_axis.
         U = state.U0
         for angle_deg, cry_ax in (
-            (s_ca.val, np.array([1., 0., 0.])),
-            (s_cb.val, np.array([0., 1., 0.])),
-            (s_cc.val, np.array([0., 0., 1.])),
+            (s_ca.value, np.array([1., 0., 0.])),
+            (s_cb.value, np.array([0., 1., 0.])),
+            (s_cc.value, np.array([0., 0., 1.])),
         ):
             if angle_deg == 0.0:
                 continue
@@ -448,20 +377,36 @@ def interactive_orientation(
 
         fig.canvas.draw_idle()
 
-    # ── Button callbacks ──────────────────────────────────────────────────────
-    _all_sliders = (s_ca, s_cb, s_cc)
+    def _reset_sliders() -> None:
+        _updating[0] = True
+        s_ca.value = 0.0
+        s_cb.value = 0.0
+        s_cc.value = 0.0
+        _updating[0] = False
+        _do_update()
 
-    def _cb_reset(event) -> None:
+    def _on_slider(change) -> None:
+        if not _updating[0]:
+            _do_update()
+
+    for s in (s_ca, s_cb, s_cc):
+        s.observe(_on_slider, names="value")
+
+    # ── ipywidgets buttons ────────────────────────────────────────────────────
+    _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
+    btn_reset  = ipw.Button(description="Reset",      button_style="warning", **_bkw)
+    btn_setu0  = ipw.Button(description="Set as U₀",  button_style="info",    **_bkw)
+    btn_accept = ipw.Button(description="✓  Accept",  button_style="success", **_bkw)
+
+    def _cb_reset(_b) -> None:
         state.U0 = state._U0_orig.copy()
-        for s in _all_sliders:
-            s.reset()
+        _reset_sliders()
 
-    def _cb_setu0(event) -> None:
+    def _cb_setu0(_b) -> None:
         state.U0 = state.U.copy()
-        for s in _all_sliders:
-            s.reset()
+        _reset_sliders()
 
-    def _cb_accept(event) -> None:
+    def _cb_accept(_b) -> None:
         state.accepted = True
         if _is_stack:
             R = state.U @ np.linalg.inv(state._U0_orig)
@@ -477,10 +422,25 @@ def interactive_orientation(
             print(f"  Stack updated in place ({len(stack.all_layers)} layers).")
         print("\n  Pass to fitter:  fit_orientation(crystal, camera, obs_xy, state.U)")
 
-    # ── "Center at hkl" callbacks (one per preset) ───────────────────────────
+    btn_reset.on_click(_cb_reset)
+    btn_setu0.on_click(_cb_setu0)
+    btn_accept.on_click(_cb_accept)
+
+    # ── "Center at hkl" preset buttons ───────────────────────────────────────
+    # Planes: cubic axes + diagonal + hexagonal first-order {10-10} and
+    # second-order {11-20} prismatic planes (3-index notation).
+    _presets: list[tuple[str, tuple[int, int, int]]] = [
+        ("100",  ( 1,  0,  0)),
+        ("010",  ( 0,  1,  0)),
+        ("001",  ( 0,  0,  1)),
+        ("111",  ( 1,  1,  1)),
+        ("-110", (-1,  1,  0)),   # hex {10-10} first-order prism
+        ("110",  ( 1,  1,  0)),   # hex {11-20} second-order prism
+    ]
+
     def _make_center_cb(hkl: tuple[int, int, int]):
         h, k, l = hkl
-        def _cb(_event) -> None:
+        def _cb(_b) -> None:
             _xtal = crystal.all_layers[0].crystal if _is_stack else crystal
             G_cry = _xtal.Q(h, k, l)
             g_norm = np.linalg.norm(G_cry)
@@ -513,58 +473,42 @@ def interactive_orientation(
                     perp = np.array([0., 0., 1.] if abs(G_lab[2]) < 0.9
                                     else [0., 1., 0.])
                     v = np.cross(G_lab, perp)
-                    R_ctr = Rotation.from_rotvec(np.pi * v / np.linalg.norm(v)).as_matrix()
+                    R_ctr = Rotation.from_rotvec(
+                        np.pi * v / np.linalg.norm(v)
+                    ).as_matrix()
             else:
                 R_ctr = Rotation.from_rotvec(
                     np.arctan2(sin_a, cos_a) * (ax_r / sin_a)
                 ).as_matrix()
 
             state.U0 = R_ctr @ state.U
-            for s in _all_sliders:
-                s.reset()
+            _reset_sliders()
         return _cb
 
-    _debounce_timer: list[threading.Timer | None] = [None]
+    _ckw = dict(layout=ipw.Layout(width="68px", height="28px"))
+    _center_btns = []
+    for _lbl, _hkl in _presets:
+        _b = ipw.Button(description=_lbl, **_ckw)
+        _b.on_click(_make_center_cb(_hkl))
+        _center_btns.append(_b)
 
-    def _on_slider_changed(_val) -> None:
-        if _debounce_timer[0] is not None:
-            _debounce_timer[0].cancel()
-        _debounce_timer[0] = threading.Timer(0.12, _do_update)
-        _debounce_timer[0].start()
-
-    for s in _all_sliders:
-        s.on_changed(_on_slider_changed)
-    btn_reset.on_clicked(_cb_reset)
-    btn_setu0.on_clicked(_cb_setu0)
-    btn_accept.on_clicked(_cb_accept)
-
+    # ── Layout and display ────────────────────────────────────────────────────
     _do_update()
-    plt.show()
 
-    # ── ipywidgets "Center at hkl" row (displayed below the figure) ──────────
-    # Uses Jupyter comms rather than canvas mouse events, so it works reliably
-    # on remote Jupyter-Slurm setups where mpl Button clicks can be dropped.
-    try:
-        import ipywidgets as ipw
-        from IPython.display import display as _ipy_display
+    _controls = ipw.VBox([
+        s_ca, s_cb, s_cc,
+        ipw.HBox(
+            [btn_reset, btn_setu0, btn_accept],
+            layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
+        ),
+        ipw.HBox(
+            [ipw.HTML("<b>Center at hkl:</b>",
+                      layout=ipw.Layout(align_self="center", margin="0 10px 0 0"))]
+            + _center_btns,
+            layout=ipw.Layout(gap="4px"),
+        ),
+    ], layout=ipw.Layout(width="100%", padding="4px 8px"))
 
-        _ipy_btns = []
-        for _lbl, _hkl in _presets:
-            _b = ipw.Button(
-                description=_lbl,
-                layout=ipw.Layout(width="70px", height="28px"),
-                style={"button_color": "#1a2535", "font_size": "12px"},
-            )
-            _b.on_click(_make_center_cb(_hkl))
-            _ipy_btns.append(_b)
-
-        _ipy_display(ipw.HBox(
-            [ipw.Label("Center at hkl:", layout=ipw.Layout(width="110px",
-                                                            align_self="center"))]
-            + _ipy_btns,
-            layout=ipw.Layout(margin="4px 0 0 0"),
-        ))
-    except ImportError:
-        pass  # not in Jupyter or ipywidgets not installed
+    _ipy_display(ipw.VBox([fig.canvas, _controls]))
 
     return state

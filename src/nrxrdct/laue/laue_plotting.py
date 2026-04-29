@@ -1741,7 +1741,8 @@ def plot_measured_vs_simulated(
     n_label: int = 8,
     E_min_eV: float = 5_000,
     E_max_eV: float = 27_000,
-    out_path: str | None = "measured_vs_simulated.png",
+    figsize: tuple = (14, 6),
+    out_path: str | None = None,
 ):
     """
     Side-by-side comparison of segmented measured spots and simulated Laue spots
@@ -1775,8 +1776,11 @@ def plot_measured_vs_simulated(
     E_min_eV, E_max_eV : float
         Energy range for the simulated-spot colour scale (keV).
 
+    figsize : tuple of (float, float)
+        Figure size in inches passed to ``plt.subplots``.  Default ``(14, 6)``.
+
     out_path : str or None
-        Path to save the PNG figure.  ``None`` → do not save.
+        Path to save the PNG figure.  ``None`` (default) → do not save.
 
     Returns
     -------
@@ -1785,7 +1789,7 @@ def plot_measured_vs_simulated(
     peaklist = np.asarray(peaklist, dtype=float)
 
     fig, (ax_m, ax_s) = plt.subplots(
-        1, 2, figsize=(14, 6), sharex=False, sharey=False
+        1, 2, figsize=figsize, sharex=True, sharey=True
     )
     fig.patch.set_facecolor(BG)
 

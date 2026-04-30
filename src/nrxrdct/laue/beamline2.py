@@ -111,9 +111,32 @@ KB1_LENGTH = 0.300;  KB1_WIDTH = 0.020
 KB2_LENGTH = 0.150;  KB2_WIDTH = 0.020
 
 # ── Slit half-openings [m] — replace with motor-derived values ───────────────
-SL1_H = 5.000e-3;   SL1_V = 2.000e-3   # Slits 1
-SL2_H = 0.100e-3;   SL2_V = 0.100e-3   # Slits 2 (mu-slits)
-SL3_H = 1.000e-3;   SL3_V = 1.000e-3   # Slits 3 (before KB — update)
+# Convention: HALF-opening in metres (total gap = 2 x value).
+# Example: SL2_H = 0.100e-3  means the slit gap is 0.200 mm wide (+-0.1 mm).
+# Helper: bm.mm(x) converts a TOTAL gap in mm to the half-opening in metres.
+#   bm.SL2_H = bm.mm(0.2)   # 0.2 mm total gap -> 0.1 mm half-opening
+SL1_H = 5.000e-3;   SL1_V = 2.000e-3   # Slits 1  (+-5 mm H, +-2 mm V)
+SL2_H = 0.100e-3;   SL2_V = 0.100e-3   # Slits 2  (+-0.1 mm H, +-0.1 mm V)
+SL3_H = 1.000e-3;   SL3_V = 1.000e-3   # Slits 3  (+-1 mm H, +-1 mm V)
+
+def mm(total_gap_mm):
+    """Convert a total slit gap in mm to a half-opening in metres.
+
+    Usage:
+        bm.SL2_H = bm.mm(0.2)   # 0.2 mm total gap
+        bm.SL1_V = bm.mm(4.0)   # 4 mm total gap
+    """
+    return total_gap_mm * 0.5e-3
+
+
+def mrad(value_mrad):
+    """Convert milliradians to radians.
+
+    Usage:
+        bm.G_M1  = bm.mrad(3.062)   # 3.062 mrad
+        bm.G_KB1 = bm.mrad(2.2)     # 2.2 mrad
+    """
+    return value_mrad * 1e-3
 
 # ── Energy range [eV] ────────────────────────────────────────────────────────
 E_MIN = 5_000.0
@@ -148,7 +171,11 @@ def _geo():
     """
     m = _self()
     return dict(
+        # Source to each element
+        L_SRC_SL1 = m.D_SL1,
         L_SRC_M1  = m.D_M1,
+        # Inter-element drifts (for p_coord in ElementCoordinates)
+        L_SL1_M1  = m.D_M1  - m.D_SL1,
         L_M1_M2   = m.D_M2  - m.D_M1,
         L_M2_SL2  = m.D_SL2 - m.D_M2,
         L_SL2_SL3 = m.D_SL3 - m.D_SL2,
@@ -159,6 +186,9 @@ def _geo():
         L_KB1_KB2 = m.D_KB2 - m.D_KB1,
         L_KB1_SA  = m.D_SA  - m.D_KB1,
         L_KB2_SA  = m.D_SA  - m.D_KB2,
+        # SL1 angular half-acceptance from BM source
+        A_SL1_H   = m.SL1_H / m.D_SL1,
+        A_SL1_V   = m.SL1_V / m.D_SL1,
         # SL2 angular half-acceptance from BM source
         A_SL2_H   = m.SL2_H / m.D_SL2,
         A_SL2_V   = m.SL2_V / m.D_SL2,
@@ -184,7 +214,8 @@ def _print_geometry():
     print("=" * 65)
     print("BM32 GEOMETRY  (current values)")
     print("=" * 65)
-    print(f"  SL1 : D={m.D_SL1:.3f} m  H=+-{m.SL1_H*1e3:.2f} mm  V=+-{m.SL1_V*1e3:.2f} mm")
+    g = _geo()
+    print(f"  SL1 : D={m.D_SL1:.3f} m  H=+-{m.SL1_H*1e3:.2f} mm  V=+-{m.SL1_V*1e3:.2f} mm  -> L_SL1_M1={g['L_SL1_M1']:.3f} m to M1")
     print(f"  M1  : D={m.D_M1:.3f} m  G={m.G_M1*1e3:.4f} mrad  "
           f"({'curved' if m.MIRROR_CURVED else 'flat'})  "
           f"p={g['L_SRC_M1']:.3f} m  q={m.D_SL2-m.D_M1:.3f} m")
@@ -460,18 +491,22 @@ def _make_mirror_ir(name, boundary, p_foc, q_foc, G, curved):
             coating_material="Ir", coating_density=22.56, coating_roughness=3.0)
 
 
-def element_m1(beam):
+def element_m1(beam, p_from=None):
     """
     Mirror 1 - Ir, deflects beam UP (azimuthal=0).
     Flat or bent cylinder depending on MIRROR_CURVED.
     """
     m = _self(); g = _geo()
     curved = m.MIRROR_CURVED
+    # p_from: distance from the last element to M1.
+    # Default = D_M1 (from source). If SL1 was applied first, pass L_SL1_M1.
+    p_coord = p_from if p_from is not None else g['L_SRC_M1']
     print(f"\n[M1] D={m.D_M1:.3f} m  G={m.G_M1*1e3:.4f} mrad  "
-          f"L={m.M1_LENGTH*1e3:.0f} mm  ({'bent' if curved else 'flat'}) ...")
+          f"L={m.M1_LENGTH*1e3:.0f} mm  ({'bent' if curved else 'flat'})  "
+          f"p_coord={p_coord:.3f} m ...")
     mirror = _make_mirror_ir("M1", _aperture(m.M1_WIDTH, m.M1_LENGTH),
                               g['L_SRC_M1'], m.D_SL2 - m.D_M1, m.G_M1, curved)
-    coords = ElementCoordinates(p=g['L_SRC_M1'], q=g['L_M1_M2'],
+    coords = ElementCoordinates(p=p_coord, q=g['L_M1_M2'],
                                 angle_radial=_ar(m.G_M1), angle_azimuthal=0.0)
     if curved:
         beam_out, fp = S4EllipsoidMirrorElement(
@@ -897,7 +932,14 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
     print("=" * 60)
     beam, norm = source_bm32(nrays=nrays_bm)
 
-    beam_m1, _ = element_m1(beam)
+    # SL1 (optional — uses module SL1_H/V)
+    beam_sl1 = element_slit(beam, m.SL1_H, m.SL1_V,
+                             p=g['L_SRC_SL1'], label="SL1",
+                             plot=plot_each)
+    if plot_each: plot_beam(beam_sl1, "After SL1", position_m=m.D_SL1)
+
+    # M1: beam is now at SL1, so p_from = D_M1 - D_SL1
+    beam_m1, _ = element_m1(beam_sl1, p_from=g['L_SL1_M1'])
     if plot_each: plot_beam(beam_m1, "After M1", position_m=m.D_M1)
 
     beam_m2, _ = element_m2(beam_m1)
@@ -941,6 +983,7 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
         plot_footprint(fp2, "KB2 footprint")
 
     return dict(
+        beam_sl1=beam_sl1,
         beam_m1=beam_m1, beam_m2=beam_m2,
         beam_sl2=beam_sl2, beam_sl3=beam_sl3,
         beam_kb_source=beam_kb,

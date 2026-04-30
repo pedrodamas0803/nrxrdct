@@ -1206,32 +1206,80 @@ def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
         return s['z0'] + s['sz']*dy, s['x0'] + s['sx']*dy
 
     # ── Analytic beam envelope (±1 sigma) ─────────────────────────────────────
-    # Before KB: free propagation from BM source with emittance (sigma, sigma')
-    # After KB1: beam converges vertically to sample
-    # After KB2: beam converges horizontally to sample
-    def envelope_v(y):
-        """Vertical ±1 sigma [m] at position y (lab frame)."""
-        if y <= m.D_KB1:
-            # Free propagation from source
-            return np.sqrt(m.SIGMA_Y**2 + (m.SIGMA_YP * y)**2)
+    # The BM emits a wide photon fan dominated by 1/gamma, NOT just SIGMA_YP.
+    # The effective divergence at each position is limited by the most restrictive
+    # upstream aperture (SL1, M1 physical size, M2 physical size, SL2, SL3).
+    # Beyond M1/M2 the beam is clipped to whatever the flat mirrors accept.
+    #
+    # We compute the effective half-angle at each longitudinal position, then
+    # the beam half-size = source_sigma + acceptance_angle * distance.
+
+    gamma        = m.E_GEV * 1e9 / 0.511e6   # Lorentz factor
+    one_over_g   = 1.0 / gamma                 # rad  ~84 urad at 6.04 GeV
+
+    # Upstream aperture half-angles (V and H) as seen from source
+    # — take the most restrictive one that is <= current position
+    def _eff_accept(y, plane):
+        """Effective half-acceptance angle [rad] at position y."""
+        candidates = []
+        # BM intrinsic cone
+        if plane == 'V':
+            candidates.append(one_over_g)       # ~84 urad
         else:
-            # KB1 focuses: beam converges from KB1 to sample
-            # Linear interpolation between size at KB1 entrance and ~0 at sample
-            s_kb1 = np.sqrt(m.SIGMA_Y**2 + (m.SIGMA_YP * m.D_KB1)**2)
-            frac  = (y - m.D_KB1) / g['L_KB1_SA']
-            # At focus: sigma = SIGMA_Y * q_KB1/p_KB1
-            s_foc = m.SIGMA_Y * g['L_KB1_SA'] / g['L_SL2_KB1']
-            return s_kb1 * (1 - frac) + s_foc * frac
+            candidates.append(10 * one_over_g)  # H fan much wider; use M1 as limit
+
+        # SL1
+        if y >= m.D_SL1:
+            a = (m.SL1_V if plane=='V' else m.SL1_H) / 2 / m.D_SL1
+            candidates.append(a)
+        # M1 physical aperture (clips more than SL1 in V)
+        if y >= m.D_M1:
+            if plane == 'V':
+                candidates.append((m.M1_LENGTH/2 * np.sin(m.G_M1)) / m.D_M1)
+            else:
+                candidates.append((m.M1_WIDTH/2) / m.D_M1)
+        # M2 physical aperture
+        if y >= m.D_M2:
+            if plane == 'V':
+                candidates.append((m.M2_LENGTH/2 * np.sin(m.G_M2)) / m.D_M2)
+            else:
+                candidates.append((m.M2_WIDTH/2) / m.D_M2)
+        # SL2
+        if y >= m.D_SL2:
+            a = (m.SL2_V if plane=='V' else m.SL2_H) / 2 / m.D_SL2
+            candidates.append(a)
+        # SL3
+        if y >= m.D_SL3:
+            a = (m.SL3_V if plane=='V' else m.SL3_H) / 2 / m.D_SL3
+            candidates.append(a)
+        return min(candidates)
+
+    def envelope_v(y):
+        """Vertical beam half-size [m] at position y (lab frame, ±1 effective sigma)."""
+        accept = _eff_accept(y, 'V')
+        src    = m.SIGMA_Y
+        # half-size = source size + divergence * distance (linear, not Gaussian quad,
+        # because the acceptance clips the tails making it approximately top-hat)
+        if y <= m.D_KB1:
+            return src + accept * y
+        else:
+            # KB1 focuses: linearly converge to focus size at sample
+            size_at_kb1 = src + accept * m.D_KB1
+            size_at_foc = m.SIGMA_Y * g['L_KB1_SA'] / g['L_SL2_KB1']
+            frac = (y - m.D_KB1) / g['L_KB1_SA']
+            return size_at_kb1 * (1 - frac) + size_at_foc * frac
 
     def envelope_h(y):
-        """Horizontal ±1 sigma [m] at position y (lab frame)."""
+        """Horizontal beam half-size [m] at position y (lab frame)."""
+        accept = _eff_accept(y, 'H')
+        src    = m.SIGMA_X
         if y <= m.D_KB2:
-            return np.sqrt(m.SIGMA_X**2 + (m.SIGMA_XP * y)**2)
+            return src + accept * y
         else:
-            s_kb2 = np.sqrt(m.SIGMA_X**2 + (m.SIGMA_XP * m.D_KB2)**2)
-            frac  = (y - m.D_KB2) / g['L_KB2_SA']
-            s_foc = m.SIGMA_X * g['L_KB2_SA'] / g['L_SL2_KB2']
-            return s_kb2 * (1 - frac) + s_foc * frac
+            size_at_kb2 = src + accept * m.D_KB2
+            size_at_foc = m.SIGMA_X * g['L_KB2_SA'] / g['L_SL2_KB2']
+            frac = (y - m.D_KB2) / g['L_KB2_SA']
+            return size_at_kb2 * (1 - frac) + size_at_foc * frac
 
     # Sample positions
     y_pts  = np.linspace(0, m.D_SA, n_samples)

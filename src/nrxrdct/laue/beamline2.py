@@ -81,7 +81,7 @@ D_SL1  = 26.368   # m  Slits 1
 D_M1   = 28.309   # m  Mirror 1
 D_M2   = 31.732   # m  Mirror 2
 D_SL2  = 35.370   # m  Slits 2 (mu-slits)
-D_SL3  = 44.000   # m  Slits 3 (before KB — update with real position)
+D_SL3  = 44.361   # m  Slits 3 (before KB)
 D_KB1  = 44.645   # m  KB1
 D_KB2  = 44.880   # m  KB2
 D_SA   = 45.000   # m  Sample
@@ -110,23 +110,23 @@ M2_LENGTH  = 1.100;  M2_WIDTH  = 0.050
 KB1_LENGTH = 0.300;  KB1_WIDTH = 0.020
 KB2_LENGTH = 0.150;  KB2_WIDTH = 0.020
 
-# ── Slit half-openings [m] — replace with motor-derived values ───────────────
-# Convention: HALF-opening in metres (total gap = 2 x value).
-# Example: SL2_H = 0.100e-3  means the slit gap is 0.200 mm wide (+-0.1 mm).
-# Helper: bm.mm(x) converts a TOTAL gap in mm to the half-opening in metres.
-#   bm.SL2_H = bm.mm(0.2)   # 0.2 mm total gap -> 0.1 mm half-opening
-SL1_H = 5.000e-3;   SL1_V = 2.000e-3   # Slits 1  (+-5 mm H, +-2 mm V)
-SL2_H = 0.100e-3;   SL2_V = 0.100e-3   # Slits 2  (+-0.1 mm H, +-0.1 mm V)
-SL3_H = 1.000e-3;   SL3_V = 1.000e-3   # Slits 3  (+-1 mm H, +-1 mm V)
+# ── Slit gaps [m] — FULL gap (total opening), replace with motor-derived values
+# Convention: FULL gap in metres (half-opening used internally = value / 2).
+# Example: SL2_H = 0.200e-3  means the slit is 0.200 mm wide total (+-0.1 mm).
+# Helper: bm.mm(x) sets a gap of x mm total.
+#   bm.SL2_H = bm.mm(0.2)   # 0.2 mm total gap
+SL1_H = 10.000e-3;  SL1_V = 4.000e-3   # Slits 1  (10 mm H, 4 mm V total)
+SL2_H =  0.200e-3;  SL2_V = 0.200e-3   # Slits 2  (0.2 mm H, 0.2 mm V total)
+SL3_H =  2.000e-3;  SL3_V = 2.000e-3   # Slits 3  (2 mm H, 2 mm V total)
 
-def mm(total_gap_mm):
-    """Convert a total slit gap in mm to a half-opening in metres.
+def mm(gap_mm):
+    """Set a slit gap from a value in mm (total gap).
 
     Usage:
-        bm.SL2_H = bm.mm(0.2)   # 0.2 mm total gap
-        bm.SL1_V = bm.mm(4.0)   # 4 mm total gap
+        bm.SL2_H = bm.mm(0.2)    # 0.2 mm total gap
+        bm.SL1_V = bm.mm(4.0)    # 4 mm total gap
     """
-    return total_gap_mm * 0.5e-3
+    return gap_mm * 1e-3
 
 
 def mrad(value_mrad):
@@ -187,14 +187,14 @@ def _geo():
         L_KB1_SA  = m.D_SA  - m.D_KB1,
         L_KB2_SA  = m.D_SA  - m.D_KB2,
         # SL1 angular half-acceptance from BM source
-        A_SL1_H   = m.SL1_H / m.D_SL1,
-        A_SL1_V   = m.SL1_V / m.D_SL1,
+        A_SL1_H   = (m.SL1_H / 2) / m.D_SL1,
+        A_SL1_V   = (m.SL1_V / 2) / m.D_SL1,
         # SL2 angular half-acceptance from BM source
-        A_SL2_H   = m.SL2_H / m.D_SL2,
-        A_SL2_V   = m.SL2_V / m.D_SL2,
+        A_SL2_H   = (m.SL2_H / 2) / m.D_SL2,
+        A_SL2_V   = (m.SL2_V / 2) / m.D_SL2,
         # SL3 angular half-acceptance from BM source
-        A_SL3_H   = m.SL3_H / m.D_SL3,
-        A_SL3_V   = m.SL3_V / m.D_SL3,
+        A_SL3_H   = (m.SL3_H / 2) / m.D_SL3,
+        A_SL3_V   = (m.SL3_V / 2) / m.D_SL3,
         # Vertical offset tracking
         DZ_M1_M2  = m.DZ_M1_M2,
         DZ_AT_SL2 = m.DZ_M1_M2 - 2.0 * m.G_M2 * (m.D_SL2 - m.D_M2),
@@ -215,7 +215,7 @@ def _print_geometry():
     print("BM32 GEOMETRY  (current values)")
     print("=" * 65)
     g = _geo()
-    print(f"  SL1 : D={m.D_SL1:.3f} m  H=+-{m.SL1_H*1e3:.2f} mm  V=+-{m.SL1_V*1e3:.2f} mm  -> L_SL1_M1={g['L_SL1_M1']:.3f} m to M1")
+    print(f"  SL1 : D={m.D_SL1:.3f} m  H={m.SL1_H*1e3:.3f} mm  V={m.SL1_V*1e3:.3f} mm  -> L_SL1_M1={g['L_SL1_M1']:.3f} m to M1")
     print(f"  M1  : D={m.D_M1:.3f} m  G={m.G_M1*1e3:.4f} mrad  "
           f"({'curved' if m.MIRROR_CURVED else 'flat'})  "
           f"p={g['L_SRC_M1']:.3f} m  q={m.D_SL2-m.D_M1:.3f} m")
@@ -224,8 +224,8 @@ def _print_geometry():
           f"p={m.D_M2:.3f} m  q={g['L_M2_SL2']:.3f} m")
     print(f"  DZ(M1->M2) = {g['DZ_M1_M2']*1e3:.2f} mm  |  "
           f"DZ(net at SL2) = {g['DZ_AT_SL2']*1e3:.3f} mm")
-    print(f"  SL2 : D={m.D_SL2:.3f} m  H=+-{m.SL2_H*1e3:.3f} mm  V=+-{m.SL2_V*1e3:.3f} mm")
-    print(f"  SL3 : D={m.D_SL3:.3f} m  H=+-{m.SL3_H*1e3:.3f} mm  V=+-{m.SL3_V*1e3:.3f} mm")
+    print(f"  SL2 : D={m.D_SL2:.3f} m  H={m.SL2_H*1e3:.3f} mm  V={m.SL2_V*1e3:.3f} mm")
+    print(f"  SL3 : D={m.D_SL3:.3f} m  H={m.SL3_H*1e3:.3f} mm  V={m.SL3_V*1e3:.3f} mm")
     print(f"  KB1 : D={m.D_KB1:.3f} m  G={m.G_KB1*1e3:.3f} mrad  "
           f"p={g['L_SL2_KB1']:.3f} m  q={g['L_KB1_SA']:.3f} m  "
           f"demag={g['L_KB1_SA']/g['L_SL2_KB1']:.5f}")
@@ -392,7 +392,10 @@ def element_slit(beam, H, V, p,
     beam_sl2_tight = bm.element_slit(beam_m2, bm.SL2_H, bm.SL2_V,
                                       p=bm._geo()['L_M2_SL2'], label="SL2 tight")
     """
-    lbl = label or f"Slit H=+-{H*1e3:.3f} mm V=+-{V*1e3:.3f} mm"
+    # H, V are FULL gaps; half-openings used for clipping
+    H_half = H / 2
+    V_half = V / 2
+    lbl = label or f"Slit {H*1e3:.3f} x {V*1e3:.3f} mm"
 
     # 1. Propagate to slit plane
     if abs(p) > 1e-9:
@@ -401,15 +404,15 @@ def element_slit(beam, H, V, p,
         from shadow4.beam.s4_beam import S4Beam
         beam_at = S4Beam(); beam_at.rays = beam.rays.copy()
 
-    # 2. Clip
+    # 2. Clip to +-H/2 x +-V/2
     rays  = beam_at.rays
     good  = rays[:, 9] > 0
     n_in  = good.sum()
-    inside = (np.abs(rays[:, 0]) <= H) & (np.abs(rays[:, 2]) <= V)
+    inside = (np.abs(rays[:, 0]) <= H_half) & (np.abs(rays[:, 2]) <= V_half)
     rays[good & ~inside, 9] = -1
     n_out = (rays[:, 9] > 0).sum()
 
-    print(f"[Slit] {lbl}")
+    print(f"[Slit] {lbl}  (H=+-{H_half*1e3:.3f} mm  V=+-{V_half*1e3:.3f} mm)")
     print(f"       p={p:.3f} m  ->  "
           f"{n_out} / {n_in} rays survive  ({100*n_out/max(n_in,1):.3f}%)")
 
@@ -428,7 +431,7 @@ def element_slit(beam, H, V, p,
                 sc = ax.scatter(g2[:, 0]*1e3, g2[:, 2]*1e3, s=0.4,
                                 alpha=0.4, c=g2[:, 10]/A2EV/1e3, cmap="plasma")
                 fig.colorbar(sc, ax=ax, label="E (keV)")
-            rect = MplRect((-H*1e3, -V*1e3), 2*H*1e3, 2*V*1e3,
+            rect = MplRect((-H_half*1e3, -V_half*1e3), H*1e3, V*1e3,
                            lw=1.5, edgecolor="red", facecolor="none")
             ax.add_patch(rect)
             ax.set_xlabel("H (mm)"); ax.set_ylabel("V (mm)")
@@ -656,18 +659,19 @@ def element_kb1(beam):
     """
     m = _self(); g = _geo()
     accept_v_mirror = (m.KB1_LENGTH/2) * np.sin(m.G_KB1) / g['L_SL2_KB1']
-    accept_v_sl2    = m.SL2_V / m.D_SL2
-    accept_v_sl3    = m.SL3_V / m.D_SL3 if m.D_SL3 < m.D_KB1 else np.inf
-    accept_v_eff    = min(accept_v_mirror, accept_v_sl2, accept_v_sl3)
-    limiting        = ("mirror" if accept_v_mirror <= min(accept_v_sl2, accept_v_sl3)
-                       else "SL2" if accept_v_sl2 <= accept_v_sl3 else "SL3")
+    accept_v_sl2    = (m.SL2_V / 2) / m.D_SL2
+    accept_v_sl3    = (m.SL3_V / 2) / m.D_SL3 if m.D_SL3 < m.D_KB1 else np.inf
+    accept_v_bm     = 3.0 * m.SIGMA_YP
+    candidates_v    = [('mirror', accept_v_mirror), ('SL2', accept_v_sl2),
+                       ('SL3', accept_v_sl3), ('BM div', accept_v_bm)]
+    limiting_v      = min(candidates_v, key=lambda x: x[1])[0]
     print(f"\n[KB1] D={m.D_KB1:.3f} m  G={m.G_KB1*1e3:.3f} mrad  "
           f"L={m.KB1_LENGTH*1e3:.0f} mm  (V-focus) ...")
     print(f"       p={g['L_SL2_KB1']:.3f} m  q={g['L_KB1_SA']:.3f} m  "
           f"demag={g['L_KB1_SA']/g['L_SL2_KB1']:.5f}")
     print(f"       accept_V: mirror=+-{accept_v_mirror*1e6:.1f}  "
-          f"SL2=+-{accept_v_sl2*1e6:.1f}  "
-          f"SL3=+-{accept_v_sl3*1e6:.1f} urad  -> {limiting} limits")
+          f"SL2=+-{accept_v_sl2*1e6:.1f}  SL3=+-{accept_v_sl3*1e6:.1f}  "
+          f"BM=+-{accept_v_bm*1e6:.2f} urad  -> {limiting_v} limits")
     mirror = S4EllipsoidMirror(
         name="KB1", boundary_shape=_aperture(m.KB1_WIDTH, m.KB1_LENGTH),
         surface_calculation=SurfaceCalculation.INTERNAL,
@@ -694,18 +698,19 @@ def element_kb2(beam):
     """
     m = _self(); g = _geo()
     accept_h_mirror = (m.KB2_LENGTH/2) * np.sin(m.G_KB2) / g['L_SL2_KB2']
-    accept_h_sl2    = m.SL2_H / m.D_SL2
-    accept_h_sl3    = m.SL3_H / m.D_SL3 if m.D_SL3 < m.D_KB2 else np.inf
-    accept_h_eff    = min(accept_h_mirror, accept_h_sl2, accept_h_sl3)
-    limiting        = ("mirror" if accept_h_mirror <= min(accept_h_sl2, accept_h_sl3)
-                       else "SL2" if accept_h_sl2 <= accept_h_sl3 else "SL3")
+    accept_h_sl2    = (m.SL2_H / 2) / m.D_SL2
+    accept_h_sl3    = (m.SL3_H / 2) / m.D_SL3 if m.D_SL3 < m.D_KB2 else np.inf
+    accept_h_bm     = 3.0 * m.SIGMA_XP
+    candidates_h    = [('mirror', accept_h_mirror), ('SL2', accept_h_sl2),
+                       ('SL3', accept_h_sl3), ('BM div', accept_h_bm)]
+    limiting_h      = min(candidates_h, key=lambda x: x[1])[0]
     print(f"\n[KB2] D={m.D_KB2:.3f} m  G={m.G_KB2*1e3:.3f} mrad  "
           f"L={m.KB2_LENGTH*1e3:.0f} mm  (H-focus) ...")
     print(f"       p={g['L_SL2_KB2']:.3f} m  q={g['L_KB2_SA']:.3f} m  "
           f"demag={g['L_KB2_SA']/g['L_SL2_KB2']:.5f}")
     print(f"       accept_H: mirror=+-{accept_h_mirror*1e6:.1f}  "
-          f"SL2=+-{accept_h_sl2*1e6:.1f}  "
-          f"SL3=+-{accept_h_sl3*1e6:.1f} urad  -> {limiting} limits")
+          f"SL2=+-{accept_h_sl2*1e6:.1f}  SL3=+-{accept_h_sl3*1e6:.1f}  "
+          f"BM=+-{accept_h_bm*1e6:.2f} urad  -> {limiting_h} limits")
     fwhm_v = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1']
     fwhm_h = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2']
     print(f"\n  -- Focus at sample (BM source imaged by KB) --")
@@ -846,11 +851,13 @@ def element_kb_source(nrays=500_000, seed=1234):
     """
     m = _self(); g = _geo()
     accept_v = min((m.KB1_LENGTH/2)*np.sin(m.G_KB1)/g['L_SL2_KB1'],
-                   m.SL2_V/m.D_SL2,
-                   m.SL3_V/m.D_SL3 if m.D_SL3 < m.D_KB1 else np.inf)
+                   (m.SL2_V/2)/m.D_SL2,
+                   (m.SL3_V/2)/m.D_SL3 if m.D_SL3 < m.D_KB1 else np.inf,
+                   3.0 * m.SIGMA_YP)
     accept_h = min((m.KB2_LENGTH/2)*np.sin(m.G_KB2)/g['L_SL2_KB2'],
-                   m.SL2_H/m.D_SL2,
-                   m.SL3_H/m.D_SL3 if m.D_SL3 < m.D_KB2 else np.inf)
+                   (m.SL2_H/2)/m.D_SL2,
+                   (m.SL3_H/2)/m.D_SL3 if m.D_SL3 < m.D_KB2 else np.inf,
+                   3.0 * m.SIGMA_XP)
     fwhm_v = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1']
     fwhm_h = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2']
     print(f"\n[KB source] Virtual source at SL2  ({nrays} rays)")
@@ -1094,7 +1101,242 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
 
 
 # =============================================================================
-if __name__ == "__main__":
+def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
+    """
+    Render the BM32 beamline beam path from source to sample.
+
+    Draws two panels:
+      Top    — Side view (Y longitudinal vs Z vertical, lab frame).
+               Shows the vertical deflections at M1 and M2, and the
+               vertical focusing by KB1.
+      Bottom — Top view  (Y longitudinal vs X horizontal, lab frame).
+               Shows the horizontal focusing by KB2.
+
+    The beam envelope (±1 sigma) is shown at each position, computed
+    analytically from the BM source emittance and the optical geometry.
+
+    Parameters
+    ----------
+    results : dict (optional)
+        Output of run_full_kb_chain().  If provided, the actual beam
+        sizes from the simulation are overlaid on the analytic envelope.
+    n_samples : int
+        Number of longitudinal positions for the envelope.
+    figsize : tuple
+    save_fig : str   filename to save ('' = don't save)
+
+    Returns
+    -------
+    matplotlib Figure
+    """
+    m = _self(); g = _geo()
+
+    # ── Beamline element positions and labels ─────────────────────────────────
+    elements = [
+        (0.0,      'Source',  'S'),
+        (m.D_SL1,  'SL1',     'slit'),
+        (m.D_M1,   'M1',      'mirror_v'),
+        (m.D_M2,   'M2',      'mirror_v'),
+        (m.D_SL2,  'SL2',     'slit'),
+        (m.D_SL3,  'SL3',     'slit'),
+        (m.D_KB1,  'KB1',     'mirror_v'),
+        (m.D_KB2,  'KB2',     'mirror_h'),
+        (m.D_SA,   'Sample',  'S'),
+    ]
+
+    # ── Lab-frame beam centroid path ──────────────────────────────────────────
+    # Track z_lab (vertical) and x_lab (horizontal) of beam centroid.
+    # Deflections happen at mirrors; beam propagates as straight lines between.
+    #
+    # Vertical (side view):
+    #   M1 deflects UP   by 2*G_M1 → beam rises until M2
+    #   M2 deflects DOWN by 2*G_M2 → beam (nearly) restored to axis
+    #   KB1 deflects the beam for focusing (azimuthal=0, vertical plane)
+    #
+    # Horizontal (top view):
+    #   M1, M2 sagittal → no horizontal deflection
+    #   KB2 deflects horizontally (azimuthal=pi/2)
+
+    # Build piecewise-linear centroid path
+    # Segments: (y_start, y_end, dz_start, slope_z, dx_start, slope_x)
+    def _segments():
+        segs = []
+        # Source → M1: on axis, horizontal
+        segs.append(dict(y0=0, y1=m.D_M1,
+                         z0=0,         sz=0,
+                         x0=0,         sx=0))
+        # M1 → M2: beam rises by 2*G_M1 rad, starts at z=0 at M1
+        segs.append(dict(y0=m.D_M1, y1=m.D_M2,
+                         z0=0,         sz=2*m.G_M1,
+                         x0=0,         sx=0))
+        # M2 → SL2: M2 is at z_lab = DZ_M1_M2; M2 deflects back down by 2*G_M2
+        z_at_m2 = 2*m.G_M1 * (m.D_M2 - m.D_M1)
+        slope_after_m2 = 2*m.G_M1 - 2*m.G_M2   # net slope (should be ~0)
+        segs.append(dict(y0=m.D_M2, y1=m.D_SL2,
+                         z0=z_at_m2,   sz=slope_after_m2,
+                         x0=0,         sx=0))
+        # SL2 → KB1: beam continues at same slope
+        z_at_sl2 = z_at_m2 + slope_after_m2 * (m.D_SL2 - m.D_M2)
+        segs.append(dict(y0=m.D_SL2, y1=m.D_KB1,
+                         z0=z_at_sl2,  sz=slope_after_m2,
+                         x0=0,         sx=0))
+        # KB1 → KB2: KB1 deflects vertically by 2*G_KB1 downward (azimuthal=0)
+        z_at_kb1 = z_at_sl2 + slope_after_m2 * (m.D_KB1 - m.D_SL2)
+        slope_after_kb1 = slope_after_m2 - 2*m.G_KB1
+        segs.append(dict(y0=m.D_KB1, y1=m.D_KB2,
+                         z0=z_at_kb1,  sz=slope_after_kb1,
+                         x0=0,         sx=0))
+        # KB2 → Sample: KB2 deflects horizontally by 2*G_KB2 (azimuthal=pi/2)
+        z_at_kb2 = z_at_kb1 + slope_after_kb1 * (m.D_KB2 - m.D_KB1)
+        segs.append(dict(y0=m.D_KB2, y1=m.D_SA,
+                         z0=z_at_kb2,  sz=slope_after_kb1,
+                         x0=0,         sx=-2*m.G_KB2))
+        return segs
+
+    segs = _segments()
+
+    def centroid_at(y):
+        """Lab-frame (z, x) centroid at longitudinal position y."""
+        for s in segs:
+            if s['y0'] <= y <= s['y1'] + 1e-9:
+                dy = y - s['y0']
+                return s['z0'] + s['sz']*dy, s['x0'] + s['sx']*dy
+        s = segs[-1]
+        dy = y - s['y0']
+        return s['z0'] + s['sz']*dy, s['x0'] + s['sx']*dy
+
+    # ── Analytic beam envelope (±1 sigma) ─────────────────────────────────────
+    # Before KB: free propagation from BM source with emittance (sigma, sigma')
+    # After KB1: beam converges vertically to sample
+    # After KB2: beam converges horizontally to sample
+    def envelope_v(y):
+        """Vertical ±1 sigma [m] at position y (lab frame)."""
+        if y <= m.D_KB1:
+            # Free propagation from source
+            return np.sqrt(m.SIGMA_Y**2 + (m.SIGMA_YP * y)**2)
+        else:
+            # KB1 focuses: beam converges from KB1 to sample
+            # Linear interpolation between size at KB1 entrance and ~0 at sample
+            s_kb1 = np.sqrt(m.SIGMA_Y**2 + (m.SIGMA_YP * m.D_KB1)**2)
+            frac  = (y - m.D_KB1) / g['L_KB1_SA']
+            # At focus: sigma = SIGMA_Y * q_KB1/p_KB1
+            s_foc = m.SIGMA_Y * g['L_KB1_SA'] / g['L_SL2_KB1']
+            return s_kb1 * (1 - frac) + s_foc * frac
+
+    def envelope_h(y):
+        """Horizontal ±1 sigma [m] at position y (lab frame)."""
+        if y <= m.D_KB2:
+            return np.sqrt(m.SIGMA_X**2 + (m.SIGMA_XP * y)**2)
+        else:
+            s_kb2 = np.sqrt(m.SIGMA_X**2 + (m.SIGMA_XP * m.D_KB2)**2)
+            frac  = (y - m.D_KB2) / g['L_KB2_SA']
+            s_foc = m.SIGMA_X * g['L_KB2_SA'] / g['L_SL2_KB2']
+            return s_kb2 * (1 - frac) + s_foc * frac
+
+    # Sample positions
+    y_pts  = np.linspace(0, m.D_SA, n_samples)
+    cz     = np.array([centroid_at(y)[0] for y in y_pts]) * 1e3   # mm
+    cx     = np.array([centroid_at(y)[1] for y in y_pts]) * 1e3
+    env_v  = np.array([envelope_v(y)     for y in y_pts]) * 1e3
+    env_h  = np.array([envelope_h(y)     for y in y_pts]) * 1e3
+
+    # ── Plot ─────────────────────────────────────────────────────────────────
+    fig, (ax_side, ax_top) = plt.subplots(2, 1, figsize=figsize,
+                                           sharex=True)
+    fig.suptitle("BM32 beam path  —  source to sample", fontsize=12)
+
+    BEAM_COL   = "#e07b39"
+    MIRROR_COL = "#4a90d9"
+    SLIT_COL   = "#555555"
+
+    for ax, cen, env, ylabel, view in [
+        (ax_side, cz, env_v, "Z vertical (mm)", "side"),
+        (ax_top,  cx, env_h, "X horizontal (mm)", "top"),
+    ]:
+        # Beam envelope
+        ax.fill_between(y_pts, cen - env, cen + env,
+                        color=BEAM_COL, alpha=0.35, label="Beam ±1σ")
+        ax.plot(y_pts, cen + env, color=BEAM_COL, lw=1.0, alpha=0.7)
+        ax.plot(y_pts, cen - env, color=BEAM_COL, lw=1.0, alpha=0.7)
+        ax.plot(y_pts, cen,       color=BEAM_COL, lw=1.5, label="Centroid")
+
+        # Optical axis (dashed)
+        ax.axhline(0, color="gray", lw=0.7, ls="--", alpha=0.5)
+
+        # Draw elements
+        for (pos, name, etype) in elements:
+            if etype == 'slit':
+                # Vertical line + jaw markers
+                ax.axvline(pos, color=SLIT_COL, lw=1.0, ls=":", alpha=0.7)
+                z0, x0 = centroid_at(pos)
+                c = (z0 if view == "side" else x0) * 1e3
+                gap = (m.SL1_V if name == "SL1" else
+                       m.SL2_V if name == "SL2" else m.SL3_V) if view == "side" else \
+                      (m.SL1_H if name == "SL1" else
+                       m.SL2_H if name == "SL2" else m.SL3_H)
+                h = gap/2 * 1e3
+                ax.annotate("", xy=(pos, c+h+0.3), xytext=(pos, c+h+1.2),
+                             arrowprops=dict(arrowstyle="-|>", color=SLIT_COL, lw=1.2))
+                ax.annotate("", xy=(pos, c-h-0.3), xytext=(pos, c-h-1.2),
+                             arrowprops=dict(arrowstyle="-|>", color=SLIT_COL, lw=1.2))
+                ax.text(pos, ax.get_ylim()[1] if ax.get_ylim()[1] != 1.0 else 2,
+                        name, ha='center', va='bottom', fontsize=7,
+                        color=SLIT_COL)
+
+            elif etype in ('mirror_v', 'mirror_h'):
+                active = (etype == 'mirror_v' and view == 'side') or \
+                         (etype == 'mirror_h' and view == 'top')
+                col   = MIRROR_COL if active else "lightgray"
+                lw    = 2.0 if active else 0.8
+                z0, x0 = centroid_at(pos)
+                c   = (z0 if view == "side" else x0) * 1e3
+                if name in ('M1', 'M2'):
+                    half = m.M1_LENGTH/2 * np.sin(m.G_M1 if name=='M1' else m.G_M2) * 1e3
+                elif name == 'KB1':
+                    half = m.KB1_LENGTH/2 * np.sin(m.G_KB1) * 1e3
+                else:
+                    half = m.KB2_LENGTH/2 * np.sin(m.G_KB2) * 1e3
+                ax.plot([pos, pos], [c - half, c + half],
+                        color=col, lw=lw, solid_capstyle='round')
+                ax.text(pos + 0.05, c + half + 0.2, name,
+                        ha='left', va='bottom', fontsize=7, color=col)
+
+            elif etype == 'S':
+                z0, x0 = centroid_at(pos)
+                c = (z0 if view == "side" else x0) * 1e3
+                ax.plot(pos, c, 'o', color="crimson" if name == "Sample" else "black",
+                        ms=5, zorder=5)
+                ax.text(pos + 0.1, c + 0.3, name, fontsize=7,
+                        color="crimson" if name == "Sample" else "black")
+
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.grid(True, alpha=0.2)
+        ax.set_xlim(-0.5, m.D_SA + 0.3)
+        label = "Side view  (vertical plane)" if view == "side" \
+                else "Top view  (horizontal plane)"
+        ax.set_title(label, fontsize=9, loc="left")
+
+    ax_top.set_xlabel("Distance from source  (m)", fontsize=9)
+
+    # Shared legend
+    from matplotlib.lines import Line2D
+    legend_els = [
+        Line2D([0],[0], color=BEAM_COL, lw=2, label="Beam envelope ±1σ"),
+        Line2D([0],[0], color=MIRROR_COL, lw=2, label="Active mirror"),
+        Line2D([0],[0], color="lightgray", lw=2, label="Inactive plane"),
+        Line2D([0],[0], color=SLIT_COL, lw=1, ls=":", label="Slits"),
+    ]
+    ax_side.legend(handles=legend_els, fontsize=7, loc="upper right", ncol=4)
+
+    plt.tight_layout()
+    if save_fig:
+        plt.savefig(save_fig, dpi=150)
+        print(f"[plot_beam_path] Saved -> {save_fig}")
+    _maybe_show(fig)
+    return fig
+
+
+
     # Notebook-style step-by-step usage:
     #
     #   import beamline2 as bm

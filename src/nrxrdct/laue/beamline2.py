@@ -1263,70 +1263,153 @@ def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
         # Optical axis (dashed)
         ax.axhline(0, color="gray", lw=0.7, ls="--", alpha=0.5)
 
-        # Draw elements
+        # Draw elements + annotations
         for (pos, name, etype) in elements:
+
+            # ── annotation text for this element ──────────────────────────────
+            if name == 'SL1':
+                ann = (f"SL1  {m.D_SL1:.3f} m\n"
+                       f"H={m.SL1_H*1e3:.1f} mm  V={m.SL1_V*1e3:.1f} mm")
+            elif name == 'SL2':
+                ann = (f"SL2  {m.D_SL2:.3f} m\n"
+                       f"H={m.SL2_H*1e3:.3f} mm  V={m.SL2_V*1e3:.3f} mm")
+            elif name == 'SL3':
+                ann = (f"SL3  {m.D_SL3:.3f} m\n"
+                       f"H={m.SL3_H*1e3:.2f} mm  V={m.SL3_V*1e3:.2f} mm")
+            elif name == 'M1':
+                ann = (f"M1  {m.D_M1:.3f} m\n"
+                       f"G={m.G_M1*1e3:.3f} mrad\n"
+                       f"{'bent' if m.MIRROR_CURVED else 'flat'}")
+            elif name == 'M2':
+                ann = (f"M2  {m.D_M2:.3f} m\n"
+                       f"G={m.G_M2*1e3:.3f} mrad\n"
+                       f"{'bent' if m.MIRROR_CURVED else 'flat'}")
+            elif name == 'KB1':
+                ann = (f"KB1  {m.D_KB1:.3f} m\n"
+                       f"G={m.G_KB1*1e3:.3f} mrad\n"
+                       f"demag={g['L_KB1_SA']/g['L_SL2_KB1']:.4f}")
+            elif name == 'KB2':
+                ann = (f"KB2  {m.D_KB2:.3f} m\n"
+                       f"G={m.G_KB2*1e3:.3f} mrad\n"
+                       f"demag={g['L_KB2_SA']/g['L_SL2_KB2']:.4f}")
+            elif name == 'Source':
+                ann = (f"Source\n"
+                       f"sx={m.SIGMA_X*1e6:.1f} um\n"
+                       f"sy={m.SIGMA_Y*1e6:.1f} um")
+            elif name == 'Sample':
+                fv = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1'] * 1e9
+                fh = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2'] * 1e9
+                ann = (f"Sample  {m.D_SA:.3f} m\n"
+                       f"V={fv:.0f} nm\n"
+                       f"H={fh:.0f} nm FWHM")
+            else:
+                ann = name
+
+            # ── draw element ──────────────────────────────────────────────────
             if etype == 'slit':
-                # Vertical line + jaw markers
                 ax.axvline(pos, color=SLIT_COL, lw=1.0, ls=":", alpha=0.7)
                 z0, x0 = centroid_at(pos)
                 c = (z0 if view == "side" else x0) * 1e3
                 gap = (m.SL1_V if name == "SL1" else
-                       m.SL2_V if name == "SL2" else m.SL3_V) if view == "side" else \
+                       m.SL2_V if name == "SL2" else m.SL3_V) \
+                      if view == "side" else \
                       (m.SL1_H if name == "SL1" else
                        m.SL2_H if name == "SL2" else m.SL3_H)
-                h = gap/2 * 1e3
-                ax.annotate("", xy=(pos, c+h+0.3), xytext=(pos, c+h+1.2),
-                             arrowprops=dict(arrowstyle="-|>", color=SLIT_COL, lw=1.2))
-                ax.annotate("", xy=(pos, c-h-0.3), xytext=(pos, c-h-1.2),
-                             arrowprops=dict(arrowstyle="-|>", color=SLIT_COL, lw=1.2))
-                ax.text(pos, ax.get_ylim()[1] if ax.get_ylim()[1] != 1.0 else 2,
-                        name, ha='center', va='bottom', fontsize=7,
-                        color=SLIT_COL)
+                h = gap / 2 * 1e3
+                # Jaw arrows
+                for sign in (+1, -1):
+                    ax.annotate(
+                        "", xy=(pos, c + sign*(h + 0.15)),
+                        xytext=(pos, c + sign*(h + 1.0)),
+                        arrowprops=dict(arrowstyle="-|>",
+                                        color=SLIT_COL, lw=1.2))
+                # Annotation box — alternate above/below to reduce overlap
+                y_ann = ax.get_ylim()[1] * 0.85 if ax.get_ylim()[1] != 1.0 else 3
+                ax.annotate(ann,
+                            xy=(pos, c), xytext=(pos, y_ann),
+                            ha='center', va='top', fontsize=6,
+                            color=SLIT_COL,
+                            arrowprops=dict(arrowstyle="-", color=SLIT_COL,
+                                            lw=0.5, alpha=0.4),
+                            bbox=dict(boxstyle="round,pad=0.2",
+                                      fc="white", ec=SLIT_COL,
+                                      alpha=0.85, lw=0.6))
 
             elif etype in ('mirror_v', 'mirror_h'):
                 active = (etype == 'mirror_v' and view == 'side') or \
                          (etype == 'mirror_h' and view == 'top')
-                col   = MIRROR_COL if active else "lightgray"
-                lw    = 2.0 if active else 0.8
+                col = MIRROR_COL if active else "lightgray"
+                lw  = 2.5 if active else 0.8
                 z0, x0 = centroid_at(pos)
-                c   = (z0 if view == "side" else x0) * 1e3
+                c = (z0 if view == "side" else x0) * 1e3
                 if name in ('M1', 'M2'):
-                    half = m.M1_LENGTH/2 * np.sin(m.G_M1 if name=='M1' else m.G_M2) * 1e3
+                    G    = m.G_M1 if name == 'M1' else m.G_M2
+                    half = m.M1_LENGTH / 2 * np.sin(G) * 1e3
                 elif name == 'KB1':
-                    half = m.KB1_LENGTH/2 * np.sin(m.G_KB1) * 1e3
+                    half = m.KB1_LENGTH / 2 * np.sin(m.G_KB1) * 1e3
                 else:
-                    half = m.KB2_LENGTH/2 * np.sin(m.G_KB2) * 1e3
+                    half = m.KB2_LENGTH / 2 * np.sin(m.G_KB2) * 1e3
                 ax.plot([pos, pos], [c - half, c + half],
                         color=col, lw=lw, solid_capstyle='round')
-                ax.text(pos + 0.05, c + half + 0.2, name,
-                        ha='left', va='bottom', fontsize=7, color=col)
+                if active:
+                    # Annotation box on active side
+                    y_ann = (c + half + 0.3) if c + half > 0 else (c - half - 0.3)
+                    va    = 'bottom' if c + half > 0 else 'top'
+                    ax.annotate(ann,
+                                xy=(pos, c + half if c + half > 0 else c - half),
+                                xytext=(pos + 0.3, y_ann),
+                                ha='left', va=va, fontsize=6,
+                                color=MIRROR_COL,
+                                arrowprops=dict(arrowstyle="-",
+                                                color=MIRROR_COL,
+                                                lw=0.5, alpha=0.5),
+                                bbox=dict(boxstyle="round,pad=0.2",
+                                          fc="white", ec=MIRROR_COL,
+                                          alpha=0.85, lw=0.6))
+                else:
+                    ax.text(pos + 0.05, c + half + 0.1, name,
+                            ha='left', va='bottom', fontsize=6,
+                            color="darkgray")
 
             elif etype == 'S':
                 z0, x0 = centroid_at(pos)
                 c = (z0 if view == "side" else x0) * 1e3
-                ax.plot(pos, c, 'o', color="crimson" if name == "Sample" else "black",
-                        ms=5, zorder=5)
-                ax.text(pos + 0.1, c + 0.3, name, fontsize=7,
-                        color="crimson" if name == "Sample" else "black")
+                col = "crimson" if name == "Sample" else "black"
+                ms  = 6 if name == "Sample" else 4
+                ax.plot(pos, c, 'o', color=col, ms=ms, zorder=5)
+                ax.annotate(ann,
+                            xy=(pos, c),
+                            xytext=(pos + (0.3 if name == 'Sample' else 0.3),
+                                    c + 0.5),
+                            ha='left', va='bottom', fontsize=6,
+                            color=col,
+                            arrowprops=dict(arrowstyle="-", color=col,
+                                            lw=0.5, alpha=0.5),
+                            bbox=dict(boxstyle="round,pad=0.2",
+                                      fc="white", ec=col,
+                                      alpha=0.85, lw=0.6))
 
         ax.set_ylabel(ylabel, fontsize=9)
         ax.grid(True, alpha=0.2)
-        ax.set_xlim(-0.5, m.D_SA + 0.3)
-        label = "Side view  (vertical plane)" if view == "side" \
-                else "Top view  (horizontal plane)"
-        ax.set_title(label, fontsize=9, loc="left")
+        ax.set_xlim(-0.5, m.D_SA + 0.5)
+        view_label = "Side view  (vertical plane)" if view == "side" \
+                     else "Top view  (horizontal plane)"
+        ax.set_title(view_label, fontsize=9, loc="left")
 
     ax_top.set_xlabel("Distance from source  (m)", fontsize=9)
 
-    # Shared legend
+    # Legend — top left corner of side-view panel
     from matplotlib.lines import Line2D
     legend_els = [
-        Line2D([0],[0], color=BEAM_COL, lw=2, label="Beam envelope ±1σ"),
-        Line2D([0],[0], color=MIRROR_COL, lw=2, label="Active mirror"),
-        Line2D([0],[0], color="lightgray", lw=2, label="Inactive plane"),
-        Line2D([0],[0], color=SLIT_COL, lw=1, ls=":", label="Slits"),
+        Line2D([0],[0], color=BEAM_COL,    lw=2,       label="Beam envelope ±1σ"),
+        Line2D([0],[0], color=BEAM_COL,    lw=1.5,     label="Centroid"),
+        Line2D([0],[0], color=MIRROR_COL,  lw=2.5,     label="Active mirror"),
+        Line2D([0],[0], color="lightgray", lw=1.5,     label="Mirror (inactive plane)"),
+        Line2D([0],[0], color=SLIT_COL,    lw=1, ls=":", label="Slits"),
     ]
-    ax_side.legend(handles=legend_els, fontsize=7, loc="upper right", ncol=4)
+    ax_side.legend(handles=legend_els, fontsize=7,
+                   loc="upper left", ncol=1,
+                   framealpha=0.9, edgecolor="gray")
 
     plt.tight_layout()
     if save_fig:

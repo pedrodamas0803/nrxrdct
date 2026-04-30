@@ -576,6 +576,231 @@ def source_bm32_parallel(nrays=2_000_000, ncores=None):
     return beam_out, norm_factor
 
 
+    return beam_out, norm_factor
+
+
+# =============================================================================
+# PARALLEL / CHUNKED BEAM UTILITIES
+# =============================================================================
+
+def merge_beams(beams):
+    """
+    Merge a list of S4Beam objects into a single beam.
+
+    Ray numbers are re-assigned sequentially so they are unique across chunks.
+    Only surviving rays (flag > 0) from each chunk are kept.
+
+    Parameters
+    ----------
+    beams : list of S4Beam
+
+    Returns
+    -------
+    S4Beam  with all surviving rays concatenated
+
+    Example
+    -------
+    beams_m2 = bm.pmap(bm.element_m2, beams_m1)
+    beam_m2  = bm.merge_beams([b for b, _ in beams_m2])
+    """
+    from shadow4.beam.s4_beam import S4Beam
+    chunks = []
+    for b in beams:
+        g = b.rays[b.rays[:, 9] > 0]
+        if len(g):
+            chunks.append(g)
+    if not chunks:
+        raise ValueError("merge_beams: no surviving rays in any chunk.")
+    all_rays = np.vstack(chunks)
+    all_rays[:, 11] = np.arange(1, len(all_rays) + 1, dtype=float)
+    out = S4Beam(); out.rays = all_rays
+    return out
+
+
+def source_bm32_chunks(nrays=10_000_000, ncores=None, nchunks=None):
+    """
+    Generate the BM source as a list of independent beam chunks, one per core.
+
+    Each chunk is a separate S4Beam with nrays/nchunks rays and a unique seed.
+    The chunks can be passed directly to pmap() for parallel downstream tracing,
+    or merged with merge_beams() for single-beam analysis.
+
+    This is the recommended starting point for high-statistics simulations:
+
+        beams, norm = bm.source_bm32_chunks(nrays=10_000_000, ncores=8)
+        beams_sl1   = bm.pmap(bm.element_slit, beams,
+                               bm.SL1_H, bm.SL1_V, bm._geo()['L_SRC_SL1'],
+                               label='SL1')
+        beams_m1    = bm.pmap(bm.element_m1,  beams_sl1,
+                               p_from=bm._geo()['L_SL1_M1'])
+        ...
+        beam_final  = bm.merge_beams([b for b, _ in beams_m2])
+
+    Parameters
+    ----------
+    nrays   : int   total number of rays (split across chunks)
+    ncores  : int   number of parallel workers (default = all CPUs)
+    nchunks : int   number of chunks (default = ncores).
+                    You can set nchunks > ncores to get more chunks than cores,
+                    which allows finer-grained progress reporting.
+
+    Returns
+    -------
+    beams       : list of S4Beam  (length = nchunks)
+    norm_factor : float   ph/s per ray (same for all chunks)
+    """
+    import multiprocessing as mp
+    import time
+    from shadow4.beam.s4_beam import S4Beam
+
+    m = _self()
+    if ncores is None:
+        ncores = mp.cpu_count()
+    ncores = max(1, ncores)
+    if nchunks is None:
+        nchunks = ncores
+
+    rays_per_chunk = nrays // nchunks
+    remainder      = nrays - rays_per_chunk * nchunks
+    counts         = [rays_per_chunk + (1 if i < remainder else 0)
+                      for i in range(nchunks)]
+    seeds          = [5676561 + i * 1000 for i in range(nchunks)]
+
+    print(f"\n[Source chunks] SBM32  {nrays:,} rays total  "
+          f"-> {nchunks} chunks x {rays_per_chunk:,} rays  "
+          f"({ncores} parallel workers) ...")
+
+    t0 = time.time()
+    if ncores == 1:
+        results = [_bm32_worker((counts[i], seeds[i])) for i in range(nchunks)]
+    else:
+        ctx = mp.get_context('fork')
+        with ctx.Pool(processes=ncores) as pool:
+            results = pool.map(_bm32_worker, zip(counts, seeds))
+
+    # Build one S4Beam per chunk
+    beams = []
+    for rays, _ in results:
+        b = S4Beam(); b.rays = rays; beams.append(b)
+
+    total_flux  = np.mean([t for _, t in results])
+    norm_factor = total_flux / rays_per_chunk
+
+    dt     = time.time() - t0
+    n_good = sum((b.rays[:, 9] > 0).sum() for b in beams)
+    print(f"       {n_good:,} rays  in {dt:.1f}s  "
+          f"({nrays/dt/1e3:.0f}k rays/s)  "
+          f"norm={norm_factor:.4e} ph/s/ray")
+    return beams, norm_factor
+
+
+
+def _pmap_worker(task):
+    """Module-level worker for pmap — must be picklable."""
+    beam_rays, mod_name, fn_name, pos_args, kw_args = task
+    from shadow4.beam.s4_beam import S4Beam
+    import sys, importlib
+    # Use the already-imported module (fork shares memory, so it's available)
+    mod = sys.modules.get(mod_name)
+    if mod is None:
+        mod = importlib.import_module(mod_name)
+    fn  = getattr(mod, fn_name)
+    b   = S4Beam(); b.rays = beam_rays
+    return fn(b, *pos_args, **kw_args)
+
+
+def pmap(fn, beams, *args, ncores=None, verbose=True, **kwargs):
+    """
+    Apply an element function to each beam in a list, in parallel.
+
+    Every element function in this module works with pmap.
+    plot=False is set automatically on each chunk.
+
+    Parameters
+    ----------
+    fn     : callable   module-level element function (e.g. bm.element_m1)
+    beams  : list of S4Beam
+    *args  : positional args forwarded to fn after the beam
+    ncores : int        workers (default = min(len(beams), cpu_count))
+    verbose: bool       print survival summary
+    **kwargs            keyword args forwarded to fn
+
+    Returns
+    -------
+    list — one result per input beam.
+      element_slit / beam_at_distance -> list of S4Beam
+      element_m1/m2/kb1/kb2           -> list of (S4Beam, footprint)
+
+    Examples
+    --------
+    g = bm._geo()
+    beams, norm = bm.source_bm32_chunks(nrays=10_000_000, ncores=8)
+
+    # Slits (return beam directly):
+    beams_sl1 = bm.pmap(bm.element_slit, beams,
+                         bm.SL1_H, bm.SL1_V, g["L_SRC_SL1"], label="SL1")
+    beam_sl1  = bm.merge_beams(beams_sl1)
+
+    # Mirrors (return (beam, footprint)):
+    res_m1  = bm.pmap(bm.element_m1, beams_sl1, p_from=g["L_SL1_M1"])
+    beam_m1 = bm.merge_beams([r[0] for r in res_m1])
+    fp_m1   = bm.merge_beams([r[1] for r in res_m1])
+
+    res_m2  = bm.pmap(bm.element_m2, [r[0] for r in res_m1])
+    beam_m2 = bm.merge_beams([r[0] for r in res_m2])
+
+    bm.plot_beam(beam_m2, "After M2")
+    bm.plot_spectrum(beam_m2, norm_factor=norm)
+    """
+    import multiprocessing as mp
+    import time
+
+    fn_name = getattr(fn, "__name__", None)
+    if fn_name is None:
+        raise ValueError("pmap: fn must be a named module-level function.")
+
+    if ncores is None:
+        ncores = min(len(beams), mp.cpu_count())
+    ncores = max(1, ncores)
+
+    if verbose:
+        print(f"\n[pmap] {fn_name}  {len(beams)} chunks  ({ncores} workers) ...")
+
+    kw = dict(kwargs)
+    # Only inject plot=False for functions that accept it
+    import inspect
+    try:
+        sig = inspect.signature(fn)
+        if "plot" in sig.parameters and "plot" not in kw:
+            kw["plot"] = False
+    except (ValueError, TypeError):
+        pass
+
+    tasks = [(b.rays, __name__, fn_name, args, kw) for b in beams]
+
+    t0 = time.time()
+    if ncores == 1 or len(beams) == 1:
+        results = [_pmap_worker(t) for t in tasks]
+    else:
+        ctx = mp.get_context("fork")
+        with ctx.Pool(processes=ncores) as pool:
+            results = pool.map(_pmap_worker, tasks)
+
+    dt = time.time() - t0
+
+    if verbose:
+        from shadow4.beam.s4_beam import S4Beam
+        def _n(r):
+            b = r[0] if isinstance(r, tuple) else r
+            return (b.rays[:, 9] > 0).sum() if isinstance(b, S4Beam) else 0
+        n_out = sum(_n(r) for r in results)
+        n_in  = sum((b.rays[:, 9] > 0).sum() for b in beams)
+        print(f"       {n_out:,} / {n_in:,} rays survive  "
+              f"({100*n_out/max(n_in, 1):.3f}%)  in {dt:.1f}s")
+
+    return results
+
+
 def _make_mirror_ir(name, boundary, p_foc, q_foc, G, curved):
     """Internal: build Ir mirror (flat or bent cylinder)."""
     if curved:

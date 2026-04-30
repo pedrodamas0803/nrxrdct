@@ -1301,6 +1301,379 @@ def set_kb_source_from_beam(beam, nrays=500_000, seed=1234,
 # CONVENIENCE: full chain
 # =============================================================================
 
+
+
+def load_from_h5(h5file, scan="1.1"):
+    """
+    Read motor positions from a BM32 HDF5 data file and set all beamline
+    geometry variables automatically.
+
+    The HDF5 structure expected is:
+        {scan}/instrument/positioners/{motor_name}  -> scalar value
+
+    Parameters
+    ----------
+    h5file : str   path to the .h5 file
+    scan   : str   scan entry name, e.g. "1.1", "2.1", "3.1"
+                   (default "1.1")
+
+    Returns
+    -------
+    dict   all motor values read from the file (raw, in original units)
+
+    Motor mapping
+    -------------
+    Slits (gap in mm, converted via bm.mm()):
+        vg1, hg1  -> SL1_V, SL1_H   (x20 multiplier — full gap = 20 * vg1/hg1)
+        vg2, hg2  -> SL2_V, SL2_H
+        vg3, hg3  -> SL3_V, SL3_H
+
+    Mirror angles (in mrad, converted via bm.mrad()):
+        ma1  -> G_M1
+        ma2  -> G_M2
+        ry1  -> G_KB1
+        rz2  -> G_KB2
+
+    Mirror height offset:
+        mh1, mh2  -> DZ_M1_M2 = mm(mh2 - mh1)
+
+    Example
+    -------
+    import beamline2 as bm
+
+    motors = bm.load_from_h5(
+        "/data/visitor/a322865/bm32/20240719/RAW_DATA/"
+        "M5785w3/M5785w3_map2/M5785w3_map2.h5",
+        scan="2.1"
+    )
+    g = bm._geo()
+    bm._print_geometry()
+    bm.plot_beam_path()
+    """
+    import h5py
+    m = _self()
+
+    with h5py.File(h5file, "r") as hin:
+        base = f"{scan}/instrument/positioners"
+        if base not in hin:
+            available = list(hin.keys())
+            raise KeyError(
+                f"Scan '{scan}' not found in {h5file}.\n"
+                f"Available top-level keys: {available}"
+            )
+        motors = {}
+        for key in hin[base].keys():
+            try:
+                motors[key] = float(hin[f"{base}/{key}"][()])
+            except Exception:
+                pass   # skip non-scalar entries silently
+
+    print(f"[load_from_h5] {h5file}")
+    print(f"  Scan : {scan}")
+    print(f"  Motors read ({len(motors)}): {', '.join(sorted(motors))}")
+    print()
+
+    def _get(name, default=None):
+        val = motors.get(name, default)
+        if val is None:
+            print(f"  WARNING: motor '{name}' not found, skipping.")
+        return val
+
+    # ── Slit gaps ─────────────────────────────────────────────────────────────
+    # SL1: vg1/hg1 are blade positions; full gap = 20 * motor_value (empirical)
+    vg1 = _get("vg1"); hg1 = _get("hg1")
+    vg2 = _get("vg2"); hg2 = _get("hg2")
+    vg3 = _get("vg3"); hg3 = _get("hg3")
+
+    if vg1 is not None and hg1 is not None:
+        m.SL1_V = mm(vg1 * 20)
+        m.SL1_H = mm(hg1 * 20)
+    if vg2 is not None and hg2 is not None:
+        m.SL2_V = mm(vg2)
+        m.SL2_H = mm(hg2)
+    if vg3 is not None and hg3 is not None:
+        m.SL3_V = mm(vg3)
+        m.SL3_H = mm(hg3)
+
+    # ── Mirror angles ─────────────────────────────────────────────────────────
+    ma1 = _get("ma1"); ma2 = _get("ma2")
+    ry1 = _get("ry1"); rz2 = _get("rz2")
+
+    if ma1 is not None: m.G_M1  = mrad(ma1)
+    if ma2 is not None: m.G_M2  = mrad(ma2)
+    if ry1 is not None: m.G_KB1 = mrad(ry1)
+    if rz2 is not None: m.G_KB2 = mrad(rz2)
+
+    # ── Mirror height offset ──────────────────────────────────────────────────
+    mh1 = _get("mh1"); mh2 = _get("mh2")
+    if mh1 is not None and mh2 is not None:
+        m.DZ_M1_M2 = mm(mh2 - mh1)
+
+    # ── Print what was set ────────────────────────────────────────────────────
+    print("  Geometry updated:")
+    if vg1 is not None:
+        print(f"    SL1  : H={m.SL1_H*1e3:.3f} mm  V={m.SL1_V*1e3:.3f} mm  "
+              f"(hg1={hg1:.4f}  vg1={vg1:.4f})")
+    if vg2 is not None:
+        print(f"    SL2  : H={m.SL2_H*1e3:.3f} mm  V={m.SL2_V*1e3:.3f} mm  "
+              f"(hg2={hg2:.4f}  vg2={vg2:.4f})")
+    if vg3 is not None:
+        print(f"    SL3  : H={m.SL3_H*1e3:.3f} mm  V={m.SL3_V*1e3:.3f} mm  "
+              f"(hg3={hg3:.4f}  vg3={vg3:.4f})")
+    if ma1 is not None:
+        print(f"    M1   : G={m.G_M1*1e3:.4f} mrad  (ma1={ma1:.4f})")
+    if ma2 is not None:
+        print(f"    M2   : G={m.G_M2*1e3:.4f} mrad  (ma2={ma2:.4f})")
+    if mh1 is not None and mh2 is not None:
+        print(f"    DZ_M1_M2 = {m.DZ_M1_M2*1e3:.3f} mm  "
+              f"(mh2={mh2:.4f} - mh1={mh1:.4f})")
+    if ry1 is not None:
+        print(f"    KB1  : G={m.G_KB1*1e3:.4f} mrad  (ry1={ry1:.4f})")
+    if rz2 is not None:
+        print(f"    KB2  : G={m.G_KB2*1e3:.4f} mrad  (rz2={rz2:.4f})")
+
+    return motors
+
+
+def save_results(path, norm_factor,
+                 beam_source=None,
+                 beam_sl1=None, beam_m1=None, footprint_m1=None,
+                 beam_m2=None, footprint_m2=None,
+                 beam_sl2=None, beam_sl3=None,
+                 beam_kb=None,
+                 beam_kb1=None, footprint_kb1=None,
+                 beam_kb2=None, footprint_kb2=None,
+                 label="", notes=""):
+    """
+    Save simulation results and geometry to a compressed NumPy archive (.npz).
+
+    Stores every beam and footprint that is provided, together with the
+    full geometry snapshot and a plain-text summary so the file is
+    self-describing.  Any beam can be omitted (pass None).
+
+    Parameters
+    ----------
+    path        : str   output path, e.g. "results/run_001.npz"
+                        The .npz extension is added automatically if absent.
+    norm_factor : float ph/s per ray (from source_bm32 / source_bm32_chunks)
+    beam_*      : S4Beam or None
+    footprint_* : S4Beam or None
+    label       : str   short run label, e.g. "G_KB1=2.2mrad SL2=0.2mm"
+    notes       : str   free-text notes stored in the archive
+
+    Returns
+    -------
+    str  — actual path written
+
+    Example
+    -------
+    bm.save_results(
+        "results/nominal.npz",
+        norm_factor = norm,
+        beam_m2     = beam_m2,
+        beam_sl2    = beam_sl2,
+        beam_sl3    = beam_sl3,
+        beam_kb2    = beam_kb2,
+        footprint_kb1 = fp_kb1,
+        footprint_kb2 = fp_kb2,
+        label = "nominal  G_KB1=2.2mrad  SL2=0.2mm",
+    )
+    """
+    import os, datetime
+    from shadow4.beam.s4_beam import A2EV
+
+    m = _self()
+    g = _geo()
+
+    if not path.endswith(".npz"):
+        path += ".npz"
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    # ── Geometry snapshot ─────────────────────────────────────────────────────
+    geo_keys = [
+        "D_SL1", "D_M1", "D_M2", "D_SL2", "D_SL3", "D_KB1", "D_KB2", "D_SA",
+        "G_M1", "G_M2", "G_KB1", "G_KB2",
+        "SL1_H", "SL1_V", "SL2_H", "SL2_V", "SL3_H", "SL3_V",
+        "M1_LENGTH", "M1_WIDTH", "M2_LENGTH", "M2_WIDTH",
+        "KB1_LENGTH", "KB1_WIDTH", "KB2_LENGTH", "KB2_WIDTH",
+        "SIGMA_X", "SIGMA_XP", "SIGMA_Y", "SIGMA_YP",
+        "E_GEV", "CURRENT_A", "E_MIN", "E_MAX",
+    ]
+    geo_arr = np.array([getattr(m, k) for k in geo_keys])
+    geo_names = np.array(geo_keys, dtype=object)
+    mirror_curved = np.array([int(m.MIRROR_CURVED)])
+
+    # ── Geometric focus ───────────────────────────────────────────────────────
+    fwhm_v = m.SIGMA_Y * 2.355 * g["L_KB1_SA"] / g["L_SL2_KB1"]
+    fwhm_h = m.SIGMA_X * 2.355 * g["L_KB2_SA"] / g["L_SL2_KB2"]
+
+    # ── Summary text ──────────────────────────────────────────────────────────
+    ts   = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    beams_provided = [name for name, b in [
+        ("beam_source", beam_source), ("beam_sl1", beam_sl1),
+        ("beam_m1", beam_m1), ("beam_m2", beam_m2),
+        ("beam_sl2", beam_sl2), ("beam_sl3", beam_sl3),
+        ("beam_kb", beam_kb), ("beam_kb1", beam_kb1), ("beam_kb2", beam_kb2),
+    ] if b is not None]
+    fps_provided = [name for name, b in [
+        ("footprint_m1", footprint_m1), ("footprint_m2", footprint_m2),
+        ("footprint_kb1", footprint_kb1), ("footprint_kb2", footprint_kb2),
+    ] if b is not None]
+
+    summary = (
+        f"BM32 simulation results\n"
+        f"=======================\n"
+        f"Saved    : {ts}\n"
+        f"Label    : {label}\n"
+        f"Notes    : {notes}\n\n"
+        f"Geometry:\n"
+        f"  G_M1={m.G_M1*1e3:.4f} mrad  G_M2={m.G_M2*1e3:.4f} mrad\n"
+        f"  G_KB1={m.G_KB1*1e3:.4f} mrad  G_KB2={m.G_KB2*1e3:.4f} mrad\n"
+        f"  Mirror curved: {m.MIRROR_CURVED}\n"
+        f"  SL1: {m.SL1_H*1e3:.3f} x {m.SL1_V*1e3:.3f} mm\n"
+        f"  SL2: {m.SL2_H*1e3:.3f} x {m.SL2_V*1e3:.3f} mm\n"
+        f"  SL3: {m.SL3_H*1e3:.3f} x {m.SL3_V*1e3:.3f} mm  D={m.D_SL3:.3f} m\n\n"
+        f"norm_factor = {norm_factor:.6e} ph/s/ray\n\n"
+        f"Geometric focus:\n"
+        f"  V = {fwhm_v*1e9:.2f} nm FWHM\n"
+        f"  H = {fwhm_h*1e9:.2f} nm FWHM\n\n"
+        f"Beams saved   : {', '.join(beams_provided) or 'none'}\n"
+        f"Footprints    : {', '.join(fps_provided) or 'none'}\n"
+    )
+
+    # Add ray counts
+    for name, b in [
+        ("beam_source", beam_source), ("beam_sl1", beam_sl1),
+        ("beam_m1", beam_m1), ("beam_m2", beam_m2),
+        ("beam_sl2", beam_sl2), ("beam_sl3", beam_sl3),
+        ("beam_kb", beam_kb), ("beam_kb1", beam_kb1), ("beam_kb2", beam_kb2),
+    ]:
+        if b is not None:
+            n = (b.rays[:, 9] > 0).sum()
+            summary += f"  {name}: {n:,} surviving rays\n"
+
+    # ── Build payload ─────────────────────────────────────────────────────────
+    payload = {
+        "summary":       np.array([summary], dtype=object),
+        "label":         np.array([label],   dtype=object),
+        "notes":         np.array([notes],   dtype=object),
+        "norm_factor":   np.array([norm_factor]),
+        "geo_keys":      geo_names,
+        "geo_values":    geo_arr,
+        "mirror_curved": mirror_curved,
+        "focus_fwhm_nm": np.array([fwhm_v * 1e9, fwhm_h * 1e9]),   # [V, H]
+        "A2EV":          np.array([A2EV]),
+    }
+
+    # Add beams (only surviving rays to save space)
+    for name, b in [
+        ("beam_source", beam_source), ("beam_sl1", beam_sl1),
+        ("beam_m1",     beam_m1),     ("beam_m2",  beam_m2),
+        ("beam_sl2",    beam_sl2),    ("beam_sl3", beam_sl3),
+        ("beam_kb",     beam_kb),     ("beam_kb1", beam_kb1),
+        ("beam_kb2",    beam_kb2),
+    ]:
+        if b is not None:
+            payload[name] = b.rays[b.rays[:, 9] > 0]
+
+    for name, b in [
+        ("footprint_m1",  footprint_m1),  ("footprint_m2",  footprint_m2),
+        ("footprint_kb1", footprint_kb1), ("footprint_kb2", footprint_kb2),
+    ]:
+        if b is not None:
+            payload[name] = b.rays[b.rays[:, 9] > 0]
+
+    np.savez_compressed(path, **payload)
+
+    # ── Report ─────────────────────────────────────────────────────────────────
+    size_mb = os.path.getsize(path) / 1e6
+    print(f"[save_results] {path}")
+    print(f"  Label   : {label}")
+    print(f"  Size    : {size_mb:.1f} MB")
+    print(f"  Beams   : {', '.join(beams_provided) or 'none'}")
+    print(f"  Focus   : V={fwhm_v*1e9:.1f} nm  H={fwhm_h*1e9:.1f} nm FWHM")
+    return path
+
+
+def load_results(path):
+    """
+    Load results saved by save_results() and restore geometry.
+
+    Returns a dict with all saved beams, footprints, and geometry.
+    Each beam is returned as an S4Beam object ready for plotting or further tracing.
+
+    Also restores the module-level geometry variables so that element functions
+    called after load_results() use the same geometry as when the file was saved.
+
+    Parameters
+    ----------
+    path : str   path to a .npz file written by save_results()
+
+    Returns
+    -------
+    dict with keys:
+        summary, label, notes, norm_factor, geometry (dict), focus_fwhm_nm,
+        beam_source, beam_sl1, beam_m1, beam_m2, beam_sl2, beam_sl3,
+        beam_kb, beam_kb1, beam_kb2,
+        footprint_m1, footprint_m2, footprint_kb1, footprint_kb2
+        (missing beams are not present in the dict)
+
+    Example
+    -------
+    r = bm.load_results("results/nominal.npz")
+    print(r["summary"])
+    bm.plot_beam(r["beam_kb2"], "At sample (loaded)")
+    bm.plot_spectrum(r["beam_kb2"], norm_factor=r["norm_factor"])
+    """
+    from shadow4.beam.s4_beam import S4Beam
+
+    m   = _self()
+    npz = np.load(path, allow_pickle=True)
+
+    result = {}
+
+    # Scalars
+    result["summary"]     = str(npz["summary"][0])
+    result["label"]       = str(npz["label"][0])
+    result["notes"]       = str(npz["notes"][0])
+    result["norm_factor"] = float(npz["norm_factor"][0])
+    result["focus_fwhm_nm"] = npz["focus_fwhm_nm"]   # [V_nm, H_nm]
+
+    # Restore geometry
+    keys = list(npz["geo_keys"])
+    vals = npz["geo_values"]
+    geo_dict = {k: float(v) for k, v in zip(keys, vals)}
+    for k, v in geo_dict.items():
+        if hasattr(m, k):
+            setattr(m, k, v)
+    result["geometry"] = geo_dict
+
+    curved = bool(npz["mirror_curved"][0])
+    m.MIRROR_CURVED = curved
+    result["geometry"]["MIRROR_CURVED"] = curved
+
+    # Beams
+    beam_keys = [
+        "beam_source", "beam_sl1", "beam_m1", "beam_m2",
+        "beam_sl2", "beam_sl3", "beam_kb", "beam_kb1", "beam_kb2",
+        "footprint_m1", "footprint_m2", "footprint_kb1", "footprint_kb2",
+    ]
+    for key in beam_keys:
+        if key in npz:
+            b = S4Beam()
+            b.rays = npz[key].copy()
+            result[key] = b
+
+    print(f"[load_results] {path}")
+    print(f"  Label   : {result['label']}")
+    print(f"  Focus   : V={result['focus_fwhm_nm'][0]:.1f} nm  "
+          f"H={result['focus_fwhm_nm'][1]:.1f} nm FWHM")
+    loaded_beams = [k for k in beam_keys if k in result]
+    print(f"  Loaded  : {', '.join(loaded_beams)}")
+    print(f"  Geometry restored to module.")
+    return result
+
+
 def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
                       plot_each=False, plot_final=True):
     """
@@ -1398,6 +1771,295 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
 
 
 # =============================================================================
+def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
+                          figsize=(13, 9), label="At sample"):
+    """
+    Compute and plot the beam footprint on a tilted sample surface.
+
+    The sample is tilted by tilt_deg around the X axis (horizontal axis
+    perpendicular to the beam direction Y).  This stretches the footprint
+    in the vertical (V) direction by 1/cos(tilt) and modifies the effective
+    divergence seen by the sample.
+
+    Geometry
+    --------
+    Lab frame:  beam travels along +Y, H = X, V = Z.
+    Sample tilt around X by angle theta:
+      - Sample surface normal rotates from Z toward Y.
+      - The footprint H dimension (along X) is unchanged.
+      - The footprint V dimension (along Z projected onto surface) is
+        stretched by 1/cos(theta).
+      - The effective incidence angle is (90 - theta) degrees.
+
+    Divergence
+    ----------
+    The beam convergence half-angles at the focal plane are:
+      alpha_V = SL2_V / (2 * D_SL2)  [rad]  (or BM divergence if SL2 wide open)
+      alpha_H = SL2_H / (2 * D_SL2)
+    On the tilted surface the effective V divergence becomes alpha_V / cos(theta).
+
+    Parameters
+    ----------
+    beam       : S4Beam   beam at the sample plane (output of element_kb2)
+    tilt_deg   : float    sample tilt angle [degrees] around X axis (default 40)
+    norm_factor: float    ph/s per ray (from source_bm32)
+    figsize    : tuple
+    label      : str
+
+    Returns
+    -------
+    dict with keys:
+        fwhm_H_nm, fwhm_V_nm,
+        footprint_H_nm, footprint_V_nm,   (on tilted surface)
+        div_H_urad, div_V_urad,            (convergence half-angles at focus)
+        div_H_sample_urad, div_V_sample_urad,  (on tilted surface)
+        incidence_deg,                     (beam-to-surface angle)
+        tilt_deg
+    fig
+
+    Example
+    -------
+    beam_kb2, _ = bm.element_kb2(beam_kb1)
+    info = bm.plot_sample_footprint(beam_kb2, tilt_deg=40.0,
+                                     norm_factor=norm)
+    print(f"Footprint: {info['footprint_H_nm']:.0f} x {info['footprint_V_nm']:.0f} nm")
+    """
+    from shadow4.beam.s4_beam import A2EV
+    import matplotlib.gridspec as gridspec
+    from matplotlib.patches import Ellipse
+
+    m    = _self()
+    g    = _geo()
+    tilt = np.radians(tilt_deg)
+    inc  = 90.0 - tilt_deg    # incidence angle (beam to sample surface)
+
+    rays = beam.rays[beam.rays[:, 9] > 0]
+    if len(rays) == 0:
+        print("[plot_sample_footprint] no surviving rays"); return None
+
+    # ── Lab-frame beam dimensions ─────────────────────────────────────────────
+    x_mm  = rays[:, 0] * 1e3   # H position [mm]
+    z_mm  = rays[:, 2] * 1e3   # V position [mm]
+    e_keV = rays[:, 10] / A2EV / 1e3
+
+    # Lab sigma and FWHM
+    sig_H_nm  = x_mm.std() * 1e6         # nm
+    sig_V_nm  = z_mm.std() * 1e6
+    fwhm_H_nm = sig_H_nm  * 2.355
+    fwhm_V_nm = sig_V_nm  * 2.355
+
+    # ── Footprint on tilted surface ───────────────────────────────────────────
+    # Tilt around X: H unchanged, V stretched by 1/cos(tilt)
+    stretch      = 1.0 / np.cos(tilt)
+    fp_H_nm      = fwhm_H_nm
+    fp_V_nm      = fwhm_V_nm * stretch
+    fp_H_sig_nm  = sig_H_nm
+    fp_V_sig_nm  = sig_V_nm * stretch
+
+    # Tilted-surface coordinates for each ray:
+    # x_surf = x  (unchanged)
+    # s_surf = z / cos(tilt)  (stretched along beam projection on surface)
+    x_surf_nm = x_mm  * 1e6               # nm, H on surface
+    s_surf_nm = z_mm  * 1e6 * stretch     # nm, V on surface (stretched)
+
+    # ── Divergences ───────────────────────────────────────────────────────────
+    # Convergence half-angles at focal plane from ray directions
+    py  = rays[:, 4]
+    pys = np.where(np.abs(py) > 1e-10, py, 1e-10)
+    px_div = rays[:, 3] / pys   # H divergence [rad]
+    pz_div = rays[:, 5] / pys   # V divergence [rad]
+
+    div_H_urad  = np.std(px_div) * 1e6   # RMS divergence
+    div_V_urad  = np.std(pz_div) * 1e6
+
+    # Full acceptance half-angle from SL2 (or BM divergence)
+    a_SL2_V = (m.SL2_V / 2) / m.D_SL2
+    a_SL2_H = (m.SL2_H / 2) / m.D_SL2
+    a_BM_V  = 3.0 * m.SIGMA_YP
+    a_BM_H  = 3.0 * m.SIGMA_XP
+    accept_V = min(a_SL2_V, a_BM_V) * 1e6   # urad
+    accept_H = min(a_SL2_H, a_BM_H) * 1e6
+
+    # Effective divergence on tilted surface
+    div_V_sample = div_V_urad / np.cos(tilt)
+    div_H_sample = div_H_urad              # H unchanged by X-tilt
+
+    # ── Spectral bandwidth in the beam ────────────────────────────────────────
+    e_eV   = beam.get_column(26, nolost=1)
+    i_col  = beam.get_column(23, nolost=1)
+    counts, edges = np.histogram(e_eV, bins=150,
+                                  range=(m.E_MIN, m.E_MAX), weights=i_col)
+    en_keV = 0.5 * (edges[:-1] + edges[1:]) / 1e3
+    dE     = (m.E_MAX - m.E_MIN) / 150
+    flux   = counts * norm_factor / dE
+
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize)
+    fig.suptitle(f"Sample footprint  —  {label}  "
+                 f"(tilt = {tilt_deg:.1f}° around X)",
+                 fontsize=12, fontweight="bold")
+
+    gs = gridspec.GridSpec(2, 3, figure=fig,
+                           hspace=0.45, wspace=0.38,
+                           left=0.07, right=0.97,
+                           top=0.90, bottom=0.08)
+    ax_lab  = fig.add_subplot(gs[0, 0])   # lab frame cross-section
+    ax_surf = fig.add_subplot(gs[0, 1])   # sample surface footprint
+    ax_div  = fig.add_subplot(gs[0, 2])   # divergence scatter
+    ax_sp   = fig.add_subplot(gs[1, 0])   # spectrum
+    ax_txt  = fig.add_subplot(gs[1, 1])   # numerical summary
+    ax_geo  = fig.add_subplot(gs[1, 2])   # geometry sketch
+
+    # Downsample for scatter
+    N = len(rays)
+    idx = slice(None) if N <= 20_000 else np.random.choice(N, 20_000, replace=False)
+    e_plot = e_keV[idx]
+    sc_kw  = dict(s=0.8, alpha=0.5, cmap="plasma",
+                  vmin=m.E_MIN/1e3, vmax=m.E_MAX/1e3)
+
+    # Lab frame
+    sc = ax_lab.scatter(x_mm[idx], z_mm[idx], c=e_plot, **sc_kw)
+    fig.colorbar(sc, ax=ax_lab, pad=0.01, fraction=0.046).set_label("E (keV)", fontsize=7)
+    ell_lab = Ellipse((0, 0), 2*sig_H_nm/1e6, 2*sig_V_nm/1e6,
+                      fill=False, ec="white", lw=1.5, ls="--")
+    ax_lab.add_patch(ell_lab)
+    ax_lab.set_xlabel("H  (mm)", fontsize=8); ax_lab.set_ylabel("V  (mm)", fontsize=8)
+    ax_lab.set_title(f"Lab frame\nFWHM: H={fwhm_H_nm:.0f} nm  V={fwhm_V_nm:.0f} nm",
+                     fontsize=8)
+    ax_lab.tick_params(labelsize=7); ax_lab.grid(True, alpha=0.2)
+    ax_lab.set_aspect("equal", adjustable="datalim")
+
+    # Sample surface (stretched V)
+    sc2 = ax_surf.scatter(x_surf_nm[idx]/1e3, s_surf_nm[idx]/1e3,
+                           c=e_plot, **sc_kw)
+    fig.colorbar(sc2, ax=ax_surf, pad=0.01, fraction=0.046).set_label("E (keV)", fontsize=7)
+    ell_surf = Ellipse((0, 0), 2*fp_H_sig_nm/1e3, 2*fp_V_sig_nm/1e3,
+                       fill=False, ec="white", lw=1.5, ls="--")
+    ax_surf.add_patch(ell_surf)
+    ax_surf.set_xlabel("H on surface  (µm)", fontsize=8)
+    ax_surf.set_ylabel(f"V on surface  (µm)\n[stretched x{stretch:.3f}]", fontsize=8)
+    ax_surf.set_title(f"Sample surface  (tilt={tilt_deg:.0f}°)\n"
+                      f"FWHM: H={fp_H_nm:.0f} nm  V={fp_V_nm:.0f} nm", fontsize=8)
+    ax_surf.tick_params(labelsize=7); ax_surf.grid(True, alpha=0.2)
+    ax_surf.set_aspect("equal", adjustable="datalim")
+
+    # Divergence scatter (lab frame)
+    sc3 = ax_div.scatter(px_div[idx]*1e6, pz_div[idx]*1e6, c=e_plot, **sc_kw)
+    fig.colorbar(sc3, ax=ax_div, pad=0.01, fraction=0.046).set_label("E (keV)", fontsize=7)
+    ax_div.set_xlabel("px/py  (µrad)  H", fontsize=8)
+    ax_div.set_ylabel("pz/py  (µrad)  V", fontsize=8)
+    ax_div.set_title(f"Convergence angles\n"
+                     f"RMS: H=±{div_H_urad:.2f} µrad  V=±{div_V_urad:.2f} µrad",
+                     fontsize=8)
+    ax_div.tick_params(labelsize=7); ax_div.grid(True, alpha=0.2)
+    ax_div.set_aspect("equal", adjustable="datalim")
+
+    # Spectrum
+    ax_sp.fill_between(en_keV, flux, alpha=0.4, color="#e07b39")
+    ax_sp.plot(en_keV, flux, lw=1.5, color="#a04010")
+    pk = en_keV[np.argmax(flux)]
+    ax_sp.axvline(pk, color="#a04010", lw=0.8, ls="--", label=f"peak {pk:.1f} keV")
+    unit = "ph/s/eV" if norm_factor != 1.0 else "a.u./eV"
+    ax_sp.set_xlabel("Photon energy  (keV)", fontsize=8)
+    ax_sp.set_ylabel(f"Spectral flux  ({unit})", fontsize=8)
+    ax_sp.set_title("Spectrum at sample", fontsize=8)
+    ax_sp.set_xlim(m.E_MIN/1e3, m.E_MAX/1e3); ax_sp.set_ylim(0)
+    ax_sp.legend(fontsize=8); ax_sp.grid(True, alpha=0.2); ax_sp.tick_params(labelsize=7)
+
+    # Numerical summary
+    geo = _geo()
+    demag_V = geo["L_KB1_SA"] / geo["L_SL2_KB1"]
+    demag_H = geo["L_KB2_SA"] / geo["L_SL2_KB2"]
+    txt = (
+        f"  BEAM AT SAMPLE  ({label})\n"
+        f"  {'─'*38}\n"
+        f"  Tilt around X      : {tilt_deg:.1f} °\n"
+        f"  Incidence angle    : {inc:.1f} °\n"
+        f"  Stretch 1/cos(θ)   : {stretch:.4f} ×\n\n"
+        f"  LAB FRAME FWHM\n"
+        f"    H = {fwhm_H_nm:8.1f} nm\n"
+        f"    V = {fwhm_V_nm:8.1f} nm\n\n"
+        f"  FOOTPRINT ON SURFACE\n"
+        f"    H = {fp_H_nm:8.1f} nm  (unchanged)\n"
+        f"    V = {fp_V_nm:8.1f} nm  (stretched)\n\n"
+        f"  CONVERGENCE HALF-ANGLES (lab)\n"
+        f"    H = ±{div_H_urad:6.2f} µrad  (RMS)\n"
+        f"    V = ±{div_V_urad:6.2f} µrad  (RMS)\n\n"
+        f"  ON TILTED SURFACE\n"
+        f"    H = ±{div_H_sample:6.2f} µrad\n"
+        f"    V = ±{div_V_sample:6.2f} µrad\n\n"
+        f"  KB DEMAG\n"
+        f"    V = {demag_V:.5f}   (KB1)\n"
+        f"    H = {demag_H:.5f}   (KB2)\n"
+    )
+    ax_txt.text(0.03, 0.97, txt, transform=ax_txt.transAxes,
+                fontsize=8.5, va="top", ha="left", family="monospace",
+                bbox=dict(boxstyle="round,pad=0.4",
+                          fc="#f8f8f8", ec="#aaaaaa", lw=0.8))
+    ax_txt.axis("off")
+
+    # Geometry sketch (side view of tilted sample)
+    ax_geo.set_xlim(-2, 2); ax_geo.set_ylim(-1.5, 1.5)
+    ax_geo.set_aspect("equal")
+    ax_geo.axis("off")
+    ax_geo.set_title("Geometry (side view)", fontsize=8)
+
+    # Sample surface line (tilted)
+    surf_len = 1.2
+    sx = np.array([-surf_len * np.cos(tilt), surf_len * np.cos(tilt)])
+    sy = np.array([-surf_len * np.sin(tilt), surf_len * np.sin(tilt)])
+    ax_geo.plot(sx, sy, "k-", lw=3, solid_capstyle="round", label="Sample surface")
+
+    # Beam (horizontal arrow arriving from left)
+    ax_geo.annotate("", xy=(0, 0), xytext=(-1.8, 0),
+                    arrowprops=dict(arrowstyle="-|>", color="#e07b39",
+                                   lw=2.0, mutation_scale=18))
+    ax_geo.text(-1.8, 0.12, "Beam", fontsize=8, color="#e07b39")
+
+    # Surface normal
+    ax_geo.annotate("", xy=(np.sin(tilt)*0.7, np.cos(tilt)*0.7),
+                    xytext=(0, 0),
+                    arrowprops=dict(arrowstyle="-|>", color="#4a90d9",
+                                   lw=1.5, mutation_scale=14))
+    ax_geo.text(np.sin(tilt)*0.75, np.cos(tilt)*0.75 + 0.05,
+                "Normal", fontsize=7, color="#4a90d9", ha="center")
+
+    # Angles
+    theta_arc = np.linspace(0, tilt, 40)
+    ax_geo.plot(0.35 * np.sin(theta_arc), 0.35 * np.cos(theta_arc),
+                color="gray", lw=1, ls="--")
+    ax_geo.text(0.20, 0.42, f"{tilt_deg:.0f}°", fontsize=7, color="gray", ha="center")
+
+    inc_arc = np.linspace(np.pi, np.pi + np.radians(inc), 40)
+    ax_geo.plot(0.55 * np.cos(inc_arc), 0.55 * np.sin(inc_arc),
+                color="green", lw=1, ls="--")
+    ax_geo.text(-0.75, -0.18, f"inc={inc:.0f}°", fontsize=7, color="green")
+
+    ax_geo.text(0, -1.3,
+                f"footprint H={fp_H_nm:.0f} nm\n"
+                f"footprint V={fp_V_nm:.0f} nm",
+                ha="center", va="bottom", fontsize=7.5,
+                bbox=dict(boxstyle="round,pad=0.3", fc="#ffffdd", ec="#aaaaaa"))
+
+    plt.show()
+
+    info = dict(
+        fwhm_H_nm          = fwhm_H_nm,
+        fwhm_V_nm          = fwhm_V_nm,
+        footprint_H_nm     = fp_H_nm,
+        footprint_V_nm     = fp_V_nm,
+        div_H_urad         = div_H_urad,
+        div_V_urad         = div_V_urad,
+        div_H_sample_urad  = div_H_sample,
+        div_V_sample_urad  = div_V_sample,
+        incidence_deg      = inc,
+        tilt_deg           = tilt_deg,
+        stretch            = stretch,
+        fig                = fig,
+    )
+    return info
+
+
 def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
     """
     Render the BM32 beamline beam path from source to sample.

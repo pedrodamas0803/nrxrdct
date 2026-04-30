@@ -473,6 +473,106 @@ def source_bm32(nrays=500_000, seed=5676561):
     return beam, norm
 
 
+def _bm32_worker(args):
+    """Module-level worker for source_bm32_parallel — must be picklable."""
+    n, seed = args
+    m = _self()
+    from shadow4.sources.bending_magnet.s4_bending_magnet import S4BendingMagnet
+    from shadow4.sources.bending_magnet.s4_bending_magnet_light_source import (
+        S4BendingMagnetLightSource)
+    from shadow4.sources.s4_electron_beam import S4ElectronBeam
+    from scipy.integrate import trapezoid as trapz
+    ebeam = S4ElectronBeam(energy_in_GeV=m.E_GEV,
+                           energy_spread=m.ENERGY_SPREAD,
+                           current=m.CURRENT_A)
+    ebeam.set_sigmas_all(sigma_x=m.SIGMA_X, sigma_xp=m.SIGMA_XP,
+                         sigma_y=m.SIGMA_Y,  sigma_yp=m.SIGMA_YP)
+    bm_s = S4BendingMagnet(
+        radius=m.BM_RADIUS, magnetic_field=m.BM_FIELD,
+        length=m.BM_LENGTH, emin=m.E_MIN, emax=m.E_MAX,
+        ng_e=200, flag_emittance=1)
+    ls = S4BendingMagnetLightSource(
+        name="SBM32", electron_beam=ebeam,
+        magnetic_structure=bm_s, nrays=n, seed=seed)
+    b = ls.get_beam()
+    flux  = trapz(ls.tot, ls.angle_array_mrad * 1e-3, axis=0)
+    total = trapz(flux, ls.photon_energy_array)
+    return b.rays, total
+
+
+
+def source_bm32_parallel(nrays=2_000_000, ncores=None):
+    """
+    Generate BM source rays in parallel across multiple CPU cores.
+
+    Splits nrays across ncores independent workers, each generating
+    nrays/ncores rays with a different random seed, then merges the
+    resulting beams. The norm_factor is computed from the full set.
+
+    The speedup is nearly linear with ncores for the BM source step,
+    which is the main bottleneck for large ray counts.
+
+    Parameters
+    ----------
+    nrays  : int   total number of rays (split evenly across cores)
+    ncores : int   number of parallel workers (default = all CPUs)
+
+    Returns
+    -------
+    beam        : S4Beam  merged beam from all workers
+    norm_factor : float   ph/s per surviving ray
+
+    Example
+    -------
+    beam, norm = bm.source_bm32_parallel(nrays=2_000_000, ncores=8)
+    beam_sl1 = bm.element_slit(beam, bm.SL1_H, bm.SL1_V,
+                                p=bm.D_SL1, label='SL1')
+    """
+    import multiprocessing as mp
+    from shadow4.beam.s4_beam import S4Beam
+
+    m = _self()
+    if ncores is None:
+        ncores = mp.cpu_count()
+    ncores = max(1, ncores)
+
+    rays_per_core = nrays // ncores
+    remainder     = nrays - rays_per_core * ncores
+    counts        = [rays_per_core + (1 if i < remainder else 0)
+                     for i in range(ncores)]
+    seeds         = [5676561 + i * 1000 for i in range(ncores)]
+
+    print(f"\n[Source parallel] SBM32  {nrays} rays total  "
+          f"across {ncores} cores ({rays_per_core} rays/core) ...")
+
+    import time
+    t0 = time.time()
+    if ncores == 1:
+        results = [_bm32_worker((counts[0], seeds[0]))]
+    else:
+        ctx = mp.get_context('fork')   # 'fork' avoids re-importing overhead
+        with ctx.Pool(processes=ncores) as pool:
+            results = pool.map(_bm32_worker, zip(counts, seeds))
+
+    # Merge rays from all workers
+    all_rays = np.vstack([r for r, _ in results])
+    total_flux = np.mean([t for _, t in results])  # same BM flux regardless of nrays
+    norm_factor = total_flux / nrays               # ph/s per ray (total)
+
+    # Re-number rays sequentially
+    all_rays[:, 11] = np.arange(1, len(all_rays) + 1, dtype=float)
+
+    beam_out = S4Beam()
+    beam_out.rays = all_rays
+
+    dt = time.time() - t0
+    n_good = (all_rays[:, 9] > 0).sum()
+    print(f"       {n_good} rays in {dt:.1f}s  "
+          f"({nrays/dt/1e3:.0f}k rays/s)  "
+          f"norm={norm_factor:.4e} ph/s/ray")
+    return beam_out, norm_factor
+
+
 def _make_mirror_ir(name, boundary, p_foc, q_foc, G, curved):
     """Internal: build Ir mirror (flat or bent cylinder)."""
     if curved:

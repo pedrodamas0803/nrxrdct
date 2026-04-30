@@ -617,6 +617,78 @@ def merge_beams(beams):
     return out
 
 
+def beam_memory_gb(nrays):
+    """Return memory in GB for a beam of nrays (144 bytes/ray, float64)."""
+    return nrays * 144 / 1e9
+
+
+def recommend_chunks(total_gb=302, ncores=40,
+                     survival_pct=0.009, target_after_slits=100_000):
+    """
+    Print and return recommended simulation settings for a cluster.
+
+    Computes how many source rays to generate given the cluster memory,
+    number of cores, and the expected survival rate through the slit chain.
+
+    Parameters
+    ----------
+    total_gb           : float  total cluster RAM [GB]
+    ncores             : int    CPU cores available
+    survival_pct       : float  percentage of source rays surviving to the
+                                last slit. Defaults to 0.009% (0.009),
+                                measured for 100 um SL2 slits at BM32.
+                                Measure your own with a quick 1M-ray test.
+    target_after_slits : int    desired number of surviving rays after slits
+
+    Returns
+    -------
+    dict with nrays, ncores, nchunks, rays_per_core,
+         gb_per_core_peak, expected_after_slits
+
+    Example
+    -------
+    cfg = bm.recommend_chunks(total_gb=302, ncores=40,
+                              survival_pct=0.009,
+                              target_after_slits=100_000)
+    beams, norm = bm.source_bm32_chunks(**{k: cfg[k]
+                                           for k in ('nrays','ncores','nchunks')})
+    """
+    # Peak memory per worker = 2 x chunk x 144 bytes (input + output in trace_beam)
+    # Reserve 10% RAM for OS / Python / shadow4
+    gb_per_core   = total_gb * 0.90 / ncores / 2.0
+    max_rays_core = int(gb_per_core * 1e9 / 144)
+    nrays_needed  = int(target_after_slits / (survival_pct / 100))
+    rays_per_core = nrays_needed // ncores
+    clamped       = rays_per_core > max_rays_core
+    rays_per_core = min(rays_per_core, max_rays_core)
+    nrays_total   = rays_per_core * ncores
+    expected_out  = int(nrays_total * survival_pct / 100)
+
+    print("=" * 55)
+    print(f"Cluster        : {total_gb} GB RAM  /  {ncores} cores")
+    print(f"Memory budget  : {gb_per_core*2:.1f} GB/core peak  "
+          f"(max {max_rays_core/1e6:.0f}M rays/core)")
+    print(f"Survival rate  : {survival_pct:.4f}%  "
+          f"(set survival_pct= to your measured value)")
+    print(f"Target         : {target_after_slits:,} rays after slits")
+    print("-" * 55)
+    print(f"  nrays   = {nrays_total:,}  ({nrays_total/1e6:.0f}M total)")
+    print(f"  ncores  = {ncores}")
+    print(f"  nchunks = {ncores}  ({rays_per_core/1e6:.1f}M rays/core)")
+    print(f"  Peak RAM: {beam_memory_gb(rays_per_core)*2:.1f} GB/core "
+          f"x {ncores} = {beam_memory_gb(rays_per_core)*2*ncores:.0f} GB total")
+    print(f"  Expected after slits: ~{expected_out:,}")
+    if clamped:
+        print(f"  WARNING: memory-limited to {nrays_total/1e6:.0f}M rays "
+              f"(need {nrays_needed/1e6:.0f}M for target).")
+        print(f"  -> Run multiple sessions and merge_beams() to accumulate.")
+    print("=" * 55)
+    return dict(nrays=nrays_total, ncores=ncores, nchunks=ncores,
+                rays_per_core=rays_per_core,
+                gb_per_core_peak=beam_memory_gb(rays_per_core) * 2,
+                expected_after_slits=expected_out)
+
+
 def source_bm32_chunks(nrays=10_000_000, ncores=None, nchunks=None):
     """
     Generate the BM source as a list of independent beam chunks, one per core.

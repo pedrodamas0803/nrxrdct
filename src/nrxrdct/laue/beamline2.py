@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-BM32 beamline - element-by-element API
+BM32 beamline — element-by-element API
 =======================================
 
 Design principles
@@ -115,12 +115,7 @@ SL1_H = 5.000e-3;   SL1_V = 2.000e-3   # Slits 1
 SL2_H = 0.100e-3;   SL2_V = 0.100e-3   # Slits 2 (mu-slits)
 SL3_H = 1.000e-3;   SL3_V = 1.000e-3   # Slits 3 (before KB — update)
 
-# -- Mirror curvature flag ----------------------------------------------------
-# Set to True if the bending motors are active and mirrors are curved.
-# Set to False (default) when mirrors are flat (no bending applied).
-MIRROR_CURVED = False
-
-# -- Energy range [eV] --------------------------------------------------------
+# ── Energy range [eV] ────────────────────────────────────────────────────────
 E_MIN = 5_000.0
 E_MAX = 35_000.0
 
@@ -138,7 +133,6 @@ BM_LENGTH     = 0.1
 
 # ── Spectrum cache (set by set_spectrum_from_beam or compute_spectrum_at_sl2) ─
 SPECTRUM_ENERGY_EV = None
-SPECTRUM_FLUX      = None
 SPECTRUM_FLUX      = None
 
 
@@ -268,9 +262,6 @@ def plot_spectrum(beam, label="spectrum", norm_factor=1.0,
     ax.plot(en/1e3, flux, color="crimson", lw=2, label=label)
     ax.axvline(peak, color="darkred", lw=0.8, ls="--",
                label=f"peak {peak:.1f} keV")
-    ax.plot(en/1e3, flux, color="crimson", lw=2, label=label)
-    ax.axvline(peak, color="darkred", lw=0.8, ls="--",
-               label=f"peak {peak:.1f} keV")
     ax.set_xlabel("Photon energy (keV)")
     ax.set_ylabel(f"Spectral flux ({unit})")
     ax.set_title(f"Spectrum  -  {label}")
@@ -287,8 +278,6 @@ def plot_footprint(footprint_beam, label="footprint", figsize=(7, 6)):
     from shadow4.beam.s4_beam import A2EV
     e_keV = g[:, 10] / A2EV / 1e3
     fig, ax = plt.subplots(figsize=figsize)
-    sc = ax.scatter(g[:, 0]*1e3, g[:, 1]*1e3,
-                    s=0.4, alpha=0.3, c=e_keV, cmap="plasma")
     sc = ax.scatter(g[:, 0]*1e3, g[:, 1]*1e3,
                     s=0.4, alpha=0.3, c=e_keV, cmap="plasma")
     plt.colorbar(sc, ax=ax, label="E (keV)")

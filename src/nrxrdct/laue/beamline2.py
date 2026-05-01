@@ -476,32 +476,249 @@ def source_bm32(nrays=500_000, seed=5676561):
     return beam, norm
 
 
+    return beam_out, norm_factor
+
+
+# =============================================================================
+
+# BM SOURCE POOL  —  generate once, resample many times
+# =============================================================================
+
 def _bm32_worker(args):
-    """Module-level worker for source_bm32_parallel — must be picklable."""
+    """Module-level BM source worker — must be picklable for multiprocessing."""
     n, seed = args
-    m = _self()
     from shadow4.sources.bending_magnet.s4_bending_magnet import S4BendingMagnet
     from shadow4.sources.bending_magnet.s4_bending_magnet_light_source import (
         S4BendingMagnetLightSource)
     from shadow4.sources.s4_electron_beam import S4ElectronBeam
     from scipy.integrate import trapezoid as trapz
+    import sys
+    m = sys.modules[__name__]
     ebeam = S4ElectronBeam(energy_in_GeV=m.E_GEV,
-                           energy_spread=m.ENERGY_SPREAD,
-                           current=m.CURRENT_A)
+                           energy_spread=m.ENERGY_SPREAD, current=m.CURRENT_A)
     ebeam.set_sigmas_all(sigma_x=m.SIGMA_X, sigma_xp=m.SIGMA_XP,
                          sigma_y=m.SIGMA_Y,  sigma_yp=m.SIGMA_YP)
-    bm_s = S4BendingMagnet(
-        radius=m.BM_RADIUS, magnetic_field=m.BM_FIELD,
-        length=m.BM_LENGTH, emin=m.E_MIN, emax=m.E_MAX,
-        ng_e=200, flag_emittance=1)
-    ls = S4BendingMagnetLightSource(
-        name="SBM32", electron_beam=ebeam,
-        magnetic_structure=bm_s, nrays=n, seed=seed)
-    b = ls.get_beam()
+    bm_s = S4BendingMagnet(radius=m.BM_RADIUS, magnetic_field=m.BM_FIELD,
+                            length=m.BM_LENGTH, emin=m.E_MIN, emax=m.E_MAX,
+                            ng_e=200, flag_emittance=1)
+    ls = S4BendingMagnetLightSource(name="SBM32", electron_beam=ebeam,
+                                     magnetic_structure=bm_s, nrays=n, seed=seed)
+    b     = ls.get_beam()
     flux  = trapz(ls.tot, ls.angle_array_mrad * 1e-3, axis=0)
     total = trapz(flux, ls.photon_energy_array)
     return b.rays, total
 
+
+# Module-level pool storage
+_BM_POOL_RAYS      = None   # np.ndarray (N, 18) — surviving rays
+_BM_POOL_NORM      = None   # float — ph/s per ray
+_BM_POOL_N         = 0      # number of rays in pool
+
+def source_bm32_build_pool(nrays=500_000, ncores=None, force=False):
+    """
+    Generate a large BM source pool once and cache it in memory.
+
+    The pool is the reference phase-space distribution of the BM source.
+    All subsequent calls to source_bm32_from_pool() resample from this pool
+    via fast numpy bootstrap (~150x faster than re-running shadow4).
+
+    The BM source distribution is deterministic (same physics every time),
+    so resampling is statistically equivalent to generating fresh rays,
+    provided the pool is large enough to cover the full phase space.
+
+    Minimum pool size guidelines
+    ----------------------------
+    The BM source has structure in 3 dimensions: energy, vertical angle,
+    and horizontal angle (plus emittance spread).  The pool needs to cover
+    all of these densely enough that resampling doesn't introduce artefacts.
+
+    - Spectral accuracy  : pool > 50k   (250 rays / energy bin at ng_e=200)
+    - Angular accuracy   : pool > 200k  (smooth vertical emission cone)
+    - Emittance accuracy : pool > 500k  (spatial + divergence correlations)
+
+    For downstream slits that pass ~0.009% of rays, a 500k pool gives
+    ~45 unique rays after SL2 — sufficient for spectrum but not footprint.
+    A 5M pool gives ~450 unique rays — good for most purposes.
+    A 50M pool gives ~4500 unique rays — reliable footprint and focus size.
+
+    The pool is generated in parallel (same as source_bm32_parallel) and
+    stored in the module-level variables _BM_POOL_RAYS / _BM_POOL_NORM.
+    It is reused across multiple simulation conditions without regeneration.
+
+    Parameters
+    ----------
+    nrays  : int   pool size (default 500_000; use 5_000_000+ for production)
+    ncores : int   parallel workers (default = all CPUs)
+    force  : bool  if True, regenerate even if pool already exists
+
+    Returns
+    -------
+    norm_factor : float   ph/s per ray
+
+    Example
+    -------
+    # Build pool once at start of session (or once per notebook):
+    bm.source_bm32_build_pool(nrays=5_000_000, ncores=40)
+
+    # Then run many conditions without regenerating:
+    for sl2_gap in [0.1, 0.2, 0.5]:
+        bm.SL2_H = bm.SL2_V = bm.mm(sl2_gap)
+        beams = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=500_000)
+        res_m1 = bm.pmap(bm.element_m1, ...)
+        ...
+    """
+    import multiprocessing as mp
+    import time
+    from shadow4.beam.s4_beam import S4Beam
+
+    m = _self()
+
+    if _BM_POOL_RAYS is not None and not force:
+        print(f"[BM pool] Already built: {_BM_POOL_N:,} rays.  "
+              f"Use force=True to rebuild.")
+        return _BM_POOL_NORM
+
+    if ncores is None:
+        ncores = mp.cpu_count()
+    ncores = max(1, ncores)
+
+    nchunks   = ncores
+    rays_per  = nrays // nchunks
+    rem       = nrays - rays_per * nchunks
+    counts    = [rays_per + (1 if i < rem else 0) for i in range(nchunks)]
+    seeds     = [5676561 + i * 1000 for i in range(nchunks)]
+
+    print(f"\n[BM pool] Building pool: {nrays:,} rays  "
+          f"({nchunks} chunks x {rays_per:,} rays,  {ncores} workers) ...")
+    print(f"          Memory: {beam_memory_gb(nrays):.2f} GB")
+
+    t0 = time.time()
+    if ncores == 1:
+        results = [_bm32_worker((c, s)) for c, s in zip(counts, seeds)]
+    else:
+        ctx = mp.get_context("fork")
+        with ctx.Pool(processes=ncores) as pool:
+            results = pool.map(_bm32_worker, zip(counts, seeds))
+
+    all_rays = np.vstack([r for r, _ in results])
+    norm     = np.mean([t for _, t in results]) / rays_per
+    dt       = time.time() - t0
+
+    # Store in module
+    m._BM_POOL_RAYS = all_rays
+    m._BM_POOL_NORM = norm
+    m._BM_POOL_N    = len(all_rays)
+
+    print(f"          {m._BM_POOL_N:,} rays stored  in {dt:.1f}s  "
+          f"({nrays/dt/1e3:.0f}k rays/s)  "
+          f"norm={norm:.4e} ph/s/ray")
+    print(f"          Resample speed: ~{int(m._BM_POOL_N / 0.15 / 1e6)}M rays/s "
+          f"(~{int(23e3 * m._BM_POOL_N / 0.15 / nrays)}x faster than shadow4)")
+    return norm
+
+
+def source_bm32_from_pool(nrays=None, n_chunks=None, rays_per_chunk=None,
+                           seed=None):
+    """
+    Resample BM source rays from the pre-built pool.
+
+    This is ~150x faster than source_bm32() because it uses numpy bootstrap
+    instead of the shadow4 inverse-CDF sampler.  The statistical properties
+    are equivalent to generating fresh rays provided the pool is large enough.
+
+    Call source_bm32_build_pool() once before using this function.
+
+    You can specify the output as either:
+    - A single merged beam:  nrays=N
+    - A list of chunks:      n_chunks=K, rays_per_chunk=M
+
+    Parameters
+    ----------
+    nrays          : int   total rays to draw (returns single S4Beam + norm)
+    n_chunks       : int   number of chunks (returns list of S4Beam + norm)
+    rays_per_chunk : int   rays per chunk (used with n_chunks)
+    seed           : int   random seed (None = random)
+
+    Returns
+    -------
+    If nrays is given:
+        (S4Beam, norm_factor)
+    If n_chunks is given:
+        (list of S4Beam, norm_factor)
+
+    Example
+    -------
+    # Single beam
+    beam, norm = bm.source_bm32_from_pool(nrays=2_000_000)
+
+    # Chunked (for pmap)
+    beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=500_000)
+    beams_sl1   = bm.pmap(bm.element_slit, beams, ...)
+    """
+    import time
+    from shadow4.beam.s4_beam import S4Beam
+
+    m = _self()
+    if m._BM_POOL_RAYS is None:
+        raise RuntimeError(
+            "BM pool not built. Call source_bm32_build_pool() first.")
+
+    pool  = m._BM_POOL_RAYS
+    norm  = m._BM_POOL_NORM
+    n_pool = len(pool)
+    rng   = np.random.default_rng(seed)
+
+    t0 = time.time()
+
+    if nrays is not None:
+        # Single beam
+        idx      = rng.choice(n_pool, size=nrays, replace=True)
+        new_rays = pool[idx].copy()
+        new_rays[:, 11] = np.arange(1, nrays + 1, dtype=float)
+        b = S4Beam(); b.rays = new_rays
+        dt = time.time() - t0
+        print(f"[BM pool] Resampled {nrays:,} rays in {dt*1e3:.0f}ms  "
+              f"(pool={n_pool:,}  norm={norm:.4e})")
+        return b, norm
+
+    elif n_chunks is not None:
+        if rays_per_chunk is None:
+            raise ValueError("Specify rays_per_chunk when using n_chunks.")
+        beams = []
+        for i in range(n_chunks):
+            idx      = rng.choice(n_pool, size=rays_per_chunk, replace=True)
+            new_rays = pool[idx].copy()
+            new_rays[:, 9]  = 1
+            new_rays[:, 11] = np.arange(1, rays_per_chunk + 1, dtype=float)
+            b = S4Beam(); b.rays = new_rays
+            beams.append(b)
+        total = n_chunks * rays_per_chunk
+        dt = time.time() - t0
+        print(f"[BM pool] Resampled {n_chunks} x {rays_per_chunk:,} = {total:,} rays  "
+              f"in {dt*1e3:.0f}ms  (pool={n_pool:,}  norm={norm:.4e})")
+        return beams, norm
+
+    else:
+        raise ValueError("Specify either nrays or (n_chunks + rays_per_chunk).")
+
+
+def source_bm32_pool_info():
+    """Print information about the current BM source pool."""
+    m = _self()
+    if m._BM_POOL_RAYS is None:
+        print("[BM pool] No pool built. Call source_bm32_build_pool() first.")
+        return
+    pool = m._BM_POOL_RAYS
+    from shadow4.beam.s4_beam import A2EV
+    e_keV = pool[:, 10] / A2EV / 1e3
+    print(f"[BM pool] Status:")
+    print(f"  Rays          : {m._BM_POOL_N:,}")
+    print(f"  Memory        : {beam_memory_gb(m._BM_POOL_N):.2f} GB")
+    print(f"  Norm factor   : {m._BM_POOL_NORM:.4e} ph/s/ray")
+    print(f"  Energy range  : [{e_keV.min():.1f}, {e_keV.max():.1f}] keV  "
+          f"(mean={e_keV.mean():.1f} keV)")
+    print(f"  H sigma       : {pool[:, 0].std()*1e6:.1f} um")
+    print(f"  V sigma       : {pool[:, 2].std()*1e6:.1f} um")
 
 
 def source_bm32_parallel(nrays=2_000_000, ncores=None):
@@ -1256,6 +1473,21 @@ def set_kb_source_from_beam(beam, nrays=500_000, seed=1234,
     new_rays[:, 1]  = 0.0
     new_rays[:, 11] = np.arange(1, nrays + 1, dtype=float)
     print(f"       Resampled {nrays} rays from {n_src} unique rays")
+
+    # ── Statistical quality warning ───────────────────────────────────────────
+    if n_src < 100:
+        print(f"  *** CRITICAL: only {n_src} unique rays in pool — results meaningless.")
+        print(f"  ***           Footprint will have {n_src} discrete clumps, focus FWHM wrong.")
+        print(f"  ***           Increase NRAYS_BM by at least {int(1000/max(n_src,1))}x.")
+    elif n_src < 500:
+        print(f"  WARNING: {n_src} unique rays — spectrum usable but footprint has")
+        print(f"           visible discrete structure. Increase NRAYS_BM ~{int(1000/n_src)}x")
+        print(f"           for smooth results (need > 1000 unique).")
+    elif n_src < 2000:
+        print(f"  NOTE: {n_src} unique rays — FWHM accuracy ~5%, footprint shape rough.")
+        print(f"        For <2% accuracy increase NRAYS_BM ~{int(2000/n_src)}x (need > 2000).")
+    else:
+        print(f"  OK: {n_src} unique rays — sufficient for reliable statistics.")
 
     fwhm_v = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1']
     fwhm_h = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2']

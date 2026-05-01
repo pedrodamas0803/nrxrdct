@@ -84,13 +84,26 @@ D_SL2  = 35.370   # m  Slits 2 (mu-slits)
 D_SL3  = 44.361   # m  Slits 3 (before KB)
 D_KB1  = 44.645   # m  KB1
 D_KB2  = 44.880   # m  KB2
-D_SA   = 45.000   # m  Sample
+D_SA   = 44.645 + 0.35449   # m  Sample  (= D_KB1 + q_KB1_LTP = 44.99949 m)
 
 # ── Grazing angles [rad] — from motor readbacks ──────────────────────────────
 G_M1  = 3.062181698459972e-3   # rad  (ma1 motor)
 G_M2  = 2.5627372258861216e-3  # rad  (ma2 motor)
-G_KB1 = 2.2e-3                 # rad  (Ry1 motor)
-G_KB2 = 13.97e-3               # rad  (Rz2 motor)
+G_KB1 = 2.2e-3                 # rad  (Ry1 motor — working grazing angle)
+G_KB2 = 2.8e-3                 # rad  (design grazing angle from spec sheet)
+                                #      NOTE: rz2 motor value is NOT the grazing
+                                #      angle — use spec sheet Theta=2.8mrad
+
+# ── KB ellipse parameters — from LTP measurement report (actual manufactured values) ──
+# These are measured after manufacturing and differ slightly from spec sheet targets.
+# VFM (KB1): q=354.49mm, Theta=2.777mrad  (p fixed by beamline = 44.645m)
+# HFM (KB2): q=119.92mm, Theta=2.797mrad  (p fixed by beamline = 44.88m)
+KB1_P_FOCUS = 44.645    # m   (fixed by beamline geometry = D_KB1 from source)
+KB1_Q_FOCUS =  0.35449  # m   (LTP measured)
+KB1_THETA   =  2.777e-3 # rad (LTP measured)
+KB2_P_FOCUS = 44.88     # m   (fixed by beamline geometry = D_KB2 from source)
+KB2_Q_FOCUS =  0.11992  # m   (LTP measured)
+KB2_THETA   =  2.797e-3 # rad (LTP measured)
 
 # ── Mirror curvature flag ─────────────────────────────────────────────────────
 MIRROR_CURVED = False   # True = bent cylinder, False = flat (no bending applied)
@@ -107,8 +120,8 @@ DZ_M1_M2 = 0.02108279594058422   # m
 # ── Mirror physical dimensions [m] ───────────────────────────────────────────
 M1_LENGTH  = 1.100;  M1_WIDTH  = 0.050
 M2_LENGTH  = 1.100;  M2_WIDTH  = 0.050
-KB1_LENGTH = 0.300;  KB1_WIDTH = 0.020
-KB2_LENGTH = 0.150;  KB2_WIDTH = 0.020
+KB1_LENGTH = 0.290;  KB1_WIDTH = 0.050   # VFM: 290x50mm (spec sheet)
+KB2_LENGTH = 0.140;  KB2_WIDTH = 0.050   # HFM: 140x50mm (spec sheet)
 
 # ── Slit gaps [m] — FULL gap (total opening), replace with motor-derived values
 # Convention: FULL gap in metres (half-opening used internally = value / 2).
@@ -1306,7 +1319,7 @@ def _make_mirror_ir(name, boundary, p_foc, q_foc, G, curved):
             surface_calculation=SurfaceCalculation.INTERNAL,
             p_focus=p_foc, q_focus=q_foc, grazing_angle=G,
             is_cylinder=True, cylinder_direction=Direction.TANGENTIAL,
-            convexity=Convexity.UPWARD,
+            convexity=Convexity.DOWNWARD,
             f_reflec=1, f_refl=5, file_refl="",
             coating_material="Ir", coating_density=22.56, coating_roughness=3.0)
     else:
@@ -1376,11 +1389,17 @@ def element_m2(beam):
 
 def element_kb1(beam):
     """
-    KB1 - Ir cylinder, focuses VERTICALLY (azimuthal=0).
-    p_focus = L_SL2_KB1 (SL2 is effective virtual source).
+    KB1 — VFM, Ir tangential ellipse, focuses VERTICALLY (azimuthal=0).
+
+    Traces the beam from SL2 (virtual source) to the sample plane (q=L_KB1_SA).
+    The output beam is at the V focal plane with col3 = lab V (focused).
+    col1 = lab H (unfocused, sagittal of KB1).
+
+    Note: this function is self-contained. For the full KB simulation use
+    element_kb_sample() which correctly combines V (from KB1) and H (from KB2).
     """
     m = _self(); g = _geo()
-    accept_v_mirror = (m.KB1_LENGTH/2) * np.sin(m.G_KB1) / g['L_SL2_KB1']
+    accept_v_mirror = (m.KB1_LENGTH/2) * np.sin(m.KB1_THETA) / g['L_SL2_KB1']
     accept_v_sl2    = (m.SL2_V / 2) / m.D_SL2
     accept_v_sl3    = (m.SL3_V / 2) / m.D_SL3 if m.D_SL3 < m.D_KB1 else np.inf
     accept_v_bm     = 3.0 * m.SIGMA_YP
@@ -1389,22 +1408,23 @@ def element_kb1(beam):
     limiting_v      = min(candidates_v, key=lambda x: x[1])[0]
     print(f"\n[KB1] D={m.D_KB1:.3f} m  G={m.G_KB1*1e3:.3f} mrad  "
           f"L={m.KB1_LENGTH*1e3:.0f} mm  (V-focus) ...")
-    print(f"       p={g['L_SL2_KB1']:.3f} m  q={g['L_KB1_SA']:.3f} m  "
-          f"demag={g['L_KB1_SA']/g['L_SL2_KB1']:.5f}")
+    print(f"       p_focus={m.KB1_P_FOCUS:.3f} m  q_focus={m.KB1_Q_FOCUS:.3f} m  "
+          f"Theta={m.KB1_THETA*1e3:.1f} mrad (spec sheet)")
+    print(f"       demag_V = {g['L_KB1_SA']/g['L_SL2_KB1']:.5f}")
     print(f"       accept_V: mirror=+-{accept_v_mirror*1e6:.1f}  "
           f"SL2=+-{accept_v_sl2*1e6:.1f}  SL3=+-{accept_v_sl3*1e6:.1f}  "
           f"BM=+-{accept_v_bm*1e6:.2f} urad  -> {limiting_v} limits")
     mirror = S4EllipsoidMirror(
         name="KB1", boundary_shape=_aperture(m.KB1_WIDTH, m.KB1_LENGTH),
         surface_calculation=SurfaceCalculation.INTERNAL,
-        p_focus=g['L_SL2_KB1'], q_focus=g['L_KB1_SA'],
-        grazing_angle=m.G_KB1, is_cylinder=True,
-        cylinder_direction=Direction.TANGENTIAL, convexity=Convexity.UPWARD,
+        p_focus=m.KB1_P_FOCUS, q_focus=m.KB1_Q_FOCUS,
+        grazing_angle=m.KB1_THETA, is_cylinder=True,
+        cylinder_direction=Direction.TANGENTIAL, convexity=Convexity.DOWNWARD,
         f_reflec=1, f_refl=5, file_refl="",
         coating_material="Ir", coating_density=22.56, coating_roughness=3.0)
     coords = ElementCoordinates(
-        p=g['L_SL2_KB1'], q=g['L_KB1_KB2'],
-        angle_radial=_ar(m.G_KB1), angle_azimuthal=0.0)
+        p=m.KB1_P_FOCUS, q=m.KB1_Q_FOCUS,   # p_coord = p_focus (rays start at BM source)
+        angle_radial=_ar(m.KB1_THETA), angle_azimuthal=0.0)
     beam_out, fp = S4EllipsoidMirrorElement(
         optical_element=mirror, coordinates=coords,
         input_beam=beam).trace_beam()
@@ -1415,11 +1435,17 @@ def element_kb1(beam):
 
 def element_kb2(beam):
     """
-    KB2 - Ir cylinder, focuses HORIZONTALLY (azimuthal=pi/2).
-    p_focus = L_SL2_KB2 (SL2 is effective virtual source).
+    KB2 — HFM, Ir tangential ellipse, focuses HORIZONTALLY (azimuthal=pi/2).
+
+    Receives the SAME KB source beam as KB1 (not the KB1 output).
+    Traces from SL2 (virtual source) to the sample plane (q=L_KB2_SA).
+    The output beam has col3 = lab H (focused) after the coordinate swap.
+    col1 = lab V (unfocused, sagittal of KB2).
+
+    Note: use element_kb_sample() to get the correctly combined sample beam.
     """
     m = _self(); g = _geo()
-    accept_h_mirror = (m.KB2_LENGTH/2) * np.sin(m.G_KB2) / g['L_SL2_KB2']
+    accept_h_mirror = (m.KB2_LENGTH/2) * np.sin(m.KB2_THETA) / g['L_SL2_KB2']
     accept_h_sl2    = (m.SL2_H / 2) / m.D_SL2
     accept_h_sl3    = (m.SL3_H / 2) / m.D_SL3 if m.D_SL3 < m.D_KB2 else np.inf
     accept_h_bm     = 3.0 * m.SIGMA_XP
@@ -1428,32 +1454,116 @@ def element_kb2(beam):
     limiting_h      = min(candidates_h, key=lambda x: x[1])[0]
     print(f"\n[KB2] D={m.D_KB2:.3f} m  G={m.G_KB2*1e3:.3f} mrad  "
           f"L={m.KB2_LENGTH*1e3:.0f} mm  (H-focus) ...")
-    print(f"       p={g['L_SL2_KB2']:.3f} m  q={g['L_KB2_SA']:.3f} m  "
-          f"demag={g['L_KB2_SA']/g['L_SL2_KB2']:.5f}")
+    print(f"       p_focus={m.KB2_P_FOCUS:.3f} m  q_focus={m.KB2_Q_FOCUS:.3f} m  "
+          f"Theta={m.KB2_THETA*1e3:.1f} mrad (spec sheet)")
+    print(f"       demag_H = {g['L_KB2_SA']/g['L_SL2_KB2']:.5f}")
     print(f"       accept_H: mirror=+-{accept_h_mirror*1e6:.1f}  "
           f"SL2=+-{accept_h_sl2*1e6:.1f}  SL3=+-{accept_h_sl3*1e6:.1f}  "
           f"BM=+-{accept_h_bm*1e6:.2f} urad  -> {limiting_h} limits")
-    fwhm_v = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1']
-    fwhm_h = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2']
-    print(f"\n  -- Focus at sample (BM source imaged by KB) --")
-    print(f"       Geometric FWHM  H={fwhm_h*1e9:.2f} nm  V={fwhm_v*1e9:.2f} nm")
     mirror = S4EllipsoidMirror(
         name="KB2", boundary_shape=_aperture(m.KB2_WIDTH, m.KB2_LENGTH),
         surface_calculation=SurfaceCalculation.INTERNAL,
-        p_focus=g['L_SL2_KB2'], q_focus=g['L_KB2_SA'],
-        grazing_angle=m.G_KB2, is_cylinder=True,
-        cylinder_direction=Direction.TANGENTIAL, convexity=Convexity.UPWARD,
+        p_focus=m.KB2_P_FOCUS, q_focus=m.KB2_Q_FOCUS,
+        grazing_angle=m.KB2_THETA, is_cylinder=True,
+        cylinder_direction=Direction.TANGENTIAL, convexity=Convexity.DOWNWARD,
         f_reflec=1, f_refl=5, file_refl="",
         coating_material="Ir", coating_density=22.56, coating_roughness=3.0)
     coords = ElementCoordinates(
-        p=g['L_KB1_KB2'], q=g['L_KB2_SA'],
-        angle_radial=_ar(m.G_KB2), angle_azimuthal=np.pi/2)
+        p=m.KB2_P_FOCUS, q=m.KB2_Q_FOCUS,   # p_coord = p_focus (rays start at BM source)
+        angle_radial=_ar(m.KB2_THETA), angle_azimuthal=np.pi/2)
     beam_out, fp = S4EllipsoidMirrorElement(
         optical_element=mirror, coordinates=coords,
         input_beam=beam).trace_beam()
+
+    # ── Coordinate frame correction ───────────────────────────────────────────
+    # KB2 (azimuthal=pi/2) deflects in H (X). In shadow4's exit frame:
+    #   col3 (z) = tangential = lab H = focused by KB2  ✓
+    #   col1 (x) = sagittal   = lab V = unfocused       (comes from KB1)
+    # Swap col1 <-> col3 so convention is col1=H, col3=V.
+    for _r in [beam_out.rays, fp.rays]:
+        _r[:, 0], _r[:, 2] = _r[:, 2].copy(), _r[:, 0].copy()
+        _r[:, 3], _r[:, 5] = _r[:, 5].copy(), _r[:, 3].copy()
+
     n = _good(beam_out).shape[0]; n0 = _good(beam).shape[0]
     print(f"       {n} / {n0} rays survive  ({100*n/max(n0,1):.1f}%)")
     return beam_out, fp
+
+
+def element_kb_sample(beam):
+    """
+    Full KB system: KB1 (V) + KB2 (H) → combined sample beam.
+
+    Traces KB1 and KB2 INDEPENDENTLY from the same KB source beam,
+    then combines col1 (H) from KB2 with col3 (V) from KB1 into one beam.
+
+    This correctly handles the fact that shadow4 cannot sequentially trace
+    a nested KB pair with independent p/q for each mirror.
+
+    Parameters
+    ----------
+    beam : S4Beam  — KB source beam at SL2 plane (from set_kb_source_from_beam)
+
+    Returns
+    -------
+    beam_sample : S4Beam  — combined beam at sample (col1=H focused, col3=V focused)
+    fp_kb1      : S4Beam  — KB1 footprint
+    fp_kb2      : S4Beam  — KB2 footprint
+
+    Example
+    -------
+    beam_kb = bm.set_kb_source_from_beam(beam_sl3, nrays=500_000)
+    beam_sample, fp_kb1, fp_kb2 = bm.element_kb_sample(beam_kb)
+    bm.plot_beam(beam_sample, "At sample")
+    info = bm.plot_sample_footprint(beam_sample, tilt_deg=40.0, norm_factor=norm)
+    """
+    from shadow4.beam.s4_beam import S4Beam
+    import copy
+
+    m = _self(); g = _geo()
+
+    fwhm_v = m.SIGMA_Y * 2.355 * g['L_KB1_SA'] / g['L_SL2_KB1']
+    fwhm_h = m.SIGMA_X * 2.355 * g['L_KB2_SA'] / g['L_SL2_KB2']
+    print(f"\n[KB system] Tracing KB1 (V) and KB2 (H) independently ...")
+    print(f"  Geometric focus: H={fwhm_h*1e9:.1f} nm  V={fwhm_v*1e9:.1f} nm FWHM")
+
+    # Deep copy beam for KB2 (KB1 trace modifies nothing but we need separate beams)
+    beam2 = S4Beam(); beam2.rays = beam.rays.copy()
+
+    # Trace KB1 → V focus at sample
+    beam_kb1, fp_kb1 = element_kb1(beam)
+
+    # Trace KB2 → H focus at sample (after col1/col3 swap: col1=H, col3=V)
+    beam_kb2, fp_kb2 = element_kb2(beam2)
+
+    # ── Combine: take H (col1, col4) from KB2, V (col3, col6) from KB1 ────────
+    # Both beams have the same number of rays (same source).
+    # Surviving rays may differ slightly due to mirror apertures — use intersection.
+    alive_kb1 = beam_kb1.rays[:, 9] > 0
+    alive_kb2 = beam_kb2.rays[:, 9] > 0
+    alive_both = alive_kb1 & alive_kb2
+
+    combined_rays = beam_kb2.rays.copy()           # start with KB2 (has H focus in col1)
+    combined_rays[:, 2] = beam_kb1.rays[:, 2]     # col3 (V) from KB1
+    combined_rays[:, 5] = beam_kb1.rays[:, 5]     # col6 (pz/V divergence) from KB1
+    combined_rays[:, 9] = alive_both.astype(float) # only rays surviving both mirrors
+
+    beam_sample = S4Beam()
+    beam_sample.rays = combined_rays
+
+    n = alive_both.sum()
+    n_in = (beam.rays[:, 9] > 0).sum()
+    print(f"\n[KB combined] {n:,} / {n_in:,} rays at sample  "
+          f"({100*n/max(n_in,1):.1f}%)")
+
+    g2 = _good(beam_sample)
+    if len(g2) > 10:
+        fwhm_H_sim = g2[:, 0].std() * 2.355 * 1e9
+        fwhm_V_sim = g2[:, 2].std() * 2.355 * 1e9
+        print(f"  Simulated FWHM: H={fwhm_H_sim:.1f} nm  V={fwhm_V_sim:.1f} nm")
+
+    return beam_sample, fp_kb1, fp_kb2
+
+
 
 
 # =============================================================================

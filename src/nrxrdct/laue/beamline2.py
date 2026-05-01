@@ -721,6 +721,133 @@ def source_bm32_pool_info():
     print(f"  V sigma       : {pool[:, 2].std()*1e6:.1f} um")
 
 
+def save_pool(path):
+    """
+    Save the current BM source pool to disk as a compressed .npz file.
+
+    The pool only needs to be built once for a given set of BM source
+    parameters (E_GEV, CURRENT_A, BM_RADIUS, E_MIN, E_MAX).  Save it after
+    the first build and reload it in all future sessions to skip the
+    expensive shadow4 generation step entirely.
+
+    Parameters
+    ----------
+    path : str   output path, e.g. "bm32_pool_100M.npz"
+                 The .npz extension is added automatically if absent.
+
+    Example
+    -------
+    # First session:
+    bm.source_bm32_build_pool(nrays=100_000_000, ncores=40)
+    bm.save_pool("bm32_pool_100M.npz")
+
+    # All future sessions:
+    bm.load_pool("bm32_pool_100M.npz")
+    beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=2_500_000)
+    """
+    import os, datetime
+    m = _self()
+    if m._BM_POOL_RAYS is None:
+        raise RuntimeError("No pool in memory. Call source_bm32_build_pool() first.")
+
+    if not path.endswith(".npz"):
+        path += ".npz"
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    # Store source parameters alongside rays so the file is self-describing
+    meta_keys = ["E_GEV", "CURRENT_A", "ENERGY_SPREAD",
+                 "SIGMA_X", "SIGMA_XP", "SIGMA_Y", "SIGMA_YP",
+                 "BM_RADIUS", "BM_FIELD", "BM_LENGTH",
+                 "E_MIN", "E_MAX"]
+    meta_vals = np.array([getattr(m, k) for k in meta_keys])
+
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    note = (f"BM32 source pool  |  saved {ts}  |  "
+            f"{m._BM_POOL_N:,} rays  |  "
+            f"norm={m._BM_POOL_NORM:.6e} ph/s/ray")
+
+    import time
+    t0 = time.time()
+    np.savez_compressed(path,
+                        rays      = m._BM_POOL_RAYS,
+                        norm      = np.array([m._BM_POOL_NORM]),
+                        meta_keys = np.array(meta_keys, dtype=object),
+                        meta_vals = meta_vals,
+                        note      = np.array([note], dtype=object))
+    dt = time.time() - t0
+    size_gb = os.path.getsize(path) / 1e9
+
+    print(f"[save_pool] {path}")
+    print(f"  {m._BM_POOL_N:,} rays  ->  {size_gb:.2f} GB  in {dt:.1f}s")
+    return path
+
+
+def load_pool(path):
+    """
+    Load a previously saved BM source pool from disk.
+
+    Restores _BM_POOL_RAYS, _BM_POOL_NORM, and _BM_POOL_N so that
+    source_bm32_from_pool() works immediately.
+
+    Also prints a warning if the stored BM source parameters differ from
+    the current module settings (which would mean the pool was built for
+    a different source configuration).
+
+    Parameters
+    ----------
+    path : str   path to a .npz file written by save_pool()
+
+    Example
+    -------
+    # Instead of source_bm32_build_pool():
+    bm.load_pool("bm32_pool_100M.npz")
+    bm.source_bm32_pool_info()
+
+    beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=2_500_000)
+    """
+    import time
+    m = _self()
+
+    if not path.endswith(".npz"):
+        path += ".npz"
+
+    print(f"[load_pool] Loading {path} ...")
+    t0 = time.time()
+    npz = np.load(path, allow_pickle=True)
+
+    m._BM_POOL_RAYS = npz["rays"]
+    m._BM_POOL_NORM = float(npz["norm"][0])
+    m._BM_POOL_N    = len(m._BM_POOL_RAYS)
+
+    dt = time.time() - t0
+    print(f"  {m._BM_POOL_N:,} rays loaded in {dt:.1f}s  "
+          f"(norm={m._BM_POOL_NORM:.4e} ph/s/ray)")
+
+    if "note" in npz:
+        print(f"  {npz['note'][0]}")
+
+    # Check if source parameters match current settings
+    if "meta_keys" in npz and "meta_vals" in npz:
+        keys = list(npz["meta_keys"])
+        vals = npz["meta_vals"]
+        mismatches = []
+        for k, v_saved in zip(keys, vals):
+            v_current = getattr(m, k, None)
+            if v_current is not None and abs(float(v_current) - float(v_saved)) > 1e-10:
+                mismatches.append(
+                    f"    {k}: saved={v_saved:.6g}  current={v_current:.6g}")
+        if mismatches:
+            print(f"  WARNING: pool was built with different source parameters:")
+            for mm in mismatches:
+                print(mm)
+            print(f"  -> Rebuild pool with source_bm32_build_pool() if this matters.")
+        else:
+            print(f"  Source parameters match current settings. OK.")
+
+    return m._BM_POOL_NORM
+
+
+
 def source_bm32_parallel(nrays=2_000_000, ncores=None):
     """
     Generate BM source rays in parallel across multiple CPU cores.

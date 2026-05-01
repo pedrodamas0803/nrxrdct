@@ -244,34 +244,97 @@ def _print_geometry():
 # PLOTTING UTILITIES
 # =============================================================================
 
-def plot_beam(beam, label="beam", position_m=None, n_bins=100, figsize=(12, 5)):
-    """Two-panel: transverse cross-section (H vs V) + energy spectrum."""
+def plot_beam(beam, label="beam", position_m=None, n_bins=200,
+              figsize=(12, 5), scatter_max=5_000):
+    """
+    Two-panel: transverse cross-section (H vs V) + energy spectrum.
+
+    The cross-section is rendered as a 2D density histogram (imshow) so
+    performance is O(pixels) regardless of ray count.  A scatter overlay
+    is added only when n_rays <= scatter_max, coloured by energy.
+
+    Parameters
+    ----------
+    beam        : S4Beam
+    label       : str
+    position_m  : float  longitudinal position for title
+    n_bins      : int    histogram bins per axis (default 200 -> 200x200 image)
+    figsize     : tuple
+    scatter_max : int    max rays for scatter overlay (default 5000)
+                         set to 0 to always use histogram only
+    """
     g = _good(beam)
     if len(g) == 0:
         print(f"  [plot_beam] {label}: no surviving rays"); return
+
     from shadow4.beam.s4_beam import A2EV
     e_keV = g[:, 10] / A2EV / 1e3
-    x_mm  = g[:, 0] * 1e3
-    z_mm  = g[:, 2] * 1e3
+    x_mm  = g[:, 0]  * 1e3
+    z_mm  = g[:, 2]  * 1e3
     pos   = f"  z={position_m:.3f} m" if position_m is not None else ""
+
     fig, (ax_s, ax_e) = plt.subplots(1, 2, figsize=figsize)
-    fig.suptitle(f"{label}{pos}  ({len(g)} rays)", fontsize=11)
-    sc = ax_s.scatter(x_mm, z_mm, s=0.5, alpha=0.4, c=e_keV, cmap="plasma")
-    fig.colorbar(sc, ax=ax_s, label="E (keV)")
-    ax_s.set_xlabel("col1  H (mm)")
-    ax_s.set_ylabel("col3  V (mm)")
-    ax_s.set_title(f"H FWHM={x_mm.std()*2.355:.3f} mm  "
-                   f"V FWHM={z_mm.std()*2.355:.3f} mm")
-    ax_s.set_aspect("equal", adjustable="datalim")
-    ax_s.grid(True, alpha=0.3)
-    ax_e.hist(e_keV, bins=n_bins, range=(E_MIN/1e3, E_MAX/1e3),
+    fig.suptitle(f"{label}{pos}  ({len(g):,} rays)", fontsize=11)
+
+    # ── Cross-section: 2D histogram rendered as image ─────────────────────────
+    # Pad limits slightly so edge rays are visible
+    x_c = x_mm.mean(); z_c = z_mm.mean()
+    x_r = max(x_mm.std() * 4, 1e-6);  z_r = max(z_mm.std() * 4, 1e-6)
+    x_lim = (x_c - x_r, x_c + x_r)
+    z_lim = (z_c - z_r, z_c + z_r)
+
+    H, xedges, zedges = np.histogram2d(
+        x_mm, z_mm, bins=n_bins,
+        range=[x_lim, z_lim])
+
+    # imshow uses (row=z, col=x) with origin="lower"
+    im = ax_s.imshow(
+        H.T,
+        origin="lower",
+        extent=[xedges[0], xedges[-1], zedges[0], zedges[-1]],
+        aspect="equal",
+        cmap="inferno",
+        interpolation="nearest",
+    )
+    fig.colorbar(im, ax=ax_s, label="Ray count / bin")
+
+    # Optional scatter overlay (energy coloured) for small beams
+    if len(g) <= scatter_max:
+        idx = slice(None) if len(g) <= scatter_max else \
+              np.random.choice(len(g), scatter_max, replace=False)
+        ax_s.scatter(x_mm[idx], z_mm[idx], s=1.5, alpha=0.6,
+                     c=e_keV[idx], cmap="cool",
+                     vmin=E_MIN/1e3, vmax=E_MAX/1e3,
+                     linewidths=0, zorder=3)
+
+    fwhm_h = x_mm.std() * 2.355
+    fwhm_v = z_mm.std() * 2.355
+    # Adaptive units
+    if fwhm_h < 0.5:
+        sz = f"H={fwhm_h*1e3:.1f} um  V={fwhm_v*1e3:.1f} um  FWHM"
+    else:
+        sz = f"H={fwhm_h:.4f} mm  V={fwhm_v:.4f} mm  FWHM"
+
+    ax_s.set_xlabel("H  (mm)", fontsize=9)
+    ax_s.set_ylabel("V  (mm)", fontsize=9)
+    ax_s.set_title(sz, fontsize=9)
+    ax_s.set_xlim(x_lim); ax_s.set_ylim(z_lim)
+    ax_s.grid(True, alpha=0.2, color="white", lw=0.5)
+
+    # ── Spectrum: plain histogram ──────────────────────────────────────────────
+    ax_e.hist(e_keV, bins=150, range=(E_MIN/1e3, E_MAX/1e3),
               color="crimson", alpha=0.7)
-    ax_e.set_xlabel("Photon energy (keV)")
-    ax_e.set_ylabel("Ray count")
-    ax_e.set_title("Energy distribution")
+    ax_e.set_xlabel("Photon energy  (keV)", fontsize=9)
+    ax_e.set_ylabel("Ray count", fontsize=9)
+    ax_e.set_title("Energy distribution", fontsize=9)
     ax_e.set_xlim(E_MIN/1e3, E_MAX/1e3)
     ax_e.grid(True, alpha=0.3)
-    plt.tight_layout(); _maybe_show(fig); return fig
+
+    plt.tight_layout()
+    _maybe_show(fig)
+    return fig
+
+
 
 
 def plot_spectrum(beam, label="spectrum", norm_factor=1.0,
@@ -301,22 +364,40 @@ def plot_spectrum(beam, label="spectrum", norm_factor=1.0,
     plt.tight_layout(); _maybe_show(fig); return fig
 
 
-def plot_footprint(footprint_beam, label="footprint", figsize=(7, 6)):
-    """Mirror footprint in local (sagittal x tangential) frame."""
+def plot_footprint(footprint_beam, label="footprint", figsize=(7, 6),
+                   n_bins=200):
+    """
+    Mirror footprint in local (sagittal x tangential) frame.
+    Rendered as a 2D density histogram for speed with large ray counts.
+    """
     g = _good(footprint_beam)
     if len(g) == 0:
         print(f"  [plot_footprint] {label}: no rays"); return
     from shadow4.beam.s4_beam import A2EV
-    e_keV = g[:, 10] / A2EV / 1e3
+
+    x_mm = g[:, 0] * 1e3   # sagittal
+    y_mm = g[:, 1] * 1e3   # tangential
+
+    x_c = x_mm.mean(); y_c = y_mm.mean()
+    x_r = max(x_mm.std() * 4, 1e-6)
+    y_r = max(y_mm.std() * 4, 1e-6)
+
+    H, xedges, yedges = np.histogram2d(
+        x_mm, y_mm, bins=n_bins,
+        range=[(x_c-x_r, x_c+x_r), (y_c-y_r, y_c+y_r)])
+
     fig, ax = plt.subplots(figsize=figsize)
-    sc = ax.scatter(g[:, 0]*1e3, g[:, 1]*1e3,
-                    s=0.4, alpha=0.3, c=e_keV, cmap="plasma")
-    plt.colorbar(sc, ax=ax, label="E (keV)")
-    ax.set_xlabel("x sagittal (mm)")
-    ax.set_ylabel("y tangential (mm)")
-    ax.set_title(f"{label}  ({len(g)} rays)")
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout(); _maybe_show(fig); return fig
+    im = ax.imshow(H.T, origin="lower",
+                   extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+                   aspect="auto", cmap="inferno", interpolation="nearest")
+    fig.colorbar(im, ax=ax, label="Ray count / bin")
+    ax.set_xlabel("Sagittal  (mm)", fontsize=9)
+    ax.set_ylabel("Tangential  (mm)", fontsize=9)
+    ax.set_title(f"{label}  ({len(g):,} rays)", fontsize=10)
+    ax.grid(True, alpha=0.2, color="white", lw=0.5)
+    plt.tight_layout()
+    _maybe_show(fig)
+    return fig
 
 
 # =============================================================================

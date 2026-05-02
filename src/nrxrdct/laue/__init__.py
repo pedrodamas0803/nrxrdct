@@ -2,7 +2,7 @@
 nrxrdct.laue — Laue diffraction simulation utilities.
 """
 
-from .camera import Camera
+from .camera import Camera, CalibrationResult
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
 from .interactive import OrientationState, interactive_orientation
 from .fitting import (
@@ -135,6 +135,7 @@ __all__ = [
     "lorentz_pol",
     # Camera / detector
     "Camera",
+    "CalibrationResult",
     # Simulation
     "precompute_allowed_hkl",
     "simulate_laue",

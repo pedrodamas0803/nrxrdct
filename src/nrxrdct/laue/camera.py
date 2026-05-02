@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 
 DD = 85.475  # dd    (mm)
@@ -10,6 +12,28 @@ N_PIX_H = 2018  # framedim[0]
 N_PIX_V = 2016  # framedim[1]
 KF_DIRECTION = "Z>0"  # kf_direction from calibration file
 SPOT_SIGMA_PIX = 2
+
+
+@dataclass
+class CalibrationResult:
+    """Returned by :meth:`Camera.fit_calibration`."""
+
+    camera: "Camera"
+    U: np.ndarray
+    rms_px: float
+    n_matched: int
+    n_obs: int
+    n_sim: int
+    fit_params: tuple
+    success: bool
+    message: str
+
+    def __repr__(self):
+        return (
+            f"CalibrationResult(rms={self.rms_px:.2f} px, "
+            f"matched={self.n_matched}/{self.n_obs} obs / {self.n_sim} sim, "
+            f"success={self.success})"
+        )
 
 
 class Camera:
@@ -486,3 +510,265 @@ class Camera:
         if normalize and img.max() > 0:
             img = img / img.max()
         return img.astype(np.float32)
+
+    # ── .det file IO ──────────────────────────────────────────────────────────
+
+    def to_det(self, path) -> None:
+        """
+        Write a LaueTools-compatible ``.det`` calibration file.
+
+        Format (4 lines)::
+
+            dd xcen ycen xbet xgam
+            pixelsize
+            Nh Nv
+            kf_direction
+        """
+        from pathlib import Path
+
+        text = (
+            f"{self.dd:.6g} {self.xcen:.6g} {self.ycen:.6g} "
+            f"{self.xbet:.6g} {self.xgam:.6g}\n"
+            f"{self.pixel_mm:.6g}\n"
+            f"{self.Nh} {self.Nv}\n"
+            f"{self.kf_direction}\n"
+        )
+        Path(path).write_text(text)
+
+    @classmethod
+    def from_det(cls, path, pixelsize=None, framedim=None, kf_direction=None):
+        """
+        Read a LaueTools-compatible ``.det`` calibration file.
+
+        Parameters
+        ----------
+        path : path-like
+            Path to the ``.det`` file.
+        pixelsize : float or None
+            Override the pixel size (mm) read from the file.
+        framedim : (Nh, Nv) or None
+            Override the frame dimensions read from the file.
+        kf_direction : str or None
+            Override the kf_direction read from the file.
+        """
+        from pathlib import Path
+
+        lines = [
+            ln.strip()
+            for ln in Path(path).read_text().splitlines()
+            if ln.strip()
+        ]
+        dd, xcen, ycen, xbet, xgam = map(float, lines[0].split())
+        px = float(lines[1]) if pixelsize is None else float(pixelsize)
+        if framedim is None:
+            Nh, Nv = map(int, lines[2].split())
+        else:
+            Nh, Nv = int(framedim[0]), int(framedim[1])
+        kfd = lines[3] if kf_direction is None else kf_direction
+        return cls(
+            dd=dd, xcen=xcen, ycen=ycen, xbet=xbet, xgam=xgam,
+            pixelsize=px, n_pix_h=Nh, n_pix_v=Nv, kf_direction=kfd,
+        )
+
+    # ── calibration fitting ───────────────────────────────────────────────────
+
+    def fit_calibration(
+        self,
+        crystal,
+        U,
+        obs_xy,
+        *,
+        fit_params=("dd", "xcen", "ycen", "xbet", "xgam"),
+        fit_U=False,
+        E_min=5_000.0,
+        E_max=25_000.0,
+        source="bending_magnet",
+        source_kwargs=None,
+        hmax=15,
+        f2_thresh=0.01,
+        max_match_px=20.0,
+        top_n_sim=None,
+        method="Nelder-Mead",
+        options=None,
+    ):
+        """
+        Fit camera calibration parameters to an observed Laue pattern.
+
+        The cost function is the mean squared nearest-neighbour distance from
+        each observed spot to the closest simulated spot, capped at
+        ``max_match_px``.  This soft matching gives a smooth landscape suitable
+        for Nelder-Mead optimisation.
+
+        Parameters
+        ----------
+        crystal : Crystal
+            Crystal structure of the calibration standard.
+        U : (3, 3) array
+            Initial orientation matrix.  Updated in the result if ``fit_U=True``.
+        obs_xy : (N, 2) array
+            Observed spot pixel positions ``[[xcam, ycam], ...]``.
+        fit_params : sequence of str
+            Camera parameters to optimise.  Any subset of
+            ``{"dd", "xcen", "ycen", "xbet", "xgam"}``.
+        fit_U : bool
+            If ``True``, also refine the orientation matrix via three small-angle
+            Euler rotations around lab x, y, z (degrees).
+        E_min, E_max : float
+            Energy range (eV) for the Laue simulation.
+        source : str
+            Source model passed to ``simulate_laue``.
+        source_kwargs : dict or None
+            Extra kwargs for the spectrum function.
+        hmax : int
+            Maximum Miller index for HKL precomputation.
+        f2_thresh : float
+            Structure-factor threshold for HKL precomputation.
+        max_match_px : float
+            Cap distance (pixels) used in the cost function and for
+            reporting the final match rate.
+        top_n_sim : int or None
+            Restrict cost evaluation to the brightest *N* simulated spots.
+        method : str
+            Scipy optimisation method (default ``"Nelder-Mead"``).
+        options : dict or None
+            Options forwarded to ``scipy.optimize.minimize``, overriding
+            defaults.
+
+        Returns
+        -------
+        CalibrationResult
+        """
+        from scipy.optimize import minimize
+        from scipy.spatial import cKDTree
+        from .simulation import simulate_laue, precompute_allowed_hkl
+
+        obs_xy = np.asarray(obs_xy, dtype=float)
+        if obs_xy.ndim != 2 or obs_xy.shape[1] != 2:
+            raise ValueError("obs_xy must be shape (N, 2)")
+        n_obs = len(obs_xy)
+        U0 = np.asarray(U, dtype=float).copy()
+        src_kw = source_kwargs or {}
+
+        _valid = {"dd", "xcen", "ycen", "xbet", "xgam"}
+        for p in fit_params:
+            if p not in _valid:
+                raise ValueError(f"Unknown fit_param {p!r}; must be one of {_valid}")
+        fit_params = list(fit_params)
+
+        E_ref = 0.5 * (E_min + E_max)
+        allowed_hkl = precompute_allowed_hkl(crystal, hmax, E_ref, f2_thresh)
+
+        _all_names = fit_params + (["U_rx", "U_ry", "U_rz"] if fit_U else [])
+        _cam_init = {
+            "dd": self.dd, "xcen": self.xcen, "ycen": self.ycen,
+            "xbet": self.xbet, "xgam": self.xgam,
+        }
+        x0 = np.array(
+            [_cam_init[p] for p in fit_params] + ([0.0, 0.0, 0.0] if fit_U else []),
+            dtype=float,
+        )
+
+        def _build_cam(x):
+            kw = dict(
+                dd=self.dd, xcen=self.xcen, ycen=self.ycen,
+                xbet=self.xbet, xgam=self.xgam,
+                pixelsize=self.pixel_mm, n_pix_h=self.Nh, n_pix_v=self.Nv,
+                kf_direction=self.kf_direction,
+            )
+            for i, p in enumerate(fit_params):
+                kw[p] = float(x[i])
+            return Camera(**kw)
+
+        def _build_U(x):
+            if not fit_U:
+                return U0
+            from scipy.spatial.transform import Rotation
+            rx, ry, rz = x[len(fit_params):]
+            dU = Rotation.from_euler("xyz", [rx, ry, rz], degrees=True).as_matrix()
+            return U0 @ dU
+
+        def _cost(x):
+            try:
+                cam = _build_cam(x)
+                U_cur = _build_U(x)
+                spots = simulate_laue(
+                    crystal, U_cur, cam,
+                    E_min=E_min, E_max=E_max,
+                    source=source, source_kwargs=src_kw,
+                    hmax=hmax, f2_thresh=f2_thresh,
+                    allowed_hkl=allowed_hkl,
+                )
+            except Exception:
+                return float(max_match_px ** 2)
+
+            sim_xy = np.array(
+                [s["pix"] for s in spots if s.get("pix") is not None]
+            )
+            if len(sim_xy) == 0:
+                return float(max_match_px ** 2)
+
+            if top_n_sim is not None and len(sim_xy) > top_n_sim:
+                I_vals = np.array(
+                    [s["I_raw"] for s in spots if s.get("pix") is not None]
+                )
+                idx = np.argsort(I_vals)[::-1][:top_n_sim]
+                sim_xy = sim_xy[idx]
+
+            tree = cKDTree(sim_xy)
+            dists, _ = tree.query(obs_xy, k=1)
+            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+
+        # Build initial simplex with parameter-appropriate step sizes
+        _steps = {
+            "dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5,
+            "U_rx": 2.0, "U_ry": 2.0, "U_rz": 2.0,
+        }
+        n_p = len(x0)
+        init_simplex = np.tile(x0, (n_p + 1, 1))
+        for i, pname in enumerate(_all_names):
+            init_simplex[i + 1, i] += _steps.get(pname, 1.0)
+
+        _opts = {
+            "maxiter": 5000, "xatol": 0.05, "fatol": 1e-4,
+            "initial_simplex": init_simplex,
+        }
+        if options:
+            _opts.update(options)
+
+        result = minimize(_cost, x0, method=method, options=_opts)
+
+        cam_final = _build_cam(result.x)
+        U_final = _build_U(result.x)
+
+        # Final match statistics with the converged parameters
+        spots_final = simulate_laue(
+            crystal, U_final, cam_final,
+            E_min=E_min, E_max=E_max,
+            source=source, source_kwargs=src_kw,
+            hmax=hmax, f2_thresh=f2_thresh,
+            allowed_hkl=allowed_hkl,
+        )
+        sim_xy_f = np.array(
+            [s["pix"] for s in spots_final if s.get("pix") is not None]
+        )
+
+        n_matched, rms_px = 0, float("nan")
+        if len(sim_xy_f) > 0 and n_obs > 0:
+            tree = cKDTree(sim_xy_f)
+            dists, _ = tree.query(obs_xy, k=1)
+            ok = dists < max_match_px
+            n_matched = int(ok.sum())
+            if n_matched > 0:
+                rms_px = float(np.sqrt((dists[ok] ** 2).mean()))
+
+        return CalibrationResult(
+            camera=cam_final,
+            U=U_final,
+            rms_px=rms_px,
+            n_matched=n_matched,
+            n_obs=n_obs,
+            n_sim=len(sim_xy_f),
+            fit_params=tuple(_all_names),
+            success=bool(result.success),
+            message=result.message,
+        )

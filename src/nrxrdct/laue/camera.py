@@ -35,6 +35,202 @@ class CalibrationResult:
             f"success={self.success})"
         )
 
+    def plot(
+        self,
+        crystal,
+        obs_xy: np.ndarray,
+        image: np.ndarray | None = None,
+        max_match_px: float = 20.0,
+        E_min_eV: float = 5_000.0,
+        E_max_eV: float = 25_000.0,
+        source: str = "bending_magnet",
+        source_kwargs: dict | None = None,
+        hmax: int = 15,
+        f2_thresh: float = 0.01,
+        top_n_sim: int | None = None,
+        figsize: tuple = (14, 5),
+    ):
+        """
+        Plot the calibration result: observed vs simulated spot positions.
+
+        Parameters
+        ----------
+        crystal     : Crystal  — calibration standard used during fitting.
+        obs_xy      : (N, 2)  — observed pixel positions [xcam, ycam].
+        image       : (Nv, Nh) array or None  — optional background detector image.
+        max_match_px : float  — match radius; only pairs within this distance
+                                are drawn and counted in the histogram.
+        top_n_sim   : int or None  — restrict to the N brightest simulated spots.
+        figsize     : (w, h)  — figure size in inches.
+
+        Returns
+        -------
+        fig, (ax_det, ax_info, ax_hist)
+        """
+        import matplotlib.colors as mcolors
+        import matplotlib.gridspec as gridspec
+        import matplotlib.pyplot as plt
+        from scipy.spatial import cKDTree
+
+        from .simulation import simulate_laue
+        from .fitting import _match_spots
+
+        _BG   = "#080c14"
+        _BG2  = "#0d1220"
+        _FG   = "#ccccee"
+        _GRAY = "#4a5070"
+        _OBS  = "#ffffff"
+        _SIM  = "#ff6b35"
+
+        cam    = self.camera
+        obs_xy = np.asarray(obs_xy, dtype=float)
+        src_kw = source_kwargs or {}
+
+        # ── simulate with the fitted camera + U ──────────────────────────────
+        spots = simulate_laue(
+            crystal, self.U, cam,
+            E_min=E_min_eV, E_max=E_max_eV,
+            source=source, source_kwargs=src_kw,
+            hmax=hmax, f2_thresh=f2_thresh,
+        )
+        sim_xy = np.array([s["pix"] for s in spots if s.get("pix") is not None],
+                          dtype=float)
+        if len(sim_xy) == 0:
+            sim_xy = np.empty((0, 2), dtype=float)
+        if top_n_sim is not None and len(sim_xy) > top_n_sim:
+            I_vals = np.array([s["I_raw"] for s in spots if s.get("pix") is not None])
+            idx = np.argsort(I_vals)[::-1][:top_n_sim]
+            sim_xy = sim_xy[idx]
+
+        # ── one-to-one matching (Hungarian) ──────────────────────────────────
+        row_ind, col_ind, dist_px = _match_spots(obs_xy, sim_xy, max_match_px)
+        ok_mask   = dist_px < max_match_px
+        n_matched = int(ok_mask.sum())
+        dists_ok  = dist_px[ok_mask]
+        mean_px   = float(np.mean(dists_ok))   if n_matched > 0 else float("nan")
+        rms_px    = float(np.sqrt(np.mean(dists_ok ** 2))) if n_matched > 0 else float("nan")
+        rate      = n_matched / max(len(obs_xy), 1)
+
+        # ── figure layout ─────────────────────────────────────────────────────
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize, facecolor=_BG)
+
+        gs = gridspec.GridSpec(
+            1, 2, figure=fig,
+            left=0.05, right=0.98, bottom=0.08, top=0.93,
+            wspace=0.06, width_ratios=[2.5, 1.0],
+        )
+        gs_r = gridspec.GridSpecFromSubplotSpec(
+            2, 1, subplot_spec=gs[1], hspace=0.45, height_ratios=[1, 1],
+        )
+        ax_det  = fig.add_subplot(gs[0])
+        ax_info = fig.add_subplot(gs_r[0])
+        ax_hist = fig.add_subplot(gs_r[1])
+
+        for ax in (ax_det, ax_info, ax_hist):
+            ax.set_facecolor(_BG2)
+            ax.tick_params(colors=_GRAY, labelsize=7)
+            for sp in ax.spines.values():
+                sp.set_edgecolor(_GRAY)
+
+        # ── detector panel ────────────────────────────────────────────────────
+        if image is not None:
+            img = np.asarray(image, dtype=float)
+            vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img / vmax * 1000),
+                origin="upper", extent=[0, cam.Nh, cam.Nv, 0],
+                cmap="inferno", aspect="auto", alpha=0.55, zorder=0,
+            )
+        else:
+            ax_det.add_patch(plt.Rectangle(
+                (0, 0), cam.Nh, cam.Nv,
+                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+            ))
+
+        ax_det.set_xlim(0, cam.Nh)
+        ax_det.set_ylim(cam.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+        rms_s  = f"{rms_px:.2f} px"  if np.isfinite(rms_px)  else "—"
+        mean_s = f"{mean_px:.2f} px" if np.isfinite(mean_px) else "—"
+        ax_det.set_title(
+            f"Calibration result   "
+            f"○ observed   ◆ fitted   — matched   "
+            f"mean={mean_s}   rms={rms_s}",
+            color=_FG, fontsize=9, pad=6,
+        )
+
+        ax_det.scatter(
+            obs_xy[:, 0], obs_xy[:, 1],
+            s=45, c="none", edgecolors=_OBS, linewidths=0.9,
+            zorder=4, label=f"observed ({len(obs_xy)})",
+        )
+        if len(sim_xy):
+            ax_det.scatter(
+                sim_xy[:, 0], sim_xy[:, 1],
+                s=28, c=_SIM, marker="D", linewidths=0,
+                zorder=5, label=f"simulated ({len(sim_xy)})",
+            )
+
+        # Lines coloured by distance: green (close) → red (far)
+        cmap_match = plt.get_cmap("RdYlGn_r")
+        cnorm = mcolors.Normalize(vmin=0, vmax=max_match_px)
+        for r, c, d, ok in zip(row_ind, col_ind, dist_px, ok_mask):
+            if ok:
+                ax_det.plot(
+                    [obs_xy[r, 0], sim_xy[c, 0]],
+                    [obs_xy[r, 1], sim_xy[c, 1]],
+                    color=cmap_match(cnorm(d)), lw=0.8, alpha=0.7, zorder=3,
+                )
+        ax_det.legend(loc="upper right", fontsize=7,
+                      facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
+
+        # ── info panel ────────────────────────────────────────────────────────
+        ax_info.set_axis_off()
+        status = "OK" if self.success else "FAILED"
+        ax_info.text(
+            0.06, 0.97,
+            f"Fit  [{status}]\n"
+            f"{'─' * 22}\n"
+            f"  matched : {n_matched} / {len(obs_xy)}\n"
+            f"  rate    : {rate:.0%}\n"
+            f"  mean    : {mean_s}\n"
+            f"  rms     : {rms_s}\n"
+            f"\n"
+            f"Camera\n"
+            f"{'─' * 22}\n"
+            f"  dd   ={cam.dd:9.4f} mm\n"
+            f"  xcen ={cam.xcen:9.2f} px\n"
+            f"  ycen ={cam.ycen:9.2f} px\n"
+            f"  xbet ={cam.xbet:9.4f} °\n"
+            f"  xgam ={cam.xgam:9.4f} °\n",
+            transform=ax_info.transAxes,
+            color=_FG, fontsize=8, va="top", family="monospace",
+            linespacing=1.5,
+        )
+
+        # ── histogram panel ───────────────────────────────────────────────────
+        ax_hist.set_xlabel("distance  (px)", color=_FG, fontsize=8)
+        ax_hist.set_ylabel("count", color=_FG, fontsize=8)
+        ax_hist.set_title("Match distances", color=_FG, fontsize=9, pad=4)
+        ax_hist.set_xlim(0, max_match_px)
+
+        if n_matched > 0:
+            bins = np.linspace(0, max_match_px, min(30, n_matched + 1))
+            ax_hist.hist(dists_ok, bins=bins, color=_SIM, alpha=0.85,
+                         edgecolor=_BG, linewidth=0.4)
+            ax_hist.axvline(mean_px, color="#44dd66", lw=1.4, ls="--",
+                            label=f"mean {mean_px:.2f} px")
+            ax_hist.axvline(rms_px, color="#ffcc44", lw=1.4, ls=":",
+                            label=f"rms  {rms_px:.2f} px")
+            ax_hist.legend(fontsize=7, facecolor=_BG2, edgecolor=_GRAY,
+                           labelcolor=_FG)
+
+        plt.show()
+        return fig, (ax_det, ax_info, ax_hist)
+
 
 class Camera:
     """

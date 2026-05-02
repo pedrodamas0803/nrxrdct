@@ -4,7 +4,12 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 
 from .camera import Camera, CalibrationResult
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
-from .interactive import OrientationState, interactive_orientation
+from .interactive import (
+    CalibrationState,
+    OrientationState,
+    interactive_calibration,
+    interactive_orientation,
+)
 from .fitting import (
     MixedFitResult,
     OrientationFitResult,
@@ -160,9 +165,11 @@ __all__ = [
     "d_spacing_hkl",
     "pseudomorphic_d_spacing",
     "nitride_elastic_constants",
-    # Interactive orientation tool
+    # Interactive orientation / calibration tools
     "OrientationState",
     "interactive_orientation",
+    "CalibrationState",
+    "interactive_calibration",
     # Orientation fitting
     "OrientationFitResult",
     "StackFitResult",

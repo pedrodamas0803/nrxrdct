@@ -215,7 +215,8 @@ def interactive_orientation(
             )
 
     # ── Figure: detector + info panel only (no widget rows) ──────────────────
-    fig = plt.figure(figsize=figsize, facecolor=_BG)
+    with plt.ioff():
+        fig = plt.figure(figsize=figsize, facecolor=_BG)
     try:
         fig.canvas.manager.set_window_title("Laue — interactive orientation")
     except Exception:
@@ -556,15 +557,13 @@ class CalibrationState:
         self.accepted  = False
 
     def __repr__(self) -> str:
-        cam   = self.camera
-        euler = Rotation.from_matrix(self.U).as_euler("ZXZ", degrees=True)
+        cam = self.camera
         return (
             f"CalibrationState(accepted={self.accepted},\n"
             f"  Camera(dd={cam.dd:.4g}, xcen={cam.xcen:.4g},"
             f" ycen={cam.ycen:.4g},\n"
             f"         xbet={cam.xbet:.4g}, xgam={cam.xgam:.4g}),\n"
-            f"  Euler(ZXZ) = [{euler[0]:.4f}°, {euler[1]:.4f}°,"
-            f" {euler[2]:.4f}°])"
+            f"  U =\n{np.array2string(self.U, precision=6)})"
         )
 
 
@@ -665,7 +664,8 @@ def interactive_calibration(
         )
 
     # ── Figure ────────────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=figsize, facecolor=_BG)
+    with plt.ioff():
+        fig = plt.figure(figsize=figsize, facecolor=_BG)
     try:
         fig.canvas.manager.set_window_title("Laue — interactive calibration")
     except Exception:
@@ -843,9 +843,12 @@ def interactive_calibration(
                     )[0])
             sc_obs.set_edgecolors(edge_colors)
 
-        euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
         rate  = n_matched / max(min(len(obs_use), len(sim_xy)), 1)
+        u_rows = [
+            f"  [{U[i,0]:+.4f}  {U[i,1]:+.4f}  {U[i,2]:+.4f}]"
+            for i in range(3)
+        ]
 
         _info_txt.set_text(
             f"Camera\n"
@@ -856,11 +859,9 @@ def interactive_calibration(
             f"  xbet ={cam.xbet:9.4f} °\n"
             f"  xgam ={cam.xgam:9.4f} °\n"
             f"\n"
-            f"Orientation  (ZXZ)\n"
+            f"Orientation  (U matrix)\n"
             f"{'─' * 22}\n"
-            f"  φ₁ = {euler[0]:+9.3f}°\n"
-            f"  Φ  = {euler[1]:+9.3f}°\n"
-            f"  φ₂ = {euler[2]:+9.3f}°\n"
+            + "\n".join(u_rows) + "\n"
             f"  |δω| = {dw:.4f}°\n"
             f"\n"
             f"Match  ({max_match_px:.0f} px window)\n"
@@ -906,13 +907,11 @@ def interactive_calibration(
 
     def _cb_accept(_b) -> None:  # noqa: ARG001
         state.accepted = True
-        cam   = state.camera
-        euler = Rotation.from_matrix(state.U).as_euler("ZXZ", degrees=True)
+        cam = state.camera
         print("\n✓ Calibration initial guess accepted")
         print(f"  Camera:")
         print(f"    dd={cam.dd:.5g}  xcen={cam.xcen:.5g}  ycen={cam.ycen:.5g}")
         print(f"    xbet={cam.xbet:.5g}  xgam={cam.xgam:.5g}")
-        print(f"  Euler (ZXZ): φ₁={euler[0]:.4f}°  Φ={euler[1]:.4f}°  φ₂={euler[2]:.4f}°")
         print(f"  U =\n{np.array2string(state.U, precision=8)}")
         print(
             f"\n  Re-create camera:\n"

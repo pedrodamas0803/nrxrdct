@@ -348,6 +348,10 @@ def interactive_orientation(
         zorder=5, label="simulated",
     )
     _lines: list = []
+    sc_sel = ax_det.scatter(                          # selected-spot ring
+        [], [], s=130, c="none", edgecolors="#ffff00",
+        linewidths=1.8, zorder=7, marker="o",
+    )
     ax_det.legend(loc="upper right", fontsize=7,
                   facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
 
@@ -364,7 +368,7 @@ def interactive_orientation(
         step=0.02,
         readout_format=".2f",
         continuous_update=False,
-        style={"description_width": "110px"},
+        style={"description_width": "130px"},
         layout=ipw.Layout(width="98%"),
     )
     s_ca = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
@@ -373,6 +377,17 @@ def interactive_orientation(
                            description="Cry [010]  (b)", **_sk)
     s_cc = ipw.FloatSlider(value=0.0, min=-c_rot_range_deg, max=+c_rot_range_deg,
                            description="Cry [001]  (c)", **_sk)
+    s_hkl = ipw.FloatSlider(value=0.0, min=-rot_range_deg, max=+rot_range_deg,
+                             description="rot. [—]", disabled=True, **_sk)
+
+    # State shared between _do_update and the click handler
+    _selected: list = [None]   # dict with keys: hkl, tth, chi
+    _last     = {"disp": np.empty((0, 2)), "on_det": []}
+
+    _hkl_html = ipw.HTML(
+        "<span style='color:#666;font-style:italic'>click a simulated spot to select it</span>",
+        layout=ipw.Layout(margin="0 0 2px 4px"),
+    )
 
     # ── Update ────────────────────────────────────────────────────────────────
     # _updating flag prevents re-entrant calls when we programmatically reset
@@ -394,25 +409,37 @@ def interactive_orientation(
                 np.radians(angle_deg) * ax_lab
             ).as_matrix() @ U
 
+        # Rotation around the selected crystal-plane normal
+        if _selected[0] is not None and s_hkl.value != 0.0:
+            h, k, l = _selected[0]["hkl"]
+            _xtal  = crystal.all_layers[0].crystal if _is_stack else crystal
+            G_cry  = _xtal.Q(h, k, l)
+            g_norm = np.linalg.norm(G_cry)
+            if g_norm > 1e-12:
+                ax_hkl = U @ (G_cry / g_norm)
+                ax_hkl /= np.linalg.norm(ax_hkl)
+                U = Rotation.from_rotvec(
+                    np.radians(s_hkl.value) * ax_hkl
+                ).as_matrix() @ U
+
         state.U = U
 
         dR = U @ np.linalg.inv(state.U0)
         dw = float(np.degrees(Rotation.from_matrix(dR).magnitude()))
 
         spots  = _simulate(U)
-        sim_xy = _extract_sim_xy(spots)[:top_n_sim]
+        on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+        sim_xy = np.array([s["pix"] for s in on_det]) if on_det else np.empty((0, 2))
 
         # Build display coordinates
         if space == "angular":
             obs_disp = _obs_angular
-            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             sim_disp = (
                 np.array([[s["tth"], s["chi"]] for s in on_det])
                 if on_det else np.empty((0, 2))
             )
         elif space == "gnomonic":
             obs_disp = _obs_gnomonic
-            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             if on_det:
                 gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
                 sim_disp = np.column_stack([gX, gY])
@@ -422,8 +449,22 @@ def interactive_orientation(
             obs_disp = obs_use
             sim_disp = sim_xy
 
+        # Save for click handler
+        _last["disp"]   = sim_disp
+        _last["on_det"] = on_det
+
         sc_obs.set_offsets(obs_disp)
         sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
+
+        # Keep selected-spot marker in sync
+        sel_pos = np.empty((0, 2))
+        if _selected[0] is not None and len(sim_disp):
+            sel_hkl = _selected[0]["hkl"]
+            for i, s in enumerate(on_det):
+                if s.get("hkl") == sel_hkl:
+                    sel_pos = sim_disp[i:i + 1]
+                    break
+        sc_sel.set_offsets(sel_pos)
 
         for ln in _lines:
             ln.remove()
@@ -454,7 +495,6 @@ def interactive_orientation(
 
         euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
-        # Rate relative to the smaller of obs/sim — fairer when top_n_sim < n_obs
         rate  = n_matched / max(min(len(obs_use), len(sim_xy)), 1)
 
         _info_txt.set_text(
@@ -481,9 +521,10 @@ def interactive_orientation(
 
     def _reset_sliders() -> None:
         _updating[0] = True
-        s_ca.value = 0.0
-        s_cb.value = 0.0
-        s_cc.value = 0.0
+        s_ca.value  = 0.0
+        s_cb.value  = 0.0
+        s_cc.value  = 0.0
+        s_hkl.value = 0.0
         _updating[0] = False
         _do_update()
 
@@ -491,8 +532,36 @@ def interactive_orientation(
         if not _updating[0]:
             _do_update()
 
-    for s in (s_ca, s_cb, s_cc):
+    for s in (s_ca, s_cb, s_cc, s_hkl):
         s.observe(_on_slider, names="value")
+
+    # ── Click handler — select a simulated spot ───────────────────────────────
+    def _on_click(event) -> None:
+        if event.inaxes is not ax_det:
+            return
+        disp = _last["disp"]
+        od   = _last["on_det"]
+        if len(disp) == 0:
+            return
+        dx  = disp[:, 0] - event.xdata
+        dy  = disp[:, 1] - event.ydata
+        idx = int(np.argmin(dx ** 2 + dy ** 2))
+        spot = od[idx]
+        _selected[0] = spot
+        h, k, l = spot["hkl"]
+        _hkl_html.value = (
+            f"<b style='color:#ffff00'>({h:+d} {k:+d} {l:+d})</b>"
+            f"&nbsp;&nbsp;2θ&nbsp;=&nbsp;{spot['tth']:.2f}°"
+            f"&nbsp;&nbsp;χ&nbsp;=&nbsp;{spot['chi']:.2f}°"
+        )
+        s_hkl.description = f"rot. [{h} {k} {l}]"
+        s_hkl.disabled    = False
+        _updating[0] = True
+        s_hkl.value  = 0.0
+        _updating[0] = False
+        _do_update()
+
+    fig.canvas.mpl_connect("button_press_event", _on_click)
 
     # ── ipywidgets buttons ────────────────────────────────────────────────────
     _bkw = dict(layout=ipw.Layout(width="145px", height="32px"))
@@ -680,9 +749,11 @@ def interactive_orientation(
 
     _controls = ipw.VBox([
         s_ca, s_cb, s_cc,
+        s_hkl,
+        _hkl_html,
         ipw.HBox(
             [btn_reset, btn_setref, btn_accept, btn_fit],
-            layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
+            layout=ipw.Layout(margin="6px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(
             [ipw.HTML("<b>Center at hkl:</b>",

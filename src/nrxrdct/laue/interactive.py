@@ -157,10 +157,12 @@ def interactive_orientation(
     c_rot_range_deg : float
         Half-range of the [001] crystal-axis slider (degrees).  Defaults to
         180° so the full azimuthal range is accessible in one drag.
-    space : ``'angular'`` or ``'detector'``
+    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
         Coordinate frame for the main panel.  ``'angular'`` (default) plots
-        2θ (x) vs χ (y) in degrees.  ``'detector'`` plots raw pixel positions.
-        Matching is always done in detector (pixel) space.
+        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines,
+        which helps identify multiple grains.  ``'detector'`` plots raw pixel
+        positions.  Matching is always done in detector (pixel) space.
 
     Returns
     -------
@@ -273,19 +275,32 @@ def interactive_orientation(
                 (0, 0), camera.Nh, camera.Nv,
                 linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
             ))
-    else:
+    elif space == "gnomonic":
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("k_y / k_x", color=_FG, fontsize=8)
+        ax_det.set_ylabel("k_z / k_x", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+        ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
+        ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
+    else:  # angular
         ax_det.set_aspect("auto")
         ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
         ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
         ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
 
-    # Precompute angular obs coords once — camera is fixed in orientation mode.
+    # Precompute angular and gnomonic obs coords once — camera is fixed.
     _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
     _obs_angular = np.column_stack([
         np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
         np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
     ])
-    _obs_init = _obs_angular if space == "angular" else obs_use
+    _kfx_safe = np.where(np.abs(_uf0[:, 0]) > 1e-8, _uf0[:, 0], 1e-8)
+    _obs_gnomonic = np.column_stack([_uf0[:, 1] / _kfx_safe, _uf0[:, 2] / _kfx_safe])
+    _obs_init = (
+        _obs_angular  if space == "angular"  else
+        _obs_gnomonic if space == "gnomonic" else
+        obs_use
+    )
 
     sc_obs = ax_det.scatter(
         _obs_init[:, 0], _obs_init[:, 1],
@@ -359,6 +374,18 @@ def interactive_orientation(
                 np.array([[s["tth"], s["chi"]] for s in on_det])
                 if on_det else np.empty((0, 2))
             )
+        elif space == "gnomonic":
+            obs_disp = _obs_gnomonic
+            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            if on_det:
+                tth_r    = np.radians([s["tth"] for s in on_det])
+                chi_r    = np.radians([s["chi"] for s in on_det])
+                sim_disp = np.column_stack([
+                    np.tan(tth_r) * np.sin(chi_r),
+                    np.tan(tth_r) * np.cos(chi_r),
+                ])
+            else:
+                sim_disp = np.empty((0, 2))
         else:
             obs_disp = obs_use
             sim_disp = sim_xy
@@ -747,9 +774,11 @@ def interactive_calibration(
         Half-range of the Δ xcen / Δ ycen sliders (px).
     angle_range_deg : float
         Half-range of the Δ xbet / Δ xgam sliders (°).
-    space : ``'angular'`` or ``'detector'``
+    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
         Coordinate frame for the main panel.  ``'angular'`` (default) plots
-        2θ (x) vs χ (y) in degrees.  ``'detector'`` plots raw pixel positions.
+        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines.
+        ``'detector'`` plots raw pixel positions.
         Matching is always done in detector (pixel) space regardless of this flag.
 
     Returns
@@ -830,22 +859,32 @@ def interactive_calibration(
                 (0, 0), camera.Nh, camera.Nv,
                 linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
             ))
-    else:
+    elif space == "gnomonic":
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("k_y / k_x", color=_FG, fontsize=8)
+        ax_det.set_ylabel("k_z / k_x", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+        ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
+        ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
+    else:  # angular
         ax_det.set_aspect("auto")
         ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
         ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
         ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
 
-    # Initial observed scatter; angular mode will update positions each frame
-    # since pixel→angle mapping depends on the current camera.
+    # Initial observed scatter; angular/gnomonic coords update each frame in
+    # _do_update since the camera changes with slider movement.
     _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
-    _obs_init = (
-        obs_use if space == "detector"
-        else np.column_stack([
+    if space == "detector":
+        _obs_init = obs_use
+    elif space == "gnomonic":
+        _kfx0     = np.where(np.abs(_uf0[:, 0]) > 1e-8, _uf0[:, 0], 1e-8)
+        _obs_init = np.column_stack([_uf0[:, 1] / _kfx0, _uf0[:, 2] / _kfx0])
+    else:  # angular
+        _obs_init = np.column_stack([
             np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
             np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
         ])
-    )
     sc_obs = ax_det.scatter(
         _obs_init[:, 0], _obs_init[:, 1],
         s=45, c="none", edgecolors=_OBS, linewidths=0.9,
@@ -945,21 +984,35 @@ def interactive_calibration(
         spots  = _simulate(U, cam)
         sim_xy = _extract_sim_xy(spots)[:top_n_sim]
 
-        # Build display coordinates (angular or detector)
+        # Build display coordinates (angular, gnomonic, or detector)
         if space == "angular":
             uf = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
             tth_o = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
             chi_o = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
             obs_disp = np.column_stack([tth_o, chi_o])
-            on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             sim_disp = (
                 np.array([[s["tth"], s["chi"]] for s in on_det])
                 if on_det else np.empty((0, 2))
             )
-            sc_obs.set_offsets(obs_disp)
+        elif space == "gnomonic":
+            uf       = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+            kfx_safe = np.where(np.abs(uf[:, 0]) > 1e-8, uf[:, 0], 1e-8)
+            obs_disp = np.column_stack([uf[:, 1] / kfx_safe, uf[:, 2] / kfx_safe])
+            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            if on_det:
+                tth_r    = np.radians([s["tth"] for s in on_det])
+                chi_r    = np.radians([s["chi"] for s in on_det])
+                sim_disp = np.column_stack([
+                    np.tan(tth_r) * np.sin(chi_r),
+                    np.tan(tth_r) * np.cos(chi_r),
+                ])
+            else:
+                sim_disp = np.empty((0, 2))
         else:
             obs_disp = obs_use
             sim_disp = sim_xy
+        sc_obs.set_offsets(obs_disp)
 
         sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
 

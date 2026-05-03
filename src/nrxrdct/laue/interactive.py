@@ -408,16 +408,16 @@ def interactive_orientation(
         s.observe(_on_slider, names="value")
 
     # ── ipywidgets buttons ────────────────────────────────────────────────────
-    _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
-    btn_reset  = ipw.Button(description="Reset",      button_style="warning", **_bkw)
-    btn_setu0  = ipw.Button(description="Set as U₀",  button_style="info",    **_bkw)
-    btn_accept = ipw.Button(description="✓  Accept",  button_style="success", **_bkw)
+    _bkw = dict(layout=ipw.Layout(width="145px", height="32px"))
+    btn_reset  = ipw.Button(description="Reset",             button_style="warning", **_bkw)
+    btn_setref = ipw.Button(description="Set as reference",  button_style="info",    **_bkw)
+    btn_accept = ipw.Button(description="✓  Accept",         button_style="success", **_bkw)
 
     def _cb_reset(_b) -> None:
         state.U0 = state._U0_orig.copy()
         _reset_sliders()
 
-    def _cb_setu0(_b) -> None:
+    def _cb_setref(_b) -> None:
         state.U0 = state.U.copy()
         _reset_sliders()
 
@@ -438,8 +438,89 @@ def interactive_orientation(
         print("\n  Pass to fitter:  fit_orientation(crystal, camera, obs_xy, state.U)")
 
     btn_reset.on_click(_cb_reset)
-    btn_setu0.on_click(_cb_setu0)
+    btn_setref.on_click(_cb_setref)
     btn_accept.on_click(_cb_accept)
+
+    # ── Quick-fit button ──────────────────────────────────────────────────────
+    btn_fit = ipw.Button(description="⚡ Quick Fit", button_style="primary", **_bkw)
+
+    def _cb_fit(_b) -> None:
+        import asyncio
+        import queue as _qmod
+        import threading
+        from scipy.optimize import minimize
+        from scipy.spatial import cKDTree
+
+        U_start = state.U.copy()
+        _q: _qmod.Queue = _qmod.Queue()
+
+        def _cost(rvec: np.ndarray) -> float:
+            R = Rotation.from_rotvec(rvec).as_matrix()
+            try:
+                spots = _simulate(R @ U_start)
+            except Exception:
+                return float(max_match_px ** 2)
+            sim_c = _extract_sim_xy(spots)[:top_n_sim]
+            if not len(sim_c):
+                return float(max_match_px ** 2)
+            dists, _ = cKDTree(sim_c).query(obs_use, k=1)
+            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+
+        _n = [0]
+
+        def _opt_cb(xk: np.ndarray) -> None:
+            _n[0] += 1
+            if _n[0] % 3 == 0:
+                _q.put(xk.copy())
+
+        def _optimize() -> None:
+            x0   = np.zeros(3)
+            step = np.radians(1.0)
+            simplex = np.zeros((4, 3))
+            for i in range(3):
+                simplex[i + 1, i] = step
+            res = minimize(
+                _cost, x0, method="Nelder-Mead",
+                callback=_opt_cb,
+                options={"maxiter": 600, "xatol": 1e-4, "fatol": 1e-4,
+                         "initial_simplex": simplex},
+            )
+            _q.put(res.x.copy())
+            _q.put(None)
+
+        async def _ui_loop() -> None:
+            btn_fit.disabled = True
+            btn_fit.description = "Fitting…"
+            t = threading.Thread(target=_optimize, daemon=True)
+            t.start()
+            while True:
+                await asyncio.sleep(0.15)
+                latest, done = None, False
+                while True:
+                    try:
+                        item = _q.get_nowait()
+                        if item is None:
+                            done = True
+                            break
+                        latest = item
+                    except _qmod.Empty:
+                        break
+                if latest is not None:
+                    R = Rotation.from_rotvec(latest).as_matrix()
+                    state.U0 = R @ U_start
+                    _updating[0] = True
+                    for s in (s_ca, s_cb, s_cc):
+                        s.value = 0.0
+                    _updating[0] = False
+                    _do_update()
+                if done:
+                    btn_fit.description = "⚡ Quick Fit"
+                    btn_fit.disabled = False
+                    return
+
+        asyncio.ensure_future(_ui_loop())
+
+    btn_fit.on_click(_cb_fit)
 
     # ── "Center at hkl" preset buttons ───────────────────────────────────────
     # Planes: cubic axes + diagonal + hexagonal first-order {10-10} and
@@ -513,7 +594,7 @@ def interactive_orientation(
     _controls = ipw.VBox([
         s_ca, s_cb, s_cc,
         ipw.HBox(
-            [btn_reset, btn_setu0, btn_accept],
+            [btn_reset, btn_setref, btn_accept, btn_fit],
             layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(

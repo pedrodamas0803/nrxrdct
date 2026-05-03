@@ -592,6 +592,7 @@ def interactive_calibration(
     dd_range: float = 10.0,
     cen_range_px: float = 150.0,
     angle_range_deg: float = 2.0,
+    space: str = "angular",
     figsize: tuple = (14, 6),
 ) -> CalibrationState:
     """
@@ -637,6 +638,10 @@ def interactive_calibration(
         Half-range of the Δ xcen / Δ ycen sliders (px).
     angle_range_deg : float
         Half-range of the Δ xbet / Δ xgam sliders (°).
+    space : ``'angular'`` or ``'detector'``
+        Coordinate frame for the main panel.  ``'angular'`` (default) plots
+        2θ (x) vs χ (y) in degrees.  ``'detector'`` plots raw pixel positions.
+        Matching is always done in detector (pixel) space regardless of this flag.
 
     Returns
     -------
@@ -687,37 +692,53 @@ def interactive_calibration(
         for sp in ax.spines.values():
             sp.set_edgecolor(_GRAY)
 
-    ax_det.set_xlim(0, camera.Nh)
-    ax_det.set_ylim(camera.Nv, 0)
-    ax_det.set_aspect("equal")
-    ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
-    ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
     ax_det.set_title(
         "Laue — interactive calibration   "
         "○ observed   ◆ simulated   — matched",
         color=_FG, fontsize=9, pad=6,
     )
 
-    if image is not None:
-        img_arr = np.asarray(image, dtype=float)
-        vmax = np.percentile(img_arr[img_arr > 0], 99) if img_arr.max() > 0 else 1.0
-        ax_det.imshow(
-            np.log1p(img_arr / vmax * 1000),
-            origin="upper",
-            extent=[0, camera.Nh, camera.Nv, 0],
-            cmap="inferno",
-            aspect="auto",
-            alpha=0.55,
-            zorder=0,
-        )
+    if space == "detector":
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+        if image is not None:
+            img_arr = np.asarray(image, dtype=float)
+            vmax = np.percentile(img_arr[img_arr > 0], 99) if img_arr.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img_arr / vmax * 1000),
+                origin="upper",
+                extent=[0, camera.Nh, camera.Nv, 0],
+                cmap="inferno",
+                aspect="auto",
+                alpha=0.55,
+                zorder=0,
+            )
+        else:
+            ax_det.add_patch(plt.Rectangle(
+                (0, 0), camera.Nh, camera.Nv,
+                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+            ))
     else:
-        ax_det.add_patch(plt.Rectangle(
-            (0, 0), camera.Nh, camera.Nv,
-            linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
-        ))
+        ax_det.set_aspect("auto")
+        ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
 
+    # Initial observed scatter; angular mode will update positions each frame
+    # since pixel→angle mapping depends on the current camera.
+    _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+    _obs_init = (
+        obs_use if space == "detector"
+        else np.column_stack([
+            np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
+            np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
+        ])
+    )
     sc_obs = ax_det.scatter(
-        obs_use[:, 0], obs_use[:, 1],
+        _obs_init[:, 0], _obs_init[:, 1],
         s=45, c="none", edgecolors=_OBS, linewidths=0.9,
         zorder=4, label=f"observed ({len(obs_use)})",
     )
@@ -815,7 +836,23 @@ def interactive_calibration(
         spots  = _simulate(U, cam)
         sim_xy = _extract_sim_xy(spots)[:top_n_sim]
 
-        sc_sim.set_offsets(sim_xy if len(sim_xy) else np.empty((0, 2)))
+        # Build display coordinates (angular or detector)
+        if space == "angular":
+            uf = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+            tth_o = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
+            chi_o = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
+            obs_disp = np.column_stack([tth_o, chi_o])
+            on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            sim_disp = (
+                np.array([[s["tth"], s["chi"]] for s in on_det])
+                if on_det else np.empty((0, 2))
+            )
+            sc_obs.set_offsets(obs_disp)
+        else:
+            obs_disp = obs_use
+            sim_disp = sim_xy
+
+        sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
 
         for ln in _lines:
             ln.remove()
@@ -837,8 +874,8 @@ def interactive_calibration(
                 if ok:
                     edge_colors[r] = _MATCH
                     _lines.append(ax_det.plot(
-                        [obs_use[r, 0], sim_xy[c, 0]],
-                        [obs_use[r, 1], sim_xy[c, 1]],
+                        [obs_disp[r, 0], sim_disp[c, 0]],
+                        [obs_disp[r, 1], sim_disp[c, 1]],
                         color=_MATCH, lw=0.7, alpha=0.6, zorder=3,
                     )[0])
             sc_obs.set_edgecolors(edge_colors)

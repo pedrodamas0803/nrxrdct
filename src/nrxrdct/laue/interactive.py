@@ -968,6 +968,111 @@ def interactive_calibration(
     btn_setref.on_click(_cb_setref)
     btn_accept.on_click(_cb_accept)
 
+    # ── Quick-fit button ──────────────────────────────────────────────────────
+    btn_fit = ipw.Button(
+        description="⚡ Quick Fit", button_style="primary", **_bkw
+    )
+
+    def _cb_fit(_b) -> None:  # noqa: ARG001
+        import asyncio
+        import queue as _qmod
+        import threading
+        from scipy.optimize import minimize
+        from scipy.spatial import cKDTree
+        from .simulation import precompute_allowed_hkl
+
+        fit_params = ["dd", "xcen", "ycen", "xbet", "xgam"]
+        cam0  = state.camera       # snapshot at click time
+        U_fit = state.U.copy()
+        x0    = np.array([getattr(cam0, p) for p in fit_params], dtype=float)
+
+        _allowed = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        _q: _qmod.Queue = _qmod.Queue()
+
+        def _build(x: np.ndarray):
+            kw = dict(
+                dd=cam0.dd, xcen=cam0.xcen, ycen=cam0.ycen,
+                xbet=cam0.xbet, xgam=cam0.xgam,
+                pixelsize=cam0.pixel_mm, n_pix_h=cam0.Nh, n_pix_v=cam0.Nv,
+                kf_direction=cam0.kf_direction,
+            )
+            for i, p in enumerate(fit_params):
+                kw[p] = float(x[i])
+            return _Camera(**kw)
+
+        def _cost(x: np.ndarray) -> float:
+            try:
+                spots = simulate_laue(
+                    crystal, U_fit, _build(x),
+                    E_min=E_min_eV, E_max=E_max_eV,
+                    source=source, source_kwargs=source_kwargs,
+                    hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+                    allowed_hkl=_allowed,
+                )
+            except Exception:
+                return float(max_match_px ** 2)
+            sim_c = np.array([s["pix"] for s in spots if s.get("pix") is not None])
+            if not len(sim_c):
+                return float(max_match_px ** 2)
+            dists, _ = cKDTree(sim_c).query(obs_use, k=1)
+            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+
+        _n = [0]
+
+        def _opt_cb(xk: np.ndarray) -> None:
+            _n[0] += 1
+            if _n[0] % 3 == 0:   # update display every 3 Nelder-Mead iterations
+                _q.put(xk.copy())
+
+        def _optimize() -> None:
+            _steps = {"dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5}
+            n = len(x0)
+            simplex = np.tile(x0, (n + 1, 1))
+            for i, p in enumerate(fit_params):
+                simplex[i + 1, i] += _steps[p]
+            res = minimize(
+                _cost, x0, method="Nelder-Mead",
+                callback=_opt_cb,
+                options={"maxiter": 500, "xatol": 0.02, "fatol": 1e-4,
+                         "initial_simplex": simplex},
+            )
+            _q.put(res.x.copy())
+            _q.put(None)  # sentinel: done
+
+        async def _ui_loop() -> None:
+            btn_fit.disabled = True
+            btn_fit.description = "Fitting…"
+            t = threading.Thread(target=_optimize, daemon=True)
+            t.start()
+            while True:
+                await asyncio.sleep(0.15)  # poll every 150 ms
+                latest, done = None, False
+                while True:
+                    try:
+                        item = _q.get_nowait()
+                        if item is None:
+                            done = True
+                            break
+                        latest = item
+                    except _qmod.Empty:
+                        break
+                if latest is not None:
+                    state.camera0 = _build(latest)
+                    state.U0 = U_fit.copy()
+                    _updating[0] = True
+                    for s in _all_sliders:
+                        s.value = 0.0
+                    _updating[0] = False
+                    _do_update()
+                if done:
+                    btn_fit.description = "⚡ Quick Fit"
+                    btn_fit.disabled = False
+                    return
+
+        asyncio.ensure_future(_ui_loop())
+
+    btn_fit.on_click(_cb_fit)
+
     # ── "Center at hkl" preset buttons ───────────────────────────────────────
     _presets: list[tuple[str, tuple[int, int, int]]] = [
         ("100",  ( 1,  0,  0)),
@@ -1049,7 +1154,7 @@ def interactive_calibration(
         ipw.HBox([_col_orient, _col_cam],
                  layout=ipw.Layout(width="100%")),
         ipw.HBox(
-            [btn_reset, btn_setref, btn_accept],
+            [btn_reset, btn_setref, btn_accept, btn_fit],
             layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(

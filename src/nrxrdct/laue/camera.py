@@ -38,15 +38,16 @@ class CalibrationResult:
     def plot(
         self,
         crystal,
-        obs_xy: np.ndarray,
+        peaklist: np.ndarray,
         image: np.ndarray | None = None,
         max_match_px: float = 20.0,
+        space: str = "detector",
         E_min_eV: float = 5_000.0,
         E_max_eV: float = 25_000.0,
         source: str = "bending_magnet",
         source_kwargs: dict | None = None,
         hmax: int = 15,
-        f2_thresh: float = 0.01,
+        f2_thresh: float = 0.0,
         top_n_sim: int | None = None,
         figsize: tuple = (14, 5),
     ):
@@ -55,13 +56,21 @@ class CalibrationResult:
 
         Parameters
         ----------
-        crystal     : Crystal  — calibration standard used during fitting.
-        obs_xy      : (N, 2)  — observed pixel positions [xcam, ycam].
-        image       : (Nv, Nh) array or None  — optional background detector image.
-        max_match_px : float  — match radius; only pairs within this distance
-                                are drawn and counted in the histogram.
-        top_n_sim   : int or None  — restrict to the N brightest simulated spots.
-        figsize     : (w, h)  — figure size in inches.
+        crystal      : Crystal  — calibration standard used during fitting.
+        peaklist     : (N, ≥2) array  — peak list from
+                       :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+                       Columns 0 and 1 are used as (xcam, ycam) pixel positions.
+        image        : (Nv, Nh) array or None  — optional detector image
+                       (``'detector'`` space only; ignored for ``'angular'``).
+        max_match_px : float  — pixel-space match radius for spot pairing.
+        space        : ``'detector'`` or ``'angular'``  — coordinate frame for
+                       the main panel.  ``'angular'`` plots 2θ (x) vs χ (y) in
+                       degrees.  Matching is always done in detector (pixel)
+                       space; the histogram shows pixel distances in detector
+                       mode and Euclidean (2θ, χ) distances in angular mode.
+        f2_thresh    : float  — minimum |F|² to include a reflection (0 = all).
+        top_n_sim    : int or None  — restrict to the N brightest simulated spots.
+        figsize      : (w, h)  — figure size in inches.
 
         Returns
         -------
@@ -70,10 +79,12 @@ class CalibrationResult:
         import matplotlib.colors as mcolors
         import matplotlib.gridspec as gridspec
         import matplotlib.pyplot as plt
-        from scipy.spatial import cKDTree
 
         from .simulation import simulate_laue
         from .fitting import _match_spots
+
+        if space not in ("detector", "angular"):
+            raise ValueError(f"space must be 'detector' or 'angular', got {space!r}")
 
         _BG   = "#080c14"
         _BG2  = "#0d1220"
@@ -83,7 +94,7 @@ class CalibrationResult:
         _SIM  = "#ff6b35"
 
         cam    = self.camera
-        obs_xy = np.asarray(obs_xy, dtype=float)
+        obs_xy = np.asarray(peaklist, dtype=float)[:, :2]
         src_kw = source_kwargs or {}
 
         # ── simulate with the fitted camera + U ──────────────────────────────
@@ -93,23 +104,52 @@ class CalibrationResult:
             source=source, source_kwargs=src_kw,
             hmax=hmax, f2_thresh=f2_thresh,
         )
-        sim_xy = np.array([s["pix"] for s in spots if s.get("pix") is not None],
-                          dtype=float)
-        if len(sim_xy) == 0:
-            sim_xy = np.empty((0, 2), dtype=float)
-        if top_n_sim is not None and len(sim_xy) > top_n_sim:
-            I_vals = np.array([s["I_raw"] for s in spots if s.get("pix") is not None])
-            idx = np.argsort(I_vals)[::-1][:top_n_sim]
-            sim_xy = sim_xy[idx]
 
-        # ── one-to-one matching (Hungarian) ──────────────────────────────────
+        # Collect on-detector spots keeping pixel, angular, and intensity aligned
+        _on_det = [
+            (s["pix"], s.get("tth", np.nan), s.get("chi", np.nan), s.get("I_raw", 1.0))
+            for s in spots if s.get("pix") is not None
+        ]
+        if top_n_sim is not None and len(_on_det) > top_n_sim:
+            _on_det.sort(key=lambda t: -t[3])
+            _on_det = _on_det[:top_n_sim]
+
+        if _on_det:
+            sim_xy  = np.array([t[0] for t in _on_det], dtype=float)
+            tth_sim = np.array([t[1] for t in _on_det], dtype=float)
+            chi_sim = np.array([t[2] for t in _on_det], dtype=float)
+        else:
+            sim_xy  = np.empty((0, 2), dtype=float)
+            tth_sim = np.empty(0, dtype=float)
+            chi_sim = np.empty(0, dtype=float)
+
+        # ── match in detector (pixel) space ───────────────────────────────────
         row_ind, col_ind, dist_px = _match_spots(obs_xy, sim_xy, max_match_px)
         ok_mask   = dist_px < max_match_px
         n_matched = int(ok_mask.sum())
-        dists_ok  = dist_px[ok_mask]
-        mean_px   = float(np.mean(dists_ok))   if n_matched > 0 else float("nan")
-        rms_px    = float(np.sqrt(np.mean(dists_ok ** 2))) if n_matched > 0 else float("nan")
         rate      = n_matched / max(len(obs_xy), 1)
+
+        # ── angular coords for observed spots ─────────────────────────────────
+        uf_obs  = cam.pixel_to_kf(obs_xy[:, 0], obs_xy[:, 1])
+        tth_obs = np.degrees(np.arccos(np.clip(uf_obs[:, 0], -1.0, 1.0)))
+        chi_obs = np.degrees(np.arctan2(uf_obs[:, 1], uf_obs[:, 2] + 1e-17))
+
+        # ── distances for histogram ───────────────────────────────────────────
+        if space == "detector":
+            dists_ok  = dist_px[ok_mask]
+            dist_unit = "px"
+        else:
+            ang_dists = np.sqrt(
+                (tth_obs[row_ind] - tth_sim[col_ind]) ** 2
+                + (chi_obs[row_ind] - chi_sim[col_ind]) ** 2
+            )
+            dists_ok  = ang_dists[ok_mask]
+            dist_unit = "°"
+
+        mean_d = float(np.mean(dists_ok))               if n_matched > 0 else float("nan")
+        rms_d  = float(np.sqrt(np.mean(dists_ok ** 2))) if n_matched > 0 else float("nan")
+        mean_s = f"{mean_d:.3f} {dist_unit}" if np.isfinite(mean_d) else "—"
+        rms_s  = f"{rms_d:.3f} {dist_unit}"  if np.isfinite(rms_d)  else "—"
 
         # ── figure layout ─────────────────────────────────────────────────────
         with plt.ioff():
@@ -117,7 +157,7 @@ class CalibrationResult:
 
         gs = gridspec.GridSpec(
             1, 2, figure=fig,
-            left=0.05, right=0.98, bottom=0.08, top=0.93,
+            left=0.06, right=0.98, bottom=0.08, top=0.93,
             wspace=0.06, width_ratios=[2.5, 1.0],
         )
         gs_r = gridspec.GridSpecFromSubplotSpec(
@@ -133,55 +173,62 @@ class CalibrationResult:
             for sp in ax.spines.values():
                 sp.set_edgecolor(_GRAY)
 
-        # ── detector panel ────────────────────────────────────────────────────
-        if image is not None:
-            img = np.asarray(image, dtype=float)
-            vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
-            ax_det.imshow(
-                np.log1p(img / vmax * 1000),
-                origin="upper", extent=[0, cam.Nh, cam.Nv, 0],
-                cmap="inferno", aspect="auto", alpha=0.55, zorder=0,
-            )
+        # ── choose display coordinates ────────────────────────────────────────
+        if space == "detector":
+            obs_plot = obs_xy
+            sim_plot = sim_xy
+            ax_det.set_xlim(0, cam.Nh)
+            ax_det.set_ylim(cam.Nv, 0)
+            ax_det.set_aspect("equal")
+            ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+            ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+            if image is not None:
+                img = np.asarray(image, dtype=float)
+                vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
+                ax_det.imshow(
+                    np.log1p(img / vmax * 1000),
+                    origin="upper", extent=[0, cam.Nh, cam.Nv, 0],
+                    cmap="inferno", aspect="auto", alpha=0.55, zorder=0,
+                )
+            else:
+                ax_det.add_patch(plt.Rectangle(
+                    (0, 0), cam.Nh, cam.Nv,
+                    linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+                ))
         else:
-            ax_det.add_patch(plt.Rectangle(
-                (0, 0), cam.Nh, cam.Nv,
-                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
-            ))
+            obs_plot = np.column_stack([tth_obs, chi_obs])
+            sim_plot = (np.column_stack([tth_sim, chi_sim])
+                        if len(tth_sim) else np.empty((0, 2)))
+            ax_det.set_aspect("auto")
+            ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
+            ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
+            ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
 
-        ax_det.set_xlim(0, cam.Nh)
-        ax_det.set_ylim(cam.Nv, 0)
-        ax_det.set_aspect("equal")
-        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
-        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
-        rms_s  = f"{rms_px:.2f} px"  if np.isfinite(rms_px)  else "—"
-        mean_s = f"{mean_px:.2f} px" if np.isfinite(mean_px) else "—"
         ax_det.set_title(
-            f"Calibration result   "
-            f"○ observed   ◆ fitted   — matched   "
+            f"Calibration result   ○ observed   ◆ fitted   — matched   "
             f"mean={mean_s}   rms={rms_s}",
             color=_FG, fontsize=9, pad=6,
         )
-
         ax_det.scatter(
-            obs_xy[:, 0], obs_xy[:, 1],
+            obs_plot[:, 0], obs_plot[:, 1],
             s=45, c="none", edgecolors=_OBS, linewidths=0.9,
             zorder=4, label=f"observed ({len(obs_xy)})",
         )
-        if len(sim_xy):
+        if len(sim_plot):
             ax_det.scatter(
-                sim_xy[:, 0], sim_xy[:, 1],
+                sim_plot[:, 0], sim_plot[:, 1],
                 s=28, c=_SIM, marker="D", linewidths=0,
                 zorder=5, label=f"simulated ({len(sim_xy)})",
             )
 
-        # Lines coloured by distance: green (close) → red (far)
+        # Lines coloured green→red by pixel distance (calibration quality)
         cmap_match = plt.get_cmap("RdYlGn_r")
         cnorm = mcolors.Normalize(vmin=0, vmax=max_match_px)
         for r, c, d, ok in zip(row_ind, col_ind, dist_px, ok_mask):
             if ok:
                 ax_det.plot(
-                    [obs_xy[r, 0], sim_xy[c, 0]],
-                    [obs_xy[r, 1], sim_xy[c, 1]],
+                    [obs_plot[r, 0], sim_plot[c, 0]],
+                    [obs_plot[r, 1], sim_plot[c, 1]],
                     color=cmap_match(cnorm(d)), lw=0.8, alpha=0.7, zorder=3,
                 )
         ax_det.legend(loc="upper right", fontsize=7,
@@ -212,19 +259,18 @@ class CalibrationResult:
         )
 
         # ── histogram panel ───────────────────────────────────────────────────
-        ax_hist.set_xlabel("distance  (px)", color=_FG, fontsize=8)
+        ax_hist.set_xlabel(f"distance  ({dist_unit})", color=_FG, fontsize=8)
         ax_hist.set_ylabel("count", color=_FG, fontsize=8)
         ax_hist.set_title("Match distances", color=_FG, fontsize=9, pad=4)
-        ax_hist.set_xlim(0, max_match_px)
 
         if n_matched > 0:
-            bins = np.linspace(0, max_match_px, min(30, n_matched + 1))
+            bins = np.linspace(0, dists_ok.max() * 1.05, min(30, n_matched + 1))
             ax_hist.hist(dists_ok, bins=bins, color=_SIM, alpha=0.85,
                          edgecolor=_BG, linewidth=0.4)
-            ax_hist.axvline(mean_px, color="#44dd66", lw=1.4, ls="--",
-                            label=f"mean {mean_px:.2f} px")
-            ax_hist.axvline(rms_px, color="#ffcc44", lw=1.4, ls=":",
-                            label=f"rms  {rms_px:.2f} px")
+            ax_hist.axvline(mean_d, color="#44dd66", lw=1.4, ls="--",
+                            label=f"mean {mean_s}")
+            ax_hist.axvline(rms_d, color="#ffcc44", lw=1.4, ls=":",
+                            label=f"rms  {rms_s}")
             ax_hist.legend(fontsize=7, facecolor=_BG2, edgecolor=_GRAY,
                            labelcolor=_FG)
 

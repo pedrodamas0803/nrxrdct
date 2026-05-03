@@ -132,6 +132,7 @@ def interactive_orientation(
     top_n_sim: int = 80,
     rot_range_deg: float = 20.0,
     c_rot_range_deg: float = 180.0,
+    space: str = "angular",
     figsize: tuple = (14, 6),
 ) -> OrientationState:
     """
@@ -156,6 +157,10 @@ def interactive_orientation(
     c_rot_range_deg : float
         Half-range of the [001] crystal-axis slider (degrees).  Defaults to
         180° so the full azimuthal range is accessible in one drag.
+    space : ``'angular'`` or ``'detector'``
+        Coordinate frame for the main panel.  ``'angular'`` (default) plots
+        2θ (x) vs χ (y) in degrees.  ``'detector'`` plots raw pixel positions.
+        Matching is always done in detector (pixel) space.
 
     Returns
     -------
@@ -239,37 +244,51 @@ def interactive_orientation(
         for sp in ax.spines.values():
             sp.set_edgecolor(_GRAY)
 
-    ax_det.set_xlim(0, camera.Nh)
-    ax_det.set_ylim(camera.Nv, 0)
-    ax_det.set_aspect("equal")
-    ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
-    ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
     ax_det.set_title(
         "Laue — interactive orientation   "
-        "○ observed   ◆ simulated   — matched   · unmatched",
+        "○ observed   ◆ simulated   — matched",
         color=_FG, fontsize=9, pad=6,
     )
 
-    if image is not None:
-        img = np.asarray(image, dtype=float)
-        vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
-        ax_det.imshow(
-            np.log1p(img / vmax * 1000),
-            origin="upper",
-            extent=[0, camera.Nh, camera.Nv, 0],
-            cmap="inferno",
-            aspect="auto",
-            alpha=0.55,
-            zorder=0,
-        )
+    if space == "detector":
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+        if image is not None:
+            img = np.asarray(image, dtype=float)
+            vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img / vmax * 1000),
+                origin="upper",
+                extent=[0, camera.Nh, camera.Nv, 0],
+                cmap="inferno",
+                aspect="auto",
+                alpha=0.55,
+                zorder=0,
+            )
+        else:
+            ax_det.add_patch(plt.Rectangle(
+                (0, 0), camera.Nh, camera.Nv,
+                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+            ))
     else:
-        ax_det.add_patch(plt.Rectangle(
-            (0, 0), camera.Nh, camera.Nv,
-            linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
-        ))
+        ax_det.set_aspect("auto")
+        ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+
+    # Precompute angular obs coords once — camera is fixed in orientation mode.
+    _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+    _obs_angular = np.column_stack([
+        np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
+        np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
+    ])
+    _obs_init = _obs_angular if space == "angular" else obs_use
 
     sc_obs = ax_det.scatter(
-        obs_use[:, 0], obs_use[:, 1],
+        _obs_init[:, 0], _obs_init[:, 1],
         s=45, c="none", edgecolors=_OBS, linewidths=0.9,
         zorder=4, label=f"observed ({len(obs_use)})",
     )
@@ -332,7 +351,20 @@ def interactive_orientation(
         spots  = _simulate(U)
         sim_xy = _extract_sim_xy(spots)[:top_n_sim]
 
-        sc_sim.set_offsets(sim_xy if len(sim_xy) else np.empty((0, 2)))
+        # Build display coordinates
+        if space == "angular":
+            obs_disp = _obs_angular
+            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            sim_disp = (
+                np.array([[s["tth"], s["chi"]] for s in on_det])
+                if on_det else np.empty((0, 2))
+            )
+        else:
+            obs_disp = obs_use
+            sim_disp = sim_xy
+
+        sc_obs.set_offsets(obs_disp)
+        sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
 
         for ln in _lines:
             ln.remove()
@@ -341,7 +373,6 @@ def interactive_orientation(
         n_matched = 0
         rms_px    = float("nan")
 
-        # Reset all observed markers to white
         sc_obs.set_edgecolors([_OBS] * len(obs_use))
 
         if len(sim_xy) > 0 and len(obs_use) > 0:
@@ -351,16 +382,13 @@ def interactive_orientation(
             if n_matched > 0:
                 rms_px = float(np.sqrt((dist_px[ok_mask] ** 2).mean()))
 
-            # Green edge on matched observed spots; green line to simulated partner.
-            # Unmatched pairs get no line — long red lines across the detector are
-            # misleading when obs > sim (unmatched obs have no simulated counterpart).
             edge_colors = [_OBS] * len(obs_use)
             for r, c, ok in zip(row_ind, col_ind, ok_mask):
                 if ok:
                     edge_colors[r] = _MATCH
                     _lines.append(ax_det.plot(
-                        [obs_use[r, 0], sim_xy[c, 0]],
-                        [obs_use[r, 1], sim_xy[c, 1]],
+                        [obs_disp[r, 0], sim_disp[c, 0]],
+                        [obs_disp[r, 1], sim_disp[c, 1]],
                         color=_MATCH, lw=0.7, alpha=0.6, zorder=3,
                     )[0])
             sc_obs.set_edgecolors(edge_colors)

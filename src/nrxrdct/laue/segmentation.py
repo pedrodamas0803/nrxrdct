@@ -557,10 +557,25 @@ def write_h5_spotsfile(
                 C = popt[-1]
 
                 if r2 < 0.9:
-                    hout[f"spot_{ii:04d}_0/r_squared"] = r2
-                    hout[f"spot_{ii:04d}_0/image"] = image
-                    hout[f"spot_{ii:04d}_0/yxcen"] = region.centroid_weighted
-                    hout[f"spot_{ii:04d}_0/bbox"] = region.bbox
+                    # Fit converged but quality is poor — write the best-attempt
+                    # parameters from the first Gaussian component so the spot
+                    # is usable as a position/intensity estimate.
+                    A, xm, ym, sigma_x, sigma_y, theta = popt[0:6]
+                    hout[f"spot_{ii:04d}_0/r_squared"]       = r2
+                    hout[f"spot_{ii:04d}_0/image"]            = image
+                    hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                    hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C, 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C, 2)
+                    hout[f"spot_{ii:04d}_0/Ipixmax"]          = int(region.image_intensity.max())
                     continue
                 n_success += 1
 
@@ -605,7 +620,22 @@ def write_h5_spotsfile(
             except RuntimeError as exc:
                 r2 = 0
                 print(f"Runtime error at spot {ii}: {exc}")
-                hout[f"spot_{ii:04d}_0/r_squared"] = r2
+                Ipix = int(region.image_intensity.max())
+                hout[f"spot_{ii:04d}_0/r_squared"]       = r2
+                hout[f"spot_{ii:04d}_0/image"]            = image
+                hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"]          = Ipix
                 continue
 
     print(

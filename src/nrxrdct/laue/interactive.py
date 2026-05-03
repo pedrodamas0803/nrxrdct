@@ -67,6 +67,40 @@ _OBS   = "#ffffff"
 _SIM   = "#ff6b35"
 _MATCH = "#44dd66"
 
+_DEG = np.pi / 180
+
+
+def _gnomonic(tth_deg, chi_deg):
+    """Gnomonic projection following the LaueTools convention.
+
+    Projects the scattering-vector direction onto the plane tangent at
+    (lat₀ = 45°, long₀ = 0°), which corresponds to 2θ = 90°, χ = 0°.
+    Zone axes appear as straight lines in this projection.
+
+    Parameters
+    ----------
+    tth_deg, chi_deg : array-like  —  2θ and χ in degrees.
+
+    Returns
+    -------
+    gX, gY : ndarray  —  gnomonic coordinates.
+    """
+    theta = np.asarray(tth_deg, float) / 2.0
+    chi   = np.asarray(chi_deg, float)
+    tan_t = np.tan(theta * _DEG)
+    safe_tan = np.where(np.abs(tan_t) > 1e-10, tan_t, np.sign(tan_t + 1e-30) * 1e-10)
+    lat    = np.arcsin(np.clip(np.cos(theta * _DEG) * np.cos(chi * _DEG), -1.0, 1.0))
+    longit = np.arctan(-np.sin(chi * _DEG) / safe_tan)
+    # Projection centre at lat0 = π/4 (= 2θ = 90°), longit0 = 0
+    lat0, longit0 = np.pi / 4.0, 0.0
+    slat0, clat0  = np.sin(lat0), np.cos(lat0)
+    slat,  clat   = np.sin(lat),  np.cos(lat)
+    cosad  = slat * slat0 + clat * clat0 * np.cos(longit - longit0)
+    safe_c = np.where(np.abs(cosad) > 1e-12, cosad, np.nan)
+    gX = clat * np.sin(longit0 - longit) / safe_c
+    gY = (slat * clat0 - clat * slat0 * np.cos(longit - longit0)) / safe_c
+    return gX, gY
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # State container
@@ -277,8 +311,8 @@ def interactive_orientation(
             ))
     elif space == "gnomonic":
         ax_det.set_aspect("equal")
-        ax_det.set_xlabel("k_y / k_x", color=_FG, fontsize=8)
-        ax_det.set_ylabel("k_z / k_x", color=_FG, fontsize=8)
+        ax_det.set_xlabel("gnomonic X", color=_FG, fontsize=8)
+        ax_det.set_ylabel("gnomonic Y", color=_FG, fontsize=8)
         ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
         ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
         ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
@@ -294,8 +328,10 @@ def interactive_orientation(
         np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
         np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
     ])
-    _kfx_safe = np.where(np.abs(_uf0[:, 0]) > 1e-8, _uf0[:, 0], 1e-8)
-    _obs_gnomonic = np.column_stack([_uf0[:, 1] / _kfx_safe, _uf0[:, 2] / _kfx_safe])
+    _tth0 = np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0)))
+    _chi0 = np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17))
+    _gX0, _gY0 = _gnomonic(_tth0, _chi0)
+    _obs_gnomonic = np.column_stack([_gX0, _gY0])
     _obs_init = (
         _obs_angular  if space == "angular"  else
         _obs_gnomonic if space == "gnomonic" else
@@ -378,12 +414,8 @@ def interactive_orientation(
             obs_disp = _obs_gnomonic
             on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             if on_det:
-                tth_r    = np.radians([s["tth"] for s in on_det])
-                chi_r    = np.radians([s["chi"] for s in on_det])
-                sim_disp = np.column_stack([
-                    np.tan(tth_r) * np.sin(chi_r),
-                    np.tan(tth_r) * np.cos(chi_r),
-                ])
+                gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
+                sim_disp = np.column_stack([gX, gY])
             else:
                 sim_disp = np.empty((0, 2))
         else:
@@ -861,8 +893,8 @@ def interactive_calibration(
             ))
     elif space == "gnomonic":
         ax_det.set_aspect("equal")
-        ax_det.set_xlabel("k_y / k_x", color=_FG, fontsize=8)
-        ax_det.set_ylabel("k_z / k_x", color=_FG, fontsize=8)
+        ax_det.set_xlabel("gnomonic X", color=_FG, fontsize=8)
+        ax_det.set_ylabel("gnomonic Y", color=_FG, fontsize=8)
         ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
         ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
         ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
@@ -878,8 +910,10 @@ def interactive_calibration(
     if space == "detector":
         _obs_init = obs_use
     elif space == "gnomonic":
-        _kfx0     = np.where(np.abs(_uf0[:, 0]) > 1e-8, _uf0[:, 0], 1e-8)
-        _obs_init = np.column_stack([_uf0[:, 1] / _kfx0, _uf0[:, 2] / _kfx0])
+        _tth0_c    = np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0)))
+        _chi0_c    = np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17))
+        _gX0c, _gY0c = _gnomonic(_tth0_c, _chi0_c)
+        _obs_init  = np.column_stack([_gX0c, _gY0c])
     else:  # angular
         _obs_init = np.column_stack([
             np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
@@ -996,17 +1030,15 @@ def interactive_calibration(
                 if on_det else np.empty((0, 2))
             )
         elif space == "gnomonic":
-            uf       = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
-            kfx_safe = np.where(np.abs(uf[:, 0]) > 1e-8, uf[:, 0], 1e-8)
-            obs_disp = np.column_stack([uf[:, 1] / kfx_safe, uf[:, 2] / kfx_safe])
-            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            uf         = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+            _tth_o     = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
+            _chi_o     = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
+            gX_o, gY_o = _gnomonic(_tth_o, _chi_o)
+            obs_disp   = np.column_stack([gX_o, gY_o])
+            on_det     = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             if on_det:
-                tth_r    = np.radians([s["tth"] for s in on_det])
-                chi_r    = np.radians([s["chi"] for s in on_det])
-                sim_disp = np.column_stack([
-                    np.tan(tth_r) * np.sin(chi_r),
-                    np.tan(tth_r) * np.cos(chi_r),
-                ])
+                gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
+                sim_disp = np.column_stack([gX, gY])
             else:
                 sim_disp = np.empty((0, 2))
         else:

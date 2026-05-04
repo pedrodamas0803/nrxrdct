@@ -763,6 +763,13 @@ def write_peaklist_dat(peaklist, outname):
 
     df.to_csv(outname, sep=" ", index=False)
 
+def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
+    """Fast nearest-neighbor gap filling."""
+    _, indices = ndi.distance_transform_edt(
+        ~valid_mask,
+        return_indices=True
+    )
+    return image[tuple(indices)]
 
 def LoG_segmentation(image: np.ndarray, sigma=0.01, threshold_percentile = 99.):
 

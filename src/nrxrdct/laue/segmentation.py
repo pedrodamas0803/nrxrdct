@@ -506,12 +506,37 @@ def write_h5_spotsfile(
     d: int = 10,
     overwrite: bool = False,
     max_components: int = 2,
+    include_unfitted: bool = True,
+    r_squared_min: float = 0.9,
 ):
     """
     Writes per-spot images and fitted parameters into an HDF5 file.
 
-    It tries to fit a 1-component Gaussian mixture on a cropped ROI of size 2d around the
-    region weighted centroid, and keeps results with r2 >= 0.9.
+    Tries to fit a Gaussian mixture on a cropped ROI of size 2d around the
+    region weighted centroid.  Spots whose fit reaches r² ≥ r_squared_min are
+    stored in ``spot_{ii}_{jj}`` groups (jj = 1, 2, …).
+
+    Parameters
+    ----------
+    image_array : (Nv, Nh) ndarray
+        Full detector image from which ROIs are extracted.
+    regionprops : list
+        Region properties from :func:`measure_peaks`.
+    outpath : str
+        Output HDF5 file path.
+    d : int
+        Half-size of the ROI crop around each centroid (pixels).
+    overwrite : bool
+        If True, delete an existing file at *outpath* before writing.
+    max_components : int
+        Maximum number of Gaussian components tried per spot.
+    include_unfitted : bool
+        If True (default), spots whose best fit has r² < r_squared_min are
+        still written to the file in a ``spot_{ii}_0`` group (fallback
+        position from the weighted centroid, shape fields set to 0).
+        If False, those spots are silently skipped.
+    r_squared_min : float
+        Minimum r² to consider a Gaussian fit acceptable (default 0.9).
     """
     n_labels = len(regionprops)
     n_success = 0
@@ -530,7 +555,14 @@ def write_h5_spotsfile(
                 xmin:xmax,
             ]
 
+            init_params_1 = None
             try:
+                # Single-component initial guess — used as position fallback
+                # when the Gaussian fit does not meet r_squared_min.
+                init_params_1 = auto_init_gaussian_mixture_global(
+                    image, n_components=1, smooth_sigma=0.2
+                )
+
                 for n_comp in range(1, max_components + 1):
                     try:
                         init_params = auto_init_gaussian_mixture_global(
@@ -550,17 +582,19 @@ def write_h5_spotsfile(
                         )
                         r2 = r_squared_image(image, fitted)
                         break
-                    # print(ii, n_comp, r2)
-                    if r2 > 0.9:
+                    if r2 > r_squared_min:
                         break
 
                 C = popt[-1]
 
-                if r2 < 0.9:
-                    # Fit converged but quality is poor — write the best-attempt
-                    # parameters from the first Gaussian component so the spot
-                    # is usable as a position/intensity estimate.
-                    A, xm, ym, sigma_x, sigma_y, theta = popt[0:6]
+                if r2 < r_squared_min:
+                    if not include_unfitted:
+                        continue
+                    # Fit did not reach r_squared_min — write the initial-guess
+                    # parameters (position from local maximum, shape from
+                    # weighted covariance) rather than a poor converged fit.
+                    A, xm, ym, sigma_x, sigma_y, theta = init_params_1[0:6]
+                    C0 = init_params_1[-1]
                     hout[f"spot_{ii:04d}_0/r_squared"]       = r2
                     hout[f"spot_{ii:04d}_0/image"]            = image
                     hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
@@ -568,13 +602,13 @@ def write_h5_spotsfile(
                     hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
                     hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
                     hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
-                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C0, 2)
                     hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
                     hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
                     hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
-                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C0, 2)
                     hout[f"spot_{ii:04d}_0/Ipixmax"]          = int(region.image_intensity.max())
                     continue
                 n_success += 1
@@ -618,24 +652,41 @@ def write_h5_spotsfile(
                     )
 
             except RuntimeError as exc:
+                if not include_unfitted:
+                    continue
                 r2 = 0
                 print(f"Runtime error at spot {ii}: {exc}")
                 Ipix = int(region.image_intensity.max())
-                hout[f"spot_{ii:04d}_0/r_squared"]       = r2
-                hout[f"spot_{ii:04d}_0/image"]            = image
-                hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
-                hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
-                hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
-                hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
-                hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
-                hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
-                hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
-                hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
-                hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
-                hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
-                hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
-                hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
-                hout[f"spot_{ii:04d}_0/Ipixmax"]          = Ipix
+                hout[f"spot_{ii:04d}_0/r_squared"] = r2
+                hout[f"spot_{ii:04d}_0/image"]     = image
+                hout[f"spot_{ii:04d}_0/yxcen"]     = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]       = region.bbox
+                if init_params_1 is not None:
+                    A, xm, ym, sigma_x, sigma_y, theta = init_params_1[0:6]
+                    C0 = init_params_1[-1]
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C0, 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C0, 2)
+                else:
+                    # init_params_1 itself failed — last resort: centroid only
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"] = Ipix
                 continue
 
     print(
@@ -662,7 +713,11 @@ def get_spot_limits(image_array, ycen, xcen, d):
     return ymin, ymax, xmin, xmax
 
 
-def convert_spotsfile2peaklist(h5path: str, include_unfitted: bool = False):
+def convert_spotsfile2peaklist(
+    h5path: str,
+    include_unfitted: bool = False,
+    r_squared_min: float = 0.9,
+):
     """
     Read the spots HDF5 file and return an (N, 9) array of peak quantities,
     sorted by descending peak intensity.
@@ -675,11 +730,15 @@ def convert_spotsfile2peaklist(h5path: str, include_unfitted: bool = False):
     h5path : str
         Path to the spots HDF5 file produced by the segmentation pipeline.
     include_unfitted : bool
-        If ``False`` (default) only spots with r_squared >= 0.9 are returned.
-        If ``True``, spots whose Gaussian fit failed (r_squared < 0.9) are
-        also included: their pixel position is taken from the weighted centroid
-        (``yxcen``), intensity from the peak pixel value of the stored sub-image,
-        and all shape / background columns are set to 0.
+        If ``False`` (default) only spots with r_squared >= r_squared_min are
+        returned.  If ``True``, spots whose Gaussian fit did not meet the
+        threshold are also included: their pixel position is taken from the
+        weighted centroid (``yxcen``), intensity from the peak pixel value of
+        the stored sub-image, and all shape / background columns are set to 0.
+    r_squared_min : float
+        Minimum r² to consider a fit acceptable (default 0.9).  Spots stored
+        in the HDF5 file with r_squared below this value are treated as
+        unfitted regardless of how they were written.
 
     Returns
     -------
@@ -700,7 +759,7 @@ def convert_spotsfile2peaklist(h5path: str, include_unfitted: bool = False):
         for key in hin.keys():
             r2 = hin[f"{key}/r_squared"][()]
 
-            if r2 < 0.9:
+            if r2 < r_squared_min:
                 if not include_unfitted:
                     continue
                 # Fall back to weighted centroid; shape fields are unknown

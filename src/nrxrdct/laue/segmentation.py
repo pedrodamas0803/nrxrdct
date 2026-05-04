@@ -813,7 +813,7 @@ def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size
     props = sk.measure.regionprops(labels, intensity_image=intensity_image)
 
     final_mask = np.zeros_like(detector_mask)
-    props = sk.measure.regionprops(labels, intensity_image=img)
+    props = sk.measure.regionprops(labels, intensity_image=intensity_image)
 
     valid_props = []
     for p in props:

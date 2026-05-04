@@ -218,6 +218,74 @@ class MixedFitResult:
         )
 
 
+@dataclass
+class StrainFitResult:
+    """
+    Result of a simultaneous orientation + strain refinement
+    (:func:`fit_strain_orientation`).
+
+    Attributes
+    ----------
+    U             : (3, 3) ndarray  Pure rotation part of the refined matrix.
+                                    ``U = Rotation.from_rotvec(rotvec) @ U0``.
+    U0            : (3, 3) ndarray  Starting orientation passed to the fitter.
+    U_eff         : (3, 3) ndarray  Full deformation matrix used by the
+                                    simulator: ``U @ (I + strain_tensor)``.
+                                    Pass this as ``U`` to
+                                    :func:`~nrxrdct.laue.simulate_laue` to
+                                    reproduce the fitted spot pattern.
+    rotvec        : (3,) ndarray    Rotation increment δω (radians).
+    strain_tensor : (3, 3) ndarray  Symmetric strain tensor in the crystal
+                                    frame.  Diagonal entries are axial strains
+                                    (Δa/a, Δb/b, Δc/c); off-diagonal entries
+                                    are the engineering shear strains / 2.
+    strain_voigt  : (6,) ndarray    Voigt representation
+                                    ``[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]``.
+                                    Components not listed in ``fit_strain``
+                                    are zero.
+    fit_strain    : tuple[str, …]   Strain components that were free parameters.
+    cost          : float           ½ Σ residuals² at convergence.
+    rms_px        : float           RMS pixel distance of matched pairs.
+    n_matched     : int             Matched spots within ``max_match_px``.
+    n_obs         : int             Observed spots used.
+    n_sim         : int             Simulated spots on detector at solution.
+    match_rate    : float           ``n_matched / n_obs``.
+    success       : bool            Optimizer convergence flag.
+    message       : str             Optimizer termination message.
+    optimizer     : OptimizeResult  Raw ``scipy.optimize.OptimizeResult``
+                                    (not shown in repr).
+    """
+
+    U             : np.ndarray
+    U0            : np.ndarray
+    U_eff         : np.ndarray
+    rotvec        : np.ndarray
+    strain_tensor : np.ndarray
+    strain_voigt  : np.ndarray
+    fit_strain    : tuple
+    cost          : float
+    rms_px        : float
+    n_matched     : int
+    n_obs         : int
+    n_sim         : int
+    match_rate    : float
+    success       : bool
+    message       : str
+    optimizer     : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw = float(np.degrees(np.linalg.norm(self.rotvec)))
+        e  = self.strain_voigt
+        return (
+            f"StrainFitResult [{status}]  "
+            f"rms={self.rms_px:.2f} px  "
+            f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
+            f"|δω|={dw:.4f}°  "
+            f"ε_diag=[{e[0]:.2e}, {e[1]:.2e}, {e[2]:.2e}]"
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -388,6 +456,35 @@ def _normalise_phases(phases: list) -> list[dict]:
                 d["label"] = p[3]
             out.append(d)
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Strain helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+_STRAIN_IDX: dict[str, tuple[int, int]] = {
+    "e_xx": (0, 0), "e_yy": (1, 1), "e_zz": (2, 2),
+    "e_xy": (0, 1), "e_xz": (0, 2), "e_yz": (1, 2),
+}
+_STRAIN_ALL: tuple[str, ...] = ("e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz")
+
+
+def _strain_matrix(strain_vals, fit_strain) -> np.ndarray:
+    """Return the symmetric (3,3) strain tensor for the given Voigt components."""
+    eps = np.zeros((3, 3))
+    for val, name in zip(strain_vals, fit_strain):
+        i, j = _STRAIN_IDX[name]
+        eps[i, j] = float(val)
+        eps[j, i] = float(val)
+    return eps
+
+
+def _strain_to_voigt(strain_vals, fit_strain) -> np.ndarray:
+    """Pack strain components into the full 6-element Voigt vector."""
+    voigt = np.zeros(6)
+    for val, name in zip(strain_vals, fit_strain):
+        voigt[_STRAIN_ALL.index(name)] = float(val)
+    return voigt
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -653,6 +750,94 @@ def laue_mixed_residuals(
         hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         verbose=False,
+        geometry_only=geometry_only,
+        allowed_hkl=allowed_hkl,
+    )
+
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+
+    sim_xy = _extract_sim_xy(spots)
+    if top_n_sim is not None:
+        sim_xy = sim_xy[:top_n_sim]
+
+    return _build_residuals(obs_use, sim_xy, max_match_px)
+
+
+def laue_strain_residuals(
+    params: np.ndarray,
+    crystal,
+    camera,
+    obs_xy: np.ndarray,
+    U0: np.ndarray,
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    hmax: int = HMAX,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    max_match_px: float = 30.0,
+    top_n_obs: int | None = None,
+    top_n_sim: int | None = None,
+    geometry_only: bool = False,
+    allowed_hkl=None,
+) -> np.ndarray:
+    """
+    Pixel-space residual vector for simultaneous orientation + strain refinement.
+
+    The effective deformation matrix applied to the crystal is::
+
+        U_eff = R(δω) @ U0 @ (I + ε)
+
+    where R(δω) is a small rotation and ε is the symmetric strain tensor.
+    Because ``simulate_laue`` does not enforce SO(3), the non-orthogonal
+    ``U_eff`` correctly shifts every d-spacing by the corresponding strain
+    component.
+
+    Parameters
+    ----------
+    params       : (3 + n_strain,) ndarray
+                   First 3 elements: rotation-vector increment δω (radians).
+                   Remaining ``n_strain`` elements: strain components scaled by
+                   ``strain_scale`` (i.e. divide by ``strain_scale`` to get
+                   physical strain).  Initialise with ``np.zeros(3 + n_strain)``.
+    crystal      : Crystal        xrayutilities crystal structure.
+    camera       : Camera         Detector geometry.
+    obs_xy       : (N_obs, 2)     Observed pixel positions ``[xcam, ycam]``.
+    U0           : (3, 3)         Starting orientation matrix.
+    fit_strain   : tuple of str   Which strain components are free.  Any
+                                  subset of ``('e_xx','e_yy','e_zz','e_xy',
+                                  'e_xz','e_yz')``.  Default: all six.
+    strain_scale : float          Internal scale factor for strain parameters.
+                                  Optimizer parameters = physical_strain /
+                                  strain_scale.  Default 1e-4 keeps parameters
+                                  near order-1 for typical strains of 10⁻⁴–10⁻³.
+    E_min_eV, E_max_eV, source, source_kwargs, hmax, f2_thresh, kb_params,
+    max_match_px, top_n_obs, top_n_sim, geometry_only, allowed_hkl
+                   Forwarded to :func:`simulate_laue`; see :func:`laue_residuals`.
+
+    Returns
+    -------
+    residuals : (2 * N_obs_use,) ndarray
+        Fixed-length interleaved ``[Δx, Δy]`` residual vector.
+    """
+    params = np.asarray(params, dtype=float)
+    rotvec = params[:3]
+    strain_vals = params[3:] * strain_scale
+
+    R = Rotation.from_rotvec(rotvec).as_matrix()
+    eps = _strain_matrix(strain_vals, fit_strain)
+    U_eff = R @ np.asarray(U0, dtype=float) @ (np.eye(3) + eps)
+
+    spots = simulate_laue(
+        crystal, U_eff, camera,
+        E_min=E_min_eV, E_max=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
     )
@@ -1202,6 +1387,152 @@ def fit_orientation_mixed(
     result = MixedFitResult(
         U_phases=U_phases_final, U0_phases=U0_list,
         rotvecs=rotvecs,
+        cost=float(opt.cost), rms_px=rms_px,
+        n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
+        match_rate=n_matched / max(N_obs, 1),
+        success=opt.success, message=opt.message, optimizer=opt,
+    )
+
+    if verbose:
+        print(f"  {result}")
+
+    return result
+
+
+def fit_strain_orientation(
+    crystal,
+    camera,
+    obs_xy: np.ndarray,
+    U0: np.ndarray,
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    hmax: int = HMAX,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    max_match_px: float = 30.0,
+    top_n_obs: int | None = None,
+    top_n_sim: int | None = None,
+    method: str = "lm",
+    ftol: float = 1e-8,
+    xtol: float = 1e-8,
+    gtol: float = 1e-8,
+    max_nfev: int = 2000,
+    geometry_only: bool = True,
+    verbose: bool = False,
+) -> StrainFitResult:
+    """
+    Simultaneously refine orientation and lattice strain for a single crystal.
+
+    Wraps :func:`laue_strain_residuals` + ``scipy.optimize.least_squares``.
+
+    The effective orientation passed to the simulator is::
+
+        U_eff = R(δω) @ U0 @ (I + ε)
+
+    where δω is a small rotation increment and ε is the symmetric strain
+    tensor.  Because ``simulate_laue`` accepts any 3×3 matrix, the strained
+    d-spacings are naturally encoded in ``U_eff``.
+
+    Parameters
+    ----------
+    crystal      : Crystal        xrayutilities crystal structure.
+    camera       : Camera         Detector geometry.
+    obs_xy       : (N_obs, 2)     Observed pixel positions ``[xcam, ycam]``,
+                                  sorted by descending intensity.
+    U0           : (3, 3)         Starting orientation matrix (LT frame).
+    fit_strain   : tuple of str   Strain components to refine.  Any subset of
+                                  ``('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')``.
+                                  Default: all six.  Pass a subset to fix
+                                  symmetry constraints, e.g.
+                                  ``('e_xx', 'e_yy', 'e_zz')`` for diagonal
+                                  (biaxial) strain only.
+    strain_scale : float          Internal scale for strain parameters (see
+                                  :func:`laue_strain_residuals`).  Default 1e-4.
+    E_min_eV, E_max_eV, source, source_kwargs, hmax, f2_thresh, kb_params,
+    max_match_px, top_n_obs, top_n_sim, method, ftol, xtol, gtol, max_nfev,
+    geometry_only
+                   Forwarded to ``least_squares`` / :func:`laue_strain_residuals`.
+    verbose      : bool           Print a one-line summary after convergence.
+
+    Returns
+    -------
+    StrainFitResult
+        Call ``str(result)`` for a compact summary.  The refined effective
+        matrix is ``result.U_eff``; the pure rotation part is ``result.U``.
+
+    Notes
+    -----
+    *Scaling*: strain values for metals are typically 10⁻⁴–10⁻³.
+    ``strain_scale=1e-4`` keeps all optimizer parameters near order-1,
+    which is important for Levenberg–Marquardt whose finite-difference step
+    is proportional to parameter magnitude.
+
+    *Starting point*: it is usually best to first obtain a good orientation
+    with :func:`fit_orientation` and then pass the result as ``U0`` here.
+    """
+    U0_arr = np.asarray(U0, dtype=float)
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+    N_obs = len(obs_use)
+    n_strain = len(fit_strain)
+
+    if verbose:
+        print(
+            f"fit_strain_orientation: {N_obs} observed spots, "
+            f"strain components: {list(fit_strain)}"
+        )
+
+    _allowed = (
+        precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        if geometry_only else None
+    )
+
+    fun = partial(
+        laue_strain_residuals,
+        crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0_arr,
+        fit_strain=fit_strain, strain_scale=strain_scale,
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
+        geometry_only=False, allowed_hkl=_allowed,
+    )
+
+    x0 = np.zeros(3 + n_strain)
+    opt = least_squares(
+        fun, x0=x0,
+        method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+    )
+
+    # Unpack solution.
+    rotvec = opt.x[:3]
+    strain_vals = opt.x[3:] * strain_scale
+    R = Rotation.from_rotvec(rotvec).as_matrix()
+    eps = _strain_matrix(strain_vals, fit_strain)
+    U_final = R @ U0_arr
+    U_eff = R @ U0_arr @ (np.eye(3) + eps)
+    voigt = _strain_to_voigt(strain_vals, fit_strain)
+
+    n_matched, rms_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+
+    final_spots = simulate_laue(
+        crystal, U_eff, camera,
+        E_min=E_min_eV, E_max=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        allowed_hkl=_allowed,
+    )
+    n_sim = len(_extract_sim_xy(final_spots))
+
+    result = StrainFitResult(
+        U=U_final, U0=U0_arr, U_eff=U_eff,
+        rotvec=rotvec, strain_tensor=eps, strain_voigt=voigt,
+        fit_strain=fit_strain,
         cost=float(opt.cost), rms_px=rms_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),

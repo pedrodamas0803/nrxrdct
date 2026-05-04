@@ -717,13 +717,17 @@ def write_peaklist_dat(peaklist, outname):
     df.to_csv(outname, sep=" ", index=False)
 
 
-def LoG_segmentation(image: np.ndarray, sigma=0.01, mult=0.25):
+def LoG_segmentation(image: np.ndarray, sigma=0.01, threshold_percentile = 99.):
 
-    filt_im = ndi.gaussian_laplace(image, 0.01) * -1
+    img = np.log1p(image)
 
-    thrs = sk.filters.threshold_triangle(filt_im) * mult
+    filt_im = -ndi.gaussian_laplace(img, sigma)
 
-    return filt_im >= thrs
+    thrs = np.percentile(img, threshold_percentile)
+
+    mask = filt_im >= thrs
+
+    return mask
 
 
 def process_one_image(

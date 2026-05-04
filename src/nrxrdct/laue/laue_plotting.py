@@ -3565,4 +3565,161 @@ def plot_laue_comparison(
                     facecolor=fig.get_facecolor())
         print(f"  Comparison saved → {out_path}")
 
-    return fig, ax_exp, ax_sim
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SEGMENTATION QUALITY
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_segmentation(
+    image: "np.ndarray",
+    peaklist: "np.ndarray",
+    *,
+    log_scale: bool = True,
+    color_by_intensity: bool = True,
+    show_ellipses: bool = False,
+    marker_size: float = 60.0,
+    cmap_image: str = "inferno",
+    cmap_markers: str = "plasma",
+    vmin_pct: float = 1.0,
+    vmax_pct: float = 99.5,
+    figsize: tuple = (10, 8),
+    title: str | None = None,
+    ax=None,
+):
+    """
+    Display a detector image with segmented peak positions overlaid as "+"
+    symbols.
+
+    Typical usage::
+
+        image    = load_images("scan.h5")[0]
+        peaklist = convert_spotsfile2peaklist("scan_spots.h5")
+        fig, ax  = plot_segmentation(image, peaklist)
+
+    Parameters
+    ----------
+    image : (Nv, Nh) array
+        Raw detector frame.
+    peaklist : (N, ≥2) array
+        Peak table from :func:`~nrxrdct.laue.convert_spotsfile2peaklist`.
+        Column layout (from that function):
+
+        * 0 – ``peak_X``  (xcam, column pixel)
+        * 1 – ``peak_Y``  (ycam, row pixel)
+        * 2 – ``peak_I``  (fitted peak intensity, optional)
+        * 3 – ``peak_fwaxmaj``   \\
+        * 4 – ``peak_fwaxmin``    > required for *show_ellipses*
+        * 5 – ``peak_inclination`` (degrees) /
+
+        A plain (N, 2) array of pixel positions also works.
+    log_scale : bool
+        Apply ``log1p`` compression to the image before display (default
+        ``True``).
+    color_by_intensity : bool
+        Colour "+" markers by peak intensity (log-scaled, column 2).
+        Falls back to a fixed green if column 2 is absent.
+    show_ellipses : bool
+        Overlay the fitted peak ellipses (columns 3-5 required).
+    marker_size : float
+        Marker area in points².
+    cmap_image : str
+        Colormap for the image (default ``"inferno"``).
+    cmap_markers : str
+        Colormap for intensity-coded markers (default ``"plasma"``).
+    vmin_pct, vmax_pct : float
+        Percentile clip for the image display range.
+    figsize : (w, h)
+        Figure size in inches (ignored when *ax* is supplied).
+    title : str or None
+        Axes title.  Defaults to ``"Segmentation — N spots found"``.
+    ax : matplotlib.axes.Axes or None
+        Draw into an existing axes rather than creating a new figure.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax  : matplotlib.axes.Axes
+    """
+    pl  = np.asarray(peaklist, dtype=float)
+    img = np.asarray(image, dtype=float)
+    n_spots = len(pl)
+    xcam = pl[:, 0]
+    ycam = pl[:, 1]
+
+    # ── axes setup ────────────────────────────────────────────────────────────
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    # ── image display ─────────────────────────────────────────────────────────
+    positive = img[img > 0]
+    if positive.size:
+        v0 = np.percentile(positive, vmin_pct)
+        v1 = np.percentile(positive, vmax_pct)
+    else:
+        v0, v1 = 0.0, 1.0
+
+    if log_scale:
+        denom = max(v1, 1e-10)
+        disp = np.log1p(np.clip(img, 0.0, None) / denom * 1000.0)
+    else:
+        disp = np.clip(img, v0, v1)
+
+    ax.imshow(disp, origin="upper", cmap=cmap_image, aspect="equal", zorder=0)
+
+    # ── spot markers ──────────────────────────────────────────────────────────
+    has_intensity = pl.shape[1] >= 3
+
+    if color_by_intensity and has_intensity:
+        log_I = np.log1p(np.clip(pl[:, 2], 0.0, None))
+        norm  = mcolors.Normalize(
+            vmin=np.percentile(log_I, 5) if len(log_I) > 1 else 0.0,
+            vmax=np.percentile(log_I, 99) if len(log_I) > 1 else 1.0,
+        )
+        sc = ax.scatter(
+            xcam, ycam,
+            s=marker_size, c=log_I, cmap=cmap_markers, norm=norm,
+            marker="+", linewidths=1.2, zorder=3,
+        )
+        cb = fig.colorbar(sc, ax=ax, fraction=0.025, pad=0.01, shrink=0.85)
+        cb.set_label("log(I + 1)", color=FG, fontsize=8)
+        cb.ax.tick_params(colors="#7788aa", labelsize=7)
+    else:
+        ax.scatter(
+            xcam, ycam,
+            s=marker_size, c="#00ff88",
+            marker="+", linewidths=1.2, zorder=3,
+        )
+
+    # ── optional fitted ellipses ──────────────────────────────────────────────
+    if show_ellipses and pl.shape[1] >= 6:
+        from matplotlib.patches import Ellipse
+
+        fwmaj  = pl[:, 3]
+        fwmin  = pl[:, 4]
+        angles = pl[:, 5]
+        for x, y, a, b, theta in zip(xcam, ycam, fwmaj, fwmin, angles):
+            ell = Ellipse(
+                (x, y), width=float(a), height=float(b), angle=float(theta),
+                fill=False, edgecolor="#44dd66",
+                linewidth=0.6, alpha=0.7, zorder=2,
+            )
+            ax.add_patch(ell)
+
+    # ── labels ────────────────────────────────────────────────────────────────
+    ax.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+    ax.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+
+    _title = title if title is not None else f"Segmentation — {n_spots} spots found"
+    ax.set_title(_title, color=FG, fontsize=9, pad=5)
+
+    fig.tight_layout()
+    return fig, ax

@@ -67,6 +67,40 @@ _OBS   = "#ffffff"
 _SIM   = "#ff6b35"
 _MATCH = "#44dd66"
 
+_DEG = np.pi / 180
+
+
+def _gnomonic(tth_deg, chi_deg):
+    """Gnomonic projection following the LaueTools convention.
+
+    Projects the scattering-vector direction onto the plane tangent at
+    (lat₀ = 45°, long₀ = 0°), which corresponds to 2θ = 90°, χ = 0°.
+    Zone axes appear as straight lines in this projection.
+
+    Parameters
+    ----------
+    tth_deg, chi_deg : array-like  —  2θ and χ in degrees.
+
+    Returns
+    -------
+    gX, gY : ndarray  —  gnomonic coordinates.
+    """
+    theta = np.asarray(tth_deg, float) / 2.0
+    chi   = np.asarray(chi_deg, float)
+    tan_t = np.tan(theta * _DEG)
+    safe_tan = np.where(np.abs(tan_t) > 1e-10, tan_t, np.sign(tan_t + 1e-30) * 1e-10)
+    lat    = np.arcsin(np.clip(np.cos(theta * _DEG) * np.cos(chi * _DEG), -1.0, 1.0))
+    longit = np.arctan(-np.sin(chi * _DEG) / safe_tan)
+    # Projection centre at lat0 = π/4 (= 2θ = 90°), longit0 = 0
+    lat0, longit0 = np.pi / 4.0, 0.0
+    slat0, clat0  = np.sin(lat0), np.cos(lat0)
+    slat,  clat   = np.sin(lat),  np.cos(lat)
+    cosad  = slat * slat0 + clat * clat0 * np.cos(longit - longit0)
+    safe_c = np.where(np.abs(cosad) > 1e-12, cosad, np.nan)
+    gX = clat * np.sin(longit0 - longit) / safe_c
+    gY = (slat * clat0 - clat * slat0 * np.cos(longit - longit0)) / safe_c
+    return gX, gY
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # State container
@@ -132,6 +166,7 @@ def interactive_orientation(
     top_n_sim: int = 80,
     rot_range_deg: float = 20.0,
     c_rot_range_deg: float = 180.0,
+    space: str = "angular",
     figsize: tuple = (14, 6),
 ) -> OrientationState:
     """
@@ -156,6 +191,12 @@ def interactive_orientation(
     c_rot_range_deg : float
         Half-range of the [001] crystal-axis slider (degrees).  Defaults to
         180° so the full azimuthal range is accessible in one drag.
+    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
+        Coordinate frame for the main panel.  ``'angular'`` (default) plots
+        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines,
+        which helps identify multiple grains.  ``'detector'`` plots raw pixel
+        positions.  Matching is always done in detector (pixel) space.
 
     Returns
     -------
@@ -215,7 +256,8 @@ def interactive_orientation(
             )
 
     # ── Figure: detector + info panel only (no widget rows) ──────────────────
-    fig = plt.figure(figsize=figsize, facecolor=_BG)
+    with plt.ioff():
+        fig = plt.figure(figsize=figsize, facecolor=_BG)
     try:
         fig.canvas.manager.set_window_title("Laue — interactive orientation")
     except Exception:
@@ -238,37 +280,66 @@ def interactive_orientation(
         for sp in ax.spines.values():
             sp.set_edgecolor(_GRAY)
 
-    ax_det.set_xlim(0, camera.Nh)
-    ax_det.set_ylim(camera.Nv, 0)
-    ax_det.set_aspect("equal")
-    ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
-    ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
     ax_det.set_title(
         "Laue — interactive orientation   "
-        "○ observed   ◆ simulated   — matched   · unmatched",
+        "○ observed   ◆ simulated   — matched",
         color=_FG, fontsize=9, pad=6,
     )
 
-    if image is not None:
-        img = np.asarray(image, dtype=float)
-        vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
-        ax_det.imshow(
-            np.log1p(img / vmax * 1000),
-            origin="upper",
-            extent=[0, camera.Nh, camera.Nv, 0],
-            cmap="inferno",
-            aspect="auto",
-            alpha=0.55,
-            zorder=0,
-        )
-    else:
-        ax_det.add_patch(plt.Rectangle(
-            (0, 0), camera.Nh, camera.Nv,
-            linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
-        ))
+    if space == "detector":
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+        if image is not None:
+            img = np.asarray(image, dtype=float)
+            vmax = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img / vmax * 1000),
+                origin="upper",
+                extent=[0, camera.Nh, camera.Nv, 0],
+                cmap="inferno",
+                aspect="auto",
+                alpha=0.55,
+                zorder=0,
+            )
+        else:
+            ax_det.add_patch(plt.Rectangle(
+                (0, 0), camera.Nh, camera.Nv,
+                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+            ))
+    elif space == "gnomonic":
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("gnomonic X", color=_FG, fontsize=8)
+        ax_det.set_ylabel("gnomonic Y", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+        ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
+        ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
+    else:  # angular
+        ax_det.set_aspect("auto")
+        ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+
+    # Precompute angular and gnomonic obs coords once — camera is fixed.
+    _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+    _obs_angular = np.column_stack([
+        np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
+        np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
+    ])
+    _tth0 = np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0)))
+    _chi0 = np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17))
+    _gX0, _gY0 = _gnomonic(_tth0, _chi0)
+    _obs_gnomonic = np.column_stack([_gX0, _gY0])
+    _obs_init = (
+        _obs_angular  if space == "angular"  else
+        _obs_gnomonic if space == "gnomonic" else
+        obs_use
+    )
 
     sc_obs = ax_det.scatter(
-        obs_use[:, 0], obs_use[:, 1],
+        _obs_init[:, 0], _obs_init[:, 1],
         s=45, c="none", edgecolors=_OBS, linewidths=0.9,
         zorder=4, label=f"observed ({len(obs_use)})",
     )
@@ -277,6 +348,10 @@ def interactive_orientation(
         zorder=5, label="simulated",
     )
     _lines: list = []
+    sc_sel = ax_det.scatter(                          # selected-spot ring
+        [], [], s=130, c="none", edgecolors="#ffff00",
+        linewidths=1.8, zorder=7, marker="o",
+    )
     ax_det.legend(loc="upper right", fontsize=7,
                   facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
 
@@ -293,7 +368,7 @@ def interactive_orientation(
         step=0.02,
         readout_format=".2f",
         continuous_update=False,
-        style={"description_width": "110px"},
+        style={"description_width": "130px"},
         layout=ipw.Layout(width="98%"),
     )
     s_ca = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
@@ -302,6 +377,17 @@ def interactive_orientation(
                            description="Cry [010]  (b)", **_sk)
     s_cc = ipw.FloatSlider(value=0.0, min=-c_rot_range_deg, max=+c_rot_range_deg,
                            description="Cry [001]  (c)", **_sk)
+    s_hkl = ipw.FloatSlider(value=0.0, min=-rot_range_deg, max=+rot_range_deg,
+                             description="rot. [—]", disabled=True, **_sk)
+
+    # State shared between _do_update and the click handler
+    _selected: list = [None]   # dict with keys: hkl, tth, chi
+    _last     = {"disp": np.empty((0, 2)), "on_det": []}
+
+    _hkl_html = ipw.HTML(
+        "<span style='color:#666;font-style:italic'>click a simulated spot to select it</span>",
+        layout=ipw.Layout(margin="0 0 2px 4px"),
+    )
 
     # ── Update ────────────────────────────────────────────────────────────────
     # _updating flag prevents re-entrant calls when we programmatically reset
@@ -323,15 +409,62 @@ def interactive_orientation(
                 np.radians(angle_deg) * ax_lab
             ).as_matrix() @ U
 
+        # Rotation around the selected crystal-plane normal
+        if _selected[0] is not None and s_hkl.value != 0.0:
+            h, k, l = _selected[0]["hkl"]
+            _xtal  = crystal.all_layers[0].crystal if _is_stack else crystal
+            G_cry  = _xtal.Q(h, k, l)
+            g_norm = np.linalg.norm(G_cry)
+            if g_norm > 1e-12:
+                ax_hkl = U @ (G_cry / g_norm)
+                ax_hkl /= np.linalg.norm(ax_hkl)
+                U = Rotation.from_rotvec(
+                    np.radians(s_hkl.value) * ax_hkl
+                ).as_matrix() @ U
+
         state.U = U
 
         dR = U @ np.linalg.inv(state.U0)
         dw = float(np.degrees(Rotation.from_matrix(dR).magnitude()))
 
         spots  = _simulate(U)
-        sim_xy = _extract_sim_xy(spots)[:top_n_sim]
+        on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+        sim_xy = np.array([s["pix"] for s in on_det]) if on_det else np.empty((0, 2))
 
-        sc_sim.set_offsets(sim_xy if len(sim_xy) else np.empty((0, 2)))
+        # Build display coordinates
+        if space == "angular":
+            obs_disp = _obs_angular
+            sim_disp = (
+                np.array([[s["tth"], s["chi"]] for s in on_det])
+                if on_det else np.empty((0, 2))
+            )
+        elif space == "gnomonic":
+            obs_disp = _obs_gnomonic
+            if on_det:
+                gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
+                sim_disp = np.column_stack([gX, gY])
+            else:
+                sim_disp = np.empty((0, 2))
+        else:
+            obs_disp = obs_use
+            sim_disp = sim_xy
+
+        # Save for click handler
+        _last["disp"]   = sim_disp
+        _last["on_det"] = on_det
+
+        sc_obs.set_offsets(obs_disp)
+        sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
+
+        # Keep selected-spot marker in sync
+        sel_pos = np.empty((0, 2))
+        if _selected[0] is not None and len(sim_disp):
+            sel_hkl = _selected[0]["hkl"]
+            for i, s in enumerate(on_det):
+                if s.get("hkl") == sel_hkl:
+                    sel_pos = sim_disp[i:i + 1]
+                    break
+        sc_sel.set_offsets(sel_pos)
 
         for ln in _lines:
             ln.remove()
@@ -340,7 +473,6 @@ def interactive_orientation(
         n_matched = 0
         rms_px    = float("nan")
 
-        # Reset all observed markers to white
         sc_obs.set_edgecolors([_OBS] * len(obs_use))
 
         if len(sim_xy) > 0 and len(obs_use) > 0:
@@ -350,23 +482,19 @@ def interactive_orientation(
             if n_matched > 0:
                 rms_px = float(np.sqrt((dist_px[ok_mask] ** 2).mean()))
 
-            # Green edge on matched observed spots; green line to simulated partner.
-            # Unmatched pairs get no line — long red lines across the detector are
-            # misleading when obs > sim (unmatched obs have no simulated counterpart).
             edge_colors = [_OBS] * len(obs_use)
             for r, c, ok in zip(row_ind, col_ind, ok_mask):
                 if ok:
                     edge_colors[r] = _MATCH
                     _lines.append(ax_det.plot(
-                        [obs_use[r, 0], sim_xy[c, 0]],
-                        [obs_use[r, 1], sim_xy[c, 1]],
+                        [obs_disp[r, 0], sim_disp[c, 0]],
+                        [obs_disp[r, 1], sim_disp[c, 1]],
                         color=_MATCH, lw=0.7, alpha=0.6, zorder=3,
                     )[0])
             sc_obs.set_edgecolors(edge_colors)
 
         euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
-        # Rate relative to the smaller of obs/sim — fairer when top_n_sim < n_obs
         rate  = n_matched / max(min(len(obs_use), len(sim_xy)), 1)
 
         _info_txt.set_text(
@@ -393,9 +521,10 @@ def interactive_orientation(
 
     def _reset_sliders() -> None:
         _updating[0] = True
-        s_ca.value = 0.0
-        s_cb.value = 0.0
-        s_cc.value = 0.0
+        s_ca.value  = 0.0
+        s_cb.value  = 0.0
+        s_cc.value  = 0.0
+        s_hkl.value = 0.0
         _updating[0] = False
         _do_update()
 
@@ -403,20 +532,48 @@ def interactive_orientation(
         if not _updating[0]:
             _do_update()
 
-    for s in (s_ca, s_cb, s_cc):
+    for s in (s_ca, s_cb, s_cc, s_hkl):
         s.observe(_on_slider, names="value")
 
+    # ── Click handler — select a simulated spot ───────────────────────────────
+    def _on_click(event) -> None:
+        if event.inaxes is not ax_det:
+            return
+        disp = _last["disp"]
+        od   = _last["on_det"]
+        if len(disp) == 0:
+            return
+        dx  = disp[:, 0] - event.xdata
+        dy  = disp[:, 1] - event.ydata
+        idx = int(np.argmin(dx ** 2 + dy ** 2))
+        spot = od[idx]
+        _selected[0] = spot
+        h, k, l = spot["hkl"]
+        _hkl_html.value = (
+            f"<b style='color:#ffff00'>({h:+d} {k:+d} {l:+d})</b>"
+            f"&nbsp;&nbsp;2θ&nbsp;=&nbsp;{spot['tth']:.2f}°"
+            f"&nbsp;&nbsp;χ&nbsp;=&nbsp;{spot['chi']:.2f}°"
+        )
+        s_hkl.description = f"rot. [{h} {k} {l}]"
+        s_hkl.disabled    = False
+        _updating[0] = True
+        s_hkl.value  = 0.0
+        _updating[0] = False
+        _do_update()
+
+    fig.canvas.mpl_connect("button_press_event", _on_click)
+
     # ── ipywidgets buttons ────────────────────────────────────────────────────
-    _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
-    btn_reset  = ipw.Button(description="Reset",      button_style="warning", **_bkw)
-    btn_setu0  = ipw.Button(description="Set as U₀",  button_style="info",    **_bkw)
-    btn_accept = ipw.Button(description="✓  Accept",  button_style="success", **_bkw)
+    _bkw = dict(layout=ipw.Layout(width="145px", height="32px"))
+    btn_reset  = ipw.Button(description="Reset",             button_style="warning", **_bkw)
+    btn_setref = ipw.Button(description="Set as reference",  button_style="info",    **_bkw)
+    btn_accept = ipw.Button(description="✓  Accept",         button_style="success", **_bkw)
 
     def _cb_reset(_b) -> None:
         state.U0 = state._U0_orig.copy()
         _reset_sliders()
 
-    def _cb_setu0(_b) -> None:
+    def _cb_setref(_b) -> None:
         state.U0 = state.U.copy()
         _reset_sliders()
 
@@ -437,8 +594,89 @@ def interactive_orientation(
         print("\n  Pass to fitter:  fit_orientation(crystal, camera, obs_xy, state.U)")
 
     btn_reset.on_click(_cb_reset)
-    btn_setu0.on_click(_cb_setu0)
+    btn_setref.on_click(_cb_setref)
     btn_accept.on_click(_cb_accept)
+
+    # ── Quick-fit button ──────────────────────────────────────────────────────
+    btn_fit = ipw.Button(description="⚡ Quick Fit", button_style="primary", **_bkw)
+
+    def _cb_fit(_b) -> None:
+        import asyncio
+        import queue as _qmod
+        import threading
+        from scipy.optimize import minimize
+        from scipy.spatial import cKDTree
+
+        U_start = state.U.copy()
+        _q: _qmod.Queue = _qmod.Queue()
+
+        def _cost(rvec: np.ndarray) -> float:
+            R = Rotation.from_rotvec(rvec).as_matrix()
+            try:
+                spots = _simulate(R @ U_start)
+            except Exception:
+                return float(max_match_px ** 2)
+            sim_c = _extract_sim_xy(spots)[:top_n_sim]
+            if not len(sim_c):
+                return float(max_match_px ** 2)
+            dists, _ = cKDTree(sim_c).query(obs_use, k=1)
+            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+
+        _n = [0]
+
+        def _opt_cb(xk: np.ndarray) -> None:
+            _n[0] += 1
+            if _n[0] % 3 == 0:
+                _q.put(xk.copy())
+
+        def _optimize() -> None:
+            x0   = np.zeros(3)
+            step = np.radians(1.0)
+            simplex = np.zeros((4, 3))
+            for i in range(3):
+                simplex[i + 1, i] = step
+            res = minimize(
+                _cost, x0, method="Nelder-Mead",
+                callback=_opt_cb,
+                options={"maxiter": 600, "xatol": 1e-4, "fatol": 1e-4,
+                         "initial_simplex": simplex},
+            )
+            _q.put(res.x.copy())
+            _q.put(None)
+
+        async def _ui_loop() -> None:
+            btn_fit.disabled = True
+            btn_fit.description = "Fitting…"
+            t = threading.Thread(target=_optimize, daemon=True)
+            t.start()
+            while True:
+                await asyncio.sleep(0.15)
+                latest, done = None, False
+                while True:
+                    try:
+                        item = _q.get_nowait()
+                        if item is None:
+                            done = True
+                            break
+                        latest = item
+                    except _qmod.Empty:
+                        break
+                if latest is not None:
+                    R = Rotation.from_rotvec(latest).as_matrix()
+                    state.U0 = R @ U_start
+                    _updating[0] = True
+                    for s in (s_ca, s_cb, s_cc):
+                        s.value = 0.0
+                    _updating[0] = False
+                    _do_update()
+                if done:
+                    btn_fit.description = "⚡ Quick Fit"
+                    btn_fit.disabled = False
+                    return
+
+        asyncio.ensure_future(_ui_loop())
+
+    btn_fit.on_click(_cb_fit)
 
     # ── "Center at hkl" preset buttons ───────────────────────────────────────
     # Planes: cubic axes + diagonal + hexagonal first-order {10-10} and
@@ -511,9 +749,11 @@ def interactive_orientation(
 
     _controls = ipw.VBox([
         s_ca, s_cb, s_cc,
+        s_hkl,
+        _hkl_html,
         ipw.HBox(
-            [btn_reset, btn_setu0, btn_accept],
-            layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
+            [btn_reset, btn_setref, btn_accept, btn_fit],
+            layout=ipw.Layout(margin="6px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(
             [ipw.HTML("<b>Center at hkl:</b>",
@@ -556,15 +796,13 @@ class CalibrationState:
         self.accepted  = False
 
     def __repr__(self) -> str:
-        cam   = self.camera
-        euler = Rotation.from_matrix(self.U).as_euler("ZXZ", degrees=True)
+        cam = self.camera
         return (
             f"CalibrationState(accepted={self.accepted},\n"
             f"  Camera(dd={cam.dd:.4g}, xcen={cam.xcen:.4g},"
             f" ycen={cam.ycen:.4g},\n"
             f"         xbet={cam.xbet:.4g}, xgam={cam.xgam:.4g}),\n"
-            f"  Euler(ZXZ) = [{euler[0]:.4f}°, {euler[1]:.4f}°,"
-            f" {euler[2]:.4f}°])"
+            f"  U =\n{np.array2string(self.U, precision=6)})"
         )
 
 
@@ -593,6 +831,7 @@ def interactive_calibration(
     dd_range: float = 10.0,
     cen_range_px: float = 150.0,
     angle_range_deg: float = 2.0,
+    space: str = "angular",
     figsize: tuple = (14, 6),
 ) -> CalibrationState:
     """
@@ -638,6 +877,12 @@ def interactive_calibration(
         Half-range of the Δ xcen / Δ ycen sliders (px).
     angle_range_deg : float
         Half-range of the Δ xbet / Δ xgam sliders (°).
+    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
+        Coordinate frame for the main panel.  ``'angular'`` (default) plots
+        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines.
+        ``'detector'`` plots raw pixel positions.
+        Matching is always done in detector (pixel) space regardless of this flag.
 
     Returns
     -------
@@ -665,7 +910,8 @@ def interactive_calibration(
         )
 
     # ── Figure ────────────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=figsize, facecolor=_BG)
+    with plt.ioff():
+        fig = plt.figure(figsize=figsize, facecolor=_BG)
     try:
         fig.canvas.manager.set_window_title("Laue — interactive calibration")
     except Exception:
@@ -687,37 +933,65 @@ def interactive_calibration(
         for sp in ax.spines.values():
             sp.set_edgecolor(_GRAY)
 
-    ax_det.set_xlim(0, camera.Nh)
-    ax_det.set_ylim(camera.Nv, 0)
-    ax_det.set_aspect("equal")
-    ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
-    ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
     ax_det.set_title(
         "Laue — interactive calibration   "
         "○ observed   ◆ simulated   — matched",
         color=_FG, fontsize=9, pad=6,
     )
 
-    if image is not None:
-        img_arr = np.asarray(image, dtype=float)
-        vmax = np.percentile(img_arr[img_arr > 0], 99) if img_arr.max() > 0 else 1.0
-        ax_det.imshow(
-            np.log1p(img_arr / vmax * 1000),
-            origin="upper",
-            extent=[0, camera.Nh, camera.Nv, 0],
-            cmap="inferno",
-            aspect="auto",
-            alpha=0.55,
-            zorder=0,
-        )
-    else:
-        ax_det.add_patch(plt.Rectangle(
-            (0, 0), camera.Nh, camera.Nv,
-            linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
-        ))
+    if space == "detector":
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("xcam  (px)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=_FG, fontsize=8)
+        if image is not None:
+            img_arr = np.asarray(image, dtype=float)
+            vmax = np.percentile(img_arr[img_arr > 0], 99) if img_arr.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img_arr / vmax * 1000),
+                origin="upper",
+                extent=[0, camera.Nh, camera.Nv, 0],
+                cmap="inferno",
+                aspect="auto",
+                alpha=0.55,
+                zorder=0,
+            )
+        else:
+            ax_det.add_patch(plt.Rectangle(
+                (0, 0), camera.Nh, camera.Nv,
+                linewidth=0.8, edgecolor=_GRAY, facecolor="none", zorder=0,
+            ))
+    elif space == "gnomonic":
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("gnomonic X", color=_FG, fontsize=8)
+        ax_det.set_ylabel("gnomonic Y", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
+        ax_det.axhline(0, color=_GRAY, lw=0.5, zorder=1)
+        ax_det.axvline(0, color=_GRAY, lw=0.5, zorder=1)
+    else:  # angular
+        ax_det.set_aspect("auto")
+        ax_det.set_xlabel("2θ  (°)", color=_FG, fontsize=8)
+        ax_det.set_ylabel("χ  (°)", color=_FG, fontsize=8)
+        ax_det.grid(True, ls=":", lw=0.35, color="#181e2e", zorder=0)
 
+    # Initial observed scatter; angular/gnomonic coords update each frame in
+    # _do_update since the camera changes with slider movement.
+    _uf0 = camera.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+    if space == "detector":
+        _obs_init = obs_use
+    elif space == "gnomonic":
+        _tth0_c    = np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0)))
+        _chi0_c    = np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17))
+        _gX0c, _gY0c = _gnomonic(_tth0_c, _chi0_c)
+        _obs_init  = np.column_stack([_gX0c, _gY0c])
+    else:  # angular
+        _obs_init = np.column_stack([
+            np.degrees(np.arccos(np.clip(_uf0[:, 0], -1.0, 1.0))),
+            np.degrees(np.arctan2(_uf0[:, 1], _uf0[:, 2] + 1e-17)),
+        ])
     sc_obs = ax_det.scatter(
-        obs_use[:, 0], obs_use[:, 1],
+        _obs_init[:, 0], _obs_init[:, 1],
         s=45, c="none", edgecolors=_OBS, linewidths=0.9,
         zorder=4, label=f"observed ({len(obs_use)})",
     )
@@ -815,7 +1089,35 @@ def interactive_calibration(
         spots  = _simulate(U, cam)
         sim_xy = _extract_sim_xy(spots)[:top_n_sim]
 
-        sc_sim.set_offsets(sim_xy if len(sim_xy) else np.empty((0, 2)))
+        # Build display coordinates (angular, gnomonic, or detector)
+        if space == "angular":
+            uf = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+            tth_o = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
+            chi_o = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
+            obs_disp = np.column_stack([tth_o, chi_o])
+            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            sim_disp = (
+                np.array([[s["tth"], s["chi"]] for s in on_det])
+                if on_det else np.empty((0, 2))
+            )
+        elif space == "gnomonic":
+            uf         = cam.pixel_to_kf(obs_use[:, 0], obs_use[:, 1])
+            _tth_o     = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
+            _chi_o     = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
+            gX_o, gY_o = _gnomonic(_tth_o, _chi_o)
+            obs_disp   = np.column_stack([gX_o, gY_o])
+            on_det     = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            if on_det:
+                gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
+                sim_disp = np.column_stack([gX, gY])
+            else:
+                sim_disp = np.empty((0, 2))
+        else:
+            obs_disp = obs_use
+            sim_disp = sim_xy
+        sc_obs.set_offsets(obs_disp)
+
+        sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
 
         for ln in _lines:
             ln.remove()
@@ -837,15 +1139,18 @@ def interactive_calibration(
                 if ok:
                     edge_colors[r] = _MATCH
                     _lines.append(ax_det.plot(
-                        [obs_use[r, 0], sim_xy[c, 0]],
-                        [obs_use[r, 1], sim_xy[c, 1]],
+                        [obs_disp[r, 0], sim_disp[c, 0]],
+                        [obs_disp[r, 1], sim_disp[c, 1]],
                         color=_MATCH, lw=0.7, alpha=0.6, zorder=3,
                     )[0])
             sc_obs.set_edgecolors(edge_colors)
 
-        euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
         rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
         rate  = n_matched / max(min(len(obs_use), len(sim_xy)), 1)
+        u_rows = [
+            f"  [{U[i,0]:+.4f}  {U[i,1]:+.4f}  {U[i,2]:+.4f}]"
+            for i in range(3)
+        ]
 
         _info_txt.set_text(
             f"Camera\n"
@@ -856,11 +1161,9 @@ def interactive_calibration(
             f"  xbet ={cam.xbet:9.4f} °\n"
             f"  xgam ={cam.xgam:9.4f} °\n"
             f"\n"
-            f"Orientation  (ZXZ)\n"
+            f"Orientation  (U matrix)\n"
             f"{'─' * 22}\n"
-            f"  φ₁ = {euler[0]:+9.3f}°\n"
-            f"  Φ  = {euler[1]:+9.3f}°\n"
-            f"  φ₂ = {euler[2]:+9.3f}°\n"
+            + "\n".join(u_rows) + "\n"
             f"  |δω| = {dw:.4f}°\n"
             f"\n"
             f"Match  ({max_match_px:.0f} px window)\n"
@@ -906,13 +1209,11 @@ def interactive_calibration(
 
     def _cb_accept(_b) -> None:  # noqa: ARG001
         state.accepted = True
-        cam   = state.camera
-        euler = Rotation.from_matrix(state.U).as_euler("ZXZ", degrees=True)
+        cam = state.camera
         print("\n✓ Calibration initial guess accepted")
         print(f"  Camera:")
         print(f"    dd={cam.dd:.5g}  xcen={cam.xcen:.5g}  ycen={cam.ycen:.5g}")
         print(f"    xbet={cam.xbet:.5g}  xgam={cam.xgam:.5g}")
-        print(f"  Euler (ZXZ): φ₁={euler[0]:.4f}°  Φ={euler[1]:.4f}°  φ₂={euler[2]:.4f}°")
         print(f"  U =\n{np.array2string(state.U, precision=8)}")
         print(
             f"\n  Re-create camera:\n"
@@ -931,6 +1232,111 @@ def interactive_calibration(
     btn_reset.on_click(_cb_reset)
     btn_setref.on_click(_cb_setref)
     btn_accept.on_click(_cb_accept)
+
+    # ── Quick-fit button ──────────────────────────────────────────────────────
+    btn_fit = ipw.Button(
+        description="⚡ Quick Fit", button_style="primary", **_bkw
+    )
+
+    def _cb_fit(_b) -> None:  # noqa: ARG001
+        import asyncio
+        import queue as _qmod
+        import threading
+        from scipy.optimize import minimize
+        from scipy.spatial import cKDTree
+        from .simulation import precompute_allowed_hkl
+
+        fit_params = ["dd", "xcen", "ycen", "xbet", "xgam"]
+        cam0  = state.camera       # snapshot at click time
+        U_fit = state.U.copy()
+        x0    = np.array([getattr(cam0, p) for p in fit_params], dtype=float)
+
+        _allowed = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        _q: _qmod.Queue = _qmod.Queue()
+
+        def _build(x: np.ndarray):
+            kw = dict(
+                dd=cam0.dd, xcen=cam0.xcen, ycen=cam0.ycen,
+                xbet=cam0.xbet, xgam=cam0.xgam,
+                pixelsize=cam0.pixel_mm, n_pix_h=cam0.Nh, n_pix_v=cam0.Nv,
+                kf_direction=cam0.kf_direction,
+            )
+            for i, p in enumerate(fit_params):
+                kw[p] = float(x[i])
+            return _Camera(**kw)
+
+        def _cost(x: np.ndarray) -> float:
+            try:
+                spots = simulate_laue(
+                    crystal, U_fit, _build(x),
+                    E_min=E_min_eV, E_max=E_max_eV,
+                    source=source, source_kwargs=source_kwargs,
+                    hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+                    allowed_hkl=_allowed,
+                )
+            except Exception:
+                return float(max_match_px ** 2)
+            sim_c = np.array([s["pix"] for s in spots if s.get("pix") is not None])
+            if not len(sim_c):
+                return float(max_match_px ** 2)
+            dists, _ = cKDTree(sim_c).query(obs_use, k=1)
+            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+
+        _n = [0]
+
+        def _opt_cb(xk: np.ndarray) -> None:
+            _n[0] += 1
+            if _n[0] % 3 == 0:   # update display every 3 Nelder-Mead iterations
+                _q.put(xk.copy())
+
+        def _optimize() -> None:
+            _steps = {"dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5}
+            n = len(x0)
+            simplex = np.tile(x0, (n + 1, 1))
+            for i, p in enumerate(fit_params):
+                simplex[i + 1, i] += _steps[p]
+            res = minimize(
+                _cost, x0, method="Nelder-Mead",
+                callback=_opt_cb,
+                options={"maxiter": 500, "xatol": 0.02, "fatol": 1e-4,
+                         "initial_simplex": simplex},
+            )
+            _q.put(res.x.copy())
+            _q.put(None)  # sentinel: done
+
+        async def _ui_loop() -> None:
+            btn_fit.disabled = True
+            btn_fit.description = "Fitting…"
+            t = threading.Thread(target=_optimize, daemon=True)
+            t.start()
+            while True:
+                await asyncio.sleep(0.15)  # poll every 150 ms
+                latest, done = None, False
+                while True:
+                    try:
+                        item = _q.get_nowait()
+                        if item is None:
+                            done = True
+                            break
+                        latest = item
+                    except _qmod.Empty:
+                        break
+                if latest is not None:
+                    state.camera0 = _build(latest)
+                    state.U0 = U_fit.copy()
+                    _updating[0] = True
+                    for s in _all_sliders:
+                        s.value = 0.0
+                    _updating[0] = False
+                    _do_update()
+                if done:
+                    btn_fit.description = "⚡ Quick Fit"
+                    btn_fit.disabled = False
+                    return
+
+        asyncio.ensure_future(_ui_loop())
+
+    btn_fit.on_click(_cb_fit)
 
     # ── "Center at hkl" preset buttons ───────────────────────────────────────
     _presets: list[tuple[str, tuple[int, int, int]]] = [
@@ -1013,7 +1419,7 @@ def interactive_calibration(
         ipw.HBox([_col_orient, _col_cam],
                  layout=ipw.Layout(width="100%")),
         ipw.HBox(
-            [btn_reset, btn_setref, btn_accept],
+            [btn_reset, btn_setref, btn_accept, btn_fit],
             layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(

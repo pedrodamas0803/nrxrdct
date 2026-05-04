@@ -557,10 +557,25 @@ def write_h5_spotsfile(
                 C = popt[-1]
 
                 if r2 < 0.9:
-                    hout[f"spot_{ii:04d}_0/r_squared"] = r2
-                    hout[f"spot_{ii:04d}_0/image"] = image
-                    hout[f"spot_{ii:04d}_0/yxcen"] = region.centroid_weighted
-                    hout[f"spot_{ii:04d}_0/bbox"] = region.bbox
+                    # Fit converged but quality is poor — write the best-attempt
+                    # parameters from the first Gaussian component so the spot
+                    # is usable as a position/intensity estimate.
+                    A, xm, ym, sigma_x, sigma_y, theta = popt[0:6]
+                    hout[f"spot_{ii:04d}_0/r_squared"]       = r2
+                    hout[f"spot_{ii:04d}_0/image"]            = image
+                    hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                    hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C, 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C, 2)
+                    hout[f"spot_{ii:04d}_0/Ipixmax"]          = int(region.image_intensity.max())
                     continue
                 n_success += 1
 
@@ -605,7 +620,22 @@ def write_h5_spotsfile(
             except RuntimeError as exc:
                 r2 = 0
                 print(f"Runtime error at spot {ii}: {exc}")
-                hout[f"spot_{ii:04d}_0/r_squared"] = r2
+                Ipix = int(region.image_intensity.max())
+                hout[f"spot_{ii:04d}_0/r_squared"]       = r2
+                hout[f"spot_{ii:04d}_0/image"]            = image
+                hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"]          = Ipix
                 continue
 
     print(
@@ -632,15 +662,28 @@ def get_spot_limits(image_array, ycen, xcen, d):
     return ymin, ymax, xmin, xmax
 
 
-def convert_spotsfile2peaklist(h5path: str):
+def convert_spotsfile2peaklist(h5path: str, include_unfitted: bool = False):
     """
-    Read the spots HDF5 file and return an (N, 9) array of peak quantities
-    for spots with r_squared >= 0.9, sorted by descending peak intensity.
+    Read the spots HDF5 file and return an (N, 9) array of peak quantities,
+    sorted by descending peak intensity.
 
     Columns: peak_X, peak_Y, peak_I (Isub), peak_fwaxmaj, peak_fwaxmin,
              peak_inclination, Xdev, Ydev, peak_bkg.
 
-    Returns an empty (0, 9) array if no spots pass the quality threshold.
+    Parameters
+    ----------
+    h5path : str
+        Path to the spots HDF5 file produced by the segmentation pipeline.
+    include_unfitted : bool
+        If ``False`` (default) only spots with r_squared >= 0.9 are returned.
+        If ``True``, spots whose Gaussian fit failed (r_squared < 0.9) are
+        also included: their pixel position is taken from the weighted centroid
+        (``yxcen``), intensity from the peak pixel value of the stored sub-image,
+        and all shape / background columns are set to 0.
+
+    Returns
+    -------
+    peaklist : (N, 9) ndarray  — empty (0, 9) if no spots are found.
     """
     peak_X = []
     peak_Y = []
@@ -658,13 +701,29 @@ def convert_spotsfile2peaklist(h5path: str):
             r2 = hin[f"{key}/r_squared"][()]
 
             if r2 < 0.9:
+                if not include_unfitted:
+                    continue
+                # Fall back to weighted centroid; shape fields are unknown
+                yxcen = hin[f"{key}/yxcen"][()]
+                img   = hin[f"{key}/image"][()]
+                imax  = float(img.max()) if img.size > 0 else 0.0
+                peak_X.append(float(yxcen[1]))   # col → X
+                peak_Y.append(float(yxcen[0]))   # row → Y
+                peak_I.append(imax)
+                peak_fwaxmaj.append(0.0)
+                peak_fwaxmin.append(0.0)
+                peak_inclination.append(0.0)
+                Xdev.append(0.0)
+                Ydev.append(0.0)
+                peak_bkg.append(0.0)
+                Ipixmax.append(imax)
                 continue
 
             peak_X.append(hin[f"{key}/peak_X"][()])
             peak_Y.append(hin[f"{key}/peak_Y"][()])
             peak_I.append(hin[f"{key}/peak_Isub"][()])
-            peak_fwaxmaj.append(hin[f"{key}/peak_fwaxmaj"][()])  # <- conferir nome
-            peak_fwaxmin.append(hin[f"{key}/peak_fwaxmin"][()])  # <- conferir nome
+            peak_fwaxmaj.append(hin[f"{key}/peak_fwaxmaj"][()])
+            peak_fwaxmin.append(hin[f"{key}/peak_fwaxmin"][()])
             peak_inclination.append(hin[f"{key}/peak_inclination"][()])
             Xdev.append(hin[f"{key}/Xdev"][()])
             Ydev.append(hin[f"{key}/Ydev"][()])
@@ -675,25 +734,13 @@ def convert_spotsfile2peaklist(h5path: str):
         return np.empty((0, 9), dtype=np.float64)
 
     peaklist = np.stack(
-        [
-            peak_X,
-            peak_Y,
-            peak_I,
-            peak_fwaxmaj,
-            peak_fwaxmin,
-            peak_inclination,
-            Xdev,
-            Ydev,
-            peak_bkg,
-        ],
+        [peak_X, peak_Y, peak_I, peak_fwaxmaj, peak_fwaxmin,
+         peak_inclination, Xdev, Ydev, peak_bkg],
         axis=1,
     )
 
     order = np.argsort(Ipixmax)
-
-    peaklist = peaklist[order]
-
-    return peaklist[::-1]
+    return peaklist[order][::-1]
 
 
 def write_peaklist_dat(peaklist, outname):

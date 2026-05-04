@@ -771,7 +771,7 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     )
     return image[tuple(indices)]
 
-def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigma=0.01, threshold_percentile = 99.9):
+def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9, block_size = 30):
 
     image = fill_gaps_nearest(image, mask)
     
@@ -779,15 +779,58 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigma=0.01, threshold_
 
     vmin, vmax = np.min(img[mask]), np.max(img[mask])
 
-    img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 
-    filt_im = -ndi.gaussian_laplace(img, sigma)
+    responses = [-ndi.gaussian_laplace(img, sigma = s) for s in sigmas]
+    
+    enhanced = np.max(responses, axis = 0) 
+    enhanced[~mask] = 0   
 
-    thrs = np.percentile(img, threshold_percentile)
+    global_thresh = np.percentile(enhanced, threshold_percentile)
 
-    mask = filt_im >= thrs
+    local_thresh = sk.filters.threshold_local(enhanced, block_size = block_size)
 
-    return mask
+    mask_final = ((enhanced>=global_thresh)|(enhanced>=local_thresh)) & mask
+
+    return mask_final
+
+def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size = 3, max_size = 500, gap_exclude = 3 ):
+
+    seg = ndi.binary_fill_holes(segmented_image)
+
+    seg = sk.morphology.remove_small_objects(seg, min_size=min_size)
+
+    seg = sk.morphology.closing(seg, sk.morphology.disk(1))
+
+    seg = sk.segmentation.clear_border(seg)
+
+    labels = sk.measure.label(seg, connectivity=2)
+
+    gap_zone = ndi.binary_dilation(~detector_mask, sk.morphology.disk(gap_exclude))
+
+    props = sk.measure.regionprops(labels, intensity_image=intensity_image)
+
+    final_mask = np.zeros_like(mask_bin)
+    props = measure.regionprops(labels, intensity_image=img)
+
+    valid_props = []
+    for p in props:
+        if not (min_size <= p.area <= max_size):
+            continue
+
+        if p.eccentricity > 0.995:
+            continue
+
+        coords = p.coords
+        if np.any(gap_zone[coords[:, 0], coords[:, 1]]):
+            continue
+
+        final_mask[labels == p.label] = True
+        valid_props.append(p)
+    
+    return final_mask, valid_props
+
 
 
 def process_one_image(

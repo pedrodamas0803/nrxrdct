@@ -70,6 +70,7 @@ from .segmentation import (
     segment_image,
     write_h5_spotsfile,
     write_peaklist_dat,
+    fill_gaps_nearest
 )
 from .simulation import (
     BM32_KB,
@@ -215,4 +216,5 @@ __all__ = [
     "segment_image",
     "write_h5_spotsfile",
     "write_peaklist_dat",
+    "fill_gaps_nearest"
 ]

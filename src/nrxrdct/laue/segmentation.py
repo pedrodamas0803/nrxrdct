@@ -771,7 +771,7 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     )
     return image[tuple(indices)]
 
-def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9, block_size = 30):
+def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9):
 
     image = fill_gaps_nearest(image, mask)
     
@@ -789,9 +789,10 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold
 
     global_thresh = np.percentile(enhanced, threshold_percentile)
 
-    local_thresh = sk.filters.threshold_local(enhanced, block_size = block_size)
+    # local_thresh = sk.filters.threshold_local(enhanced, block_size = block_size)
 
-    mask_final = ((enhanced>=global_thresh)|(enhanced>=local_thresh)) & mask
+    # mask_final = ((enhanced>=global_thresh)|(enhanced>=local_thresh)) & mask
+    mask_final = (enhanced>=global_thresh) & mask
 
     return mask_final
 
@@ -830,6 +831,23 @@ def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size
         valid_props.append(p)
     
     return final_mask, valid_props
+
+def gaussian_background(image, valid_mask, sigma = 251):
+    img = image.copy().astype(np.float32)
+
+    # Zero out invalid pixels
+    img[~valid_mask] = 0
+
+    # Smooth image
+    smooth = ndi.gaussian_filter(img, sigma=sigma)
+
+    # Smooth mask (normalization)
+    norm = ndi.gaussian_filter(valid_mask.astype(np.float32), sigma=sigma)
+
+    # Avoid division by zero
+    norm[norm == 0] = 1
+
+    return smooth / norm
 
 
 

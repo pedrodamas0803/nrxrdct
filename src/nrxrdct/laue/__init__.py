@@ -72,7 +72,8 @@ from .segmentation import (
     write_h5_spotsfile,
     write_peaklist_dat,
     fill_gaps_nearest,
-    clean_segmentation
+    clean_segmentation,
+    gaussian_background,
 )
 from .simulation import (
     BM32_KB,
@@ -221,4 +222,5 @@ __all__ = [
     "write_peaklist_dat",
     "fill_gaps_nearest",
     "clean_segmentation",
+    "gaussian_background"
 ]

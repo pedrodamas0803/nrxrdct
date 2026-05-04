@@ -777,7 +777,7 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigma=0.01, threshold_
     
     img = np.log1p(image)
 
-    vmin, vmax = np.min(image[mask]), np.max(image[mask])
+    vmin, vmax = np.min(img[mask]), np.max(img[mask])
 
     img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 

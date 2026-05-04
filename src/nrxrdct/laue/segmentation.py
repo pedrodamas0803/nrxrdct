@@ -771,9 +771,15 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     )
     return image[tuple(indices)]
 
-def LoG_segmentation(image: np.ndarray, sigma=0.01, threshold_percentile = 99.):
+def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigma=0.01, threshold_percentile = 99.9):
 
+    image = fill_gaps_nearest(image, mask)
+    
     img = np.log1p(image)
+
+    vmin, vmax = np.min(image[mask]), np.max(image[mask])
+
+    img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 
     filt_im = -ndi.gaussian_laplace(img, sigma)
 

@@ -820,9 +820,6 @@ def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size
         if not (min_size <= p.area <= max_size):
             continue
 
-        if p.eccentricity > 0.995:
-            continue
-
         coords = p.coords
         if np.any(gap_zone[coords[:, 0], coords[:, 1]]):
             continue

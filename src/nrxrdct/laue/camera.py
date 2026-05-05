@@ -1098,3 +1098,176 @@ class Camera:
             success=bool(result.success),
             message=result.message,
         )
+
+    def fit_calibration_staged(
+        self,
+        crystal,
+        U,
+        obs_xy,
+        *,
+        # ── Phase A — stabilise geometry ─────────────────────────────────────
+        phaseA_params=("dd", "xcen", "ycen", "xbet", "xgam"),
+        phaseA_fit_U=False,
+        phaseA_dd_range=5.0,
+        phaseA_cen_range_px=100.0,
+        phaseA_angle_range_deg=1.0,
+        phaseA_U_range_deg=0.5,
+        phaseA_options=None,
+        # ── Phase B — refine orientation ─────────────────────────────────────
+        phaseB_params=(),
+        phaseB_fit_U=True,
+        phaseB_U_range_deg=10.0,
+        phaseB_options=None,
+        # ── Phase C — global refinement ──────────────────────────────────────
+        phaseC_params=("dd", "xcen", "ycen", "xbet", "xgam"),
+        phaseC_fit_U=True,
+        phaseC_dd_range=2.0,
+        phaseC_cen_range_px=30.0,
+        phaseC_angle_range_deg=0.5,
+        phaseC_U_range_deg=3.0,
+        phaseC_options=None,
+        # ── shared ───────────────────────────────────────────────────────────
+        E_min=5_000.0,
+        E_max=25_000.0,
+        source="bending_magnet",
+        source_kwargs=None,
+        hmax=15,
+        f2_thresh=0.01,
+        max_match_px=20.0,
+        top_n_sim=None,
+        verbose=False,
+    ) -> "CalibrationResult":
+        """
+        Three-phase staged calibration that alternates between geometry and
+        orientation refinement for improved convergence.
+
+        **Phase A — stabilise geometry**
+            Refine camera geometry parameters with U fixed (or nearly fixed).
+            Large initial bounds allow coarse corrections from the starting
+            estimate; tight U bounds prevent orientation drift from corrupting
+            the geometry.
+
+        **Phase B — refine orientation**
+            Fix the geometry from Phase A and refine the orientation matrix U.
+            Geometry is now good enough that the spot pattern can guide U
+            without the two coupled parameters fighting each other.
+
+        **Phase C — global refinement**
+            Refine geometry and U simultaneously, starting from the Phase B
+            solution with tighter bounds.  Resolves the remaining correlation
+            between small geometry shifts and orientation corrections.
+
+        Parameters
+        ----------
+        crystal : Crystal
+            Calibration standard.
+        U : (3, 3) array
+            Initial orientation matrix.
+        obs_xy : (N, 2) array
+            Observed spot pixel positions.
+
+        phaseA_params : sequence of str
+            Camera parameters to optimise in Phase A.
+            Default: all five geometry parameters.
+        phaseA_fit_U : bool
+            Allow a small orientation correction in Phase A.  Default False.
+        phaseA_dd_range : float
+            Phase A bound on ``dd`` (mm, ± from starting value).
+        phaseA_cen_range_px : float
+            Phase A bound on ``xcen`` / ``ycen`` (pixels).
+        phaseA_angle_range_deg : float
+            Phase A bound on ``xbet`` / ``xgam`` (degrees).
+        phaseA_U_range_deg : float
+            Phase A bound on orientation angles (degrees), only used when
+            ``phaseA_fit_U=True``.
+        phaseA_options : dict or None
+            Extra options for the Phase A optimizer.
+
+        phaseB_params : sequence of str
+            Camera parameters to optimise in Phase B.  Default: none
+            (geometry frozen).
+        phaseB_fit_U : bool
+            Refine U in Phase B.  Default True.
+        phaseB_U_range_deg : float
+            Phase B bound on orientation angles (degrees).
+        phaseB_options : dict or None
+            Extra options for the Phase B optimizer.
+
+        phaseC_params : sequence of str
+            Camera parameters to optimise in Phase C.  Default: all five.
+        phaseC_fit_U : bool
+            Refine U in Phase C.  Default True.
+        phaseC_dd_range : float
+            Phase C bound on ``dd`` (mm).
+        phaseC_cen_range_px : float
+            Phase C bound on ``xcen`` / ``ycen`` (pixels).
+        phaseC_angle_range_deg : float
+            Phase C bound on ``xbet`` / ``xgam`` (degrees).
+        phaseC_U_range_deg : float
+            Phase C bound on orientation angles (degrees).
+        phaseC_options : dict or None
+            Extra options for the Phase C optimizer.
+
+        E_min, E_max : float
+            Energy range (eV) shared by all phases.
+        source, source_kwargs, hmax, f2_thresh, max_match_px, top_n_sim
+            Forwarded unchanged to each :meth:`fit_calibration` call.
+        verbose : bool
+            Print a one-line summary after each phase.
+
+        Returns
+        -------
+        CalibrationResult
+            Result of Phase C (the final global refinement).  Intermediate
+            results are available via ``verbose=True`` output.
+        """
+        _shared = dict(
+            E_min=E_min, E_max=E_max,
+            source=source, source_kwargs=source_kwargs,
+            hmax=hmax, f2_thresh=f2_thresh,
+            max_match_px=max_match_px, top_n_sim=top_n_sim,
+        )
+
+        # ── Phase A ───────────────────────────────────────────────────────────
+        res_A = self.fit_calibration(
+            crystal, U, obs_xy,
+            fit_params=phaseA_params,
+            fit_U=phaseA_fit_U,
+            dd_range=phaseA_dd_range,
+            cen_range_px=phaseA_cen_range_px,
+            angle_range_deg=phaseA_angle_range_deg,
+            U_range_deg=phaseA_U_range_deg if phaseA_fit_U else None,
+            options=phaseA_options,
+            **_shared,
+        )
+        if verbose:
+            print(f"Phase A (geometry):     {res_A}")
+
+        # ── Phase B ───────────────────────────────────────────────────────────
+        res_B = res_A.camera.fit_calibration(
+            crystal, res_A.U, obs_xy,
+            fit_params=phaseB_params,
+            fit_U=phaseB_fit_U,
+            U_range_deg=phaseB_U_range_deg if phaseB_fit_U else None,
+            options=phaseB_options,
+            **_shared,
+        )
+        if verbose:
+            print(f"Phase B (orientation):  {res_B}")
+
+        # ── Phase C ───────────────────────────────────────────────────────────
+        res_C = res_B.camera.fit_calibration(
+            crystal, res_B.U, obs_xy,
+            fit_params=phaseC_params,
+            fit_U=phaseC_fit_U,
+            dd_range=phaseC_dd_range,
+            cen_range_px=phaseC_cen_range_px,
+            angle_range_deg=phaseC_angle_range_deg,
+            U_range_deg=phaseC_U_range_deg if phaseC_fit_U else None,
+            options=phaseC_options,
+            **_shared,
+        )
+        if verbose:
+            print(f"Phase C (global):       {res_C}")
+
+        return res_C

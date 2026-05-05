@@ -11,6 +11,7 @@ from .interactive import (
     interactive_orientation,
 )
 from .fitting import (
+    IndexResult,
     MixedFitResult,
     OrientationFitResult,
     StackFitResult,
@@ -19,6 +20,7 @@ from .fitting import (
     fit_orientation_mixed,
     fit_orientation_stack,
     fit_strain_orientation,
+    index_orientation,
     laue_mixed_residuals,
     laue_residuals,
     laue_stack_residuals,
@@ -177,6 +179,9 @@ __all__ = [
     "interactive_orientation",
     "CalibrationState",
     "interactive_calibration",
+    # Autoindexing
+    "IndexResult",
+    "index_orientation",
     # Orientation fitting
     "OrientationFitResult",
     "StackFitResult",

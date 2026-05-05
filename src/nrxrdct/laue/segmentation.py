@@ -541,7 +541,12 @@ def write_h5_spotsfile(
     n_labels = len(regionprops)
     n_success = 0
 
-    if overwrite and os.path.exists(outpath):
+    if os.path.exists(outpath):
+        if not overwrite:
+            raise FileExistsError(
+                f"Output file already exists: {outpath!r}. "
+                "Pass overwrite=True to replace it."
+            )
         os.remove(outpath)
 
     with h5py.File(outpath, "a") as hout:

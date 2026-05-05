@@ -286,6 +286,45 @@ class StrainFitResult:
         )
 
 
+@dataclass
+class IndexResult:
+    """
+    Result of Laue autoindexing (:func:`index_orientation`).
+
+    Attributes
+    ----------
+    U            : (3,3) ndarray  Best candidate orientation matrix.
+    n_matched    : int            Observed spots matching within
+                                  ``angle_tol_deg`` at the returned orientation.
+    n_obs        : int            Number of observed spots used.
+    match_rate   : float          ``n_matched / n_obs``.
+    hkl_pair     : tuple          ``((h₁,k₁,l₁), (h₂,k₂,l₂))`` seed
+                                  reflection pair that produced the best
+                                  candidate.
+    angle_deg    : float          Inter-spot angle of the seed pair (degrees).
+    n_candidates : int            Total candidate matrices evaluated.
+    success      : bool           ``match_rate >= min_match_rate``.
+    """
+
+    U            : np.ndarray
+    n_matched    : int
+    n_obs        : int
+    match_rate   : float
+    hkl_pair     : tuple
+    angle_deg    : float
+    n_candidates : int
+    success      : bool
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        h1, h2 = self.hkl_pair
+        return (
+            f"IndexResult [{status}]  "
+            f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
+            f"seed={h1}/{h2}  angle={self.angle_deg:.2f}°"
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -485,6 +524,326 @@ def _strain_to_voigt(strain_vals, fit_strain) -> np.ndarray:
     for val, name in zip(strain_vals, fit_strain):
         voigt[_STRAIN_ALL.index(name)] = float(val)
     return voigt
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Autoindexing helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _obs_q_vecs(camera, obs_xy: np.ndarray) -> np.ndarray:
+    """Pixel positions → unit scattering vectors (N, 3)."""
+    kf = camera.pixel_to_kf(obs_xy[:, 0], obs_xy[:, 1])
+    ki = np.array([1.0, 0.0, 0.0])
+    q = kf - ki[None, :]
+    norms = np.linalg.norm(q, axis=1, keepdims=True)
+    return q / norms
+
+
+def _build_g_table(crystal, hkl_list: list):
+    """
+    Build a pairwise angle lookup table for the given list of (h,k,l).
+
+    Returns
+    -------
+    cos_sorted : (P,)    pairwise cosines sorted ascending
+    ii_sorted  : (P,)    first index into hkl_list for each pair
+    jj_sorted  : (P,)    second index
+    G_hats     : (M, 3)  unit reciprocal-lattice vectors, one per hkl
+    hkl_list   : list    input list (unchanged, for index→hkl lookup)
+    """
+    G_vecs = np.array([crystal.Q(h, k, l) for h, k, l in hkl_list])
+    norms = np.linalg.norm(G_vecs, axis=1)
+    G_hats = G_vecs / norms[:, None]
+
+    ii, jj = np.triu_indices(len(G_hats), k=1)
+    cos_vals = np.einsum("ij,ij->i", G_hats[ii], G_hats[jj])
+    np.clip(cos_vals, -1.0, 1.0, out=cos_vals)
+
+    order = np.argsort(cos_vals)
+    return (
+        cos_vals[order],
+        ii[order].astype(np.int32),
+        jj[order].astype(np.int32),
+        G_hats,
+        hkl_list,
+    )
+
+
+def _rotation_from_two_vecs(
+    q1: np.ndarray, q2: np.ndarray,
+    G1: np.ndarray, G2: np.ndarray,
+) -> np.ndarray | None:
+    """
+    Rotation R such that R @ G1 = q1 and R approximately maps G2 → q2.
+
+    Builds orthonormal frames from each pair via Gram-Schmidt, then
+    R = Fq @ FG^T.  Returns None if the two vectors in either pair are
+    nearly parallel (underdetermined).
+    """
+    def _frame(a, b):
+        a = a / np.linalg.norm(a)
+        b_perp = b - np.dot(a, b) * a
+        n = np.linalg.norm(b_perp)
+        if n < 1e-6:
+            return None
+        b_perp /= n
+        return np.column_stack([a, b_perp, np.cross(a, b_perp)])
+
+    Fq = _frame(q1, q2)
+    FG = _frame(G1, G2)
+    if Fq is None or FG is None:
+        return None
+    return Fq @ FG.T
+
+
+def _score_index(
+    U: np.ndarray,
+    q_hats: np.ndarray,
+    G_hats: np.ndarray,
+    cos_tol: float,
+) -> int:
+    """
+    Count observed q_hats that match any crystal G_hat under rotation U.
+
+    Equivalent to checking angle(U^T @ q, G) < tol for each obs spot.
+    """
+    crystal_dirs = q_hats @ U           # (N, 3) — U^T @ q for each q
+    cos_mat = crystal_dirs @ G_hats.T   # (N, M)
+    return int((cos_mat.max(axis=1) >= cos_tol).sum())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Autoindexing
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def index_orientation(
+    crystal,
+    camera,
+    obs_xy: np.ndarray,
+    *,
+    hmax: int = 8,
+    f2_thresh: float = F2_THRESHOLD,
+    n_hkl_max: int = 200,
+    E_ref_eV: float | None = None,
+    angle_tol_deg: float = 0.5,
+    min_match_rate: float = 0.25,
+    n_obs_use: int = 20,
+    max_pairs: int = 200,
+    n_candidates_per_pair: int = 20,
+    min_pair_angle_deg: float = 5.0,
+    max_pair_angle_deg: float = 175.0,
+    verbose: bool = False,
+) -> "IndexResult":
+    """
+    Autoindex a Laue pattern: find an orientation matrix U from spot positions.
+
+    Computes pairwise inter-spot angles from the observed scattering vectors
+    and compares them against a lookup table of allowed inter-planar angles
+    for the given crystal.  For each matching table entry a candidate U is
+    built by Gram-Schmidt frame alignment; the candidate that matches the most
+    observed spots is returned.
+
+    The result is typically a rough orientation (±1° accuracy) suitable as the
+    starting point for :func:`fit_orientation`.
+
+    Parameters
+    ----------
+    crystal : Crystal
+        xrayutilities crystal structure.
+    camera : Camera
+        Detector geometry.
+    obs_xy : (N, 2)
+        Observed spot pixel positions ``[xcam, ycam]``, sorted by descending
+        intensity.  The ``n_obs_use`` brightest are used.
+    hmax : int
+        Maximum Miller index for the angle lookup table.  Keep small (≤ 10)
+        to limit the number of pairs; the default of 8 works well for
+        cubic / hexagonal crystals.
+    f2_thresh : float
+        Minimum |F|² threshold for allowed reflections.
+    n_hkl_max : int
+        Keep only the ``n_hkl_max`` strongest reflections (by |F|²) for the
+        lookup table.  Limits table size and avoids O(M²) memory blow-up for
+        large ``hmax``.  Default 200.
+    E_ref_eV : float or None
+        Reference photon energy (eV) used for |F|² ranking.  Defaults to the
+        midpoint of the default energy window.
+    angle_tol_deg : float
+        Angular tolerance (degrees) for both table look-up and final scoring.
+        Tight values (0.3–0.5°) give fewer false matches; looser values
+        (1–2°) help when the geometry calibration is coarse.
+    min_match_rate : float
+        Minimum fraction of matched spots required for ``result.success``.
+    n_obs_use : int
+        Number of brightest observed spots to use.  Pairwise complexity is
+        O(n_obs_use²), so keep this ≤ 30 for fast execution.
+    max_pairs : int
+        Maximum number of observed pairs to evaluate.  Pairs are sorted so
+        that those with angles nearest 90° (most discriminating) are tried
+        first.
+    n_candidates_per_pair : int
+        Maximum number of table entries (hkl₁, hkl₂) to try per observed
+        pair.  When there are many table hits the candidates are sub-sampled
+        uniformly.
+    min_pair_angle_deg : float
+        Skip observed pairs whose inter-spot angle is below this threshold
+        (nearly-parallel beams constrain U poorly).
+    max_pair_angle_deg : float
+        Skip observed pairs above this threshold (nearly anti-parallel).
+    verbose : bool
+        Print progress to stdout.
+
+    Returns
+    -------
+    IndexResult
+        ``result.U`` is the best candidate orientation matrix.
+        Pass it directly to :func:`fit_orientation` for pixel-space
+        refinement::
+
+            idx = index_orientation(crystal, camera, obs_xy, verbose=True)
+            if idx.success:
+                fit = fit_orientation(crystal, camera, obs_xy, idx.U)
+
+    Notes
+    -----
+    The algorithm exploits the fact that in Laue diffraction the unit
+    scattering vector satisfies ``q̂ = U @ Ĝ(hkl)`` independently of
+    wavelength.  The inter-spot angle ``arccos(q̂ᵢ · q̂ⱼ)`` therefore
+    equals the inter-planar angle ``arccos(Ĝᵢ · Ĝⱼ)``, which is a
+    fixed property of the crystal metric — no energy knowledge is
+    required.
+    """
+    from .simulation import E_MIN_eV, E_MAX_eV
+
+    obs_xy = np.asarray(obs_xy, dtype=float)
+    if n_obs_use is not None:
+        obs_xy = obs_xy[:n_obs_use]
+    n_obs = len(obs_xy)
+
+    if n_obs < 2:
+        raise ValueError("Need at least 2 observed spots for indexing.")
+
+    if E_ref_eV is None:
+        E_ref_eV = 0.5 * (E_MIN_eV + E_MAX_eV)
+
+    if verbose:
+        print(f"index_orientation: {n_obs} observed spots, hmax={hmax}")
+
+    # ── step 1: observed unit q-vectors ──────────────────────────────────────
+    q_hats = _obs_q_vecs(camera, obs_xy)
+
+    # ── step 2: build HKL angle table ────────────────────────────────────────
+    allowed = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+
+    # Rank by |F|² and keep the n_hkl_max strongest reflections.
+    hkl_all = list(allowed)
+    if n_hkl_max is not None and len(hkl_all) > n_hkl_max:
+        f2_vals = np.array([
+            abs(crystal.StructureFactor(crystal.Q(h, k, l), en=E_ref_eV)) ** 2
+            for h, k, l in hkl_all
+        ])
+        top_idx = np.argsort(f2_vals)[::-1][:n_hkl_max]
+        hkl_all = [hkl_all[i] for i in top_idx]
+
+    cos_sorted, ii_sorted, jj_sorted, G_hats, hkl_list = _build_g_table(
+        crystal, hkl_all
+    )
+
+    if verbose:
+        print(
+            f"  HKL table: {len(hkl_list)} reflections, "
+            f"{len(cos_sorted)} pairs"
+        )
+
+    # ── step 3: iterate over observed pairs ──────────────────────────────────
+    cos_tol = float(np.cos(np.radians(angle_tol_deg)))
+    # Conservative search window: |Δcos| ≤ Δα_rad  (|d cos/dα| = |sin α| ≤ 1)
+    cos_search_win = float(np.radians(angle_tol_deg))
+
+    cos_min_pair = float(np.cos(np.radians(max_pair_angle_deg)))
+    cos_max_pair = float(np.cos(np.radians(min_pair_angle_deg)))
+
+    # All observed pairs + their cosines
+    obs_i_all, obs_j_all = zip(
+        *[(i, j) for i in range(n_obs) for j in range(i + 1, n_obs)]
+    )
+    obs_i_all = np.array(obs_i_all)
+    obs_j_all = np.array(obs_j_all)
+    cos_obs_all = np.einsum(
+        "ij,ij->i", q_hats[obs_i_all], q_hats[obs_j_all]
+    )
+
+    # Filter to useful angle range
+    in_range = (cos_obs_all >= cos_min_pair) & (cos_obs_all <= cos_max_pair)
+    obs_i_use = obs_i_all[in_range]
+    obs_j_use = obs_j_all[in_range]
+    cos_obs_use = cos_obs_all[in_range]
+
+    # Sort by proximity to cos = 0 (90° angle = most discriminating)
+    order = np.argsort(np.abs(cos_obs_use))
+    obs_i_use = obs_i_use[order][:max_pairs]
+    obs_j_use = obs_j_use[order][:max_pairs]
+    cos_obs_use = cos_obs_use[order][:max_pairs]
+
+    best_score = -1
+    best_U: np.ndarray | None = None
+    best_hkl_pair: tuple = ((0, 0, 0), (0, 0, 0))
+    best_angle_deg = 0.0
+    n_candidates_total = 0
+
+    for oi, oj, cos_obs in zip(obs_i_use, obs_j_use, cos_obs_use):
+        q1, q2 = q_hats[oi], q_hats[oj]
+
+        lo = int(np.searchsorted(cos_sorted, cos_obs - cos_search_win))
+        hi = int(np.searchsorted(cos_sorted, cos_obs + cos_search_win))
+        n_hits = hi - lo
+        if n_hits == 0:
+            continue
+
+        # Sub-sample uniformly when there are too many hits
+        step = max(1, n_hits // n_candidates_per_pair)
+        for k in range(lo, hi, step):
+            G1 = G_hats[ii_sorted[k]]
+            G2 = G_hats[jj_sorted[k]]
+            U_cand = _rotation_from_two_vecs(q1, q2, G1, G2)
+            if U_cand is None:
+                continue
+            n_candidates_total += 1
+            score = _score_index(U_cand, q_hats, G_hats, cos_tol)
+            if score > best_score:
+                best_score = score
+                best_U = U_cand
+                best_hkl_pair = (
+                    tuple(int(x) for x in hkl_list[ii_sorted[k]]),
+                    tuple(int(x) for x in hkl_list[jj_sorted[k]]),
+                )
+                best_angle_deg = float(
+                    np.degrees(np.arccos(np.clip(cos_obs, -1.0, 1.0)))
+                )
+
+    if best_U is None:
+        best_U = np.eye(3)
+        best_score = 0
+
+    match_rate = best_score / max(n_obs, 1)
+    result = IndexResult(
+        U=best_U,
+        n_matched=best_score,
+        n_obs=n_obs,
+        match_rate=match_rate,
+        hkl_pair=best_hkl_pair,
+        angle_deg=best_angle_deg,
+        n_candidates=n_candidates_total,
+        success=match_rate >= min_match_rate,
+    )
+
+    if verbose:
+        print(f"  {result}")
+        print(f"  evaluated {n_candidates_total} candidates")
+
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

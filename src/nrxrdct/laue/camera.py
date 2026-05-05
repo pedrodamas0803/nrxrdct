@@ -759,23 +759,33 @@ class Camera:
         """
         Write a LaueTools-compatible ``.det`` calibration file.
 
-        Format (4 lines)::
+        Format (4 data lines, preceded by a comment header)::
 
+            # LaueTools camera calibration
+            # dd xcen ycen xbet xgam   pixelsize   Nh Nv   kf_direction
+            # Written: <ISO date>
             dd xcen ycen xbet xgam
             pixelsize
             Nh Nv
             kf_direction
         """
+        import datetime
         from pathlib import Path
 
-        text = (
+        header = (
+            "# LaueTools camera calibration\n"
+            "# dd(mm)  xcen(px)  ycen(px)  xbet(deg)  xgam(deg)"
+            "   pixelsize(mm)   Nh Nv   kf_direction\n"
+            f"# Written: {datetime.date.today().isoformat()}\n"
+        )
+        data = (
             f"{self.dd:.6g} {self.xcen:.6g} {self.ycen:.6g} "
             f"{self.xbet:.6g} {self.xgam:.6g}\n"
             f"{self.pixel_mm:.6g}\n"
             f"{self.Nh} {self.Nv}\n"
             f"{self.kf_direction}\n"
         )
-        Path(path).write_text(text)
+        Path(path).write_text(header + data)
 
     @classmethod
     def from_det(cls, path, pixelsize=None, framedim=None, kf_direction=None):
@@ -798,7 +808,7 @@ class Camera:
         lines = [
             ln.strip()
             for ln in Path(path).read_text().splitlines()
-            if ln.strip()
+            if ln.strip() and not ln.strip().startswith("#")
         ]
         dd, xcen, ycen, xbet, xgam = map(float, lines[0].split())
         px = float(lines[1]) if pixelsize is None else float(pixelsize)

@@ -840,7 +840,12 @@ class Camera:
         f2_thresh=0.01,
         max_match_px=20.0,
         top_n_sim=None,
-        method="Nelder-Mead",
+        bounds=None,
+        dd_range=None,
+        cen_range_px=None,
+        angle_range_deg=None,
+        U_range_deg=None,
+        method=None,
         options=None,
     ):
         """
@@ -849,7 +854,10 @@ class Camera:
         The cost function is the mean squared nearest-neighbour distance from
         each observed spot to the closest simulated spot, capped at
         ``max_match_px``.  This soft matching gives a smooth landscape suitable
-        for Nelder-Mead optimisation.
+        for derivative-free optimisation.
+
+        When bounds are specified the optimizer switches to L-BFGS-B (which
+        enforces them natively); otherwise Nelder-Mead is used.
 
         Parameters
         ----------
@@ -880,8 +888,27 @@ class Camera:
             reporting the final match rate.
         top_n_sim : int or None
             Restrict cost evaluation to the brightest *N* simulated spots.
-        method : str
-            Scipy optimisation method (default ``"Nelder-Mead"``).
+        bounds : dict or None
+            Explicit parameter bounds as ``{param_name: (lo, hi)}``.  Values
+            are absolute (not relative).  Keys are the same as ``fit_params``
+            plus ``"U_rx"``, ``"U_ry"``, ``"U_rz"`` for orientation angles.
+            Takes priority over the convenience range parameters below.
+        dd_range : float or None
+            Maximum allowed deviation of ``dd`` from its starting value (mm).
+            E.g. ``dd_range=5.0`` → bounds ``(dd0 - 5, dd0 + 5)``.
+        cen_range_px : float or None
+            Maximum allowed deviation of ``xcen`` / ``ycen`` from their
+            starting values (pixels).
+        angle_range_deg : float or None
+            Maximum allowed deviation of ``xbet`` / ``xgam`` from their
+            starting values (degrees).
+        U_range_deg : float or None
+            Maximum allowed rotation of the orientation angles ``U_rx``,
+            ``U_ry``, ``U_rz`` from zero (degrees).  Only relevant when
+            ``fit_U=True``.
+        method : str or None
+            Scipy optimisation method.  Defaults to ``"L-BFGS-B"`` when any
+            bounds are active, ``"Nelder-Mead"`` otherwise.
         options : dict or None
             Options forwarded to ``scipy.optimize.minimize``, overriding
             defaults.
@@ -970,24 +997,71 @@ class Camera:
             dists, _ = tree.query(obs_xy, k=1)
             return float(np.mean(np.minimum(dists, max_match_px) ** 2))
 
-        # Build initial simplex with parameter-appropriate step sizes
-        _steps = {
-            "dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5,
-            "U_rx": 2.0, "U_ry": 2.0, "U_rz": 2.0,
-        }
-        n_p = len(x0)
-        init_simplex = np.tile(x0, (n_p + 1, 1))
-        for i, pname in enumerate(_all_names):
-            init_simplex[i + 1, i] += _steps.get(pname, 1.0)
+        # ── build bounds ─────────────────────────────────────────────────────
+        # Start from the explicit bounds dict, then fill missing entries from
+        # the convenience range parameters.
+        _bounds_dict: dict = dict(bounds) if bounds else {}
 
-        _opts = {
-            "maxiter": 5000, "xatol": 0.05, "fatol": 1e-4,
-            "initial_simplex": init_simplex,
+        _range_defaults = {
+            "dd":   dd_range,
+            "xcen": cen_range_px,
+            "ycen": cen_range_px,
+            "xbet": angle_range_deg,
+            "xgam": angle_range_deg,
+            "U_rx": U_range_deg,
+            "U_ry": U_range_deg,
+            "U_rz": U_range_deg,
         }
+        for pname in _all_names:
+            if pname not in _bounds_dict and _range_defaults.get(pname) is not None:
+                r = float(_range_defaults[pname])
+                centre = _cam_init.get(pname, 0.0)   # orientation deltas start at 0
+                _bounds_dict[pname] = (centre - r, centre + r)
+
+        # Ordered bounds list matching x0 / _all_names
+        scipy_bounds = (
+            [_bounds_dict[p] for p in _all_names]
+            if _bounds_dict else None
+        )
+
+        # ── choose method ────────────────────────────────────────────────────
+        if method is not None:
+            _method = method
+        elif scipy_bounds is not None:
+            _method = "L-BFGS-B"
+        else:
+            _method = "Nelder-Mead"
+
+        # ── build options ────────────────────────────────────────────────────
+        if _method == "Nelder-Mead":
+            _steps = {
+                "dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5,
+                "U_rx": 2.0, "U_ry": 2.0, "U_rz": 2.0,
+            }
+            n_p = len(x0)
+            init_simplex = np.tile(x0, (n_p + 1, 1))
+            for i, pname in enumerate(_all_names):
+                step = _steps.get(pname, 1.0)
+                if scipy_bounds:
+                    lo, hi = scipy_bounds[i]
+                    step = min(step, (hi - lo) * 0.25)
+                init_simplex[i + 1, i] += step
+            _opts: dict = {
+                "maxiter": 5000, "xatol": 0.05, "fatol": 1e-4,
+                "initial_simplex": init_simplex,
+            }
+        else:
+            _opts = {"maxiter": 5000, "ftol": 1e-6, "gtol": 1e-6}
+
         if options:
             _opts.update(options)
 
-        result = minimize(_cost, x0, method=method, options=_opts)
+        result = minimize(
+            _cost, x0,
+            method=_method,
+            bounds=scipy_bounds,
+            options=_opts,
+        )
 
         cam_final = _build_cam(result.x)
         U_final = _build_U(result.x)

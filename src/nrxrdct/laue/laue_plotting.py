@@ -3723,3 +3723,207 @@ def plot_segmentation(
 
     fig.tight_layout()
     return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MULTI-GRAIN OVERLAY
+# ─────────────────────────────────────────────────────────────────────────────
+
+_GRAIN_COLORS = [
+    "#4fc3f7",  # sky blue
+    "#ff6633",  # orange
+    "#66ff99",  # mint
+    "#ffcc00",  # yellow
+    "#cc88ff",  # violet
+    "#ff88bb",  # pink
+    "#44dddd",  # teal
+]
+
+
+def plot_multigrain(
+    obs_xy: "np.ndarray",
+    spots_per_grain: "list[list[dict]]",
+    camera,
+    *,
+    image: "np.ndarray | None" = None,
+    match_px: float = 10.0,
+    color_obs_by_grain: bool = True,
+    figsize: tuple = (9, 8),
+    out_path: "str | None" = None,
+):
+    """
+    Overlay observed spots and per-grain simulations on the detector plane.
+
+    Each grain's simulated spots are drawn in a distinct colour; thin lines
+    connect each simulated spot to its nearest observed counterpart (within
+    *match_px*).  When *color_obs_by_grain* is ``True`` the observed spots are
+    also coloured by whichever grain's simulation is closest to them, giving an
+    immediate visual assignment map.
+
+    Typical usage::
+
+        # simulate each grain after fit_orientation_mixed
+        spots_per_grain = [
+            laue.simulate_laue(crystal, U, camera, f2_thresh=0.01)
+            for U in result.U_phases
+        ]
+        fig, ax = plot_multigrain(peaks[:, :2], spots_per_grain, camera)
+
+    Parameters
+    ----------
+    obs_xy : (N, 2) array-like
+        Observed pixel positions ``[xcam, ycam]``.
+    spots_per_grain : list of spot-lists
+        One spot list per grain, each in the format returned by
+        :func:`~nrxrdct.laue.simulation.simulate_laue`.
+        Each spot dict must contain a ``'pix'`` key ``(xcam, ycam)``.
+    camera : Camera
+        Detector geometry; ``camera.Nh`` and ``camera.Nv`` set the axis limits.
+    image : (Nv, Nh) array or None
+        Optional raw detector image displayed as a log-scaled background.
+    match_px : float
+        Maximum pixel distance for drawing a match line between a simulated
+        spot and its nearest observed spot.  Default ``10.0``.
+    color_obs_by_grain : bool
+        When ``True`` (default), repaint each observed spot in the colour of
+        its closest grain.  Unmatched spots (all grains farther than
+        *match_px*) are shown in white.
+    figsize : (float, float)
+        Figure size in inches.
+    out_path : str or None
+        If given, save the figure to this path at 150 dpi.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax  : matplotlib.axes.Axes
+    """
+    obs_xy = np.asarray(obs_xy, dtype=float)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+
+    # ── optional background image ─────────────────────────────────────────────
+    if image is not None:
+        img = np.asarray(image, dtype=float)
+        vmin = np.percentile(img, 1)
+        ax.imshow(
+            np.log1p(np.clip(img - vmin, 0, None)),
+            origin="upper",
+            cmap="inferno",
+            extent=[0, camera.Nh, camera.Nv, 0],
+            aspect="auto",
+            interpolation="nearest",
+            alpha=0.6,
+            zorder=0,
+        )
+
+    # ── collect simulated xy arrays per grain ─────────────────────────────────
+    sim_xys = []
+    for spots in spots_per_grain:
+        xy = np.array(
+            [s["pix"] for s in spots if s.get("pix") is not None],
+            dtype=float,
+        )
+        sim_xys.append(xy if len(xy) else np.empty((0, 2), dtype=float))
+
+    # ── assign each observed spot to its closest grain ────────────────────────
+    obs_grain = np.full(len(obs_xy), -1, dtype=int)   # -1 = unmatched
+    if color_obs_by_grain and sim_xys:
+        best_dist = np.full(len(obs_xy), np.inf)
+        for gi, sxy in enumerate(sim_xys):
+            if len(sxy) == 0:
+                continue
+            diff = obs_xy[:, None, :] - sxy[None, :, :]           # (N_obs, N_sim, 2)
+            d = np.sqrt((diff ** 2).sum(axis=-1)).min(axis=1)      # (N_obs,)
+            closer = d < best_dist
+            best_dist = np.where(closer, d, best_dist)
+            obs_grain = np.where(closer, gi, obs_grain)
+        obs_grain[best_dist > match_px] = -1
+
+    # ── draw observed spots ───────────────────────────────────────────────────
+    unmatched = obs_grain == -1
+    if unmatched.any():
+        ax.scatter(
+            obs_xy[unmatched, 0], obs_xy[unmatched, 1],
+            s=40, facecolors="none", edgecolors="white", lw=0.8, zorder=2,
+        )
+    if color_obs_by_grain:
+        for gi in range(len(spots_per_grain)):
+            mask = obs_grain == gi
+            if mask.any():
+                ax.scatter(
+                    obs_xy[mask, 0], obs_xy[mask, 1],
+                    s=40, facecolors="none",
+                    edgecolors=_GRAIN_COLORS[gi % len(_GRAIN_COLORS)],
+                    lw=1.2, zorder=2,
+                )
+
+    # ── draw simulated spots + match lines per grain ──────────────────────────
+    legend_handles = [
+        Line2D(
+            [0], [0], linestyle="none", marker="o", markersize=6,
+            markerfacecolor="none", markeredgecolor="white", lw=0.8,
+            label="observed",
+        ),
+    ]
+
+    for gi, (spots, sxy) in enumerate(zip(spots_per_grain, sim_xys)):
+        color = _GRAIN_COLORS[gi % len(_GRAIN_COLORS)]
+        n_sim = len(sxy)
+        if n_sim == 0:
+            continue
+
+        ax.scatter(sxy[:, 0], sxy[:, 1], s=80, marker="+",
+                   color=color, lw=1.2, zorder=3)
+
+        nn_dist = np.full(n_sim, np.inf)
+        if len(obs_xy):
+            diff = sxy[:, None, :] - obs_xy[None, :, :]           # (N_sim, N_obs, 2)
+            dist = np.sqrt((diff ** 2).sum(axis=-1))               # (N_sim, N_obs)
+            nn_idx = dist.argmin(axis=1)
+            nn_dist = dist[np.arange(n_sim), nn_idx]
+            for j in range(n_sim):
+                if nn_dist[j] < match_px:
+                    ox, oy = obs_xy[nn_idx[j]]
+                    ax.plot([sxy[j, 0], ox], [sxy[j, 1], oy],
+                            color=color, lw=0.5, alpha=0.4, zorder=1)
+
+        n_matched = int((nn_dist < match_px).sum())
+        n_obs = len(obs_xy)
+        rate = n_matched / max(n_obs, 1)
+        legend_handles.append(
+            Line2D(
+                [0], [0], linestyle="none", marker="+", markersize=8,
+                color=color, lw=1.2,
+                label=f"grain {gi + 1}  ({n_matched}/{n_obs}, {rate:.0%})",
+            )
+        )
+
+    # ── axes styling ──────────────────────────────────────────────────────────
+    ax.set_xlim(0, camera.Nh)
+    ax.set_ylim(camera.Nv, 0)
+    ax.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+    ax.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax.set_title(
+        f"Multi-grain Laue  —  {len(spots_per_grain)} grain(s)",
+        color=FG, fontsize=9, pad=5,
+    )
+    ax.legend(
+        handles=legend_handles,
+        facecolor="#1a1f2e", edgecolor="#3a3f4e",
+        labelcolor=FG, fontsize=8, loc="upper right",
+    )
+
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax

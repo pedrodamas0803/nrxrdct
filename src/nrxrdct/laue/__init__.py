@@ -25,6 +25,7 @@ from .fitting import (
     laue_residuals,
     laue_stack_residuals,
     laue_strain_residuals,
+    remove_grain_spots,
 )
 from .laue_plotting import (
     plot_2theta_chi,
@@ -196,6 +197,7 @@ __all__ = [
     "fit_orientation_stack",
     "fit_orientation_mixed",
     "fit_strain_orientation",
+    "remove_grain_spots",
     # Plotting
     "plot_2theta_chi",
     "plot_all",

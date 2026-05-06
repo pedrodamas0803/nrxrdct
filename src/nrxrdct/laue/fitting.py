@@ -537,6 +537,92 @@ def _normalise_phases(phases: list) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Spot attribution
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def remove_grain_spots(
+    obs_xy: np.ndarray,
+    U: np.ndarray,
+    crystal,
+    camera,
+    match_px: float = 5.0,
+    f2_thresh: float = 1e-6,
+    hmax: int = HMAX,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Remove from *obs_xy* the spots that are one-to-one matched to a grain.
+
+    Uses the same Hungarian algorithm as the fitter so that the attribution
+    is identical to what ``fit_orientation`` does internally.  Only spots
+    that are uniquely assigned to a simulated reflection **and** within
+    *match_px* are removed; ambiguous or distant observed spots are kept.
+
+    Typical use — iterative multi-grain peeling::
+
+        remaining = peaks[:, :2].copy()
+
+        fit1 = laue.fit_orientation(crystal, cam, remaining, U0_grain1)
+        remaining, claimed1 = laue.remove_grain_spots(remaining, fit1.U,
+                                                      crystal, cam)
+
+        # now fit grain 2 starting from your own U guess
+        fit2 = laue.fit_orientation(crystal, cam, remaining, U0_grain2)
+
+    Parameters
+    ----------
+    obs_xy   : (N, 2) array-like   Observed pixel positions ``[xcam, ycam]``.
+    U        : (3, 3) array-like   Orientation matrix of the grain to remove.
+    crystal  : Crystal             xrayutilities crystal structure.
+    camera   : Camera              Detector geometry.
+    match_px : float               Maximum pixel distance for a match.
+                                   Should match the tolerance used in
+                                   ``fit_orientation``.  Default ``5.0``.
+    f2_thresh : float              Structure-factor threshold for the
+                                   removal simulation.  Use a very small value
+                                   (default ``1e-6``) to generate essentially
+                                   all allowed reflections and avoid leaving
+                                   grain spots behind.
+    hmax     : int                 Maximum Miller index.
+    E_min_eV, E_max_eV : float    Energy range forwarded to
+                                   :func:`~nrxrdct.laue.simulate_laue`.
+
+    Returns
+    -------
+    remaining : (M, 2) ndarray
+        Observed spots **not** claimed by this grain  (M ≤ N).
+    claimed   : (N,) bool ndarray
+        Boolean mask over *obs_xy*: ``True`` where a spot was removed.
+    """
+    from .simulation import simulate_laue as _sim
+
+    obs_xy = np.asarray(obs_xy, dtype=float)
+
+    spots  = _sim(
+        crystal, U, camera,
+        E_min=E_min_eV, E_max=E_max_eV,
+        hmax=hmax, f2_thresh=f2_thresh,
+        geometry_only=True,
+    )
+    sim_xy = _extract_sim_xy(spots)
+
+    claimed = np.zeros(len(obs_xy), dtype=bool)
+
+    if len(sim_xy) > 0 and len(obs_xy) > 0:
+        diff    = obs_xy[:, None, :] - sim_xy[None, :, :]      # (N_obs, N_sim, 2)
+        dist    = np.sqrt((diff ** 2).sum(axis=-1))             # (N_obs, N_sim)
+        row_ind, col_ind = linear_sum_assignment(
+            np.minimum(dist, match_px)
+        )
+        hit = row_ind[dist[row_ind, col_ind] < match_px]
+        claimed[hit] = True
+
+    return obs_xy[~claimed], claimed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Strain helpers
 # ─────────────────────────────────────────────────────────────────────────────
 

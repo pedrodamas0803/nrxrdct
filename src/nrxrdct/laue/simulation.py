@@ -153,7 +153,7 @@ KI_HAT = np.array([1.0, 0.0, 0.0])  # LT frame: beam along +x  (do not change)
 
 # ── Simulation ────────────────────────────────────────────────────────────────
 HMAX = 12
-F2_THRESHOLD = 0.5
+F2_THRESHOLD = 0.01
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & UTILITIES

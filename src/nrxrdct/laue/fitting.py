@@ -240,9 +240,14 @@ class StrainFitResult:
                                     (Δa/a, Δb/b, Δc/c); off-diagonal entries
                                     are the engineering shear strains / 2.
     strain_voigt  : (6,) ndarray    Voigt representation
-                                    ``[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]``.
-                                    Components not listed in ``fit_strain``
-                                    are zero.
+                                    ``[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]``
+                                    in the crystal frame.  Components not
+                                    listed in ``fit_strain`` are zero.
+    strain_tensor_lab : (3,3) ndarray  ``strain_tensor`` rotated to the
+                                    lab frame via ``U @ ε @ Uᵀ``
+                                    (computed property).
+    strain_voigt_lab  : (6,) ndarray   Voigt form of ``strain_tensor_lab``
+                                    (computed property).
     fit_strain    : tuple[str, …]   Strain components that were free parameters.
     cost          : float           ½ Σ residuals² at convergence.
     rms_px        : float           RMS pixel distance of matched pairs.
@@ -272,6 +277,40 @@ class StrainFitResult:
     success       : bool
     message       : str
     optimizer     : object = field(repr=False)
+
+    @property
+    def strain_tensor_lab(self) -> np.ndarray:
+        """
+        Strain tensor rotated into the laboratory frame.
+
+        The stored ``strain_tensor`` is expressed in the crystal Cartesian
+        frame (right-hand side of U0 in ``U_eff = R @ U0 @ (I + ε)``).
+        This property applies the similarity transform
+
+            ε_lab = U @ ε_crystal @ Uᵀ
+
+        where ``U = R @ U0`` is the pure rotation part, yielding the same
+        physical deformation expressed in the lab Cartesian axes
+        (x ∥ beam, z vertical).
+
+        Returns
+        -------
+        (3, 3) ndarray
+        """
+        return self.U @ self.strain_tensor @ self.U.T
+
+    @property
+    def strain_voigt_lab(self) -> np.ndarray:
+        """
+        Voigt representation of ``strain_tensor_lab``:
+        ``[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`` in the lab frame.
+
+        Returns
+        -------
+        (6,) ndarray
+        """
+        e = self.strain_tensor_lab
+        return np.array([e[0, 0], e[1, 1], e[2, 2], e[0, 1], e[0, 2], e[1, 2]])
 
     def __str__(self) -> str:
         status = "OK" if self.success else "FAILED"

@@ -30,7 +30,7 @@ from __future__ import annotations
 import glob
 import json
 import os
-import pickle
+import dill as pickle
 import re
 import subprocess
 
@@ -709,6 +709,7 @@ class GrainMap:
         max_size: int = 500,
         gap_exclude: int = 3,
         bg_sigma: float = 251,
+        max_components: int = 1,
         extra_sbatch: dict | None = None,
     ) -> list:
         """
@@ -747,8 +748,9 @@ class GrainMap:
             "method_kwargs": method_kwargs or {},
             "min_size":      min_size,
             "max_size":      max_size,
-            "gap_exclude":   gap_exclude,
-            "bg_sigma":      bg_sigma,
+            "gap_exclude":    gap_exclude,
+            "bg_sigma":       bg_sigma,
+            "max_components": max_components,
         }
         meta_path = os.path.join(dirs["job_meta"], "seg_meta.json")
         with open(meta_path, "w") as fh:
@@ -779,6 +781,8 @@ class GrainMap:
         min_matched: int = 5,
         min_match_rate: float = 0.2,
         max_rms_px: float | None = None,
+        r_squared_min: float = 0.9,
+        include_unfitted: bool = False,
         hmax: int | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
@@ -818,10 +822,12 @@ class GrainMap:
             "ub_files":       self.ub_files,
             "max_match_px":   max_match_px if isinstance(max_match_px, list)
                               else [float(max_match_px)],
-            "min_matched":    min_matched,
-            "min_match_rate": min_match_rate,
-            "max_rms_px":     max_rms_px,
-            "method":         method,
+            "min_matched":     min_matched,
+            "min_match_rate":  min_match_rate,
+            "max_rms_px":      max_rms_px,
+            "r_squared_min":   r_squared_min,
+            "include_unfitted": include_unfitted,
+            "method":          method,
             "ftol":           ftol,
             "xtol":           xtol,
             "gtol":           gtol,
@@ -862,6 +868,8 @@ class GrainMap:
         python_bin: str = "python",
         max_match_px=10.0,
         fit_strain: list | None = None,
+        r_squared_min: float = 0.9,
+        include_unfitted: bool = False,
         hmax: int | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
@@ -904,9 +912,11 @@ class GrainMap:
             "n_grains":   self.n_grains,
             "max_match_px": max_match_px if isinstance(max_match_px, list)
                             else [float(max_match_px)],
-            "fit_strain": fit_strain or
-                          ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"],
-            "method":     method,
+            "fit_strain":      fit_strain or
+                               ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"],
+            "r_squared_min":   r_squared_min,
+            "include_unfitted": include_unfitted,
+            "method":          method,
             "ftol":       ftol,
             "xtol":       xtol,
             "gtol":       gtol,

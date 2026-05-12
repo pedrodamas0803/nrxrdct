@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import pickle
+import dill as pickle
 import sys
 import time
 
@@ -62,6 +62,8 @@ def _process_frame(
     min_match_rate: float,
     max_rms_px: float | None,
     fit_kwargs: dict,
+    r_squared_min: float,
+    include_unfitted: bool,
 ) -> int:
     """Process one frame. Returns number of grains successfully fitted."""
     seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
@@ -69,7 +71,11 @@ def _process_frame(
         return 0
 
     try:
-        peaklist = convert_spotsfile2peaklist(seg_path)
+        peaklist = convert_spotsfile2peaklist(
+            seg_path,
+            r_squared_min    = r_squared_min,
+            include_unfitted = include_unfitted,
+        )
         obs_xy = peaklist[:, :2]
     except Exception as exc:
         print(f"  ✗  frame {frame_idx}: load peaklist: {exc}", flush=True)
@@ -163,11 +169,13 @@ def main() -> None:
             camera        = camera,
             crystal       = crystal,
             ub_arrays     = ub_arrays,
-            max_match_px  = meta.get("max_match_px", [30, 10, 3]),
-            min_matched   = meta.get("min_matched", 5),
-            min_match_rate= meta.get("min_match_rate", 0.2),
-            max_rms_px    = meta.get("max_rms_px", None),
-            fit_kwargs    = fit_kwargs,
+            max_match_px     = meta.get("max_match_px", [30, 10, 3]),
+            min_matched      = meta.get("min_matched", 5),
+            min_match_rate   = meta.get("min_match_rate", 0.2),
+            max_rms_px       = meta.get("max_rms_px", None),
+            fit_kwargs       = fit_kwargs,
+            r_squared_min    = meta.get("r_squared_min", 0.9),
+            include_unfitted = meta.get("include_unfitted", False),
         )
 
     elapsed = time.time() - t0

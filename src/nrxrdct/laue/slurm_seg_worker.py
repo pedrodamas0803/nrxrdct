@@ -54,6 +54,7 @@ def _process_frame(
     max_size: int,
     gap_exclude: int,
     bg_sigma: float,
+    max_components: int,
 ) -> bool:
     out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
     if os.path.exists(out_path):
@@ -84,7 +85,8 @@ def _process_frame(
         regionprops = measure_peaks(label_img, filt_im)
 
         tmp = out_path + ".tmp"
-        write_h5_spotsfile(filt_im, regionprops, outpath=tmp, overwrite=True)
+        write_h5_spotsfile(filt_im, regionprops, outpath=tmp, overwrite=True,
+                           max_components=max_components)
         os.rename(tmp, out_path)
         return True
 
@@ -129,10 +131,11 @@ def main() -> None:
             detector_mask = detector_mask,
             method        = meta.get("method", "LoG"),
             method_kwargs = meta.get("method_kwargs", {}),
-            min_size      = meta.get("min_size", 3),
-            max_size      = meta.get("max_size", 500),
-            gap_exclude   = meta.get("gap_exclude", 3),
-            bg_sigma      = meta.get("bg_sigma", 251),
+            min_size       = meta.get("min_size", 3),
+            max_size       = meta.get("max_size", 500),
+            gap_exclude    = meta.get("gap_exclude", 3),
+            bg_sigma       = meta.get("bg_sigma", 251),
+            max_components = meta.get("max_components", 1),
         )
         n_ok   += ok
         n_fail += not ok

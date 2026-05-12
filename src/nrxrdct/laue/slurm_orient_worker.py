@@ -109,7 +109,7 @@ def _process_frame(
         if max_rms_px is not None and result.rms_px > max_rms_px:
             continue
 
-        tmp = out_path + ".tmp"
+        tmp = out_path[:-4] + ".tmp.npz"
         np.savez(
             tmp,
             U           = result.U,

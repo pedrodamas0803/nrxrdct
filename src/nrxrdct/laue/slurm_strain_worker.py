@@ -104,7 +104,7 @@ def _process_frame(
                 **fit_kwargs,
             )
 
-            tmp = out_path + ".tmp"
+            tmp = out_path[:-4] + ".tmp.npz"
             np.savez(
                 tmp,
                 U             = result.U,

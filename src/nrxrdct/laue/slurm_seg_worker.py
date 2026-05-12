@@ -34,6 +34,7 @@ from nrxrdct.laue.segmentation import (
     WTH_segmentation,
     clean_segmentation,
     filter_and_rescale_images,
+    gaussian_background,
     label_segmented_image,
     measure_peaks,
     write_h5_spotsfile,
@@ -52,6 +53,7 @@ def _process_frame(
     min_size: int,
     max_size: int,
     gap_exclude: int,
+    bg_sigma: float,
 ) -> bool:
     out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
     if os.path.exists(out_path):
@@ -60,6 +62,12 @@ def _process_frame(
     try:
         with h5py.File(h5_path, "r") as f:
             frame = f[h5_dataset][frame_idx].astype(np.float32)
+
+        valid = detector_mask if detector_mask is not None else np.ones(frame.shape, dtype=bool)
+        bg = gaussian_background(frame, valid, sigma=bg_sigma)
+        frame = frame - bg
+        frame -= frame[valid].min()
+        frame[~valid] = 0.0
 
         if method.upper() == "WTH":
             seg_mask = WTH_segmentation(frame, detector_mask, **method_kwargs)
@@ -124,6 +132,7 @@ def main() -> None:
             min_size      = meta.get("min_size", 3),
             max_size      = meta.get("max_size", 500),
             gap_exclude   = meta.get("gap_exclude", 3),
+            bg_sigma      = meta.get("bg_sigma", 251),
         )
         n_ok   += ok
         n_fail += not ok

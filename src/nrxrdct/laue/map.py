@@ -708,6 +708,7 @@ class GrainMap:
         min_size: int = 3,
         max_size: int = 500,
         gap_exclude: int = 3,
+        bg_sigma: float = 251,
         extra_sbatch: dict | None = None,
     ) -> list:
         """
@@ -725,6 +726,10 @@ class GrainMap:
             ``'LoG'`` (Laplacian of Gaussian) or ``'WTH'`` (white top-hat).
         method_kwargs : dict or None
             Extra kwargs forwarded to the chosen segmentation function.
+        bg_sigma : float
+            Gaussian sigma (pixels) for background estimation.  A large-scale
+            Gaussian is fitted to the frame, subtracted, and the result is
+            shifted to be entirely non-negative before segmentation.
         """
         dirs = self.setup_processing_dirs(base_dir)
         all_frames = list(range(self.ny * self.nx))
@@ -743,6 +748,7 @@ class GrainMap:
             "min_size":      min_size,
             "max_size":      max_size,
             "gap_exclude":   gap_exclude,
+            "bg_sigma":      bg_sigma,
         }
         meta_path = os.path.join(dirs["job_meta"], "seg_meta.json")
         with open(meta_path, "w") as fh:

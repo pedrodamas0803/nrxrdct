@@ -352,6 +352,14 @@ def interactive_orientation(
         [], [], s=130, c="none", edgecolors="#ffff00",
         linewidths=1.8, zorder=7, marker="o",
     )
+    sc_drag = ax_det.scatter(                         # drag target ring
+        [], [], s=180, c="none", edgecolors="#ff4400",
+        linewidths=1.8, zorder=8, marker="o",
+    )
+    _drag_line, = ax_det.plot(                        # guide line during drag
+        [], [], color="#ff4400", lw=1.0,
+        linestyle="--", zorder=7, alpha=0.7,
+    )
     ax_det.legend(loc="upper right", fontsize=7,
                   facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
 
@@ -535,17 +543,43 @@ def interactive_orientation(
     for s in (s_ca, s_cb, s_cc, s_hkl):
         s.observe(_on_slider, names="value")
 
-    # ── Click handler — select a simulated spot ───────────────────────────────
-    def _on_click(event) -> None:
-        if event.inaxes is not ax_det:
-            return
-        disp = _last["disp"]
+    # ── Click / drag handlers ─────────────────────────────────────────────────
+    # A short click selects a simulated spot (enables the HKL rotation slider).
+    # Pressing and dragging a spot rotates U so that spot moves to the drop
+    # position — a quick way to bootstrap the orientation manually.
+    #
+    # Drag detection uses screen-pixel distance (event.x / event.y) so the
+    # threshold is independent of the current zoom level and display space.
+
+    _drag = {
+        "active":       False,
+        "spot_idx":     None,
+        "orig_disp":    None,   # display coords of spot at press time
+        "press_screen": None,   # screen coords (px) at press time
+    }
+
+    def _display_to_kf(x: float, y: float) -> np.ndarray:
+        """Return unit kf vector (LT lab frame) for a display-space point."""
+        if space == "angular":
+            tth = np.radians(x)
+            chi = np.radians(y)
+            return np.array([
+                np.cos(tth),
+                np.sin(tth) * np.sin(chi),
+                np.sin(tth) * np.cos(chi),
+            ])
+        elif space == "gnomonic":
+            r2 = x ** 2 + y ** 2
+            d  = 1.0 + r2
+            kf = np.array([(1.0 - r2) / d, -2.0 * x / d, 2.0 * y / d])
+            return kf / np.linalg.norm(kf)
+        else:  # detector
+            kf = camera.pixel_to_kf(np.array([x]), np.array([y]))[0]
+            return kf / np.linalg.norm(kf)
+
+    def _select_spot(idx: int) -> None:
+        """Mark spot *idx* as selected and enable the HKL slider."""
         od   = _last["on_det"]
-        if len(disp) == 0:
-            return
-        dx  = disp[:, 0] - event.xdata
-        dy  = disp[:, 1] - event.ydata
-        idx = int(np.argmin(dx ** 2 + dy ** 2))
         spot = od[idx]
         _selected[0] = spot
         h, k, l = spot["hkl"]
@@ -561,7 +595,89 @@ def interactive_orientation(
         _updating[0] = False
         _do_update()
 
-    fig.canvas.mpl_connect("button_press_event", _on_click)
+    def _nearest_sim_idx(xdata: float, ydata: float) -> int | None:
+        disp = _last["disp"]
+        if len(disp) == 0:
+            return None
+        dx = disp[:, 0] - xdata
+        dy = disp[:, 1] - ydata
+        return int(np.argmin(dx ** 2 + dy ** 2))
+
+    def _on_press(event) -> None:
+        if event.inaxes is not ax_det or event.button != 1:
+            return
+        idx = _nearest_sim_idx(event.xdata, event.ydata)
+        if idx is None:
+            return
+        _drag["spot_idx"]     = idx
+        _drag["orig_disp"]    = _last["disp"][idx].copy()
+        _drag["press_screen"] = np.array([event.x, event.y])
+        _drag["active"]       = False
+
+    def _on_motion(event) -> None:
+        if event.inaxes is not ax_det or _drag["spot_idx"] is None:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+        # Activate drag only after moving 6 screen pixels — avoids accidental
+        # drags on a plain click.
+        screen_dist = np.linalg.norm(
+            np.array([event.x, event.y]) - _drag["press_screen"]
+        )
+        if screen_dist < 6.0:
+            return
+        _drag["active"] = True
+        orig = _drag["orig_disp"]
+        cur  = np.array([event.xdata, event.ydata])
+        sc_drag.set_offsets([cur])
+        _drag_line.set_data([orig[0], cur[0]], [orig[1], cur[1]])
+        fig.canvas.draw_idle()
+
+    def _on_release(event) -> None:
+        if event.button != 1 or _drag["spot_idx"] is None:
+            _drag["spot_idx"] = None
+            return
+
+        if not _drag["active"]:
+            # Short click → select the spot
+            _select_spot(_drag["spot_idx"])
+        else:
+            # Drag released → rotate U so the dragged spot lands at drop point
+            if event.xdata is not None and event.ydata is not None:
+                orig = _drag["orig_disp"]
+                drop = np.array([event.xdata, event.ydata])
+                try:
+                    ki        = np.array([1.0, 0.0, 0.0])
+                    q_orig    = _display_to_kf(orig[0], orig[1]) - ki
+                    q_target  = _display_to_kf(drop[0],  drop[1])  - ki
+                    n_o, n_t  = np.linalg.norm(q_orig), np.linalg.norm(q_target)
+                    if n_o > 1e-10 and n_t > 1e-10:
+                        q_o_hat = q_orig   / n_o
+                        q_t_hat = q_target / n_t
+                        axis    = np.cross(q_o_hat, q_t_hat)
+                        sin_a   = np.linalg.norm(axis)
+                        cos_a   = float(np.clip(
+                            np.dot(q_o_hat, q_t_hat), -1.0, 1.0
+                        ))
+                        if sin_a > 1e-10:
+                            R = Rotation.from_rotvec(
+                                np.arctan2(sin_a, cos_a) * axis / sin_a
+                            ).as_matrix()
+                            state.U0 = R @ state.U
+                            _reset_sliders()   # resets sliders and redraws
+                except Exception:
+                    pass
+
+        # Clear drag visuals
+        sc_drag.set_offsets(np.empty((0, 2)))
+        _drag_line.set_data([], [])
+        _drag["spot_idx"] = None
+        _drag["active"]   = False
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("button_press_event",   _on_press)
+    fig.canvas.mpl_connect("motion_notify_event",  _on_motion)
+    fig.canvas.mpl_connect("button_release_event", _on_release)
 
     # ── ipywidgets buttons ────────────────────────────────────────────────────
     _bkw = dict(layout=ipw.Layout(width="145px", height="32px"))
@@ -604,77 +720,54 @@ def interactive_orientation(
         import asyncio
         import queue as _qmod
         import threading
-        from scipy.optimize import minimize
-        from scipy.spatial import cKDTree
+        from .fitting import fit_orientation as _fit_orientation
+
+        # Guard against double-click while a fit is already running.
+        if getattr(_cb_fit, "_running", False):
+            return
+        _cb_fit._running = True
+        btn_fit.disabled    = True
+        btn_fit.description = "Fitting…"
 
         U_start = state.U.copy()
         _q: _qmod.Queue = _qmod.Queue()
 
-        def _cost(rvec: np.ndarray) -> float:
-            R = Rotation.from_rotvec(rvec).as_matrix()
+        def _run() -> None:
             try:
-                spots = _simulate(R @ U_start)
-            except Exception:
-                return float(max_match_px ** 2)
-            sim_c = _extract_sim_xy(spots)[:top_n_sim]
-            if not len(sim_c):
-                return float(max_match_px ** 2)
-            dists, _ = cKDTree(sim_c).query(obs_use, k=1)
-            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+                res = _fit_orientation(
+                    crystal, camera, obs_use, U_start,
+                    max_match_px=max_match_px,
+                    top_n_sim=top_n_sim,
+                    geometry_only=True,
+                    max_nfev=400,
+                    verbose=True,
+                )
+                _q.put(res)
+            except Exception as exc:
+                _q.put(exc)
 
-        _n = [0]
+        async def _wait() -> None:
+            threading.Thread(target=_run, daemon=True).start()
+            while _q.empty():
+                await asyncio.sleep(0.2)
+            item = _q.get_nowait()
+            if isinstance(item, Exception):
+                print(f"  ⚡ Quick fit error: {item}")
+            else:
+                # Update state only once, after the fit completes cleanly.
+                state.U0 = item.U.copy()
+                _reset_sliders()
+                print(f"  ⚡ {item}")
+            btn_fit.description = "⚡ Quick Fit"
+            btn_fit.disabled    = False
+            _cb_fit._running    = False
 
-        def _opt_cb(xk: np.ndarray) -> None:
-            _n[0] += 1
-            if _n[0] % 3 == 0:
-                _q.put(xk.copy())
-
-        def _optimize() -> None:
-            x0   = np.zeros(3)
-            step = np.radians(1.0)
-            simplex = np.zeros((4, 3))
-            for i in range(3):
-                simplex[i + 1, i] = step
-            res = minimize(
-                _cost, x0, method="Nelder-Mead",
-                callback=_opt_cb,
-                options={"maxiter": 600, "xatol": 1e-4, "fatol": 1e-4,
-                         "initial_simplex": simplex},
-            )
-            _q.put(res.x.copy())
-            _q.put(None)
-
-        async def _ui_loop() -> None:
-            btn_fit.disabled = True
-            btn_fit.description = "Fitting…"
-            t = threading.Thread(target=_optimize, daemon=True)
-            t.start()
-            while True:
-                await asyncio.sleep(0.15)
-                latest, done = None, False
-                while True:
-                    try:
-                        item = _q.get_nowait()
-                        if item is None:
-                            done = True
-                            break
-                        latest = item
-                    except _qmod.Empty:
-                        break
-                if latest is not None:
-                    R = Rotation.from_rotvec(latest).as_matrix()
-                    state.U0 = R @ U_start
-                    _updating[0] = True
-                    for s in (s_ca, s_cb, s_cc):
-                        s.value = 0.0
-                    _updating[0] = False
-                    _do_update()
-                if done:
-                    btn_fit.description = "⚡ Quick Fit"
-                    btn_fit.disabled = False
-                    return
-
-        asyncio.ensure_future(_ui_loop())
+        # create_task is more reliable than ensure_future when the event
+        # loop is already running (standard Jupyter / ipykernel setup).
+        try:
+            asyncio.get_event_loop().create_task(_wait())
+        except RuntimeError:
+            asyncio.ensure_future(_wait())
 
     btn_fit.on_click(_cb_fit)
 
@@ -1000,6 +1093,18 @@ def interactive_calibration(
         zorder=5, label="simulated",
     )
     _lines: list = []
+    sc_sel = ax_det.scatter(                          # selected-spot ring
+        [], [], s=130, c="none", edgecolors="#ffff00",
+        linewidths=1.8, zorder=7, marker="o",
+    )
+    sc_drag = ax_det.scatter(                         # drag target ring
+        [], [], s=180, c="none", edgecolors="#ff4400",
+        linewidths=1.8, zorder=8, marker="o",
+    )
+    _drag_line, = ax_det.plot(                        # guide line during drag
+        [], [], color="#ff4400", lw=1.0,
+        linestyle="--", zorder=7, alpha=0.7,
+    )
     ax_det.legend(loc="upper right", fontsize=7,
                   facecolor=_BG2, edgecolor=_GRAY, labelcolor=_FG)
 
@@ -1010,6 +1115,8 @@ def interactive_calibration(
         color=_FG, fontsize=8.0, va="top", family="monospace",
         linespacing=1.5,
     )
+
+    _last = {"disp": np.empty((0, 2)), "on_det": []}
 
     # ── Sliders ───────────────────────────────────────────────────────────────
     _sk_o = dict(
@@ -1088,6 +1195,7 @@ def interactive_calibration(
 
         spots  = _simulate(U, cam)
         sim_xy = _extract_sim_xy(spots)[:top_n_sim]
+        on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
 
         # Build display coordinates (angular, gnomonic, or detector)
         if space == "angular":
@@ -1095,7 +1203,6 @@ def interactive_calibration(
             tth_o = np.degrees(np.arccos(np.clip(uf[:, 0], -1.0, 1.0)))
             chi_o = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
             obs_disp = np.column_stack([tth_o, chi_o])
-            on_det   = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             sim_disp = (
                 np.array([[s["tth"], s["chi"]] for s in on_det])
                 if on_det else np.empty((0, 2))
@@ -1106,7 +1213,6 @@ def interactive_calibration(
             _chi_o     = np.degrees(np.arctan2(uf[:, 1], uf[:, 2] + 1e-17))
             gX_o, gY_o = _gnomonic(_tth_o, _chi_o)
             obs_disp   = np.column_stack([gX_o, gY_o])
-            on_det     = [s for s in spots if s.get("pix") is not None][:top_n_sim]
             if on_det:
                 gX, gY   = _gnomonic([s["tth"] for s in on_det], [s["chi"] for s in on_det])
                 sim_disp = np.column_stack([gX, gY])
@@ -1115,6 +1221,10 @@ def interactive_calibration(
         else:
             obs_disp = obs_use
             sim_disp = sim_xy
+
+        _last["disp"]   = sim_disp
+        _last["on_det"] = on_det
+
         sc_obs.set_offsets(obs_disp)
 
         sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
@@ -1190,6 +1300,113 @@ def interactive_calibration(
 
     for s in _all_sliders:
         s.observe(_on_slider, names="value")
+
+    # ── Click / drag handlers ─────────────────────────────────────────────────
+    # Pressing and dragging a simulated spot rotates U so that spot moves to the
+    # drop position. Uses state.camera for detector-space kf so the mapping is
+    # consistent with the live (slider-adjusted) view.
+
+    _drag = {
+        "active":       False,
+        "spot_idx":     None,
+        "orig_disp":    None,
+        "press_screen": None,
+    }
+
+    def _display_to_kf_cal(x: float, y: float) -> np.ndarray:
+        if space == "angular":
+            tth = np.radians(x)
+            chi = np.radians(y)
+            return np.array([
+                np.cos(tth),
+                np.sin(tth) * np.sin(chi),
+                np.sin(tth) * np.cos(chi),
+            ])
+        elif space == "gnomonic":
+            r2 = x ** 2 + y ** 2
+            d  = 1.0 + r2
+            kf = np.array([(1.0 - r2) / d, -2.0 * x / d, 2.0 * y / d])
+            return kf / np.linalg.norm(kf)
+        else:  # detector — use current camera to match the live view
+            kf = state.camera.pixel_to_kf(np.array([x]), np.array([y]))[0]
+            return kf / np.linalg.norm(kf)
+
+    def _nearest_sim_idx_cal(xdata: float, ydata: float) -> int | None:
+        disp = _last["disp"]
+        if len(disp) == 0:
+            return None
+        dx = disp[:, 0] - xdata
+        dy = disp[:, 1] - ydata
+        return int(np.argmin(dx ** 2 + dy ** 2))
+
+    def _on_press(event) -> None:
+        if event.inaxes is not ax_det or event.button != 1:
+            return
+        idx = _nearest_sim_idx_cal(event.xdata, event.ydata)
+        if idx is None:
+            return
+        _drag["spot_idx"]     = idx
+        _drag["orig_disp"]    = _last["disp"][idx].copy()
+        _drag["press_screen"] = np.array([event.x, event.y])
+        _drag["active"]       = False
+
+    def _on_motion(event) -> None:
+        if event.inaxes is not ax_det or _drag["spot_idx"] is None:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+        screen_dist = np.linalg.norm(
+            np.array([event.x, event.y]) - _drag["press_screen"]
+        )
+        if screen_dist < 6.0:
+            return
+        _drag["active"] = True
+        orig = _drag["orig_disp"]
+        cur  = np.array([event.xdata, event.ydata])
+        sc_drag.set_offsets([cur])
+        _drag_line.set_data([orig[0], cur[0]], [orig[1], cur[1]])
+        fig.canvas.draw_idle()
+
+    def _on_release(event) -> None:
+        if event.button != 1 or _drag["spot_idx"] is None:
+            _drag["spot_idx"] = None
+            return
+
+        if _drag["active"]:
+            if event.xdata is not None and event.ydata is not None:
+                orig = _drag["orig_disp"]
+                drop = np.array([event.xdata, event.ydata])
+                try:
+                    ki       = np.array([1.0, 0.0, 0.0])
+                    q_orig   = _display_to_kf_cal(orig[0], orig[1]) - ki
+                    q_target = _display_to_kf_cal(drop[0],  drop[1]) - ki
+                    n_o, n_t = np.linalg.norm(q_orig), np.linalg.norm(q_target)
+                    if n_o > 1e-10 and n_t > 1e-10:
+                        q_o_hat = q_orig   / n_o
+                        q_t_hat = q_target / n_t
+                        axis    = np.cross(q_o_hat, q_t_hat)
+                        sin_a   = np.linalg.norm(axis)
+                        cos_a   = float(np.clip(
+                            np.dot(q_o_hat, q_t_hat), -1.0, 1.0
+                        ))
+                        if sin_a > 1e-10:
+                            R = Rotation.from_rotvec(
+                                np.arctan2(sin_a, cos_a) * axis / sin_a
+                            ).as_matrix()
+                            state.U0 = R @ state.U
+                            _reset_sliders()
+                except Exception:
+                    pass
+
+        sc_drag.set_offsets(np.empty((0, 2)))
+        _drag_line.set_data([], [])
+        _drag["spot_idx"] = None
+        _drag["active"]   = False
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("button_press_event",   _on_press)
+    fig.canvas.mpl_connect("motion_notify_event",  _on_motion)
+    fig.canvas.mpl_connect("button_release_event", _on_release)
 
     # ── Buttons ───────────────────────────────────────────────────────────────
     _bkw = dict(layout=ipw.Layout(width="160px", height="32px"))

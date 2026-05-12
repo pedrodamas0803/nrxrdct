@@ -860,6 +860,65 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold
 
     return mask_final
 
+def WTH_segmentation(
+    image: np.ndarray,
+    mask: np.ndarray,
+    disk_radius: int = 7,
+    threshold_percentile: float = 99.9,
+) -> np.ndarray:
+    """
+    Segment diffraction spots using a white top-hat transform.
+
+    The white top-hat ``WTH(I) = I - opening(I)`` suppresses slowly varying
+    background while preserving bright compact features (spots) smaller than
+    the structuring element.  It is complementary to
+    :func:`LoG_segmentation`: LoG excels at ring/blob detection; WTH is more
+    robust when spots sit on a strong, uneven background (e.g. fluorescence
+    or detector artefacts).
+
+    Parameters
+    ----------
+    image : (Nv, Nh) ndarray
+        Raw detector image (uint or float).
+    mask : (Nv, Nh) bool ndarray
+        Valid-pixel mask (``True`` = active detector area).
+    disk_radius : int
+        Radius of the disk structuring element in pixels.  Should be larger
+        than the largest spot radius but smaller than the background
+        correlation length.  Default ``7``.
+    threshold_percentile : float
+        Percentile of the WTH response (within *mask*) used as the binary
+        threshold.  Raise to keep only the brightest spots; lower to be more
+        inclusive.  Default ``99.9``.
+
+    Returns
+    -------
+    mask_final : (Nv, Nh) bool ndarray
+        Binary segmentation mask (``True`` = spot pixel).
+
+    See Also
+    --------
+    LoG_segmentation : Laplacian-of-Gaussian based segmentation.
+    clean_segmentation : Post-processing (size filter, border removal, etc.).
+    """
+    image = fill_gaps_nearest(image, mask)
+
+    img = np.log1p(image.astype(float))
+
+    vmin, vmax = img[mask].min(), img[mask].max()
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+
+    selem = sk.morphology.disk(disk_radius)
+    enhanced = sk.morphology.white_tophat(img, selem)
+    enhanced[~mask] = 0.0
+
+    threshold = np.percentile(enhanced[mask], threshold_percentile)
+    mask_final = (enhanced >= threshold) & mask
+
+    return mask_final
+
+
 def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size = 3, max_size = 500, gap_exclude = 3 ):
 
     seg = ndi.binary_fill_holes(segmented_image)

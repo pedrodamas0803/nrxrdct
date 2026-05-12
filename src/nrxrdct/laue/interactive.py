@@ -771,6 +771,25 @@ def interactive_orientation(
 
     btn_fit.on_click(_cb_fit)
 
+    # ── Save U button ─────────────────────────────────────────────────────────
+    btn_save = ipw.Button(description="💾 Save U", button_style="", **_bkw)
+
+    def _cb_save(_b) -> None:
+        import glob
+        import os
+        import re
+        existing = glob.glob(os.path.join(os.getcwd(), "UB[0-9]*.npy"))
+        max_n = -1
+        for f in existing:
+            m = re.search(r"UB(\d+)\.npy$", os.path.basename(f))
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        fname = f"UB{max_n + 1:02d}.npy"
+        np.save(fname, state.U)
+        print(f"  💾 Saved U → {os.path.abspath(fname)}")
+
+    btn_save.on_click(_cb_save)
+
     # ── "Center at hkl" preset buttons ───────────────────────────────────────
     # Planes: cubic axes + diagonal + hexagonal first-order {10-10} and
     # second-order {11-20} prismatic planes (3-index notation).
@@ -845,7 +864,7 @@ def interactive_orientation(
         s_hkl,
         _hkl_html,
         ipw.HBox(
-            [btn_reset, btn_setref, btn_accept, btn_fit],
+            [btn_reset, btn_setref, btn_accept, btn_fit, btn_save],
             layout=ipw.Layout(margin="6px 0 6px 0", gap="6px"),
         ),
         ipw.HBox(

@@ -3891,13 +3891,12 @@ def plot_multigrain(
                             color=color, lw=0.5, alpha=0.4, zorder=1)
 
         n_matched = int((nn_dist < match_px).sum())
-        n_obs = len(obs_xy)
-        rate = n_matched / max(n_obs, 1)
+        rate = n_matched / max(n_sim, 1)
         legend_handles.append(
             Line2D(
                 [0], [0], linestyle="none", marker="+", markersize=8,
                 color=color, lw=1.2,
-                label=f"grain {gi + 1}  ({n_matched}/{n_obs}, {rate:.0%})",
+                label=f"grain {gi + 1}  ({n_matched}/{n_sim}, {rate:.0%})",
             )
         )
 

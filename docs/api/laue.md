@@ -3,7 +3,7 @@
 White-beam synchrotron Laue diffraction simulation — single crystals, mixed phases,
 coherent layered superlattices, and dynamical (Darwin) intensity correction.
 
-The module covers the full simulation pipeline:
+The module covers the full simulation and data-analysis pipeline:
 
 1. **Crystal construction** — from built-in helpers or CIF files.
 2. **Orientation** — Bunge Euler angles, LaueTools `matstarlab`, or explicit rotation matrices.
@@ -12,8 +12,16 @@ The module covers the full simulation pipeline:
    or Darwin-corrected multilayer (`simulate_laue_darwin`).
 5. **Layered structures** — `LayeredCrystal` for superlattice / multilayer stacks with
    pseudomorphic strain, elastic constants, and lattice-parameter / strain profiling.
-6. **Strain analysis** — spot Jacobians, strain broadening, instrument broadening fitting.
-7. **Plotting** — 2θ/χ maps, detector images, comparison panels, strain-broadening overlays.
+6. **Segmentation** — spot detection via Laplacian-of-Gaussian (`LoG_segmentation`) or
+   white top-hat transform (`WTH_segmentation`), cleaning, labelling and peak measurement.
+7. **Orientation & strain fitting** — least-squares refinement of U matrices and full
+   strain tensors from observed spot lists; staged multi-resolution refinement.
+8. **Interactive tools** — ipywidgets-based geometry calibration and orientation viewer.
+9. **Grain map** — `GrainMap` for storing, visualising and collecting results of a 2-D
+   micro-Laue raster scan; SLURM cluster submission for segmentation, orientation and
+   strain fitting.
+10. **Strain analysis** — spot Jacobians, strain broadening, instrument broadening fitting.
+11. **Plotting** — 2θ/χ maps, detector images, comparison panels, strain-broadening overlays.
 
 ---
 
@@ -127,7 +135,85 @@ The module covers the full simulation pipeline:
 
 ---
 
+## Segmentation
+
+Spot detection and peak measurement on individual diffraction frames.
+
+::: nrxrdct.laue.LoG_segmentation
+
+::: nrxrdct.laue.WTH_segmentation
+
+::: nrxrdct.laue.clean_segmentation
+
+::: nrxrdct.laue.filter_and_rescale_images
+
+::: nrxrdct.laue.label_segmented_image
+
+::: nrxrdct.laue.measure_peaks
+
+::: nrxrdct.laue.write_h5_spotsfile
+
+::: nrxrdct.laue.convert_spotsfile2peaklist
+
+::: nrxrdct.laue.fill_gaps_nearest
+
+---
+
+## Orientation and strain fitting
+
+::: nrxrdct.laue.fit_orientation
+
+::: nrxrdct.laue.fit_strain_orientation
+
+::: nrxrdct.laue.index_orientation
+
+::: nrxrdct.laue.fit_orientation_stack
+
+::: nrxrdct.laue.fit_orientation_mixed
+
+::: nrxrdct.laue.OrientationFitResult
+
+::: nrxrdct.laue.StrainFitResult
+
+::: nrxrdct.laue.IndexResult
+
+---
+
+## Interactive tools
+
+::: nrxrdct.laue.interactive_calibration
+
+::: nrxrdct.laue.interactive_orientation
+
+::: nrxrdct.laue.CalibrationState
+
+::: nrxrdct.laue.OrientationState
+
+---
+
+## Grain map
+
+`GrainMap` stores orientation and strain results for every point of a 2-D
+micro-Laue raster scan and provides methods to submit the three processing
+steps — segmentation, orientation fitting, and strain fitting — as
+independent SLURM job arrays.
+
+The SLURM workers (`slurm_seg_worker`, `slurm_orient_worker`,
+`slurm_strain_worker`) are standalone Python modules invoked via
+`python -m nrxrdct.laue.slurm_*_worker`; they are managed automatically
+by the `submit_*` methods and do not need to be called directly.
+
+::: nrxrdct.laue.GrainMap
+
+::: nrxrdct.laue.parse_scan_title
+
+---
+
 ## Plotting
+
+::: nrxrdct.laue.plot_multigrain
+
+::: nrxrdct.laue.plot_segmentation
 
 ::: nrxrdct.laue.plot_2theta_chi
 

@@ -69,6 +69,7 @@ from .segmentation import (
     label_segmented_image,
     load_images,
     LoG_segmentation,
+    WTH_segmentation,
     measure_peaks,
     plot_labeled_image,
     process_one_image,
@@ -82,6 +83,7 @@ from .segmentation import (
     clean_segmentation,
     gaussian_background,
 )
+from .map import GrainMap, parse_scan_title
 from .simulation import (
     BM32_KB,
     beam_divergence_ellipses,
@@ -176,6 +178,9 @@ __all__ = [
     "d_spacing_hkl",
     "pseudomorphic_d_spacing",
     "nitride_elastic_constants",
+    # Grain map (raster micro-Laue)
+    "GrainMap",
+    "parse_scan_title",
     # Interactive orientation / calibration tools
     "OrientationState",
     "interactive_orientation",
@@ -226,6 +231,7 @@ __all__ = [
     "label_segmented_image",
     "load_images",
     "LoG_segmentation",
+    "WTH_segmentation",
     "measure_peaks",
     "plot_labeled_image",
     "process_one_image",

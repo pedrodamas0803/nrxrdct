@@ -1353,7 +1353,7 @@ def fit_orientation(
     hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
-    max_match_px: float = 30.0,
+    max_match_px: float | list[float] = 30.0,
     top_n_obs: int | None = None,
     top_n_sim: int | None = None,
     method: str = "lm",
@@ -1390,11 +1390,13 @@ def fit_orientation(
     f2_thresh    : float          Minimum squared structure factor |F|² to
                                   include a reflection.
     kb_params    :                KB mirror reflectivity parameters.
-    max_match_px : float          Pixel tolerance for spot matching.  Start
-                                  large (~30–50 px) for a rough alignment and
-                                  tighten for final refinement.  Observed spots
-                                  farther than this from any simulated spot are
-                                  penalised but not excluded.
+    max_match_px : float or list of float
+                                  Pixel tolerance(s) for spot matching.  A
+                                  single float runs one fit.  A decreasing
+                                  list (e.g. ``[50, 20, 5]``) runs staged
+                                  refinement: each stage warm-starts from the
+                                  previous solution, progressively tightening
+                                  the matching window to sharpen convergence.
     top_n_obs    : int or None    Use only the brightest N observed spots.
                                   Reduces cost per iteration; useful when the
                                   spot list contains many weak peaks.
@@ -1444,6 +1446,11 @@ def fit_orientation(
     if verbose:
         print(f"fit_orientation: {N_obs} observed spots")
 
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
+    )
+
     # Precompute which (hkl) are structurally allowed once — avoids calling
     # crystal.StructureFactor on every optimizer iteration.
     _allowed = (
@@ -1463,7 +1470,7 @@ def fit_orientation(
             E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
             hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
-            max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
+            max_match_px=_stages[0], top_n_obs=None, top_n_sim=top_n_sim,
             geometry_only=False, allowed_hkl=_allowed,
         )
 
@@ -1489,23 +1496,34 @@ def fit_orientation(
             )
         U0 = best_U0
 
-    fun = partial(
-        laue_residuals,
-        crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0,
-        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-        source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
-        max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=False, allowed_hkl=_allowed,
-    )
+    # ── staged refinement loop ────────────────────────────────────────────────
+    U0_stage = U0.copy()
+    opt = None
+    for _si, _px in enumerate(_stages):
+        _fun = partial(
+            laue_residuals,
+            crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0_stage,
+            E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs,
+            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+            geometry_only=False, allowed_hkl=_allowed,
+        )
+        opt = least_squares(
+            _fun, x0=np.zeros(3),
+            method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+        )
+        if verbose and len(_stages) > 1:
+            _nm, _rms = _compute_match_stats(opt.fun, _px, N_obs)
+            print(
+                f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                f"  matched={_nm}  rms={_rms:.2f} px"
+            )
+        if _si < len(_stages) - 1:
+            U0_stage = Rotation.from_rotvec(opt.x).as_matrix() @ U0_stage
 
-    opt = least_squares(
-        fun, x0=np.zeros(3),
-        method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
-    )
-
-    U_final = Rotation.from_rotvec(opt.x).as_matrix() @ U0
-    n_matched, rms_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    U_final = Rotation.from_rotvec(opt.x).as_matrix() @ U0_stage
+    n_matched, rms_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     # One extra simulation to report n_sim at solution.
     final_spots = simulate_laue(
@@ -1517,8 +1535,9 @@ def fit_orientation(
     )
     n_sim = len(_extract_sim_xy(final_spots))
 
+    rotvec_total = Rotation.from_matrix(U_final @ U0_input.T).as_rotvec()
     result = OrientationFitResult(
-        U=U_final, U0=U0_input, rotvec=opt.x.copy(),
+        U=U_final, U0=U0_input, rotvec=rotvec_total,
         cost=float(opt.cost), rms_px=rms_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
@@ -1897,7 +1916,7 @@ def fit_strain_orientation(
     hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
-    max_match_px: float = 30.0,
+    max_match_px: float | list[float] = 30.0,
     top_n_obs: int | None = None,
     top_n_sim: int | None = None,
     method: str = "lm",
@@ -1976,33 +1995,51 @@ def fit_strain_orientation(
         if geometry_only else None
     )
 
-    fun = partial(
-        laue_strain_residuals,
-        crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0_arr,
-        fit_strain=fit_strain, strain_scale=strain_scale,
-        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-        source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
-        max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=False, allowed_hkl=_allowed,
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
     )
 
-    x0 = np.zeros(3 + n_strain)
-    opt = least_squares(
-        fun, x0=x0,
-        method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
-    )
+    # ── staged refinement loop ────────────────────────────────────────────────
+    # Between stages only the rotation is baked into U0_stage; strain is reset
+    # to zero so that opt.x[3:] at the final stage is the total strain relative
+    # to the cumulatively-rotated (but unstrained) reference structure.
+    U0_stage = U0_arr.copy()
+    opt = None
+    for _si, _px in enumerate(_stages):
+        _fun = partial(
+            laue_strain_residuals,
+            crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0_stage,
+            fit_strain=fit_strain, strain_scale=strain_scale,
+            E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs,
+            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+            geometry_only=False, allowed_hkl=_allowed,
+        )
+        opt = least_squares(
+            _fun, x0=np.zeros(3 + n_strain),
+            method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+        )
+        if verbose and len(_stages) > 1:
+            _nm, _rms = _compute_match_stats(opt.fun, _px, N_obs)
+            print(
+                f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                f"  matched={_nm}  rms={_rms:.2f} px"
+            )
+        if _si < len(_stages) - 1:
+            U0_stage = Rotation.from_rotvec(opt.x[:3]).as_matrix() @ U0_stage
 
     # Unpack solution.
     rotvec = opt.x[:3]
     strain_vals = opt.x[3:] * strain_scale
     R = Rotation.from_rotvec(rotvec).as_matrix()
     eps = _strain_matrix(strain_vals, fit_strain)
-    U_final = R @ U0_arr
-    U_eff = R @ U0_arr @ (np.eye(3) + eps)
+    U_final = R @ U0_stage
+    U_eff = R @ U0_stage @ (np.eye(3) + eps)
     voigt = _strain_to_voigt(strain_vals, fit_strain)
 
-    n_matched, rms_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    n_matched, rms_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     final_spots = simulate_laue(
         crystal, U_eff, camera,

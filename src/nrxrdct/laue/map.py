@@ -653,11 +653,11 @@ class GrainMap:
         time: str = "01:00:00",
         mem: str = "4G",
         cpus_per_task: int = 1,
-        conda_env: str | None = None,
+        python_bin: str = "python",
         extra_sbatch: dict | None = None,
     ) -> list:
         """Submit one SLURM job per chunk. Returns list of job IDs."""
-        python_cmd = f"conda run -n {conda_env} python" if conda_env else "python"
+        python_cmd = python_bin
         job_ids = []
         for i, chunk in enumerate(frame_chunks):
             indices_str = ",".join(str(fi) for fi in chunk)
@@ -701,7 +701,7 @@ class GrainMap:
         time: str = "01:00:00",
         mem: str = "4G",
         cpus_per_task: int = 1,
-        conda_env: str | None = None,
+        python_bin: str = "python",
         mask_path: str | None = None,
         method: str = "LoG",
         method_kwargs: dict | None = None,
@@ -758,7 +758,7 @@ class GrainMap:
             "seg", "nrxrdct.laue.slurm_seg_worker", meta_path, chunks,
             dirs["slurm_logs"],
             partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
-            conda_env=conda_env, extra_sbatch=extra_sbatch,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
         )
         print(f"Segmentation: {len(job_ids)} jobs → {dirs['seg']}")
         return job_ids
@@ -774,7 +774,7 @@ class GrainMap:
         time: str = "02:00:00",
         mem: str = "4G",
         cpus_per_task: int = 1,
-        conda_env: str | None = None,
+        python_bin: str = "python",
         max_match_px=30.0,
         min_matched: int = 5,
         min_match_rate: float = 0.2,
@@ -843,7 +843,7 @@ class GrainMap:
             "orient", "nrxrdct.laue.slurm_orient_worker", meta_path, chunks,
             dirs["slurm_logs"],
             partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
-            conda_env=conda_env, extra_sbatch=extra_sbatch,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
         )
         print(f"Orientation: {len(job_ids)} jobs → {dirs['ubs']}")
         return job_ids
@@ -859,7 +859,7 @@ class GrainMap:
         time: str = "02:00:00",
         mem: str = "4G",
         cpus_per_task: int = 1,
-        conda_env: str | None = None,
+        python_bin: str = "python",
         max_match_px=10.0,
         fit_strain: list | None = None,
         hmax: int | None = None,
@@ -928,7 +928,7 @@ class GrainMap:
             "strain", "nrxrdct.laue.slurm_strain_worker", meta_path, chunks,
             dirs["slurm_logs"],
             partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
-            conda_env=conda_env, extra_sbatch=extra_sbatch,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
         )
         print(f"Strain: {len(job_ids)} jobs → {dirs['strain']}")
         return job_ids

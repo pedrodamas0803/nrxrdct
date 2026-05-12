@@ -5,7 +5,7 @@ repo_name: nrxrdct
 edit_uri: edit/main/docs/
 
 theme:
-  name: readthedocs
+  name: material
   palette:
     - scheme: default
       primary: indigo
@@ -37,7 +37,7 @@ plugins:
         python:
           paths: [src]
           options:
-            docstring_style: google
+            docstring_style: numpy
             show_source: true
             show_root_heading: true
             show_signature_annotations: true

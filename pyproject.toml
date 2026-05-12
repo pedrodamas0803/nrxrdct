@@ -9,7 +9,7 @@ dependencies = [
     "ipympl==0.9.4",
     "matplotlib==3.8.0",
     "numpy==1.26.4",
-    "pandas==3.0.2",
+    "pandas>=2.2.0",
     "pybaselines>=1.1.0",
     "pyfai>=2026.2.1",
     "scikit-image>=0.26.0",

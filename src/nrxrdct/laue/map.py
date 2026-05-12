@@ -622,9 +622,9 @@ class GrainMap:
             "ycen":         float(camera.ycen),
             "xbet":         float(camera.xbet),
             "xgam":         float(camera.xgam),
-            "pixelsize":    float(camera.pixelsize),
-            "n_pix_h":      int(camera.n_pix_h),
-            "n_pix_v":      int(camera.n_pix_v),
+            "pixelsize":    float(camera.pixel_mm),
+            "n_pix_h":      int(camera.Nh),
+            "n_pix_v":      int(camera.Nv),
             "kf_direction": str(camera.kf_direction),
         }
 

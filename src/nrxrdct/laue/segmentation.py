@@ -1089,3 +1089,191 @@ def process_one_image(
 
     datfilepath = os.path.join(datfile_folder, f"frame_{image_index:05}.dat")
     write_peaklist_dat(peaklist, datfilepath)
+
+
+# ── Local parallel segmentation ───────────────────────────────────────────────
+
+def _seg_process_frame(
+    frame_idx: int,
+    frame: np.ndarray,
+    seg_dir: str,
+    detector_mask,
+    method: str,
+    method_kwargs: dict,
+    min_size: int,
+    max_size: int,
+    gap_exclude: int,
+    bg_sigma: float,
+    max_components: int,
+    overwrite: bool,
+) -> tuple:
+    """Process one frame; returns (frame_idx, success, out_path_or_error_msg)."""
+    out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+    if os.path.exists(out_path) and not overwrite:
+        return frame_idx, True, out_path
+
+    try:
+        valid = (
+            detector_mask
+            if detector_mask is not None
+            else np.ones(frame.shape, dtype=bool)
+        )
+
+        bg    = gaussian_background(frame, valid, sigma=bg_sigma)
+        frame = frame - bg
+        frame -= frame[valid].min()
+        frame[~valid] = 0.0
+
+        if method.upper() == "WTH":
+            seg_mask = WTH_segmentation(frame, valid, **method_kwargs)
+        elif method.upper() == "HYBRID":
+            seg_mask = hybrid_segmentation(frame, valid, **method_kwargs)
+        else:
+            seg_mask = LoG_segmentation(frame, valid, **method_kwargs)
+
+        final_mask, _ = clean_segmentation(
+            seg_mask, valid, frame,
+            min_size=min_size, max_size=max_size, gap_exclude=gap_exclude,
+        )
+
+        filt_im      = filter_and_rescale_images(frame, cutoff_freq=0.001)
+        label_img, _, _ = label_segmented_image(final_mask, filt_im)
+        regionprops  = measure_peaks(label_img, filt_im)
+
+        tmp = out_path + ".tmp"
+        write_h5_spotsfile(
+            filt_im, regionprops, outpath=tmp,
+            overwrite=True, max_components=max_components,
+        )
+        os.rename(tmp, out_path)
+        return frame_idx, True, out_path
+
+    except Exception as exc:
+        return frame_idx, False, str(exc)
+
+
+def run_segmentation_local(
+    image_stack: np.ndarray,
+    seg_dir: str,
+    detector_mask: np.ndarray | None = None,
+    method: str = "LoG",
+    method_kwargs: dict | None = None,
+    min_size: int = 3,
+    max_size: int = 500,
+    gap_exclude: int = 3,
+    bg_sigma: float = 251.0,
+    max_components: int = 1,
+    n_workers: int | None = None,
+    overwrite: bool = False,
+    frame_indices=None,
+) -> list:
+    """
+    Run the Laue segmentation pipeline locally using multiple CPU cores.
+
+    Mirrors the SLURM worker pipeline (background subtraction → segmentation
+    → cleaning → Gaussian fitting → HDF5 output) but runs in-process using
+    a ``ProcessPoolExecutor`` instead of submitting cluster jobs.
+
+    Parameters
+    ----------
+    image_stack : (N, Ny, Nx) ndarray
+        Stack of raw detector frames, already loaded into memory.
+    seg_dir : str
+        Output directory.  One ``frame_{idx:05d}.h5`` file is written per frame.
+    detector_mask : (Ny, Nx) bool ndarray or None
+        Valid-pixel mask (True = active pixel).  None → all pixels active.
+    method : {'LoG', 'WTH', 'HYBRID'}
+        Segmentation method passed to the corresponding function.
+    method_kwargs : dict or None
+        Extra keyword arguments forwarded to the segmentation function.
+    min_size, max_size : int
+        Minimum / maximum spot area in pixels after cleaning.
+    gap_exclude : int
+        Dilation radius (pixels) around detector gaps excluded during cleaning.
+    bg_sigma : float
+        Sigma (pixels) for the Gaussian background estimate.
+    max_components : int
+        Maximum number of Gaussian components fitted per spot.
+    n_workers : int or None
+        Number of worker processes.  None → ``os.cpu_count()``.
+    overwrite : bool
+        If False (default), skip frames whose output file already exists.
+    frame_indices : sequence of int or None
+        Subset of frame indices to process.  None → all frames.
+
+    Returns
+    -------
+    out_paths : list of str
+        Paths of successfully written HDF5 files, sorted by frame index.
+    """
+    import time
+
+    os.makedirs(seg_dir, exist_ok=True)
+
+    if frame_indices is None:
+        frame_indices = range(image_stack.shape[0])
+    frame_indices = list(frame_indices)
+    method_kwargs = method_kwargs or {}
+
+    print(
+        f"run_segmentation_local — {len(frame_indices)} frames  "
+        f"method={method}  workers={n_workers or os.cpu_count()}",
+        flush=True,
+    )
+
+    t0        = time.time()
+    n_ok      = 0
+    n_fail    = 0
+    out_paths = []
+    n_total   = len(frame_indices)
+    tick      = max(1, n_total // 20)   # print every ~5 %
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(
+                _seg_process_frame,
+                fi,
+                image_stack[fi].astype(np.float32),
+                seg_dir,
+                detector_mask,
+                method,
+                method_kwargs,
+                min_size,
+                max_size,
+                gap_exclude,
+                bg_sigma,
+                max_components,
+                overwrite,
+            ): fi
+            for fi in frame_indices
+        }
+
+        done = 0
+        for fut in concurrent.futures.as_completed(futures):
+            done += 1
+            fi, ok, result = fut.result()
+            if ok:
+                n_ok += 1
+                out_paths.append(result)
+            else:
+                n_fail += 1
+                print(f"  ✗  frame {fi}: {result}", flush=True)
+
+            if done % tick == 0 or done == n_total:
+                elapsed = time.time() - t0
+                rate    = done / elapsed
+                eta     = (n_total - done) / rate if rate > 0 else float("inf")
+                print(
+                    f"  {done}/{n_total}  "
+                    f"({n_ok} ok, {n_fail} failed)  "
+                    f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                    flush=True,
+                )
+
+    out_paths.sort()
+    print(
+        f"\nDone — {n_ok}/{n_total} OK, {n_fail} failed  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return out_paths

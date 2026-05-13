@@ -557,7 +557,7 @@ def _normalise_phases(phases: list) -> list[dict]:
 
 
 def remove_grain_spots(
-    obs_xy: np.ndarray,
+    obs: np.ndarray,
     U: np.ndarray,
     crystal,
     camera,
@@ -568,7 +568,7 @@ def remove_grain_spots(
     E_max_eV: float = E_MAX_eV,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Remove from *obs_xy* the spots that are one-to-one matched to a grain.
+    Remove from *obs* the spots that are one-to-one matched to a grain.
 
     Uses the same Hungarian algorithm as the fitter so that the attribution
     is identical to what ``fit_orientation`` does internally.  Only spots
@@ -577,18 +577,21 @@ def remove_grain_spots(
 
     Typical use — iterative multi-grain peeling::
 
-        remaining = peaks[:, :2].copy()
+        remaining = peaks.copy()  # any (N, K) array; first two cols are x, y
 
-        fit1 = laue.fit_orientation(crystal, cam, remaining, U0_grain1)
+        fit1 = laue.fit_orientation(crystal, cam, remaining[:, :2], U0_grain1)
         remaining, claimed1 = laue.remove_grain_spots(remaining, fit1.U,
                                                       crystal, cam)
 
         # now fit grain 2 starting from your own U guess
-        fit2 = laue.fit_orientation(crystal, cam, remaining, U0_grain2)
+        fit2 = laue.fit_orientation(crystal, cam, remaining[:, :2], U0_grain2)
 
     Parameters
     ----------
-    obs_xy   : (N, 2) array-like   Observed pixel positions ``[xcam, ycam]``.
+    obs      : (N, K) array-like   Observed spots. The first two columns must
+                                   be pixel positions ``[xcam, ycam]``; any
+                                   additional columns (intensities, widths, …)
+                                   are preserved unchanged in the output.
     U        : (3, 3) array-like   Orientation matrix of the grain to remove.
     crystal  : Crystal             xrayutilities crystal structure.
     camera   : Camera              Detector geometry.
@@ -606,14 +609,16 @@ def remove_grain_spots(
 
     Returns
     -------
-    remaining : (M, 2) ndarray
-        Observed spots **not** claimed by this grain  (M ≤ N).
+    remaining : (M, K) ndarray
+        Observed spots **not** claimed by this grain  (M ≤ N), with all
+        original columns intact.
     claimed   : (N,) bool ndarray
-        Boolean mask over *obs_xy*: ``True`` where a spot was removed.
+        Boolean mask over *obs*: ``True`` where a spot was removed.
     """
     from .simulation import simulate_laue as _sim
 
-    obs_xy = np.asarray(obs_xy, dtype=float)
+    obs    = np.asarray(obs, dtype=float)
+    obs_xy = obs[:, :2]
 
     spots  = _sim(
         crystal, U, camera,
@@ -623,9 +628,9 @@ def remove_grain_spots(
     )
     sim_xy = _extract_sim_xy(spots)
 
-    claimed = np.zeros(len(obs_xy), dtype=bool)
+    claimed = np.zeros(len(obs), dtype=bool)
 
-    if len(sim_xy) > 0 and len(obs_xy) > 0:
+    if len(sim_xy) > 0 and len(obs) > 0:
         diff    = obs_xy[:, None, :] - sim_xy[None, :, :]      # (N_obs, N_sim, 2)
         dist    = np.sqrt((diff ** 2).sum(axis=-1))             # (N_obs, N_sim)
         row_ind, col_ind = linear_sum_assignment(
@@ -634,7 +639,7 @@ def remove_grain_spots(
         hit = row_ind[dist[row_ind, col_ind] < match_px]
         claimed[hit] = True
 
-    return obs_xy[~claimed], claimed
+    return obs[~claimed], claimed
 
 
 # ─────────────────────────────────────────────────────────────────────────────

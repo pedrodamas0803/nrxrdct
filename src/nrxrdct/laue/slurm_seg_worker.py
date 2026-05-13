@@ -44,9 +44,8 @@ from nrxrdct.laue.segmentation import (
 
 def _process_frame(
     frame_idx: int,
+    frame: np.ndarray,
     *,
-    h5_path: str,
-    h5_dataset: str,
     seg_dir: str,
     detector_mask: np.ndarray,
     method: str,
@@ -62,9 +61,6 @@ def _process_frame(
         return True  # resume: already done
 
     try:
-        with h5py.File(h5_path, "r") as f:
-            frame = f[h5_dataset][frame_idx].astype(np.float32)
-
         valid = detector_mask if detector_mask is not None else np.ones(frame.shape, dtype=bool)
         bg = gaussian_background(frame, valid, sigma=bg_sigma)
         frame = frame - bg
@@ -123,13 +119,19 @@ def main() -> None:
         flush=True,
     )
 
+    # Load all assigned frames in one HDF5 access to avoid repeated file opens.
+    t_io = time.time()
+    with h5py.File(meta["h5_path"], "r") as f:
+        ds = f[meta["h5_dataset"]]
+        frames = {fi: ds[fi].astype(np.float32) for fi in frame_indices}
+    print(f"  HDF5 read done ({time.time() - t_io:.1f}s)", flush=True)
+
     t0 = time.time()
     n_ok = n_fail = 0
     for fi in frame_indices:
         ok = _process_frame(
             fi,
-            h5_path       = meta["h5_path"],
-            h5_dataset    = meta["h5_dataset"],
+            frames[fi],
             seg_dir       = meta["seg_dir"],
             detector_mask = detector_mask,
             method        = meta.get("method", "LoG"),

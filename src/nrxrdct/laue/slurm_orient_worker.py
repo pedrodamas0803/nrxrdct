@@ -115,6 +115,7 @@ def _process_frame(
             U           = result.U,
             rotvec      = result.rotvec,
             rms_px      = np.array(result.rms_px),
+            mean_px     = np.array(result.mean_px),
             n_matched   = np.array(result.n_matched),
             match_rate  = np.array(result.match_rate),
             cost        = np.array(result.cost),

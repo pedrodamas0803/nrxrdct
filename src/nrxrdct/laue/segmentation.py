@@ -6,6 +6,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy.fft as sp_fft
 import scipy.ndimage as ndi
 import skimage as sk
 from matplotlib.patches import Rectangle
@@ -1040,20 +1041,23 @@ def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size
     
     return final_mask, valid_props
 
-def gaussian_background(image, valid_mask, sigma = 251):
-    img = image.copy().astype(np.float32)
+def gaussian_background(image, valid_mask, sigma=251):
+    """Estimate a smooth background via FFT-based Gaussian filtering.
 
-    # Zero out invalid pixels
-    img[~valid_mask] = 0
+    Uses FFT convolution (O(N log N)) so large sigma values are fast.
+    ``workers=-1`` lets scipy use all available CPU cores for the FFT.
+    """
+    def _fft_gauss(arr):
+        f = sp_fft.fft2(arr, workers=-1)
+        ndi.fourier_gaussian(f, sigma=sigma, output=f)
+        return sp_fft.ifft2(f, workers=-1).real.astype(np.float32)
 
-    # Smooth image
-    smooth = ndi.gaussian_filter(img, sigma=sigma)
+    img = image.astype(np.float32).copy()
+    img[~valid_mask] = 0.0
 
-    # Smooth mask (normalization)
-    norm = ndi.gaussian_filter(valid_mask.astype(np.float32), sigma=sigma)
-
-    # Avoid division by zero
-    norm[norm == 0] = 1
+    smooth = _fft_gauss(img)
+    norm   = _fft_gauss(valid_mask.astype(np.float32))
+    norm[norm < 1e-6] = 1.0
 
     return smooth / norm
 

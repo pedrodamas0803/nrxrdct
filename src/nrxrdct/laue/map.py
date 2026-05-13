@@ -148,6 +148,7 @@ class GrainMap:
     U : (n_grains, ny, nx, 3, 3) ndarray
         Fitted orientation matrices.  ``NaN`` where not yet fitted.
     rms_px : (n_grains, ny, nx) ndarray
+    mean_px : (n_grains, ny, nx) ndarray
     n_matched : (n_grains, ny, nx) int ndarray   (-1 = not fitted)
     match_rate : (n_grains, ny, nx) ndarray
     cost : (n_grains, ny, nx) ndarray
@@ -211,6 +212,8 @@ class GrainMap:
                 np.full((extra, *shape2d, 3, 3), np.nan)], axis=0)
             self.rms_px    = np.concatenate([self.rms_px,
                 np.full((extra, *shape2d), np.nan)], axis=0)
+            self.mean_px   = np.concatenate([self.mean_px,
+                np.full((extra, *shape2d), np.nan)], axis=0)
             self.n_matched = np.concatenate([self.n_matched,
                 np.full((extra, *shape2d), -1, dtype=int)], axis=0)
             self.match_rate = np.concatenate([self.match_rate,
@@ -233,6 +236,7 @@ class GrainMap:
         shape2d = (self.ny, self.nx)
         self.U             = np.full((ng, *shape2d, 3, 3), np.nan)
         self.rms_px        = np.full((ng, *shape2d), np.nan)
+        self.mean_px       = np.full((ng, *shape2d), np.nan)
         self.n_matched     = np.full((ng, *shape2d), -1, dtype=int)
         self.match_rate    = np.full((ng, *shape2d), np.nan)
         self.cost          = np.full((ng, *shape2d), np.nan)
@@ -286,6 +290,7 @@ class GrainMap:
         if result is not None:
             self.U[grain, iy, ix]          = result.U
             self.rms_px[grain, iy, ix]     = result.rms_px
+            self.mean_px[grain, iy, ix]    = result.mean_px
             self.n_matched[grain, iy, ix]  = result.n_matched
             self.match_rate[grain, iy, ix] = result.match_rate
             self.cost[grain, iy, ix]       = result.cost
@@ -360,7 +365,7 @@ class GrainMap:
     # ── Visualisation ─────────────────────────────────────────────────────────
 
     _SCALAR_QUANTITIES = {
-        "rms_px", "match_rate", "cost", "n_matched", "misorientation",
+        "rms_px", "mean_px", "match_rate", "cost", "n_matched", "misorientation",
         "euler_phi1", "euler_Phi", "euler_phi2",
     }
 
@@ -402,6 +407,10 @@ class GrainMap:
         elif quantity == "rms_px":
             data = self.rms_px[grain]
             label = "RMS (px)"
+            cmap  = cmap or "plasma_r"
+        elif quantity == "mean_px":
+            data = self.mean_px[grain]
+            label = "Mean dev (px)"
             cmap  = cmap or "plasma_r"
         elif quantity == "cost":
             data = self.cost[grain]
@@ -534,6 +543,7 @@ class GrainMap:
                 grp = f.create_group(f"grain_{gi:02d}")
                 grp.create_dataset("U",             data=self.U[gi],             compression="gzip")
                 grp.create_dataset("rms_px",        data=self.rms_px[gi],        compression="gzip")
+                grp.create_dataset("mean_px",       data=self.mean_px[gi],       compression="gzip")
                 grp.create_dataset("n_matched",     data=self.n_matched[gi],     compression="gzip")
                 grp.create_dataset("match_rate",    data=self.match_rate[gi],    compression="gzip")
                 grp.create_dataset("cost",          data=self.cost[gi],          compression="gzip")
@@ -582,6 +592,7 @@ class GrainMap:
             shape2d = (ny, nx)
             obj.U             = np.full((n_grains, *shape2d, 3, 3), np.nan)
             obj.rms_px        = np.full((n_grains, *shape2d), np.nan)
+            obj.mean_px       = np.full((n_grains, *shape2d), np.nan)
             obj.n_matched     = np.full((n_grains, *shape2d), -1, dtype=int)
             obj.match_rate    = np.full((n_grains, *shape2d), np.nan)
             obj.cost          = np.full((n_grains, *shape2d), np.nan)
@@ -592,6 +603,7 @@ class GrainMap:
                 grp = f[f"grain_{gi:02d}"]
                 obj.U[gi]          = grp["U"][()]
                 obj.rms_px[gi]     = grp["rms_px"][()]
+                obj.mean_px[gi]    = grp["mean_px"][()] if "mean_px" in grp else np.full((ny, nx), np.nan)
                 obj.n_matched[gi]  = grp["n_matched"][()]
                 obj.match_rate[gi] = grp["match_rate"][()]
                 obj.cost[gi]       = grp["cost"][()]
@@ -968,6 +980,7 @@ class GrainMap:
                 d = np.load(fpath)
                 self.U[gi, iy, ix]          = d["U"]
                 self.rms_px[gi, iy, ix]     = float(d["rms_px"])
+                self.mean_px[gi, iy, ix]    = float(d["mean_px"]) if "mean_px" in d else np.nan
                 self.n_matched[gi, iy, ix]  = int(d["n_matched"])
                 self.match_rate[gi, iy, ix] = float(d["match_rate"])
                 self.cost[gi, iy, ix]       = float(d["cost"])
@@ -999,6 +1012,7 @@ class GrainMap:
                 d = np.load(fpath)
                 self.U[gi, iy, ix]             = d["U"]
                 self.rms_px[gi, iy, ix]        = float(d["rms_px"])
+                self.mean_px[gi, iy, ix]       = float(d["mean_px"]) if "mean_px" in d else np.nan
                 self.n_matched[gi, iy, ix]     = int(d["n_matched"])
                 self.match_rate[gi, iy, ix]    = float(d["match_rate"])
                 self.cost[gi, iy, ix]          = float(d["cost"])

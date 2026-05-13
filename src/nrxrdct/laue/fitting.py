@@ -84,6 +84,9 @@ class OrientationFitResult:
     cost       : float           ½ Σ residuals² as returned by ``least_squares``.
     rms_px     : float           RMS pixel distance of matched observed-simulated
                                  pairs (``nan`` if no matches).
+    mean_px    : float           Mean Euclidean pixel distance of matched pairs
+                                 (less sensitive to outliers than RMS;
+                                 ``nan`` if no matches).
     n_matched  : int             Number of observed spots matched within
                                  ``max_match_px`` at the solution.
     n_obs      : int             Number of observed spots used in the fit.
@@ -101,6 +104,7 @@ class OrientationFitResult:
     rotvec     : np.ndarray
     cost       : float
     rms_px     : float
+    mean_px    : float
     n_matched  : int
     n_obs      : int
     n_sim      : int
@@ -114,7 +118,7 @@ class OrientationFitResult:
         dw = float(np.degrees(np.linalg.norm(self.rotvec)))
         return (
             f"OrientationFitResult [{status}]  "
-            f"rms={self.rms_px:.2f} px  "
+            f"rms={self.rms_px:.2f} px  mean={self.mean_px:.2f} px  "
             f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
             f"|δω|={dw:.4f}°"
         )
@@ -251,6 +255,7 @@ class StrainFitResult:
     fit_strain    : tuple[str, …]   Strain components that were free parameters.
     cost          : float           ½ Σ residuals² at convergence.
     rms_px        : float           RMS pixel distance of matched pairs.
+    mean_px       : float           Mean Euclidean pixel distance of matched pairs.
     n_matched     : int             Matched spots within ``max_match_px``.
     n_obs         : int             Observed spots used.
     n_sim         : int             Simulated spots on detector at solution.
@@ -270,6 +275,7 @@ class StrainFitResult:
     fit_strain    : tuple
     cost          : float
     rms_px        : float
+    mean_px       : float
     n_matched     : int
     n_obs         : int
     n_sim         : int
@@ -495,13 +501,22 @@ def _compute_match_stats(
     n_matched : int    Number of spots with a matched simulated counterpart.
     rms_px    : float  RMS Euclidean pixel distance of matched pairs only.
                        Returns ``nan`` when no spots are matched.
+    mean_px   : float  Mean Euclidean pixel distance of matched pairs only.
+                       Less sensitive to outliers than RMS.
+                       Returns ``nan`` when no spots are matched.
     """
     r = residuals.reshape(N_obs, 2)
     unmatched = np.all(np.abs(r) >= max_match_px - 1e-9, axis=1)
     matched   = ~unmatched
     n_matched = int(matched.sum())
-    rms_px    = float(np.sqrt((r[matched] ** 2).mean())) if n_matched > 0 else float("nan")
-    return n_matched, rms_px
+    if n_matched > 0:
+        dists   = np.linalg.norm(r[matched], axis=1)
+        rms_px  = float(np.sqrt((r[matched] ** 2).mean()))
+        mean_px = float(dists.mean())
+    else:
+        rms_px  = float("nan")
+        mean_px = float("nan")
+    return n_matched, rms_px, mean_px
 
 
 def _normalise_phases(phases: list) -> list[dict]:
@@ -1514,7 +1529,7 @@ def fit_orientation(
             method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
         )
         if verbose and len(_stages) > 1:
-            _nm, _rms = _compute_match_stats(opt.fun, _px, N_obs)
+            _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
             print(
                 f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
                 f"  matched={_nm}  rms={_rms:.2f} px"
@@ -1523,7 +1538,7 @@ def fit_orientation(
             U0_stage = Rotation.from_rotvec(opt.x).as_matrix() @ U0_stage
 
     U_final = Rotation.from_rotvec(opt.x).as_matrix() @ U0_stage
-    n_matched, rms_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     # One extra simulation to report n_sim at solution.
     final_spots = simulate_laue(
@@ -1538,7 +1553,7 @@ def fit_orientation(
     rotvec_total = Rotation.from_matrix(U_final @ U0_input.T).as_rotvec()
     result = OrientationFitResult(
         U=U_final, U0=U0_input, rotvec=rotvec_total,
-        cost=float(opt.cost), rms_px=rms_px,
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
         success=opt.success, message=opt.message, optimizer=opt,
@@ -1683,7 +1698,7 @@ def fit_orientation_stack(
         for layer, U_new in zip(stack.all_layers, U_layers_final):
             layer.U = U_new.copy()
 
-    n_matched, rms_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
 
     # Final simulation for n_sim.
     for layer, U_new in zip(stack.all_layers, U_layers_final):
@@ -1705,7 +1720,7 @@ def fit_orientation_stack(
     result = StackFitResult(
         R_global=R_global, rotvec=opt.x.copy(),
         U_layers=U_layers_final, U0_layers=U0_layers,
-        cost=float(opt.cost), rms_px=rms_px,
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
         success=opt.success, message=opt.message, optimizer=opt,
@@ -1872,7 +1887,7 @@ def fit_orientation_mixed(
             if isinstance(p_orig, dict):
                 p_orig["U"] = U_new.copy()
 
-    n_matched, rms_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
 
     # Final simulation for n_sim.
     for p, U_new in zip(phases_work, U_phases_final):
@@ -1890,7 +1905,7 @@ def fit_orientation_mixed(
     result = MixedFitResult(
         U_phases=U_phases_final, U0_phases=U0_list,
         rotvecs=rotvecs,
-        cost=float(opt.cost), rms_px=rms_px,
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
         success=opt.success, message=opt.message, optimizer=opt,
@@ -2022,7 +2037,7 @@ def fit_strain_orientation(
             method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
         )
         if verbose and len(_stages) > 1:
-            _nm, _rms = _compute_match_stats(opt.fun, _px, N_obs)
+            _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
             print(
                 f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
                 f"  matched={_nm}  rms={_rms:.2f} px"
@@ -2039,7 +2054,7 @@ def fit_strain_orientation(
     U_eff = R @ U0_stage @ (np.eye(3) + eps)
     voigt = _strain_to_voigt(strain_vals, fit_strain)
 
-    n_matched, rms_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     final_spots = simulate_laue(
         crystal, U_eff, camera,
@@ -2054,7 +2069,7 @@ def fit_strain_orientation(
         U=U_final, U0=U0_arr, U_eff=U_eff,
         rotvec=rotvec, strain_tensor=eps, strain_voigt=voigt,
         fit_strain=fit_strain,
-        cost=float(opt.cost), rms_px=rms_px,
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
         success=opt.success, message=opt.message, optimizer=opt,

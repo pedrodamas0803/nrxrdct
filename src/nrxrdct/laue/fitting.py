@@ -45,9 +45,14 @@ them directly compatible with ``scipy.optimize.least_squares``.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from functools import partial
 
+import dill as _dill
 import numpy as np
 from scipy.optimize import least_squares, linear_sum_assignment
 from scipy.spatial.transform import Rotation
@@ -2086,3 +2091,443 @@ def fit_strain_orientation(
         print(f"  {result}")
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Local (in-process) parallel fitting  –  mirrors SLURM worker pipelines
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── per-process globals set by pool initializers ──────────────────────────────
+_g_crystal  = None
+_g_camera   = None
+_g_allowed  = None
+
+
+def _local_pool_init(crystal_pkl_path: str, camera, allowed_hkl) -> None:
+    global _g_crystal, _g_camera, _g_allowed
+    with open(crystal_pkl_path, "rb") as fh:
+        _g_crystal = _dill.load(fh)
+    _g_camera  = camera
+    _g_allowed = allowed_hkl
+
+
+# ── orientation ───────────────────────────────────────────────────────────────
+
+def _orient_process_frame(
+    frame_idx: int,
+    obs_xy: "np.ndarray | None",
+    *,
+    ubs_dir: str,
+    ub_arrays: list,
+    max_match_px,
+    min_matched: int,
+    min_match_rate: float,
+    max_rms_px: "float | None",
+    fit_kwargs: dict,
+    overwrite: bool,
+) -> tuple:
+    """Process one frame for orientation fitting.  Returns (frame_idx, n_saved)."""
+    if obs_xy is None or len(obs_xy) < min_matched:
+        return frame_idx, 0
+
+    crystal = _g_crystal
+    camera  = _g_camera
+    n_saved = 0
+
+    for gi, U_ref in enumerate(ub_arrays):
+        out_path = os.path.join(ubs_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+        if os.path.exists(out_path) and not overwrite:
+            n_saved += 1
+            continue
+
+        try:
+            result = fit_orientation(
+                crystal, camera, obs_xy, U_ref,
+                max_match_px=list(max_match_px),
+                allowed_hkl=_g_allowed,
+                **fit_kwargs,
+            )
+        except Exception as exc:
+            print(f"  ✗  frame {frame_idx} g{gi}: fit: {exc}", flush=True)
+            continue
+
+        if result.n_matched < min_matched:
+            continue
+        if result.match_rate < min_match_rate:
+            continue
+        if max_rms_px is not None and result.rms_px > max_rms_px:
+            continue
+
+        tmp = out_path + ".tmp.npz"
+        np.savez(
+            tmp,
+            U          = result.U,
+            rotvec     = result.rotvec,
+            rms_px     = np.array(result.rms_px),
+            mean_px    = np.array(result.mean_px),
+            n_matched  = np.array(result.n_matched),
+            match_rate = np.array(result.match_rate),
+            cost       = np.array(result.cost),
+        )
+        os.replace(tmp, out_path)
+        n_saved += 1
+
+    return frame_idx, n_saved
+
+
+def run_orientation_local(
+    crystal,
+    camera,
+    ub_arrays: list,
+    seg_dir: str,
+    ubs_dir: str,
+    *,
+    r_squared_min: float = 0.9,
+    include_unfitted: bool = False,
+    max_match_px=(30, 10, 3),
+    min_matched: int = 5,
+    min_match_rate: float = 0.2,
+    max_rms_px: "float | None" = None,
+    hmax: int = 15,
+    f2_thresh: float = 1e-4,
+    geometry_only: bool = True,
+    n_workers: "int | None" = None,
+    overwrite: bool = False,
+    frame_indices: "list | None" = None,
+    **fit_kwargs,
+) -> int:
+    """Orientation fitting on local cores, mirroring the SLURM orient worker.
+
+    Parameters
+    ----------
+    crystal     : Crystal object.
+    camera      : Camera object.
+    ub_arrays   : List of (3,3) U matrices — one per grain reference.
+    seg_dir     : Directory with ``frame_{idx:05d}.h5`` peaklist files.
+    ubs_dir     : Output directory; receives ``frame_{idx:05d}_g{gi:02d}.npz``.
+    frame_indices : Subset of frames to process; defaults to all found in seg_dir.
+
+    Returns
+    -------
+    n_saved : Total number of orientation files written.
+    """
+    from .segmentation import convert_spotsfile2peaklist
+    import glob
+
+    os.makedirs(ubs_dir, exist_ok=True)
+
+    if frame_indices is None:
+        h5s = sorted(glob.glob(os.path.join(seg_dir, "frame_?????.h5")))
+        frame_indices = [int(os.path.basename(p)[6:11]) for p in h5s]
+
+    # Precompute allowed HKL once.
+    t_hkl = time.time()
+    allowed_hkl = None
+    if geometry_only:
+        allowed_hkl = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        print(
+            f"  allowed_hkl: {len(allowed_hkl)} reflections "
+            f"({time.time() - t_hkl:.1f}s)",
+            flush=True,
+        )
+
+    # Serialize crystal to a temp file so the pool initializer can load it.
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tf:
+        crystal_pkl = tf.name
+    try:
+        with open(crystal_pkl, "wb") as fh:
+            _dill.dump(crystal, fh)
+
+        # Load peaklists.
+        t_io = time.time()
+        peaklists: dict[int, np.ndarray] = {}
+        for fi in frame_indices:
+            seg_path = os.path.join(seg_dir, f"frame_{fi:05d}.h5")
+            if not os.path.exists(seg_path):
+                continue
+            try:
+                pl = convert_spotsfile2peaklist(
+                    seg_path,
+                    r_squared_min=r_squared_min,
+                    include_unfitted=include_unfitted,
+                )
+                if len(pl) >= min_matched:
+                    peaklists[fi] = pl[:, :2]
+            except Exception as exc:
+                print(f"  ✗  frame {fi}: load peaklist: {exc}", flush=True)
+
+        n_total = len(frame_indices)
+        print(
+            f"Orient local — {n_total} frames | {len(ub_arrays)} UB(s) | "
+            f"{len(peaklists)} with enough spots | "
+            f"I/O: {time.time() - t_io:.1f}s",
+            flush=True,
+        )
+
+        _fk = dict(fit_kwargs)
+        if geometry_only:
+            _fk["geometry_only"] = True
+
+        common = dict(
+            ubs_dir        = ubs_dir,
+            ub_arrays      = ub_arrays,
+            max_match_px   = max_match_px,
+            min_matched    = min_matched,
+            min_match_rate = min_match_rate,
+            max_rms_px     = max_rms_px,
+            fit_kwargs     = _fk,
+            overwrite      = overwrite,
+        )
+        n_workers = min(len(peaklists) or 1, n_workers or os.cpu_count() or 1)
+        tick = max(1, n_total // 20)
+
+        t0 = time.time()
+        n_saved = 0
+        done = 0
+        with ProcessPoolExecutor(
+            max_workers = n_workers,
+            initializer = _local_pool_init,
+            initargs    = (crystal_pkl, camera, allowed_hkl),
+        ) as pool:
+            futs = {
+                pool.submit(_orient_process_frame, fi, peaklists.get(fi), **common): fi
+                for fi in frame_indices
+            }
+            for fut in as_completed(futs):
+                done += 1
+                try:
+                    _, n = fut.result()
+                    n_saved += n
+                except Exception as exc:
+                    print(f"  ✗  frame {futs[fut]}: {exc}", flush=True)
+
+                if done % tick == 0 or done == n_total:
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else float("inf")
+                    eta  = (n_total - done) / rate if rate > 0 else float("inf")
+                    print(
+                        f"  {done}/{n_total}  {n_saved} fits saved  "
+                        f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                        flush=True,
+                    )
+
+    finally:
+        os.unlink(crystal_pkl)
+
+    print(
+        f"\nOrient local done — {n_saved} fits saved  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return n_saved
+
+
+# ── strain ────────────────────────────────────────────────────────────────────
+
+def _strain_process_frame(
+    frame_idx: int,
+    obs_xy: "np.ndarray | None",
+    *,
+    ubs_dir: str,
+    strain_dir: str,
+    n_grains: int,
+    max_match_px,
+    fit_strain: tuple,
+    fit_kwargs: dict,
+    overwrite: bool,
+) -> tuple:
+    """Process one frame for strain fitting.  Returns (frame_idx, n_saved)."""
+    if obs_xy is None or len(obs_xy) < 3:
+        return frame_idx, 0
+
+    crystal = _g_crystal
+    camera  = _g_camera
+    n_saved = 0
+
+    for gi in range(n_grains):
+        orient_path = os.path.join(ubs_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+        if not os.path.exists(orient_path):
+            continue
+
+        out_path = os.path.join(strain_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+        if os.path.exists(out_path) and not overwrite:
+            n_saved += 1
+            continue
+
+        try:
+            U0 = np.load(orient_path)["U"]
+            result = fit_strain_orientation(
+                crystal, camera, obs_xy, U0,
+                max_match_px = list(max_match_px),
+                fit_strain   = fit_strain,
+                allowed_hkl  = _g_allowed,
+                **fit_kwargs,
+            )
+
+            tmp = out_path + ".tmp.npz"
+            np.savez(
+                tmp,
+                U             = result.U,
+                U_eff         = result.U_eff,
+                strain_tensor = result.strain_tensor,
+                strain_voigt  = result.strain_voigt,
+                rotvec        = result.rotvec,
+                rms_px        = np.array(result.rms_px),
+                mean_px       = np.array(result.mean_px),
+                n_matched     = np.array(result.n_matched),
+                match_rate    = np.array(result.match_rate),
+                cost          = np.array(result.cost),
+            )
+            os.replace(tmp, out_path)
+            n_saved += 1
+
+        except Exception as exc:
+            print(f"  ✗  frame {frame_idx} g{gi}: strain fit: {exc}", flush=True)
+
+    return frame_idx, n_saved
+
+
+def run_strain_local(
+    crystal,
+    camera,
+    seg_dir: str,
+    ubs_dir: str,
+    strain_dir: str,
+    n_grains: int,
+    *,
+    fit_strain=("e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"),
+    r_squared_min: float = 0.9,
+    include_unfitted: bool = False,
+    max_match_px=(10, 3),
+    hmax: int = 15,
+    f2_thresh: float = 1e-4,
+    geometry_only: bool = True,
+    n_workers: "int | None" = None,
+    overwrite: bool = False,
+    frame_indices: "list | None" = None,
+    **fit_kwargs,
+) -> int:
+    """Strain fitting on local cores, mirroring the SLURM strain worker.
+
+    Parameters
+    ----------
+    crystal     : Crystal object.
+    camera      : Camera object.
+    seg_dir     : Directory with ``frame_{idx:05d}.h5`` peaklist files.
+    ubs_dir     : Directory with orientation ``frame_{idx:05d}_g{gi:02d}.npz`` files.
+    strain_dir  : Output directory; receives ``frame_{idx:05d}_g{gi:02d}.npz``.
+    n_grains    : Number of grains (grain indices 0 … n_grains-1).
+    frame_indices : Subset of frames to process; defaults to all found in seg_dir.
+
+    Returns
+    -------
+    n_saved : Total number of strain files written.
+    """
+    from .segmentation import convert_spotsfile2peaklist
+    import glob
+
+    os.makedirs(strain_dir, exist_ok=True)
+
+    if frame_indices is None:
+        h5s = sorted(glob.glob(os.path.join(seg_dir, "frame_?????.h5")))
+        frame_indices = [int(os.path.basename(p)[6:11]) for p in h5s]
+
+    # Precompute allowed HKL once.
+    t_hkl = time.time()
+    allowed_hkl = None
+    if geometry_only:
+        allowed_hkl = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        print(
+            f"  allowed_hkl: {len(allowed_hkl)} reflections "
+            f"({time.time() - t_hkl:.1f}s)",
+            flush=True,
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tf:
+        crystal_pkl = tf.name
+    try:
+        with open(crystal_pkl, "wb") as fh:
+            _dill.dump(crystal, fh)
+
+        # Load peaklists.
+        t_io = time.time()
+        peaklists: dict[int, np.ndarray] = {}
+        for fi in frame_indices:
+            seg_path = os.path.join(seg_dir, f"frame_{fi:05d}.h5")
+            if not os.path.exists(seg_path):
+                continue
+            try:
+                pl = convert_spotsfile2peaklist(
+                    seg_path,
+                    r_squared_min=r_squared_min,
+                    include_unfitted=include_unfitted,
+                )
+                if len(pl) >= 3:
+                    peaklists[fi] = pl[:, :2]
+            except Exception as exc:
+                print(f"  ✗  frame {fi}: load peaklist: {exc}", flush=True)
+
+        n_total = len(frame_indices)
+        print(
+            f"Strain local — {n_total} frames | {n_grains} grain(s) | "
+            f"{len(peaklists)} with spots | "
+            f"fit_strain={list(fit_strain)} | "
+            f"I/O: {time.time() - t_io:.1f}s",
+            flush=True,
+        )
+
+        _fk = dict(fit_kwargs)
+        if geometry_only:
+            _fk["geometry_only"] = True
+
+        common = dict(
+            ubs_dir      = ubs_dir,
+            strain_dir   = strain_dir,
+            n_grains     = n_grains,
+            max_match_px = max_match_px,
+            fit_strain   = tuple(fit_strain),
+            fit_kwargs   = _fk,
+            overwrite    = overwrite,
+        )
+        n_workers = min(len(peaklists) or 1, n_workers or os.cpu_count() or 1)
+        tick = max(1, n_total // 20)
+
+        t0 = time.time()
+        n_saved = 0
+        done = 0
+        with ProcessPoolExecutor(
+            max_workers = n_workers,
+            initializer = _local_pool_init,
+            initargs    = (crystal_pkl, camera, allowed_hkl),
+        ) as pool:
+            futs = {
+                pool.submit(_strain_process_frame, fi, peaklists.get(fi), **common): fi
+                for fi in frame_indices
+            }
+            for fut in as_completed(futs):
+                done += 1
+                try:
+                    _, n = fut.result()
+                    n_saved += n
+                except Exception as exc:
+                    print(f"  ✗  frame {futs[fut]}: {exc}", flush=True)
+
+                if done % tick == 0 or done == n_total:
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else float("inf")
+                    eta  = (n_total - done) / rate if rate > 0 else float("inf")
+                    print(
+                        f"  {done}/{n_total}  {n_saved} fits saved  "
+                        f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                        flush=True,
+                    )
+
+    finally:
+        os.unlink(crystal_pkl)
+
+    print(
+        f"\nStrain local done — {n_saved} fits saved  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return n_saved

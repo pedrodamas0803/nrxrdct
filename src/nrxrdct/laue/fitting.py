@@ -1382,6 +1382,7 @@ def fit_orientation(
     gtol: float = 1e-8,
     max_nfev: int = 500,
     geometry_only: bool = True,
+    allowed_hkl=None,
     z_scan_step_deg: float | None = None,
     z_axis: np.ndarray | None = None,
     verbose: bool = False,
@@ -1471,10 +1472,9 @@ def fit_orientation(
         else [float(v) for v in max_match_px]
     )
 
-    # Precompute which (hkl) are structurally allowed once — avoids calling
-    # crystal.StructureFactor on every optimizer iteration.
     _allowed = (
-        precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        allowed_hkl if allowed_hkl is not None
+        else precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
         if geometry_only else None
     )
 
@@ -1945,6 +1945,7 @@ def fit_strain_orientation(
     gtol: float = 1e-8,
     max_nfev: int = 2000,
     geometry_only: bool = True,
+    allowed_hkl=None,
     verbose: bool = False,
 ) -> StrainFitResult:
     """
@@ -2011,7 +2012,8 @@ def fit_strain_orientation(
         )
 
     _allowed = (
-        precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        allowed_hkl if allowed_hkl is not None
+        else precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
         if geometry_only else None
     )
 

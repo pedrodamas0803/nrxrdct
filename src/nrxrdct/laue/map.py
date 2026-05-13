@@ -698,9 +698,7 @@ class GrainMap:
                 raise RuntimeError(
                     f"sbatch failed for {job_name} chunk {i}:\n{result.stderr}"
                 )
-            job_id = result.stdout.strip().split()[-1]
-            job_ids.append(job_id)
-            print(f"  Submitted {job_name} chunk {i:04d} → job {job_id}", flush=True)
+            job_ids.append(result.stdout.strip().split()[-1])
         return job_ids
 
     def submit_segmentation(

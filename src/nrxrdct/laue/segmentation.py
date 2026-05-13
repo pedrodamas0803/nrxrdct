@@ -934,6 +934,79 @@ def WTH_segmentation(
     return mask_final
 
 
+def hybrid_segmentation(
+    image: np.ndarray,
+    mask: np.ndarray,
+    log_sigmas=None,
+    wth_disk_radius=None,
+    threshold_percentile: float = 99.9,
+) -> np.ndarray:
+    """
+    Segment diffraction spots by combining LoG (large/round spots) and WTH
+    (small/sharp spots) responses.
+
+    All scales from both methods are submitted to a single
+    ``ThreadPoolExecutor`` so every allocated CPU is used without
+    thread-pool nesting or oversubscription.  The two families are
+    thresholded independently at *threshold_percentile* and the results
+    are combined with a logical OR.
+
+    Parameters
+    ----------
+    image : (Nv, Nh) ndarray
+        Raw detector image.
+    mask : (Nv, Nh) bool ndarray
+        Valid-pixel mask.
+    log_sigmas : float or list of float
+        Sigma(s) for the Laplacian-of-Gaussian filter.  Default ``[2, 4, 8]``.
+    wth_disk_radius : int or list of int
+        Disk radius/radii for the white top-hat transform.  Default ``[5, 7]``.
+    threshold_percentile : float
+        Detection threshold percentile applied independently to each family.
+        Default ``99.9``.
+
+    Returns
+    -------
+    mask_final : (Nv, Nh) bool ndarray
+        Union of the LoG and WTH binary masks.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    if log_sigmas is None:
+        log_sigmas = [2, 4, 8]
+    if wth_disk_radius is None:
+        wth_disk_radius = [5, 7]
+
+    image = fill_gaps_nearest(image, mask)
+    img = np.log1p(image.astype(float))
+    vmin, vmax = img[mask].min(), img[mask].max()
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+
+    _log_sigmas = [log_sigmas] if np.isscalar(log_sigmas) else list(log_sigmas)
+    _radii      = [wth_disk_radius] if np.isscalar(wth_disk_radius) else list(wth_disk_radius)
+
+    def _log(s):
+        return -ndi.gaussian_laplace(img, sigma=s)
+
+    def _wth(r):
+        return sk.morphology.white_tophat(img, sk.morphology.disk(r))
+
+    with ThreadPoolExecutor() as pool:
+        log_futures = [pool.submit(_log, s) for s in _log_sigmas]
+        wth_futures = [pool.submit(_wth, r) for r in _radii]
+        log_responses = [f.result() for f in log_futures]
+        wth_responses = [f.result() for f in wth_futures]
+
+    def _threshold(responses):
+        enhanced = np.max(responses, axis=0)
+        enhanced[~mask] = 0.0
+        thresh = np.percentile(enhanced[mask], threshold_percentile)
+        return (enhanced >= thresh) & mask
+
+    return _threshold(log_responses) | _threshold(wth_responses)
+
+
 def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size = 3, max_size = 500, gap_exclude = 3 ):
 
     seg = ndi.binary_fill_holes(segmented_image)

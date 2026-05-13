@@ -32,6 +32,7 @@ import numpy as np
 from nrxrdct.laue.segmentation import (
     LoG_segmentation,
     WTH_segmentation,
+    hybrid_segmentation,
     clean_segmentation,
     filter_and_rescale_images,
     gaussian_background,
@@ -72,6 +73,8 @@ def _process_frame(
 
         if method.upper() == "WTH":
             seg_mask = WTH_segmentation(frame, detector_mask, **method_kwargs)
+        elif method.upper() == "HYBRID":
+            seg_mask = hybrid_segmentation(frame, detector_mask, **method_kwargs)
         else:
             seg_mask = LoG_segmentation(frame, detector_mask, **method_kwargs)
 

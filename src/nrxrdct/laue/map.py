@@ -724,9 +724,12 @@ class GrainMap:
         n_jobs : int
             Number of SLURM jobs (frames split evenly).
         method : str
-            ``'LoG'`` (Laplacian of Gaussian) or ``'WTH'`` (white top-hat).
+            ``'LoG'`` (Laplacian of Gaussian), ``'WTH'`` (white top-hat), or
+            ``'HYBRID'`` (LoG for large spots + WTH for small spots, OR-combined).
         method_kwargs : dict or None
             Extra kwargs forwarded to the chosen segmentation function.
+            For ``'HYBRID'``: ``log_sigmas``, ``wth_disk_radius``,
+            ``threshold_percentile``.
         bg_sigma : float
             Gaussian sigma (pixels) for background estimation.  A large-scale
             Gaussian is fitted to the frame, subtracted, and the result is

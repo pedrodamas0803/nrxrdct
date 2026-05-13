@@ -143,6 +143,8 @@ Spot detection and peak measurement on individual diffraction frames.
 
 ::: nrxrdct.laue.WTH_segmentation
 
+::: nrxrdct.laue.hybrid_segmentation
+
 ::: nrxrdct.laue.clean_segmentation
 
 ::: nrxrdct.laue.filter_and_rescale_images

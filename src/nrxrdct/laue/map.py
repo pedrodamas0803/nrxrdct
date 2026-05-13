@@ -1284,6 +1284,41 @@ class GrainMap:
             job_ids.append(result.stdout.strip().split()[-1])
         return job_ids
 
+    @staticmethod
+    def cancel_jobs(
+        job_ids: "list[str | int]",
+        *,
+        dry_run: bool = False,
+    ) -> None:
+        """
+        Cancel SLURM jobs by ID.
+
+        Parameters
+        ----------
+        job_ids : list[str | int]
+            Job IDs returned by :meth:`submit_segmentation`,
+            :meth:`submit_orientation`, or :meth:`submit_strain`.
+        dry_run : bool
+            If ``True``, print the ``scancel`` command without executing it.
+        """
+        if not job_ids:
+            print("cancel_jobs: no job IDs provided.")
+            return
+
+        ids = [str(j) for j in job_ids]
+        cmd = ["scancel"] + ids
+
+        if dry_run:
+            print("cancel_jobs (dry run):", " ".join(cmd))
+            return
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"scancel failed:\n{result.stderr.strip()}"
+            )
+        print(f"cancel_jobs: cancelled {len(ids)} job(s): {', '.join(ids)}")
+
     def submit_segmentation(
         self,
         base_dir: str,

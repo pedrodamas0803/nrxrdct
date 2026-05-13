@@ -836,9 +836,10 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     return image[tuple(indices)]
 
 def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9):
+    from concurrent.futures import ThreadPoolExecutor
 
     image = fill_gaps_nearest(image, mask)
-    
+
     img = np.log1p(image)
 
     vmin, vmax = np.min(img[mask]), np.max(img[mask])
@@ -846,16 +847,19 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold
     if vmax > vmin:
         img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 
-    responses = [-ndi.gaussian_laplace(img, sigma = s) for s in sigmas]
-    
-    enhanced = np.max(responses, axis = 0) 
-    enhanced[~mask] = 0   
+    _sigmas = [sigmas] if np.isscalar(sigmas) else list(sigmas)
+
+    def _log_response(s):
+        return -ndi.gaussian_laplace(img, sigma=s)
+
+    with ThreadPoolExecutor() as pool:
+        responses = list(pool.map(_log_response, _sigmas))
+
+    enhanced = np.max(responses, axis = 0)
+    enhanced[~mask] = 0
 
     global_thresh = np.percentile(enhanced, threshold_percentile)
 
-    # local_thresh = sk.filters.threshold_local(enhanced, block_size = block_size)
-
-    # mask_final = ((enhanced>=global_thresh)|(enhanced>=local_thresh)) & mask
     mask_final = (enhanced>=global_thresh) & mask
 
     return mask_final
@@ -911,11 +915,16 @@ def WTH_segmentation(
     if vmax > vmin:
         img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 
+    from concurrent.futures import ThreadPoolExecutor
+
     radii = [disk_radius] if np.isscalar(disk_radius) else list(disk_radius)
-    responses = [
-        sk.morphology.white_tophat(img, sk.morphology.disk(r))
-        for r in radii
-    ]
+
+    def _wth_response(r):
+        return sk.morphology.white_tophat(img, sk.morphology.disk(r))
+
+    with ThreadPoolExecutor() as pool:
+        responses = list(pool.map(_wth_response, radii))
+
     enhanced = np.max(responses, axis=0)
     enhanced[~mask] = 0.0
 

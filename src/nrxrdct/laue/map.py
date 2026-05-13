@@ -486,6 +486,127 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    def plot_mean_px(
+        self,
+        *,
+        grains: "list[int] | None" = None,
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple | None = None,
+        colorbar: bool = True,
+        share_scale: bool = True,
+    ) -> tuple:
+        """
+        Plot the mean pixel deviation map for one or all grains.
+
+        When more than one grain is shown a figure with one subplot per grain
+        is created automatically.  Pass ``ax`` to place a single-grain plot on
+        an existing axes.
+
+        Parameters
+        ----------
+        grains : list[int] or None
+            Grain indices to plot.  ``None`` plots all grains.
+        ax : Axes or None
+            If provided, only the first (or only) grain is plotted here.
+        cmap : str or None
+            Colormap.  Defaults to ``'plasma_r'``.
+        vmin, vmax : float or None
+            Color scale limits.  If ``share_scale`` is ``True`` and both are
+            ``None``, the limits are computed jointly from all shown grains.
+        motor_x, motor_y : str or None
+            Motor names for axis labels.
+        motor_units : dict or None
+            Units for motor axes, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        share_scale : bool
+            If ``True`` (default), all subplots share the same ``vmin``/``vmax``.
+        """
+        grains = list(range(self.n_grains)) if grains is None else list(grains)
+        cmap   = cmap or "plasma_r"
+
+        # ── motor extent ──────────────────────────────────────────────────────
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        # ── shared color limits ───────────────────────────────────────────────
+        if share_scale and vmin is None and vmax is None:
+            all_vals = np.concatenate([
+                self.mean_px[gi][np.isfinite(self.mean_px[gi])].ravel()
+                for gi in grains
+            ])
+            if all_vals.size > 0:
+                vmin = float(np.nanmin(all_vals))
+                vmax = float(np.nanmax(all_vals))
+
+        # ── single-axes shortcut ──────────────────────────────────────────────
+        if ax is not None or len(grains) == 1:
+            gi = grains[0]
+            if ax is None:
+                fig, ax = plt.subplots(figsize=figsize or (6, 5))
+            else:
+                fig = ax.get_figure()
+            im = ax.imshow(
+                self.mean_px[gi],
+                origin="upper", extent=extent,
+                cmap=cmap, vmin=vmin, vmax=vmax,
+                interpolation="nearest", aspect="auto",
+            )
+            if colorbar:
+                cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                cb.set_label("Mean dev (px)", fontsize=9)
+            ax.set_xlabel(xlabel, fontsize=9)
+            ax.set_ylabel(ylabel, fontsize=9)
+            ax.set_title(title or f"Grain {gi + 1}  —  Mean pixel deviation", fontsize=10)
+            fig.tight_layout()
+            return fig, ax
+
+        # ── multi-grain figure ────────────────────────────────────────────────
+        ncols  = len(grains)
+        fsize  = figsize or (5 * ncols, 4.5)
+        fig, axes_arr = plt.subplots(1, ncols, figsize=fsize,
+                                     squeeze=False)
+        axes_arr = axes_arr[0]
+
+        for col, gi in enumerate(grains):
+            a  = axes_arr[col]
+            im = a.imshow(
+                self.mean_px[gi],
+                origin="upper", extent=extent,
+                cmap=cmap, vmin=vmin, vmax=vmax,
+                interpolation="nearest", aspect="auto",
+            )
+            if colorbar:
+                cb = fig.colorbar(im, ax=a, fraction=0.046, pad=0.04)
+                if col == len(grains) - 1:
+                    cb.set_label("Mean dev (px)", fontsize=9)
+            a.set_xlabel(xlabel, fontsize=9)
+            a.set_ylabel(ylabel if col == 0 else "", fontsize=9)
+            a.set_title(
+                title or f"Grain {gi + 1}  —  Mean pixel deviation",
+                fontsize=10,
+            )
+
+        fig.tight_layout()
+        return fig, axes_arr
+
     # ── strain component map ──────────────────────────────────────────────────
 
     _STRAIN_INDICES = {

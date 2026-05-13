@@ -380,6 +380,7 @@ class GrainMap:
         vmax: float | None = None,
         motor_x: str | None = None,
         motor_y: str | None = None,
+        motor_units: "dict | None" = None,
         title: str | None = None,
         figsize: tuple = (6, 5),
         colorbar: bool = True,
@@ -439,17 +440,17 @@ class GrainMap:
                 f"Choose from: {sorted(self._SCALAR_QUANTITIES)}"
             )
 
-        # ── axis extent ───────────────────────────────────────────────────────
+        # ── axis extent and labels ────────────────────────────────────────────
+        mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
         my = self.motors.get(motor_y) if motor_y else None
 
         if mx is not None and my is not None:
-            extent = [
-                mx[0, 0], mx[0, -1],
-                my[-1, 0], my[0, 0],
-            ]
-            xlabel = motor_x
-            ylabel = motor_y
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
         else:
             extent = [0, self.nx, self.ny, 0]
             xlabel = "column (ix)"
@@ -485,31 +486,492 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
-    def plot_ipf(
+    # ── strain component map ──────────────────────────────────────────────────
+
+    _STRAIN_INDICES = {
+        "e_xx": (0, 0), "e_yy": (1, 1), "e_zz": (2, 2),
+        "e_xy": (0, 1), "e_xz": (0, 2), "e_yz": (1, 2),
+    }
+    _STRAIN_LABELS = {
+        "e_xx": "ε_xx", "e_yy": "ε_yy", "e_zz": "ε_zz",
+        "e_xy": "ε_xy", "e_xz": "ε_xz", "e_yz": "ε_yz",
+    }
+
+    def _strain_component_map(
+        self,
+        component: str,
+        grain: int,
+        frame: str,
+        sample_tilt_deg: float,
+        sample_tilt_axis: str,
+    ) -> np.ndarray:
+        """Return (ny, nx) array of the requested strain component."""
+        i, j = self._STRAIN_INDICES[component]
+        eps = self.strain_tensor[grain]   # (ny, nx, 3, 3)
+        U   = self.U[grain]               # (ny, nx, 3, 3)
+
+        if frame == "crystal":
+            data = eps[..., i, j]
+        elif frame == "lab":
+            # ε_lab = U @ ε @ U^T  (vectorised over map points)
+            eps_t = np.einsum("...ik,...kl,...jl->...ij", U, eps, U)
+            data  = eps_t[..., i, j]
+        elif frame == "sample":
+            # ε_lab first, then rotate by R_s about the chosen lab axis
+            R_s        = Rotation.from_euler(
+                sample_tilt_axis, sample_tilt_deg, degrees=True
+            ).as_matrix()
+            eps_lab    = np.einsum("...ik,...kl,...jl->...ij", U, eps, U)
+            eps_sample = np.einsum("ik,...kl,jl->...ij", R_s, eps_lab, R_s)
+            data = eps_sample[..., i, j]
+        else:
+            raise ValueError(
+                f"Unknown frame {frame!r}. Choose 'crystal', 'lab', or 'sample'."
+            )
+        return data
+
+    def plot_strain_component(
+        self,
+        component: str = "e_xx",
+        grain: int = 0,
+        *,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot a single strain-tensor component for a given grain.
+
+        Parameters
+        ----------
+        component : str
+            One of ``'e_xx'``, ``'e_yy'``, ``'e_zz'``,
+            ``'e_xy'``, ``'e_xz'``, ``'e_yz'``.
+        grain : int
+            Grain index (0-based).
+        frame : str
+            Reference frame for the strain tensor:
+
+            ``'crystal'``
+                As fitted — components in the crystal coordinate system.
+            ``'lab'``
+                Rotated to the lab frame via ``ε_lab = U @ ε @ Uᵀ``.
+            ``'sample'``
+                Lab frame further rotated by *sample_tilt_deg* about
+                *sample_tilt_axis* (default −40° about Y).
+
+        sample_tilt_deg : float
+            Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+        sample_tilt_axis : str
+            Lab axis of the tilt rotation (``'x'``, ``'y'``, or ``'z'``).
+            Default ``'y'``.
+        motor_x, motor_y : str or None
+            Motor names to use as axis tick labels.
+        """
+        if component not in self._STRAIN_INDICES:
+            raise ValueError(
+                f"Unknown component {component!r}. "
+                f"Choose from: {sorted(self._STRAIN_INDICES)}"
+            )
+
+        data  = self._strain_component_map(
+            component, grain, frame, sample_tilt_deg, sample_tilt_axis
+        )
+        label = self._STRAIN_LABELS[component]
+        cmap  = cmap or "RdBu_r"
+
+        # ── axis extent ───────────────────────────────────────────────────────
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        # ── figure ────────────────────────────────────────────────────────────
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data,
+            origin="upper",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+            aspect="auto",
+        )
+
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(label, fontsize=9)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }[frame]
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"Grain {grain + 1}  —  {label}  [{_frame_label}]",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
+
+    # ── IPF map ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _cubic_ipf_colors(c: np.ndarray) -> np.ndarray:
+        """
+        Vectorised IPF RGB for cubic (m-3m) symmetry.
+
+        Colour convention: [001] → blue, [011] → green, [111] → red.
+
+        Parameters
+        ----------
+        c : (…, 3) array
+            Crystal-frame directions.  Need not be unit vectors; NaN rows
+            produce NaN RGB output.
+
+        Returns
+        -------
+        rgb : same leading shape + (3,), float in [0, 1].
+        """
+        c       = np.asarray(c, dtype=float)
+        leading = c.shape[:-1]
+        flat    = c.reshape(-1, 3).copy()
+
+        rgb  = np.full((len(flat), 3), np.nan)
+        norm = np.linalg.norm(flat, axis=1)
+        ok   = (norm > 0) & ~np.any(np.isnan(flat), axis=1)
+
+        d = flat[ok] / norm[ok, None]
+        d = np.sort(np.abs(d), axis=1)      # h1 ≤ h2 ≤ h3
+
+        theta = np.arctan2(d[:, 1], d[:, 2])
+        phi   = np.arctan2(d[:, 0], np.sqrt(d[:, 1]**2 + d[:, 2]**2))
+
+        t = np.clip(theta / (np.pi / 4.0),          0.0, 1.0)
+        p = np.clip(phi   / np.arctan(1.0 / np.sqrt(2.0)), 0.0, 1.0)
+
+        r_c = p
+        g_c = t * (1.0 - p)
+        b_c = (1.0 - t) * (1.0 - p)
+        mx  = np.maximum(np.maximum(r_c, g_c), b_c)
+        mx  = np.maximum(mx, 1e-10)
+
+        rgb[ok] = np.stack([r_c / mx, g_c / mx, b_c / mx], axis=1)
+        return rgb.reshape(*leading, 3)
+
+    @staticmethod
+    def _cubic_ipf_colorkey(N: int = 256) -> np.ndarray:
+        """
+        Render the cubic IPF color key as an (N, N, 3) float32 RGB image.
+
+        The standard triangle [001]–[011]–[111] is filled; pixels outside
+        are white.  In the returned image rows correspond to increasing *p*
+        (phi, bottom = [001]–[011] edge) and columns to increasing *t*
+        (theta, left = [001]).
+        """
+        t_vals = np.linspace(0.0, 1.0, N)
+        p_vals = np.linspace(0.0, 1.0, N)
+        T, P   = np.meshgrid(t_vals, p_vals)
+
+        # Boundary curve [001] → [111]: directions [s, s, 1]/norm, s ∈ [0, 1].
+        s_b  = np.linspace(0.0, 1.0, 1000)
+        t_b  = np.arctan(s_b) / (np.pi / 4.0)
+        p_b  = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
+        p_b[0] = 0.0   # exact zero at s = 0
+
+        # For each column index (t value) the maximum allowed p.
+        p_max = np.interp(t_vals, t_b, p_b)   # shape (N,)
+        inside = P <= p_max[np.newaxis, :]     # broadcast over rows
+
+        r_c = P
+        g_c = T * (1.0 - P)
+        b_c = (1.0 - T) * (1.0 - P)
+        mx  = np.maximum(np.maximum(r_c, g_c), b_c)
+        mx  = np.maximum(mx, 1e-10)
+
+        rgb         = np.stack([r_c / mx, g_c / mx, b_c / mx], axis=-1).astype(np.float32)
+        rgb[~inside] = 1.0
+        return rgb
+
+    @staticmethod
+    def _ipf_colorkey_inset(parent_ax) -> None:
+        """Add the cubic IPF color-key as a small inset in *parent_ax*."""
+        try:
+            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+        except ImportError:
+            return
+
+        ax_key = inset_axes(parent_ax, width="28%", height="28%",
+                            loc="lower right", borderpad=0.5)
+
+        rgb = GrainMap._cubic_ipf_colorkey(200)
+        ax_key.imshow(rgb, origin="lower", extent=[0, 1, 0, 1],
+                      aspect="auto", interpolation="bilinear")
+
+        # Corner labels
+        kw = dict(fontsize=6, fontweight="bold", color="k")
+        ax_key.text(0.03, 0.03, "001", ha="left",  va="bottom", **kw)
+        ax_key.text(0.97, 0.03, "011", ha="right", va="bottom", **kw)
+        ax_key.text(0.97, 0.97, "111", ha="right", va="top",    **kw)
+
+        # Triangle outline following the exact [001]–[111] boundary
+        s_b  = np.linspace(0.0, 1.0, 120)
+        t_b  = np.arctan(s_b) / (np.pi / 4.0)
+        p_b  = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
+        p_b[0] = 0.0
+        verts = np.column_stack([
+            np.concatenate([[0, 1, 1], t_b[::-1]]),
+            np.concatenate([[0, 0, 1], p_b[::-1]]),
+        ])
+        from matplotlib.patches import Polygon as _Poly
+        ax_key.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.8))
+
+        ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
+        ax_key.set_xticks([]); ax_key.set_yticks([])
+        for sp in ax_key.spines.values():
+            sp.set_visible(False)
+
+    def plot_ipf_map(
+        self,
+        axis="z",
+        grain: int = 0,
+        *,
+        frame: str = "lab",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        symmetry: str = "cubic",
+        ax: "plt.Axes | None" = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        show_colorkey: bool = True,
+    ) -> tuple:
+        """
+        Inverse pole figure (IPF) map coloured by which crystal direction is
+        parallel to a chosen reference axis.
+
+        Parameters
+        ----------
+        axis : str or (3,) array-like
+            Reference direction in the chosen *frame*.
+            Shortcuts: ``'x'``, ``'y'``, ``'z'``; or a custom 3-vector.
+        grain : int
+            Grain index (0-based).
+        frame : str
+            ``'lab'``    — *axis* is in the lab frame.
+            ``'sample'`` — *axis* is in the sample frame, converted to lab
+            via the inverse of the sample tilt (see *sample_tilt_deg*).
+        sample_tilt_deg : float
+            Rotation angle (°) about *sample_tilt_axis* that maps lab → sample.
+            Default ``-40``.
+        sample_tilt_axis : str
+            Lab axis of the tilt rotation.  Default ``'y'``.
+        symmetry : str
+            Crystal symmetry for IPF reduction.  Currently only ``'cubic'``.
+        motor_x, motor_y : str or None
+            Motor names to use as axis tick labels.
+        motor_units : dict or None
+            Optional units for motor axes, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+            Appended to the axis label in parentheses.
+        show_colorkey : bool
+            Overlay a small colour-key triangle in the lower-right corner.
+        """
+        _shortcuts = {
+            "x": np.array([1.0, 0.0, 0.0]),
+            "y": np.array([0.0, 1.0, 0.0]),
+            "z": np.array([0.0, 0.0, 1.0]),
+        }
+        if isinstance(axis, str):
+            ref        = _shortcuts[axis.lower()]
+            axis_label = axis.upper()
+        else:
+            ref        = np.asarray(axis, dtype=float)
+            ref        = ref / np.linalg.norm(ref)
+            axis_label = f"[{ref[0]:.2f} {ref[1]:.2f} {ref[2]:.2f}]"
+
+        if frame == "sample":
+            R_s = Rotation.from_euler(
+                sample_tilt_axis, sample_tilt_deg, degrees=True
+            ).as_matrix()
+            ref = R_s.T @ ref   # sample frame → lab frame
+
+        if symmetry != "cubic":
+            raise ValueError(
+                f"Unsupported symmetry {symmetry!r}. Only 'cubic' is implemented."
+            )
+
+        # Crystal direction parallel to ref: c = U^T @ ref  (vectorised)
+        U   = self.U[grain]                             # (ny, nx, 3, 3)
+        c   = np.einsum("...ji,j->...i", U, ref)        # (ny, nx, 3)
+        rgb = self._cubic_ipf_colors(c)                 # (ny, nx, 3)
+
+        # NaN → white
+        img = np.where(np.isnan(rgb), 1.0, np.clip(rgb, 0.0, 1.0)).astype(np.float32)
+
+        # ── axis extent and labels ────────────────────────────────────────────
+        mu  = motor_units or {}
+        mx  = self.motors.get(motor_x) if motor_x else None
+        my  = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        # ── figure ────────────────────────────────────────────────────────────
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        ax.imshow(img, origin="upper", extent=extent,
+                  interpolation="nearest", aspect="auto")
+
+        _frame_str = {
+            "lab":    "lab",
+            "sample": f"sample ({sample_tilt_deg:+.0f}° {sample_tilt_axis})",
+        }.get(frame, frame)
+
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"Grain {grain + 1}  —  IPF ∥ {axis_label}  [{_frame_str} frame]",
+            fontsize=10,
+        )
+
+        if show_colorkey:
+            self._ipf_colorkey_inset(ax)
+
+        fig.tight_layout()
+        return fig, ax
+
+    def plot_ipf_scatter(
         self,
         grain: int = 0,
         *,
-        figsize: tuple = (6, 5),
-        s: float = 15,
+        frame: str = "lab",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        symmetry: str = "cubic",
+        figsize: tuple = (15, 5),
+        s: float = 15.0,
+        alpha: float = 0.8,
     ) -> tuple:
         """
-        Scatter plot of the crystal Z-axis in the lab frame (crude IPF stand-in).
+        Scatter pole figure — all three crystal axes in the chosen frame.
 
-        Returns fig, ax.
+        Each of the three panels shows where the crystal a-, b- or c-axis
+        points relative to the lab/sample coordinate system, for every fitted
+        map pixel.  Points are coloured with the same IPF scheme as
+        :meth:`plot_ipf_map` (cubic: [001] → blue, [011] → green, [111] → red).
+
+        Parameters
+        ----------
+        grain : int
+            Grain index (0-based).
+        frame : str
+            ``'lab'``    — directions expressed in the lab frame.
+            ``'sample'`` — directions expressed in the sample frame (rotated
+            from lab by *sample_tilt_deg* about *sample_tilt_axis*).
+        sample_tilt_deg : float
+            Lab-to-sample rotation angle (°).  Default ``-40``.
+        sample_tilt_axis : str
+            Axis of the lab-to-sample rotation.  Default ``'y'``.
+        symmetry : str
+            IPF colour symmetry.  Currently only ``'cubic'``.
+        s, alpha : float
+            Scatter marker size and transparency.
         """
-        fig, ax = plt.subplots(figsize=figsize)
-        for iy in range(self.ny):
-            for ix in range(self.nx):
-                U = self.U[grain, iy, ix]
-                if not np.any(np.isnan(U)):
-                    z_lab = U[:, 2]
-                    ax.scatter(z_lab[1], z_lab[2], s=s, c=[[abs(z_lab)]], vmin=0, vmax=1)
-        ax.set_aspect("equal")
-        ax.set_xlabel("lab Y")
-        ax.set_ylabel("lab Z")
-        ax.set_title(f"Grain {grain + 1}  —  crystal c-axis (lab frame)")
+        U = self.U[grain]   # (ny, nx, 3, 3)
+
+        if frame == "sample":
+            R_s    = Rotation.from_euler(
+                sample_tilt_axis, sample_tilt_deg, degrees=True
+            ).as_matrix()
+            U_plot = np.einsum("ij,...jk->...ik", R_s, U)   # R_s @ U at each point
+        else:
+            U_plot = U
+
+        # Valid (fitted) pixels
+        valid = ~np.any(np.isnan(U_plot.reshape(*U_plot.shape[:2], -1)), axis=-1)
+
+        _axis_names = ["a", "b", "c"]
+        _frame_str  = {
+            "lab":    "lab frame",
+            "sample": f"sample frame ({sample_tilt_deg:+.0f}° {sample_tilt_axis})",
+        }.get(frame, frame)
+
+        fig, axes_arr = plt.subplots(1, 3, figsize=figsize)
+
+        for ai, aname in enumerate(_axis_names):
+            ax = axes_arr[ai]
+
+            # i-th column of U_plot = i-th crystal axis in the chosen frame
+            d = U_plot[valid, :, ai]           # (N, 3)
+
+            if symmetry == "cubic":
+                colors = np.clip(self._cubic_ipf_colors(d), 0.0, 1.0)
+            else:
+                nrm    = np.linalg.norm(d, axis=1, keepdims=True)
+                colors = np.abs(d) / np.maximum(nrm, 1e-10)
+
+            ax.scatter(d[:, 0], d[:, 1], s=s, c=colors, alpha=alpha,
+                       linewidths=0)
+
+            # Reference circle (unit sphere projected to XY)
+            theta_c = np.linspace(0, 2 * np.pi, 200)
+            ax.plot(np.cos(theta_c), np.sin(theta_c),
+                    color="k", linewidth=0.5, zorder=3)
+            ax.axhline(0, color="k", linewidth=0.3, zorder=3)
+            ax.axvline(0, color="k", linewidth=0.3, zorder=3)
+
+            ax.set_aspect("equal")
+            ax.set_xlim(-1.1, 1.1)
+            ax.set_ylim(-1.1, 1.1)
+            ax.set_xlabel("X", fontsize=9)
+            ax.set_ylabel("Y", fontsize=9)
+            ax.set_title(
+                f"Grain {grain + 1}  —  crystal {aname}-axis  [{_frame_str}]",
+                fontsize=10,
+            )
+
         fig.tight_layout()
-        return fig, ax
+        return fig, axes_arr
 
     # ── Persistence ───────────────────────────────────────────────────────────
 

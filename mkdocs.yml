@@ -76,6 +76,7 @@ nav:
     - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
     - Layered Structures: user-guide/laue_layered_structures.md
     - Darwin Model (Thick Layers): user-guide/laue_darwin.md
+    - Orientation Plotting: user-guide/laue_orientation_plotting.md
     - Strain Analysis: user-guide/laue_strain.md
   - Examples:
     - SLURM Pipeline: examples/slurm_pipeline.md

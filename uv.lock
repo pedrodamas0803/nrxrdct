@@ -1140,6 +1140,7 @@ name = "nrxrdct"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "dill" },
     { name = "h5py" },
     { name = "ipympl" },
     { name = "matplotlib" },
@@ -1165,6 +1166,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dill", specifier = ">=0.3.8" },
     { name = "h5py", specifier = ">=3.16.0" },
     { name = "ipympl", specifier = "==0.9.4" },
     { name = "matplotlib", specifier = "==3.8.0" },

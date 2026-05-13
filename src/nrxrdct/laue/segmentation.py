@@ -863,7 +863,7 @@ def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold
 def WTH_segmentation(
     image: np.ndarray,
     mask: np.ndarray,
-    disk_radius: int = 7,
+    disk_radius=7,
     threshold_percentile: float = 99.9,
 ) -> np.ndarray:
     """
@@ -882,10 +882,12 @@ def WTH_segmentation(
         Raw detector image (uint or float).
     mask : (Nv, Nh) bool ndarray
         Valid-pixel mask (``True`` = active detector area).
-    disk_radius : int
-        Radius of the disk structuring element in pixels.  Should be larger
-        than the largest spot radius but smaller than the background
-        correlation length.  Default ``7``.
+    disk_radius : int or list of int
+        Radius (or list of radii) of the disk structuring element in pixels.
+        When a list is given, the WTH response is computed at every radius and
+        the pixel-wise maximum is taken, analogous to multi-scale LoG.
+        Each radius should be larger than the largest spot but smaller than
+        the background correlation length.  Default ``7``.
     threshold_percentile : float
         Percentile of the WTH response (within *mask*) used as the binary
         threshold.  Raise to keep only the brightest spots; lower to be more
@@ -909,8 +911,12 @@ def WTH_segmentation(
     if vmax > vmin:
         img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
 
-    selem = sk.morphology.disk(disk_radius)
-    enhanced = sk.morphology.white_tophat(img, selem)
+    radii = [disk_radius] if np.isscalar(disk_radius) else list(disk_radius)
+    responses = [
+        sk.morphology.white_tophat(img, sk.morphology.disk(r))
+        for r in radii
+    ]
+    enhanced = np.max(responses, axis=0)
     enhanced[~mask] = 0.0
 
     threshold = np.percentile(enhanced[mask], threshold_percentile)

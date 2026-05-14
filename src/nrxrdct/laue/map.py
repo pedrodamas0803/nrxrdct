@@ -1319,6 +1319,24 @@ class GrainMap:
             )
         print(f"cancel_jobs: cancelled {len(ids)} job(s): {', '.join(ids)}")
 
+    @staticmethod
+    def _seg_defaults(base_dir: str) -> dict:
+        """Read r_squared_min / include_unfitted from seg_meta.json if present."""
+        path = os.path.join(base_dir, "job_meta", "seg_meta.json")
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path) as fh:
+                m = json.load(fh)
+            out = {}
+            if "r_squared_min" in m:
+                out["r_squared_min"] = m["r_squared_min"]
+            if "include_unfitted" in m:
+                out["include_unfitted"] = m["include_unfitted"]
+            return out
+        except Exception:
+            return {}
+
     def submit_segmentation(
         self,
         base_dir: str,
@@ -1338,6 +1356,8 @@ class GrainMap:
         gap_exclude: int = 3,
         bg_sigma: float = 251,
         max_components: int = 1,
+        r_squared_min: float = 0.9,
+        include_unfitted: bool = False,
         extra_sbatch: dict | None = None,
     ) -> list:
         """
@@ -1362,6 +1382,16 @@ class GrainMap:
             Gaussian sigma (pixels) for background estimation.  A large-scale
             Gaussian is fitted to the frame, subtracted, and the result is
             shifted to be entirely non-negative before segmentation.
+        r_squared_min : float
+            Minimum R² of the Gaussian fit for a spot to be included in the
+            peak list when the segmentation results are loaded by the
+            orientation and strain workers.  Stored in ``seg_meta.json`` and
+            used as the default for :meth:`submit_orientation` and
+            :meth:`submit_strain` unless overridden there.  Default ``0.9``.
+        include_unfitted : bool
+            If ``True``, spots whose Gaussian fit failed are still included
+            using their raw centroid.  Stored in ``seg_meta.json`` and
+            inherited by downstream workers.  Default ``False``.
         """
         dirs = self.setup_processing_dirs(base_dir)
         all_frames = list(range(self.ny * self.nx))
@@ -1371,17 +1401,19 @@ class GrainMap:
             if len(c) > 0
         ]
         meta = {
-            "h5_path":       self.h5_path,
-            "h5_dataset":    h5_dataset,
-            "seg_dir":       dirs["seg"],
-            "mask_path":     mask_path,
-            "method":        method,
-            "method_kwargs": method_kwargs or {},
-            "min_size":      min_size,
-            "max_size":      max_size,
+            "h5_path":        self.h5_path,
+            "h5_dataset":     h5_dataset,
+            "seg_dir":        dirs["seg"],
+            "mask_path":      mask_path,
+            "method":         method,
+            "method_kwargs":  method_kwargs or {},
+            "min_size":       min_size,
+            "max_size":       max_size,
             "gap_exclude":    gap_exclude,
             "bg_sigma":       bg_sigma,
             "max_components": max_components,
+            "r_squared_min":  r_squared_min,
+            "include_unfitted": include_unfitted,
         }
         meta_path = os.path.join(dirs["job_meta"], "seg_meta.json")
         with open(meta_path, "w") as fh:
@@ -1412,8 +1444,8 @@ class GrainMap:
         min_matched: int = 5,
         min_match_rate: float = 0.2,
         max_rms_px: float | None = None,
-        r_squared_min: float = 0.9,
-        include_unfitted: bool = False,
+        r_squared_min: "float | None" = None,
+        include_unfitted: "bool | None" = None,
         hmax: int | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
@@ -1432,8 +1464,25 @@ class GrainMap:
 
         Each UB reference matrix in *processing_dir* is tried independently;
         successful fits are written as ``frame_{idx:05d}_g{gi:02d}.npz``.
+
+        Parameters
+        ----------
+        r_squared_min : float or None
+            Minimum R² for spot inclusion.  ``None`` inherits the value stored
+            in ``seg_meta.json`` by :meth:`submit_segmentation`; falls back to
+            ``0.9`` if that file is absent.
+        include_unfitted : bool or None
+            Include spots whose Gaussian fit failed.  ``None`` inherits from
+            ``seg_meta.json``; falls back to ``False``.
         """
         dirs = self.setup_processing_dirs(base_dir)
+
+        # Inherit filtering thresholds from the segmentation step if not set.
+        _seg = self._seg_defaults(base_dir)
+        if r_squared_min is None:
+            r_squared_min = _seg.get("r_squared_min", 0.9)
+        if include_unfitted is None:
+            include_unfitted = _seg.get("include_unfitted", False)
 
         crystal_pkl = os.path.join(dirs["job_meta"], "crystal.pkl")
         with open(crystal_pkl, "wb") as fh:
@@ -1499,8 +1548,8 @@ class GrainMap:
         python_bin: str = "python",
         max_match_px=10.0,
         fit_strain: list | None = None,
-        r_squared_min: float = 0.9,
-        include_unfitted: bool = False,
+        r_squared_min: "float | None" = None,
+        include_unfitted: "bool | None" = None,
         hmax: int | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
@@ -1520,8 +1569,25 @@ class GrainMap:
 
         Requires orientation results in ``base_dir/ubs/`` (run
         :meth:`submit_orientation` first).
+
+        Parameters
+        ----------
+        r_squared_min : float or None
+            Minimum R² for spot inclusion.  ``None`` inherits the value stored
+            in ``seg_meta.json`` by :meth:`submit_segmentation`; falls back to
+            ``0.9`` if that file is absent.
+        include_unfitted : bool or None
+            Include spots whose Gaussian fit failed.  ``None`` inherits from
+            ``seg_meta.json``; falls back to ``False``.
         """
         dirs = self.setup_processing_dirs(base_dir)
+
+        # Inherit filtering thresholds from the segmentation step if not set.
+        _seg = self._seg_defaults(base_dir)
+        if r_squared_min is None:
+            r_squared_min = _seg.get("r_squared_min", 0.9)
+        if include_unfitted is None:
+            include_unfitted = _seg.get("include_unfitted", False)
 
         crystal_pkl = os.path.join(dirs["job_meta"], "crystal.pkl")
         if not os.path.exists(crystal_pkl):

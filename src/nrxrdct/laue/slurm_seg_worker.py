@@ -62,23 +62,26 @@ def _process_frame(
 
     try:
         valid = detector_mask if detector_mask is not None else np.ones(frame.shape, dtype=bool)
-        bg = gaussian_background(frame, valid, sigma=bg_sigma)
-        frame = frame - bg
-        frame -= frame[valid].min()
-        frame[~valid] = 0.0
+
+        # Background subtraction for spot detection only — keep original intensities.
+        bg       = gaussian_background(frame, valid, sigma=bg_sigma)
+        frame_sub = frame - bg
+        frame_sub -= frame_sub[valid].min()
+        frame_sub[~valid] = 0.0
 
         if method.upper() == "WTH":
-            seg_mask = WTH_segmentation(frame, detector_mask, **method_kwargs)
+            seg_mask = WTH_segmentation(frame_sub, detector_mask, **method_kwargs)
         elif method.upper() == "HYBRID":
-            seg_mask = hybrid_segmentation(frame, detector_mask, **method_kwargs)
+            seg_mask = hybrid_segmentation(frame_sub, detector_mask, **method_kwargs)
         else:
-            seg_mask = LoG_segmentation(frame, detector_mask, **method_kwargs)
+            seg_mask = LoG_segmentation(frame_sub, detector_mask, **method_kwargs)
 
         final_mask, _ = clean_segmentation(
-            seg_mask, detector_mask, frame,
+            seg_mask, detector_mask, frame_sub,
             min_size=min_size, max_size=max_size, gap_exclude=gap_exclude,
         )
 
+        # Gaussian fits and intensity measurements use the original (unmodified) frame.
         filt_im = filter_and_rescale_images(frame, cutoff_freq=0.001)
         label_img, _, _ = label_segmented_image(final_mask, filt_im)
         regionprops = measure_peaks(label_img, filt_im)

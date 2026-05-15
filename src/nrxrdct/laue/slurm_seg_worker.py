@@ -64,23 +64,25 @@ def _process_frame(
         return True  # resume: already done
 
     try:
-        valid = detector_mask if detector_mask is not None else np.ones(frame.shape, dtype=bool)
+        # Always work with a concrete boolean mask.  When none is supplied,
+        # derive it from the frame: invalid pixels are stored as zero.
+        valid = detector_mask if detector_mask is not None else (frame > 0)
 
         # Background subtraction for spot detection only — keep original intensities.
-        bg       = gaussian_background(frame, valid, sigma=bg_sigma)
+        bg        = gaussian_background(frame, valid, sigma=bg_sigma)
         frame_sub = frame - bg
         frame_sub -= frame_sub[valid].min()
         frame_sub[~valid] = 0.0
 
         if method.upper() == "WTH":
-            seg_mask = WTH_segmentation(frame_sub, detector_mask, **method_kwargs)
+            seg_mask = WTH_segmentation(frame_sub, valid, **method_kwargs)
         elif method.upper() == "HYBRID":
-            seg_mask = hybrid_segmentation(frame_sub, detector_mask, **method_kwargs)
+            seg_mask = hybrid_segmentation(frame_sub, valid, **method_kwargs)
         else:
-            seg_mask = LoG_segmentation(frame_sub, detector_mask, **method_kwargs)
+            seg_mask = LoG_segmentation(frame_sub, valid, **method_kwargs)
 
         final_mask, _ = clean_segmentation(
-            seg_mask, detector_mask, frame_sub,
+            seg_mask, valid, frame_sub,
             min_size=min_size, max_size=max_size, gap_exclude=gap_exclude,
         )
 

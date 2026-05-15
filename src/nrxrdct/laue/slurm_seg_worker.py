@@ -55,6 +55,7 @@ def _process_frame(
     gap_exclude: int,
     bg_sigma: float,
     max_components: int,
+    d: int,
 ) -> bool:
     out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
     if os.path.exists(out_path):
@@ -88,7 +89,7 @@ def _process_frame(
 
         tmp = out_path + ".tmp"
         write_h5_spotsfile(filt_im, regionprops, outpath=tmp, overwrite=True,
-                           max_components=max_components)
+                           d=d, max_components=max_components)
         os.rename(tmp, out_path)
         return True
 
@@ -144,6 +145,7 @@ def main() -> None:
             gap_exclude    = meta.get("gap_exclude", 3),
             bg_sigma       = meta.get("bg_sigma", 251),
             max_components = meta.get("max_components", 1),
+            d              = meta.get("d", 10),
         )
         n_ok   += ok
         n_fail += not ok

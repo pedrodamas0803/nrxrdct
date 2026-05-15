@@ -1356,6 +1356,7 @@ class GrainMap:
         gap_exclude: int = 3,
         bg_sigma: float = 251,
         max_components: int = 1,
+        d: int = 10,
         r_squared_min: float = 0.9,
         include_unfitted: bool = False,
         extra_sbatch: dict | None = None,
@@ -1363,35 +1364,114 @@ class GrainMap:
         """
         Submit segmentation jobs to SLURM.
 
+        Each job processes an assigned subset of frames and writes one HDF5
+        spots file per frame under ``base_dir/seg/``.  The pipeline is:
+
+        1. Estimate and subtract a Gaussian background (sigma ``bg_sigma``)
+           from the raw frame — **used only for spot detection**.
+        2. Detect spots with the chosen segmentation method.
+        3. Clean the binary mask (size filter, border removal).
+        4. Measure regionprops and fit a 2-D Gaussian to the **original**
+           (unmodified) frame intensities inside a ``(2d)×(2d)`` ROI around
+           each centroid.
+        5. Write results to ``seg_dir/frame_{idx:05d}.h5``.
+
         Parameters
         ----------
         base_dir : str
-            Root processing directory.  Subdirs are created automatically.
+            Root processing directory.  The sub-directories ``seg/``,
+            ``ubs/``, ``strain/``, ``slurm_logs/``, and ``job_meta/`` are
+            created automatically if they do not exist.
         h5_dataset : str
-            HDF5 dataset path inside *h5_path* that holds the image stack.
+            HDF5 dataset path inside ``self.h5_path`` that holds the image
+            stack, e.g. ``'1.1/measurement/det'``.
         n_jobs : int
-            Number of SLURM jobs (frames split evenly).
+            Number of SLURM array jobs.  Frames are split as evenly as
+            possible across jobs.  Default ``10``.
+        partition : str
+            SLURM partition name.  Default ``'all'``.
+        time : str
+            Wall-clock time limit per job in ``HH:MM:SS`` format.
+            Default ``'01:00:00'``.
+        mem : str
+            Memory per job, e.g. ``'4G'``, ``'16G'``.  Default ``'4G'``.
+        cpus_per_task : int
+            CPU cores requested per job.  Default ``1``.
+        python_bin : str
+            Python executable used in the ``--wrap`` command.  Default
+            ``'python'``.
+        mask_path : str or None
+            Path to a ``.npy`` boolean array marking valid detector pixels
+            (``True`` = active).  ``None`` treats the whole frame as valid.
         method : str
-            ``'LoG'`` (Laplacian of Gaussian), ``'WTH'`` (white top-hat), or
-            ``'HYBRID'`` (LoG for large spots + WTH for small spots, OR-combined).
+            Spot-detection algorithm:
+
+            ``'LoG'``
+                Laplacian-of-Gaussian blob detector.  Good for round,
+                diffuse spots.
+            ``'WTH'``
+                White top-hat transform.  More robust on strong or uneven
+                background.
+            ``'HYBRID'``
+                LoG and WTH responses combined with a logical OR; best
+                when the pattern contains both large and small spots.
+
+            Default ``'LoG'``.
         method_kwargs : dict or None
-            Extra kwargs forwarded to the chosen segmentation function.
-            For ``'HYBRID'``: ``log_sigmas``, ``wth_disk_radius``,
-            ``threshold_percentile``.
+            Extra keyword arguments forwarded to the segmentation function.
+            Useful keys by method:
+
+            * ``'LoG'``: ``sigmas``, ``threshold_percentile``
+            * ``'WTH'``: ``disk_radius``, ``threshold_percentile``
+            * ``'HYBRID'``: ``log_sigmas``, ``wth_disk_radius``,
+              ``threshold_percentile``
+        min_size : int
+            Minimum connected-component area in pixels; smaller blobs are
+            discarded.  Default ``3``.
+        max_size : int
+            Maximum connected-component area in pixels; larger blobs are
+            discarded.  Default ``500``.
+        gap_exclude : int
+            Width in pixels of the border region to clear before labelling
+            (removes spots cut off by the detector edge).  Default ``3``.
         bg_sigma : float
-            Gaussian sigma (pixels) for background estimation.  A large-scale
-            Gaussian is fitted to the frame, subtracted, and the result is
-            shifted to be entirely non-negative before segmentation.
+            Gaussian sigma (pixels) for FFT-based background estimation.
+            A large value (≥ several spot spacings) captures the slowly
+            varying beam profile.  The subtracted frame is used only for
+            segmentation; Gaussian fits are performed on the original
+            intensities.  Default ``251``.
+        max_components : int
+            Maximum number of Gaussian components tried per spot during
+            fitting.  ``1`` fits a single 2-D Gaussian; higher values
+            attempt mixture models for overlapping spots.  Default ``1``.
+        d : int
+            Half-size in pixels of the square ROI cropped around each spot
+            centroid for Gaussian fitting.  The crop window is
+            ``(2d) × (2d)`` pixels.  Increase for large or diffuse spots;
+            decrease to speed up fitting for small, sharp spots.
+            Default ``10``.
         r_squared_min : float
-            Minimum R² of the Gaussian fit for a spot to be included in the
-            peak list when the segmentation results are loaded by the
-            orientation and strain workers.  Stored in ``seg_meta.json`` and
-            used as the default for :meth:`submit_orientation` and
-            :meth:`submit_strain` unless overridden there.  Default ``0.9``.
+            Minimum R² of the Gaussian fit for a spot to be accepted.
+            Spots below this threshold are either skipped or stored without
+            fit parameters (see *include_unfitted*).  This value is stored
+            in ``seg_meta.json`` and used as the default for
+            :meth:`submit_orientation` and :meth:`submit_strain` unless
+            explicitly overridden there.  Default ``0.9``.
         include_unfitted : bool
-            If ``True``, spots whose Gaussian fit failed are still included
-            using their raw centroid.  Stored in ``seg_meta.json`` and
-            inherited by downstream workers.  Default ``False``.
+            If ``True``, spots whose best Gaussian fit has R² < *r_squared_min*
+            are still written to the HDF5 file using the raw weighted
+            centroid as position (shape parameters set to zero).  If
+            ``False``, those spots are silently discarded.  Stored in
+            ``seg_meta.json`` and inherited by downstream workers.
+            Default ``False``.
+        extra_sbatch : dict or None
+            Additional ``sbatch`` options passed as ``--key=value`` flags,
+            e.g. ``{'account': 'myproject', 'constraint': 'gpu'}``.
+
+        Returns
+        -------
+        list of str
+            SLURM job IDs, one per submitted job.
         """
         dirs = self.setup_processing_dirs(base_dir)
         all_frames = list(range(self.ny * self.nx))
@@ -1412,6 +1492,7 @@ class GrainMap:
             "gap_exclude":    gap_exclude,
             "bg_sigma":       bg_sigma,
             "max_components": max_components,
+            "d":              d,
             "r_squared_min":  r_squared_min,
             "include_unfitted": include_unfitted,
         }

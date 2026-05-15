@@ -921,7 +921,11 @@ def WTH_segmentation(
     radii = [disk_radius] if np.isscalar(disk_radius) else list(disk_radius)
 
     def _wth_response(r):
-        return sk.morphology.white_tophat(img, sk.morphology.disk(r))
+        # grey_opening with a scalar size uses a square footprint processed
+        # row- and column-wise via the van Herk–Gil–Werman O(N) algorithm,
+        # which is independent of r — far faster than a disk for large radii.
+        opened = ndi.grey_opening(img, size=2 * r + 1)
+        return img - opened
 
     with ThreadPoolExecutor() as pool:
         responses = list(pool.map(_wth_response, radii))

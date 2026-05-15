@@ -120,7 +120,9 @@ def _gnomonic_inv(gX: float, gY: float) -> np.ndarray:
 
     # Invert gnomonic with centre (lat0=π/4, long0=0), sin=cos=1/√2
     lat    = np.arcsin(np.clip((cos_c + gY * sin_c / r) / np.sqrt(2.0), -1.0, 1.0))
-    longit = np.arctan2(np.sqrt(2.0) * gX * sin_c, r * cos_c - gY * sin_c)
+    # Note the negation of gX: _gnomonic uses sin(longit0 - longit) = -sin(longit),
+    # so gX = -cos(lat)*sin(longit)/cosad — opposite sign from the standard formula.
+    longit = np.arctan2(-np.sqrt(2.0) * gX * sin_c, r * cos_c - gY * sin_c)
 
     cl, sl   = np.cos(lat),    np.sin(lat)
     clo, slo = np.cos(longit), np.sin(longit)

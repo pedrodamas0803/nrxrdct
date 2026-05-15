@@ -365,6 +365,25 @@ class IndexResult:
     n_candidates : int
     success      : bool
 
+    def save_U(self, path: str) -> None:
+        """
+        Save the orientation matrix to a ``.npy`` file.
+
+        Parameters
+        ----------
+        path : str
+            Output path.  If the filename has no extension, ``.npy`` is
+            appended automatically by :func:`numpy.save`.
+
+        Examples
+        --------
+        >>> idx = index_orientation(crystal, camera, obs_xy)
+        >>> idx.save_U("UB0.npy")   # ready for submit_orientation
+        """
+        import os
+        np.save(path, self.U)
+        print(f"IndexResult.save_U → {os.path.abspath(path)}")
+
     def __str__(self) -> str:
         status = "OK" if self.success else "FAILED"
         h1, h2 = self.hkl_pair
@@ -566,7 +585,7 @@ def remove_grain_spots(
     U: np.ndarray,
     crystal,
     camera,
-    match_px: float = 5.0,
+    max_match_px: float = 5.0,
     f2_thresh: float = 1e-6,
     hmax: int = HMAX,
     E_min_eV: float = E_MIN_eV,
@@ -578,7 +597,7 @@ def remove_grain_spots(
     Uses the same Hungarian algorithm as the fitter so that the attribution
     is identical to what ``fit_orientation`` does internally.  Only spots
     that are uniquely assigned to a simulated reflection **and** within
-    *match_px* are removed; ambiguous or distant observed spots are kept.
+    *max_match_px* are removed; ambiguous or distant observed spots are kept.
 
     Typical use — iterative multi-grain peeling::
 
@@ -593,16 +612,16 @@ def remove_grain_spots(
 
     Parameters
     ----------
-    obs      : (N, K) array-like   Observed spots. The first two columns must
-                                   be pixel positions ``[xcam, ycam]``; any
-                                   additional columns (intensities, widths, …)
-                                   are preserved unchanged in the output.
-    U        : (3, 3) array-like   Orientation matrix of the grain to remove.
-    crystal  : Crystal             xrayutilities crystal structure.
-    camera   : Camera              Detector geometry.
-    match_px : float               Maximum pixel distance for a match.
-                                   Should match the tolerance used in
-                                   ``fit_orientation``.  Default ``5.0``.
+    obs          : (N, K) array-like   Observed spots. The first two columns must
+                                       be pixel positions ``[xcam, ycam]``; any
+                                       additional columns (intensities, widths, …)
+                                       are preserved unchanged in the output.
+    U            : (3, 3) array-like   Orientation matrix of the grain to remove.
+    crystal      : Crystal             xrayutilities crystal structure.
+    camera       : Camera              Detector geometry.
+    max_match_px : float               Maximum pixel distance for a match.
+                                       Should match the tolerance used in
+                                       ``fit_orientation``.  Default ``5.0``.
     f2_thresh : float              Structure-factor threshold for the
                                    removal simulation.  Use a very small value
                                    (default ``1e-6``) to generate essentially
@@ -639,9 +658,9 @@ def remove_grain_spots(
         diff    = obs_xy[:, None, :] - sim_xy[None, :, :]      # (N_obs, N_sim, 2)
         dist    = np.sqrt((diff ** 2).sum(axis=-1))             # (N_obs, N_sim)
         row_ind, col_ind = linear_sum_assignment(
-            np.minimum(dist, match_px)
+            np.minimum(dist, max_match_px)
         )
-        hit = row_ind[dist[row_ind, col_ind] < match_px]
+        hit = row_ind[dist[row_ind, col_ind] < max_match_px]
         claimed[hit] = True
 
     return obs[~claimed], claimed

@@ -1340,9 +1340,10 @@ class GrainMap:
     def submit_segmentation(
         self,
         base_dir: str,
-        h5_dataset: str,
+        h5_dataset: "str | None" = None,
         n_jobs: int = 10,
         *,
+        tiff_dir: "str | None" = None,
         partition: str = "all",
         time: str = "01:00:00",
         mem: str = "4G",
@@ -1382,9 +1383,16 @@ class GrainMap:
             Root processing directory.  The sub-directories ``seg/``,
             ``ubs/``, ``strain/``, ``slurm_logs/``, and ``job_meta/`` are
             created automatically if they do not exist.
-        h5_dataset : str
+        h5_dataset : str or None
             HDF5 dataset path inside ``self.h5_path`` that holds the image
-            stack, e.g. ``'1.1/measurement/det'``.
+            stack, e.g. ``'1.1/measurement/det'``.  Mutually exclusive with
+            *tiff_dir*; exactly one must be supplied.
+        tiff_dir : str or None
+            Path to a directory containing one TIFF file per frame, named
+            ``img_<number>.tif`` (e.g. ``img_1500.tif``).  Files are sorted
+            by their embedded number and mapped to 0-based frame indices in
+            that order.  Motor positions are still read from ``self.h5_path``
+            as usual.  Mutually exclusive with *h5_dataset*.
         n_jobs : int
             Number of SLURM array jobs.  Frames are split as evenly as
             possible across jobs.  Default ``10``.
@@ -1473,6 +1481,14 @@ class GrainMap:
         list of str
             SLURM job IDs, one per submitted job.
         """
+        if h5_dataset is None and tiff_dir is None:
+            raise ValueError(
+                "Provide either h5_dataset (HDF5 image stack) "
+                "or tiff_dir (folder of img_*.tif files)."
+            )
+        if h5_dataset is not None and tiff_dir is not None:
+            raise ValueError("Provide h5_dataset or tiff_dir, not both.")
+
         dirs = self.setup_processing_dirs(base_dir)
         all_frames = list(range(self.ny * self.nx))
         chunks = [
@@ -1483,6 +1499,7 @@ class GrainMap:
         meta = {
             "h5_path":        self.h5_path,
             "h5_dataset":     h5_dataset,
+            "tiff_dir":       tiff_dir,
             "seg_dir":        dirs["seg"],
             "mask_path":      mask_path,
             "method":         method,

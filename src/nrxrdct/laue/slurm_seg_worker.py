@@ -23,11 +23,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
 import h5py
 import numpy as np
+import skimage as sk
 
 from nrxrdct.laue.segmentation import (
     LoG_segmentation,
@@ -98,6 +100,39 @@ def _process_frame(
         return False
 
 
+def _load_tiff_frames(tiff_dir: str, frame_indices: list) -> dict:
+    """
+    Load TIFF frames from *tiff_dir*.
+
+    Files must match ``img_<number>.tif`` (case-insensitive).  They are
+    sorted by their embedded number and mapped to 0-based frame indices in
+    that order (i.e. the file with the smallest number → frame 0).
+
+    Returns
+    -------
+    dict[int, np.ndarray]  mapping frame_idx → float32 image array.
+    """
+    pattern = re.compile(r'^img_(\d+)\.tif$', re.IGNORECASE)
+    all_files = []
+    for fname in os.listdir(tiff_dir):
+        m = pattern.match(fname)
+        if m:
+            all_files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+    all_files.sort(key=lambda x: x[0])
+
+    idx_to_path = {fi: path for fi, (_, path) in enumerate(all_files)}
+
+    frames = {}
+    for fi in frame_indices:
+        if fi not in idx_to_path:
+            continue
+        try:
+            frames[fi] = sk.io.imread(idx_to_path[fi]).astype(np.float32)
+        except Exception as exc:
+            print(f"  ✗  frame {fi}: TIFF read: {exc}", flush=True)
+    return frames
+
+
 def main() -> None:
     p = argparse.ArgumentParser(
         description="nrxrdct Laue segmentation worker (one SLURM job)"
@@ -116,23 +151,31 @@ def main() -> None:
     mask_path = meta.get("mask_path")
     detector_mask = np.load(mask_path).astype(bool) if mask_path else None
 
+    tiff_dir = meta.get("tiff_dir")
+    source_label = f"tiff:{tiff_dir}" if tiff_dir else f"h5:{meta.get('h5_dataset')}"
     print(
         f"Seg worker — {len(frame_indices)} frames | "
         f"method={meta.get('method', 'LoG')} | "
-        f"dataset={meta['h5_dataset']}",
+        f"source={source_label}",
         flush=True,
     )
 
-    # Load all assigned frames in one HDF5 access to avoid repeated file opens.
+    # Load all assigned frames in a single I/O pass.
     t_io = time.time()
-    with h5py.File(meta["h5_path"], "r") as f:
-        ds = f[meta["h5_dataset"]]
-        frames = {fi: ds[fi].astype(np.float32) for fi in frame_indices}
-    print(f"  HDF5 read done ({time.time() - t_io:.1f}s)", flush=True)
+    if tiff_dir:
+        frames = _load_tiff_frames(tiff_dir, frame_indices)
+    else:
+        with h5py.File(meta["h5_path"], "r") as f:
+            ds = f[meta["h5_dataset"]]
+            frames = {fi: ds[fi].astype(np.float32) for fi in frame_indices}
+    print(f"  image read done ({time.time() - t_io:.1f}s)", flush=True)
 
     t0 = time.time()
     n_ok = n_fail = 0
     for fi in frame_indices:
+        if fi not in frames:
+            n_fail += 1
+            continue
         ok = _process_frame(
             fi,
             frames[fi],

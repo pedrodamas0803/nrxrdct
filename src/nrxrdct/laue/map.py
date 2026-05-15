@@ -362,6 +362,71 @@ class GrainMap:
                     )
         return misor
 
+    def kam_map(
+        self,
+        grain: int = 0,
+        kernel: int = 1,
+        max_misor_deg: float | None = 5.0,
+    ) -> np.ndarray:
+        """
+        Kernel Average Misorientation (KAM) map.
+
+        For each fitted pixel the misorientation angle to every fitted
+        neighbour within a square kernel of half-size *kernel* is computed,
+        and the average of those angles is stored.  Pairs whose misorientation
+        exceeds *max_misor_deg* are excluded so that grain-boundary pixels do
+        not inflate the KAM inside grains.
+
+        Parameters
+        ----------
+        grain : int
+            Grain index (0-based).  Default ``0``.
+        kernel : int
+            Half-size of the square neighbourhood in pixels.  ``1`` uses all
+            8 immediate neighbours (3×3 kernel excluding the centre); ``2``
+            uses a 5×5 neighbourhood, and so on.  Default ``1``.
+        max_misor_deg : float or None
+            Neighbour pairs with misorientation above this value are ignored.
+            Set to ``None`` to include all neighbours regardless of angle.
+            Default ``5.0``°.
+
+        Returns
+        -------
+        kam : (ny, nx) ndarray
+            KAM values in degrees.  ``NaN`` at unfitted points or points
+            with no valid neighbours.
+        """
+        U     = self.U[grain]                                    # (ny, nx, 3, 3)
+        valid = ~np.any(np.isnan(U), axis=(-2, -1))             # (ny, nx) bool
+
+        offsets = [
+            (dy, dx)
+            for dy in range(-kernel, kernel + 1)
+            for dx in range(-kernel, kernel + 1)
+            if (dy, dx) != (0, 0)
+        ]
+
+        kam = np.full((self.ny, self.nx), np.nan)
+        for iy in range(self.ny):
+            for ix in range(self.nx):
+                if not valid[iy, ix]:
+                    continue
+                U0     = U[iy, ix]
+                angles = []
+                for dy, dx in offsets:
+                    jy, jx = iy + dy, ix + dx
+                    if (0 <= jy < self.ny and 0 <= jx < self.nx
+                            and valid[jy, jx]):
+                        dR    = U0 @ U[jy, jx].T
+                        angle = np.degrees(
+                            Rotation.from_matrix(dR).magnitude()
+                        )
+                        if max_misor_deg is None or angle <= max_misor_deg:
+                            angles.append(angle)
+                if angles:
+                    kam[iy, ix] = float(np.mean(angles))
+        return kam
+
     # ── Visualisation ─────────────────────────────────────────────────────────
 
     _SCALAR_QUANTITIES = {
@@ -607,6 +672,109 @@ class GrainMap:
         fig.tight_layout()
         return fig, axes_arr
 
+    def plot_kam(
+        self,
+        grain: int = 0,
+        kernel: int = 1,
+        max_misor_deg: float | None = 5.0,
+        *,
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple | None = None,
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot the Kernel Average Misorientation (KAM) map.
+
+        Calls :meth:`kam_map` and displays the result.  The KAM value at
+        each pixel is the mean misorientation angle (°) to its neighbours
+        within a square kernel of half-size *kernel*, excluding pairs above
+        *max_misor_deg* (grain boundaries).
+
+        Parameters
+        ----------
+        grain : int
+            Grain index (0-based).  Default ``0``.
+        kernel : int
+            Half-size of the square neighbourhood in pixels.  ``1`` → 8
+            immediate neighbours; ``2`` → 24 neighbours in a 5×5 window.
+            Default ``1``.
+        max_misor_deg : float or None
+            Neighbour pairs with misorientation above this threshold are
+            excluded from the average.  ``None`` includes all neighbours.
+            Default ``5.0``°.
+        ax : Axes or None
+            Existing axes to draw on.  If ``None`` a new figure is created.
+        cmap : str or None
+            Colormap.  Defaults to ``'inferno'``.
+        vmin, vmax : float or None
+            Color scale limits.  ``None`` uses the data range.
+        motor_x, motor_y : str or None
+            Motor names for axis labels (from ``self.motors``).
+        motor_units : dict or None
+            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        title : str or None
+            Axes title.  Auto-generated if ``None``.
+        figsize : tuple or None
+            Figure size.  Defaults to ``(6, 5)``.
+        colorbar : bool
+            Whether to add a colorbar.  Default ``True``.
+
+        Returns
+        -------
+        fig : Figure
+        ax  : Axes
+        """
+        data = self.kam_map(grain, kernel=kernel, max_misor_deg=max_misor_deg)
+        cmap = cmap or "inferno"
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize or (6, 5))
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data,
+            origin="upper", extent=extent,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            interpolation="nearest", aspect="auto",
+        )
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label("KAM (°)", fontsize=9)
+
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        _t = (
+            title or
+            f"Grain {grain + 1}  —  KAM  "
+            f"(kernel={kernel}, max={max_misor_deg}°)"
+        )
+        ax.set_title(_t, fontsize=10)
+        fig.tight_layout()
+        return fig, ax
+
     # ── strain component map ──────────────────────────────────────────────────
 
     _STRAIN_INDICES = {
@@ -762,6 +930,147 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    def plot_strain_histogram(
+        self,
+        components: "list[str] | None" = None,
+        grains: "list[int] | None" = None,
+        *,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        bins: int = 40,
+        density: bool = False,
+        scale: float = 1e3,
+        alpha: float = 0.7,
+        figsize: tuple | None = None,
+        title: str | None = None,
+    ) -> tuple:
+        """
+        Histogram of strain-tensor components for one or more grains.
+
+        Each component gets its own subplot; when multiple grains are
+        requested their distributions are overlaid with different colours.
+        A vertical dashed line marks the mean of each distribution.
+
+        Parameters
+        ----------
+        components : list of str or None
+            Strain components to plot.  Valid values: ``'e_xx'``, ``'e_yy'``,
+            ``'e_zz'``, ``'e_xy'``, ``'e_xz'``, ``'e_yz'``.  ``None`` plots
+            all six.  Default ``None``.
+        grains : list of int or None
+            Grain indices to include.  ``None`` uses all grains.
+            Default ``None``.
+        frame : str
+            Reference frame for the strain tensor:
+
+            ``'crystal'``
+                Components in the crystal coordinate system (as fitted).
+            ``'lab'``
+                Rotated to the lab frame via ``ε_lab = U @ ε @ Uᵀ``.
+            ``'sample'``
+                Lab frame further rotated by *sample_tilt_deg* about
+                *sample_tilt_axis*.
+
+        sample_tilt_deg : float
+            Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+        sample_tilt_axis : str
+            Lab axis of the tilt rotation.  Default ``'y'``.
+        bins : int
+            Number of histogram bins.  Default ``40``.
+        density : bool
+            If ``True``, normalise each histogram to unit area.
+            Default ``False``.
+        scale : float
+            Multiplicative factor applied to all strain values before
+            plotting.  The default ``1e3`` converts dimensionless strain to
+            millistrain (×10⁻³), giving axis values near 1 for typical
+            elastic strains.
+        alpha : float
+            Bar transparency (0–1).  Default ``0.7``.
+        figsize : tuple or None
+            Figure size.  Auto-sized if ``None``.
+        title : str or None
+            Overall figure suptitle.  Auto-generated if ``None``.
+
+        Returns
+        -------
+        fig : Figure
+        axes : ndarray of Axes  (shape matches the subplot grid)
+        """
+        _all_components = list(self._STRAIN_INDICES.keys())
+        components = list(components) if components is not None else _all_components
+
+        invalid = [c for c in components if c not in self._STRAIN_INDICES]
+        if invalid:
+            raise ValueError(
+                f"Unknown component(s) {invalid}. "
+                f"Choose from: {_all_components}"
+            )
+
+        grains = list(grains) if grains is not None else list(range(self.n_grains))
+
+        # ── subplot grid ──────────────────────────────────────────────────────
+        n    = len(components)
+        ncols = min(n, 3)
+        nrows = int(np.ceil(n / ncols))
+
+        default_fs = (4.5 * ncols, 3.5 * nrows)
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=figsize or default_fs,
+            squeeze=False,
+        )
+
+        prop_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        scale_str  = f"  ×10⁻³" if scale == 1e3 else (
+                     f"  ×{scale:.0e}" if scale != 1.0 else "")
+
+        for idx, comp in enumerate(components):
+            row, col = divmod(idx, ncols)
+            ax       = axes[row, col]
+            label    = self._STRAIN_LABELS[comp] + scale_str
+
+            for gi, grain in enumerate(grains):
+                data = self._strain_component_map(
+                    comp, grain, frame, sample_tilt_deg, sample_tilt_axis
+                )
+                vals = data[np.isfinite(data)].ravel() * scale
+                if vals.size == 0:
+                    continue
+
+                color  = prop_cycle[gi % len(prop_cycle)]
+                glabel = f"Grain {grain + 1}" if self.n_grains > 1 else None
+                ax.hist(vals, bins=bins, density=density,
+                        color=color, alpha=alpha, label=glabel)
+                ax.axvline(float(np.mean(vals)), color=color,
+                           linestyle="--", linewidth=1.2, alpha=0.9)
+
+            ax.set_xlabel(label, fontsize=9)
+            ax.set_ylabel("Density" if density else "Count", fontsize=9)
+            ax.set_title(self._STRAIN_LABELS[comp], fontsize=10)
+            ax.tick_params(labelsize=8)
+
+            if self.n_grains > 1 and idx == 0:
+                ax.legend(fontsize=7, framealpha=0.7)
+
+        # Hide any unused axes in the last row
+        for idx in range(n, nrows * ncols):
+            row, col = divmod(idx, ncols)
+            axes[row, col].set_visible(False)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }[frame]
+        fig.suptitle(
+            title or f"Strain histogram  [{_frame_label}]",
+            fontsize=11, y=1.01,
+        )
+        fig.tight_layout()
+        return fig, axes
+
     # ── IPF map ───────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -810,10 +1119,10 @@ class GrainMap:
     @staticmethod
     def _cubic_ipf_colorkey(N: int = 256) -> np.ndarray:
         """
-        Render the cubic IPF color key as an (N, N, 3) float32 RGB image.
+        Render the cubic IPF color key as an (N, N, 4) float32 RGBA image.
 
         The standard triangle [001]–[011]–[111] is filled; pixels outside
-        are white.  In the returned image rows correspond to increasing *p*
+        have alpha=0 (transparent).  Rows correspond to increasing *p*
         (phi, bottom = [001]–[011] edge) and columns to increasing *t*
         (theta, left = [001]).
         """
@@ -828,8 +1137,8 @@ class GrainMap:
         p_b[0] = 0.0   # exact zero at s = 0
 
         # For each column index (t value) the maximum allowed p.
-        p_max = np.interp(t_vals, t_b, p_b)   # shape (N,)
-        inside = P <= p_max[np.newaxis, :]     # broadcast over rows
+        p_max  = np.interp(t_vals, t_b, p_b)   # shape (N,)
+        inside = P <= p_max[np.newaxis, :]      # broadcast over rows
 
         r_c = P
         g_c = T * (1.0 - P)
@@ -837,13 +1146,24 @@ class GrainMap:
         mx  = np.maximum(np.maximum(r_c, g_c), b_c)
         mx  = np.maximum(mx, 1e-10)
 
-        rgb         = np.stack([r_c / mx, g_c / mx, b_c / mx], axis=-1).astype(np.float32)
-        rgb[~inside] = 1.0
-        return rgb
+        rgba          = np.zeros((N, N, 4), dtype=np.float32)
+        rgba[..., 0]  = r_c / mx
+        rgba[..., 1]  = g_c / mx
+        rgba[..., 2]  = b_c / mx
+        rgba[..., 3]  = inside.astype(np.float32)   # 0 = transparent outside
+        return rgba
 
     @staticmethod
-    def _ipf_colorkey_inset(parent_ax) -> None:
-        """Add the cubic IPF color-key as a small inset in *parent_ax*."""
+    def _ipf_colorkey_inset(parent_ax, c_mean: "np.ndarray | None" = None) -> None:
+        """Add the cubic IPF color-key as a small inset in *parent_ax*.
+
+        Parameters
+        ----------
+        c_mean : (3,) array or None
+            Mean crystal direction (already in the fundamental zone, i.e.
+            sorted absolute values).  If given, a marker is drawn at the
+            corresponding position in the triangle.
+        """
         try:
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
         except ImportError:
@@ -851,9 +1171,10 @@ class GrainMap:
 
         ax_key = inset_axes(parent_ax, width="28%", height="28%",
                             loc="lower right", borderpad=0.5)
+        ax_key.set_facecolor("none")
 
-        rgb = GrainMap._cubic_ipf_colorkey(200)
-        ax_key.imshow(rgb, origin="lower", extent=[0, 1, 0, 1],
+        rgba = GrainMap._cubic_ipf_colorkey(200)
+        ax_key.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
                       aspect="auto", interpolation="bilinear")
 
         # Corner labels
@@ -873,6 +1194,21 @@ class GrainMap:
         ])
         from matplotlib.patches import Polygon as _Poly
         ax_key.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.8))
+
+        # Average orientation marker
+        if c_mean is not None:
+            n = np.linalg.norm(c_mean)
+            if n > 1e-12:
+                d     = c_mean / n                        # already sorted abs
+                theta = np.arctan2(d[1], d[2])
+                phi   = np.arctan2(d[0], np.sqrt(d[1] ** 2 + d[2] ** 2))
+                t_avg = float(np.clip(theta / (np.pi / 4.0),             0.0, 1.0))
+                p_avg = float(np.clip(phi   / np.arctan(1.0 / np.sqrt(2.0)), 0.0, 1.0))
+                ax_key.scatter(
+                    [t_avg], [p_avg],
+                    s=55, marker="*", zorder=6,
+                    c="white", edgecolors="black", linewidths=0.7,
+                )
 
         ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
         ax_key.set_xticks([]); ax_key.set_yticks([])
@@ -958,6 +1294,19 @@ class GrainMap:
         # NaN → white
         img = np.where(np.isnan(rgb), 1.0, np.clip(rgb, 0.0, 1.0)).astype(np.float32)
 
+        # Mean orientation in the fundamental zone for the inset marker.
+        # Apply the same cubic symmetry reduction (_cubic_ipf_colors uses
+        # sorted absolute values) then average the unit vectors.
+        valid = ~np.any(np.isnan(c), axis=-1)
+        if valid.any():
+            c_v    = c[valid]
+            norms  = np.linalg.norm(c_v, axis=1, keepdims=True)
+            c_unit = c_v / np.maximum(norms, 1e-12)
+            c_sym  = np.sort(np.abs(c_unit), axis=1)   # fundamental-zone reps
+            c_mean = c_sym.mean(axis=0)                 # (3,)  h1 ≤ h2 ≤ h3
+        else:
+            c_mean = None
+
         # ── axis extent and labels ────────────────────────────────────────────
         mu  = motor_units or {}
         mx  = self.motors.get(motor_x) if motor_x else None
@@ -996,7 +1345,7 @@ class GrainMap:
         )
 
         if show_colorkey:
-            self._ipf_colorkey_inset(ax)
+            self._ipf_colorkey_inset(ax, c_mean=c_mean)
 
         fig.tight_layout()
         return fig, ax
@@ -1443,6 +1792,12 @@ class GrainMap:
         gap_exclude : int
             Width in pixels of the border region to clear before labelling
             (removes spots cut off by the detector edge).  Default ``3``.
+        gap_closing : int
+            Radius (pixels) of the disk used for binary closing of the
+            detector mask **before** the gap-exclusion dilation.  Closing
+            fills isolated dead pixels so that spots near a single bad pixel
+            are not incorrectly excluded by the gap zone.  Set to ``0`` to
+            disable closing (mask is used as-is).  Default ``3``.
         bg_sigma : float
             Gaussian sigma (pixels) for FFT-based background estimation.
             A large value (≥ several spot spacings) captures the slowly
@@ -1562,18 +1917,128 @@ class GrainMap:
         """
         Submit orientation-fitting jobs to SLURM.
 
-        Each UB reference matrix in *processing_dir* is tried independently;
-        successful fits are written as ``frame_{idx:05d}_g{gi:02d}.npz``.
+        Each job processes an assigned subset of frames.  For every frame the
+        worker loads the observed spot list, then tries each ``UB*.npy``
+        reference matrix in :attr:`ub_files` independently.  A fit is saved
+        only if it passes the quality thresholds (*min_matched*,
+        *min_match_rate*, *max_rms_px*).  The pipeline is:
+
+        1. Load observed spot positions from ``seg_dir/frame_{idx:05d}.h5``
+           (filtered by *r_squared_min* / *include_unfitted*).
+        2. Precompute allowed HKL reflections once per SLURM job.
+        3. For each ``UB*.npy`` reference matrix (grain index *gi*):
+
+           a. Run :func:`~nrxrdct.laue.fitting.fit_orientation` with the
+              staged *max_match_px* schedule.
+           b. Accept the result only if ``n_matched ≥ min_matched`` **and**
+              ``match_rate ≥ min_match_rate`` **and** (if set)
+              ``rms_px ≤ max_rms_px``.
+           c. Write ``ubs_dir/frame_{idx:05d}_g{gi:02d}.npz``.
+
+        Results are collected into the map arrays by
+        :meth:`collect_orientation`.
 
         Parameters
         ----------
+        base_dir : str
+            Root processing directory — the same path used for
+            :meth:`submit_segmentation`.  Sub-directories ``seg/``,
+            ``ubs/``, ``slurm_logs/``, and ``job_meta/`` are created if
+            absent.
+        crystal : Crystal or LayeredCrystal
+            Crystal structure object (xrayutilities ``Crystal`` or the
+            project's :class:`~nrxrdct.laue.layers.LayeredCrystal`).
+            Serialised with ``dill`` into ``job_meta/crystal.pkl`` and
+            deserialised inside each worker process.
+        camera : Camera
+            Detector geometry used for spot simulation.
+        n_jobs : int
+            Number of SLURM array jobs.  Frames are split as evenly as
+            possible.  Default ``10``.
+        partition : str
+            SLURM partition name.  Default ``'all'``.
+        time : str
+            Wall-clock time limit per job in ``HH:MM:SS`` format.
+            Default ``'02:00:00'``.
+        mem : str
+            Memory per job, e.g. ``'4G'``, ``'16G'``.  Default ``'4G'``.
+        cpus_per_task : int
+            CPU cores requested per SLURM job.  Each job spawns a
+            ``ProcessPoolExecutor`` that uses all allocated cores.
+            Default ``1``.
+        python_bin : str
+            Python executable used in the ``--wrap`` command.
+            Default ``'python'``.
+        max_match_px : float or list of float
+            Matching radius (pixels) for the spot-to-simulation assignment.
+            Pass a list for staged matching: e.g. ``[30, 10, 3]`` starts
+            with a loose radius to bootstrap the fit and tightens it in
+            successive rounds.  A single float is wrapped in a list.
+            Default ``30.0``.
+        min_matched : int
+            Minimum number of matched spots required to save a result.
+            Frames with fewer spots than this value are skipped entirely.
+            Default ``5``.
+        min_match_rate : float
+            Minimum match rate ``n_matched / min(n_obs, n_sim)`` required to
+            accept a fit.  Default ``0.2``.
+        max_rms_px : float or None
+            Maximum allowed RMS residual in pixels.  ``None`` disables this
+            filter.  Default ``None``.
         r_squared_min : float or None
-            Minimum R² for spot inclusion.  ``None`` inherits the value stored
-            in ``seg_meta.json`` by :meth:`submit_segmentation`; falls back to
+            Minimum R² of the Gaussian fit for a spot to be loaded from the
+            HDF5 spots file.  ``None`` inherits the value written by
+            :meth:`submit_segmentation` in ``seg_meta.json``; falls back to
             ``0.9`` if that file is absent.
         include_unfitted : bool or None
-            Include spots whose Gaussian fit failed.  ``None`` inherits from
-            ``seg_meta.json``; falls back to ``False``.
+            Whether to include spots whose Gaussian fit did not reach
+            *r_squared_min* (stored as raw centroid positions).  ``None``
+            inherits from ``seg_meta.json``; falls back to ``False``.
+        hmax : int or None
+            Maximum Miller index used when generating the list of allowed
+            reflections.  Higher values include weaker high-angle spots but
+            increase simulation time.  ``None`` uses the
+            :func:`~nrxrdct.laue.fitting.fit_orientation` default (``15``).
+        f2_thresh : float or None
+            Minimum squared structure factor |F|² for a reflection to be
+            included.  ``None`` uses the default (``1e-4``).
+        top_n_sim : int or None
+            Keep only the *top_n_sim* strongest simulated spots per frame.
+            ``None`` keeps all.
+        top_n_obs : int or None
+            Keep only the *top_n_obs* brightest observed spots per frame.
+            ``None`` keeps all.
+        method : str
+            ``scipy.optimize`` method passed to
+            :func:`~nrxrdct.laue.fitting.fit_orientation`.  ``'lm'``
+            (Levenberg–Marquardt) is fastest for unconstrained problems.
+            Default ``'lm'``.
+        ftol : float
+            Relative tolerance on the cost function for convergence.
+            Default ``1e-6``.
+        xtol : float
+            Relative tolerance on the parameter vector for convergence.
+            Default ``1e-6``.
+        gtol : float
+            Tolerance on the gradient norm for convergence.  Default ``1e-6``.
+        max_nfev : int or None
+            Maximum number of function evaluations per fit.  ``None`` uses
+            the scipy default (``100 * n_params``).
+        source : str or None
+            X-ray source spectrum model forwarded to
+            :func:`~nrxrdct.laue.simulation.simulate_laue`.  Common values:
+            ``'bending_magnet'``, ``'wiggler'``.  ``None`` uses the
+            simulation default.
+        source_kwargs : dict or None
+            Extra keyword arguments for the source spectrum model.
+        extra_sbatch : dict or None
+            Additional ``sbatch`` options passed as ``--key=value`` flags,
+            e.g. ``{'account': 'myproject', 'constraint': 'gpu'}``.
+
+        Returns
+        -------
+        list of str
+            SLURM job IDs, one per submitted job.
         """
         dirs = self.setup_processing_dirs(base_dir)
 
@@ -1667,18 +2132,109 @@ class GrainMap:
         """
         Submit strain-fitting jobs to SLURM.
 
-        Requires orientation results in ``base_dir/ubs/`` (run
-        :meth:`submit_orientation` first).
+        Requires orientation results produced by :meth:`submit_orientation`
+        (``base_dir/ubs/frame_*_g*.npz``).  For each frame and grain the
+        worker refines both the orientation matrix **and** the six independent
+        strain-tensor components simultaneously.  The pipeline is:
+
+        1. Load observed spot positions from ``seg_dir/frame_{idx:05d}.h5``
+           (filtered by *r_squared_min* / *include_unfitted*).
+        2. Precompute allowed HKL reflections once per SLURM job.
+        3. For each grain index *gi*, load the orientation matrix U from
+           ``ubs_dir/frame_{idx:05d}_g{gi:02d}.npz``.
+        4. Run :func:`~nrxrdct.laue.fitting.fit_strain_orientation` with the
+           staged *max_match_px* schedule, fitting only the strain components
+           listed in *fit_strain*.
+        5. Write ``strain_dir/frame_{idx:05d}_g{gi:02d}.npz`` containing
+           the updated U, strain tensor, and fit quality metrics.
+
+        Results are collected into the map arrays by :meth:`collect_strain`.
 
         Parameters
         ----------
+        base_dir : str
+            Root processing directory — the same path used for
+            :meth:`submit_segmentation` and :meth:`submit_orientation`.
+        crystal : Crystal or LayeredCrystal
+            Crystal structure object.  Reuses ``job_meta/crystal.pkl`` if it
+            already exists from the orientation step; otherwise writes it.
+        camera : Camera
+            Detector geometry.
+        n_jobs : int
+            Number of SLURM array jobs.  Default ``10``.
+        partition : str
+            SLURM partition name.  Default ``'all'``.
+        time : str
+            Wall-clock time limit per job in ``HH:MM:SS`` format.
+            Default ``'02:00:00'``.
+        mem : str
+            Memory per job, e.g. ``'4G'``, ``'16G'``.  Default ``'4G'``.
+        cpus_per_task : int
+            CPU cores requested per SLURM job.  Default ``1``.
+        python_bin : str
+            Python executable used in the ``--wrap`` command.
+            Default ``'python'``.
+        max_match_px : float or list of float
+            Matching radius (pixels) for the spot-to-simulation assignment.
+            Strain fitting starts from a good orientation, so a tighter
+            default (``10.0``) is appropriate compared to the orientation
+            step.  Pass a list for staged refinement, e.g. ``[10, 3]``.
+            Default ``10.0``.
+        fit_strain : list of str or None
+            Strain-tensor components to include in the fit.  Valid component
+            names are ``'e_xx'``, ``'e_yy'``, ``'e_zz'``, ``'e_xy'``,
+            ``'e_xz'``, ``'e_yz'``.  Components not listed are fixed at
+            zero.  ``None`` fits all six components.
+            Default ``None`` (all six).
         r_squared_min : float or None
-            Minimum R² for spot inclusion.  ``None`` inherits the value stored
-            in ``seg_meta.json`` by :meth:`submit_segmentation`; falls back to
-            ``0.9`` if that file is absent.
+            Minimum R² of the Gaussian fit for a spot to be loaded.  ``None``
+            inherits from ``seg_meta.json``; falls back to ``0.9``.
         include_unfitted : bool or None
-            Include spots whose Gaussian fit failed.  ``None`` inherits from
-            ``seg_meta.json``; falls back to ``False``.
+            Whether to include spots stored as raw centroids (Gaussian fit
+            failed).  ``None`` inherits from ``seg_meta.json``; falls back
+            to ``False``.
+        hmax : int or None
+            Maximum Miller index for generating allowed reflections.
+            ``None`` uses the fitting default (``15``).
+        f2_thresh : float or None
+            Minimum |F|² for reflection inclusion.  ``None`` uses the default
+            (``1e-4``).
+        top_n_sim : int or None
+            Keep only the *top_n_sim* strongest simulated spots.  ``None``
+            keeps all.
+        top_n_obs : int or None
+            Keep only the *top_n_obs* brightest observed spots.  ``None``
+            keeps all.
+        method : str
+            ``scipy.optimize`` method for :func:`fit_strain_orientation`.
+            Default ``'lm'``.
+        ftol : float
+            Relative tolerance on the cost function.  Default ``1e-6``.
+        xtol : float
+            Relative tolerance on the parameter vector.  Default ``1e-6``.
+        gtol : float
+            Gradient-norm tolerance.  Default ``1e-6``.
+        max_nfev : int or None
+            Maximum function evaluations per fit.  ``None`` uses the scipy
+            default.
+        strain_scale : float or None
+            Multiplicative scale applied to strain parameters inside the
+            optimizer to improve conditioning (strain components are ~10⁻³
+            while rotation angles are ~10⁻² rad).  ``None`` uses the
+            :func:`fit_strain_orientation` default.
+        source : str or None
+            X-ray source spectrum model.  ``None`` uses the simulation
+            default.
+        source_kwargs : dict or None
+            Extra keyword arguments for the source spectrum model.
+        extra_sbatch : dict or None
+            Additional ``sbatch`` options, e.g.
+            ``{'account': 'myproject'}``.
+
+        Returns
+        -------
+        list of str
+            SLURM job IDs, one per submitted job.
         """
         dirs = self.setup_processing_dirs(base_dir)
 

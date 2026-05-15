@@ -55,6 +55,7 @@ def _process_frame(
     min_size: int,
     max_size: int,
     gap_exclude: int,
+    gap_closing: int,
     bg_sigma: float,
     max_components: int,
     d: int,
@@ -83,16 +84,15 @@ def _process_frame(
 
         final_mask, _ = clean_segmentation(
             seg_mask, valid, frame_sub,
-            min_size=min_size, max_size=max_size, gap_exclude=gap_exclude,
+            min_size=min_size, max_size=max_size,
+            gap_exclude=gap_exclude, gap_closing=gap_closing,
         )
 
-        # Gaussian fits and intensity measurements use the original (unmodified) frame.
-        filt_im = filter_and_rescale_images(frame, cutoff_freq=0.001)
-        label_img, _, _ = label_segmented_image(final_mask, filt_im)
-        regionprops = measure_peaks(label_img, filt_im)
+        label_img, _, _ = label_segmented_image(final_mask, frame_sub)
+        regionprops = measure_peaks(label_img, frame_sub)
 
         tmp = out_path + ".tmp"
-        write_h5_spotsfile(filt_im, regionprops, outpath=tmp, overwrite=True,
+        write_h5_spotsfile(frame_sub, regionprops, outpath=tmp, overwrite=True,
                            d=d, max_components=max_components)
         os.rename(tmp, out_path)
         return True
@@ -188,6 +188,7 @@ def main() -> None:
             min_size       = meta.get("min_size", 3),
             max_size       = meta.get("max_size", 500),
             gap_exclude    = meta.get("gap_exclude", 3),
+            gap_closing    = meta.get("gap_closing", 3),
             bg_sigma       = meta.get("bg_sigma", 251),
             max_components = meta.get("max_components", 1),
             d              = meta.get("d", 10),

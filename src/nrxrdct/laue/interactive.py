@@ -102,6 +102,42 @@ def _gnomonic(tth_deg, chi_deg):
     return gX, gY
 
 
+def _gnomonic_inv(gX: float, gY: float) -> np.ndarray:
+    """Exact inverse of :func:`_gnomonic` — returns unit kf (LT lab frame).
+
+    Inverts the geographic gnomonic centred at lat₀=π/4 (2θ=90°, χ=0°).
+    Used by the drag handler to convert a drop position back to a scattering
+    direction so the correct U rotation can be computed.
+    """
+    r = float(np.sqrt(gX ** 2 + gY ** 2))
+    if r < 1e-12:
+        # Centre of projection: 2θ=90°, χ=0° → kf = (0, 0, 1)
+        return np.array([0.0, 0.0, 1.0])
+
+    c     = np.arctan(r)
+    sin_c = np.sin(c)
+    cos_c = np.cos(c)
+
+    # Invert gnomonic with centre (lat0=π/4, long0=0), sin=cos=1/√2
+    lat    = np.arcsin(np.clip((cos_c + gY * sin_c / r) / np.sqrt(2.0), -1.0, 1.0))
+    longit = np.arctan2(np.sqrt(2.0) * gX * sin_c, r * cos_c - gY * sin_c)
+
+    cl, sl   = np.cos(lat),    np.sin(lat)
+    clo, slo = np.cos(longit), np.sin(longit)
+
+    # Reconstruct kf from (lat, longit) using the forward chain in _gnomonic:
+    #   sin(theta) = cos(lat)*cos(longit)
+    #   cos(chi)   = sin(lat)/cos(theta)
+    #   sin(chi)   = -tan(longit)*tan(theta)
+    kfx = 1.0 - 2.0 * cl ** 2 * clo ** 2
+    kfy = -2.0 * cl ** 2 * clo * slo
+    kfz = 2.0 * sl * cl * clo
+
+    kf = np.array([kfx, kfy, kfz])
+    n  = np.linalg.norm(kf)
+    return kf / n if n > 1e-12 else kf
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # State container
 # ─────────────────────────────────────────────────────────────────────────────
@@ -569,10 +605,7 @@ def interactive_orientation(
                 np.sin(tth) * np.cos(chi),
             ])
         elif space == "gnomonic":
-            r2 = x ** 2 + y ** 2
-            d  = 1.0 + r2
-            kf = np.array([(1.0 - r2) / d, -2.0 * x / d, 2.0 * y / d])
-            return kf / np.linalg.norm(kf)
+            return _gnomonic_inv(x, y)
         else:  # detector
             kf = camera.pixel_to_kf(np.array([x]), np.array([y]))[0]
             return kf / np.linalg.norm(kf)
@@ -1342,10 +1375,7 @@ def interactive_calibration(
                 np.sin(tth) * np.cos(chi),
             ])
         elif space == "gnomonic":
-            r2 = x ** 2 + y ** 2
-            d  = 1.0 + r2
-            kf = np.array([(1.0 - r2) / d, -2.0 * x / d, 2.0 * y / d])
-            return kf / np.linalg.norm(kf)
+            return _gnomonic_inv(x, y)
         else:  # detector — use current camera to match the live view
             kf = state.camera.pixel_to_kf(np.array([x]), np.array([y]))[0]
             return kf / np.linalg.norm(kf)

@@ -1012,37 +1012,72 @@ def hybrid_segmentation(
     return _threshold(log_responses) | _threshold(wth_responses)
 
 
-def clean_segmentation(segmented_image, detector_mask, intensity_image, min_size = 3, max_size = 500, gap_exclude = 3 ):
+def clean_segmentation(
+    segmented_image,
+    detector_mask,
+    intensity_image,
+    min_size: int = 3,
+    max_size: int = 500,
+    gap_exclude: int = 3,
+    gap_closing: int = 3,
+):
+    """
+    Post-process a binary segmentation mask.
 
+    Parameters
+    ----------
+    segmented_image : (Ny, Nx) bool ndarray
+        Raw binary mask from the segmentation step.
+    detector_mask : (Ny, Nx) bool ndarray
+        Valid-pixel mask (True = active pixel).
+    intensity_image : (Ny, Nx) ndarray
+        Intensity image forwarded to ``skimage.measure.regionprops``.
+    min_size, max_size : int
+        Minimum / maximum connected-component area in pixels.
+    gap_exclude : int
+        Dilation radius (pixels) around detector gaps used to exclude spots
+        that genuinely overlap a module edge or large dead region.
+    gap_closing : int
+        Closing radius (pixels) applied to *detector_mask* **before** the
+        gap-exclusion dilation.  Binary closing fills isolated bad pixels
+        (single dead pixels, small clusters) that are surrounded by valid
+        pixels, so that spots near those bad pixels are not incorrectly
+        excluded.  Set to ``0`` to disable.  Default ``3``.
+
+    Returns
+    -------
+    final_mask : (Ny, Nx) bool ndarray
+    valid_props : list of RegionProperties
+    """
     seg = ndi.binary_fill_holes(segmented_image)
-
     seg = sk.morphology.remove_small_objects(seg, min_size=min_size)
-
     seg = sk.morphology.closing(seg, sk.morphology.disk(1))
-
     seg = sk.segmentation.clear_border(seg)
 
     labels = sk.measure.label(seg, connectivity=2)
 
-    gap_zone = ndi.binary_dilation(~detector_mask, sk.morphology.disk(gap_exclude))
+    # Close the valid-pixel mask to fill isolated bad pixels before dilating
+    # the gap zone.  This prevents spots near single dead pixels or small
+    # pixel clusters from being discarded, while real module edges (wider
+    # than gap_closing) remain as exclusion boundaries.
+    if gap_closing > 0:
+        closed_mask = ndi.binary_closing(detector_mask, sk.morphology.disk(gap_closing))
+    else:
+        closed_mask = detector_mask
+    gap_zone = ndi.binary_dilation(~closed_mask, sk.morphology.disk(gap_exclude))
 
-    props = sk.measure.regionprops(labels, intensity_image=intensity_image)
-
-    final_mask = np.zeros_like(detector_mask)
-    props = sk.measure.regionprops(labels, intensity_image=intensity_image)
-
+    final_mask  = np.zeros_like(detector_mask)
+    props       = sk.measure.regionprops(labels, intensity_image=intensity_image)
     valid_props = []
     for p in props:
         if not (min_size <= p.area <= max_size):
             continue
-
         coords = p.coords
         if np.any(gap_zone[coords[:, 0], coords[:, 1]]):
             continue
-
         final_mask[labels == p.label] = True
         valid_props.append(p)
-    
+
     return final_mask, valid_props
 
 def gaussian_background(image, valid_mask, sigma=251):
@@ -1107,6 +1142,7 @@ def _seg_process_frame(
     min_size: int,
     max_size: int,
     gap_exclude: int,
+    gap_closing: int,
     bg_sigma: float,
     max_components: int,
     overwrite: bool,
@@ -1137,7 +1173,8 @@ def _seg_process_frame(
 
         final_mask, _ = clean_segmentation(
             seg_mask, valid, frame,
-            min_size=min_size, max_size=max_size, gap_exclude=gap_exclude,
+            min_size=min_size, max_size=max_size,
+            gap_exclude=gap_exclude, gap_closing=gap_closing,
         )
 
         filt_im      = filter_and_rescale_images(frame, cutoff_freq=0.001)
@@ -1165,6 +1202,7 @@ def run_segmentation_local(
     min_size: int = 3,
     max_size: int = 500,
     gap_exclude: int = 3,
+    gap_closing: int = 3,
     bg_sigma: float = 251.0,
     max_components: int = 1,
     n_workers: int | None = None,
@@ -1194,6 +1232,10 @@ def run_segmentation_local(
         Minimum / maximum spot area in pixels after cleaning.
     gap_exclude : int
         Dilation radius (pixels) around detector gaps excluded during cleaning.
+    gap_closing : int
+        Closing radius (pixels) applied to the valid-pixel mask before the
+        gap-exclusion dilation.  Fills isolated dead pixels so spots near bad
+        pixels are not incorrectly excluded.  Default ``3``.
     bg_sigma : float
         Sigma (pixels) for the Gaussian background estimate.
     max_components : int
@@ -1245,6 +1287,7 @@ def run_segmentation_local(
                 min_size,
                 max_size,
                 gap_exclude,
+                gap_closing,
                 bg_sigma,
                 max_components,
                 overwrite,

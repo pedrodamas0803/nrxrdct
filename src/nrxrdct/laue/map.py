@@ -1443,6 +1443,364 @@ class GrainMap:
         fig.tight_layout()
         return fig, axes_arr
 
+    def inspect_frame(
+        self,
+        crystal,
+        camera,
+        base_dir: str,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        grains: "list[int] | None" = None,
+        map_quantity: str = "match_rate",
+        map_grain: int = 0,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 23000.0,
+        hmax: int = 6,
+        max_match_px: float = 10.0,
+        top_n_sim: "int | None" = None,
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
+        figsize: tuple = (14, 7),
+    ) -> tuple:
+        """
+        Interactive frame inspector: click a map pixel to display the
+        diffraction image, observed spots, and simulated grain patterns.
+
+        The figure has two panels:
+
+        * **Left** — a scalar map (e.g. match rate) of the raster scan.
+          Click any pixel to load that frame.
+        * **Right** — the detector image for the selected frame, with
+          observed spots (white circles), simulated spots per grain
+          (coloured diamonds), and lines connecting matched pairs.
+          Standard matplotlib zoom / pan tools work on this panel; the
+          zoom level is preserved across clicks.
+
+        Parameters
+        ----------
+        crystal : Crystal or LayeredCrystal
+            Crystal structure used for spot simulation.
+        camera : Camera
+            Detector geometry.
+        base_dir : str
+            Processing directory that contains the ``seg/`` sub-folder
+            with segmentation HDF5 spot files.
+        h5_dataset : str or None
+            HDF5 dataset path inside ``self.h5_path`` for the image stack
+            (e.g. ``'1.1/measurement/det'``).  Mutually exclusive with
+            *tiff_dir*; supply exactly one (or neither to skip image loading).
+        tiff_dir : str or None
+            Path to a folder of ``img_<number>.tif`` files.  Files are
+            sorted by their embedded number and mapped to 0-based frame
+            indices.  Mutually exclusive with *h5_dataset*.
+        grains : list of int or None
+            Grain indices to simulate.  ``None`` uses all grains.
+        map_quantity : str
+            Scalar quantity shown on the left panel.  One of
+            ``'match_rate'``, ``'rms_px'``, ``'mean_px'``, ``'cost'``.
+            Default ``'match_rate'``.
+        map_grain : int
+            Grain index used to build the left-panel map.  Default ``0``.
+        motor_x, motor_y : str or None
+            Motor names for axis labels and click-to-pixel conversion.
+        motor_units : dict or None
+            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        E_min_eV, E_max_eV : float
+            Energy range for spot simulation.  Defaults ``5000`` / ``23000`` eV.
+        hmax : int
+            Maximum Miller index for the simulation.  Default ``6``.
+        max_match_px : float
+            Match radius in pixels for drawing connection lines.
+            Default ``10``.
+        top_n_sim : int or None
+            Limit the number of simulated spots shown.  ``None`` keeps all.
+        r_squared_min : float
+            Minimum Gaussian-fit R² for loading observed spots.  Default
+            ``0.0`` (show everything from the spots file).
+        include_unfitted : bool
+            Include spots stored as raw centroids (fit failed).  Default
+            ``True``.
+        figsize : tuple
+            Figure size.  Default ``(14, 7)``.
+
+        Returns
+        -------
+        fig : Figure
+        axes : (ax_map, ax_det)
+        """
+        from .simulation import simulate_laue
+        from .fitting import _match_spots
+        from .segmentation import convert_spotsfile2peaklist
+
+        seg_dir    = os.path.join(base_dir, "seg")
+        grains_use = list(grains) if grains is not None else list(range(self.n_grains))
+
+        # ── motor / extent helpers ────────────────────────────────────────────
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel_map = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        # ── image loader ──────────────────────────────────────────────────────
+        _tiff_index: "list | None" = None   # built lazily
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                nonlocal _tiff_index
+                if _tiff_index is None:
+                    import re as _re
+                    pat   = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.match(fname)
+                        if m:
+                            files.append(
+                                (int(m.group(1)), os.path.join(tiff_dir, fname))
+                            )
+                    files.sort(key=lambda x: x[0])
+                    _tiff_index = [p for _, p in files]
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            elif h5_dataset is not None:
+                try:
+                    with h5py.File(self.h5_path, "r") as f:
+                        return f[h5_dataset][frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+            return None
+
+        # ── left-panel map data ───────────────────────────────────────────────
+        _map_opts = {
+            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
+            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
+            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
+            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+        }
+        map_data, map_label, map_cmap = _map_opts.get(
+            map_quantity,
+            (self.match_rate[map_grain], "Match rate", "viridis"),
+        )
+
+        # ── figure ────────────────────────────────────────────────────────────
+        fig = plt.figure(figsize=figsize)
+        gs  = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap=map_cmap, interpolation="nearest", aspect="auto",
+        )
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title(
+            f"Click to inspect — {map_label}  (grain {map_grain + 1})",
+            fontsize=9,
+        )
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        ax_det.set_title("← click map to load frame", fontsize=9, color="#888")
+
+        prop_cycle  = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        grain_colors = [prop_cycle[gi % len(prop_cycle)] for gi in range(self.n_grains)]
+
+        fig.suptitle(
+            "Frame inspector  —  zoom / pan right panel freely between clicks",
+            fontsize=9, color="#555",
+        )
+
+        # ── click handler ─────────────────────────────────────────────────────
+        _state = {"drawn": False}
+
+        def _on_click(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            # Preserve user zoom between clicks
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+
+            # Move selection crosshair on map
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            # Load image
+            image = _load_image(frame_idx)
+
+            # Load observed spots
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    obs_xy = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )[:, :2]
+                except Exception:
+                    obs_xy = np.empty((0, 2))
+            else:
+                obs_xy = np.empty((0, 2))
+
+            # Simulate fitted grains
+            sim_data = {}   # gi → (sim_xy, row_ind, col_ind, ok_mask)
+            for gi in grains_use:
+                U = self.U[gi, iy, ix]
+                if np.any(np.isnan(U)):
+                    continue
+                try:
+                    spots  = simulate_laue(
+                        crystal, U, camera,
+                        E_min=E_min_eV, E_max=E_max_eV,
+                        hmax=hmax,
+                    )
+                    on_det = [s for s in spots if s.get("pix") is not None]
+                    if top_n_sim is not None:
+                        on_det = on_det[:top_n_sim]
+                    sim_xy = (
+                        np.array([s["pix"] for s in on_det])
+                        if on_det else np.empty((0, 2))
+                    )
+                    if len(obs_xy) > 0 and len(sim_xy) > 0:
+                        row_ind, col_ind, dist_px = _match_spots(
+                            obs_xy, sim_xy, max_match_px
+                        )
+                        ok = dist_px < max_match_px
+                    else:
+                        row_ind = col_ind = np.array([], dtype=int)
+                        ok      = np.array([], dtype=bool)
+                    sim_data[gi] = (sim_xy, row_ind, col_ind, ok)
+                except Exception as exc:
+                    print(f"  grain {gi}: simulation error: {exc}", flush=True)
+
+            # ── redraw detector panel ─────────────────────────────────────────
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            if image is not None:
+                pos = image[image > 0]
+                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                ax_det.imshow(
+                    np.log1p(image / vmax * 1000),
+                    origin="upper",
+                    extent=[0, camera.Nh, camera.Nv, 0],
+                    cmap="inferno", aspect="equal", zorder=0,
+                )
+            else:
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+
+            ax_det.set_aspect("equal")
+
+            # Observed spots
+            if len(obs_xy):
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=40, c="none", edgecolors="white", linewidths=0.8,
+                    zorder=4,
+                )
+
+            # Simulated spots + match lines
+            from matplotlib.lines import Line2D
+            legend_handles = [
+                Line2D([0], [0], marker="o", color="w",
+                       markerfacecolor="none", markeredgecolor="white",
+                       markersize=5, linestyle="none",
+                       label=f"observed ({len(obs_xy)})")
+            ] if len(obs_xy) else []
+
+            for gi, (sim_xy, row_ind, col_ind, ok) in sim_data.items():
+                color     = grain_colors[gi]
+                n_matched = int(ok.sum()) if len(ok) else 0
+                if len(sim_xy):
+                    ax_det.scatter(
+                        sim_xy[:, 0], sim_xy[:, 1],
+                        s=28, c=color, marker="D",
+                        linewidths=0, zorder=5, alpha=0.85,
+                    )
+                for r, c, hit in zip(row_ind, col_ind, ok):
+                    if hit:
+                        ax_det.plot(
+                            [obs_xy[r, 0], sim_xy[c, 0]],
+                            [obs_xy[r, 1], sim_xy[c, 1]],
+                            color=color, lw=0.7, alpha=0.55, zorder=3,
+                        )
+                legend_handles.append(Line2D(
+                    [0], [0], marker="D", color="w",
+                    markerfacecolor=color, markersize=5,
+                    linestyle="none",
+                    label=f"grain {gi + 1}  ({n_matched} matched)",
+                ))
+
+            if legend_handles:
+                ax_det.legend(
+                    handles=legend_handles, fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+            ax_det.set_title(
+                f"Frame {frame_idx}  (iy={iy}, ix={ix})  "
+                f"— {len(sim_data)} grain(s) simulated",
+                fontsize=9,
+            )
+
+            # Restore zoom from before the click (skip on first draw)
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+
+            fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("button_press_event", _on_click)
+        return fig, (ax_map, ax_det)
+
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def save(self, path: str) -> None:

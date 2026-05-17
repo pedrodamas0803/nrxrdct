@@ -1836,12 +1836,14 @@ def plot_measured_vs_simulated(
         col_m = peaklist[:, 0]
         row_m = peaklist[:, 1]
         I_m = peaklist[:, 2]
-        I_norm = I_m / I_m.max() if I_m.max() > 0 else np.ones_like(I_m)
-        sz_m = np.clip(20 + 200 * I_norm**0.4, 5, 300)
+        I_pos = np.clip(I_m, 1e-6 * I_m.max() if I_m.max() > 0 else 1e-6, None)
+        log_I = np.log10(I_pos)
+        log_I_norm = (log_I - log_I.min()) / (log_I.max() - log_I.min() + 1e-12)
+        sz_m = np.clip(20 + 200 * log_I_norm**0.4, 5, 300)
         sc_m = ax_m.scatter(
             col_m, row_m,
             s=sz_m,
-            c=I_norm,
+            c=log_I_norm,
             cmap="viridis",
             vmin=0,
             vmax=1,
@@ -1852,7 +1854,7 @@ def plot_measured_vs_simulated(
             zorder=3,
         )
         cb_m = fig.colorbar(sc_m, ax=ax_m, pad=0.02, fraction=0.035, aspect=30)
-        cb_m.set_label("Normalised intensity  (measured)", color="#7788aa", fontsize=7)
+        cb_m.set_label("log₁₀ intensity  (measured, normalised)", color="#7788aa", fontsize=7)
         cb_m.ax.tick_params(colors="#7788aa", labelsize=6)
         cb_m.outline.set_edgecolor("#1a1f2e")
 

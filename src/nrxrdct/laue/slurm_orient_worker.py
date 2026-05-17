@@ -76,6 +76,7 @@ def _process_frame(
     min_match_rate: float,
     max_rms_px: "float | None",
     fit_kwargs: dict,
+    overwrite: bool = False,
 ) -> int:
     """Process one frame. Returns number of grains successfully fitted."""
     if obs_xy is None or len(obs_xy) < min_matched:
@@ -87,7 +88,7 @@ def _process_frame(
 
     for gi, U_ref in enumerate(ub_arrays):
         out_path = os.path.join(ubs_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
-        if os.path.exists(out_path):
+        if os.path.exists(out_path) and not overwrite:
             n_saved += 1
             continue
 
@@ -204,6 +205,7 @@ def main() -> None:
         min_match_rate = meta.get("min_match_rate", 0.2),
         max_rms_px     = meta.get("max_rms_px", None),
         fit_kwargs     = fit_kwargs,
+        overwrite      = meta.get("overwrite", False),
     )
     n_workers = min(len(peaklists) or 1, os.cpu_count() or 1)
 

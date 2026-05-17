@@ -2271,6 +2271,7 @@ class GrainMap:
         source: str | None = None,
         source_kwargs: dict | None = None,
         extra_sbatch: dict | None = None,
+        overwrite: bool = False,
     ) -> list:
         """
         Submit orientation-fitting jobs to SLURM.
@@ -2430,6 +2431,7 @@ class GrainMap:
             "max_rms_px":      max_rms_px,
             "r_squared_min":   r_squared_min,
             "include_unfitted": include_unfitted,
+            "overwrite":       overwrite,
             "method":          method,
             "ftol":           ftol,
             "xtol":           xtol,
@@ -2486,6 +2488,7 @@ class GrainMap:
         source: str | None = None,
         source_kwargs: dict | None = None,
         extra_sbatch: dict | None = None,
+        overwrite: bool = False,
     ) -> list:
         """
         Submit strain-fitting jobs to SLURM.
@@ -2627,6 +2630,7 @@ class GrainMap:
                                ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"],
             "r_squared_min":   r_squared_min,
             "include_unfitted": include_unfitted,
+            "overwrite":       overwrite,
             "method":          method,
             "ftol":       ftol,
             "xtol":       xtol,

@@ -76,6 +76,7 @@ def _process_frame(
     max_match_px,
     fit_strain: tuple,
     fit_kwargs: dict,
+    overwrite: bool = False,
 ) -> int:
     """Process one frame. Returns number of grains successfully fitted."""
     if obs_xy is None or len(obs_xy) < 3:
@@ -91,7 +92,7 @@ def _process_frame(
             continue
 
         out_path = os.path.join(strain_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
-        if os.path.exists(out_path):
+        if os.path.exists(out_path) and not overwrite:
             n_saved += 1
             continue
 
@@ -205,6 +206,7 @@ def main() -> None:
         fit_strain   = tuple(meta.get("fit_strain",
                              ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"])),
         fit_kwargs   = fit_kwargs,
+        overwrite    = meta.get("overwrite", False),
     )
     n_workers = min(len(peaklists) or 1, os.cpu_count() or 1)
 

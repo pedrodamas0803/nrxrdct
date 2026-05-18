@@ -329,50 +329,107 @@ class GrainMap:
         source: str = "auto",
     ) -> tuple[np.ndarray, dict]:
         """
-        For each map position select the grain with the best fit quality.
+        Select the best-fitting grain at every map position.
 
-        Recommended metric is ``"match_rate"`` (default): it is normalised
-        to [0, 1] and directly measures the fraction of observed spots
-        explained by the fit, making it comparable across positions and
-        immune to the artefact where a single near-perfect match gives a
-        misleadingly low ``rms_px``.  Use ``"rms_px"`` only as a secondary
-        criterion once a minimum ``min_match_rate`` is already enforced.
+        Background
+        ----------
+        A micro-Laue raster scan is processed independently for each
+        reference grain (each ``UB*.npy`` file).  At every pixel the
+        diffraction pattern may be explained well by one grain, poorly by
+        another, or not at all.  ``merge`` collapses the per-grain result
+        arrays into a single best-grain map by comparing a chosen quality
+        metric across all grain slots and keeping the winner.
+
+        This method does **not** modify the map — it only reads the stored
+        metrics and returns the selection.  Call :meth:`apply_merge`
+        afterwards to register the result as a new grain slot that all
+        existing analysis and plotting methods can use transparently.
+
+        Quality metric choice
+        ---------------------
+        ``"match_rate"`` (default) is the recommended primary criterion.
+        It is defined as ``n_matched / n_observed`` and therefore lies in
+        [0, 1] regardless of how many spots are in the pattern.  This makes
+        it directly comparable across positions and immune to the artefact
+        where a single near-perfectly placed spot gives ``rms_px ≈ 0``
+        without actually explaining the pattern.
+
+        ``"rms_px"`` is useful as a *secondary* tiebreaker once a floor on
+        ``min_match_rate`` is already enforced, because a low RMS among
+        few matches can be misleading.
+
+        Quality filters
+        ---------------
+        Grains that fail *any* of the three filters
+        (``min_match_rate``, ``min_n_matched``, ``max_rms_px``) are masked
+        out before scoring.  A map position where *all* grains fail the
+        filters receives ``best_grain = -1`` and ``NaN`` metrics — it
+        appears white in IPF / scalar maps.
 
         Parameters
         ----------
         metric : str
             Quality metric used to rank grains at each position.  One of:
 
-            * ``"match_rate"``  — fraction of matched spots (higher → better)
-            * ``"n_matched"``   — raw matched-spot count (higher → better)
-            * ``"rms_px"``      — RMS pixel residual (lower → better)
-            * ``"mean_px"``     — mean pixel residual (lower → better)
-            * ``"cost"``        — optimizer cost ½Σr² (lower → better)
+            * ``"match_rate"``  — fraction of observed spots matched
+              (higher is better).  Defined as ``n_matched / n_observed``.
+            * ``"n_matched"``   — raw count of matched spots
+              (higher is better).  Favours positions with many spots,
+              which may not always be desirable.
+            * ``"rms_px"``      — root-mean-square pixel residual of
+              matched pairs (lower is better).
+            * ``"mean_px"``     — mean pixel residual of matched pairs
+              (lower is better).
+            * ``"cost"``        — optimizer cost function value ½Σr²
+              at convergence (lower is better).
 
         min_match_rate : float
-            Discard any grain fit with ``match_rate < min_match_rate``.
+            Minimum acceptable match rate for a grain to be considered at
+            any position.  Grain fits below this threshold are excluded
+            before scoring.  Default ``0.0`` (no filtering).  A value of
+            ``0.2``–``0.3`` is a reasonable starting point.
         min_n_matched : int
-            Discard any grain fit with fewer than this many matched spots.
-            Defaults to 1 (exclude positions with no matches at all).
+            Minimum number of matched spots required.  Positions with
+            fewer matches than this (including unfitted positions where
+            ``n_matched = -1``) are excluded.  Default ``1``.
         max_rms_px : float
-            Discard any grain fit with ``rms_px > max_rms_px``.
+            Maximum RMS pixel residual allowed.  Fits with larger residuals
+            are excluded.  Default ``inf`` (no filtering).
         source : str
-            Forwarded to :meth:`write_merge_links` via the returned
-            ``metrics`` dict.  One of ``"auto"`` (default), ``"ubs"``, or
-            ``"strain"``.  Set this once here so you don't have to repeat it
-            when writing symlinks.
+            Carried forward into the returned ``metrics`` dict so that
+            :meth:`write_merge_links` can inherit the correct result
+            directory without the user having to repeat it.  One of
+            ``"auto"`` (default, prefers ``strain/`` over ``ubs/``),
+            ``"ubs"``, or ``"strain"``.
 
         Returns
         -------
         best_grain : (ny, nx) int ndarray
-            Index (0-based) of the winning grain at each map position.
-            ``-1`` where no grain passes the quality filters.
-        metrics : dict of (ny, nx) ndarrays
-            Quality metrics for the selected grain at each position:
-            ``"match_rate"``, ``"rms_px"``, ``"mean_px"``, ``"n_matched"``,
-            ``"cost"``, ``"U"`` (shape ``(ny, nx, 3, 3)``), and ``"source"``
-            (the *source* argument, carried forward for :meth:`write_merge_links`).
-            Values are ``NaN`` / ``-1`` where ``best_grain == -1``.
+            Index (0-based) of the winning grain slot at each map
+            position.  ``-1`` where no grain passed the quality filters.
+        metrics : dict
+            Quality metrics for the winning grain at each position.
+            All arrays have shape ``(ny, nx)``:
+
+            * ``"match_rate"`` — match rate of the winner.
+            * ``"rms_px"``     — RMS residual of the winner (pixels).
+            * ``"mean_px"``    — mean residual of the winner (pixels).
+            * ``"n_matched"``  — matched-spot count of the winner
+              (``int``, ``-1`` where invalid).
+            * ``"cost"``       — optimizer cost of the winner.
+            * ``"U"``          — orientation matrix of the winner,
+              shape ``(ny, nx, 3, 3)``.
+            * ``"source"``     — the *source* argument (scalar str).
+
+            Values are ``NaN`` / ``-1`` at positions where
+            ``best_grain == -1``.
+
+        See also
+        --------
+        :meth:`apply_merge` : register the selection as a new grain slot.
+        :meth:`write_merge_links` : persist the selection as disk symlinks.
+        :meth:`reduce_to_fundamental_zone` : resolve symmetry-equivalent
+            orientation jumps before merging.
         """
         _higher_better = {"match_rate", "n_matched"}
         _lower_better  = {"rms_px", "mean_px", "cost"}
@@ -605,16 +662,86 @@ class GrainMap:
         closest to a common reference, resolving spurious isolated pixels that
         converged to a different member of the symmetry-equivalent family.
 
-        For a crystal with N symmetry operations the equivalent orientations at
-        each pixel are  ``U' = U @ S``  for each proper rotation S in the
-        point group.  All equivalents produce an identical Laue pattern but
-        different Euler angles.  This method picks the one with the smallest
-        misorientation angle relative to *reference*, making the map
-        self-consistent.
+        Background: why isolated pixels appear
+        ---------------------------------------
+        In polychromatic Laue diffraction the peak *positions* on the detector
+        are determined jointly by the orientation matrix **U** and the crystal
+        lattice **B**, but are independent of the absolute X-ray wavelength.
+        A direct consequence is that replacing **U** with any symmetry-
+        equivalent ``U' = U @ S`` (where **S** is any proper rotation in the
+        crystal's point group) produces an *identical* set of predicted spot
+        positions.  No residual-based optimizer can distinguish between the
+        N\ :sub:`sym` members of this family.
 
-        If strain data are present (``strain_tensor``) the tensor is rotated
-        consistently: ``ε' = Sᵀ ε S``.  Note that corrected pixels ideally
-        should be re-refined starting from the corrected U.
+        During a map fit every pixel is refined independently, starting from
+        the same pre-indexed reference orientation.  Pixels near a grain
+        boundary or in a strained region are more sensitive to the starting
+        point, and the optimizer can converge to *any* of the N\ :sub:`sym`
+        symmetry equivalents.  The result is a map that is correct in the
+        physical sense (every U is a valid fit) but inconsistent in the
+        representation sense: neighbouring pixels that should have the same
+        orientation may carry different Euler-angle triples because they
+        happen to belong to different members of the symmetry family.  This
+        causes isolated pixels with an "orientation" that looks very different
+        from its neighbours, purely as an artefact of the representation.
+
+        Algorithm
+        ---------
+        For each pixel the N\ :sub:`sym` candidate matrices are formed as
+        ``U_equiv[s] = U @ ops[s]``, where ``ops`` is the set of proper
+        rotations in the point group (24 for cubic, 12 for hexagonal, 8 for
+        tetragonal, 4 for orthorhombic).
+
+        The candidate closest to *reference* **R** is identified by maximising
+        the matrix trace:
+
+        .. math::
+
+           s^*(\\text{iy, ix}) = \\underset{s}{\\operatorname{argmax}}\\;
+                                  \\operatorname{tr}\\!\\bigl(R^T U^{(s)}\\bigr)
+
+        This is equivalent to minimising the geodesic misorientation angle
+        :math:`\\omega = \\arccos\\!\\left(\\tfrac{\\operatorname{tr}(R^T U^{(s)})-1}{2}\\right)`,
+        which lies in :math:`[0°, 180°]`.  The computation is vectorised over
+        all map pixels simultaneously.
+
+        Reference orientation
+        ---------------------
+        When ``reference=None`` the target is computed as the quaternion mean
+        of all *valid* (non-NaN) pixels in the map:
+
+        1. Convert each U matrix to a unit quaternion.
+        2. Flip every quaternion to the same hemisphere as the first
+           (``q ← −q`` if ``q · q₀ < 0``), so the average is not pulled
+           toward zero by sign cancellation.
+        3. Average the flipped quaternions and re-normalise.
+        4. Convert back to a rotation matrix.
+
+        This gives a robust, bias-free estimate of the "dominant" orientation
+        in the map, which is almost always sufficient.  A custom reference can
+        be supplied when the grain of interest occupies a minority of pixels.
+
+        Strain tensor rotation
+        ----------------------
+        When strain data are present (``self.strain_tensor[grain]`` contains
+        finite values), the strain tensor at corrected pixels is transformed
+        consistently with the symmetry operation:
+
+        .. math::
+
+           \\boldsymbol{\\varepsilon}' = S^T \\boldsymbol{\\varepsilon}\\, S
+
+        where **S** = ``ops[s*]``.  The Voigt representation is rebuilt from
+        the updated full tensor and written back into ``self.strain_voigt``.
+
+        .. note::
+
+           This rotation makes the *representation* of the strain tensor
+           consistent with the new orientation convention but does not
+           change the physical strain state.  Pixels that were corrected
+           ideally should be re-refined starting from the corrected **U**;
+           the rotated tensor is an approximation that is exact only in the
+           limit of a purely rotational symmetry operation.
 
         Parameters
         ----------
@@ -625,14 +752,30 @@ class GrainMap:
             ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.
             Default ``'cubic'``.
         reference : (3, 3) ndarray or None
-            Target orientation.  ``None`` uses the mean orientation of all
-            fitted pixels in the map (computed via quaternion averaging).
+            Target orientation matrix **R**.  Every pixel will be mapped to
+            the symmetry-equivalent closest to this matrix.
+            ``None`` (default) uses the quaternion mean of all valid pixels.
 
         Returns
         -------
-        n_changed : (ny, nx) bool ndarray
+        changed : (ny, nx) bool ndarray
             ``True`` at positions where a different symmetry equivalent was
-            selected.
+            selected (i.e. where the operator index ``s* ≠ 0``).
+
+        See also
+        --------
+        :meth:`merge` : combine fits from multiple reference grains into one
+            best-grain map.
+        :meth:`apply_merge` : register the merged selection as a new grain slot.
+        :meth:`_symmetry_ops` : returns the rotation matrices for a given
+            crystal point-group symmetry.
+
+        Notes
+        -----
+        ``reduce_to_fundamental_zone`` modifies ``self.U[grain]`` and
+        ``self.strain_tensor[grain]`` / ``self.strain_voigt[grain]`` **in
+        place**.  Run it before calling :meth:`merge` or :meth:`apply_merge`
+        if you want the merged grain to also benefit from the correction.
         """
         ops = self._symmetry_ops(symmetry)          # (N_sym, 3, 3)
         U   = self.U[grain]                         # (ny, nx, 3, 3)

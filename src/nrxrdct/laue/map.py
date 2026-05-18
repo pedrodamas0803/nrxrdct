@@ -654,7 +654,11 @@ class GrainMap:
             If ``None``, integer pixel indices are shown.
         """
         # ── build data array ──────────────────────────────────────────────────
-        if quantity == "match_rate":
+        if isinstance(quantity, np.ndarray):
+            data  = quantity
+            label = title or ""
+            cmap  = cmap or "viridis"
+        elif quantity == "match_rate":
             data = self.match_rate[grain]
             label = "Match rate"
             cmap  = cmap or "viridis"

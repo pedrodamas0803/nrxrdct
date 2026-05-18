@@ -1437,6 +1437,97 @@ class GrainMap:
         for sp in ax_key.spines.values():
             sp.set_visible(False)
 
+    @staticmethod
+    def _ipf_colorkey_inset_stretched(
+        parent_ax,
+        t_vals: np.ndarray,
+        p_vals: np.ndarray,
+        rgb_stretched: np.ndarray,
+    ) -> None:
+        """
+        Colour-key inset for stretched IPF maps.
+
+        Shows the full standard triangle with the data extent highlighted,
+        then a zoomed inset of the data region coloured with the *stretched*
+        colours so you can read off absolute orientations.
+
+        Parameters
+        ----------
+        t_vals, p_vals : (N,) flat arrays
+            (t, p) coordinates in [0,1]² of all valid map pixels.
+        rgb_stretched : (N, 3) float array
+            Stretched RGB for each valid pixel.
+        """
+        try:
+            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+        except ImportError:
+            return
+
+        # ── outer inset: full triangle + data bounding box ────────────────────
+        ax_full = inset_axes(parent_ax, width="28%", height="28%",
+                             loc="lower right", borderpad=0.5)
+        ax_full.set_facecolor("none")
+
+        rgba = GrainMap._cubic_ipf_colorkey(200)
+        ax_full.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
+                       aspect="auto", interpolation="bilinear", alpha=0.35)
+
+        # Triangle outline
+        s_b = np.linspace(0.0, 1.0, 120)
+        t_b = np.arctan(s_b) / (np.pi / 4.0)
+        p_b = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
+        p_b[0] = 0.0
+        verts = np.column_stack([
+            np.concatenate([[0, 1, 1], t_b[::-1]]),
+            np.concatenate([[0, 0, 1], p_b[::-1]]),
+        ])
+        from matplotlib.patches import Polygon as _Poly, Rectangle as _Rect
+        ax_full.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.6))
+
+        # Bounding box of data in (t, p) space
+        if len(t_vals):
+            t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
+            p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
+            pad = 0.02
+            ax_full.add_patch(_Rect(
+                (t_lo - pad, p_lo - pad),
+                (t_hi - t_lo) + 2 * pad,
+                (p_hi - p_lo) + 2 * pad,
+                fill=False, edgecolor="black", linewidth=1.0, linestyle="--",
+            ))
+
+        kw = dict(fontsize=5, color="k")
+        ax_full.text(0.02, 0.02, "001", ha="left",  va="bottom", **kw)
+        ax_full.text(0.98, 0.02, "011", ha="right", va="bottom", **kw)
+        ax_full.text(0.98, 0.98, "111", ha="right", va="top",    **kw)
+        ax_full.set_xlim(0, 1); ax_full.set_ylim(0, 1)
+        ax_full.set_xticks([]); ax_full.set_yticks([])
+        for sp in ax_full.spines.values():
+            sp.set_visible(False)
+
+        # ── inner inset: zoomed scatter coloured with stretched RGB ───────────
+        if len(t_vals) == 0:
+            return
+        t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
+        p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
+
+        ax_zoom = inset_axes(parent_ax, width="28%", height="28%",
+                             loc="upper right", borderpad=0.5)
+        ax_zoom.set_facecolor("0.15")
+
+        # scatter each valid pixel as a tiny point
+        ax_zoom.scatter(t_vals, p_vals, c=rgb_stretched, s=1.5,
+                        linewidths=0, rasterized=True)
+
+        pad_t = max((t_hi - t_lo) * 0.15, 1e-4)
+        pad_p = max((p_hi - p_lo) * 0.15, 1e-4)
+        ax_zoom.set_xlim(t_lo - pad_t, t_hi + pad_t)
+        ax_zoom.set_ylim(p_lo - pad_p, p_hi + pad_p)
+        ax_zoom.set_xticks([]); ax_zoom.set_yticks([])
+        ax_zoom.set_title("stretched", fontsize=5, pad=2)
+        for sp in ax_zoom.spines.values():
+            sp.set_color("0.5"); sp.set_linewidth(0.5)
+
     def plot_overview(
         self,
         grain: int = 0,
@@ -1648,6 +1739,7 @@ class GrainMap:
         title: str | None = None,
         figsize: tuple = (6, 5),
         show_colorkey: bool = True,
+        stretch: bool = False,
     ) -> tuple:
         """
         Inverse pole figure (IPF) map coloured by which crystal direction is
@@ -1678,6 +1770,17 @@ class GrainMap:
             Appended to the axis label in parentheses.
         show_colorkey : bool
             Overlay a small colour-key triangle in the lower-right corner.
+            Automatically disabled when *stretch* is ``True``.
+        stretch : bool
+            If ``True``, linearly rescale each RGB channel so that the
+            minimum and maximum values in the map span the full [0, 1]
+            range.  Useful when all orientations cluster in a small region
+            of the IPF triangle and the map appears as a nearly solid
+            colour.  When *show_colorkey* is also ``True`` (default), the
+            standard key is replaced by two insets: a faded full triangle
+            with a dashed box marking the data extent, and a zoomed scatter
+            of the actual data coloured with the stretched colours so you
+            can still read off absolute orientations.  Default ``False``.
         """
         _shortcuts = {
             "x": np.array([1.0, 0.0, 0.0]),
@@ -1708,21 +1811,35 @@ class GrainMap:
         c   = np.einsum("...ji,j->...i", U, ref)        # (ny, nx, 3)
         rgb = self._cubic_ipf_colors(c)                 # (ny, nx, 3)
 
-        # NaN → white
-        img = np.where(np.isnan(rgb), 1.0, np.clip(rgb, 0.0, 1.0)).astype(np.float32)
-
-        # Mean orientation in the fundamental zone for the inset marker.
-        # Apply the same cubic symmetry reduction (_cubic_ipf_colors uses
-        # sorted absolute values) then average the unit vectors.
+        # (t, p) coordinates for every valid pixel — needed for the stretched
+        # colour key and for the standard mean-orientation marker.
         valid = ~np.any(np.isnan(c), axis=-1)
+        t_flat = np.full(valid.shape, np.nan)
+        p_flat = np.full(valid.shape, np.nan)
         if valid.any():
             c_v    = c[valid]
             norms  = np.linalg.norm(c_v, axis=1, keepdims=True)
             c_unit = c_v / np.maximum(norms, 1e-12)
-            c_sym  = np.sort(np.abs(c_unit), axis=1)   # fundamental-zone reps
-            c_mean = c_sym.mean(axis=0)                 # (3,)  h1 ≤ h2 ≤ h3
+            c_sym  = np.sort(np.abs(c_unit), axis=1)          # h1 ≤ h2 ≤ h3
+            t_flat[valid] = np.arctan2(c_sym[:, 1], c_sym[:, 2]) / (np.pi / 4.0)
+            p_flat[valid] = (np.arctan2(c_sym[:, 0],
+                             np.sqrt(c_sym[:, 1]**2 + c_sym[:, 2]**2))
+                             / np.arctan(1.0 / np.sqrt(2.0)))
+            c_mean = c_sym.mean(axis=0)
         else:
             c_mean = None
+
+        if stretch:
+            # Per-channel linear stretch so the data range fills [0, 1].
+            for ch in range(3):
+                ch_vals = rgb[..., ch]
+                lo = np.nanmin(ch_vals)
+                hi = np.nanmax(ch_vals)
+                if hi > lo:
+                    rgb[..., ch] = (ch_vals - lo) / (hi - lo)
+
+        # NaN → white
+        img = np.where(np.isnan(rgb), 1.0, np.clip(rgb, 0.0, 1.0)).astype(np.float32)
 
         # ── axis extent and labels ────────────────────────────────────────────
         mu  = motor_units or {}
@@ -1762,7 +1879,15 @@ class GrainMap:
         )
 
         if show_colorkey:
-            self._ipf_colorkey_inset(ax, c_mean=c_mean)
+            if stretch:
+                self._ipf_colorkey_inset_stretched(
+                    ax,
+                    t_vals=t_flat[valid],
+                    p_vals=p_flat[valid],
+                    rgb_stretched=img[valid],
+                )
+            else:
+                self._ipf_colorkey_inset(ax, c_mean=c_mean)
 
         fig.tight_layout()
         return fig, ax
@@ -1870,7 +1995,7 @@ class GrainMap:
         tiff_dir: "str | None" = None,
         grains: "list[int] | None" = None,
         map_quantity: str = "match_rate",
-        map_grain: int = 0,
+        map_grain: "int | None" = None,
         motor_x: "str | None" = None,
         motor_y: "str | None" = None,
         motor_units: "dict | None" = None,
@@ -1920,8 +2045,10 @@ class GrainMap:
             Scalar quantity shown on the left panel.  One of
             ``'match_rate'``, ``'rms_px'``, ``'mean_px'``, ``'cost'``.
             Default ``'match_rate'``.
-        map_grain : int
-            Grain index used to build the left-panel map.  Default ``0``.
+        map_grain : int or None
+            Grain index used to build the left-panel map.  ``None`` (default)
+            uses the merged grain slot when :meth:`apply_merge` has been
+            called, otherwise falls back to grain ``0``.
         motor_x, motor_y : str or None
             Motor names for axis labels and click-to-pixel conversion.
         motor_units : dict or None
@@ -1955,6 +2082,8 @@ class GrainMap:
 
         seg_dir    = os.path.join(base_dir, "seg")
         grains_use = list(grains) if grains is not None else list(range(self.n_grains))
+        if map_grain is None:
+            map_grain = self._merged_grain if self._merged_grain is not None else 0
 
         # ── motor / extent helpers ────────────────────────────────────────────
         mu = motor_units or {}

@@ -325,6 +325,7 @@ class GrainMap:
         min_match_rate: float = 0.0,
         min_n_matched: int = 1,
         max_rms_px: float = np.inf,
+        source: str = "auto",
     ) -> tuple[np.ndarray, dict]:
         """
         For each map position select the grain with the best fit quality.
@@ -354,6 +355,11 @@ class GrainMap:
             Defaults to 1 (exclude positions with no matches at all).
         max_rms_px : float
             Discard any grain fit with ``rms_px > max_rms_px``.
+        source : str
+            Forwarded to :meth:`write_merge_links` via the returned
+            ``metrics`` dict.  One of ``"auto"`` (default), ``"ubs"``, or
+            ``"strain"``.  Set this once here so you don't have to repeat it
+            when writing symlinks.
 
         Returns
         -------
@@ -363,7 +369,8 @@ class GrainMap:
         metrics : dict of (ny, nx) ndarrays
             Quality metrics for the selected grain at each position:
             ``"match_rate"``, ``"rms_px"``, ``"mean_px"``, ``"n_matched"``,
-            ``"cost"``, and ``"U"`` (shape ``(ny, nx, 3, 3)``).
+            ``"cost"``, ``"U"`` (shape ``(ny, nx, 3, 3)``), and ``"source"``
+            (the *source* argument, carried forward for :meth:`write_merge_links`).
             Values are ``NaN`` / ``-1`` where ``best_grain == -1``.
         """
         _higher_better = {"match_rate", "n_matched"}
@@ -380,7 +387,8 @@ class GrainMap:
                 {"match_rate": empty, "rms_px": empty, "mean_px": empty,
                  "n_matched": np.full((self.ny, self.nx), -1, dtype=int),
                  "cost": empty,
-                 "U": np.full((self.ny, self.nx, 3, 3), np.nan)},
+                 "U": np.full((self.ny, self.nx, 3, 3), np.nan),
+                 "source": source},
             )
 
         # ── quality mask ─────────────────────────────────────────────────────
@@ -439,6 +447,7 @@ class GrainMap:
             "n_matched":  n_sel,
             "cost":       _sel(self.cost),
             "U":          U_sel,
+            "source":     source,
         }
 
     def apply_merge(self, best_grain: np.ndarray, metrics: dict) -> int:
@@ -471,7 +480,7 @@ class GrainMap:
 
         U_new = np.where(valid, metrics["U"], np.nan)[None]   # (1, ny, nx, 3, 3)
 
-        def _f(key):
+        def _f(key: str) -> np.ndarray:
             return np.asarray(metrics[key], dtype=float)[None]   # (1, ny, nx)
 
         n_new = np.asarray(metrics["n_matched"], dtype=int)[None]
@@ -2914,6 +2923,168 @@ class GrainMap:
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
         print(f"collect_strain: {n_loaded} results loaded from {strain_dir}")
+        return n_loaded
+
+    def write_merge_links(
+        self,
+        base_dir: str,
+        best_grain: np.ndarray,
+        metrics: dict | None = None,
+        *,
+        grain_index: int | None = None,
+        source: str | None = None,
+        overwrite: bool = False,
+    ) -> tuple[str, int]:
+        """
+        Persist a merge selection as a folder of symlinks.
+
+        Creates ``base_dir/merged/`` and, for every map position where
+        *best_grain* is non-negative, places a symlink
+        ``frame_{frame_idx:05d}_g{gi_merged:02d}.npz`` pointing to the
+        corresponding source file in *source* (``ubs/`` or ``strain/``).
+
+        The folder can later be fed to :meth:`collect_merged` to restore the
+        merged grain slot into a freshly-loaded :class:`GrainMap`.
+
+        Parameters
+        ----------
+        base_dir : str
+            Root of the processing directory tree (same root passed to
+            ``submit_orientation`` / ``collect_orientation``).
+        best_grain : (ny, nx) int ndarray
+            First return value of :meth:`merge`.  Positions with value ``-1``
+            (no valid fit) are skipped.
+        metrics : dict or None
+            Second return value of :meth:`merge`.  When provided, *source* is
+            inherited from ``metrics["source"]`` unless explicitly overridden.
+        grain_index : int or None
+            Grain slot index embedded in the symlink filename.  ``None`` uses
+            ``self.n_grains - 1`` (i.e., the slot created by the most recent
+            :meth:`apply_merge` call).
+        source : str or None
+            Which result directory to link from.  One of:
+
+            * ``"ubs"``    — orientation ``.npz`` files in ``base_dir/ubs/``.
+            * ``"strain"`` — strain ``.npz`` files in ``base_dir/strain/``.
+            * ``"auto"``   — prefers ``strain/`` when it contains matching
+              files, otherwise falls back to ``ubs/``.
+        overwrite : bool
+            If ``True``, existing entries in ``merged/`` are removed before
+            writing.  Default ``False``.
+
+        Returns
+        -------
+        merged_dir : str
+            Absolute path of the created ``merged/`` directory.
+        n_links : int
+            Number of symlinks written.
+        """
+        gi_merged = self.n_grains - 1 if grain_index is None else int(grain_index)
+        if source is None:
+            source = (metrics or {}).get("source", "auto")
+
+        ubs_dir    = os.path.join(base_dir, "ubs")
+        strain_dir = os.path.join(base_dir, "strain")
+
+        if source == "auto":
+            src_dir  = strain_dir if glob.glob(os.path.join(strain_dir, "frame_*_g*.npz")) else ubs_dir
+            src_label = "strain" if src_dir == strain_dir else "ubs"
+        elif source == "ubs":
+            src_dir, src_label = ubs_dir, "ubs"
+        elif source == "strain":
+            src_dir, src_label = strain_dir, "strain"
+        else:
+            raise ValueError(f"source must be 'ubs', 'strain', or 'auto', got {source!r}")
+
+        merged_dir = os.path.join(base_dir, "merged")
+        os.makedirs(merged_dir, exist_ok=True)
+
+        n_links = 0
+        n_missing = 0
+        for iy in range(self.ny):
+            for ix in range(self.nx):
+                gi = int(best_grain[iy, ix])
+                if gi < 0:
+                    continue
+
+                frame_idx = self.frame_index(iy, ix)
+                src_file  = os.path.join(src_dir,    f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+                dst_file  = os.path.join(merged_dir, f"frame_{frame_idx:05d}_g{gi_merged:02d}.npz")
+
+                if not os.path.exists(src_file):
+                    n_missing += 1
+                    continue
+
+                if os.path.lexists(dst_file):
+                    if overwrite:
+                        os.remove(dst_file)
+                    else:
+                        continue
+
+                rel_src = os.path.relpath(src_file, merged_dir)
+                os.symlink(rel_src, dst_file)
+                n_links += 1
+
+        if n_missing:
+            print(f"write_merge_links: {n_missing} source files not found (skipped)", flush=True)
+        print(f"write_merge_links: {n_links} symlinks → {merged_dir}  [source={src_label}]", flush=True)
+        return merged_dir, n_links
+
+    def collect_merged(self, base_dir: str, grain_index: int | None = None) -> int:
+        """
+        Load results from ``base_dir/merged/`` into a grain slot.
+
+        This is the complement of :meth:`write_merge_links`: it reads the
+        ``.npz`` symlinks produced by that method and populates the chosen
+        grain slot.  Strain fields (``strain_voigt``, ``strain_tensor``) are
+        loaded automatically when present.
+
+        Parameters
+        ----------
+        base_dir : str
+            Same root directory passed to :meth:`write_merge_links`.
+        grain_index : int or None
+            Grain slot to populate.  ``None`` uses ``self.n_grains - 1``.
+
+        Returns
+        -------
+        int
+            Number of results loaded.
+        """
+        merged_dir = os.path.join(base_dir, "merged")
+        if not os.path.isdir(merged_dir):
+            raise FileNotFoundError(
+                f"merged/ directory not found: {merged_dir!r}. "
+                "Call write_merge_links() first."
+            )
+
+        gi_target = self.n_grains - 1 if grain_index is None else int(grain_index)
+        files = glob.glob(os.path.join(merged_dir, "frame_*_g*.npz"))
+        n_loaded = 0
+        for fpath in files:
+            m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
+            if not m:
+                continue
+            frame_idx = int(m.group(1))
+            iy, ix    = self.map_index(frame_idx)
+            if iy >= self.ny or ix >= self.nx:
+                continue
+            try:
+                d = np.load(fpath, allow_pickle=False)
+                self.U[gi_target, iy, ix]          = d["U"]
+                self.rms_px[gi_target, iy, ix]     = float(d["rms_px"])
+                self.mean_px[gi_target, iy, ix]    = float(d["mean_px"]) if "mean_px" in d else np.nan
+                self.n_matched[gi_target, iy, ix]  = int(d["n_matched"])
+                self.match_rate[gi_target, iy, ix] = float(d["match_rate"])
+                self.cost[gi_target, iy, ix]       = float(d["cost"])
+                if "strain_voigt" in d:
+                    self.strain_voigt[gi_target, iy, ix]  = d["strain_voigt"]
+                    self.strain_tensor[gi_target, iy, ix] = d["strain_tensor"]
+                n_loaded += 1
+            except Exception as exc:
+                print(f"  ✗  {fpath}: {exc}", flush=True)
+
+        print(f"collect_merged: {n_loaded} results loaded from {merged_dir}", flush=True)
         return n_loaded
 
     # ── Dunder ────────────────────────────────────────────────────────────────

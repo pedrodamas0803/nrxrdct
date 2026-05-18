@@ -258,6 +258,7 @@ class GrainMap:
             [[None] * self.nx for _ in range(self.ny)]
             for _ in range(ng)
         ]
+        self._merged_grain: int | None = None
 
     # ── Motor positions ───────────────────────────────────────────────────────
 
@@ -452,8 +453,12 @@ class GrainMap:
 
     def apply_merge(self, best_grain: np.ndarray, metrics: dict) -> int:
         """
-        Append a merge result as a new grain slot so all visualization and
-        analysis methods can be applied to it without modification.
+        Write a merge result into a dedicated merged grain slot.
+
+        The first call appends a new slot so that a map with *n* fitted
+        grains ends up with *n + 1* grains total.  Every subsequent call
+        **replaces** that same slot in-place, so repeated merging with
+        different thresholds never adds extra slots.
 
         Parameters
         ----------
@@ -465,7 +470,7 @@ class GrainMap:
         Returns
         -------
         int
-            Index of the new grain slot.  Pass it directly to any method
+            Index of the merged grain slot.  Pass it directly to any method
             that accepts a ``grain`` argument::
 
                 best_grain, m = gmap.merge(min_match_rate=0.3)
@@ -478,26 +483,42 @@ class GrainMap:
         shape2d = (self.ny, self.nx)
         valid = (best_grain >= 0)[..., None, None]  # (ny, nx, 1, 1)
 
-        U_new = np.where(valid, metrics["U"], np.nan)[None]   # (1, ny, nx, 3, 3)
+        U_new = np.where(valid, metrics["U"], np.nan)            # (ny, nx, 3, 3)
 
         def _f(key: str) -> np.ndarray:
-            return np.asarray(metrics[key], dtype=float)[None]   # (1, ny, nx)
+            return np.asarray(metrics[key], dtype=float)         # (ny, nx)
 
-        n_new = np.asarray(metrics["n_matched"], dtype=int)[None]
+        n_new = np.asarray(metrics["n_matched"], dtype=int)
 
-        self.U             = np.concatenate([self.U,             U_new],              axis=0)
-        self.rms_px        = np.concatenate([self.rms_px,        _f("rms_px")],       axis=0)
-        self.mean_px       = np.concatenate([self.mean_px,       _f("mean_px")],      axis=0)
-        self.n_matched     = np.concatenate([self.n_matched,     n_new],              axis=0)
-        self.match_rate    = np.concatenate([self.match_rate,    _f("match_rate")],   axis=0)
-        self.cost          = np.concatenate([self.cost,          _f("cost")],         axis=0)
-        self.strain_voigt  = np.concatenate([self.strain_voigt,
-                                             np.full((1, *shape2d, 6),    np.nan)],   axis=0)
-        self.strain_tensor = np.concatenate([self.strain_tensor,
-                                             np.full((1, *shape2d, 3, 3), np.nan)],  axis=0)
-        self._results.append([[None] * self.nx for _ in range(self.ny)])
-        self.n_grains += 1
-        return self.n_grains - 1
+        if self._merged_grain is None:
+            # ── first merge: append a new slot ───────────────────────────────
+            self.U             = np.concatenate([self.U,          U_new[None]],                    axis=0)
+            self.rms_px        = np.concatenate([self.rms_px,     _f("rms_px")[None]],             axis=0)
+            self.mean_px       = np.concatenate([self.mean_px,    _f("mean_px")[None]],            axis=0)
+            self.n_matched     = np.concatenate([self.n_matched,  n_new[None]],                    axis=0)
+            self.match_rate    = np.concatenate([self.match_rate, _f("match_rate")[None]],         axis=0)
+            self.cost          = np.concatenate([self.cost,       _f("cost")[None]],               axis=0)
+            self.strain_voigt  = np.concatenate([self.strain_voigt,
+                                                 np.full((1, *shape2d, 6),    np.nan)],            axis=0)
+            self.strain_tensor = np.concatenate([self.strain_tensor,
+                                                 np.full((1, *shape2d, 3, 3), np.nan)],           axis=0)
+            self._results.append([[None] * self.nx for _ in range(self.ny)])
+            self.n_grains += 1
+            self._merged_grain = self.n_grains - 1
+        else:
+            # ── subsequent merge: replace the existing slot in-place ──────────
+            gi = self._merged_grain
+            self.U[gi]          = U_new
+            self.rms_px[gi]     = _f("rms_px")
+            self.mean_px[gi]    = _f("mean_px")
+            self.n_matched[gi]  = n_new
+            self.match_rate[gi] = _f("match_rate")
+            self.cost[gi]       = _f("cost")
+            self.strain_voigt[gi]  = np.nan
+            self.strain_tensor[gi] = np.nan
+            self._results[gi] = [[None] * self.nx for _ in range(self.ny)]
+
+        return self._merged_grain
 
     # ── Derived quantities ────────────────────────────────────────────────────
 
@@ -1416,6 +1437,201 @@ class GrainMap:
         for sp in ax_key.spines.values():
             sp.set_visible(False)
 
+    def plot_overview(
+        self,
+        grain: int = 0,
+        *,
+        ipf_axes: "list[str] | None" = None,
+        quality_metrics: "list[str] | None" = None,
+        show_strain: bool = True,
+        strain_components: "list[str] | None" = None,
+        strain_frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        symmetry: str = "cubic",
+        frame: str = "lab",
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        figsize_per_panel: tuple = (4.0, 3.5),
+        title: str | None = None,
+    ) -> tuple:
+        """
+        Multi-panel overview figure for one grain.
+
+        Assembles up to three rows:
+
+        * **Row 1 — Orientations**: IPF maps for each axis in *ipf_axes*
+          (default: X, Y, Z).
+        * **Row 2 — Quality**: scalar quality maps listed in
+          *quality_metrics* (default: ``match_rate``, ``rms_px``, ``kam``).
+        * **Row 3 — Strain** *(optional)*: one panel per component in
+          *strain_components* (default: all six).  Only shown when
+          *show_strain* is ``True`` **and** the grain has non-NaN strain data.
+
+        Parameters
+        ----------
+        grain : int
+            Grain index (0-based).  Use the index returned by
+            :meth:`apply_merge` to plot the merged result.
+        ipf_axes : list of str or None
+            Reference axes for the IPF maps.  Each entry is ``'x'``,
+            ``'y'``, or ``'z'``.  Default ``['x', 'y', 'z']``.
+        quality_metrics : list of str or None
+            Scalar maps for row 2.  Valid values: any key accepted by
+            :meth:`plot_map` (``'match_rate'``, ``'rms_px'``, ``'mean_px'``,
+            ``'cost'``, ``'n_matched'``, ``'misorientation'``) plus
+            ``'kam'``.  Default ``['match_rate', 'rms_px', 'kam']``.
+        show_strain : bool
+            Include the strain row.  Silently skipped if no strain data are
+            present for *grain*.  Default ``True``.
+        strain_components : list of str or None
+            Strain components to show.  Default: all six
+            ``['e_xx', 'e_yy', 'e_zz', 'e_xy', 'e_xz', 'e_yz']``.
+        strain_frame : str
+            ``'crystal'``, ``'lab'``, or ``'sample'``.  Default
+            ``'crystal'``.
+        sample_tilt_deg : float
+            Tilt angle (°) for sample-frame strain rotation.  Default
+            ``-40``.
+        sample_tilt_axis : str
+            Lab axis of the tilt rotation.  Default ``'y'``.
+        symmetry : str
+            Crystal symmetry for IPF colouring.  Default ``'cubic'``.
+        frame : str
+            Frame passed to :meth:`plot_ipf_map`.  Default ``'lab'``.
+        motor_x, motor_y : str or None
+            Motor names for axis labels (from ``self.motors``).
+        motor_units : dict or None
+            Units per motor, e.g. ``{'xech': 'mm', 'yech': 'mm'}``.
+        figsize_per_panel : tuple
+            ``(width, height)`` in inches for each individual panel.
+            Default ``(4.0, 3.5)``.
+        title : str or None
+            Overall figure title.  Auto-generated if ``None``.
+
+        Returns
+        -------
+        fig : Figure
+        axes : (n_rows, n_cols) ndarray of Axes
+        """
+        ipf_axes       = list(ipf_axes or ["x", "y", "z"])
+        quality_metrics = list(quality_metrics or ["match_rate", "rms_px", "kam"])
+        strain_comps   = list(
+            strain_components or ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"]
+        )
+
+        # decide whether to show strain row
+        has_strain = (
+            show_strain
+            and self.n_grains > grain
+            and np.any(np.isfinite(self.strain_voigt[grain]))
+        )
+
+        # ── build row specs ───────────────────────────────────────────────────
+        rows: list[list[str]] = []
+        rows.append([f"ipf_{a}" for a in ipf_axes])
+        rows.append(quality_metrics)
+        if has_strain:
+            rows.append(strain_comps)
+
+        ncols = max(len(r) for r in rows)
+        nrows = len(rows)
+        pw, ph = figsize_per_panel
+        fig, axes_all = plt.subplots(
+            nrows, ncols,
+            figsize=(pw * ncols, ph * nrows),
+            squeeze=False,
+        )
+
+        _km = {"motor_x": motor_x, "motor_y": motor_y, "motor_units": motor_units}
+
+        for row_idx, row_specs in enumerate(rows):
+            for col_idx in range(ncols):
+                ax = axes_all[row_idx, col_idx]
+                if col_idx >= len(row_specs):
+                    ax.set_visible(False)
+                    continue
+
+                spec = row_specs[col_idx]
+
+                if spec.startswith("ipf_"):
+                    ipf_ax = spec[4:]
+                    self.plot_ipf_map(
+                        ipf_ax, grain=grain,
+                        frame=frame,
+                        sample_tilt_deg=sample_tilt_deg,
+                        sample_tilt_axis=sample_tilt_axis,
+                        symmetry=symmetry,
+                        ax=ax,
+                        show_colorkey=(col_idx == len(row_specs) - 1),
+                        **_km,
+                    )
+
+                elif spec == "kam":
+                    data = self.kam_map(grain)
+                    im = ax.imshow(
+                        data, origin="upper", cmap="inferno",
+                        extent=self._motor_extent(motor_x, motor_y),
+                        interpolation="nearest", aspect="auto",
+                    )
+                    cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                    cb.set_label("KAM (°)", fontsize=8)
+                    self._apply_motor_labels(ax, motor_x, motor_y, motor_units)
+                    ax.set_title(f"Grain {grain + 1}  —  KAM", fontsize=9)
+
+                elif spec in self._STRAIN_INDICES:
+                    self.plot_strain_component(
+                        spec, grain=grain,
+                        frame=strain_frame,
+                        sample_tilt_deg=sample_tilt_deg,
+                        sample_tilt_axis=sample_tilt_axis,
+                        ax=ax,
+                        **_km,
+                    )
+
+                else:
+                    self.plot_map(spec, grain=grain, ax=ax, **_km)
+
+        fig.suptitle(
+            title or f"Grain {grain + 1}  —  overview",
+            fontsize=11, y=1.01,
+        )
+        fig.tight_layout()
+        return fig, axes_all
+
+    # ── helpers used by plot_overview ─────────────────────────────────────────
+
+    def _motor_extent(
+        self,
+        motor_x: str | None,
+        motor_y: str | None,
+    ) -> list:
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        if mx is not None and my is not None:
+            return [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+        return [0, self.nx, self.ny, 0]
+
+    def _apply_motor_labels(
+        self,
+        ax: "plt.Axes",
+        motor_x: str | None,
+        motor_y: str | None,
+        motor_units: "dict | None" = None,
+    ) -> None:
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        if mx is not None and my is not None:
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            ax.set_xlabel(f"{motor_x} ({xu})" if xu else motor_x, fontsize=8)
+            ax.set_ylabel(f"{motor_y} ({yu})" if yu else motor_y, fontsize=8)
+        else:
+            ax.set_xlabel("column (ix)", fontsize=8)
+            ax.set_ylabel("row (iy)", fontsize=8)
+
     def plot_ipf_map(
         self,
         axis="z",
@@ -2013,12 +2229,13 @@ class GrainMap:
         """
         with h5py.File(path, "w") as f:
             meta = f.create_group("meta")
-            meta.attrs["ny"]           = self.ny
-            meta.attrs["nx"]           = self.nx
-            meta.attrs["n_grains"]     = self.n_grains
-            meta.attrs["h5_path"]      = self.h5_path or ""
-            meta.attrs["entry"]        = self.entry
+            meta.attrs["ny"]            = self.ny
+            meta.attrs["nx"]            = self.nx
+            meta.attrs["n_grains"]      = self.n_grains
+            meta.attrs["h5_path"]       = self.h5_path or ""
+            meta.attrs["entry"]         = self.entry
             meta.attrs["processing_dir"] = self.processing_dir
+            meta.attrs["merged_grain"]  = self._merged_grain if self._merged_grain is not None else -1
             meta.create_dataset(
                 "ub_files",
                 data=np.array([os.path.basename(p) for p in self.ub_files],
@@ -2112,6 +2329,8 @@ class GrainMap:
                 [[None] * nx for _ in range(ny)]
                 for _ in range(n_grains)
             ]
+            mg = int(meta.attrs.get("merged_grain", -1))
+            obj._merged_grain = mg if mg >= 0 else None
 
         return obj
 

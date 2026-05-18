@@ -520,6 +520,190 @@ class GrainMap:
 
         return self._merged_grain
 
+    # ── Symmetry reduction ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _symmetry_ops(symmetry: str) -> np.ndarray:
+        """
+        Return the proper rotations of the chosen crystal point group as a
+        (N, 3, 3) array.
+
+        Supported
+        ---------
+        ``'cubic'``     24 proper rotations of Oh (m-3m).
+        ``'hexagonal'`` 12 proper rotations of D6h (6/mmm).
+        ``'tetragonal'`` 8 proper rotations of D4h (4/mmm).
+        ``'orthorhombic'`` 4 proper rotations of D2h (mmm).
+        """
+        from itertools import permutations, product as _product
+        if symmetry == "cubic":
+            ops = []
+            for perm in permutations(range(3)):
+                for signs in _product((-1, 1), repeat=3):
+                    R = np.zeros((3, 3))
+                    for j in range(3):
+                        R[perm[j], j] = signs[j]
+                    if round(np.linalg.det(R)) == 1:
+                        ops.append(R)
+            return np.array(ops)   # (24, 3, 3)
+
+        if symmetry == "hexagonal":
+            ops = []
+            for n in range(6):
+                a = n * np.pi / 3
+                c, s = np.cos(a), np.sin(a)
+                ops.append(np.array([[ c, -s, 0],
+                                     [ s,  c, 0],
+                                     [ 0,  0, 1]]))
+            # C2 rotations about in-plane axes (six of them for D6)
+            for n in range(6):
+                a = n * np.pi / 6
+                c, s = np.cos(2 * a), np.sin(2 * a)
+                ops.append(np.array([[ c,  s, 0],
+                                     [ s, -c, 0],
+                                     [ 0,  0, -1]]))
+            return np.array(ops)   # (12, 3, 3)
+
+        if symmetry == "tetragonal":
+            ops = []
+            for n in range(4):
+                a = n * np.pi / 2
+                c, s = np.cos(a), np.sin(a)
+                ops.append(np.array([[ c, -s, 0],
+                                     [ s,  c, 0],
+                                     [ 0,  0, 1]]))
+            for n in range(4):
+                a = n * np.pi / 2
+                c, s = np.cos(a), np.sin(a)
+                ops.append(np.array([[ c,  s, 0],
+                                     [ s, -c, 0],
+                                     [ 0,  0, -1]]))
+            return np.array(ops)   # (8, 3, 3)
+
+        if symmetry == "orthorhombic":
+            return np.array([
+                np.eye(3),
+                np.diag([1, -1, -1]),
+                np.diag([-1, 1, -1]),
+                np.diag([-1, -1, 1]),
+            ])
+
+        raise ValueError(
+            f"Unknown symmetry {symmetry!r}. "
+            "Choose from: 'cubic', 'hexagonal', 'tetragonal', 'orthorhombic'."
+        )
+
+    def reduce_to_fundamental_zone(
+        self,
+        grain: int = 0,
+        *,
+        symmetry: str = "cubic",
+        reference: "np.ndarray | None" = None,
+    ) -> np.ndarray:
+        """
+        Re-label each pixel's orientation to the symmetry-equivalent U matrix
+        closest to a common reference, resolving spurious isolated pixels that
+        converged to a different member of the symmetry-equivalent family.
+
+        For a crystal with N symmetry operations the equivalent orientations at
+        each pixel are  ``U' = U @ S``  for each proper rotation S in the
+        point group.  All equivalents produce an identical Laue pattern but
+        different Euler angles.  This method picks the one with the smallest
+        misorientation angle relative to *reference*, making the map
+        self-consistent.
+
+        If strain data are present (``strain_tensor``) the tensor is rotated
+        consistently: ``ε' = Sᵀ ε S``.  Note that corrected pixels ideally
+        should be re-refined starting from the corrected U.
+
+        Parameters
+        ----------
+        grain : int
+            Grain slot to correct.  Default ``0``.
+        symmetry : str
+            Crystal point-group symmetry.  One of ``'cubic'``,
+            ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.
+            Default ``'cubic'``.
+        reference : (3, 3) ndarray or None
+            Target orientation.  ``None`` uses the mean orientation of all
+            fitted pixels in the map (computed via quaternion averaging).
+
+        Returns
+        -------
+        n_changed : (ny, nx) bool ndarray
+            ``True`` at positions where a different symmetry equivalent was
+            selected.
+        """
+        ops = self._symmetry_ops(symmetry)          # (N_sym, 3, 3)
+        U   = self.U[grain]                         # (ny, nx, 3, 3)
+        valid = ~np.any(np.isnan(U), axis=(-2, -1)) # (ny, nx) bool
+
+        # ── compute reference orientation ─────────────────────────────────────
+        if reference is None:
+            valid_U = U[valid]                      # (M, 3, 3)
+            if len(valid_U) == 0:
+                return np.zeros((self.ny, self.nx), dtype=bool)
+            # Quaternion mean (sign-flip to consistent hemisphere)
+            rots = Rotation.from_matrix(valid_U)
+            q    = rots.as_quat()                   # (M, 4)  xyzw
+            q    = np.where((q @ q[0]) < 0, -q, q) # flip to same hemisphere
+            q_mean = q.mean(axis=0)
+            q_mean /= np.linalg.norm(q_mean)
+            reference = Rotation.from_quat(q_mean).as_matrix()
+
+        ref = np.asarray(reference, dtype=float)
+
+        # ── for each pixel pick the equivalent closest to reference ───────────
+        # U_equiv[i] = U @ ops[i]  → shape (N_sym, ny, nx, 3, 3)
+        U_equiv = np.einsum("...ij,kjl->k...il", U, ops)  # (N_sym, ny, nx, 3, 3)
+
+        # Misorientation angle: trace(ref^T @ U') in [-1, 3]
+        # angle = arccos((trace - 1) / 2)  → minimise angle = maximise trace
+        traces = np.einsum("ij,k...jl->k...li", ref, U_equiv)
+        # traces shape is wrong — let me compute correctly:
+        # trace(ref^T @ U_equiv[k,iy,ix]) = sum_i (ref^T)_ii' U_equiv[k,iy,ix]_i'i
+        # = sum_i ref_i'i U_equiv[k,iy,ix]_i'i  ... simpler:
+        # = einsum("ji,k...ji->k...", ref, U_equiv)
+        traces = np.einsum("ji,k...ji->k...", ref, U_equiv)  # (N_sym, ny, nx)
+        best   = np.argmax(traces, axis=0)                   # (ny, nx)
+
+        # ── apply best symmetry op — vectorised ──────────────────────────────
+        changed = valid & (best != 0)
+
+        if changed.any():
+            # U_new[iy,ix] = U[iy,ix] @ ops[best[iy,ix]]
+            # Gather: ops_sel[iy,ix] = ops[best[iy,ix]]  → (ny,nx,3,3)
+            ops_sel = ops[best]                          # (ny, nx, 3, 3)
+            U_new   = np.einsum("...ij,...jk->...ik", U, ops_sel)
+            self.U[grain] = np.where(changed[..., None, None], U_new, U)
+
+            # Strain: ε' = Sᵀ ε S  (only where strain exists)
+            eps     = self.strain_tensor[grain]          # (ny, nx, 3, 3)
+            has_eps = changed & ~np.any(np.isnan(eps), axis=(-2, -1))
+            if has_eps.any():
+                eps_new = np.einsum(
+                    "...ki,...kl,...lj->...ij", ops_sel, eps, ops_sel
+                )   # Sᵀ ε S  (ops_sel rows are the columns of S, so "ki" = Sᵀ)
+                self.strain_tensor[grain] = np.where(
+                    has_eps[..., None, None], eps_new, eps
+                )
+                # Repack strain_voigt
+                e = self.strain_tensor[grain]
+                sv = np.stack([
+                    e[..., 0, 0], e[..., 1, 1], e[..., 2, 2],
+                    e[..., 0, 1], e[..., 0, 2], e[..., 1, 2],
+                ], axis=-1)
+                self.strain_voigt[grain] = np.where(
+                    has_eps[..., None], sv, self.strain_voigt[grain]
+                )
+
+        n_changed = int(changed.sum())
+        print(
+            f"reduce_to_fundamental_zone: {n_changed} / {int(valid.sum())} "
+            f"pixels reoriented  [grain={grain}, symmetry={symmetry!r}]"
+        )
+        return changed
+
     # ── Derived quantities ────────────────────────────────────────────────────
 
     def euler_map(
@@ -1147,6 +1331,266 @@ class GrainMap:
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
             title or f"Grain {grain + 1}  —  {label}  [{_frame_label}]",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
+
+    # ── Stress analysis ───────────────────────────────────────────────────────
+
+    # Code Voigt ordering: [xx=0, yy=1, zz=2, xy=3, xz=4, yz=5]
+    # Standard crystallographic Voigt (xrayutilities cij):
+    #                      [xx=0, yy=1, zz=2, yz=3, xz=4, xy=5]
+    # Permutation between the two (its own inverse): [0,1,2,5,4,3]
+    _VOIGT_REORDER = np.array([0, 1, 2, 5, 4, 3])
+
+    _STRESS_INDICES = {
+        "s_xx": (0, 0), "s_yy": (1, 1), "s_zz": (2, 2),
+        "s_xy": (0, 1), "s_xz": (0, 2), "s_yz": (1, 2),
+    }
+    _STRESS_LABELS = {
+        "s_xx": "σ_xx", "s_yy": "σ_yy", "s_zz": "σ_zz",
+        "s_xy": "σ_xy", "s_xz": "σ_xz", "s_yz": "σ_yz",
+    }
+    _STRESS_ALL = ("s_xx", "s_yy", "s_zz", "s_xy", "s_xz", "s_yz")
+
+    @staticmethod
+    def _extract_cij(crystal, cij=None) -> np.ndarray:
+        """
+        Return the 6×6 Voigt stiffness matrix in GPa.
+
+        Resolution order
+        ----------------
+        1. *cij* parameter if given directly.
+        2. ``crystal.cij`` (xrayutilities stores this in Pa → converted to GPa).
+        3. ``crystal.cijkl`` (4th-rank tensor in Pa) → Mandel/Voigt reduction.
+
+        The returned matrix uses the standard crystallographic Voigt ordering
+        ``[xx, yy, zz, yz, xz, xy]``.
+        """
+        if cij is not None:
+            return np.asarray(cij, dtype=float)
+
+        # xrayutilities Crystal
+        if hasattr(crystal, "cij"):
+            raw = np.asarray(crystal.cij, dtype=float)
+            if raw.shape == (6, 6):
+                # xrayutilities returns Pa; convert to GPa
+                scale = 1e-9 if raw.max() > 1e6 else 1.0
+                return raw * scale
+
+        # 4th-rank tensor fallback
+        if hasattr(crystal, "cijkl"):
+            cijkl = np.asarray(crystal.cijkl, dtype=float)
+            # Mandel/Voigt contraction: (i,j) → Voigt index
+            _v = {(0,0):0,(1,1):1,(2,2):2,(1,2):3,(2,1):3,(0,2):4,(2,0):4,(0,1):5,(1,0):5}
+            mat = np.zeros((6, 6))
+            for (i,j), a in _v.items():
+                for (k,l), b in _v.items():
+                    mat[a, b] = cijkl[i, j, k, l]
+            scale = 1e-9 if mat.max() > 1e6 else 1.0
+            return mat * scale
+
+        raise AttributeError(
+            f"Cannot find a 6×6 stiffness matrix on {type(crystal).__name__}. "
+            "Pass cij explicitly as a (6,6) array in GPa."
+        )
+
+    def stress_voigt(
+        self,
+        crystal,
+        grain: int = 0,
+        *,
+        cij: "np.ndarray | None" = None,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+    ) -> np.ndarray:
+        """
+        Compute the Cauchy stress tensor in Voigt notation for every map point.
+
+        Uses Hooke's law  **σ = C : ε**  where *C* is the 6×6 stiffness
+        matrix extracted from *crystal* and *ε* is the fitted strain tensor
+        stored in ``self.strain_tensor[grain]``.
+
+        Parameters
+        ----------
+        crystal : Crystal or LayeredCrystal
+            Source of elastic constants.  The stiffness matrix is extracted
+            automatically (see :meth:`_extract_cij`).
+        grain : int
+            Grain index (0-based).
+        cij : (6, 6) array or None
+            Override the stiffness matrix (GPa, standard Voigt ordering
+            ``[xx, yy, zz, yz, xz, xy]``).  ``None`` reads from *crystal*.
+        frame : str
+            Reference frame of the returned stress tensor.
+
+            ``'crystal'``
+                Components referred to the crystal axes (as fitted).
+            ``'lab'``
+                Rotated to the lab frame via ``σ_lab = U σ_crystal Uᵀ``.
+            ``'sample'``
+                Lab frame further rotated by *sample_tilt_deg* about
+                *sample_tilt_axis*.
+
+        Returns
+        -------
+        stress : (ny, nx, 6) ndarray, GPa
+            Stress in code Voigt ordering ``[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]``.
+            ``NaN`` where strain data are absent.
+        """
+        C = self._extract_cij(crystal, cij)          # (6,6) GPa, std Voigt
+        eps_code = self.strain_tensor[grain]          # (ny, nx, 3, 3)
+
+        # Build (ny, nx, 6) engineering Voigt in standard ordering
+        # Standard: [xx, yy, zz, yz, xz, xy]
+        eps_std = np.full((*eps_code.shape[:2], 6), np.nan)
+        eps_std[..., 0] = eps_code[..., 0, 0]
+        eps_std[..., 1] = eps_code[..., 1, 1]
+        eps_std[..., 2] = eps_code[..., 2, 2]
+        eps_std[..., 3] = 2.0 * eps_code[..., 1, 2]  # engineering γ_yz
+        eps_std[..., 4] = 2.0 * eps_code[..., 0, 2]  # engineering γ_xz
+        eps_std[..., 5] = 2.0 * eps_code[..., 0, 1]  # engineering γ_xy
+
+        # σ_std (ny,nx,6) = C (6,6) @ ε_std (ny,nx,6) via einsum
+        sig_std = np.einsum("ij,...j->...i", C, eps_std)   # (ny, nx, 6)
+
+        # Reorder back to code convention [xx,yy,zz,xy,xz,yz]
+        sig_code = sig_std[..., self._VOIGT_REORDER]
+
+        if frame in ("lab", "sample"):
+            U = self.U[grain]                             # (ny, nx, 3, 3)
+            R = U
+            if frame == "sample":
+                R_s = Rotation.from_euler(
+                    sample_tilt_axis, sample_tilt_deg, degrees=True
+                ).as_matrix()
+                R = np.einsum("ij,...jk->...ik", R_s, U)
+
+            # Rebuild (ny,nx,3,3) tensor from code Voigt, rotate, repack
+            _idx = self._STRESS_INDICES
+            sig_t = np.full((*eps_code.shape[:2], 3, 3), np.nan)
+            for comp, (i, j) in _idx.items():
+                v = sig_code[..., self._STRESS_ALL.index(comp)]
+                sig_t[..., i, j] = v
+                sig_t[..., j, i] = v
+
+            sig_rot = np.einsum("...ik,...kl,...jl->...ij", R, sig_t, R)
+
+            # Repack rotated tensor to code Voigt
+            sig_code = np.full_like(sig_code, np.nan)
+            for comp, (i, j) in _idx.items():
+                sig_code[..., self._STRESS_ALL.index(comp)] = sig_rot[..., i, j]
+
+        return sig_code
+
+    def plot_stress_component(
+        self,
+        component: str = "s_xx",
+        grain: int = 0,
+        crystal = None,
+        *,
+        cij: "np.ndarray | None" = None,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+        scale: float = 1e3,
+    ) -> tuple:
+        """
+        Plot a single stress-tensor component for a given grain.
+
+        Parameters
+        ----------
+        component : str
+            One of ``'s_xx'``, ``'s_yy'``, ``'s_zz'``,
+            ``'s_xy'``, ``'s_xz'``, ``'s_yz'``.
+        grain : int
+            Grain index (0-based).
+        crystal : Crystal or LayeredCrystal or None
+            Source of elastic constants.  Required unless *cij* is given.
+        cij : (6, 6) array or None
+            Override stiffness matrix (GPa, standard Voigt ordering).
+        frame : str
+            ``'crystal'``, ``'lab'``, or ``'sample'``.  Default
+            ``'crystal'``.
+        sample_tilt_deg : float
+            Tilt angle (°) for sample-frame rotation.  Default ``-40``.
+        sample_tilt_axis : str
+            Lab axis of the tilt rotation.  Default ``'y'``.
+        scale : float
+            Multiply stress values before plotting.  Default ``1e3``
+            converts GPa → MPa.
+        motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
+        title, figsize, colorbar
+            Same as :meth:`plot_strain_component`.
+        """
+        if component not in self._STRESS_INDICES:
+            raise ValueError(
+                f"Unknown component {component!r}. "
+                f"Choose from: {sorted(self._STRESS_INDICES)}"
+            )
+        if crystal is None and cij is None:
+            raise ValueError("Provide crystal or cij.")
+
+        sig = self.stress_voigt(
+            crystal, grain, cij=cij, frame=frame,
+            sample_tilt_deg=sample_tilt_deg, sample_tilt_axis=sample_tilt_axis,
+        )
+        idx  = self._STRESS_ALL.index(component)
+        data = sig[..., idx] * scale
+        unit = "MPa" if abs(scale - 1e3) < 1 else "GPa" if scale == 1.0 else f"×{scale} GPa"
+        label = f"{self._STRESS_LABELS[component]} ({unit})"
+        cmap  = cmap or "RdBu_r"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data, origin="upper", extent=extent,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            interpolation="nearest", aspect="auto",
+        )
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(label, fontsize=9)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }[frame]
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"Grain {grain + 1}  —  {self._STRESS_LABELS[component]}  [{_frame_label}]",
             fontsize=10,
         )
         fig.tight_layout()

@@ -138,6 +138,14 @@ class GrainMap:
         absent.
     entry : str
         HDF5 entry key, e.g. ``"1.1"``.
+    motor_x : str or None
+        Name of the horizontal (column) motor in the HDF5 file, e.g.
+        ``"xech"``.  When given, ``motors["x"]`` is populated as an alias
+        so you can always use ``gmap.motors["x"]`` regardless of the
+        beamline-specific motor name.
+    motor_y : str or None
+        Name of the vertical (row) motor, e.g. ``"yech"``.  Populates
+        ``motors["y"]`` as an alias.
 
     Attributes
     ----------
@@ -166,11 +174,15 @@ class GrainMap:
         h5_path: str | None = None,
         processing_dir: str | None = None,
         entry: str = "1.1",
+        motor_x: str | None = None,
+        motor_y: str | None = None,
     ):
         self.ny = int(ny)
         self.nx = int(nx)
         self.h5_path = h5_path
         self.entry = entry
+        self.motor_x = motor_x
+        self.motor_y = motor_y
 
         if processing_dir is None:
             if h5_path is not None:
@@ -266,6 +278,11 @@ class GrainMap:
         except Exception:
             pass  # motors are optional; don't break initialisation
 
+        if self.motor_x is not None and self.motor_x in self.motors:
+            self.motors["x"] = self.motors[self.motor_x]
+        if self.motor_y is not None and self.motor_y in self.motors:
+            self.motors["y"] = self.motors[self.motor_y]
+
     # ── Index helpers ─────────────────────────────────────────────────────────
 
     def frame_index(self, iy: int, ix: int) -> int:
@@ -301,6 +318,174 @@ class GrainMap:
     def get_result(self, iy: int, ix: int, grain: int):
         """Return the stored fit result (or ``None``) at ``(iy, ix, grain)``."""
         return self._results[grain][iy][ix]
+
+    def merge(
+        self,
+        metric: str = "match_rate",
+        min_match_rate: float = 0.0,
+        min_n_matched: int = 1,
+        max_rms_px: float = np.inf,
+    ) -> tuple[np.ndarray, dict]:
+        """
+        For each map position select the grain with the best fit quality.
+
+        Recommended metric is ``"match_rate"`` (default): it is normalised
+        to [0, 1] and directly measures the fraction of observed spots
+        explained by the fit, making it comparable across positions and
+        immune to the artefact where a single near-perfect match gives a
+        misleadingly low ``rms_px``.  Use ``"rms_px"`` only as a secondary
+        criterion once a minimum ``min_match_rate`` is already enforced.
+
+        Parameters
+        ----------
+        metric : str
+            Quality metric used to rank grains at each position.  One of:
+
+            * ``"match_rate"``  — fraction of matched spots (higher → better)
+            * ``"n_matched"``   — raw matched-spot count (higher → better)
+            * ``"rms_px"``      — RMS pixel residual (lower → better)
+            * ``"mean_px"``     — mean pixel residual (lower → better)
+            * ``"cost"``        — optimizer cost ½Σr² (lower → better)
+
+        min_match_rate : float
+            Discard any grain fit with ``match_rate < min_match_rate``.
+        min_n_matched : int
+            Discard any grain fit with fewer than this many matched spots.
+            Defaults to 1 (exclude positions with no matches at all).
+        max_rms_px : float
+            Discard any grain fit with ``rms_px > max_rms_px``.
+
+        Returns
+        -------
+        best_grain : (ny, nx) int ndarray
+            Index (0-based) of the winning grain at each map position.
+            ``-1`` where no grain passes the quality filters.
+        metrics : dict of (ny, nx) ndarrays
+            Quality metrics for the selected grain at each position:
+            ``"match_rate"``, ``"rms_px"``, ``"mean_px"``, ``"n_matched"``,
+            ``"cost"``, and ``"U"`` (shape ``(ny, nx, 3, 3)``).
+            Values are ``NaN`` / ``-1`` where ``best_grain == -1``.
+        """
+        _higher_better = {"match_rate", "n_matched"}
+        _lower_better  = {"rms_px", "mean_px", "cost"}
+        _all_metrics   = _higher_better | _lower_better
+        if metric not in _all_metrics:
+            raise ValueError(
+                f"metric must be one of {sorted(_all_metrics)}, got {metric!r}"
+            )
+        if self.n_grains == 0:
+            empty = np.full((self.ny, self.nx), np.nan)
+            return (
+                np.full((self.ny, self.nx), -1, dtype=int),
+                {"match_rate": empty, "rms_px": empty, "mean_px": empty,
+                 "n_matched": np.full((self.ny, self.nx), -1, dtype=int),
+                 "cost": empty,
+                 "U": np.full((self.ny, self.nx, 3, 3), np.nan)},
+            )
+
+        # ── quality mask ─────────────────────────────────────────────────────
+        valid = (
+            (self.n_matched >= min_n_matched)
+            & (self.match_rate >= min_match_rate)
+            & (self.rms_px <= max_rms_px)
+        )  # (n_grains, ny, nx) bool
+
+        # ── score array (always "higher = better") ───────────────────────────
+        raw = {
+            "match_rate": self.match_rate,
+            "n_matched":  self.n_matched.astype(float),
+            "rms_px":     self.rms_px,
+            "mean_px":    self.mean_px,
+            "cost":       self.cost,
+        }[metric]
+
+        score = np.where(valid, raw, np.nan)
+        if metric in _lower_better:
+            score = -score
+
+        # ── find winning grain ────────────────────────────────────────────────
+        any_valid = np.any(valid, axis=0)  # (ny, nx)
+        with np.errstate(all="ignore"):
+            best_grain = np.where(
+                any_valid,
+                np.nanargmax(score, axis=0),
+                -1,
+            ).astype(int)
+
+        # ── extract metric values for the winner ─────────────────────────────
+        iy_idx, ix_idx = np.meshgrid(
+            np.arange(self.ny), np.arange(self.nx), indexing="ij"
+        )
+        g_idx = np.clip(best_grain, 0, self.n_grains - 1)
+
+        def _sel(arr: np.ndarray) -> np.ndarray:
+            out = arr[g_idx, iy_idx, ix_idx].astype(float)
+            out[~any_valid] = np.nan
+            return out
+
+        n_sel = self.n_matched[g_idx, iy_idx, ix_idx].copy()
+        n_sel[~any_valid] = -1
+
+        U_sel = self.U[g_idx, iy_idx, ix_idx].copy()
+        U_sel[~any_valid] = np.nan
+
+        return best_grain, {
+            "match_rate": _sel(self.match_rate),
+            "rms_px":     _sel(self.rms_px),
+            "mean_px":    _sel(self.mean_px),
+            "n_matched":  n_sel,
+            "cost":       _sel(self.cost),
+            "U":          U_sel,
+        }
+
+    def apply_merge(self, best_grain: np.ndarray, metrics: dict) -> int:
+        """
+        Append a merge result as a new grain slot so all visualization and
+        analysis methods can be applied to it without modification.
+
+        Parameters
+        ----------
+        best_grain : (ny, nx) int ndarray
+            First return value of :meth:`merge`.
+        metrics : dict
+            Second return value of :meth:`merge`.
+
+        Returns
+        -------
+        int
+            Index of the new grain slot.  Pass it directly to any method
+            that accepts a ``grain`` argument::
+
+                best_grain, m = gmap.merge(min_match_rate=0.3)
+                gi = gmap.apply_merge(best_grain, m)
+
+                gmap.kam_map(gi)
+                gmap.plot_ipf_map(gi)
+                gmap.plot_map("match_rate", grain=gi)
+        """
+        shape2d = (self.ny, self.nx)
+        valid = (best_grain >= 0)[..., None, None]  # (ny, nx, 1, 1)
+
+        U_new = np.where(valid, metrics["U"], np.nan)[None]   # (1, ny, nx, 3, 3)
+
+        def _f(key):
+            return np.asarray(metrics[key], dtype=float)[None]   # (1, ny, nx)
+
+        n_new = np.asarray(metrics["n_matched"], dtype=int)[None]
+
+        self.U             = np.concatenate([self.U,             U_new],              axis=0)
+        self.rms_px        = np.concatenate([self.rms_px,        _f("rms_px")],       axis=0)
+        self.mean_px       = np.concatenate([self.mean_px,       _f("mean_px")],      axis=0)
+        self.n_matched     = np.concatenate([self.n_matched,     n_new],              axis=0)
+        self.match_rate    = np.concatenate([self.match_rate,    _f("match_rate")],   axis=0)
+        self.cost          = np.concatenate([self.cost,          _f("cost")],         axis=0)
+        self.strain_voigt  = np.concatenate([self.strain_voigt,
+                                             np.full((1, *shape2d, 6),    np.nan)],   axis=0)
+        self.strain_tensor = np.concatenate([self.strain_tensor,
+                                             np.full((1, *shape2d, 3, 3), np.nan)],  axis=0)
+        self._results.append([[None] * self.nx for _ in range(self.ny)])
+        self.n_grains += 1
+        return self.n_grains - 1
 
     # ── Derived quantities ────────────────────────────────────────────────────
 

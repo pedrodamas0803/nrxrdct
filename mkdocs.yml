@@ -78,6 +78,8 @@ nav:
     - Darwin Model (Thick Layers): user-guide/laue_darwin.md
     - Orientation Plotting: user-guide/laue_orientation_plotting.md
     - Strain Analysis: user-guide/laue_strain.md
+    - Elastic Stress from Strain Maps: user-guide/laue_stress.md
+    - Grain Map Merging and Symmetry Reduction: user-guide/laue_grain_map_merge.md
   - Examples:
     - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:

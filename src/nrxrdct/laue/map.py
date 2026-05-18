@@ -1739,7 +1739,8 @@ class GrainMap:
         title: str | None = None,
         figsize: tuple = (6, 5),
         show_colorkey: bool = True,
-        stretch: bool = False,
+        stretch: "bool | str" = False,
+        best_grain: "np.ndarray | None" = None,
     ) -> tuple:
         """
         Inverse pole figure (IPF) map coloured by which crystal direction is
@@ -1771,16 +1772,30 @@ class GrainMap:
         show_colorkey : bool
             Overlay a small colour-key triangle in the lower-right corner.
             Automatically disabled when *stretch* is ``True``.
-        stretch : bool
-            If ``True``, linearly rescale each RGB channel so that the
-            minimum and maximum values in the map span the full [0, 1]
-            range.  Useful when all orientations cluster in a small region
-            of the IPF triangle and the map appears as a nearly solid
-            colour.  When *show_colorkey* is also ``True`` (default), the
-            standard key is replaced by two insets: a faded full triangle
-            with a dashed box marking the data extent, and a zoomed scatter
-            of the actual data coloured with the stretched colours so you
-            can still read off absolute orientations.  Default ``False``.
+        stretch : bool or str
+            Contrast enhancement mode.  Options:
+
+            ``False`` (default)
+                No stretching — standard IPF colour mapping.
+            ``True`` or ``"global"``
+                Single linear stretch across all valid pixels.  Good for
+                a map with one dominant orientation; with two distinct
+                grains the inter-grain distance consumes the full gamut
+                and intra-grain variation remains compressed.
+            ``"local"``
+                Independent per-grain stretch: each grain region is
+                normalised to [0, 1] separately, revealing intra-grain
+                orientation spread for every grain simultaneously.
+                Requires *best_grain* (the ``(ny, nx)`` int array returned
+                by :meth:`merge`); raises ``ValueError`` if omitted.
+                Colours are **not** comparable between grains.
+
+            When stretching is active and *show_colorkey* is ``True`` the
+            standard colour-key is replaced by two insets (see
+            :meth:`_ipf_colorkey_inset_stretched`).
+        best_grain : (ny, nx) int ndarray or None
+            Grain-label array required for ``stretch="local"``.  Positions
+            with value ``-1`` are treated as invalid (white).
         """
         _shortcuts = {
             "x": np.array([1.0, 0.0, 0.0]),
@@ -1829,14 +1844,41 @@ class GrainMap:
         else:
             c_mean = None
 
-        if stretch:
-            # Per-channel linear stretch so the data range fills [0, 1].
+        # Normalise stretch argument
+        if stretch is True:
+            stretch = "global"
+        elif stretch is False:
+            stretch = None
+
+        if stretch == "global":
             for ch in range(3):
                 ch_vals = rgb[..., ch]
-                lo = np.nanmin(ch_vals)
-                hi = np.nanmax(ch_vals)
+                lo, hi = np.nanmin(ch_vals), np.nanmax(ch_vals)
                 if hi > lo:
                     rgb[..., ch] = (ch_vals - lo) / (hi - lo)
+
+        elif stretch == "local":
+            if best_grain is None:
+                raise ValueError(
+                    "stretch='local' requires best_grain — pass the (ny, nx) "
+                    "int array returned by merge()."
+                )
+            bg = np.asarray(best_grain)
+            for gi in np.unique(bg[bg >= 0]):
+                mask = (bg == gi) & valid
+                if not mask.any():
+                    continue
+                for ch in range(3):
+                    ch_vals = rgb[..., ch]
+                    lo = float(np.nanmin(ch_vals[mask]))
+                    hi = float(np.nanmax(ch_vals[mask]))
+                    if hi > lo:
+                        rgb[mask, ch] = (ch_vals[mask] - lo) / (hi - lo)
+
+        elif stretch is not None:
+            raise ValueError(
+                f"stretch must be False, True, 'global', or 'local', got {stretch!r}"
+            )
 
         # NaN → white
         img = np.where(np.isnan(rgb), 1.0, np.clip(rgb, 0.0, 1.0)).astype(np.float32)

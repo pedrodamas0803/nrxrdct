@@ -789,7 +789,7 @@ class GrainMap:
             # Quaternion mean (sign-flip to consistent hemisphere)
             rots = Rotation.from_matrix(valid_U)
             q    = rots.as_quat()                   # (M, 4)  xyzw
-            q    = np.where((q @ q[0]) < 0, -q, q) # flip to same hemisphere
+            q    = np.where(((q @ q[0]) < 0)[:, None], -q, q) # flip to same hemisphere
             q_mean = q.mean(axis=0)
             q_mean /= np.linalg.norm(q_mean)
             reference = Rotation.from_quat(q_mean).as_matrix()

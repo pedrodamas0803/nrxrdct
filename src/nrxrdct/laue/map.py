@@ -405,12 +405,15 @@ class GrainMap:
 
         # ── find winning grain ────────────────────────────────────────────────
         any_valid = np.any(valid, axis=0)  # (ny, nx)
-        with np.errstate(all="ignore"):
-            best_grain = np.where(
-                any_valid,
-                np.nanargmax(score, axis=0),
-                -1,
-            ).astype(int)
+        # Replace NaN with -inf so argmax never sees an all-NaN column.
+        # np.where evaluates both branches eagerly, so nanargmax would raise
+        # "All-NaN slice encountered" for positions where no grain is valid.
+        score_filled = np.where(np.isnan(score), -np.inf, score)
+        best_grain = np.where(
+            any_valid,
+            np.argmax(score_filled, axis=0),
+            -1,
+        ).astype(int)
 
         # ── extract metric values for the winner ─────────────────────────────
         iy_idx, ix_idx = np.meshgrid(

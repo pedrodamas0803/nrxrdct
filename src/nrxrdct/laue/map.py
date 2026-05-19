@@ -2902,7 +2902,7 @@ class GrainMap:
                     np.log1p(image / vmax * 1000),
                     origin="upper",
                     extent=[0, camera.Nh, camera.Nv, 0],
-                    cmap="inferno", aspect="equal", zorder=0,
+                    cmap="gray", aspect="equal", zorder=0,
                 )
             else:
                 ax_det.set_xlim(0, camera.Nh)
@@ -3245,7 +3245,7 @@ class GrainMap:
                     np.log1p(image / vmax * 1000),
                     origin="upper",
                     extent=[0, camera.Nh, camera.Nv, 0],
-                    cmap="inferno", aspect="equal", zorder=0,
+                    cmap="gray", aspect="equal", zorder=0,
                 )
             else:
                 ax_det.set_xlim(0, camera.Nh)
@@ -3535,6 +3535,518 @@ class GrainMap:
                  w_grain, btn_store, btn_save],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
                                   align_items="center"),
+            ),
+            _info,
+        ], layout=ipw.Layout(padding="6px 8px"))
+
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
+    def segment_frame(
+        self,
+        base_dir: str,
+        detector_mask: "np.ndarray | None" = None,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        map_quantity: str = "match_rate",
+        map_grain: "int | None" = None,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        figsize: tuple = (14, 7),
+    ) -> None:
+        """
+        Interactive single-frame segmentation tuner.
+
+        Click a pixel on the left map panel to load the frame into the right
+        panel, adjust parameters, then press **Segment** to preview the result.
+        When satisfied press **💾 Save** to write the spots file to
+        ``<base_dir>/seg/frame_NNNNN.h5``.
+
+        Segmentation methods
+        --------------------
+        * **LoG** — Laplacian-of-Gaussian.  Sigmas control the scale of
+          detected blobs.  Supply a single value (e.g. ``4``) or a
+          comma-separated list (e.g. ``2, 4, 8``) for multi-scale detection.
+        * **WTH** — White top-hat transform.  Disk radii should be larger than
+          the spots but smaller than the background correlation length.
+        * **Hybrid** — LoG and WTH combined (logical OR); use when spot sizes
+          vary across the detector.
+
+        Parameters
+        ----------
+        base_dir : str
+            Processing directory.  Segmentation files are written to
+            ``<base_dir>/seg/``.
+        detector_mask : (Nv, Nh) bool ndarray or None
+            Valid-pixel mask (``True`` = active pixel).  ``None`` uses all
+            pixels.
+        h5_dataset : str or None
+            HDF5 dataset path inside ``self.h5_path`` for the image stack.
+        tiff_dir : str or None
+            Path to a folder of ``img_<number>.tif`` files.
+        map_quantity : str
+            Scalar quantity shown on the left panel.
+        map_grain : int or None
+            Grain index used to build the left-panel map.
+        motor_x, motor_y : str or None
+            Motor names for axis labels and click-to-pixel conversion.
+        motor_units : dict or None
+            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        figsize : tuple
+            Figure size.  Default ``(14, 7)``.
+        """
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+        from .segmentation import (
+            LoG_segmentation, WTH_segmentation, hybrid_segmentation,
+            clean_segmentation, label_segmented_image, measure_peaks,
+            filter_and_rescale_images, gaussian_background, write_h5_spotsfile,
+        )
+
+        seg_dir = os.path.join(base_dir, "seg")
+        os.makedirs(seg_dir, exist_ok=True)
+
+        if map_grain is None:
+            map_grain = self._merged_grain if self._merged_grain is not None else 0
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu_ = mu.get(motor_x, "")
+            yu_ = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu_})" if xu_ else motor_x
+            ylabel_map = f"{motor_y} ({yu_})" if yu_ else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        _tiff_index: list = []
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                if not _tiff_index:
+                    import re as _re
+                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.match(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda t: t[0])
+                    _tiff_index.extend(p for _, p in files)
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            elif h5_dataset is not None:
+                try:
+                    with h5py.File(self.h5_path, "r") as fh:
+                        return fh[h5_dataset][frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+            return None
+
+        _map_opts = {
+            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
+            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
+            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
+            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+        }
+        map_data, map_label, map_cmap = _map_opts.get(
+            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+        )
+
+        # ── figure ────────────────────────────────────────────────────────────
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize)
+        try:
+            fig.canvas.manager.set_window_title("Laue — segment frame")
+        except Exception:
+            pass
+
+        gs = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap=map_cmap, interpolation="nearest", aspect="auto",
+        )
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title(
+            f"Click to select — {map_label}  (grain {map_grain + 1})",
+            fontsize=9,
+        )
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+        fig.suptitle(
+            "Segment frame  —  click map → adjust params → Segment → Save",
+            fontsize=9, color="#555",
+        )
+
+        _state: dict = {
+            "frame_idx": None, "iy": None, "ix": None,
+            "image": None,
+            "props": None,
+            "drawn": False,
+        }
+
+        # ── parse text → scalar or list ───────────────────────────────────────
+        def _parse(s: str):
+            parts = [x.strip() for x in s.split(",") if x.strip()]
+            if not parts:
+                raise ValueError(f"Empty parameter field: {s!r}")
+            nums = []
+            for p in parts:
+                nums.append(float(p) if "." in p else int(p))
+            return nums[0] if len(nums) == 1 else nums
+
+        # ── draw the detector panel ───────────────────────────────────────────
+        def _draw_det(props=None) -> None:
+            image = _state["image"]
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            if image is None:
+                ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+                fig.canvas.draw_idle()
+                return
+
+            nv, nh = image.shape
+            pos  = image[image > 0]
+            vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+            ax_det.imshow(
+                np.log1p(image / vmax * 1000),
+                origin="upper", extent=[0, nh, nv, 0],
+                cmap="gray", aspect="equal", zorder=0,
+            )
+
+            if props is not None and len(props) > 0:
+                ys = np.array([p.centroid_weighted[0] for p in props])
+                xs = np.array([p.centroid_weighted[1] for p in props])
+                ax_det.scatter(
+                    xs, ys, s=35, c="none", edgecolors="#44aaff",
+                    linewidths=0.9, zorder=4,
+                    label=f"spots ({len(props)})",
+                )
+                ax_det.legend(
+                    fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_aspect("equal")
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+            iy, ix = _state["iy"], _state["ix"]
+            n_spots = len(props) if props else 0
+            suffix  = f"  — {n_spots} spots" if props is not None else ""
+            ax_det.set_title(
+                f"Frame {_state['frame_idx']}  (iy={iy}, ix={ix}){suffix}",
+                fontsize=9,
+            )
+
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+            fig.canvas.draw_idle()
+
+        # ── map click ─────────────────────────────────────────────────────────
+        def _on_click(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            image = _load_image(frame_idx)
+            _state.update(frame_idx=frame_idx, iy=iy, ix=ix,
+                          image=image, props=None)
+            btn_segment.disabled = image is None
+            btn_save.disabled    = True
+            _info.value = (
+                f"<span style='color:#aaa'>Frame {frame_idx} loaded"
+                + (" — no image data" if image is None else "")
+                + "</span>"
+            )
+            _draw_det(props=None)
+
+        fig.canvas.mpl_connect("button_press_event", _on_click)
+
+        # ── ipywidgets — parameter controls ───────────────────────────────────
+        _sk = dict(
+            continuous_update=False,
+            style={"description_width": "110px"},
+            layout=ipw.Layout(width="320px"),
+        )
+        _isk = dict(
+            style={"description_width": "90px"},
+            layout=ipw.Layout(width="160px"),
+        )
+
+        w_method = ipw.Dropdown(
+            options=["LoG", "WTH", "Hybrid"],
+            value="LoG",
+            description="Method:",
+            layout=ipw.Layout(width="220px"),
+            style={"description_width": "70px"},
+        )
+
+        # LoG-specific
+        w_log_sigmas = ipw.Text(
+            value="2, 4, 8", description="Sigmas:", **_sk,
+            placeholder="e.g. 2, 4, 8  or  4",
+        )
+        # WTH-specific
+        w_wth_radius = ipw.Text(
+            value="5, 7", description="Disk radii:", **_sk,
+            placeholder="e.g. 5, 7  or  7",
+        )
+        # Hybrid-specific (separate copies so values are independent)
+        w_hyb_log = ipw.Text(
+            value="2, 4, 8", description="LoG sigmas:", **_sk,
+            placeholder="e.g. 2, 4, 8",
+        )
+        w_hyb_wth = ipw.Text(
+            value="5, 7", description="WTH radii:", **_sk,
+            placeholder="e.g. 5, 7",
+        )
+
+        # Shared
+        w_thresh = ipw.FloatText(
+            value=99.9, description="Threshold %:", **_sk,
+        )
+        w_bg_sigma = ipw.FloatText(
+            value=5.0, description="BG sigma:", **_sk,
+        )
+
+        # Clean segmentation
+        w_min_size  = ipw.IntText(value=3,   description="min_size:",   **_isk)
+        w_max_size  = ipw.IntText(value=500, description="max_size:",   **_isk)
+        w_gap_excl  = ipw.IntText(value=3,   description="gap_exclude:",**_isk)
+        w_gap_clos  = ipw.IntText(value=3,   description="gap_closing:",**_isk)
+
+        # Save params
+        w_d          = ipw.IntText(value=10,  description="Crop d (px):", **_isk)
+        w_r2         = ipw.FloatText(value=0.9, description="R² min:",   **_isk)
+        w_overwrite  = ipw.Checkbox(
+            value=True, description="Overwrite existing",
+            layout=ipw.Layout(width="200px"),
+        )
+
+        # Method-specific containers (show/hide)
+        box_log    = ipw.VBox([w_log_sigmas])
+        box_wth    = ipw.VBox([w_wth_radius])
+        box_hybrid = ipw.VBox([w_hyb_log, w_hyb_wth])
+        box_wth.layout.display    = "none"
+        box_hybrid.layout.display = "none"
+
+        def _on_method(change) -> None:
+            m = change["new"]
+            box_log.layout.display    = "" if m == "LoG"    else "none"
+            box_wth.layout.display    = "" if m == "WTH"    else "none"
+            box_hybrid.layout.display = "" if m == "Hybrid" else "none"
+
+        w_method.observe(_on_method, names="value")
+
+        # ── buttons ───────────────────────────────────────────────────────────
+        _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
+        btn_segment = ipw.Button(description="⚙ Segment", button_style="primary", **_bkw)
+        btn_save    = ipw.Button(description="💾 Save",   button_style="success", **_bkw)
+        btn_segment.disabled = True
+        btn_save.disabled    = True
+
+        _info = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "click a map pixel to load a frame"
+            "</span>",
+            layout=ipw.Layout(margin="4px 0 0 6px"),
+        )
+
+        def _cb_segment(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            image = _state["image"]
+            if image is None:
+                return
+            if getattr(_cb_segment, "_running", False):
+                return
+            _cb_segment._running    = True
+            btn_segment.disabled    = True
+            btn_segment.description = "Running…"
+
+            method = w_method.value
+            try:
+                if method == "LoG":
+                    method_kwargs = {
+                        "sigmas": _parse(w_log_sigmas.value),
+                        "threshold_percentile": w_thresh.value,
+                    }
+                elif method == "WTH":
+                    method_kwargs = {
+                        "disk_radius": _parse(w_wth_radius.value),
+                        "threshold_percentile": w_thresh.value,
+                    }
+                else:  # Hybrid
+                    method_kwargs = {
+                        "log_sigmas": _parse(w_hyb_log.value),
+                        "wth_disk_radius": _parse(w_hyb_wth.value),
+                        "threshold_percentile": w_thresh.value,
+                    }
+            except ValueError as exc:
+                _info.value = f"<b style='color:#f44'>Parameter error: {exc}</b>"
+                btn_segment.description = "⚙ Segment"
+                btn_segment.disabled    = False
+                _cb_segment._running    = False
+                return
+
+            clean_kw = dict(
+                min_size=w_min_size.value, max_size=w_max_size.value,
+                gap_exclude=w_gap_excl.value, gap_closing=w_gap_clos.value,
+            )
+            bg_sigma = w_bg_sigma.value
+            _det_mask = (
+                detector_mask.astype(bool)
+                if detector_mask is not None
+                else np.ones(image.shape, dtype=bool)
+            )
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    valid = _det_mask
+                    frame = image.copy().astype(np.float32)
+                    if bg_sigma > 0:
+                        bg    = gaussian_background(frame, valid, sigma=bg_sigma)
+                        frame = frame - bg
+                    frame -= frame[valid].min()
+                    frame[~valid] = 0.0
+
+                    if method == "WTH":
+                        seg = WTH_segmentation(frame, valid, **method_kwargs)
+                    elif method == "Hybrid":
+                        seg = hybrid_segmentation(frame, valid, **method_kwargs)
+                    else:
+                        seg = LoG_segmentation(frame, valid, **method_kwargs)
+
+                    final_mask, _ = clean_segmentation(seg, valid, frame, **clean_kw)
+                    filt = filter_and_rescale_images(frame, cutoff_freq=0.001)
+                    labels, _, _ = label_segmented_image(final_mask, filt)
+                    props = measure_peaks(labels, filt)
+                    q.put(("ok", props))
+                except Exception as exc:
+                    q.put(("err", exc))
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                tag, payload = q.get_nowait()
+                if tag == "err":
+                    _info.value = f"<b style='color:#f44'>Error: {payload}</b>"
+                else:
+                    _state["props"] = payload
+                    n = len(payload)
+                    col = "#44dd66" if n > 0 else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{n} spots detected</b>"
+                    btn_save.disabled = n == 0
+                    _draw_det(props=payload)
+                btn_segment.description = "⚙ Segment"
+                btn_segment.disabled    = False
+                _cb_segment._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        def _cb_save(_) -> None:
+            props = _state["props"]
+            if not props:
+                return
+            frame_idx = _state["frame_idx"]
+            out_path  = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            try:
+                write_h5_spotsfile(
+                    _state["image"], props, outpath=out_path,
+                    d=w_d.value, r_squared_min=w_r2.value,
+                    overwrite=w_overwrite.value,
+                )
+                _info.value = (
+                    f"<b style='color:#44dd66'>Saved → {out_path}</b>"
+                )
+                print(f"  💾 Saved → {os.path.abspath(out_path)}")
+            except Exception as exc:
+                _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
+
+        btn_segment.on_click(_cb_segment)
+        btn_save.on_click(_cb_save)
+
+        # ── layout ────────────────────────────────────────────────────────────
+        _controls = ipw.VBox([
+            ipw.HBox([w_method], layout=ipw.Layout(margin="4px 0 2px 0")),
+            ipw.HBox([
+                ipw.VBox([
+                    box_log, box_wth, box_hybrid,
+                    w_thresh, w_bg_sigma,
+                ], layout=ipw.Layout(padding="0 16px 0 0")),
+                ipw.VBox([
+                    ipw.HTML("<b>Clean:</b>"),
+                    ipw.HBox([w_min_size, w_max_size]),
+                    ipw.HBox([w_gap_excl, w_gap_clos]),
+                    ipw.HTML("<b>Save:</b>"),
+                    ipw.HBox([w_d, w_r2]),
+                    w_overwrite,
+                ]),
+            ]),
+            ipw.HBox(
+                [btn_segment, btn_save],
+                layout=ipw.Layout(gap="8px", margin="6px 0 0 0"),
             ),
             _info,
         ], layout=ipw.Layout(padding="6px 8px"))

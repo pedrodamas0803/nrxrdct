@@ -337,9 +337,9 @@ def interactive_orientation(
                 np.log1p(img / vmax * 1000),
                 origin="upper",
                 extent=[0, camera.Nh, camera.Nv, 0],
-                cmap="inferno",
+                cmap="gray",
                 aspect="auto",
-                alpha=0.55,
+                alpha=0.85,
                 zorder=0,
             )
         else:
@@ -1133,9 +1133,9 @@ def interactive_calibration(
                 np.log1p(img_arr / vmax * 1000),
                 origin="upper",
                 extent=[0, camera.Nh, camera.Nv, 0],
-                cmap="inferno",
+                cmap="gray",
                 aspect="auto",
-                alpha=0.55,
+                alpha=0.85,
                 zorder=0,
             )
         else:

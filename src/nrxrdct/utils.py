@@ -229,23 +229,26 @@ def calculate_xrd_baseline(
 
 def generate_circular_mask(shape, center, diameter) -> np.ndarray:
     """
-    Generate a 2-D boolean circular mask for a given volume shape.
+    Generate a 2-D boolean circular mask for a given image or volume shape.
 
     Args:
-        shape (tuple): Shape of the volume ``(n_tth, ny, nx)``; the mask is built
-            over the last two dimensions.
-        center (tuple): ``(cx, cy)`` centre of the circle in pixel coordinates.
+        shape (tuple): Shape of the array.  Both 2-D ``(ny, nx)`` and 3-D
+            ``(n_tth, ny, nx)`` (or any shape with at least 2 dimensions) are
+            accepted; the mask is always built over the **last two** dimensions.
+        center (tuple): ``(cx, cy)`` centre of the circle in pixel coordinates,
+            where *cx* indexes along the last axis (columns) and *cy* along the
+            second-to-last axis (rows).
         diameter (int or float): Diameter of the circular region in pixels.
 
     Returns:
         np.ndarray: 2-D boolean array of shape ``(ny, nx)`` where ``True`` marks
             pixels inside the circle.
     """
-    x, y = np.arange(0, shape[1]), np.arange(0, shape[2])
+    ny, nx = shape[-2], shape[-1]
+    x, y = np.arange(nx), np.arange(ny)
     X, Y = np.meshgrid(x, y)
     z = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
-    mask = z < diameter // 2
-    return mask
+    return z < diameter / 2
 
 
 def simulate_powder_xrd_monophase(

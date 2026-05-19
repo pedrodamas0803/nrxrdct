@@ -2976,6 +2976,571 @@ class GrainMap:
         fig.canvas.mpl_connect("button_press_event", _on_click)
         return fig, (ax_map, ax_det)
 
+    def reindex_frame(
+        self,
+        crystal,
+        camera,
+        base_dir: str,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        map_quantity: str = "match_rate",
+        map_grain: "int | None" = None,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 23000.0,
+        hmax: int = 8,
+        angle_tol_deg: float = 0.5,
+        min_match_rate: float = 0.25,
+        n_obs_use: int = 20,
+        max_match_px: float = 30.0,
+        fit_max_match_px: "float | list[float]" = [30.0, 10.0, 3.0],
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
+        figsize: tuple = (14, 7),
+    ) -> None:
+        """
+        Interactive single-frame re-indexer and fitter.
+
+        Click a pixel on the left map panel to select a frame, then:
+
+        1. **⚡ Index** — runs :func:`index_orientation` to find a rough
+           orientation from the inter-spot angle table.  Orange diamonds show
+           the simulated spots; green lines connect matched pairs.
+        2. **⚡ Fit** — refines the orientation with :func:`fit_orientation`
+           starting from the index result (or from the map's existing U if
+           indexing was skipped).  Cyan diamonds replace the index overlay.
+        3. **⬆ Store** — writes the fit result back into the map at the
+           selected position and grain slot chosen by the grain selector.
+        4. **💾 Save UB** — writes the best available U to an auto-numbered
+           ``UB<n>.npy`` file in the current directory.
+
+        Parameters
+        ----------
+        crystal : Crystal
+            xrayutilities crystal structure used for indexing and simulation.
+        camera : Camera
+            Detector geometry.
+        base_dir : str
+            Processing directory containing the ``seg/`` sub-folder with
+            segmentation HDF5 spot files.
+        h5_dataset : str or None
+            HDF5 dataset path inside ``self.h5_path`` for the image stack.
+            Mutually exclusive with *tiff_dir*.
+        tiff_dir : str or None
+            Path to a folder of ``img_<number>.tif`` files.  Mutually
+            exclusive with *h5_dataset*.
+        map_quantity : str
+            Scalar quantity shown on the left panel.  One of
+            ``'match_rate'``, ``'rms_px'``, ``'mean_px'``, ``'cost'``.
+        map_grain : int or None
+            Grain index used to build the left-panel map.  ``None`` uses
+            the merged grain slot when available, otherwise grain ``0``.
+        motor_x, motor_y : str or None
+            Motor names for axis labels and click-to-pixel conversion.
+        motor_units : dict or None
+            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        E_min_eV, E_max_eV : float
+            Energy range for spot simulation after indexing.
+        hmax : int
+            Maximum Miller index for the angle lookup table.  Default ``8``.
+        angle_tol_deg : float
+            Angular tolerance for table lookup and final scoring.  Default ``0.5``.
+        min_match_rate : float
+            Minimum match rate for ``IndexResult.success``.  Default ``0.25``.
+        n_obs_use : int
+            Number of brightest observed spots passed to the indexer.
+            Default ``20``.
+        max_match_px : float
+            Pixel radius for drawing match lines.  Default ``30``.
+        fit_max_match_px : float or list of float
+            Match-radius schedule passed to :func:`fit_orientation`.  A list
+            enables staged refinement (each stage tightens the window).
+            Default ``[30, 10, 3]``.
+        r_squared_min : float
+            Minimum Gaussian-fit R² when loading the spot file.  Default ``0``.
+        include_unfitted : bool
+            Include raw centroids (fit failed) from the spot file.
+        figsize : tuple
+            Figure size.  Default ``(14, 7)``.
+        """
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+        from .simulation import simulate_laue as _sim_laue
+        from .segmentation import convert_spotsfile2peaklist
+        from .fitting import (
+            index_orientation as _index,
+            fit_orientation   as _fit_ori,
+            _match_spots,
+        )
+
+        seg_dir = os.path.join(base_dir, "seg")
+        if map_grain is None:
+            map_grain = self._merged_grain if self._merged_grain is not None else 0
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu_ = mu.get(motor_x, "")
+            yu_ = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu_})" if xu_ else motor_x
+            ylabel_map = f"{motor_y} ({yu_})" if yu_ else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        _tiff_index: list = []
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                if not _tiff_index:
+                    import re as _re
+                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.match(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda t: t[0])
+                    _tiff_index.extend(p for _, p in files)
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            elif h5_dataset is not None:
+                try:
+                    with h5py.File(self.h5_path, "r") as fh:
+                        return fh[h5_dataset][frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+            return None
+
+        _map_opts = {
+            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
+            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
+            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
+            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+        }
+        map_data, map_label, map_cmap = _map_opts.get(
+            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+        )
+
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize)
+        try:
+            fig.canvas.manager.set_window_title("Laue — re-index frame")
+        except Exception:
+            pass
+
+        gs = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap=map_cmap, interpolation="nearest", aspect="auto",
+        )
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title(
+            f"Click to select — {map_label}  (grain {map_grain + 1})",
+            fontsize=9,
+        )
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+        fig.suptitle(
+            "Re-index frame  —  click map → Index → Fit → Store",
+            fontsize=9, color="#555",
+        )
+
+        _state: dict = {
+            "frame_idx": None,
+            "iy": None, "ix": None,
+            "obs_xy": np.empty((0, 2)),
+            "result":     None,   # IndexResult
+            "fit_result": None,   # OrientationFitResult
+            "drawn": False,
+        }
+
+        # ── detector panel draw ───────────────────────────────────────────────
+        def _overlay_sim(U, color, label) -> None:
+            """Draw simulated spots + match lines for a given U."""
+            try:
+                spots  = _sim_laue(
+                    crystal, U, camera,
+                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                )
+                on_det = [s for s in spots if s.get("pix") is not None]
+                sim_xy = (
+                    np.array([s["pix"] for s in on_det])
+                    if on_det else np.empty((0, 2))
+                )
+                obs_xy = _state["obs_xy"]
+                ax_det.scatter(
+                    sim_xy[:, 0], sim_xy[:, 1],
+                    s=28, c=color, marker="D",
+                    linewidths=0, zorder=5, alpha=0.85,
+                    label=f"{label} ({len(sim_xy)} sim)",
+                )
+                if len(obs_xy) and len(sim_xy):
+                    row_ind, col_ind, dist_px = _match_spots(
+                        obs_xy, sim_xy, max_match_px
+                    )
+                    ok = dist_px < max_match_px
+                    for r, c, hit in zip(row_ind, col_ind, ok):
+                        if hit:
+                            ax_det.plot(
+                                [obs_xy[r, 0], sim_xy[c, 0]],
+                                [obs_xy[r, 1], sim_xy[c, 1]],
+                                color="#44dd66", lw=0.7, alpha=0.55, zorder=3,
+                            )
+            except Exception as exc:
+                print(f"  simulation error: {exc}", flush=True)
+
+        def _draw_det() -> None:
+            frame_idx  = _state["frame_idx"]
+            obs_xy     = _state["obs_xy"]
+            result     = _state["result"]
+            fit_result = _state["fit_result"]
+
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            image = _load_image(frame_idx)
+            if image is not None:
+                pos  = image[image > 0]
+                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                ax_det.imshow(
+                    np.log1p(image / vmax * 1000),
+                    origin="upper",
+                    extent=[0, camera.Nh, camera.Nv, 0],
+                    cmap="inferno", aspect="equal", zorder=0,
+                )
+            else:
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+            ax_det.set_aspect("equal")
+
+            if len(obs_xy):
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=40, c="none", edgecolors="white", linewidths=0.8,
+                    zorder=4, label=f"observed ({len(obs_xy)})",
+                )
+
+            # Fit result (cyan) takes priority; fall back to index result (orange)
+            if fit_result is not None:
+                _overlay_sim(fit_result.U, "#44aaff", "fitted")
+            elif result is not None:
+                _overlay_sim(result.U, "#ff6b35", "indexed")
+
+            if len(obs_xy) or result is not None or fit_result is not None:
+                ax_det.legend(
+                    fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+            iy, ix = _state["iy"], _state["ix"]
+            best   = fit_result or result
+            suffix = f"  — {best}" if best is not None else ""
+            ax_det.set_title(
+                f"Frame {frame_idx}  (iy={iy}, ix={ix}){suffix}",
+                fontsize=8,
+            )
+
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+            fig.canvas.draw_idle()
+
+        # ── map click handler ─────────────────────────────────────────────────
+        def _on_click(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    obs_xy = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )[:, :2]
+                except Exception:
+                    obs_xy = np.empty((0, 2))
+            else:
+                obs_xy = np.empty((0, 2))
+
+            # Check if map already has a fitted U for this position
+            existing_U = self.U[map_grain, iy, ix]
+            has_existing = not np.any(np.isnan(existing_U))
+
+            _state.update(
+                frame_idx=frame_idx, iy=iy, ix=ix,
+                obs_xy=obs_xy, result=None, fit_result=None,
+            )
+            enough = len(obs_xy) >= 3
+            _info.value = (
+                f"<span style='color:#aaa'>Frame {frame_idx} — "
+                f"{len(obs_xy)} observed spots"
+                + (" — existing fit in map" if has_existing else "")
+                + "</span>"
+            )
+            btn_index.disabled = not enough
+            btn_fit.disabled   = not (enough and (has_existing or False))
+            btn_store.disabled = True
+            btn_save.disabled  = True
+            _draw_det()
+
+        fig.canvas.mpl_connect("button_press_event", _on_click)
+
+        # ── ipywidgets ────────────────────────────────────────────────────────
+        _bkw = dict(layout=ipw.Layout(width="120px", height="32px"))
+        btn_index = ipw.Button(description="⚡ Index",   button_style="primary",  **_bkw)
+        btn_fit   = ipw.Button(description="⚡ Fit",     button_style="info",     **_bkw)
+        btn_store = ipw.Button(description="⬆ Store",   button_style="success",  **_bkw)
+        btn_save  = ipw.Button(description="💾 Save UB", button_style="",         **_bkw)
+        w_grain   = ipw.BoundedIntText(
+            value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
+            layout=ipw.Layout(width="55px", height="32px"),
+        )
+        btn_index.disabled = True
+        btn_fit.disabled   = True
+        btn_store.disabled = True
+        btn_save.disabled  = True
+
+        _info = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "click a map pixel to select a frame"
+            "</span>",
+            layout=ipw.Layout(margin="4px 0 0 6px"),
+        )
+
+        def _cb_index(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if len(_state["obs_xy"]) < 3:
+                return
+            if getattr(_cb_index, "_running", False):
+                return
+            _cb_index._running    = True
+            btn_index.disabled    = True
+            btn_index.description = "Indexing…"
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _index(
+                        crystal, camera, _state["obs_xy"],
+                        hmax=hmax,
+                        angle_tol_deg=angle_tol_deg,
+                        min_match_rate=min_match_rate,
+                        n_obs_use=n_obs_use,
+                        verbose=True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = (
+                        f"<b style='color:#f44'>Index error: {item}</b>"
+                    )
+                else:
+                    _state["result"] = item
+                    col = "#44dd66" if item.success else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{item}</b>"
+                    btn_fit.disabled  = len(_state["obs_xy"]) < 3
+                    btn_save.disabled = False
+                    _draw_det()
+                btn_index.description = "⚡ Index"
+                btn_index.disabled    = False
+                _cb_index._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        def _cb_fit(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            obs_xy = _state["obs_xy"]
+            if len(obs_xy) < 3:
+                return
+            if getattr(_cb_fit, "_running", False):
+                return
+            _cb_fit._running   = True
+            btn_fit.disabled   = True
+            btn_fit.description = "Fitting…"
+
+            # Starting U: prefer index result, fall back to existing map U
+            if _state["result"] is not None:
+                U0 = _state["result"].U
+            else:
+                U0 = self.U[map_grain, _state["iy"], _state["ix"]]
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _fit_ori(
+                        crystal, camera, obs_xy, U0,
+                        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                        hmax=hmax,
+                        max_match_px=fit_max_match_px,
+                        verbose=True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Fit error: {item}</b>"
+                else:
+                    _state["fit_result"] = item
+                    col = "#44aaff" if item.success else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{item}</b>"
+                    btn_store.disabled = False
+                    btn_save.disabled  = False
+                    _draw_det()
+                btn_fit.description = "⚡ Fit"
+                btn_fit.disabled    = False
+                _cb_fit._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        def _cb_store(_) -> None:
+            fit_result = _state["fit_result"]
+            if fit_result is None:
+                return
+            iy   = _state["iy"]
+            ix   = _state["ix"]
+            gi   = int(w_grain.value)
+            if gi < 0 or gi >= self.n_grains:
+                _info.value = (
+                    f"<b style='color:#f44'>Grain {gi} out of range "
+                    f"(0 – {self.n_grains - 1})</b>"
+                )
+                return
+            self.set_result(iy, ix, gi, fit_result)
+            _info.value = (
+                f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
+                f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
+            )
+            print(
+                f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
+                f"rms={fit_result.rms_px:.2f} px  "
+                f"match={fit_result.match_rate:.0%}"
+            )
+
+        def _cb_save(_) -> None:
+            # Prefer the refined fit; fall back to index result
+            best = _state["fit_result"] or _state["result"]
+            if best is None:
+                return
+            existing = glob.glob(os.path.join(os.getcwd(), "UB[0-9]*.npy"))
+            max_n = -1
+            for fpath in existing:
+                m = re.search(r"UB(\d+)\.npy$", os.path.basename(fpath))
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+            fname    = f"UB{max_n + 1:02d}.npy"
+            np.save(fname, best.U)
+            abs_path = os.path.abspath(fname)
+            print(f"  💾 Saved U → {abs_path}")
+            _info.value = (
+                f"<b style='color:#44dd66'>Saved → {fname}</b>"
+                f"&emsp;{_info.value}"
+            )
+
+        btn_index.on_click(_cb_index)
+        btn_fit.on_click(_cb_fit)
+        btn_store.on_click(_cb_store)
+        btn_save.on_click(_cb_save)
+
+        _controls = ipw.VBox([
+            ipw.HBox(
+                [btn_index, btn_fit,
+                 ipw.HTML("<span style='color:#aaa;align-self:center'>grain:</span>",
+                          layout=ipw.Layout(margin="0 2px 0 10px")),
+                 w_grain, btn_store, btn_save],
+                layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
+                                  align_items="center"),
+            ),
+            _info,
+        ], layout=ipw.Layout(padding="6px 8px"))
+
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def save(self, path: str) -> None:

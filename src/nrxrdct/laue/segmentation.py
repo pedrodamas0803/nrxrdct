@@ -509,6 +509,7 @@ def write_h5_spotsfile(
     max_components: int = 2,
     include_unfitted: bool = True,
     r_squared_min: float = 0.9,
+    fit_spots: bool = True,
 ):
     """
     Writes per-spot images and fitted parameters into an HDF5 file.
@@ -535,9 +536,18 @@ def write_h5_spotsfile(
         If True (default), spots whose best fit has r² < r_squared_min are
         still written to the file in a ``spot_{ii}_0`` group (fallback
         position from the weighted centroid, shape fields set to 0).
-        If False, those spots are silently skipped.
+        If False, those spots are silently skipped.  Ignored when
+        *fit_spots* is ``False``.
     r_squared_min : float
         Minimum r² to consider a Gaussian fit acceptable (default 0.9).
+        Ignored when *fit_spots* is ``False``.
+    fit_spots : bool
+        If ``True`` (default), attempt a 2-D Gaussian mixture fit for each
+        spot ROI.  If ``False``, skip fitting entirely and write each spot
+        using the weighted centroid from *regionprops* directly; shape
+        fields are set to 0 and ``r_squared`` is stored as ``-1`` to
+        indicate that no fit was attempted.  This is much faster and
+        suitable when peak positions are all that is needed.
     """
     n_labels = len(regionprops)
     n_success = 0
@@ -560,6 +570,27 @@ def write_h5_spotsfile(
                 ymin:ymax,
                 xmin:xmax,
             ]
+
+            # ── no-fit bypass ─────────────────────────────────────────────────
+            if not fit_spots:
+                Ipix = int(region.image_intensity.max())
+                hout[f"spot_{ii:04d}_0/r_squared"]       = -1
+                hout[f"spot_{ii:04d}_0/image"]            = image
+                hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"]          = Ipix
+                n_success += 1
+                continue
 
             init_params_1 = None
             try:
@@ -698,10 +729,13 @@ def write_h5_spotsfile(
         hout.attrs["n_spots"] = n_labels
         hout.attrs["n_success"] = n_success
 
-    print(
-        f"I successfully segmented {n_success} out of {n_labels} spots. "
-        f"Rate of success: {n_success / n_labels:.3f}"
-    )
+    if fit_spots:
+        print(
+            f"I successfully segmented {n_success} out of {n_labels} spots. "
+            f"Rate of success: {n_success / n_labels:.3f}"
+        )
+    else:
+        print(f"Saved {n_labels} spots (centroid only, no Gaussian fit).")
 
 
 def get_spot_limits(image_array, ycen, xcen, d):

@@ -3560,19 +3560,21 @@ class GrainMap:
         Interactive single-frame segmentation tuner.
 
         Click a pixel on the left map panel to load the frame into the right
-        panel, adjust parameters, then press **Segment** to preview the result.
-        When satisfied press **💾 Save** to write the spots file to
+        panel, adjust parameters, then press **⚙ Segment** to preview the
+        result.  When satisfied press **💾 Save** to write the spots file to
         ``<base_dir>/seg/frame_NNNNN.h5``.
 
         Segmentation methods
         --------------------
-        * **LoG** — Laplacian-of-Gaussian.  Sigmas control the scale of
-          detected blobs.  Supply a single value (e.g. ``4``) or a
-          comma-separated list (e.g. ``2, 4, 8``) for multi-scale detection.
-        * **WTH** — White top-hat transform.  Disk radii should be larger than
-          the spots but smaller than the background correlation length.
+        Selected via the **Method** dropdown in the widget:
+
+        * **LoG** — Laplacian-of-Gaussian.  *Sigmas* controls the blob scales;
+          supply a single value (e.g. ``4``) or a comma-separated list
+          (e.g. ``2, 4, 8``) for multi-scale detection.
+        * **WTH** — White top-hat transform.  *Disk radii* should exceed the
+          spot size but stay below the background correlation length.
         * **Hybrid** — LoG and WTH combined (logical OR); use when spot sizes
-          vary across the detector.
+          vary strongly across the detector.
 
         Parameters
         ----------
@@ -3580,22 +3582,47 @@ class GrainMap:
             Processing directory.  Segmentation files are written to
             ``<base_dir>/seg/``.
         detector_mask : (Nv, Nh) bool ndarray or None
-            Valid-pixel mask (``True`` = active pixel).  ``None`` uses all
-            pixels.
+            Valid-pixel mask (``True`` = active pixel).  ``None`` treats all
+            pixels as valid.
         h5_dataset : str or None
-            HDF5 dataset path inside ``self.h5_path`` for the image stack.
+            HDF5 dataset path inside ``self.h5_path`` for the raw image stack.
+            Mutually exclusive with *tiff_dir*; one of the two must be given.
         tiff_dir : str or None
-            Path to a folder of ``img_<number>.tif`` files.
+            Path to a folder of ``img_<number>.tif`` files sorted by frame
+            index.  Mutually exclusive with *h5_dataset*.
         map_quantity : str
-            Scalar quantity shown on the left panel.
+            Scalar quantity shown on the left overview panel.  Options:
+
+            ``"match_rate"``
+                Fraction of simulated reflections matched after indexing
+                (default).  Useful to identify already-indexed pixels.
+            ``"rms_px"``
+                RMS deviation of matched spot positions in pixels.
+            ``"mean_px"``
+                Mean absolute deviation of matched spot positions in pixels.
+            ``"cost"``
+                Indexing cost function value.
+            ``"n_obs"``
+                Number of segmented spots per pixel, read from the ``seg/``
+                directory.  Pixels with no saved segmentation file appear as
+                NaN (background colour).  The map refreshes live each time a
+                frame is saved, making it easy to track segmentation coverage
+                before running indexing.
         map_grain : int or None
-            Grain index used to build the left-panel map.
+            Grain slot index used to build the left-panel map for quantities
+            that are per-grain (``match_rate``, ``rms_px``, ``mean_px``,
+            ``cost``).  Ignored for ``n_obs``.  Defaults to the merged-grain
+            slot if one exists, otherwise grain 0.
         motor_x, motor_y : str or None
-            Motor names for axis labels and click-to-pixel conversion.
+            Motor names looked up in ``self.motors``.  When both are supplied
+            the map axes use physical motor coordinates and click-to-pixel
+            conversion is done by nearest-neighbour search; otherwise pixel
+            indices are used.
         motor_units : dict or None
-            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+            Physical units for axis labels, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
         figsize : tuple
-            Figure size.  Default ``(14, 7)``.
+            Matplotlib figure size ``(width, height)`` in inches.
+            Default ``(14, 7)``.
         """
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
@@ -3720,7 +3747,8 @@ class GrainMap:
 
         _state: dict = {
             "frame_idx": None, "iy": None, "ix": None,
-            "image": None,
+            "image": None,      # raw frame
+            "proc_image": None, # background-subtracted + filtered (set after segmentation)
             "props": None,
             "drawn": False,
         }
@@ -3737,23 +3765,48 @@ class GrainMap:
 
         # ── draw the detector panel ───────────────────────────────────────────
         def _draw_det(props=None) -> None:
-            image = _state["image"]
+            disp = _state["proc_image"] if _state["proc_image"] is not None else _state["image"]
             saved_xlim = ax_det.get_xlim()
             saved_ylim = ax_det.get_ylim()
 
             ax_det.cla()
             ax_det.set_facecolor("k")
 
-            if image is None:
+            if disp is None:
                 ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
                 fig.canvas.draw_idle()
                 return
 
-            nv, nh = image.shape
-            pos  = image[image > 0]
-            vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+            nv, nh = disp.shape
+
+            # Parse user vmin / vmax (blank → auto)
+            try:
+                user_vmin = float(w_vmin.value) if w_vmin.value.strip() else None
+            except ValueError:
+                user_vmin = None
+            try:
+                user_vmax = float(w_vmax.value) if w_vmax.value.strip() else None
+            except ValueError:
+                user_vmax = None
+
+            pos = disp[disp > 0]
+            clip_min = user_vmin if user_vmin is not None else 0.0
+            clip_max = user_vmax if user_vmax is not None else (
+                float(np.percentile(pos, 99)) if pos.size else 1.0
+            )
+            if clip_max <= clip_min:
+                clip_max = clip_min + 1.0
+
+            disp_clipped = np.clip(disp, clip_min, clip_max)
+            disp_norm    = (disp_clipped - clip_min) / (clip_max - clip_min)
+
+            if w_log_scale.value:
+                disp_show = np.log1p(disp_norm * 1000)
+            else:
+                disp_show = disp_norm
+
             ax_det.imshow(
-                np.log1p(image / vmax * 1000),
+                disp_show,
                 origin="upper", extent=[0, nh, nv, 0],
                 cmap="gray", aspect="equal", zorder=0,
             )
@@ -3811,7 +3864,7 @@ class GrainMap:
 
             image = _load_image(frame_idx)
             _state.update(frame_idx=frame_idx, iy=iy, ix=ix,
-                          image=image, props=None)
+                          image=image, proc_image=None, props=None)
             btn_segment.disabled = image is None
             btn_save.disabled    = True
             _info.value = (
@@ -3879,6 +3932,11 @@ class GrainMap:
         # Save params
         w_d          = ipw.IntText(value=10,  description="Crop d (px):", **_isk)
         w_r2         = ipw.FloatText(value=0.9, description="R² min:",   **_isk)
+        w_fit_spots  = ipw.Checkbox(
+            value=True, description="Fit spots (Gaussian)",
+            layout=ipw.Layout(width="200px"),
+            style={"description_width": "initial"},
+        )
         w_overwrite  = ipw.Checkbox(
             value=True, description="Overwrite existing",
             layout=ipw.Layout(width="200px"),
@@ -3986,7 +4044,7 @@ class GrainMap:
                     filt = filter_and_rescale_images(frame, cutoff_freq=0.001)
                     labels, _, _ = label_segmented_image(final_mask, filt)
                     props = measure_peaks(labels, filt)
-                    q.put(("ok", props))
+                    q.put(("ok", props, filt))
                 except Exception as exc:
                     q.put(("err", exc))
 
@@ -3994,16 +4052,18 @@ class GrainMap:
                 threading.Thread(target=_run, daemon=True).start()
                 while q.empty():
                     await asyncio.sleep(0.15)
-                tag, payload = q.get_nowait()
+                tag, *payload = q.get_nowait()
                 if tag == "err":
-                    _info.value = f"<b style='color:#f44'>Error: {payload}</b>"
+                    _info.value = f"<b style='color:#f44'>Error: {payload[0]}</b>"
                 else:
-                    _state["props"] = payload
-                    n = len(payload)
+                    props, filt = payload
+                    _state["props"] = props
+                    _state["proc_image"] = filt
+                    n = len(props)
                     col = "#44dd66" if n > 0 else "#ffaa33"
                     _info.value = f"<b style='color:{col}'>{n} spots detected</b>"
                     btn_save.disabled = n == 0
-                    _draw_det(props=payload)
+                    _draw_det(props=props)
                 btn_segment.description = "⚙ Segment"
                 btn_segment.disabled    = False
                 _cb_segment._running    = False
@@ -4024,6 +4084,7 @@ class GrainMap:
                     _state["image"], props, outpath=out_path,
                     d=w_d.value, r_squared_min=w_r2.value,
                     overwrite=w_overwrite.value,
+                    fit_spots=w_fit_spots.value,
                 )
                 _info.value = (
                     f"<b style='color:#44dd66'>Saved → {out_path}</b>"
@@ -4038,6 +4099,38 @@ class GrainMap:
                     fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
+
+        # ── display controls ──────────────────────────────────────────────────
+        _dsk = dict(
+            style={"description_width": "40px"},
+            layout=ipw.Layout(width="130px"),
+            continuous_update=False,
+        )
+        w_log_scale = ipw.Checkbox(
+            value=True, description="Log scale",
+            layout=ipw.Layout(width="110px"),
+            style={"description_width": "initial"},
+        )
+        w_vmin = ipw.Text(
+            value="", description="vmin:", placeholder="auto",
+            **_dsk,
+        )
+        w_vmax = ipw.Text(
+            value="", description="vmax:", placeholder="auto (99th %)",
+            **_dsk,
+        )
+
+        def _redraw(_change=None) -> None:
+            if _state["image"] is not None:
+                _draw_det(props=_state["props"])
+
+        def _on_fit_toggle(change) -> None:
+            w_r2.disabled = not change["new"]
+
+        w_log_scale.observe(_redraw, names="value")
+        w_vmin.observe(_redraw, names="value")
+        w_vmax.observe(_redraw, names="value")
+        w_fit_spots.observe(_on_fit_toggle, names="value")
 
         btn_segment.on_click(_cb_segment)
         btn_save.on_click(_cb_save)
@@ -4056,12 +4149,18 @@ class GrainMap:
                     ipw.HBox([w_gap_excl, w_gap_clos]),
                     ipw.HTML("<b>Save:</b>"),
                     ipw.HBox([w_d, w_r2]),
+                    w_fit_spots,
                     w_overwrite,
                 ]),
             ]),
             ipw.HBox(
                 [btn_segment, btn_save],
                 layout=ipw.Layout(gap="8px", margin="6px 0 0 0"),
+            ),
+            ipw.HBox(
+                [ipw.HTML("<b style='line-height:26px;margin-right:6px'>Display:</b>"),
+                 w_log_scale, w_vmin, w_vmax],
+                layout=ipw.Layout(gap="6px", margin="4px 0 0 0", align_items="center"),
             ),
             _info,
         ], layout=ipw.Layout(padding="6px 8px"))

@@ -695,6 +695,9 @@ def write_h5_spotsfile(
                 hout[f"spot_{ii:04d}_0/Ipixmax"] = Ipix
                 continue
 
+        hout.attrs["n_spots"] = n_labels
+        hout.attrs["n_success"] = n_success
+
     print(
         f"I successfully segmented {n_success} out of {n_labels} spots. "
         f"Rate of success: {n_success / n_labels:.3f}"

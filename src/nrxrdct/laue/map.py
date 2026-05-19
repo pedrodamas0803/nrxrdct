@@ -3146,6 +3146,7 @@ class GrainMap:
         with plt.ioff():
             fig = plt.figure(figsize=figsize)
         try:
+
             fig.canvas.manager.set_window_title("Laue — re-index frame")
         except Exception:
             pass
@@ -3663,11 +3664,16 @@ class GrainMap:
                     return None
             return None
 
+        def _build_n_obs_data() -> np.ndarray:
+            raw = self.load_n_obs_map(seg_dir)
+            return np.where(raw >= 0, raw.astype(float), np.nan)
+
         _map_opts = {
             "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
             "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
             "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
             "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+            "n_obs":      (_build_n_obs_data(),         "N spots (seg)", "YlOrRd"),
         }
         map_data, map_label, map_cmap = _map_opts.get(
             map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
@@ -3688,16 +3694,18 @@ class GrainMap:
         ax_map = fig.add_subplot(gs[0])
         ax_det = fig.add_subplot(gs[1])
 
-        ax_map.imshow(
+        im_map = ax_map.imshow(
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        ax_map.set_title(
-            f"Click to select — {map_label}  (grain {map_grain + 1})",
-            fontsize=9,
+        _map_title = (
+            f"Click to select — {map_label}"
+            if map_quantity == "n_obs"
+            else f"Click to select — {map_label}  (grain {map_grain + 1})"
         )
+        ax_map.set_title(_map_title, fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -4021,6 +4029,13 @@ class GrainMap:
                     f"<b style='color:#44dd66'>Saved → {out_path}</b>"
                 )
                 print(f"  💾 Saved → {os.path.abspath(out_path)}")
+                if map_quantity == "n_obs":
+                    new_data = _build_n_obs_data()
+                    im_map.set_data(new_data)
+                    valid = new_data[np.isfinite(new_data)]
+                    if valid.size:
+                        im_map.set_clim(valid.min(), valid.max())
+                    fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
 
@@ -4052,6 +4067,54 @@ class GrainMap:
         ], layout=ipw.Layout(padding="6px 8px"))
 
         _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
+    # ── Segmentation map ──────────────────────────────────────────────────────
+
+    def load_n_obs_map(self, seg_dir: str) -> np.ndarray:
+        """
+        Build a ``(ny, nx)`` map of the number of segmented spots per pixel
+        by scanning an existing segmentation directory.
+
+        Reads the ``n_spots`` attribute written by
+        :func:`~nrxrdct.laue.segmentation.write_h5_spotsfile`.  For files
+        that pre-date this attribute the number of unique spot groups is
+        counted directly from the HDF5 keys (slower but backwards-compatible).
+
+        Parameters
+        ----------
+        seg_dir : str
+            Directory containing ``frame_NNNNN.h5`` segmentation files.
+
+        Returns
+        -------
+        n_obs : (ny, nx) int ndarray
+            Per-pixel spot count.  Pixels with no seg file are set to ``-1``.
+            The same array is stored on ``self.n_obs`` for subsequent use.
+        """
+        import re as _re
+        n_obs = np.full((self.ny, self.nx), -1, dtype=int)
+        pat = _re.compile(r'^frame_(\d+)\.h5$', _re.IGNORECASE)
+        for fname in os.listdir(seg_dir):
+            m = pat.match(fname)
+            if not m:
+                continue
+            frame_idx = int(m.group(1))
+            iy, ix = self.map_index(frame_idx)
+            if iy >= self.ny or ix >= self.nx:
+                continue
+            fpath = os.path.join(seg_dir, fname)
+            try:
+                with h5py.File(fpath, "r") as fh:
+                    if "n_spots" in fh.attrs:
+                        n_obs[iy, ix] = int(fh.attrs["n_spots"])
+                    else:
+                        indices = {k.split("_")[1] for k in fh.keys()
+                                   if k.startswith("spot_")}
+                        n_obs[iy, ix] = len(indices)
+            except Exception:
+                pass
+        self.n_obs = n_obs
+        return n_obs
 
     # ── Persistence ───────────────────────────────────────────────────────────
 

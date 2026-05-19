@@ -434,6 +434,12 @@ def interactive_orientation(
         "<span style='color:#666;font-style:italic'>click a simulated spot to select it</span>",
         layout=ipw.Layout(margin="0 0 2px 4px"),
     )
+    btn_desel = ipw.Button(
+        description="✕ Deselect",
+        button_style="warning",
+        layout=ipw.Layout(width="100px", height="26px"),
+    )
+    btn_desel.on_click(lambda _: _deselect())
 
     # ── Update ────────────────────────────────────────────────────────────────
     # _updating flag prevents re-entrant calls when we programmatically reset
@@ -612,6 +618,21 @@ def interactive_orientation(
             kf = camera.pixel_to_kf(np.array([x]), np.array([y]))[0]
             return kf / np.linalg.norm(kf)
 
+    def _deselect() -> None:
+        """Clear the current spot selection and disable the HKL slider."""
+        _selected[0]    = None
+        s_hkl.disabled  = True
+        s_hkl.description = "rot. [—]"
+        _hkl_html.value = (
+            "<span style='color:#666;font-style:italic'>"
+            "click a simulated spot to select it"
+            "</span>"
+        )
+        _updating[0] = True
+        s_hkl.value  = 0.0
+        _updating[0] = False
+        _do_update()
+
     def _select_spot(idx: int) -> None:
         """Mark spot *idx* as selected and enable the HKL slider."""
         od   = _last["on_det"]
@@ -639,7 +660,12 @@ def interactive_orientation(
         return int(np.argmin(dx ** 2 + dy ** 2))
 
     def _on_press(event) -> None:
-        if event.inaxes is not ax_det or event.button != 1:
+        if event.inaxes is not ax_det:
+            return
+        if event.button == 3:          # right-click → deselect
+            _deselect()
+            return
+        if event.button != 1:
             return
         idx = _nearest_sim_idx(event.xdata, event.ydata)
         if idx is None:
@@ -897,7 +923,8 @@ def interactive_orientation(
     _controls = ipw.VBox([
         s_ca, s_cb, s_cc,
         s_hkl,
-        _hkl_html,
+        ipw.HBox([_hkl_html, btn_desel],
+                 layout=ipw.Layout(align_items="center", gap="6px")),
         ipw.HBox(
             [btn_reset, btn_setref, btn_accept, btn_fit, btn_save],
             layout=ipw.Layout(margin="6px 0 6px 0", gap="6px"),

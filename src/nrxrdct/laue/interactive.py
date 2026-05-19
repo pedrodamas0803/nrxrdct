@@ -662,11 +662,18 @@ def interactive_orientation(
     def _on_press(event) -> None:
         if event.inaxes is not ax_det:
             return
-        if event.button == 3:          # right-click → deselect
+        if event.button == 3:          # right-click → deselect (always works)
             _deselect()
             return
         if event.button != 1:
             return
+        # When the matplotlib toolbar zoom/pan tool is active, left-click events
+        # belong to the toolbar — don't treat them as spot clicks.
+        try:
+            if fig.canvas.toolbar.mode != "":
+                return
+        except Exception:
+            pass
         idx = _nearest_sim_idx(event.xdata, event.ydata)
         if idx is None:
             return

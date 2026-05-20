@@ -3142,6 +3142,7 @@ class GrainMap:
             fit_orientation        as _fit_ori,
             fit_strain_orientation as _fit_strain,
             _match_spots,
+        )
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:

@@ -3568,6 +3568,10 @@ class GrainMap:
         r_squared_min: float = 0.0,
         include_unfitted: bool = True,
         click_radius_px: float = 25.0,
+        angle_tol_deg: float = 0.5,
+        min_match_rate: float = 0.25,
+        n_obs_use: int = 20,
+        remove_match_px: float = 5.0,
         figsize: tuple = (14, 7),
     ) -> None:
         """
@@ -3578,14 +3582,18 @@ class GrainMap:
         which observed spot:
 
         1. **Click the map** to select a frame (observed and simulated spots appear).
-        2. **Click a simulated spot** (orange diamond) — it turns yellow and waits.
-        3. **Click the matching observed spot** (white circle) — the pair is
+        2. Optionally click **⚡ Index** to auto-index the observed spots.
+        3. **Click a simulated spot** (orange diamond) — it turns yellow and waits.
+        4. **Click the matching observed spot** (white circle) — the pair is
            registered and shown as a green line with an hkl label.
-        4. Repeat until you have ≥ 3 pairs.
-        5. **⚡ Fit pairs** — refines U using only the manually assigned pairs.
-        6. **🔬 Refine all** — full refinement against all observed spots,
+        5. Repeat until you have ≥ 3 pairs.
+        6. **⚡ Fit pairs** — refines U using only the manually assigned pairs.
+        7. **🔬 Refine all** — full refinement against all observed spots,
            starting from the pair-fitted U.
-        7. **⬆ Store** — writes the result into the map.
+        8. **⬆ Store** — writes the result into the map.
+        9. **✂ Remove spots** — removes the matched spots from the current
+           observation list and resets the state so you can index the next grain
+           from the remaining spots.  Only enabled after a successful *Store*.
 
         Right-click on the detector panel cancels a pending sim-spot selection.
 
@@ -3626,6 +3634,18 @@ class GrainMap:
         click_radius_px : float
             Maximum pixel distance for a click to select a sim or obs spot.
             Default ``25``.
+        angle_tol_deg : float
+            Angular tolerance for the auto-indexer.  Default ``0.5``.
+        min_match_rate : float
+            Minimum match rate for the auto-indexer to report success.
+            Default ``0.25``.
+        n_obs_use : int
+            Number of brightest observed spots passed to the auto-indexer.
+            Default ``20``.
+        remove_match_px : float
+            Pixel radius used to identify matched spots when *Remove spots* is
+            clicked.  Spots within this distance of any simulated spot from the
+            stored grain are removed.  Default ``5``.
         figsize : tuple
             Figure size.  Default ``(14, 7)``.
         """
@@ -3633,7 +3653,11 @@ class GrainMap:
         from IPython.display import display as _ipy_display
         from .simulation import simulate_laue as _sim_laue
         from .segmentation import convert_spotsfile2peaklist
-        from .fitting import fit_orientation as _fit_ori
+        from .fitting import (
+            index_orientation as _index,
+            fit_orientation   as _fit_ori,
+            _match_spots,
+        )
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:
@@ -3753,6 +3777,7 @@ class GrainMap:
             "pending_hkl":    None,  # sim hkl awaiting obs assignment
             "pending_sim_xy": None,
             "fit_result":     None,
+            "stored_result":  None,  # last result written via Store (for Remove)
             "drawn":          False,
         }
 
@@ -3875,6 +3900,15 @@ class GrainMap:
             _state["drawn"] = True
             fig.canvas.draw_idle()
 
+        # Declared early so closures below can reference them before the main
+        # widget block.
+        btn_index  = ipw.Button(description="⚡ Index",        button_style="primary",
+                                layout=ipw.Layout(width="130px", height="32px"))
+        btn_remove = ipw.Button(description="✂ Remove spots",  button_style="danger",
+                                layout=ipw.Layout(width="140px", height="32px"))
+        btn_index.disabled  = True
+        btn_remove.disabled = True
+
         # ── pair-list display ─────────────────────────────────────────────────
         def _refresh_pair_list() -> None:
             pairs = _state["pairs"]
@@ -3943,7 +3977,7 @@ class GrainMap:
                 frame_idx=frame_idx, iy=iy, ix=ix,
                 obs_xy=obs_xy, U0=U0,
                 pairs=[], pending_hkl=None, pending_sim_xy=None,
-                fit_result=None, drawn=False,
+                fit_result=None, stored_result=None, drawn=False,
             )
 
             if U0 is not None:
@@ -3960,8 +3994,10 @@ class GrainMap:
                    " — <b style='color:#ffaa33'>no U loaded</b>")
                 + "</span>"
             )
-            btn_store.disabled = True
-            btn_save.disabled  = True
+            btn_index.disabled  = len(obs_xy) < 3
+            btn_store.disabled  = True
+            btn_save.disabled   = True
+            btn_remove.disabled = True
             _refresh_pair_list()
             _draw_det()
 
@@ -4258,9 +4294,12 @@ class GrainMap:
                 )
                 return
             self.set_result(iy, ix, gi, fit_result)
+            _state["stored_result"] = fit_result
+            btn_remove.disabled = False
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
+                "<span style='color:#aaa'> — click ✂ Remove spots to isolate next grain</span>"
             )
             print(
                 f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
@@ -4287,11 +4326,92 @@ class GrainMap:
                 f"&emsp;{_info.value}"
             )
 
+        def _cb_index(btn) -> None:
+            obs_xy = _state["obs_xy"]
+            if len(obs_xy) < 3:
+                return
+
+            def _run():
+                return _index(
+                    crystal, camera, obs_xy,
+                    hmax=hmax,
+                    angle_tol_deg=angle_tol_deg,
+                    min_match_rate=min_match_rate,
+                    n_obs_use=n_obs_use,
+                    verbose=True,
+                )
+
+            def _on_done(item) -> None:
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Index error: {item}</b>"
+                    return
+                _state["U0"] = item.U
+                _run_simulation(item.U)
+                col = "#44dd66" if item.success else "#ffaa33"
+                _info.value = (
+                    f"<b style='color:{col}'>{item}</b>"
+                    "<span style='color:#aaa'> — refine with 🔬 or pair manually</span>"
+                )
+                btn_refine.disabled = len(_state["obs_xy"]) < 3
+                btn_save.disabled   = False
+                _draw_det()
+
+            _async_fit(_run, _on_done, btn, "Indexing…", "⚡ Index")
+
+        def _cb_remove(_) -> None:
+            stored = _state["stored_result"]
+            obs_xy = _state["obs_xy"]
+            if stored is None or len(obs_xy) == 0:
+                return
+
+            try:
+                spots = _sim_laue(
+                    crystal, stored.U, camera,
+                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                )
+                sim_xy_stored = np.array(
+                    [s["pix"] for s in spots if s.get("pix") is not None]
+                )
+            except Exception as exc:
+                _info.value = f"<b style='color:#f44'>Simulation error: {exc}</b>"
+                return
+
+            if len(sim_xy_stored) == 0:
+                _info.value = "<span style='color:#aaa'>No simulated spots — nothing removed.</span>"
+                return
+
+            row_ind, _, dist_px = _match_spots(obs_xy, sim_xy_stored, remove_match_px)
+            matched_mask = np.zeros(len(obs_xy), dtype=bool)
+            matched_mask[row_ind[dist_px <= remove_match_px]] = True
+            remaining = obs_xy[~matched_mask]
+            n_removed = int(matched_mask.sum())
+
+            _state.update(
+                obs_xy=remaining, U0=None,
+                sim_spots=[], pairs=[], pending_hkl=None, pending_sim_xy=None,
+                fit_result=None, stored_result=None, drawn=False,
+            )
+            btn_remove.disabled   = True
+            btn_store.disabled    = True
+            btn_save.disabled     = True
+            btn_refine.disabled   = True
+            btn_fit_pairs.disabled = True
+            btn_index.disabled    = len(remaining) < 3
+            _refresh_pair_list()
+            _draw_det()
+            _info.value = (
+                f"<b style='color:#44dd66'>Removed {n_removed} matched spots — "
+                f"{len(remaining)} remaining.</b>"
+                "<span style='color:#aaa'> Load a UB or click ⚡ Index for the next grain.</span>"
+            )
+
+        btn_index.on_click(_cb_index)
         btn_fit_pairs.on_click(_cb_fit_pairs)
         btn_refine.on_click(_cb_refine)
         btn_clear.on_click(_cb_clear)
         btn_store.on_click(_cb_store)
         btn_save.on_click(_cb_save)
+        btn_remove.on_click(_cb_remove)
 
         _controls = ipw.VBox([
             ipw.HBox(
@@ -4299,7 +4419,7 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center;"
                      "font-size:11px;margin-right:4px'>Load U:</span>",
                  ),
-                 w_ub_path, btn_load_ub],
+                 w_ub_path, btn_load_ub, btn_index],
                 layout=ipw.Layout(gap="4px", align_items="center",
                                   margin="4px 0 2px 0"),
             ),
@@ -4309,7 +4429,7 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center'>grain:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),
                  ),
-                 w_grain, btn_store, btn_save],
+                 w_grain, btn_store, btn_save, btn_remove],
                 layout=ipw.Layout(gap="6px", align_items="center",
                                   margin="2px 0 2px 0"),
             ),
@@ -4875,7 +4995,6 @@ class GrainMap:
                     valid = new_data[np.isfinite(new_data)]
                     if valid.size:
                         im_map.set_clim(valid.min(), valid.max())
-                        cb_map.update_normal(im_map)
                     fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"

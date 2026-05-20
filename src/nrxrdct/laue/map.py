@@ -2793,10 +2793,12 @@ class GrainMap:
         ax_map = fig.add_subplot(gs[0])
         ax_det = fig.add_subplot(gs[1])
 
-        ax_map.imshow(
+        im_map = ax_map.imshow(
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
         ax_map.set_title(
@@ -3159,10 +3161,12 @@ class GrainMap:
         ax_map = fig.add_subplot(gs[0])
         ax_det = fig.add_subplot(gs[1])
 
-        ax_map.imshow(
+        im_map = ax_map.imshow(
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
         ax_map.set_title(
@@ -3544,6 +3548,777 @@ class GrainMap:
 
         _ipy_display(ipw.VBox([fig.canvas, _controls]))
 
+    def reindex_frame_manual(
+        self,
+        crystal,
+        camera,
+        base_dir: str,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        map_quantity: str = "match_rate",
+        map_grain: "int | None" = None,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 23000.0,
+        hmax: int = 10,
+        fit_max_match_px: "float | list[float]" = [30.0, 10.0, 3.0],
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
+        click_radius_px: float = 25.0,
+        figsize: tuple = (14, 7),
+    ) -> None:
+        """
+        Interactive manual re-indexer using click-to-pair spot assignment.
+
+        When the automatic indexer confuses two grains with similar orientation,
+        use this widget to manually tell it which simulated reflection belongs to
+        which observed spot:
+
+        1. **Click the map** to select a frame (observed and simulated spots appear).
+        2. **Click a simulated spot** (orange diamond) — it turns yellow and waits.
+        3. **Click the matching observed spot** (white circle) — the pair is
+           registered and shown as a green line with an hkl label.
+        4. Repeat until you have ≥ 3 pairs.
+        5. **⚡ Fit pairs** — refines U using only the manually assigned pairs.
+        6. **🔬 Refine all** — full refinement against all observed spots,
+           starting from the pair-fitted U.
+        7. **⬆ Store** — writes the result into the map.
+
+        Right-click on the detector panel cancels a pending sim-spot selection.
+
+        Parameters
+        ----------
+        crystal : Crystal
+            xrayutilities crystal structure.
+        camera : Camera
+            Detector geometry.
+        base_dir : str
+            Processing directory containing the ``seg/`` sub-folder.
+        h5_dataset : str or None
+            HDF5 dataset path for the image stack.  Mutually exclusive with
+            *tiff_dir*.
+        tiff_dir : str or None
+            Path to ``img_<n>.tif`` files.  Mutually exclusive with
+            *h5_dataset*.
+        map_quantity : str
+            Scalar shown on the left panel.  One of ``'match_rate'``,
+            ``'rms_px'``, ``'mean_px'``, ``'cost'``.
+        map_grain : int or None
+            Grain slot for the left-panel map.  ``None`` uses the merged slot
+            or grain 0.
+        motor_x, motor_y : str or None
+            Motor names for axis labels and click conversion.
+        motor_units : dict or None
+            Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+        E_min_eV, E_max_eV : float
+            Energy range for spot simulation.
+        hmax : int
+            Maximum Miller index.  Default ``10``.
+        fit_max_match_px : float or list of float
+            Match-radius schedule for *Refine all*.  Default ``[30, 10, 3]``.
+        r_squared_min : float
+            Minimum Gaussian R² when loading the spot file.  Default ``0``.
+        include_unfitted : bool
+            Include centroid-only spots from the spot file.  Default ``True``.
+        click_radius_px : float
+            Maximum pixel distance for a click to select a sim or obs spot.
+            Default ``25``.
+        figsize : tuple
+            Figure size.  Default ``(14, 7)``.
+        """
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+        from .simulation import simulate_laue as _sim_laue
+        from .segmentation import convert_spotsfile2peaklist
+        from .fitting import fit_orientation as _fit_ori
+
+        seg_dir = os.path.join(base_dir, "seg")
+        if map_grain is None:
+            map_grain = self._merged_grain if self._merged_grain is not None else 0
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu_ = mu.get(motor_x, "")
+            yu_ = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu_})" if xu_ else motor_x
+            ylabel_map = f"{motor_y} ({yu_})" if yu_ else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        _tiff_index: list = []
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                if not _tiff_index:
+                    import re as _re
+                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.match(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda t: t[0])
+                    _tiff_index.extend(p for _, p in files)
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            elif h5_dataset is not None:
+                try:
+                    with h5py.File(self.h5_path, "r") as fh:
+                        return fh[h5_dataset][frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+            return None
+
+        _map_opts = {
+            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
+            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
+            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
+            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+        }
+        map_data, map_label, map_cmap = _map_opts.get(
+            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+        )
+
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize)
+        try:
+            fig.canvas.manager.set_window_title("Laue — manual re-index")
+        except Exception:
+            pass
+
+        gs = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        im_map = ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap=map_cmap, interpolation="nearest", aspect="auto",
+        )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label=map_label)
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title(
+            f"Click to select — {map_label}  (grain {map_grain + 1})",
+            fontsize=9,
+        )
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+        fig.suptitle(
+            "Manual re-index  —  click sim spot → click obs spot  (≥3 pairs) → Fit pairs → Refine all → Store",
+            fontsize=9, color="#555",
+        )
+
+        _state: dict = {
+            "frame_idx":      None,
+            "iy":             None,
+            "ix":             None,
+            "obs_xy":         np.empty((0, 2)),
+            "sim_spots":      [],    # list of spot dicts (hkl, pix, …)
+            "U0":             None,  # current working orientation matrix
+            "pairs":          [],    # list of {"hkl", "obs_xy", "sim_xy"}
+            "pending_hkl":    None,  # sim hkl awaiting obs assignment
+            "pending_sim_xy": None,
+            "fit_result":     None,
+            "drawn":          False,
+        }
+
+        # ── simulation helper ─────────────────────────────────────────────────
+        def _run_simulation(U: np.ndarray) -> None:
+            try:
+                spots = _sim_laue(
+                    crystal, U, camera,
+                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                )
+                _state["sim_spots"] = [s for s in spots if s.get("pix") is not None]
+            except Exception as exc:
+                print(f"  simulation error: {exc}", flush=True)
+                _state["sim_spots"] = []
+
+        # ── detector panel draw ───────────────────────────────────────────────
+        def _draw_det() -> None:
+            frame_idx      = _state["frame_idx"]
+            obs_xy         = _state["obs_xy"]
+            sim_spots      = _state["sim_spots"]
+            pairs          = _state["pairs"]
+            pending_hkl    = _state["pending_hkl"]
+            pending_sim_xy = _state["pending_sim_xy"]
+            fit_result     = _state["fit_result"]
+
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            image = _load_image(frame_idx)
+            if image is not None:
+                pos  = image[image > 0]
+                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                nv_im, nh_im = image.shape
+                ax_det.imshow(
+                    np.log1p(image / vmax * 1000),
+                    origin="upper",
+                    extent=[0, nh_im, nv_im, 0],
+                    cmap="gray", aspect="equal", zorder=0,
+                )
+            else:
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+            ax_det.set_aspect("equal")
+
+            # ── observed spots ────────────────────────────────────────────
+            if len(obs_xy):
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=40, c="none", edgecolors="white", linewidths=0.8,
+                    zorder=4, label=f"observed ({len(obs_xy)})",
+                )
+
+            # ── simulated spots ───────────────────────────────────────────
+            paired_hkls = {tuple(p["hkl"]) for p in pairs}
+            if sim_spots:
+                sim_xy_arr = np.array([s["pix"] for s in sim_spots])
+                colors, sizes = [], []
+                for s in sim_spots:
+                    hkl = s["hkl"]
+                    if hkl == pending_hkl:
+                        colors.append("#ffff00")   # yellow = selected/pending
+                        sizes.append(90)
+                    elif tuple(hkl) in paired_hkls:
+                        colors.append("#44dd66")   # green = already paired
+                        sizes.append(55)
+                    else:
+                        colors.append("#ff6b35")   # orange = free
+                        sizes.append(25)
+                ax_det.scatter(
+                    sim_xy_arr[:, 0], sim_xy_arr[:, 1],
+                    s=sizes, c=colors, marker="D",
+                    linewidths=0, zorder=5, alpha=0.85,
+                    label=f"simulated ({len(sim_spots)})",
+                )
+
+            # ── confirmed pairs: line + hkl label ────────────────────────
+            for p in pairs:
+                ox, oy = p["obs_xy"]
+                sx, sy = p["sim_xy"]
+                ax_det.plot(
+                    [ox, sx], [oy, sy],
+                    color="#44dd66", lw=1.2, zorder=6,
+                )
+                ax_det.annotate(
+                    str(p["hkl"]),
+                    xy=(ox, oy), fontsize=6, color="#44dd66", zorder=7,
+                    xytext=(3, 3), textcoords="offset points",
+                )
+
+            # ── pending sim-spot annotation ───────────────────────────────
+            if pending_hkl is not None and pending_sim_xy is not None:
+                ax_det.annotate(
+                    f"{pending_hkl} → ?",
+                    xy=pending_sim_xy, fontsize=7, color="#ffff00", zorder=8,
+                    xytext=(5, 5), textcoords="offset points",
+                )
+
+            if sim_spots or len(obs_xy):
+                ax_det.legend(
+                    fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+            iy, ix = _state["iy"], _state["ix"]
+            suffix = f"  — {fit_result}" if fit_result is not None else ""
+            ax_det.set_title(
+                f"Frame {frame_idx}  (iy={iy}, ix={ix}){suffix}",
+                fontsize=8,
+            )
+
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+            fig.canvas.draw_idle()
+
+        # ── pair-list display ─────────────────────────────────────────────────
+        def _refresh_pair_list() -> None:
+            pairs = _state["pairs"]
+            if not pairs:
+                w_pair_list.value = (
+                    "<span style='color:#666;font-style:italic'>No pairs yet — "
+                    "click a simulated spot then an observed spot</span>"
+                )
+            else:
+                rows = "".join(
+                    f"<tr>"
+                    f"<td style='color:#aaa;padding:0 6px'>{i + 1}</td>"
+                    f"<td style='color:#44dd66;padding:0 6px'>{p['hkl']}</td>"
+                    f"<td style='color:#aaa;padding:0 6px'>"
+                    f"({p['obs_xy'][0]:.0f}, {p['obs_xy'][1]:.0f})</td>"
+                    f"</tr>"
+                    for i, p in enumerate(pairs)
+                )
+                w_pair_list.value = (
+                    f"<table style='font-size:11px;line-height:1.5;border-spacing:0'>"
+                    f"<tr><th style='color:#888'>#</th>"
+                    f"<th style='color:#888;padding:0 6px'>hkl</th>"
+                    f"<th style='color:#888;padding:0 6px'>obs (px)</th></tr>"
+                    f"{rows}</table>"
+                )
+            btn_fit_pairs.disabled = len(pairs) < 3
+
+        # ── map click ─────────────────────────────────────────────────────────
+        def _on_map_click(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    obs_xy = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )[:, :2]
+                except Exception:
+                    obs_xy = np.empty((0, 2))
+            else:
+                obs_xy = np.empty((0, 2))
+
+            existing_U = self.U[map_grain, iy, ix]
+            has_map_U  = not np.any(np.isnan(existing_U))
+            U0 = existing_U if has_map_U else _state["U0"]
+
+            _state.update(
+                frame_idx=frame_idx, iy=iy, ix=ix,
+                obs_xy=obs_xy, U0=U0,
+                pairs=[], pending_hkl=None, pending_sim_xy=None,
+                fit_result=None, drawn=False,
+            )
+
+            if U0 is not None:
+                _run_simulation(U0)
+            else:
+                _state["sim_spots"] = []
+
+            n_sim = len(_state["sim_spots"])
+            _info.value = (
+                f"<span style='color:#aaa'>Frame {frame_idx} — "
+                f"{len(obs_xy)} obs, {n_sim} sim"
+                + (" — U from map" if has_map_U else
+                   " — U from file" if U0 is not None else
+                   " — <b style='color:#ffaa33'>no U loaded</b>")
+                + "</span>"
+            )
+            btn_store.disabled = True
+            btn_save.disabled  = True
+            _refresh_pair_list()
+            _draw_det()
+
+        # ── detector click ────────────────────────────────────────────────────
+        def _on_det_click(event) -> None:
+            if event.inaxes is not ax_det:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+            if _state["frame_idx"] is None:
+                return
+
+            # Right-click cancels a pending sim-spot selection
+            if event.button == 3:
+                if _state["pending_hkl"] is not None:
+                    _state["pending_hkl"]    = None
+                    _state["pending_sim_xy"] = None
+                    _info.value = "<span style='color:#aaa'>Selection cancelled.</span>"
+                    _draw_det()
+                return
+
+            x, y      = event.xdata, event.ydata
+            obs_xy    = _state["obs_xy"]
+            sim_spots = _state["sim_spots"]
+
+            if _state["pending_hkl"] is None:
+                # ── Step 1: select a simulated spot ──────────────────────────
+                if not sim_spots:
+                    _info.value = (
+                        "<span style='color:#ffaa33'>No simulated spots — "
+                        "load a UB file first.</span>"
+                    )
+                    return
+                sim_xy = np.array([s["pix"] for s in sim_spots])
+                dists  = np.hypot(sim_xy[:, 0] - x, sim_xy[:, 1] - y)
+                idx    = int(np.argmin(dists))
+                if dists[idx] <= click_radius_px:
+                    sel = sim_spots[idx]
+                    _state["pending_hkl"]    = sel["hkl"]
+                    _state["pending_sim_xy"] = list(sim_xy[idx])
+                    _info.value = (
+                        f"<span style='color:#ffff00'>"
+                        f"Sim spot {sel['hkl']} selected "
+                        f"({sim_xy[idx, 0]:.0f}, {sim_xy[idx, 1]:.0f}) — "
+                        f"now click the matching observed spot "
+                        f"(right-click to cancel)</span>"
+                    )
+                    _draw_det()
+                else:
+                    _info.value = (
+                        f"<span style='color:#aaa'>"
+                        f"No sim spot within {click_radius_px:.0f} px.</span>"
+                    )
+            else:
+                # ── Step 2: assign to an observed spot ────────────────────────
+                if len(obs_xy) == 0:
+                    _state["pending_hkl"]    = None
+                    _state["pending_sim_xy"] = None
+                    _info.value = "<span style='color:#aaa'>No observed spots loaded.</span>"
+                    _draw_det()
+                    return
+
+                dists = np.hypot(obs_xy[:, 0] - x, obs_xy[:, 1] - y)
+                idx   = int(np.argmin(dists))
+                if dists[idx] <= click_radius_px:
+                    pair = {
+                        "hkl":    _state["pending_hkl"],
+                        "obs_xy": [float(obs_xy[idx, 0]), float(obs_xy[idx, 1])],
+                        "sim_xy": _state["pending_sim_xy"],
+                    }
+                    _state["pairs"].append(pair)
+                    n = len(_state["pairs"])
+                    _info.value = (
+                        f"<span style='color:#44dd66'>"
+                        f"Pair {n}: {pair['hkl']} → "
+                        f"({obs_xy[idx, 0]:.0f}, {obs_xy[idx, 1]:.0f})"
+                        + (" — ready to fit!" if n >= 3 else
+                           f" — need {3 - n} more pair(s)")
+                        + "</span>"
+                    )
+                else:
+                    _info.value = (
+                        f"<span style='color:#ffaa33'>"
+                        f"No obs spot within {click_radius_px:.0f} px — "
+                        f"pair cancelled.  Click a sim spot again.</span>"
+                    )
+                _state["pending_hkl"]    = None
+                _state["pending_sim_xy"] = None
+                _refresh_pair_list()
+                _draw_det()
+
+        fig.canvas.mpl_connect("button_press_event", _on_map_click)
+        fig.canvas.mpl_connect("button_press_event", _on_det_click)
+
+        # ── async fit helper ──────────────────────────────────────────────────
+        def _async_fit(run_fn, on_done_fn, btn, label_busy, label_idle) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if getattr(btn, "_running", False):
+                return
+            btn._running    = True
+            btn.disabled    = True
+            btn.description = label_busy
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    q.put(run_fn())
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                on_done_fn(item)
+                btn.description = label_idle
+                btn.disabled    = False
+                btn._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        # ── widgets ───────────────────────────────────────────────────────────
+        _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
+        btn_fit_pairs = ipw.Button(description="⚡ Fit pairs",   button_style="warning", **_bkw)
+        btn_refine    = ipw.Button(description="🔬 Refine all",  button_style="info",    **_bkw)
+        btn_clear     = ipw.Button(description="🗑 Clear pairs", button_style="danger",
+                                   layout=ipw.Layout(width="120px", height="32px"))
+        btn_store     = ipw.Button(description="⬆ Store",        button_style="success", **_bkw)
+        btn_save      = ipw.Button(description="💾 Save UB",     button_style="",        **_bkw)
+        w_grain       = ipw.BoundedIntText(
+            value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
+            layout=ipw.Layout(width="55px", height="32px"),
+        )
+        btn_fit_pairs.disabled = True
+        btn_refine.disabled    = True
+        btn_store.disabled     = True
+        btn_save.disabled      = True
+
+        _info = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "click a map pixel to select a frame</span>",
+            layout=ipw.Layout(margin="4px 0 0 6px"),
+        )
+        w_pair_list = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "No pairs yet — click a simulated spot then an observed spot</span>",
+            layout=ipw.Layout(margin="2px 0 0 6px"),
+        )
+
+        # ── UB file loader ────────────────────────────────────────────────────
+        w_ub_path   = ipw.Text(
+            value="", description="UB file:",
+            placeholder="leave blank to auto-scan for UB*.npy",
+            layout=ipw.Layout(width="310px"),
+            style={"description_width": "55px"},
+        )
+        btn_load_ub = ipw.Button(
+            description="Load", layout=ipw.Layout(width="65px", height="32px")
+        )
+
+        def _cb_load_ub(_) -> None:
+            path = w_ub_path.value.strip()
+            if not path:
+                existing = sorted(glob.glob(os.path.join(os.getcwd(), "UB[0-9]*.npy")))
+                if existing:
+                    path = existing[-1]
+                    w_ub_path.value = path
+                else:
+                    _info.value = "<b style='color:#f44'>No UB*.npy found in current directory</b>"
+                    return
+            try:
+                U = np.load(path)
+                if U.shape != (3, 3):
+                    raise ValueError(f"expected (3, 3), got {U.shape}")
+                _state["U0"] = U
+                if _state["frame_idx"] is not None:
+                    _run_simulation(U)
+                    n_sim = len(_state["sim_spots"])
+                    _draw_det()
+                    _info.value = (
+                        f"<b style='color:#44dd66'>Loaded U from "
+                        f"{os.path.basename(path)} — {n_sim} sim spots</b>"
+                    )
+                else:
+                    _info.value = (
+                        f"<b style='color:#44dd66'>Loaded U from "
+                        f"{os.path.basename(path)}</b>"
+                    )
+            except Exception as exc:
+                _info.value = f"<b style='color:#f44'>Load error: {exc}</b>"
+
+        btn_load_ub.on_click(_cb_load_ub)
+
+        # ── button callbacks ──────────────────────────────────────────────────
+        def _cb_clear(_) -> None:
+            _state["pairs"]          = []
+            _state["pending_hkl"]    = None
+            _state["pending_sim_xy"] = None
+            _refresh_pair_list()
+            if _state["frame_idx"] is not None:
+                _draw_det()
+            _info.value = "<span style='color:#aaa'>Pairs cleared.</span>"
+
+        def _cb_fit_pairs(btn) -> None:
+            pairs = _state["pairs"]
+            U0    = _state["U0"]
+            if len(pairs) < 3 or U0 is None:
+                return
+
+            manual_obs = np.array([p["obs_xy"] for p in pairs])
+            manual_hkl = {tuple(p["hkl"]) for p in pairs}
+
+            def _run():
+                return _fit_ori(
+                    crystal, camera, manual_obs, U0,
+                    E_min_eV=E_min_eV, E_max_eV=E_max_eV, hmax=hmax,
+                    max_match_px=3000.0,
+                    allowed_hkl=manual_hkl,
+                    verbose=True,
+                )
+
+            def _on_done(item) -> None:
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Fit error: {item}</b>"
+                    return
+                _state["fit_result"] = item
+                _state["U0"]         = item.U
+                _run_simulation(item.U)
+                col = "#44aaff" if item.success else "#ffaa33"
+                _info.value = (
+                    f"<b style='color:{col}'>{item}</b>"
+                    "<span style='color:#aaa'> — click 🔬 Refine all for full refinement</span>"
+                )
+                btn_refine.disabled = len(_state["obs_xy"]) < 3
+                btn_store.disabled  = False
+                btn_save.disabled   = False
+                _draw_det()
+
+            _async_fit(_run, _on_done, btn, "Fitting…", "⚡ Fit pairs")
+
+        def _cb_refine(btn) -> None:
+            obs_xy = _state["obs_xy"]
+            U0     = _state["U0"]
+            if len(obs_xy) < 3 or U0 is None:
+                return
+
+            def _run():
+                return _fit_ori(
+                    crystal, camera, obs_xy, U0,
+                    E_min_eV=E_min_eV, E_max_eV=E_max_eV, hmax=hmax,
+                    max_match_px=fit_max_match_px,
+                    verbose=True,
+                )
+
+            def _on_done(item) -> None:
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Refine error: {item}</b>"
+                    return
+                _state["fit_result"] = item
+                _state["U0"]         = item.U
+                _run_simulation(item.U)
+                col = "#44aaff" if item.success else "#ffaa33"
+                _info.value = f"<b style='color:{col}'>{item}</b>"
+                btn_store.disabled = False
+                btn_save.disabled  = False
+                _draw_det()
+
+            _async_fit(_run, _on_done, btn, "Refining…", "🔬 Refine all")
+
+        def _cb_store(_) -> None:
+            fit_result = _state["fit_result"]
+            if fit_result is None:
+                return
+            iy = _state["iy"]
+            ix = _state["ix"]
+            gi = int(w_grain.value)
+            if gi < 0 or gi >= self.n_grains:
+                _info.value = (
+                    f"<b style='color:#f44'>Grain {gi} out of range "
+                    f"(0 – {self.n_grains - 1})</b>"
+                )
+                return
+            self.set_result(iy, ix, gi, fit_result)
+            _info.value = (
+                f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
+                f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
+            )
+            print(
+                f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
+                f"rms={fit_result.rms_px:.2f} px  "
+                f"match={fit_result.match_rate:.0%}"
+            )
+
+        def _cb_save(_) -> None:
+            best = _state["fit_result"]
+            if best is None:
+                return
+            existing = glob.glob(os.path.join(os.getcwd(), "UB[0-9]*.npy"))
+            max_n = -1
+            for fpath in existing:
+                m = re.search(r"UB(\d+)\.npy$", os.path.basename(fpath))
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+            fname    = f"UB{max_n + 1:02d}.npy"
+            np.save(fname, best.U)
+            abs_path = os.path.abspath(fname)
+            print(f"  💾 Saved U → {abs_path}")
+            _info.value = (
+                f"<b style='color:#44dd66'>Saved → {fname}</b>"
+                f"&emsp;{_info.value}"
+            )
+
+        btn_fit_pairs.on_click(_cb_fit_pairs)
+        btn_refine.on_click(_cb_refine)
+        btn_clear.on_click(_cb_clear)
+        btn_store.on_click(_cb_store)
+        btn_save.on_click(_cb_save)
+
+        _controls = ipw.VBox([
+            ipw.HBox(
+                [ipw.HTML(
+                     "<span style='color:#aaa;align-self:center;"
+                     "font-size:11px;margin-right:4px'>Load U:</span>",
+                 ),
+                 w_ub_path, btn_load_ub],
+                layout=ipw.Layout(gap="4px", align_items="center",
+                                  margin="4px 0 2px 0"),
+            ),
+            ipw.HBox(
+                [btn_fit_pairs, btn_refine, btn_clear,
+                 ipw.HTML(
+                     "<span style='color:#aaa;align-self:center'>grain:</span>",
+                     layout=ipw.Layout(margin="0 2px 0 10px"),
+                 ),
+                 w_grain, btn_store, btn_save],
+                layout=ipw.Layout(gap="6px", align_items="center",
+                                  margin="2px 0 2px 0"),
+            ),
+            _info,
+            w_pair_list,
+        ], layout=ipw.Layout(padding="6px 8px"))
+
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
     def segment_frame(
         self,
         base_dir: str,
@@ -3727,6 +4502,8 @@ class GrainMap:
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
         _map_title = (
@@ -4098,6 +4875,7 @@ class GrainMap:
                     valid = new_data[np.isfinite(new_data)]
                     if valid.size:
                         im_map.set_clim(valid.min(), valid.max())
+                        cb_map.update_normal(im_map)
                     fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
@@ -4122,7 +4900,7 @@ class GrainMap:
             **_dsk,
         )
 
-        def _redraw(_change=None) -> None:
+        def _redraw(_=None) -> None:
             if _state["image"] is not None:
                 _draw_det(props=_state["props"])
 

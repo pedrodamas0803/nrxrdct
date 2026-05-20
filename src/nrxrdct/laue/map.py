@@ -2898,10 +2898,11 @@ class GrainMap:
             if image is not None:
                 pos = image[image > 0]
                 vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                nv_im, nh_im = image.shape
                 ax_det.imshow(
                     np.log1p(image / vmax * 1000),
                     origin="upper",
-                    extent=[0, camera.Nh, camera.Nv, 0],
+                    extent=[0, nh_im, nv_im, 0],
                     cmap="gray", aspect="equal", zorder=0,
                 )
             else:
@@ -3242,10 +3243,11 @@ class GrainMap:
             if image is not None:
                 pos  = image[image > 0]
                 vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                nv_im, nh_im = image.shape
                 ax_det.imshow(
                     np.log1p(image / vmax * 1000),
                     origin="upper",
-                    extent=[0, camera.Nh, camera.Nv, 0],
+                    extent=[0, nh_im, nv_im, 0],
                     cmap="gray", aspect="equal", zorder=0,
                 )
             else:

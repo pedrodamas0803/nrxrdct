@@ -241,6 +241,70 @@ class GrainMap:
                     [[None] * self.nx for _ in range(self.ny)]
                 )
 
+    def drop_grain(self, *indices: int) -> None:
+        """
+        Remove one or more grain slots from the map in-place.
+
+        All per-grain arrays (``U``, ``rms_px``, ``match_rate``, etc.),
+        the reference UB matrix list, the UB file list, and the stored result
+        objects are sliced to exclude the requested indices.  ``n_grains`` is
+        updated accordingly.
+
+        If the merged-grain slot is among the dropped indices it is cleared to
+        ``None``; if it survives the drop its index is remapped to the new
+        position.
+
+        Parameters
+        ----------
+        *indices : int
+            One or more grain slot indices to remove.  Duplicates are ignored.
+            Pass a single iterable with ``*`` unpacking if you have a list::
+
+                gmap.drop_grain(0, 2)        # drop grains 0 and 2
+                gmap.drop_grain(*[0, 2])     # same, from a list
+
+        Raises
+        ------
+        ValueError
+            If any index is out of range or if the call would drop all grains.
+        """
+        drop_set = set(indices)
+        out_of_range = [i for i in drop_set if not (0 <= i < self.n_grains)]
+        if out_of_range:
+            raise ValueError(
+                f"Grain indices out of range (0 – {self.n_grains - 1}): "
+                f"{sorted(out_of_range)}"
+            )
+        keep = [i for i in range(self.n_grains) if i not in drop_set]
+        if not keep:
+            raise ValueError("drop_grain would remove all grains — at least one must remain.")
+
+        idx = np.array(keep)
+
+        self.U             = self.U[idx]
+        self.rms_px        = self.rms_px[idx]
+        self.mean_px       = self.mean_px[idx]
+        self.n_matched     = self.n_matched[idx]
+        self.match_rate    = self.match_rate[idx]
+        self.cost          = self.cost[idx]
+        self.strain_voigt  = self.strain_voigt[idx]
+        self.strain_tensor = self.strain_tensor[idx]
+        self.U_ref         = self.U_ref[idx]
+        self.ub_files      = [self.ub_files[i] for i in keep]
+        self._results      = [self._results[i] for i in keep]
+        self.n_grains      = len(keep)
+
+        # remap _merged_grain: clear if dropped, shift if it survived
+        mg = self._merged_grain
+        if mg is not None:
+            if mg in drop_set:
+                self._merged_grain = None
+            else:
+                self._merged_grain = keep.index(mg)
+
+        dropped_str = ", ".join(str(i) for i in sorted(drop_set))
+        print(f"Dropped grain(s) {dropped_str} — {self.n_grains} grain(s) remaining.")
+
     # ── Array initialisation ──────────────────────────────────────────────────
 
     def _init_arrays(self) -> None:
@@ -3499,14 +3563,21 @@ class GrainMap:
                 )
                 return
             self.set_result(iy, ix, gi, fit_result)
+            if self.h5_path:
+                self.save(self.h5_path)
+                save_note = f" — saved to {os.path.basename(self.h5_path)}"
+            else:
+                save_note = " — <b style='color:#ffaa33'>no h5_path set, results in memory only</b>"
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
+                f"<span style='color:#aaa'>{save_note}</span>"
             )
             print(
                 f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
                 f"rms={fit_result.rms_px:.2f} px  "
                 f"match={fit_result.match_rate:.0%}"
+                + (f"  → saved to {self.h5_path}" if self.h5_path else "  (in memory only)")
             )
 
         def _cb_save(_) -> None:
@@ -4161,26 +4232,28 @@ class GrainMap:
         )
 
         # ── UB file loader ────────────────────────────────────────────────────
-        w_ub_path   = ipw.Text(
-            value="", description="UB file:",
-            placeholder="leave blank to auto-scan for UB*.npy",
-            layout=ipw.Layout(width="310px"),
-            style={"description_width": "55px"},
+        def _scan_ub_files() -> list:
+            seen: dict[str, str] = {}
+            for d in sorted({self.processing_dir, os.getcwd()}):
+                for p in sorted(glob.glob(os.path.join(d, "UB[0-9]*.npy"))):
+                    seen.setdefault(os.path.basename(p), p)
+            return [("— select —", "")] + [
+                (os.path.basename(p), p) for p in seen.values()
+            ]
+
+        w_ub_dd = ipw.Dropdown(
+            options=_scan_ub_files(),
+            value="",
+            description="UB matrix:",
+            layout=ipw.Layout(width="260px"),
+            style={"description_width": "72px"},
         )
-        btn_load_ub = ipw.Button(
-            description="Load", layout=ipw.Layout(width="65px", height="32px")
+        btn_refresh_ub = ipw.Button(
+            description="🔄", tooltip="Rescan for UB*.npy files",
+            layout=ipw.Layout(width="38px", height="32px"),
         )
 
-        def _cb_load_ub(_) -> None:
-            path = w_ub_path.value.strip()
-            if not path:
-                existing = sorted(glob.glob(os.path.join(os.getcwd(), "UB[0-9]*.npy")))
-                if existing:
-                    path = existing[-1]
-                    w_ub_path.value = path
-                else:
-                    _info.value = "<b style='color:#f44'>No UB*.npy found in current directory</b>"
-                    return
+        def _load_ub_from_path(path: str) -> None:
             try:
                 U = np.load(path)
                 if U.shape != (3, 3):
@@ -4199,10 +4272,24 @@ class GrainMap:
                         f"<b style='color:#44dd66'>Loaded U from "
                         f"{os.path.basename(path)}</b>"
                     )
+                btn_refine.disabled = len(_state["obs_xy"]) < 3
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Load error: {exc}</b>"
 
-        btn_load_ub.on_click(_cb_load_ub)
+        def _cb_ub_select(change) -> None:
+            path = change["new"]
+            if path:
+                _load_ub_from_path(path)
+
+        def _cb_refresh_ub(_) -> None:
+            current = w_ub_dd.value
+            opts = _scan_ub_files()
+            w_ub_dd.options = opts
+            valid_paths = {v for _, v in opts if v}
+            w_ub_dd.value = current if current in valid_paths else ""
+
+        w_ub_dd.observe(_cb_ub_select, names="value")
+        btn_refresh_ub.on_click(_cb_refresh_ub)
 
         # ── button callbacks ──────────────────────────────────────────────────
         def _cb_clear(_) -> None:
@@ -4296,15 +4383,22 @@ class GrainMap:
             self.set_result(iy, ix, gi, fit_result)
             _state["stored_result"] = fit_result
             btn_remove.disabled = False
+            if self.h5_path:
+                self.save(self.h5_path)
+                save_note = f" — saved to {os.path.basename(self.h5_path)}"
+            else:
+                save_note = " — <b style='color:#ffaa33'>no h5_path set, results in memory only</b>"
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
-                "<span style='color:#aaa'> — click ✂ Remove spots to isolate next grain</span>"
+                f"<span style='color:#aaa'>{save_note}"
+                " — click ✂ Remove spots to isolate next grain</span>"
             )
             print(
                 f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
                 f"rms={fit_result.rms_px:.2f} px  "
                 f"match={fit_result.match_rate:.0%}"
+                + (f"  → saved to {self.h5_path}" if self.h5_path else "  (in memory only)")
             )
 
         def _cb_save(_) -> None:
@@ -4325,6 +4419,10 @@ class GrainMap:
                 f"<b style='color:#44dd66'>Saved → {fname}</b>"
                 f"&emsp;{_info.value}"
             )
+            # Refresh dropdown and select the newly saved file
+            opts = _scan_ub_files()
+            w_ub_dd.options = opts
+            w_ub_dd.value = abs_path
 
         def _cb_index(btn) -> None:
             obs_xy = _state["obs_xy"]
@@ -4419,7 +4517,7 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center;"
                      "font-size:11px;margin-right:4px'>Load U:</span>",
                  ),
-                 w_ub_path, btn_load_ub, btn_index],
+                 w_ub_dd, btn_refresh_ub, btn_index],
                 layout=ipw.Layout(gap="4px", align_items="center",
                                   margin="4px 0 2px 0"),
             ),
@@ -5155,6 +5253,140 @@ class GrainMap:
                 grp.create_dataset("strain_tensor", data=self.strain_tensor[gi], compression="gzip")
 
         print(f"GrainMap saved → {os.path.abspath(path)}")
+
+    def save_merged_result(
+        self,
+        path: str,
+        grain: "int | None" = None,
+        euler_convention: str = "ZXZ",
+        compress: bool = True,
+    ) -> None:
+        """
+        Export the final merged-grain result to a self-contained HDF5 file.
+
+        Unlike :meth:`save` (which preserves the full multi-grain object for
+        later reloading), this method writes a *flat*, human-readable file
+        meant for downstream analysis tools (visualisation, strain maps, data
+        exchange).  Every dataset is a plain array — no GrainMap class is
+        needed to read it back.
+
+        Layout
+        ------
+        ``/meta``
+            Scalar metadata (``ny``, ``nx``, ``grain_index``,
+            ``h5_path``, ``processing_dir``).
+
+        ``/orientation/``
+            ``U``          — (ny, nx, 3, 3)  orientation matrices.
+            ``euler_ZXZ``  — (ny, nx, 3)     Euler angles in degrees
+                             (or the chosen ``euler_convention``).
+            ``U_ref``      — (3, 3)          reference orientation for
+                             this grain (NaN if unavailable).
+
+        ``/fit_quality/``
+            ``match_rate``, ``rms_px``, ``mean_px``,
+            ``n_matched``, ``cost`` — all (ny, nx).
+
+        ``/strain/``
+            ``voigt``   — (ny, nx, 6)    deviatoric strain in Voigt notation
+                          ``[e_xx, e_yy, e_zz, e_xy, e_xz, e_yz]``.
+            ``tensor``  — (ny, nx, 3, 3) full strain tensor.
+            Only written when at least one pixel has a fitted strain value.
+
+        ``/motors/``
+            One dataset per motor name, each (ny, nx).
+
+        Parameters
+        ----------
+        path : str
+            Output HDF5 file path.  Overwritten if it already exists.
+        grain : int or None
+            Grain slot to export.  ``None`` (default) uses the merged slot
+            set by :meth:`apply_merge`; falls back to grain 0 if no merge
+            has been performed.
+        euler_convention : str
+            Euler-angle convention passed to
+            ``scipy.spatial.transform.Rotation.as_euler``.  Default
+            ``"ZXZ"`` (Bunge convention commonly used in EBSD).
+        compress : bool
+            Apply gzip compression to numeric datasets.  Default ``True``.
+        """
+        if grain is None:
+            grain = self._merged_grain if self._merged_grain is not None else 0
+        if not (0 <= grain < self.n_grains):
+            raise ValueError(
+                f"grain={grain} out of range (0 – {self.n_grains - 1})"
+            )
+
+        kw = dict(compression="gzip") if compress else {}
+
+        # ── pre-compute Euler angles (vectorised, NaN-safe) ───────────────────
+        U_gi   = self.U[grain]                          # (ny, nx, 3, 3)
+        valid  = ~np.any(np.isnan(U_gi), axis=(-2, -1)) # (ny, nx)
+        euler  = np.full((self.ny, self.nx, 3), np.nan)
+        if valid.any():
+            euler[valid] = Rotation.from_matrix(
+                U_gi[valid]
+            ).as_euler(euler_convention, degrees=True)
+
+        # ── strain presence check ─────────────────────────────────────────────
+        sv = self.strain_voigt[grain]
+        has_strain = np.any(np.isfinite(sv))
+
+        # ── U_ref for this grain ──────────────────────────────────────────────
+        U_ref_gi = (
+            self.U_ref[grain]
+            if self.n_grains and self.U_ref.shape[0] > grain
+            else np.full((3, 3), np.nan)
+        )
+
+        with h5py.File(path, "w") as f:
+            # ── metadata ─────────────────────────────────────────────────────
+            meta = f.create_group("meta")
+            meta.attrs["ny"]             = self.ny
+            meta.attrs["nx"]             = self.nx
+            meta.attrs["grain_index"]    = grain
+            meta.attrs["euler_convention"] = euler_convention
+            meta.attrs["h5_path"]        = self.h5_path or ""
+            meta.attrs["processing_dir"] = self.processing_dir or ""
+
+            # ── orientation ───────────────────────────────────────────────────
+            ori = f.create_group("orientation")
+            ori.create_dataset("U",      data=U_gi,     **kw)
+            ori.create_dataset(
+                f"euler_{euler_convention}", data=euler, **kw
+            )
+            ori.create_dataset("U_ref",  data=U_ref_gi)
+
+            # ── fit quality ───────────────────────────────────────────────────
+            fq = f.create_group("fit_quality")
+            fq.create_dataset("match_rate", data=self.match_rate[grain], **kw)
+            fq.create_dataset("rms_px",     data=self.rms_px[grain],     **kw)
+            fq.create_dataset("mean_px",    data=self.mean_px[grain],    **kw)
+            fq.create_dataset("n_matched",  data=self.n_matched[grain],  **kw)
+            fq.create_dataset("cost",       data=self.cost[grain],       **kw)
+
+            # ── strain (only if present) ──────────────────────────────────────
+            if has_strain:
+                sg = f.create_group("strain")
+                sg.create_dataset("voigt",  data=sv,                         **kw)
+                sg.create_dataset("tensor", data=self.strain_tensor[grain],  **kw)
+
+            # ── motor positions ───────────────────────────────────────────────
+            if self.motors:
+                mg = f.create_group("motors")
+                for name, arr in self.motors.items():
+                    mg.create_dataset(name, data=arr, **kw)
+
+        n_fitted = int(valid.sum())
+        print(
+            f"Merged result saved → {os.path.abspath(path)}\n"
+            f"  grain slot : {grain}\n"
+            f"  fitted px  : {n_fitted} / {self.ny * self.nx} "
+            f"({100 * n_fitted / (self.ny * self.nx):.1f} %)\n"
+            f"  strain     : {'yes' if has_strain else 'no'}\n"
+            f"  motors     : {list(self.motors) if self.motors else 'none'}"
+        )
 
     @classmethod
     def load(cls, path: str) -> "GrainMap":

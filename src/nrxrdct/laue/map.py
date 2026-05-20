@@ -5061,6 +5061,8 @@ class GrainMap:
                     _info.value = f"<b style='color:{col}'>{n} spots detected</b>"
                     btn_save.disabled = n == 0
                     _draw_det(props=props)
+                    if n > 0:
+                        _cb_save(None)
                 btn_segment.description = "⚙ Segment"
                 btn_segment.disabled    = False
                 _cb_segment._running    = False

@@ -3138,10 +3138,10 @@ class GrainMap:
         from .simulation import simulate_laue as _sim_laue
         from .segmentation import convert_spotsfile2peaklist
         from .fitting import (
-            index_orientation as _index,
-            fit_orientation   as _fit_ori,
+            index_orientation      as _index,
+            fit_orientation        as _fit_ori,
+            fit_strain_orientation as _fit_strain,
             _match_spots,
-        )
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:
@@ -3407,28 +3407,32 @@ class GrainMap:
                 + (" — existing fit in map" if has_existing else "")
                 + "</span>"
             )
-            btn_index.disabled = not enough
-            btn_fit.disabled   = not (enough and (has_existing or False))
-            btn_store.disabled = True
-            btn_save.disabled  = True
+            btn_index.disabled  = not enough
+            btn_fit.disabled    = not (enough and (has_existing or False))
+            btn_strain.disabled = True
+            btn_store.disabled  = True
+            btn_save.disabled   = True
             _draw_det()
 
         fig.canvas.mpl_connect("button_press_event", _on_click)
 
         # ── ipywidgets ────────────────────────────────────────────────────────
         _bkw = dict(layout=ipw.Layout(width="120px", height="32px"))
-        btn_index = ipw.Button(description="⚡ Index",   button_style="primary",  **_bkw)
-        btn_fit   = ipw.Button(description="⚡ Fit",     button_style="info",     **_bkw)
-        btn_store = ipw.Button(description="⬆ Store",   button_style="success",  **_bkw)
-        btn_save  = ipw.Button(description="💾 Save UB", button_style="",         **_bkw)
-        w_grain   = ipw.BoundedIntText(
+        btn_index  = ipw.Button(description="⚡ Index",      button_style="primary",  **_bkw)
+        btn_fit    = ipw.Button(description="⚡ Fit",        button_style="info",     **_bkw)
+        btn_strain = ipw.Button(description="🔩 Fit strain", button_style="warning",
+                                layout=ipw.Layout(width="130px", height="32px"))
+        btn_store  = ipw.Button(description="⬆ Store",      button_style="success",  **_bkw)
+        btn_save   = ipw.Button(description="💾 Save UB",   button_style="",         **_bkw)
+        w_grain    = ipw.BoundedIntText(
             value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
             layout=ipw.Layout(width="55px", height="32px"),
         )
-        btn_index.disabled = True
-        btn_fit.disabled   = True
-        btn_store.disabled = True
-        btn_save.disabled  = True
+        btn_index.disabled  = True
+        btn_fit.disabled    = True
+        btn_strain.disabled = True
+        btn_store.disabled  = True
+        btn_save.disabled   = True
 
         _info = ipw.HTML(
             "<span style='color:#666;font-style:italic'>"
@@ -3537,8 +3541,9 @@ class GrainMap:
                     _state["fit_result"] = item
                     col = "#44aaff" if item.success else "#ffaa33"
                     _info.value = f"<b style='color:{col}'>{item}</b>"
-                    btn_store.disabled = False
-                    btn_save.disabled  = False
+                    btn_strain.disabled = len(_state["obs_xy"]) < 3
+                    btn_store.disabled  = False
+                    btn_save.disabled   = False
                     _draw_det()
                 btn_fit.description = "⚡ Fit"
                 btn_fit.disabled    = False
@@ -3600,14 +3605,69 @@ class GrainMap:
                 f"&emsp;{_info.value}"
             )
 
+        def _cb_strain(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            fit_result = _state["fit_result"]
+            obs_xy     = _state["obs_xy"]
+            if fit_result is None or len(obs_xy) < 3:
+                return
+            if getattr(_cb_strain, "_running", False):
+                return
+            _cb_strain._running    = True
+            btn_strain.disabled    = True
+            btn_strain.description = "Fitting…"
+
+            U0 = fit_result.U
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _fit_strain(
+                        crystal, camera, obs_xy, U0,
+                        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                        hmax=hmax,
+                        max_match_px=fit_max_match_px,
+                        verbose=True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Strain fit error: {item}</b>"
+                else:
+                    _state["fit_result"] = item
+                    col = "#ffcc44" if item.success else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{item}</b>"
+                    btn_store.disabled = False
+                    btn_save.disabled  = False
+                    _draw_det()
+                btn_strain.description = "🔩 Fit strain"
+                btn_strain.disabled    = False
+                _cb_strain._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
         btn_index.on_click(_cb_index)
         btn_fit.on_click(_cb_fit)
+        btn_strain.on_click(_cb_strain)
         btn_store.on_click(_cb_store)
         btn_save.on_click(_cb_save)
 
         _controls = ipw.VBox([
             ipw.HBox(
-                [btn_index, btn_fit,
+                [btn_index, btn_fit, btn_strain,
                  ipw.HTML("<span style='color:#aaa;align-self:center'>grain:</span>",
                           layout=ipw.Layout(margin="0 2px 0 10px")),
                  w_grain, btn_store, btn_save],
@@ -6345,7 +6405,7 @@ class GrainMap:
         else:
             raise ValueError(f"source must be 'ubs', 'strain', or 'auto', got {source!r}")
 
-        merged_dir = os.path.join(base_dir, "merged")
+        merged_dir = os.path.join(base_dir, "merged", src_label)
         os.makedirs(merged_dir, exist_ok=True)
 
         n_links = 0
@@ -6379,9 +6439,15 @@ class GrainMap:
         print(f"write_merge_links: {n_links} symlinks → {merged_dir}  [source={src_label}]", flush=True)
         return merged_dir, n_links
 
-    def collect_merged(self, base_dir: str, grain_index: int | None = None) -> int:
+    def collect_merged(
+        self,
+        base_dir: str,
+        grain_index: int | None = None,
+        *,
+        source: str = "ubs",
+    ) -> int:
         """
-        Load results from ``base_dir/merged/`` into a grain slot.
+        Load results from ``base_dir/merged/{source}/`` into a grain slot.
 
         This is the complement of :meth:`write_merge_links`: it reads the
         ``.npz`` symlinks produced by that method and populates the chosen
@@ -6394,17 +6460,23 @@ class GrainMap:
             Same root directory passed to :meth:`write_merge_links`.
         grain_index : int or None
             Grain slot to populate.  ``None`` uses ``self.n_grains - 1``.
+        source : {"ubs", "strain"}
+            Which merged subfolder to read from.  ``"ubs"`` loads orientation-
+            only results; ``"strain"`` loads results that include strain tensors.
+            Must match the ``source`` used when calling :meth:`write_merge_links`.
 
         Returns
         -------
         int
             Number of results loaded.
         """
-        merged_dir = os.path.join(base_dir, "merged")
+        if source not in ("ubs", "strain"):
+            raise ValueError(f"source must be 'ubs' or 'strain', got {source!r}")
+        merged_dir = os.path.join(base_dir, "merged", source)
         if not os.path.isdir(merged_dir):
             raise FileNotFoundError(
-                f"merged/ directory not found: {merged_dir!r}. "
-                "Call write_merge_links() first."
+                f"merged/{source}/ directory not found: {merged_dir!r}. "
+                f"Call write_merge_links(source={source!r}) first."
             )
 
         gi_target = self.n_grains - 1 if grain_index is None else int(grain_index)
@@ -6433,7 +6505,7 @@ class GrainMap:
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
 
-        print(f"collect_merged: {n_loaded} results loaded from {merged_dir}", flush=True)
+        print(f"collect_merged [{source}]: {n_loaded} results loaded from {merged_dir}", flush=True)
         return n_loaded
 
     # ── Dunder ────────────────────────────────────────────────────────────────

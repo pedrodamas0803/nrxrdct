@@ -62,7 +62,6 @@ from .simulation import (
     E_MAX_eV,
     E_MIN_eV,
     F2_THRESHOLD,
-    HMAX,
     precompute_allowed_hkl,
     simulate_laue,
     simulate_laue_stack,
@@ -587,7 +586,6 @@ def remove_grain_spots(
     camera,
     max_match_px: float = 5.0,
     f2_thresh: float = 1e-6,
-    hmax: int = HMAX,
     E_min_eV: float = E_MIN_eV,
     E_max_eV: float = E_MAX_eV,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -627,7 +625,6 @@ def remove_grain_spots(
                                    (default ``1e-6``) to generate essentially
                                    all allowed reflections and avoid leaving
                                    grain spots behind.
-    hmax     : int                 Maximum Miller index.
     E_min_eV, E_max_eV : float    Energy range forwarded to
                                    :func:`~nrxrdct.laue.simulate_laue`.
 
@@ -647,7 +644,7 @@ def remove_grain_spots(
     spots  = _sim(
         crystal, U, camera,
         E_min=E_min_eV, E_max=E_max_eV,
-        hmax=hmax, f2_thresh=f2_thresh,
+        f2_thresh=f2_thresh,
         geometry_only=True,
     )
     sim_xy = _extract_sim_xy(spots)
@@ -792,7 +789,6 @@ def index_orientation(
     camera,
     obs_xy: np.ndarray,
     *,
-    hmax: int = 8,
     f2_thresh: float = F2_THRESHOLD,
     n_hkl_max: int = 200,
     E_ref_eV: float | None = None,
@@ -826,19 +822,12 @@ def index_orientation(
     obs_xy : (N, 2)
         Observed spot pixel positions ``[xcam, ycam]``, sorted by descending
         intensity.  The ``n_obs_use`` brightest are used.
-    hmax : int
-        Maximum Miller index for the angle lookup table.  Keep small (≤ 10)
-        to limit the number of pairs; the default of 8 works well for
-        cubic crystals.  Increase to 15–20 for materials with large unit
-        cells (e.g., Al₂O₃ c ≈ 13 Å) or space groups with many systematic
-        absences (e.g., R-3c), where the lowest accessible reflections may
-        carry high Miller indices.
     f2_thresh : float
         Minimum |F|² threshold for allowed reflections.
     n_hkl_max : int
         Keep only the ``n_hkl_max`` strongest reflections (by |F|²) for the
-        lookup table.  Limits table size and avoids O(M²) memory blow-up for
-        large ``hmax``.  Default 200.
+        lookup table.  Limits table size and avoids O(M²) memory blow-up.
+        Default 200.
     E_ref_eV : float or None
         Reference photon energy (eV) used for |F|² ranking.  Defaults to the
         midpoint of the default energy window.
@@ -901,13 +890,13 @@ def index_orientation(
         E_ref_eV = 0.5 * (E_MIN_eV + E_MAX_eV)
 
     if verbose:
-        print(f"index_orientation: {n_obs} observed spots, hmax={hmax}")
+        print(f"index_orientation: {n_obs} observed spots")
 
     # ── step 1: observed unit q-vectors ──────────────────────────────────────
     q_hats = _obs_q_vecs(camera, obs_xy)
 
     # ── step 2: build HKL angle table ────────────────────────────────────────
-    allowed = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+    allowed = precompute_allowed_hkl(crystal, f2_thresh=f2_thresh)
 
     # Rank by |F|² and keep the n_hkl_max strongest reflections.
     hkl_all = list(allowed)
@@ -1033,7 +1022,6 @@ def laue_residuals(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float = 30.0,
@@ -1069,10 +1057,6 @@ def laue_residuals(
     source_kwargs: dict or None   Extra keyword arguments forwarded to the
                                   spectral function (e.g. ``{'B': 0.4}`` for
                                   a bending magnet field).
-    hmax         : int            Maximum Miller index searched.  Increase
-                                  to 15–20 for large unit cells or space
-                                  groups with many systematic absences
-                                  (e.g., R-3c, hexagonal with large c/a).
     f2_thresh    : float          Minimum squared structure factor |F|² to
                                   include a reflection.
     kb_params    : KB params      KB mirror reflectivity parameters
@@ -1101,7 +1085,7 @@ def laue_residuals(
         crystal, U, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
     )
@@ -1127,7 +1111,6 @@ def laue_stack_residuals(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     structure_model: str = "average",
@@ -1166,10 +1149,6 @@ def laue_stack_residuals(
     source       : str              Spectral model (``'bending_magnet'`` or
                                     ``'undulator'``).
     source_kwargs: dict or None     Extra kwargs for the spectral function.
-    hmax         : int              Maximum Miller index.  Increase to
-                                    15–20 for large unit cells or space
-                                    groups with many systematic absences
-                                    (e.g., R-3c, hexagonal with large c/a).
     f2_thresh    : float            Minimum |F|² threshold.
     kb_params    :                  KB mirror reflectivity parameters.
     structure_model : str           How to combine layer contributions —
@@ -1191,7 +1170,7 @@ def laue_stack_residuals(
         stack, camera,
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         verbose=False,
         geometry_only=geometry_only,
@@ -1220,7 +1199,6 @@ def laue_mixed_residuals(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float | None = None,
     kb_params=BM32_KB,
     structure_model: str = "average",
@@ -1255,7 +1233,6 @@ def laue_mixed_residuals(
     source       : str             Spectral model (``'bending_magnet'`` or
                                    ``'undulator'``).
     source_kwargs: dict or None    Extra kwargs for the spectral function.
-    hmax         : int             Maximum Miller index.
     f2_thresh    : float or None   Minimum |F|² threshold.
     kb_params    :                 KB mirror reflectivity parameters.
     structure_model : str          Layer combination model (``'average'`` or
@@ -1284,7 +1261,7 @@ def laue_mixed_residuals(
         phases, camera,
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         verbose=False,
         geometry_only=geometry_only,
@@ -1314,7 +1291,6 @@ def laue_strain_residuals(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float = 30.0,
@@ -1353,7 +1329,7 @@ def laue_strain_residuals(
                                   Optimizer parameters = physical_strain /
                                   strain_scale.  Default 1e-4 keeps parameters
                                   near order-1 for typical strains of 10⁻⁴–10⁻³.
-    E_min_eV, E_max_eV, source, source_kwargs, hmax, f2_thresh, kb_params,
+    E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
     max_match_px, top_n_obs, top_n_sim, geometry_only, allowed_hkl
                    Forwarded to :func:`simulate_laue`; see :func:`laue_residuals`.
 
@@ -1374,7 +1350,7 @@ def laue_strain_residuals(
         crystal, U_eff, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
     )
@@ -1403,7 +1379,6 @@ def fit_orientation(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float | list[float] = 30.0,
@@ -1440,7 +1415,6 @@ def fit_orientation(
     source       : str            Spectral model — ``'bending_magnet'`` or
                                   ``'undulator'``.
     source_kwargs: dict or None   Extra kwargs forwarded to the spectral function.
-    hmax         : int            Maximum Miller index searched.
     f2_thresh    : float          Minimum squared structure factor |F|² to
                                   include a reflection.
     kb_params    :                KB mirror reflectivity parameters.
@@ -1507,7 +1481,7 @@ def fit_orientation(
 
     _allowed = (
         allowed_hkl if allowed_hkl is not None
-        else precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        else precompute_allowed_hkl(crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh)
         if geometry_only else None
     )
 
@@ -1522,7 +1496,7 @@ def fit_orientation(
             crystal=crystal, camera=camera, obs_xy=obs_use,
             E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
-            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            f2_thresh=f2_thresh, kb_params=kb_params,
             max_match_px=_stages[0], top_n_obs=None, top_n_sim=top_n_sim,
             geometry_only=False, allowed_hkl=_allowed,
         )
@@ -1558,7 +1532,7 @@ def fit_orientation(
             crystal=crystal, camera=camera, obs_xy=obs_use, U0=U0_stage,
             E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
-            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            f2_thresh=f2_thresh, kb_params=kb_params,
             max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
             geometry_only=False, allowed_hkl=_allowed,
         )
@@ -1583,7 +1557,7 @@ def fit_orientation(
         crystal, U_final, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         allowed_hkl=_allowed,
     )
     n_sim = len(_extract_sim_xy(final_spots))
@@ -1611,7 +1585,6 @@ def fit_orientation_stack(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     structure_model: str = "average",
@@ -1648,7 +1621,6 @@ def fit_orientation_stack(
     source         : str              Spectral model (``'bending_magnet'`` or
                                       ``'undulator'``).
     source_kwargs  : dict or None     Extra kwargs for the spectral function.
-    hmax           : int              Maximum Miller index.
     f2_thresh      : float            Minimum |F|² threshold.
     kb_params      :                  KB mirror reflectivity parameters.
     structure_model: str              Layer combination model — ``'average'``
@@ -1700,7 +1672,7 @@ def fit_orientation_stack(
         )
         _allowed = {
             id(layer.crystal): precompute_allowed_hkl(
-                layer.crystal, hmax, f2_thresh=f2_thresh
+                layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
             )
             for layer in _enum_pool
         }
@@ -1713,7 +1685,7 @@ def fit_orientation_stack(
         U0_layers=U0_layers,
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
         geometry_only=False, allowed_hkl=_allowed,
@@ -1744,7 +1716,7 @@ def fit_orientation_stack(
     final_spots = simulate_laue_stack(
         stack, camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
         allowed_hkl=_allowed,
     )
@@ -1779,7 +1751,6 @@ def fit_orientation_mixed(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float | None = None,
     kb_params=BM32_KB,
     structure_model: str = "average",
@@ -1825,7 +1796,6 @@ def fit_orientation_mixed(
     source         : str              Spectral model (``'bending_magnet'`` or
                                       ``'undulator'``).
     source_kwargs  : dict or None     Extra kwargs for the spectral function.
-    hmax           : int              Maximum Miller index.
     f2_thresh      : float or None    Minimum |F|² threshold.
     kb_params      :                  KB mirror reflectivity parameters.
     structure_model: str              Layer combination model (``'average'`` or
@@ -1873,7 +1843,7 @@ def fit_orientation_mixed(
     if geometry_only:
         _f2 = f2_thresh if f2_thresh is not None else F2_THRESHOLD
         _allowed: dict | None = {
-            id(p["crystal"]): precompute_allowed_hkl(p["crystal"], hmax, f2_thresh=_f2)
+            id(p["crystal"]): precompute_allowed_hkl(p["crystal"], E_max_eV=E_max_eV, f2_thresh=_f2)
             for p in phases_work
         }
     else:
@@ -1885,7 +1855,7 @@ def fit_orientation_mixed(
         U0_list=U0_list, shared=shared,
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
         geometry_only=False, allowed_hkl=_allowed,
@@ -1934,7 +1904,7 @@ def fit_orientation_mixed(
         phases_work, camera,
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
         allowed_hkl=_allowed,
     )
@@ -1966,7 +1936,6 @@ def fit_strain_orientation(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float | list[float] = 30.0,
@@ -2009,7 +1978,7 @@ def fit_strain_orientation(
                                   (biaxial) strain only.
     strain_scale : float          Internal scale for strain parameters (see
                                   :func:`laue_strain_residuals`).  Default 1e-4.
-    E_min_eV, E_max_eV, source, source_kwargs, hmax, f2_thresh, kb_params,
+    E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
     max_match_px, top_n_obs, top_n_sim, method, ftol, xtol, gtol, max_nfev,
     geometry_only
                    Forwarded to ``least_squares`` / :func:`laue_strain_residuals`.
@@ -2046,7 +2015,7 @@ def fit_strain_orientation(
 
     _allowed = (
         allowed_hkl if allowed_hkl is not None
-        else precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        else precompute_allowed_hkl(crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh)
         if geometry_only else None
     )
 
@@ -2068,7 +2037,7 @@ def fit_strain_orientation(
             fit_strain=fit_strain, strain_scale=strain_scale,
             E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
-            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            f2_thresh=f2_thresh, kb_params=kb_params,
             max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
             geometry_only=False, allowed_hkl=_allowed,
         )
@@ -2100,7 +2069,7 @@ def fit_strain_orientation(
         crystal, U_eff, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
-        hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+        f2_thresh=f2_thresh, kb_params=kb_params,
         allowed_hkl=_allowed,
     )
     n_sim = len(_extract_sim_xy(final_spots))
@@ -2216,7 +2185,6 @@ def run_orientation_local(
     min_matched: int = 5,
     min_match_rate: float = 0.2,
     max_rms_px: "float | None" = None,
-    hmax: int = 15,
     f2_thresh: float = 1e-4,
     geometry_only: bool = True,
     n_workers: "int | None" = None,
@@ -2252,7 +2220,8 @@ def run_orientation_local(
     t_hkl = time.time()
     allowed_hkl = None
     if geometry_only:
-        allowed_hkl = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        _E_max = fit_kwargs.get("E_max_eV", E_MAX_eV)
+        allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=_E_max, f2_thresh=f2_thresh)
         print(
             f"  allowed_hkl: {len(allowed_hkl)} reflections "
             f"({time.time() - t_hkl:.1f}s)",
@@ -2427,7 +2396,6 @@ def run_strain_local(
     r_squared_min: float = 0.9,
     include_unfitted: bool = False,
     max_match_px=(10, 3),
-    hmax: int = 15,
     f2_thresh: float = 1e-4,
     geometry_only: bool = True,
     n_workers: "int | None" = None,
@@ -2464,7 +2432,8 @@ def run_strain_local(
     t_hkl = time.time()
     allowed_hkl = None
     if geometry_only:
-        allowed_hkl = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        _E_max = fit_kwargs.get("E_max_eV", E_MAX_eV)
+        allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=_E_max, f2_thresh=f2_thresh)
         print(
             f"  allowed_hkl: {len(allowed_hkl)} reflections "
             f"({time.time() - t_hkl:.1f}s)",

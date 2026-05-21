@@ -46,7 +46,6 @@ class CalibrationResult:
         E_max_eV: float = 27_000.0,
         source: str = "bending_magnet",
         source_kwargs: dict | None = None,
-        hmax: int = 15,
         f2_thresh: float = 0.0,
         top_n_sim: int | None = None,
         figsize: tuple = (14, 5),
@@ -102,7 +101,7 @@ class CalibrationResult:
             crystal, self.U, cam,
             E_min=E_min_eV, E_max=E_max_eV,
             source=source, source_kwargs=src_kw,
-            hmax=hmax, f2_thresh=f2_thresh,
+            f2_thresh=f2_thresh,
         )
 
         # Collect on-detector spots keeping pixel, angular, and intensity aligned
@@ -836,7 +835,6 @@ class Camera:
         E_max=27_000.0,
         source="bending_magnet",
         source_kwargs=None,
-        hmax=15,
         f2_thresh=0.01,
         max_match_px=20.0,
         top_n_sim=None,
@@ -879,11 +877,6 @@ class Camera:
             Source model passed to ``simulate_laue``.
         source_kwargs : dict or None
             Extra kwargs for the spectrum function.
-        hmax : int
-            Maximum Miller index for HKL precomputation.  Increase to
-            15–20 for materials with large unit cells or space groups
-            with many systematic absences (e.g., R-3c, hexagonal with
-            large c/a ratio).
         f2_thresh : float
             Structure-factor threshold for HKL precomputation.
         max_match_px : float
@@ -938,7 +931,7 @@ class Camera:
         fit_params = list(fit_params)
 
         E_ref = 0.5 * (E_min + E_max)
-        allowed_hkl = precompute_allowed_hkl(crystal, hmax, E_ref, f2_thresh)
+        allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=E_max, E_ref_eV=E_ref, f2_thresh=f2_thresh)
 
         _all_names = fit_params + (["U_rx", "U_ry", "U_rz"] if fit_U else [])
         _cam_init = {
@@ -977,7 +970,7 @@ class Camera:
                     crystal, U_cur, cam,
                     E_min=E_min, E_max=E_max,
                     source=source, source_kwargs=src_kw,
-                    hmax=hmax, f2_thresh=f2_thresh,
+                    f2_thresh=f2_thresh,
                     allowed_hkl=allowed_hkl,
                 )
             except Exception:
@@ -1074,7 +1067,7 @@ class Camera:
             crystal, U_final, cam_final,
             E_min=E_min, E_max=E_max,
             source=source, source_kwargs=src_kw,
-            hmax=hmax, f2_thresh=f2_thresh,
+            f2_thresh=f2_thresh,
             allowed_hkl=allowed_hkl,
         )
         sim_xy_f = np.array(
@@ -1134,7 +1127,6 @@ class Camera:
         E_max=27_000.0,
         source="bending_magnet",
         source_kwargs=None,
-        hmax=15,
         f2_thresh=0.01,
         max_match_px=20.0,
         top_n_sim=None,
@@ -1212,8 +1204,9 @@ class Camera:
             Extra options for the Phase C optimizer.
 
         E_min, E_max : float
-            Energy range (eV) shared by all phases.
-        source, source_kwargs, hmax, f2_thresh, max_match_px, top_n_sim
+            Energy range (eV) shared by all phases.  The allowed-HKL
+            sphere cutoff is derived automatically from ``E_max``.
+        source, source_kwargs, f2_thresh, max_match_px, top_n_sim
             Forwarded unchanged to each :meth:`fit_calibration` call.
         verbose : bool
             Print a one-line summary after each phase.
@@ -1227,7 +1220,7 @@ class Camera:
         _shared = dict(
             E_min=E_min, E_max=E_max,
             source=source, source_kwargs=source_kwargs,
-            hmax=hmax, f2_thresh=f2_thresh,
+            f2_thresh=f2_thresh,
             max_match_px=max_match_px, top_n_sim=top_n_sim,
         )
 

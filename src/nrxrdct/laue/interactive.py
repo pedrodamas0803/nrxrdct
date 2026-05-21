@@ -195,7 +195,6 @@ def interactive_orientation(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = 6,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     structure_model: str = "average",
@@ -221,10 +220,6 @@ def interactive_orientation(
     obs_xy    : (N, 2) ndarray  — observed pixel positions from segmentation.
     U0        : (3, 3) ndarray or None  — starting orientation.
     image     : (Nv, Nh) ndarray or None  — optional background image.
-    hmax      : int  — max Miller index (lower = faster, 6 ≈ 20 ms/update).
-                       Increase to 15–20 for materials with large unit cells
-                       (e.g., hexagonal/trigonal with large c/a) or space
-                       groups with many systematic absences (e.g., R-3c).
     max_match_px : float  — pixel radius for match lines.
     top_n_sim : int  — max simulated spots displayed.
     rot_range_deg : float
@@ -281,7 +276,7 @@ def interactive_orientation(
                 stack, camera,
                 E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                 source=source, source_kwargs=source_kwargs,
-                hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+                f2_thresh=f2_thresh, kb_params=kb_params,
                 structure_model=structure_model,
                 verbose=False,
             )
@@ -293,7 +288,7 @@ def interactive_orientation(
                 crystal, U, camera,
                 E_min=E_min_eV, E_max=E_max_eV,
                 source=source, source_kwargs=source_kwargs,
-                hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+                f2_thresh=f2_thresh, kb_params=kb_params,
             )
 
     # ── Figure: detector + info panel only (no widget rows) ──────────────────
@@ -1005,7 +1000,6 @@ def interactive_calibration(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = 6,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float = 30.0,
@@ -1045,10 +1039,6 @@ def interactive_calibration(
         Initial crystal orientation matrix.
     image : (Nv, Nh) ndarray or None
         Optional background detector image (log-scaled for display).
-    hmax : int
-        Max Miller index (lower = faster; 6 ≈ 20 ms per update).
-        Increase to 15–20 for materials with large unit cells or
-        space groups with many systematic absences (e.g., R-3c).
     max_match_px : float
         Pixel radius for match lines and match-rate reporting.
     top_n_sim : int
@@ -1092,7 +1082,7 @@ def interactive_calibration(
             crystal, U, cam,
             E_min=E_min_eV, E_max=E_max_eV,
             source=source, source_kwargs=source_kwargs,
-            hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+            f2_thresh=f2_thresh, kb_params=kb_params,
         )
 
     # ── Figure ────────────────────────────────────────────────────────────────
@@ -1565,7 +1555,7 @@ def interactive_calibration(
         U_fit = state.U.copy()
         x0    = np.array([getattr(cam0, p) for p in fit_params], dtype=float)
 
-        _allowed = precompute_allowed_hkl(crystal, hmax, f2_thresh=f2_thresh)
+        _allowed = precompute_allowed_hkl(crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh)
         _q: _qmod.Queue = _qmod.Queue()
 
         def _build(x: np.ndarray):
@@ -1585,7 +1575,7 @@ def interactive_calibration(
                     crystal, U_fit, _build(x),
                     E_min=E_min_eV, E_max=E_max_eV,
                     source=source, source_kwargs=source_kwargs,
-                    hmax=hmax, f2_thresh=f2_thresh, kb_params=kb_params,
+                    f2_thresh=f2_thresh, kb_params=kb_params,
                     allowed_hkl=_allowed,
                 )
             except Exception:

@@ -35,7 +35,7 @@ import numpy as np
 from nrxrdct.laue.camera import Camera
 from nrxrdct.laue.fitting import fit_strain_orientation
 from nrxrdct.laue.segmentation import convert_spotsfile2peaklist
-from nrxrdct.laue.simulation import precompute_allowed_hkl
+from nrxrdct.laue.simulation import precompute_allowed_hkl, E_MAX_eV
 
 
 # ── per-process globals set by the pool initializer ──────────────────────────
@@ -144,7 +144,7 @@ def main() -> None:
     n_grains      = int(meta["n_grains"])
 
     _FIT_KEYS = (
-        "hmax", "f2_thresh", "top_n_sim", "top_n_obs",
+        "E_max_eV", "f2_thresh", "top_n_sim", "top_n_obs",
         "method", "ftol", "xtol", "gtol", "max_nfev",
         "geometry_only", "strain_scale", "source", "source_kwargs",
     )
@@ -158,7 +158,7 @@ def main() -> None:
     if fit_kwargs.get("geometry_only", True):
         allowed_hkl = precompute_allowed_hkl(
             _crystal_tmp,
-            fit_kwargs.get("hmax", 15),
+            E_max_eV=meta.get("E_max_eV", E_MAX_eV),
             f2_thresh=fit_kwargs.get("f2_thresh", 1e-4),
         )
         print(

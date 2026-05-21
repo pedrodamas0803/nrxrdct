@@ -1455,7 +1455,7 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
 
 def precompute_allowed_hkl(
     crystal,
-    hmax: int = HMAX,
+    E_max_eV: float = E_MAX_eV,
     E_ref_eV: float | None = None,
     f2_thresh: float = F2_THRESHOLD,
 ) -> frozenset:
@@ -1463,12 +1463,16 @@ def precompute_allowed_hkl(
     Return the frozenset of (h, k, l) tuples whose structure factor exceeds
     ``f2_thresh`` at a single reference energy.
 
-    Evaluates ``crystal.StructureFactor`` once per (hkl) triple — a one-time
-    cost of ``(2*hmax+1)³`` calls.  The result can then be passed as
-    ``allowed_hkl`` to :func:`simulate_laue` or :func:`simulate_laue_stack`
-    to skip all per-spot structure factor calls during fitting while still
-    respecting systematic absences (the extinction rules encoded in the space
-    group / Wyckoff positions show up as ``|F|² = 0``).
+    Enumerates candidate (h, k, l) reflections using a physically correct
+    sphere criterion: only reflections with |G_hkl| ≤ G_max are considered,
+    where G_max = 4π · E_max_eV / 12398.4 Å⁻¹ (back-reflection limit).
+    This correctly handles anisotropic unit cells (e.g. hexagonal with large
+    c/a) by computing per-axis index limits from the reciprocal lattice
+    parameters.
+
+    The result can then be passed as ``allowed_hkl`` to :func:`simulate_laue`
+    or :func:`simulate_laue_stack` to skip all per-spot structure factor calls
+    during fitting while still respecting systematic absences.
 
     For a :class:`~nrxrdct.laue.layers.LayeredCrystal`, the union of allowed
     sets across all unique constituent crystals is returned.
@@ -1476,10 +1480,12 @@ def precompute_allowed_hkl(
     Parameters
     ----------
     crystal   : Crystal or LayeredCrystal
-    hmax      : int     Must match the ``hmax`` used in the simulation.
-    E_ref_eV  : float   Reference photon energy (eV).  Defaults to the
-                        midpoint of the default energy window
-                        ``(E_MIN_eV + E_MAX_eV) / 2``.
+    E_max_eV  : float   Maximum photon energy (eV) that controls the
+                        enumeration cutoff via G_max = 4π·E_max_eV/12398.4.
+                        Default: ``E_MAX_eV``.
+    E_ref_eV  : float   Reference photon energy (eV) for structure factor
+                        evaluation.  Defaults to the midpoint of the default
+                        energy window ``(E_MIN_eV + E_MAX_eV) / 2``.
     f2_thresh : float   Same threshold used in the simulation.
 
     Returns
@@ -1496,20 +1502,33 @@ def precompute_allowed_hkl(
             if layer.crystal.name not in seen_names:
                 seen_names.add(layer.crystal.name)
                 allowed |= precompute_allowed_hkl(
-                    layer.crystal, hmax, E_ref_eV, f2_thresh
+                    layer.crystal, E_max_eV=E_max_eV, E_ref_eV=E_ref_eV,
+                    f2_thresh=f2_thresh
                 )
         return frozenset(allowed)
 
     if E_ref_eV is None:
         E_ref_eV = (E_MIN_eV + E_MAX_eV) / 2.0
 
+    HC_eV_ANG = 12398.4
+    G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
+    G_max_sq = G_max ** 2
+    a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
+    b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
+    c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+    h_lim = int(G_max / a_star) + 1
+    k_lim = int(G_max / b_star) + 1
+    l_lim = int(G_max / c_star) + 1
+
     allowed = set()
-    for h in range(-hmax, hmax + 1):
-        for k in range(-hmax, hmax + 1):
-            for l in range(-hmax, hmax + 1):
+    for h in range(-h_lim, h_lim + 1):
+        for k in range(-k_lim, k_lim + 1):
+            for l in range(-l_lim, l_lim + 1):
                 if h == 0 and k == 0 and l == 0:
                     continue
                 G_cry = crystal.Q(h, k, l)
+                if np.dot(G_cry, G_cry) > G_max_sq:
+                    continue
                 F2 = abs(crystal.StructureFactor(G_cry, en=E_ref_eV)) ** 2
                 if F2 >= f2_thresh:
                     allowed.add((h, k, l))
@@ -1524,7 +1543,6 @@ def simulate_laue(
     E_max=E_MAX_eV,
     source="bending_magnet",
     source_kwargs=None,
-    hmax=HMAX,
     f2_thresh=F2_THRESHOLD,
     kb_params=BM32_KB,
     sigma_h_mrad=0.0,
@@ -1538,8 +1556,8 @@ def simulate_laue(
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
 
-    For every reciprocal-lattice vector G_hkl within the Miller-index shell
-    ``[-hmax, hmax]^3`` the function:
+    For every reciprocal-lattice vector G_hkl satisfying the sphere criterion
+    |G_hkl| ≤ G_max = 4π·E_max/12398.4 Å⁻¹ the function:
 
     1. Rotates G from the crystal frame into the lab frame via the orientation
        matrix ``U``:  ``G_lab = U @ G_cry``.
@@ -1614,16 +1632,6 @@ def simulate_laue(
         KB mirror reflectivity correction (see :func:`kb_reflectivity`).
         Ignored for ``'shadow4'`` and ``'tabulated'`` sources.
 
-    hmax : int, optional
-        Maximum absolute Miller index to enumerate.  The search space is a
-        cube ``[-hmax, hmax]^3`` (excluding 000).
-        Default: ``HMAX`` (14).  Increase beyond the default for materials
-        with large unit cells along one or more axes (e.g., hexagonal /
-        trigonal crystals with large *c/a*, such as Al₂O₃ with c ≈ 13 Å)
-        or space groups with many systematic absences (e.g., R-3c,
-        P6₃/mmc), where the lowest accessible reflections along the long
-        axis may carry Miller indices well above the default.
-
     f2_thresh : float, optional
         Minimum ``|F|^2`` threshold (arbitrary units, same scale as
         *xrayutilities* output).  Reflections below this value are treated as
@@ -1677,85 +1685,107 @@ def simulate_laue(
 
     _spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
 
+    # Sphere enumeration: only reflections with |G| ≤ G_max can satisfy
+    # the Laue condition within the energy window (back-reflection limit).
+    HC_eV_ANG = 12398.4
+    G_max = 4.0 * np.pi * E_max / HC_eV_ANG
+    G_max_sq = G_max ** 2
+    a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
+    b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
+    c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+    h_lim = int(G_max / a_star) + 1
+    k_lim = int(G_max / b_star) + 1
+    l_lim = int(G_max / c_star) + 1
+
     spots = []
-    for h in range(-hmax, hmax + 1):
-        for k in range(-hmax, hmax + 1):
-            for l in range(-hmax, hmax + 1):
-                if h == 0 and k == 0 and l == 0:
-                    continue
 
-                G_cry = crystal.Q(h, k, l)
-                G_lab = U @ G_cry
-                Gm2 = float(np.dot(G_lab, G_lab))
-                kdG = float(np.dot(ki_hat, G_lab))
+    if allowed_hkl is not None:
+        _iter = allowed_hkl
+    else:
+        _iter = None
 
-                if kdG >= 0:
-                    continue
+    def _process_hkl(h, k, l):
+        G_cry = crystal.Q(h, k, l)
+        G_lab = U @ G_cry
+        Gm2 = float(np.dot(G_lab, G_lab))
+        kdG = float(np.dot(ki_hat, G_lab))
 
-                # Laue wavelength: lambda = -4*pi*(k_hat.G) / |G|^2
-                lam = -4.0 * np.pi * kdG / Gm2  # Angstrom
-                if not (lam_lo <= lam <= lam_hi):
-                    continue
+        if kdG >= 0:
+            return
 
-                E = lam2en(lam)
+        # Laue wavelength: lambda = -4*pi*(k_hat.G) / |G|^2
+        lam = -4.0 * np.pi * kdG / Gm2  # Angstrom
+        if not (lam_lo <= lam <= lam_hi):
+            return
 
-                # Scattered beam direction
-                km = 2.0 * np.pi / lam
-                kf_vec = ki_hat * km + G_lab
-                kf_hat = kf_vec / np.linalg.norm(kf_vec)
+        E = lam2en(lam)
 
-                # Project onto camera
-                pix = camera.project(kf_hat)
-                if pix is None:
-                    continue
+        # Scattered beam direction
+        km = 2.0 * np.pi / lam
+        kf_vec = ki_hat * km + G_lab
+        kf_hat = kf_vec / np.linalg.norm(kf_vec)
 
-                # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
-                # 2theta = arccos(kf_x)   [kf_x = component along beam]
-                cos2th = np.clip(kf_hat[0], -1.0, 1.0)
-                tth = np.degrees(np.arccos(cos2th))
-                # chi: LaueTools convention  chi = arctan2(kf_y, kf_z)
-                # y = z^x (horizontal), z up (close to detector normal)
-                chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-                az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+        # Project onto camera
+        pix = camera.project(kf_hat)
+        if pix is None:
+            return
 
-                LP = lorentz_pol(tth)
-                if LP == 0.0:
-                    continue
+        # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
+        cos2th = np.clip(kf_hat[0], -1.0, 1.0)
+        tth = np.degrees(np.arccos(cos2th))
+        chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+        az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
 
-                sw = _spectrum(E)
-                if sw <= 0.0:
-                    continue
+        LP = lorentz_pol(tth)
+        if LP == 0.0:
+            return
 
-                if allowed_hkl is not None:
-                    if (h, k, l) not in allowed_hkl:
+        sw = _spectrum(E)
+        if sw <= 0.0:
+            return
+
+        if allowed_hkl is not None:
+            F2 = 1.0
+        elif geometry_only:
+            F2 = 1.0
+        else:
+            # Structure factor (energy-dependent)
+            F = crystal.StructureFactor(G_cry, en=E)
+            F2 = abs(F) ** 2
+            if F2 < f2_thresh:
+                return
+
+        spots.append(
+            {
+                "hkl": (h, k, l),
+                "satellite_order": 0,
+                "is_superlattice": False,
+                "E": E,
+                "lambda": lam,
+                "tth": tth,
+                "chi": chi,
+                "az": az,
+                "pix": pix,
+                "F2": F2,
+                "LP": LP,
+                "sw": sw,
+                "I_raw": F2 * LP * sw,
+            }
+        )
+
+    if _iter is not None:
+        for h, k, l in _iter:
+            _process_hkl(h, k, l)
+    else:
+        for h in range(-h_lim, h_lim + 1):
+            for k in range(-k_lim, k_lim + 1):
+                for l in range(-l_lim, l_lim + 1):
+                    if h == 0 and k == 0 and l == 0:
                         continue
-                    F2 = 1.0
-                elif geometry_only:
-                    F2 = 1.0
-                else:
-                    # Structure factor (energy-dependent)
-                    F = crystal.StructureFactor(G_cry, en=E)
-                    F2 = abs(F) ** 2
-                    if F2 < f2_thresh:
+                    G_cry_test = crystal.Q(h, k, l)
+                    if np.dot(G_cry_test, G_cry_test) > G_max_sq:
                         continue
-
-                spots.append(
-                    {
-                        "hkl": (h, k, l),
-                        "satellite_order": 0,
-                        "is_superlattice": False,
-                        "E": E,
-                        "lambda": lam,
-                        "tth": tth,
-                        "chi": chi,
-                        "az": az,
-                        "pix": pix,
-                        "F2": F2,
-                        "LP": LP,
-                        "sw": sw,
-                        "I_raw": F2 * LP * sw,
-                    }
-                )
+                    _process_hkl(h, k, l)
 
     if spots:
         imax = max(s["I_raw"] for s in spots)
@@ -1779,7 +1809,6 @@ def simulate_laue_stack(
     E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
-    hmax=HMAX,
     f2_thresh=F2_THRESHOLD,
     ki_hat=None,
     max_satellites=5,
@@ -1797,11 +1826,12 @@ def simulate_laue_stack(
     """
     Compute Laue spots for a ``LayeredCrystal`` stack projected onto ``camera``.
 
-    For each phase in the stack the reciprocal lattice is enumerated up to
-    ``hmax``.  Every G_lab that satisfies the Laue condition within the energy
-    window is kept, and the structure factor is evaluated on the **full stack**
-    at that Q.  This ensures coherent superposition of all layers and natural
-    emergence of superlattice satellites.
+    For each phase in the stack the reciprocal lattice is enumerated using the
+    sphere criterion |G_hkl| ≤ G_max = 4π·E_max_eV/12398.4 Å⁻¹.  Every
+    G_lab that satisfies the Laue condition within the energy window is kept,
+    and the structure factor is evaluated on the **full stack** at that Q.
+    This ensures coherent superposition of all layers and natural emergence of
+    superlattice satellites.
 
     Parameters
     ----------
@@ -1847,12 +1877,6 @@ def simulate_laue_stack(
 
         Keys: ``material``, ``grazing_angle_mrad``, ``n_mirrors``,
         ``roughness_ang``.
-    hmax : int
-        Maximum Miller index to enumerate for each phase.  Increase
-        beyond the default for materials with large unit cells or space
-        groups with many systematic absences (e.g., R-3c, hexagonal
-        crystals with large c/a), where relevant reflections can appear
-        at high Miller indices.
     f2_thresh : float
         Minimum |F_stack|²  to retain a spot (absolute, in e.u.²).
         Because the stack coherently sums many unit cells the absolute
@@ -2108,21 +2132,34 @@ def simulate_laue_stack(
         # Satellites are only meaningful around film (repeating-unit) G vectors.
         layer_has_satellites = id(layer) not in _buffer_set and bool(fringe_q_vecs)
 
+        # Sphere enumeration limits for this layer's crystal
+        HC_eV_ANG = 12398.4
+        G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
+        G_max_sq = G_max ** 2
+        a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
+        b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
+        c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+        h_lim = int(G_max / a_star) + 1
+        k_lim = int(G_max / b_star) + 1
+        l_lim = int(G_max / c_star) + 1
+
         if verbose:
             n_sat_orders = len(sat_orders) if layer_has_satellites else 0
             sat_info = f", ±{max_satellites} satellite orders" if n_sat_orders else ""
             print(
-                f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True
+                f"  Enumerating {label} (G_max={G_max:.2f} Å⁻¹{sat_info}) ...", end="", flush=True
             )
 
         n_added = 0
-        for h in range(-hmax, hmax + 1):
-            for k in range(-hmax, hmax + 1):
-                for l in range(-hmax, hmax + 1):
+        for h in range(-h_lim, h_lim + 1):
+            for k in range(-k_lim, k_lim + 1):
+                for l in range(-l_lim, l_lim + 1):
                     if h == 0 and k == 0 and l == 0:
                         continue
 
                     G_cry = crystal.Q(h, k, l)
+                    if np.dot(G_cry, G_cry) > G_max_sq:
+                        continue
                     G_lab = U @ G_cry
 
                     # ── Main Bragg peak (satellite order 0) ───────────────
@@ -2217,7 +2254,6 @@ def simulate_laue_darwin(
     E_max_eV: float = E_MAX_eV,
     source: str = "bending_magnet",
     source_kwargs: dict | None = None,
-    hmax: int = HMAX,
     f2_thresh: float = F2_THRESHOLD,
     ki_hat=None,
     kb_params=BM32_KB,
@@ -2283,7 +2319,6 @@ def simulate_laue_darwin(
         full list (``'bending_magnet'``, ``'wiggler'``, ``'undulator'``,
         ``'flat'``, ``'shadow4'``, ``'tabulated'``).
     source_kwargs : dict, optional
-    hmax : int
     f2_thresh : float
         Minimum Darwin-corrected |F_total|² to keep a spot.
     ki_hat : array-like (3,) or None
@@ -2541,18 +2576,33 @@ def simulate_laue_darwin(
 
         layer_has_satellites = id(enum_layer) not in _buffer_set and bool(fringe_q_vecs)
         sat_info = f", ±{max_satellites} satellite orders" if layer_has_satellites else ""
+
+        # Sphere enumeration limits for this layer's crystal
+        HC_eV_ANG = 12398.4
+        G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
+        G_max_sq = G_max ** 2
+        a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
+        b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
+        c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+        h_lim = int(G_max / a_star) + 1
+        k_lim = int(G_max / b_star) + 1
+        l_lim = int(G_max / c_star) + 1
+
         if verbose:
-            print(f"  Enumerating {label} (hmax={hmax}{sat_info}) ...", end="", flush=True)
+            print(f"  Enumerating {label} (G_max={G_max:.2f} Å⁻¹{sat_info}) ...", end="", flush=True)
 
         n_added = 0
 
-        for h in range(-hmax, hmax + 1):
-            for k in range(-hmax, hmax + 1):
-                for l in range(-hmax, hmax + 1):
+        for h in range(-h_lim, h_lim + 1):
+            for k in range(-k_lim, k_lim + 1):
+                for l in range(-l_lim, l_lim + 1):
                     if h == 0 and k == 0 and l == 0:
                         continue
 
-                    G_lab = U @ crystal.Q(h, k, l)
+                    G_cry = crystal.Q(h, k, l)
+                    if np.dot(G_cry, G_cry) > G_max_sq:
+                        continue
+                    G_lab = U @ G_cry
 
                     # Main Bragg peak
                     n_added += _try_darwin(G_lab, (h, k, l), 0, label)
@@ -2600,7 +2650,6 @@ def simulate_mixed_phases(
     E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
-    hmax=HMAX,
     f2_thresh=None,
     normalise="volume",
     kb_params=BM32_KB,
@@ -2657,7 +2706,6 @@ def simulate_mixed_phases(
               'U'               : np.ndarray (3×3) orientation matrix,
               'volume_fraction' : float,          # must sum to 1 (normalised)
               'label'           : str,            # optional, default crystal.name
-              'hmax'            : int,            # optional, overrides global hmax
               'f2_thresh'       : float | None,   # optional, overrides global
             }
 
@@ -2693,9 +2741,6 @@ def simulate_mixed_phases(
         per-phase simulation call.  Defaults to :data:`BM32_KB`.
         Pass ``None`` to disable, and **must** be ``None`` for
         ``'shadow4'`` and ``'tabulated'`` sources.
-
-    hmax : int
-        Maximum Miller index (global default, overridable per phase).
 
     f2_thresh : float | None
         Minimum |F|² threshold (global default, overridable per phase).
@@ -2849,7 +2894,6 @@ def simulate_mixed_phases(
         U = np.asarray(p["U"], dtype=float)
         f = float(p["volume_fraction"])
         label = p["label"]
-        ph_hmax = int(p.get("hmax", hmax))
         ph_f2 = p.get("f2_thresh", f2_thresh)
 
         vuc = eff_vuc(crystal)
@@ -2885,7 +2929,6 @@ def simulate_mixed_phases(
                 E_max_eV=E_max_eV,
                 source=source,
                 source_kwargs=source_kwargs,
-                hmax=ph_hmax,
                 f2_thresh=ph_f2,
                 kb_params=kb_params,
                 structure_model=structure_model,
@@ -2902,7 +2945,6 @@ def simulate_mixed_phases(
                 E_max=E_max_eV,
                 source=source,
                 source_kwargs=source_kwargs,
-                hmax=ph_hmax,
                 f2_thresh=(ph_f2 if ph_f2 is not None else F2_THRESHOLD),
                 kb_params=kb_params,
                 geometry_only=geometry_only,

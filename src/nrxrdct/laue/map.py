@@ -2694,7 +2694,6 @@ class GrainMap:
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
         E_max_eV: float = 27000.0,
-        hmax: int = 6,
         max_match_px: float = 10.0,
         top_n_sim: "int | None" = None,
         r_squared_min: float = 0.0,
@@ -2748,11 +2747,8 @@ class GrainMap:
             Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
         E_min_eV, E_max_eV : float
             Energy range for spot simulation.  Defaults ``5000`` / ``27000`` eV.
-        hmax : int
-            Maximum Miller index for the simulation.  Default ``6``.
-            Increase to 15–20 for materials with large unit cells or
-            space groups with many systematic absences (e.g., R-3c,
-            hexagonal / trigonal with large c/a ratio).
+            The allowed-HKL sphere cutoff is derived automatically from
+            ``E_max_eV``.
         max_match_px : float
             Match radius in pixels for drawing connection lines.
             Default ``10``.
@@ -2939,7 +2935,6 @@ class GrainMap:
                     spots  = simulate_laue(
                         crystal, U, camera,
                         E_min=E_min_eV, E_max=E_max_eV,
-                        hmax=hmax,
                     )
                     on_det = [s for s in spots if s.get("pix") is not None]
                     if top_n_sim is not None:
@@ -3061,7 +3056,6 @@ class GrainMap:
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
         E_max_eV: float = 27000.0,
-        hmax: int = 8,
         angle_tol_deg: float = 0.5,
         min_match_rate: float = 0.25,
         n_obs_use: int = 20,
@@ -3113,11 +3107,8 @@ class GrainMap:
         motor_units : dict or None
             Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
         E_min_eV, E_max_eV : float
-            Energy range for spot simulation after indexing.
-        hmax : int
-            Maximum Miller index for the angle lookup table.  Default ``8``.
-            Increase to 15–20 for materials with large unit cells or space
-            groups with many systematic absences (e.g., R-3c).
+            Energy range for spot simulation.  The allowed-HKL sphere
+            cutoff is derived automatically from ``E_max_eV``.
         angle_tol_deg : float
             Angular tolerance for table lookup and final scoring.  Default ``0.5``.
         min_match_rate : float
@@ -3272,7 +3263,7 @@ class GrainMap:
             try:
                 spots  = _sim_laue(
                     crystal, U, camera,
-                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                    E_min=E_min_eV, E_max=E_max_eV,
                 )
                 on_det = [s for s in spots if s.get("pix") is not None]
                 sim_xy = (
@@ -3466,7 +3457,6 @@ class GrainMap:
                 try:
                     res = _index(
                         crystal, camera, _state["obs_xy"],
-                        hmax=hmax,
                         angle_tol_deg=angle_tol_deg,
                         min_match_rate=min_match_rate,
                         n_obs_use=n_obs_use,
@@ -3528,7 +3518,6 @@ class GrainMap:
                     res = _fit_ori(
                         crystal, camera, obs_xy, U0,
                         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-                        hmax=hmax,
                         max_match_px=fit_max_match_px,
                         verbose=True,
                     )
@@ -3634,7 +3623,6 @@ class GrainMap:
                     res = _fit_strain(
                         crystal, camera, obs_xy, U0,
                         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-                        hmax=hmax,
                         max_match_px=fit_max_match_px,
                         verbose=True,
                     )
@@ -3700,7 +3688,6 @@ class GrainMap:
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
         E_max_eV: float = 27000.0,
-        hmax: int = 10,
         fit_max_match_px: "float | list[float]" = [30.0, 10.0, 3.0],
         r_squared_min: float = 0.0,
         include_unfitted: bool = True,
@@ -3759,12 +3746,8 @@ class GrainMap:
         motor_units : dict or None
             Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
         E_min_eV, E_max_eV : float
-            Energy range for spot simulation.
-        hmax : int
-            Maximum Miller index.  Default ``10``.  Increase to 15–20
-            for materials with large unit cells or space groups with
-            many systematic absences (e.g., R-3c, hexagonal with large
-            c/a ratio).
+            Energy range for spot simulation.  The allowed-HKL sphere
+            cutoff is derived automatically from ``E_max_eV``.
         fit_max_match_px : float or list of float
             Match-radius schedule for *Refine all*.  Default ``[30, 10, 3]``.
         r_squared_min : float
@@ -3926,7 +3909,7 @@ class GrainMap:
             try:
                 spots = _sim_laue(
                     crystal, U, camera,
-                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                    E_min=E_min_eV, E_max=E_max_eV,
                 )
                 _state["sim_spots"] = [s for s in spots if s.get("pix") is not None]
             except Exception as exc:
@@ -4382,7 +4365,7 @@ class GrainMap:
             def _run():
                 return _fit_ori(
                     crystal, camera, manual_obs, U0,
-                    E_min_eV=E_min_eV, E_max_eV=E_max_eV, hmax=hmax,
+                    E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                     max_match_px=3000.0,
                     allowed_hkl=manual_hkl,
                     verbose=True,
@@ -4416,7 +4399,7 @@ class GrainMap:
             def _run():
                 return _fit_ori(
                     crystal, camera, obs_xy, U0,
-                    E_min_eV=E_min_eV, E_max_eV=E_max_eV, hmax=hmax,
+                    E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                     max_match_px=fit_max_match_px,
                     verbose=True,
                 )
@@ -4501,7 +4484,6 @@ class GrainMap:
             def _run():
                 return _index(
                     crystal, camera, obs_xy,
-                    hmax=hmax,
                     angle_tol_deg=angle_tol_deg,
                     min_match_rate=min_match_rate,
                     n_obs_use=n_obs_use,
@@ -4534,7 +4516,7 @@ class GrainMap:
             try:
                 spots = _sim_laue(
                     crystal, stored.U, camera,
-                    E_min=E_min_eV, E_max=E_max_eV, hmax=hmax,
+                    E_min=E_min_eV, E_max=E_max_eV,
                 )
                 sim_xy_stored = np.array(
                     [s["pix"] for s in spots if s.get("pix") is not None]
@@ -5878,7 +5860,7 @@ class GrainMap:
         max_rms_px: float | None = None,
         r_squared_min: "float | None" = None,
         include_unfitted: "bool | None" = None,
-        hmax: int | None = None,
+        E_max_eV: float | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
         top_n_obs: int | None = None,
@@ -5972,11 +5954,10 @@ class GrainMap:
             Whether to include spots whose Gaussian fit did not reach
             *r_squared_min* (stored as raw centroid positions).  ``None``
             inherits from ``seg_meta.json``; falls back to ``False``.
-        hmax : int or None
-            Maximum Miller index used when generating the list of allowed
-            reflections.  Higher values include weaker high-angle spots but
-            increase simulation time.  ``None`` uses the
-            :func:`~nrxrdct.laue.fitting.fit_orientation` default (``15``).
+        E_max_eV : float or None
+            High-energy cut-off (eV) for the Laue simulation.  The allowed-HKL
+            sphere is derived automatically from this value.  ``None`` uses the
+            fitting default (27 000 eV).
         f2_thresh : float or None
             Minimum squared structure factor |F|² for a reflection to be
             included.  ``None`` uses the default (``1e-4``).
@@ -6057,7 +6038,7 @@ class GrainMap:
             "gtol":           gtol,
         }
         for key, val in [
-            ("hmax", hmax), ("f2_thresh", f2_thresh),
+            ("E_max_eV", E_max_eV), ("f2_thresh", f2_thresh),
             ("top_n_sim", top_n_sim), ("top_n_obs", top_n_obs),
             ("max_nfev", max_nfev), ("source", source),
             ("source_kwargs", source_kwargs),
@@ -6094,7 +6075,7 @@ class GrainMap:
         fit_strain: list | None = None,
         r_squared_min: "float | None" = None,
         include_unfitted: "bool | None" = None,
-        hmax: int | None = None,
+        E_max_eV: float | None = None,
         f2_thresh: float | None = None,
         top_n_sim: int | None = None,
         top_n_obs: int | None = None,
@@ -6173,9 +6154,10 @@ class GrainMap:
             Whether to include spots stored as raw centroids (Gaussian fit
             failed).  ``None`` inherits from ``seg_meta.json``; falls back
             to ``False``.
-        hmax : int or None
-            Maximum Miller index for generating allowed reflections.
-            ``None`` uses the fitting default (``15``).
+        E_max_eV : float or None
+            High-energy cut-off (eV).  The allowed-HKL sphere is derived
+            automatically from this value.  ``None`` uses the fitting
+            default (27 000 eV).
         f2_thresh : float or None
             Minimum |F|² for reflection inclusion.  ``None`` uses the default
             (``1e-4``).
@@ -6256,7 +6238,7 @@ class GrainMap:
             "gtol":       gtol,
         }
         for key, val in [
-            ("hmax", hmax), ("f2_thresh", f2_thresh),
+            ("E_max_eV", E_max_eV), ("f2_thresh", f2_thresh),
             ("top_n_sim", top_n_sim), ("top_n_obs", top_n_obs),
             ("max_nfev", max_nfev), ("strain_scale", strain_scale),
             ("source", source), ("source_kwargs", source_kwargs),

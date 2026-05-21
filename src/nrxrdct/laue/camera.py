@@ -43,7 +43,7 @@ class CalibrationResult:
         max_match_px: float = 20.0,
         space: str = "detector",
         E_min_eV: float = 5_000.0,
-        E_max_eV: float = 25_000.0,
+        E_max_eV: float = 27_000.0,
         source: str = "bending_magnet",
         source_kwargs: dict | None = None,
         hmax: int = 15,
@@ -833,7 +833,7 @@ class Camera:
         fit_params=("dd", "xcen", "ycen", "xbet", "xgam"),
         fit_U=False,
         E_min=5_000.0,
-        E_max=25_000.0,
+        E_max=27_000.0,
         source="bending_magnet",
         source_kwargs=None,
         hmax=15,
@@ -880,7 +880,10 @@ class Camera:
         source_kwargs : dict or None
             Extra kwargs for the spectrum function.
         hmax : int
-            Maximum Miller index for HKL precomputation.
+            Maximum Miller index for HKL precomputation.  Increase to
+            15–20 for materials with large unit cells or space groups
+            with many systematic absences (e.g., R-3c, hexagonal with
+            large c/a ratio).
         f2_thresh : float
             Structure-factor threshold for HKL precomputation.
         max_match_px : float
@@ -1128,7 +1131,7 @@ class Camera:
         phaseC_options=None,
         # ── shared ───────────────────────────────────────────────────────────
         E_min=5_000.0,
-        E_max=25_000.0,
+        E_max=27_000.0,
         source="bending_magnet",
         source_kwargs=None,
         hmax=15,

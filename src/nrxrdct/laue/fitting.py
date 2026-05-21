@@ -829,7 +829,10 @@ def index_orientation(
     hmax : int
         Maximum Miller index for the angle lookup table.  Keep small (≤ 10)
         to limit the number of pairs; the default of 8 works well for
-        cubic / hexagonal crystals.
+        cubic crystals.  Increase to 15–20 for materials with large unit
+        cells (e.g., Al₂O₃ c ≈ 13 Å) or space groups with many systematic
+        absences (e.g., R-3c), where the lowest accessible reflections may
+        carry high Miller indices.
     f2_thresh : float
         Minimum |F|² threshold for allowed reflections.
     n_hkl_max : int
@@ -1066,7 +1069,10 @@ def laue_residuals(
     source_kwargs: dict or None   Extra keyword arguments forwarded to the
                                   spectral function (e.g. ``{'B': 0.4}`` for
                                   a bending magnet field).
-    hmax         : int            Maximum Miller index searched.
+    hmax         : int            Maximum Miller index searched.  Increase
+                                  to 15–20 for large unit cells or space
+                                  groups with many systematic absences
+                                  (e.g., R-3c, hexagonal with large c/a).
     f2_thresh    : float          Minimum squared structure factor |F|² to
                                   include a reflection.
     kb_params    : KB params      KB mirror reflectivity parameters
@@ -1160,7 +1166,10 @@ def laue_stack_residuals(
     source       : str              Spectral model (``'bending_magnet'`` or
                                     ``'undulator'``).
     source_kwargs: dict or None     Extra kwargs for the spectral function.
-    hmax         : int              Maximum Miller index.
+    hmax         : int              Maximum Miller index.  Increase to
+                                    15–20 for large unit cells or space
+                                    groups with many systematic absences
+                                    (e.g., R-3c, hexagonal with large c/a).
     f2_thresh    : float            Minimum |F|² threshold.
     kb_params    :                  KB mirror reflectivity parameters.
     structure_model : str           How to combine layer contributions —

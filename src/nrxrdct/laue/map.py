@@ -2693,7 +2693,7 @@ class GrainMap:
         motor_y: "str | None" = None,
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
-        E_max_eV: float = 23000.0,
+        E_max_eV: float = 27000.0,
         hmax: int = 6,
         max_match_px: float = 10.0,
         top_n_sim: "int | None" = None,
@@ -2747,9 +2747,12 @@ class GrainMap:
         motor_units : dict or None
             Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
         E_min_eV, E_max_eV : float
-            Energy range for spot simulation.  Defaults ``5000`` / ``23000`` eV.
+            Energy range for spot simulation.  Defaults ``5000`` / ``27000`` eV.
         hmax : int
             Maximum Miller index for the simulation.  Default ``6``.
+            Increase to 15–20 for materials with large unit cells or
+            space groups with many systematic absences (e.g., R-3c,
+            hexagonal / trigonal with large c/a ratio).
         max_match_px : float
             Match radius in pixels for drawing connection lines.
             Default ``10``.
@@ -3057,7 +3060,7 @@ class GrainMap:
         motor_y: "str | None" = None,
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
-        E_max_eV: float = 23000.0,
+        E_max_eV: float = 27000.0,
         hmax: int = 8,
         angle_tol_deg: float = 0.5,
         min_match_rate: float = 0.25,
@@ -3113,6 +3116,8 @@ class GrainMap:
             Energy range for spot simulation after indexing.
         hmax : int
             Maximum Miller index for the angle lookup table.  Default ``8``.
+            Increase to 15–20 for materials with large unit cells or space
+            groups with many systematic absences (e.g., R-3c).
         angle_tol_deg : float
             Angular tolerance for table lookup and final scoring.  Default ``0.5``.
         min_match_rate : float
@@ -3694,7 +3699,7 @@ class GrainMap:
         motor_y: "str | None" = None,
         motor_units: "dict | None" = None,
         E_min_eV: float = 5000.0,
-        E_max_eV: float = 23000.0,
+        E_max_eV: float = 27000.0,
         hmax: int = 10,
         fit_max_match_px: "float | list[float]" = [30.0, 10.0, 3.0],
         r_squared_min: float = 0.0,
@@ -3756,7 +3761,10 @@ class GrainMap:
         E_min_eV, E_max_eV : float
             Energy range for spot simulation.
         hmax : int
-            Maximum Miller index.  Default ``10``.
+            Maximum Miller index.  Default ``10``.  Increase to 15–20
+            for materials with large unit cells or space groups with
+            many systematic absences (e.g., R-3c, hexagonal with large
+            c/a ratio).
         fit_max_match_px : float or list of float
             Match-radius schedule for *Refine all*.  Default ``[30, 10, 3]``.
         r_squared_min : float

@@ -1617,7 +1617,12 @@ def simulate_laue(
     hmax : int, optional
         Maximum absolute Miller index to enumerate.  The search space is a
         cube ``[-hmax, hmax]^3`` (excluding 000).
-        Default: ``HMAX`` (14).
+        Default: ``HMAX`` (14).  Increase beyond the default for materials
+        with large unit cells along one or more axes (e.g., hexagonal /
+        trigonal crystals with large *c/a*, such as Al₂O₃ with c ≈ 13 Å)
+        or space groups with many systematic absences (e.g., R-3c,
+        P6₃/mmc), where the lowest accessible reflections along the long
+        axis may carry Miller indices well above the default.
 
     f2_thresh : float, optional
         Minimum ``|F|^2`` threshold (arbitrary units, same scale as
@@ -1843,7 +1848,11 @@ def simulate_laue_stack(
         Keys: ``material``, ``grazing_angle_mrad``, ``n_mirrors``,
         ``roughness_ang``.
     hmax : int
-        Maximum Miller index to enumerate for each phase.
+        Maximum Miller index to enumerate for each phase.  Increase
+        beyond the default for materials with large unit cells or space
+        groups with many systematic absences (e.g., R-3c, hexagonal
+        crystals with large c/a), where relevant reflections can appear
+        at high Miller indices.
     f2_thresh : float
         Minimum |F_stack|²  to retain a spot (absolute, in e.u.²).
         Because the stack coherently sums many unit cells the absolute

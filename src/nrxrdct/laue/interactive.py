@@ -222,6 +222,9 @@ def interactive_orientation(
     U0        : (3, 3) ndarray or None  — starting orientation.
     image     : (Nv, Nh) ndarray or None  — optional background image.
     hmax      : int  — max Miller index (lower = faster, 6 ≈ 20 ms/update).
+                       Increase to 15–20 for materials with large unit cells
+                       (e.g., hexagonal/trigonal with large c/a) or space
+                       groups with many systematic absences (e.g., R-3c).
     max_match_px : float  — pixel radius for match lines.
     top_n_sim : int  — max simulated spots displayed.
     rot_range_deg : float
@@ -1044,6 +1047,8 @@ def interactive_calibration(
         Optional background detector image (log-scaled for display).
     hmax : int
         Max Miller index (lower = faster; 6 ≈ 20 ms per update).
+        Increase to 15–20 for materials with large unit cells or
+        space groups with many systematic absences (e.g., R-3c).
     max_match_px : float
         Pixel radius for match lines and match-rate reporting.
     top_n_sim : int
@@ -1427,6 +1432,13 @@ def interactive_calibration(
     def _on_press(event) -> None:
         if event.inaxes is not ax_det or event.button != 1:
             return
+        # When the matplotlib toolbar zoom/pan tool is active, left-click events
+        # belong to the toolbar — don't treat them as spot drags.
+        try:
+            if fig.canvas.toolbar.mode != "":
+                return
+        except Exception:
+            pass
         idx = _nearest_sim_idx_cal(event.xdata, event.ydata)
         if idx is None:
             return

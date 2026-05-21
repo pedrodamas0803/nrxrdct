@@ -1513,25 +1513,44 @@ def precompute_allowed_hkl(
     HC_eV_ANG = 12398.4
     G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
     G_max_sq = G_max ** 2
-    a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
-    b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
-    c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+
+    # Build the reciprocal-lattice matrix B (columns = a*, b*, c* in Å⁻¹).
+    # Q(h,k,l) = B @ [h,k,l] by linearity, so we can replace (2·h_lim+1)³
+    # individual crystal.Q calls with three calls + one numpy matmul.
+    B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+    a_star = float(np.linalg.norm(B[:, 0]))
+    b_star = float(np.linalg.norm(B[:, 1]))
+    c_star = float(np.linalg.norm(B[:, 2]))
     h_lim = int(G_max / a_star) + 1
     k_lim = int(G_max / b_star) + 1
     l_lim = int(G_max / c_star) + 1
 
+    # Generate the full bounding-box grid and filter to the sphere in one pass.
+    h_vals = np.arange(-h_lim, h_lim + 1, dtype=np.int32)
+    k_vals = np.arange(-k_lim, k_lim + 1, dtype=np.int32)
+    l_vals = np.arange(-l_lim, l_lim + 1, dtype=np.int32)
+    H, K, L = np.meshgrid(h_vals, k_vals, l_vals, indexing="ij")
+    hkl_all = np.column_stack([H.ravel(), K.ravel(), L.ravel()])
+
+    # Remove (0, 0, 0)
+    hkl_all = hkl_all[np.any(hkl_all != 0, axis=1)]
+
+    # Single matmul replaces N individual crystal.Q calls.
+    G_all = (B @ hkl_all.T).T          # (N, 3)
+    G_sq  = np.einsum("ij,ij->i", G_all, G_all)  # (N,) squared norms
+
+    # Sphere filter: only keep |G| ≤ G_max.
+    in_sphere = G_sq <= G_max_sq
+    hkl_sphere = hkl_all[in_sphere]
+    G_sphere   = G_all[in_sphere]
+
+    # Structure-factor check — unavoidably sequential (xrayutilities Python API).
     allowed = set()
-    for h in range(-h_lim, h_lim + 1):
-        for k in range(-k_lim, k_lim + 1):
-            for l in range(-l_lim, l_lim + 1):
-                if h == 0 and k == 0 and l == 0:
-                    continue
-                G_cry = crystal.Q(h, k, l)
-                if np.dot(G_cry, G_cry) > G_max_sq:
-                    continue
-                F2 = abs(crystal.StructureFactor(G_cry, en=E_ref_eV)) ** 2
-                if F2 >= f2_thresh:
-                    allowed.add((h, k, l))
+    for i in range(len(hkl_sphere)):
+        F2 = abs(crystal.StructureFactor(G_sphere[i], en=E_ref_eV)) ** 2
+        if F2 >= f2_thresh:
+            h, k, l = int(hkl_sphere[i, 0]), int(hkl_sphere[i, 1]), int(hkl_sphere[i, 2])
+            allowed.add((h, k, l))
     return frozenset(allowed)
 
 
@@ -1697,15 +1716,22 @@ def simulate_laue(
     k_lim = int(G_max / b_star) + 1
     l_lim = int(G_max / c_star) + 1
 
+    # Build B once: Q(h,k,l) = B @ [h,k,l] avoids repeated crystal.Q calls.
+    _B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+
     spots = []
 
     if allowed_hkl is not None:
-        _iter = allowed_hkl
+        # Precompute all G_cry vectors in one matmul — avoids crystal.Q per HKL.
+        _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)   # (M, 3)
+        _G_cry_arr = (_B @ _hkl_arr.T).T                            # (M, 3)
+        _iter = list(zip(_hkl_arr, _G_cry_arr))
     else:
         _iter = None
 
-    def _process_hkl(h, k, l):
-        G_cry = crystal.Q(h, k, l)
+    def _process_hkl(h, k, l, G_cry=None):
+        if G_cry is None:
+            G_cry = _B @ np.array([h, k, l], dtype=float)
         G_lab = U @ G_cry
         Gm2 = float(np.dot(G_lab, G_lab))
         kdG = float(np.dot(ki_hat, G_lab))
@@ -1774,18 +1800,26 @@ def simulate_laue(
         )
 
     if _iter is not None:
-        for h, k, l in _iter:
-            _process_hkl(h, k, l)
+        for hkl_row, G_cry_row in _iter:
+            _process_hkl(int(hkl_row[0]), int(hkl_row[1]), int(hkl_row[2]), G_cry=G_cry_row)
     else:
-        for h in range(-h_lim, h_lim + 1):
-            for k in range(-k_lim, k_lim + 1):
-                for l in range(-l_lim, l_lim + 1):
-                    if h == 0 and k == 0 and l == 0:
-                        continue
-                    G_cry_test = crystal.Q(h, k, l)
-                    if np.dot(G_cry_test, G_cry_test) > G_max_sq:
-                        continue
-                    _process_hkl(h, k, l)
+        _H2, _K2, _L2 = np.meshgrid(
+            np.arange(-h_lim, h_lim + 1, dtype=np.int32),
+            np.arange(-k_lim, k_lim + 1, dtype=np.int32),
+            np.arange(-l_lim, l_lim + 1, dtype=np.int32),
+            indexing="ij",
+        )
+        _hkl2 = np.column_stack([_H2.ravel(), _K2.ravel(), _L2.ravel()])
+        _hkl2 = _hkl2[np.any(_hkl2 != 0, axis=1)]
+        _G2 = (_B @ _hkl2.T).T
+        _mask2 = np.einsum("ij,ij->i", _G2, _G2) <= G_max_sq
+        _hkl2_f = _hkl2[_mask2]
+        _G2_f   = _G2[_mask2]
+        for _i in range(len(_hkl2_f)):
+            _process_hkl(
+                int(_hkl2_f[_i, 0]), int(_hkl2_f[_i, 1]), int(_hkl2_f[_i, 2]),
+                G_cry=_G2_f[_i],
+            )
 
     if spots:
         imax = max(s["I_raw"] for s in spots)
@@ -2136,9 +2170,10 @@ def simulate_laue_stack(
         HC_eV_ANG = 12398.4
         G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
         G_max_sq = G_max ** 2
-        a_star = float(np.linalg.norm(crystal.Q(1, 0, 0)))
-        b_star = float(np.linalg.norm(crystal.Q(0, 1, 0)))
-        c_star = float(np.linalg.norm(crystal.Q(0, 0, 1)))
+        _B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+        a_star = float(np.linalg.norm(_B[:, 0]))
+        b_star = float(np.linalg.norm(_B[:, 1]))
+        c_star = float(np.linalg.norm(_B[:, 2]))
         h_lim = int(G_max / a_star) + 1
         k_lim = int(G_max / b_star) + 1
         l_lim = int(G_max / c_star) + 1
@@ -2150,30 +2185,37 @@ def simulate_laue_stack(
                 f"  Enumerating {label} (G_max={G_max:.2f} Å⁻¹{sat_info}) ...", end="", flush=True
             )
 
+        # Build full bounding-box grid, filter to sphere, rotate to lab — all vectorised.
+        _HS, _KS, _LS = np.meshgrid(
+            np.arange(-h_lim, h_lim + 1, dtype=np.int32),
+            np.arange(-k_lim, k_lim + 1, dtype=np.int32),
+            np.arange(-l_lim, l_lim + 1, dtype=np.int32),
+            indexing="ij",
+        )
+        _hkl_s = np.column_stack([_HS.ravel(), _KS.ravel(), _LS.ravel()])
+        _hkl_s = _hkl_s[np.any(_hkl_s != 0, axis=1)]
+        _G_cry_s = (_B @ _hkl_s.T).T
+        _mask_s = np.einsum("ij,ij->i", _G_cry_s, _G_cry_s) <= G_max_sq
+        _hkl_s = _hkl_s[_mask_s]
+        _G_lab_s = (U @ (_B @ _hkl_s.T)).T  # (M, 3)
+
         n_added = 0
-        for h in range(-h_lim, h_lim + 1):
-            for k in range(-k_lim, k_lim + 1):
-                for l in range(-l_lim, l_lim + 1):
-                    if h == 0 and k == 0 and l == 0:
-                        continue
+        for _si in range(len(_hkl_s)):
+            h, k, l = int(_hkl_s[_si, 0]), int(_hkl_s[_si, 1]), int(_hkl_s[_si, 2])
+            G_lab = _G_lab_s[_si]
 
-                    G_cry = crystal.Q(h, k, l)
-                    if np.dot(G_cry, G_cry) > G_max_sq:
-                        continue
-                    G_lab = U @ G_cry
+            # ── Main Bragg peak (satellite order 0) ───────────────
+            n_added += _try_append(G_lab, (h, k, l), 0, label)
 
-                    # ── Main Bragg peak (satellite order 0) ───────────────
-                    n_added += _try_append(G_lab, (h, k, l), 0, label)
-
-                    # ── Thickness fringes / satellites ───────────────────
-                    # Only evaluated for repeating-unit (MQW) layers.
-                    # Buffer / substrate layers give Bragg peaks only.
-                    if layer_has_satellites:
-                        for q_fringe_vec, _ in fringe_q_vecs:
-                            for m in sat_orders:
-                                frac = m + 0.5 if m > 0 else m - 0.5
-                                G_sat = G_lab + frac * q_fringe_vec
-                                n_added += _try_append(G_sat, (h, k, l), m, label)
+            # ── Thickness fringes / satellites ───────────────────
+            # Only evaluated for repeating-unit (MQW) layers.
+            # Buffer / substrate layers give Bragg peaks only.
+            if layer_has_satellites:
+                for q_fringe_vec, _ in fringe_q_vecs:
+                    for m in sat_orders:
+                        frac = m + 0.5 if m > 0 else m - 0.5
+                        G_sat = G_lab + frac * q_fringe_vec
+                        n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")

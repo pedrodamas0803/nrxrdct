@@ -1087,7 +1087,7 @@ def clean_segmentation(
     valid_props : list of RegionProperties
     """
     seg = ndi.binary_fill_holes(segmented_image)
-    seg = sk.morphology.remove_small_objects(seg, min_size=min_size)
+    seg = sk.morphology.remove_small_objects(seg, max_size=min_size - 1)
     seg = sk.morphology.closing(seg, sk.morphology.disk(1))
     seg = sk.segmentation.clear_border(seg)
 

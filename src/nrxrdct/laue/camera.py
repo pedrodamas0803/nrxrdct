@@ -921,9 +921,11 @@ class Camera:
             Extra kwargs for the spectrum function.
         f2_thresh : float
             Structure-factor threshold for HKL precomputation.
-        max_match_px : float
+        max_match_px : float or list of float
             Cap distance (pixels) used in the cost function and for
-            reporting the final match rate.
+            reporting the final match rate.  Pass a list to run staged
+            refinement: the optimizer restarts from the previous result
+            at each successively tighter cap, e.g. ``[30, 10, 3]``.
         top_n_sim : int or None
             Restrict cost evaluation to the brightest *N* simulated spots.
         bounds : dict or None
@@ -972,6 +974,12 @@ class Camera:
                 raise ValueError(f"Unknown fit_param {p!r}; must be one of {_valid}")
         fit_params = list(fit_params)
 
+        if isinstance(max_match_px, (int, float)):
+            _stages = [float(max_match_px)]
+        else:
+            _stages = [float(v) for v in max_match_px]
+        _cur_mmp = _stages[0]
+
         E_ref = 0.5 * (E_min + E_max)
         allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=E_max, E_ref_eV=E_ref, f2_thresh=f2_thresh)
 
@@ -1016,13 +1024,13 @@ class Camera:
                     allowed_hkl=allowed_hkl,
                 )
             except Exception:
-                return float(max_match_px ** 2)
+                return float(_cur_mmp ** 2)
 
             sim_xy = np.array(
                 [s["pix"] for s in spots if s.get("pix") is not None]
             )
             if len(sim_xy) == 0:
-                return float(max_match_px ** 2)
+                return float(_cur_mmp ** 2)
 
             if top_n_sim is not None and len(sim_xy) > top_n_sim:
                 I_vals = np.array(
@@ -1033,7 +1041,7 @@ class Camera:
 
             tree = cKDTree(sim_xy)
             dists, _ = tree.query(obs_xy, k=1)
-            return float(np.mean(np.minimum(dists, max_match_px) ** 2))
+            return float(np.mean(np.minimum(dists, _cur_mmp) ** 2))
 
         # ── build bounds ─────────────────────────────────────────────────────
         # Start from the explicit bounds dict, then fill missing entries from
@@ -1070,36 +1078,41 @@ class Camera:
         else:
             _method = "Nelder-Mead"
 
-        # ── build options ────────────────────────────────────────────────────
-        if _method == "Nelder-Mead":
-            _steps = {
-                "dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5,
-                "U_rx": 2.0, "U_ry": 2.0, "U_rz": 2.0,
-            }
-            n_p = len(x0)
-            init_simplex = np.tile(x0, (n_p + 1, 1))
-            for i, pname in enumerate(_all_names):
-                step = _steps.get(pname, 1.0)
-                if scipy_bounds:
-                    lo, hi = scipy_bounds[i]
-                    step = min(step, (hi - lo) * 0.25)
-                init_simplex[i + 1, i] += step
-            _opts: dict = {
-                "maxiter": 5000, "xatol": 0.05, "fatol": 1e-4,
-                "initial_simplex": init_simplex,
-            }
-        else:
-            _opts = {"maxiter": 5000, "ftol": 1e-6, "gtol": 1e-6}
+        # ── build options (rebuilt each stage so simplex tracks x0) ─────────
+        _steps = {
+            "dd": 2.0, "xcen": 50.0, "ycen": 50.0, "xbet": 0.5, "xgam": 0.5,
+            "U_rx": 2.0, "U_ry": 2.0, "U_rz": 2.0,
+        }
 
-        if options:
-            _opts.update(options)
+        def _build_opts(x0_cur):
+            if _method == "Nelder-Mead":
+                n_p = len(x0_cur)
+                init_simplex = np.tile(x0_cur, (n_p + 1, 1))
+                for i, pname in enumerate(_all_names):
+                    step = _steps.get(pname, 1.0)
+                    if scipy_bounds:
+                        lo, hi = scipy_bounds[i]
+                        step = min(step, (hi - lo) * 0.25)
+                    init_simplex[i + 1, i] += step
+                return {
+                    "maxiter": 5000, "xatol": 0.05, "fatol": 1e-4,
+                    "initial_simplex": init_simplex,
+                }
+            return {"maxiter": 5000, "ftol": 1e-6, "gtol": 1e-6}
 
-        result = minimize(
-            _cost, x0,
-            method=_method,
-            bounds=scipy_bounds,
-            options=_opts,
-        )
+        # ── staged optimisation ───────────────────────────────────────────────
+        result = None
+        for _cur_mmp in _stages:
+            _opts = _build_opts(x0)
+            if options:
+                _opts.update(options)
+            result = minimize(
+                _cost, x0,
+                method=_method,
+                bounds=scipy_bounds,
+                options=_opts,
+            )
+            x0 = result.x
 
         cam_final = _build_cam(result.x)
         U_final = _build_U(result.x)
@@ -1120,7 +1133,7 @@ class Camera:
         if len(sim_xy_f) > 0 and n_obs > 0:
             tree = cKDTree(sim_xy_f)
             dists, _ = tree.query(obs_xy, k=1)
-            ok = dists < max_match_px
+            ok = dists < _stages[-1]
             n_matched = int(ok.sum())
             if n_matched > 0:
                 rms_px = float(np.sqrt((dists[ok] ** 2).mean()))

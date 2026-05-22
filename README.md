@@ -18,6 +18,7 @@
 8. **NMF decomposition** — non-negative matrix factorisation of hyperspectral volumes for phase mapping (`HyperspectralNMF`).
 9. **Utilities** — baseline fitting, powder pattern simulation, circular masking, peak listing from CIF files.
 10. **Visualisation** — napari-based interactive 3-D volume and slice viewers with live Z-profile extraction on pixel click.
+11. **Laue diffraction** — a self-contained sub-package (`nrxrdct.laue`) covering the full micro-Laue analysis pipeline: spot segmentation, orientation fitting, strain mapping, and SLURM-based map processing (see [Laue diffraction](#laue-diffraction) below).
 
 ---
 
@@ -31,10 +32,69 @@
 
 ### With `uv` (recommended)
 
+[`uv`](https://docs.astral.sh/uv/) is a fast Python package and project manager. If you do not have it installed yet:
+
+**Linux / macOS**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell)**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Via pip (any platform)**
+
+```bash
+pip install uv
+```
+
+After installing, restart your terminal so the `uv` command is on your `PATH`, then clone and install the project:
+
 ```bash
 git clone <repo-url>
 cd nrxrdct
 uv sync
+```
+
+`uv sync` creates an isolated virtual environment in `.venv/`, installs all declared dependencies, and installs `nrxrdct` itself in editable mode — no separate `pip install -e .` step is needed.
+
+To activate the environment manually:
+
+```bash
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+```
+
+Alternatively, prefix any command with `uv run` to execute it inside the managed environment without activating it:
+
+```bash
+uv run python my_script.py
+uv run jupyter lab
+```
+
+**Registering a Jupyter kernel (ESRF Jupyter-SLURM)**
+
+On shared Jupyter servers such as the ESRF Jupyter-SLURM portal, you need to register the environment as a named kernel so it appears in the launcher:
+
+```bash
+# Install ipykernel into the uv-managed environment
+uv add ipykernel
+
+# Register the kernel — the --name must be unique on the server
+uv run python -m ipykernel install --user --name nrxrdct --display-name "nrxrdct"
+```
+
+After refreshing the JupyterLab page the kernel **nrxrdct** will appear in the kernel selector. To remove it later:
+
+```bash
+jupyter kernelspec remove nrxrdct
 ```
 
 ### With `pip`
@@ -43,6 +103,13 @@ uv sync
 git clone <repo-url>
 cd nrxrdct
 pip install -e .
+```
+
+**Registering a Jupyter kernel (ESRF Jupyter-SLURM)**
+
+```bash
+pip install ipykernel
+python -m ipykernel install --user --name nrxrdct --display-name "nrxrdct"
 ```
 
 ---
@@ -77,6 +144,8 @@ These are used by specific modules but are not yet declared in `pyproject.toml` 
 | `napari` | `visualization` | Interactive 3-D volume viewer |
 | `pybaselines` | `utils` | XRD baseline fitting |
 | `tqdm` | `integration`, `fluorescence`, `nmf` | Progress bars |
+| `dill` | `laue` | Crystal object serialisation for SLURM workers |
+| `ipywidgets` | `laue` | Interactive orientation / calibration widgets |
 
 ---
 
@@ -96,7 +165,21 @@ src/nrxrdct/
 ├── utils.py             # Baseline fitting, simulation, masking, padding
 ├── plotting.py          # CAKE integration plotting
 ├── visualization.py     # napari-based interactive viewers
-└── io.py                # HDF5 and .xy file I/O, GSAS-II instprm export
+├── io.py                # HDF5 and .xy file I/O, GSAS-II instprm export
+└── laue/
+    ├── __init__.py              # Laue sub-package public API
+    ├── camera.py                # Detector geometry (Camera, CalibrationResult, fit_calibration)
+    ├── crystal.py               # Crystal structure builders (from CIF, BCC, B2)
+    ├── simulation.py            # Laue forward models (simulate_laue, _stack, _darwin)
+    ├── layers.py                # Layered structures, orientation relationships
+    ├── segmentation.py          # Spot segmentation and peak fitting pipeline
+    ├── fitting.py               # Orientation & strain fitting (fit_orientation, fit_strain_orientation)
+    ├── map.py                   # GrainMap — raster micro-Laue map management
+    ├── interactive.py           # Interactive orientation / calibration widgets
+    ├── laue_plotting.py         # Laue-specific plotting helpers
+    ├── slurm_seg_worker.py      # SLURM worker: batch spot segmentation
+    ├── slurm_orient_worker.py   # SLURM worker: batch orientation fitting
+    └── slurm_strain_worker.py   # SLURM worker: batch strain fitting
 ```
 
 ---
@@ -370,6 +453,125 @@ rebuild(
 ## GPU support
 
 `nrxrdct` detects NVIDIA GPUs automatically at import time via `astra.get_gpu_info()`. When a GPU is available, `reconstruct_slice` and `reconstruct_astra_gpu_3d` use CUDA-accelerated algorithms (`SART_CUDA`, `SIRT3D_CUDA`, `CGLS3D_CUDA`); otherwise the code falls back to CPU algorithms transparently.
+
+---
+
+## Laue diffraction
+
+`nrxrdct.laue` is a self-contained sub-package for polychromatic (Laue) diffraction analysis, targeting synchrotron micro-Laue experiments (e.g. BM32 at the ESRF).
+
+### Key capabilities
+
+| Area | What is provided |
+|---|---|
+| **Detector geometry** | `Camera` — pixel ↔ reciprocal-space projection, multi-stage `fit_calibration` with optional staged `max_match_px` refinement |
+| **Crystal structures** | Load from CIF (`crystal_from_cif`), build BCC / B2 analytically, vectorised B-matrix for fast HKL enumeration |
+| **Forward simulation** | `simulate_laue` — single grain, full spectrum; `simulate_laue_stack` — epitaxial layer stacks with thin-film satellites; `simulate_laue_darwin` — dynamical (Darwin) model for thick layers |
+| **Synchrotron spectra** | Bending-magnet and undulator spectral models, KB-mirror reflectivity, Lorentz–polarisation factors |
+| **Spot segmentation** | Laplacian-of-Gaussian (`LoG_segmentation`), white-top-hat (`WTH_segmentation`), and hybrid strategies; 2-D rotated-Gaussian peak fitting; HDF5 spotsfile I/O |
+| **Orientation indexing** | `index_orientation` — exhaustive angular search; `interactive_orientation` — IPyWidgets-based manual indexing |
+| **Orientation fitting** | `fit_orientation`, `fit_orientation_stack`, `fit_orientation_mixed` — multi-stage Nelder-Mead minimisation with vectorised residuals |
+| **Strain fitting** | `fit_strain_orientation` — simultaneous deviatoric strain tensor + orientation refinement |
+| **Layered structures** | `Layer` / `LayeredCrystal` — epitaxial stacks with built-in orientation relationships (K–S, N–W, Pitsch, Baker–Nutting, …) and pseudomorphic d-spacing calculations |
+| **Grain maps** | `GrainMap` — manages raster micro-Laue maps; submits and monitors SLURM jobs for segmentation, orientation, and strain steps |
+| **Batch conversion** | `convert_spotsfiles_to_dat` — parallel (multi-process) conversion of HDF5 spotsfiles to `.dat` peaklist files |
+
+### Quick example — single-grain simulation and fitting
+
+```python
+import numpy as np
+from nrxrdct.laue import (
+    Camera, crystal_from_cif,
+    simulate_laue, precompute_allowed_hkl,
+    fit_orientation,
+)
+
+# 1. Detector geometry
+cam = Camera(dd=70.0, xcen=1081.0, ycen=1034.0,
+             xbet=0.0, xgam=0.0, pixelsize=0.075,
+             n_pix_h=2162, n_pix_v=2068)
+
+# 2. Crystal from CIF
+crystal = crystal_from_cif("Fe.cif")
+allowed = precompute_allowed_hkl(crystal, E_max_eV=30000)
+
+# 3. Forward simulation (geometry-only, vectorised)
+U = np.eye(3)   # orientation matrix
+spots = simulate_laue(crystal, cam, U, allowed_hkl=allowed)
+obs_xy = np.array([[s["pix"][0], s["pix"][1]] for s in spots])
+
+# 4. Orientation fit
+result = fit_orientation(crystal, cam, obs_xy,
+                         max_match_px=[10.0, 3.0],
+                         allowed_hkl=allowed)
+print(f"RMS residual: {result.rms_px[-1]:.2f} px  "
+      f"matched: {result.n_matched[-1]}/{len(obs_xy)}")
+```
+
+### Quick example — layered structure with thin-film satellites
+
+```python
+from nrxrdct.laue import (
+    Layer, LayeredCrystal, crystal_from_cif,
+    or_nishiyama_wassermann, simulate_laue_stack,
+)
+
+fe  = crystal_from_cif("Fe.cif")
+fen = crystal_from_cif("FeN.cif")
+
+substrate = Layer(fe,  thickness_nm=None, label="Fe substrate")
+film      = Layer(fen, thickness_nm=50.0,
+                  orientation_relation=or_nishiyama_wassermann(fe, fen),
+                  label="FeN film")
+
+stack  = LayeredCrystal([substrate, film])
+U_sub  = np.eye(3)
+spots  = simulate_laue_stack(stack, cam, U_sub, allowed_hkl=allowed)
+```
+
+### SLURM micro-Laue map pipeline
+
+```python
+from pathlib import Path
+from nrxrdct.laue import GrainMap
+
+gmap = GrainMap(
+    scan_dir   = Path("/data/scan"),
+    output_dir = Path("/data/results"),
+    crystal    = crystal,
+    camera     = cam,
+    n_grains   = 2,
+)
+
+# 1. Segment all frames
+seg_ids = gmap.submit_segmentation(partition="nice", time="02:00:00",
+                                   n_jobs=8, conda_env="nrxrdct")
+gmap.monitor(seg_ids)
+
+# 2. Fit orientations
+ub_ids = gmap.submit_orientation(partition="nice", time="04:00:00",
+                                  n_jobs=8, conda_env="nrxrdct")
+gmap.monitor(ub_ids)
+
+# 3. Fit strain
+str_ids = gmap.submit_strain(partition="nice", time="06:00:00",
+                              n_jobs=8, fit_strain=["e_xx","e_yy","e_zz"],
+                              conda_env="nrxrdct")
+gmap.monitor(str_ids)
+
+# 4. Collect results
+grain_map_array = gmap.collect_strain_map(grain_index=0)
+```
+
+### Additional runtime dependencies for `nrxrdct.laue`
+
+| Package | Purpose |
+|---|---|
+| `xrayutilities` | Crystal structure and structure-factor calculations |
+| `dill` | Serialisation of crystal objects for SLURM workers |
+| `ipywidgets` | Interactive orientation / calibration widgets |
+| `scipy` | Optimisation (`minimize`), image filters |
+| `scikit-image` | Segmentation morphology helpers |
 
 ---
 

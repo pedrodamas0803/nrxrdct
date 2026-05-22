@@ -4741,16 +4741,22 @@ class GrainMap:
             raw = self.load_n_obs_map(seg_dir)
             return np.where(raw >= 0, raw.astype(float), np.nan)
 
+        def _grain_map(arr):
+            if self.n_grains == 0:
+                return np.full((self.ny, self.nx), np.nan)
+            return arr[map_grain]
+
         _map_opts = {
-            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
-            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
-            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
-            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
-            "n_obs":      (_build_n_obs_data(),         "N spots (seg)", "YlOrRd"),
+            "match_rate": (lambda: _grain_map(self.match_rate), "Match rate",    "viridis"),
+            "rms_px":     (lambda: _grain_map(self.rms_px),     "RMS (px)",      "plasma_r"),
+            "mean_px":    (lambda: _grain_map(self.mean_px),    "Mean dev (px)", "plasma_r"),
+            "cost":       (lambda: _grain_map(self.cost),       "Cost",          "plasma_r"),
+            "n_obs":      (_build_n_obs_data,                   "N spots (seg)", "YlOrRd"),
         }
-        map_data, map_label, map_cmap = _map_opts.get(
-            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+        _data_fn, map_label, map_cmap = _map_opts.get(
+            map_quantity, (_map_opts["match_rate"][0], "Match rate", "viridis")
         )
+        map_data = _data_fn()
 
         # ── figure ────────────────────────────────────────────────────────────
         with plt.ioff():

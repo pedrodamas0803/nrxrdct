@@ -1511,8 +1511,8 @@ def precompute_allowed_hkl(
     if isinstance(crystal, LayeredCrystal):
         _lc_key = (
             tuple(sorted({l.crystal.name for l in crystal.all_layers})),
-            E_max_eV, E_ref_eV, f2_thresh,
-        )
+            E_max_eV, f2_thresh,
+        )  # E_ref_eV no longer used
         if _lc_key in _allowed_hkl_cache:
             return _allowed_hkl_cache[_lc_key]
         allowed: set = set()
@@ -1528,7 +1528,7 @@ def precompute_allowed_hkl(
         _allowed_hkl_cache[_lc_key] = result
         return result
 
-    _key = (crystal.name, E_max_eV, E_ref_eV, f2_thresh)
+    _key = (crystal.name, E_max_eV, f2_thresh)  # E_ref_eV no longer used
     if _key in _allowed_hkl_cache:
         return _allowed_hkl_cache[_key]
 
@@ -1566,10 +1566,13 @@ def precompute_allowed_hkl(
     hkl_sphere = hkl_all[in_sphere]
     G_sphere   = G_all[in_sphere]
 
-    # Structure-factor check — unavoidably sequential (xrayutilities Python API).
+    # Structure-factor check — use en=0 to compute only f0 (Cromer-Mann) and
+    # skip Henke anomalous corrections.  Systematically absent reflections give
+    # F=0 by symmetry at any energy, so the threshold test is correct and
+    # orders of magnitude faster than evaluating at E_ref_eV.
     allowed = set()
     for i in range(len(hkl_sphere)):
-        F2 = abs(crystal.StructureFactor(G_sphere[i], en=E_ref_eV)) ** 2
+        F2 = abs(crystal.StructureFactor(G_sphere[i], en=0)) ** 2
         if F2 >= f2_thresh:
             h, k, l = int(hkl_sphere[i, 0]), int(hkl_sphere[i, 1]), int(hkl_sphere[i, 2])
             allowed.add((h, k, l))

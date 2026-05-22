@@ -507,6 +507,48 @@ class Camera:
             return float(xcam), float(ycam)
         return None
 
+    def project_batch(self, kf_hat_arr):
+        """
+        Vectorised :meth:`project` for N directions at once.
+
+        Parameters
+        ----------
+        kf_hat_arr : ndarray, shape (N, 3)
+            Unit vectors in the LT frame (x // beam).  Need not be
+            pre-normalised — they are normalised internally.
+
+        Returns
+        -------
+        pix : ndarray, shape (N, 2)
+            Pixel coordinates (xcam, ycam).  Rows for rays that miss the
+            detector contain NaN.
+        on_det : ndarray, shape (N,), dtype bool
+        """
+        kf_lt = kf_hat_arr / np.linalg.norm(kf_hat_arr, axis=1, keepdims=True)
+        kf = np.column_stack([-kf_lt[:, 1], kf_lt[:, 0], kf_lt[:, 2]])
+        scal = kf @ self.normal
+        hit = scal > 1e-8
+        safe_scal = np.where(hit, scal, 1.0)
+        normeIM = self.dd / safe_scal
+        IM = kf * normeIM[:, None]
+        OM = IM - self.IOlab[None, :]
+        xca0 = OM[:, 0]
+        yca0 = (
+            OM[:, 1] / self._sinbeta
+            if abs(self._sinbeta) > 1e-8
+            else -OM[:, 2] / self._cosbeta
+        )
+        xcam1 = self._cosgam * xca0 + self._singam * yca0
+        ycam1 = -self._singam * xca0 + self._cosgam * yca0
+        xcam = self.xcen + xcam1 / self.pixel_mm
+        ycam = self.ycen + ycam1 / self.pixel_mm
+        on_det = hit & (xcam >= 0) & (xcam < self.Nh) & (ycam >= 0) & (ycam < self.Nv)
+        pix = np.empty((len(kf_hat_arr), 2), dtype=float)
+        pix[:, 0] = xcam
+        pix[:, 1] = ycam
+        pix[~on_det] = np.nan
+        return pix, on_det
+
     # ── 2theta / chi from pixel ───────────────────────────────────────────────
 
     def pixel_to_2theta_chi(self, xcam, ycam):

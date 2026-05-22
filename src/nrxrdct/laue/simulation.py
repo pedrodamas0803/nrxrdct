@@ -1722,67 +1722,101 @@ def simulate_laue(
     spots = []
 
     if allowed_hkl is not None:
-        # Precompute all G_cry vectors in one matmul — avoids crystal.Q per HKL.
-        _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)   # (M, 3)
-        _G_cry_arr = (_B @ _hkl_arr.T).T                            # (M, 3)
-        _iter = list(zip(_hkl_arr, _G_cry_arr))
+        # ── VECTORISED PATH (fitting / geometry-only) ─────────────────────────
+        # Spectrum and LP are not needed — only pixel positions matter.
+        _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)  # (M, 3)
+        _G_cry_arr = (_B @ _hkl_arr.T).T                          # (M, 3)
+
+        G_lab = _G_cry_arr @ U.T                                   # (M, 3)
+        kdG   = G_lab @ ki_hat                                     # (M,)
+        v1    = kdG < 0
+        if np.any(v1):
+            G_lab = G_lab[v1];  _hkl_arr = _hkl_arr[v1];  kdG = kdG[v1]
+            Gm2   = np.einsum("ij,ij->i", G_lab, G_lab)
+            lam   = -4.0 * np.pi * kdG / Gm2
+            v2    = (lam >= lam_lo) & (lam <= lam_hi)
+            if np.any(v2):
+                G_lab = G_lab[v2];  _hkl_arr = _hkl_arr[v2];  lam = lam[v2]
+                E_arr = HC / lam
+                km    = 2.0 * np.pi / lam
+                kf_v  = ki_hat[None, :] * km[:, None] + G_lab     # (M, 3)
+                kf_v /= np.linalg.norm(kf_v, axis=1, keepdims=True)
+                pix_arr, on_det = camera.project_batch(kf_v)
+                if np.any(on_det):
+                    kf_v    = kf_v[on_det];  _hkl_arr = _hkl_arr[on_det]
+                    lam     = lam[on_det];   E_arr    = E_arr[on_det]
+                    pix_arr = pix_arr[on_det]
+                    cos2th  = np.clip(kf_v[:, 0], -1.0, 1.0)
+                    tth_arr = np.degrees(np.arccos(cos2th))
+                    chi_arr = np.degrees(np.arctan2(kf_v[:, 1], kf_v[:, 2] + 1e-17))
+                    az_arr  = np.degrees(np.arctan2(kf_v[:, 2], kf_v[:, 1]))
+                    for _i in range(len(lam)):
+                        spots.append({
+                            "hkl":             (int(_hkl_arr[_i, 0]),
+                                                int(_hkl_arr[_i, 1]),
+                                                int(_hkl_arr[_i, 2])),
+                            "satellite_order": 0,
+                            "is_superlattice": False,
+                            "E":               float(E_arr[_i]),
+                            "lambda":          float(lam[_i]),
+                            "tth":             float(tth_arr[_i]),
+                            "chi":             float(chi_arr[_i]),
+                            "az":              float(az_arr[_i]),
+                            "pix":             (float(pix_arr[_i, 0]),
+                                                float(pix_arr[_i, 1])),
+                            "F2":              1.0,
+                            "LP":              1.0,
+                            "sw":              1.0,
+                            "I_raw":           1.0,
+                        })
     else:
-        _iter = None
+        # ── SCALAR PATH (geometry_only=False or no allowed_hkl) ───────────────
+        # Spectrum, LP, and structure factor are computed per spot.
+        def _process_hkl(h, k, l, G_cry=None):
+            if G_cry is None:
+                G_cry = _B @ np.array([h, k, l], dtype=float)
+            G_lab = U @ G_cry
+            Gm2 = float(np.dot(G_lab, G_lab))
+            kdG = float(np.dot(ki_hat, G_lab))
 
-    def _process_hkl(h, k, l, G_cry=None):
-        if G_cry is None:
-            G_cry = _B @ np.array([h, k, l], dtype=float)
-        G_lab = U @ G_cry
-        Gm2 = float(np.dot(G_lab, G_lab))
-        kdG = float(np.dot(ki_hat, G_lab))
-
-        if kdG >= 0:
-            return
-
-        # Laue wavelength: lambda = -4*pi*(k_hat.G) / |G|^2
-        lam = -4.0 * np.pi * kdG / Gm2  # Angstrom
-        if not (lam_lo <= lam <= lam_hi):
-            return
-
-        E = lam2en(lam)
-
-        # Scattered beam direction
-        km = 2.0 * np.pi / lam
-        kf_vec = ki_hat * km + G_lab
-        kf_hat = kf_vec / np.linalg.norm(kf_vec)
-
-        # Project onto camera
-        pix = camera.project(kf_hat)
-        if pix is None:
-            return
-
-        # 2theta, chi, azimuth  --  LaueTools LT frame (x // ki)
-        cos2th = np.clip(kf_hat[0], -1.0, 1.0)
-        tth = np.degrees(np.arccos(cos2th))
-        chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-        az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-
-        LP = lorentz_pol(tth)
-        if LP == 0.0:
-            return
-
-        sw = _spectrum(E)
-        if sw <= 0.0:
-            return
-
-        if allowed_hkl is not None:
-            F2 = 1.0
-        elif geometry_only:
-            F2 = 1.0
-        else:
-            # Structure factor (energy-dependent)
-            F = crystal.StructureFactor(G_cry, en=E)
-            F2 = abs(F) ** 2
-            if F2 < f2_thresh:
+            if kdG >= 0:
                 return
 
-        spots.append(
-            {
+            lam = -4.0 * np.pi * kdG / Gm2
+            if not (lam_lo <= lam <= lam_hi):
+                return
+
+            E = lam2en(lam)
+            km = 2.0 * np.pi / lam
+            kf_vec = ki_hat * km + G_lab
+            kf_hat = kf_vec / np.linalg.norm(kf_vec)
+
+            pix = camera.project(kf_hat)
+            if pix is None:
+                return
+
+            cos2th = np.clip(kf_hat[0], -1.0, 1.0)
+            tth = np.degrees(np.arccos(cos2th))
+            chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
+            az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
+
+            LP = lorentz_pol(tth)
+            if LP == 0.0:
+                return
+
+            sw = _spectrum(E)
+            if sw <= 0.0:
+                return
+
+            if geometry_only:
+                F2 = 1.0
+            else:
+                F = crystal.StructureFactor(G_cry, en=E)
+                F2 = abs(F) ** 2
+                if F2 < f2_thresh:
+                    return
+
+            spots.append({
                 "hkl": (h, k, l),
                 "satellite_order": 0,
                 "is_superlattice": False,
@@ -1796,13 +1830,8 @@ def simulate_laue(
                 "LP": LP,
                 "sw": sw,
                 "I_raw": F2 * LP * sw,
-            }
-        )
+            })
 
-    if _iter is not None:
-        for hkl_row, G_cry_row in _iter:
-            _process_hkl(int(hkl_row[0]), int(hkl_row[1]), int(hkl_row[2]), G_cry=G_cry_row)
-    else:
         _H2, _K2, _L2 = np.meshgrid(
             np.arange(-h_lim, h_lim + 1, dtype=np.int32),
             np.arange(-k_lim, k_lim + 1, dtype=np.int32),

@@ -1494,6 +1494,7 @@ def precompute_allowed_hkl(
     E_ref_eV  : float   Reference photon energy (eV) for structure factor
                         evaluation.  Defaults to the midpoint of the default
                         energy window `(E_MIN_eV + E_MAX_eV) / 2`.
+                        Must be a valid energy within the Henke table range.
     f2_thresh : float   Same threshold used in the simulation.
 
     Returns
@@ -1511,8 +1512,8 @@ def precompute_allowed_hkl(
     if isinstance(crystal, LayeredCrystal):
         _lc_key = (
             tuple(sorted({l.crystal.name for l in crystal.all_layers})),
-            E_max_eV, f2_thresh,
-        )  # E_ref_eV no longer used
+            E_max_eV, E_ref_eV, f2_thresh,
+        )
         if _lc_key in _allowed_hkl_cache:
             return _allowed_hkl_cache[_lc_key]
         allowed: set = set()
@@ -1528,7 +1529,7 @@ def precompute_allowed_hkl(
         _allowed_hkl_cache[_lc_key] = result
         return result
 
-    _key = (crystal.name, E_max_eV, f2_thresh)  # E_ref_eV no longer used
+    _key = (crystal.name, E_max_eV, E_ref_eV, f2_thresh)
     if _key in _allowed_hkl_cache:
         return _allowed_hkl_cache[_key]
 
@@ -1566,13 +1567,9 @@ def precompute_allowed_hkl(
     hkl_sphere = hkl_all[in_sphere]
     G_sphere   = G_all[in_sphere]
 
-    # Structure-factor check — use en=0 to compute only f0 (Cromer-Mann) and
-    # skip Henke anomalous corrections.  Systematically absent reflections give
-    # F=0 by symmetry at any energy, so the threshold test is correct and
-    # orders of magnitude faster than evaluating at E_ref_eV.
     allowed = set()
     for i in range(len(hkl_sphere)):
-        F2 = abs(crystal.StructureFactor(G_sphere[i], en=0)) ** 2
+        F2 = abs(crystal.StructureFactor(G_sphere[i], en=E_ref_eV)) ** 2
         if F2 >= f2_thresh:
             h, k, l = int(hkl_sphere[i, 0]), int(hkl_sphere[i, 1]), int(hkl_sphere[i, 2])
             allowed.add((h, k, l))
@@ -1763,7 +1760,7 @@ def simulate_laue(
                 _hkl_arrays_cache[_aid] = (_hkl_arr, _G_cry_arr, crystal)
         else:
             _B = _get_B()
-            _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)  # (M, 3)
+            _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32).reshape(-1, 3)  # (M, 3)
             _G_cry_arr = (_B @ _hkl_arr.T).T                          # (M, 3)
             _hkl_arrays_cache[_aid] = (_hkl_arr, _G_cry_arr, crystal)
 

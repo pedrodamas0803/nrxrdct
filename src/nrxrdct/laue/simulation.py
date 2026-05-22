@@ -1588,6 +1588,7 @@ def simulate_laue(
     n_hat_sample=None,
     geometry_only=False,
     allowed_hkl=None,
+    _pixels_only=False,
 ):
     """
     Simulate single-crystal white-beam Laue diffraction in reflection geometry.
@@ -1763,6 +1764,8 @@ def simulate_laue(
                     kf_v    = kf_v[on_det];  _hkl_arr = _hkl_arr[on_det]
                     lam     = lam[on_det];   E_arr    = E_arr[on_det]
                     pix_arr = pix_arr[on_det]
+                    if _pixels_only:
+                        return pix_arr          # (N, 2) — skip dict construction
                     cos2th  = np.clip(kf_v[:, 0], -1.0, 1.0)
                     tth_arr = np.degrees(np.arccos(cos2th))
                     chi_arr = np.degrees(np.arctan2(kf_v[:, 1], kf_v[:, 2] + 1e-17))
@@ -1879,6 +1882,8 @@ def simulate_laue(
         sigma_beam_v_nm=sigma_beam_v_nm,
         n_hat_sample=n_hat_sample,
     )
+    if _pixels_only:
+        return np.empty((0, 2), dtype=float)
     return spots
 
 

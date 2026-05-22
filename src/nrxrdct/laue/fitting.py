@@ -1081,20 +1081,21 @@ def laue_residuals(
     delta_R = Rotation.from_rotvec(np.asarray(rotvec, dtype=float)).as_matrix()
     U = delta_R @ np.asarray(U0, dtype=float)
 
-    spots = simulate_laue(
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+
+    sim_xy = simulate_laue(
         crystal, U, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
+        _pixels_only=(allowed_hkl is not None),
     )
-
-    obs_use = np.asarray(obs_xy, dtype=float)
-    if top_n_obs is not None:
-        obs_use = obs_use[:top_n_obs]
-
-    sim_xy = _extract_sim_xy(spots)
+    if allowed_hkl is None:
+        sim_xy = _extract_sim_xy(sim_xy)
     if top_n_sim is not None:
         sim_xy = sim_xy[:top_n_sim]
 
@@ -1346,20 +1347,21 @@ def laue_strain_residuals(
     eps = _strain_matrix(strain_vals, fit_strain)
     U_eff = R @ np.asarray(U0, dtype=float) @ (np.eye(3) + eps)
 
-    spots = simulate_laue(
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+
+    sim_xy = simulate_laue(
         crystal, U_eff, camera,
         E_min=E_min_eV, E_max=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
+        _pixels_only=(allowed_hkl is not None),
     )
-
-    obs_use = np.asarray(obs_xy, dtype=float)
-    if top_n_obs is not None:
-        obs_use = obs_use[:top_n_obs]
-
-    sim_xy = _extract_sim_xy(spots)
+    if allowed_hkl is None:
+        sim_xy = _extract_sim_xy(sim_xy)
     if top_n_sim is not None:
         sim_xy = sim_xy[:top_n_sim]
 
@@ -1381,9 +1383,9 @@ def fit_orientation(
     source_kwargs: dict | None = None,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
-    max_match_px: float | list[float] = 30.0,
-    top_n_obs: int | None = None,
-    top_n_sim: int | None = None,
+    max_match_px: float | list[float] = (15.0, 3.0),
+    top_n_obs: int | None = 50,
+    top_n_sim: int | None = 100,
     method: str = "lm",
     ftol: float = 1e-6,
     xtol: float = 1e-6,
@@ -1938,9 +1940,9 @@ def fit_strain_orientation(
     source_kwargs: dict | None = None,
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
-    max_match_px: float | list[float] = 30.0,
-    top_n_obs: int | None = None,
-    top_n_sim: int | None = None,
+    max_match_px: float | list[float] = (15.0, 3.0),
+    top_n_obs: int | None = 50,
+    top_n_sim: int | None = 100,
     method: str = "lm",
     ftol: float = 1e-8,
     xtol: float = 1e-8,

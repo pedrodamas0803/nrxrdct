@@ -89,6 +89,7 @@ from .map import GrainMap, parse_scan_title
 from .simulation import (
     BM32_KB,
     beam_divergence_ellipses,
+    clear_allowed_hkl_cache,
     precompute_allowed_hkl,
     beam_in_crystal,
     decompose_matstarlab,
@@ -157,6 +158,7 @@ __all__ = [
     "Camera",
     "CalibrationResult",
     # Simulation
+    "clear_allowed_hkl_cache",
     "precompute_allowed_hkl",
     "simulate_laue",
     "simulate_laue_stack",

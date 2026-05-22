@@ -155,6 +155,14 @@ KI_HAT = np.array([1.0, 0.0, 0.0])  # LT frame: beam along +x  (do not change)
 HMAX = 12
 F2_THRESHOLD = 1e-6
 
+# Module-level cache: (crystal_name, E_max_eV, E_ref_eV, f2_thresh) → frozenset
+_allowed_hkl_cache: dict = {}
+
+
+def clear_allowed_hkl_cache() -> None:
+    """Clear the module-level cache used by :func:`precompute_allowed_hkl`."""
+    _allowed_hkl_cache.clear()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & UTILITIES
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1488,7 +1496,18 @@ def precompute_allowed_hkl(
     """
     from .layers import LayeredCrystal
 
+    # Resolve default before building the cache key so that None and the
+    # explicit midpoint value always hit the same cache entry.
+    if E_ref_eV is None:
+        E_ref_eV = (E_MIN_eV + E_MAX_eV) / 2.0
+
     if isinstance(crystal, LayeredCrystal):
+        _lc_key = (
+            tuple(sorted({l.crystal.name for l in crystal.all_layers})),
+            E_max_eV, E_ref_eV, f2_thresh,
+        )
+        if _lc_key in _allowed_hkl_cache:
+            return _allowed_hkl_cache[_lc_key]
         allowed: set = set()
         seen_names: set = set()
         for layer in crystal.all_layers:
@@ -1498,10 +1517,13 @@ def precompute_allowed_hkl(
                     layer.crystal, E_max_eV=E_max_eV, E_ref_eV=E_ref_eV,
                     f2_thresh=f2_thresh
                 )
-        return frozenset(allowed)
+        result = frozenset(allowed)
+        _allowed_hkl_cache[_lc_key] = result
+        return result
 
-    if E_ref_eV is None:
-        E_ref_eV = (E_MIN_eV + E_MAX_eV) / 2.0
+    _key = (crystal.name, E_max_eV, E_ref_eV, f2_thresh)
+    if _key in _allowed_hkl_cache:
+        return _allowed_hkl_cache[_key]
 
     HC_eV_ANG = 12398.4
     G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
@@ -1544,7 +1566,9 @@ def precompute_allowed_hkl(
         if F2 >= f2_thresh:
             h, k, l = int(hkl_sphere[i, 0]), int(hkl_sphere[i, 1]), int(hkl_sphere[i, 2])
             allowed.add((h, k, l))
-    return frozenset(allowed)
+    result = frozenset(allowed)
+    _allowed_hkl_cache[_key] = result
+    return result
 
 
 def simulate_laue(

@@ -158,10 +158,17 @@ F2_THRESHOLD = 1e-6
 # Module-level cache: (crystal_name, E_max_eV, E_ref_eV, f2_thresh) → frozenset
 _allowed_hkl_cache: dict = {}
 
+# Module-level cache: id(allowed_hkl) → (hkl_arr, G_cry_arr, crystal_name)
+# Keyed on the Python object id of the frozenset returned by precompute_allowed_hkl,
+# which is stable for the lifetime of the cached object.  Avoids re-running
+# np.array(list(frozenset)) and the B @ hkl_arr.T matmul on every residual call.
+_hkl_arrays_cache: dict = {}
+
 
 def clear_allowed_hkl_cache() -> None:
     """Clear the module-level cache used by :func:`precompute_allowed_hkl`."""
     _allowed_hkl_cache.clear()
+    _hkl_arrays_cache.clear()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & UTILITIES
@@ -1734,16 +1741,28 @@ def simulate_laue(
     k_lim = int(G_max / b_star) + 1
     l_lim = int(G_max / c_star) + 1
 
-    # Build B once: Q(h,k,l) = B @ [h,k,l] avoids repeated crystal.Q calls.
-    _B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+    # Build B matrix: Q(h,k,l) = B @ [h,k,l] avoids repeated crystal.Q calls.
+    # Deferred to avoid the cost when the hkl_arrays cache is warm.
+    def _get_B():
+        return np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
 
     spots = []
 
     if allowed_hkl is not None:
         # ── VECTORISED PATH (fitting / geometry-only) ─────────────────────────
         # Spectrum and LP are not needed — only pixel positions matter.
-        _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)  # (M, 3)
-        _G_cry_arr = (_B @ _hkl_arr.T).T                          # (M, 3)
+        _aid = id(allowed_hkl)
+        if _aid in _hkl_arrays_cache:
+            _hkl_arr, _G_cry_arr, _cached_crystal = _hkl_arrays_cache[_aid]
+            if _cached_crystal is not crystal:
+                # Different crystal with same frozenset object — recompute G_cry.
+                _G_cry_arr = (_get_B() @ _hkl_arr.T).T
+                _hkl_arrays_cache[_aid] = (_hkl_arr, _G_cry_arr, crystal)
+        else:
+            _B = _get_B()
+            _hkl_arr   = np.array(list(allowed_hkl), dtype=np.int32)  # (M, 3)
+            _G_cry_arr = (_B @ _hkl_arr.T).T                          # (M, 3)
+            _hkl_arrays_cache[_aid] = (_hkl_arr, _G_cry_arr, crystal)
 
         G_lab = _G_cry_arr @ U.T                                   # (M, 3)
         kdG   = G_lab @ ki_hat                                     # (M,)
@@ -1792,6 +1811,8 @@ def simulate_laue(
     else:
         # ── SCALAR PATH (geometry_only=False or no allowed_hkl) ───────────────
         # Spectrum, LP, and structure factor are computed per spot.
+        _B = _get_B()
+
         def _process_hkl(h, k, l, G_cry=None):
             if G_cry is None:
                 G_cry = _B @ np.array([h, k, l], dtype=float)

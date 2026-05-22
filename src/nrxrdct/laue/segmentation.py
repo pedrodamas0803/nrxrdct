@@ -865,6 +865,22 @@ def write_peaklist_dat(peaklist, outname):
 
     df.to_csv(outname, sep=" ", index=False)
 
+def _convert_one_h5_to_dat(args: tuple) -> bool:
+    """Module-level worker so it is picklable by ProcessPoolExecutor."""
+    h5path, out_path, include_unfitted, r_squared_min = args
+    try:
+        pl = convert_spotsfile2peaklist(
+            h5path,
+            include_unfitted=include_unfitted,
+            r_squared_min=r_squared_min,
+        )
+        write_peaklist_dat(pl, out_path)
+        return True
+    except Exception as exc:
+        print(f"  ✗  {os.path.basename(h5path)}: {exc}", flush=True)
+        return False
+
+
 def convert_spotsfiles_to_dat(
     seg_dir: str,
     target_dir: str,
@@ -876,7 +892,7 @@ def convert_spotsfiles_to_dat(
 ) -> int:
     """
     Convert all ``frame_?????.h5`` spot files in *seg_dir* to DAT files in
-    *target_dir*, using a thread pool for parallel I/O.
+    *target_dir*, using a process pool for true parallelism.
 
     Parameters
     ----------
@@ -889,7 +905,7 @@ def convert_spotsfiles_to_dat(
     r_squared_min : float
         Passed to :func:`convert_spotsfile2peaklist`.
     n_workers : int or None
-        Number of parallel threads.  Defaults to ``min(32, cpu_count + 4)``.
+        Number of worker processes.  Defaults to ``os.cpu_count()``.
     overwrite : bool
         If ``False`` (default), skip files that already exist in *target_dir*.
 
@@ -905,27 +921,23 @@ def convert_spotsfiles_to_dat(
         print(f"No frame_*.h5 files found in {seg_dir!r}")
         return 0
 
-    def _convert_one(h5path: str) -> bool:
+    tasks = []
+    for h5path in h5_files:
         stem = os.path.splitext(os.path.basename(h5path))[0]
         out_path = os.path.join(target_dir, stem + ".dat")
         if os.path.exists(out_path) and not overwrite:
-            return True
-        try:
-            pl = convert_spotsfile2peaklist(
-                h5path,
-                include_unfitted=include_unfitted,
-                r_squared_min=r_squared_min,
-            )
-            write_peaklist_dat(pl, out_path)
-            return True
-        except Exception as exc:
-            print(f"  ✗  {os.path.basename(h5path)}: {exc}", flush=True)
-            return False
+            continue
+        tasks.append((h5path, out_path, include_unfitted, r_squared_min))
 
-    _n_workers = n_workers or min(32, (os.cpu_count() or 1) + 4)
-    n_ok = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_n_workers) as pool:
-        futs = {pool.submit(_convert_one, p): p for p in h5_files}
+    n_already = len(h5_files) - len(tasks)
+    if not tasks:
+        print(f"All {len(h5_files)} files already converted.")
+        return len(h5_files)
+
+    _n_workers = n_workers or os.cpu_count() or 1
+    n_ok = n_already
+    with concurrent.futures.ProcessPoolExecutor(max_workers=_n_workers) as pool:
+        futs = {pool.submit(_convert_one_h5_to_dat, t): t for t in tasks}
         for fut in concurrent.futures.as_completed(futs):
             if fut.result():
                 n_ok += 1

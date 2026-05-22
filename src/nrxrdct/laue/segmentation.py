@@ -865,6 +865,75 @@ def write_peaklist_dat(peaklist, outname):
 
     df.to_csv(outname, sep=" ", index=False)
 
+def convert_spotsfiles_to_dat(
+    seg_dir: str,
+    target_dir: str,
+    *,
+    include_unfitted: bool = False,
+    r_squared_min: float = 0.9,
+    n_workers: int | None = None,
+    overwrite: bool = False,
+) -> int:
+    """
+    Convert all ``frame_?????.h5`` spot files in *seg_dir* to DAT files in
+    *target_dir*, using a thread pool for parallel I/O.
+
+    Parameters
+    ----------
+    seg_dir : str
+        Directory containing ``frame_?????.h5`` spot files.
+    target_dir : str
+        Directory where ``frame_?????.dat`` files will be written.
+    include_unfitted : bool
+        Passed to :func:`convert_spotsfile2peaklist`.
+    r_squared_min : float
+        Passed to :func:`convert_spotsfile2peaklist`.
+    n_workers : int or None
+        Number of parallel threads.  Defaults to ``min(32, cpu_count + 4)``.
+    overwrite : bool
+        If ``False`` (default), skip files that already exist in *target_dir*.
+
+    Returns
+    -------
+    int
+        Number of files successfully converted.
+    """
+    os.makedirs(target_dir, exist_ok=True)
+
+    h5_files = sorted(glob.glob(os.path.join(seg_dir, "frame_*.h5")))
+    if not h5_files:
+        print(f"No frame_*.h5 files found in {seg_dir!r}")
+        return 0
+
+    def _convert_one(h5path: str) -> bool:
+        stem = os.path.splitext(os.path.basename(h5path))[0]
+        out_path = os.path.join(target_dir, stem + ".dat")
+        if os.path.exists(out_path) and not overwrite:
+            return True
+        try:
+            pl = convert_spotsfile2peaklist(
+                h5path,
+                include_unfitted=include_unfitted,
+                r_squared_min=r_squared_min,
+            )
+            write_peaklist_dat(pl, out_path)
+            return True
+        except Exception as exc:
+            print(f"  ✗  {os.path.basename(h5path)}: {exc}", flush=True)
+            return False
+
+    _n_workers = n_workers or min(32, (os.cpu_count() or 1) + 4)
+    n_ok = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_n_workers) as pool:
+        futs = {pool.submit(_convert_one, p): p for p in h5_files}
+        for fut in concurrent.futures.as_completed(futs):
+            if fut.result():
+                n_ok += 1
+
+    print(f"Converted {n_ok}/{len(h5_files)} spot files → {target_dir!r}")
+    return n_ok
+
+
 def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     """Fast nearest-neighbor gap filling."""
     _, indices = ndi.distance_transform_edt(

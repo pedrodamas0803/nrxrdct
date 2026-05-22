@@ -59,6 +59,7 @@ from .layers import (
 from .segmentation import (
     auto_init_gaussian_mixture_global,
     convert_spotsfile2peaklist,
+    convert_spotsfiles_to_dat,
     filter_and_rescale_images,
     fit_gaussian_2d_rotated,
     fit_gaussian_mixture_2d,
@@ -222,6 +223,7 @@ __all__ = [
     # Segmentation
     "auto_init_gaussian_mixture_global",
     "convert_spotsfile2peaklist",
+    "convert_spotsfiles_to_dat",
     "filter_and_rescale_images",
     "fit_gaussian_2d_rotated",
     "fit_gaussian_mixture_2d",

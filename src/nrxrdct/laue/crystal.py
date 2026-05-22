@@ -46,20 +46,20 @@ import xrayutilities as xu
 
 def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=True):
     """
-    Build an ``xu.materials.Crystal`` from a CIF file or CIF string.
+    Build an `xu.materials.Crystal` from a CIF file or CIF string.
 
     Parameters
     ----------
     cif_source : str
-        Either a path to a ``.cif`` file OR the raw CIF text as a string.
+        Either a path to a `.cif` file OR the raw CIF text as a string.
         xrayutilities automatically detects which one is provided.
 
     name : str, optional
         Name to give the Crystal object.
         If None the function tries (in order):
-          1. The dataset name embedded in the CIF  (``data_<name>`` block)
+          1. The dataset name embedded in the CIF  (`data_<name>` block)
           2. The base filename without extension    (when a file path is given)
-          3. ``'crystal'``                         (fallback)
+          3. `'crystal'`                         (fallback)
 
     dataset : str, optional
         Name of the data block to use when the CIF contains multiple datasets.
@@ -82,10 +82,10 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     Raises
     ------
     FileNotFoundError
-        If ``cif_source`` looks like a file path but the file does not exist.
+        If `cif_source` looks like a file path but the file does not exist.
     ValueError
         If the CIF contains no datasets with atomic positions, or if a
-        requested ``dataset`` name is not found in the file.
+        requested `dataset` name is not found in the file.
     RuntimeError
         If xrayutilities cannot identify the space group from the CIF data.
 
@@ -95,7 +95,7 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     factors f0(Q) and the Henke tables for anomalous corrections f'(E), f''(E).
     These are automatically assigned based on the element symbols in the CIF.
 
-    The ``_atom_site_U_iso_or_equiv`` tag (if present) is converted to the
+    The `_atom_site_U_iso_or_equiv` tag (if present) is converted to the
     B-factor used by xrayutilities via  B = 8*pi^2 * U.
 
     Common CIF sources

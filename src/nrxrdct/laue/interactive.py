@@ -32,7 +32,7 @@ Typical workflow
 
 Backend note
 ------------
-Requires ``%matplotlib widget`` (ipympl) and ``ipywidgets`` in Jupyter::
+Requires `%matplotlib widget` (ipympl) and `ipywidgets` in Jupyter::
 
     %matplotlib widget
 
@@ -227,18 +227,18 @@ def interactive_orientation(
     c_rot_range_deg : float
         Half-range of the [001] crystal-axis slider (degrees).  Defaults to
         180° so the full azimuthal range is accessible in one drag.
-    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
-        Coordinate frame for the main panel.  ``'angular'`` (default) plots
-        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+    space : `'angular'`, `'gnomonic'`, or `'detector'`
+        Coordinate frame for the main panel.  `'angular'` (default) plots
+        2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
         projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines,
-        which helps identify multiple grains.  ``'detector'`` plots raw pixel
+        which helps identify multiple grains.  `'detector'` plots raw pixel
         positions.  Matching is always done in detector (pixel) space.
 
     Returns
     -------
     OrientationState
-        ``state.U``  — final orientation (pass to :func:`fit_orientation`).
-        ``state.accepted`` — True if "✓ Accept" was clicked.
+        `state.U`  — final orientation (pass to :func:`fit_orientation`).
+        `state.accepted` — True if "✓ Accept" was clicked.
     """
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display
@@ -1020,8 +1020,8 @@ def interactive_calibration(
 
     * **Orientation** — incremental rotations around the three crystal axes
       (same as :func:`interactive_orientation`).
-    * **Camera geometry** — additive deltas for ``dd``, ``xcen``, ``ycen``,
-      ``xbet``, ``xgam`` relative to the current reference camera.
+    * **Camera geometry** — additive deltas for `dd`, `xcen`, `ycen`,
+      `xbet`, `xgam` relative to the current reference camera.
 
     "Set as reference" bakes the current camera + orientation as the new base
     and resets all sliders to zero.  "✓ Accept" prints the final parameters
@@ -1053,19 +1053,19 @@ def interactive_calibration(
         Half-range of the Δ xcen / Δ ycen sliders (px).
     angle_range_deg : float
         Half-range of the Δ xbet / Δ xgam sliders (°).
-    space : ``'angular'``, ``'gnomonic'``, or ``'detector'``
-        Coordinate frame for the main panel.  ``'angular'`` (default) plots
-        2θ (x) vs χ (y) in degrees.  ``'gnomonic'`` plots the gnomonic
+    space : `'angular'`, `'gnomonic'`, or `'detector'`
+        Coordinate frame for the main panel.  `'angular'` (default) plots
+        2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
         projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines.
-        ``'detector'`` plots raw pixel positions.
+        `'detector'` plots raw pixel positions.
         Matching is always done in detector (pixel) space regardless of this flag.
 
     Returns
     -------
     CalibrationState
-        ``state.camera``   — pass to :meth:`~Camera.fit_calibration`.
-        ``state.U``        — pass to :meth:`~Camera.fit_calibration`.
-        ``state.accepted`` — True if "✓ Accept" was clicked.
+        `state.camera`   — pass to :meth:`~Camera.fit_calibration`.
+        `state.U`        — pass to :meth:`~Camera.fit_calibration`.
+        `state.accepted` — True if "✓ Accept" was clicked.
     """
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display

@@ -106,7 +106,7 @@ def _load_tiff_frames(tiff_dir: str, frame_indices: list) -> dict:
     """
     Load TIFF frames from *tiff_dir*.
 
-    Files must match ``img_<number>.tif`` (case-insensitive).  They are
+    Files must match `img_<number>.tif` (case-insensitive).  They are
     sorted by their embedded number and mapped to 0-based frame indices in
     that order (i.e. the file with the smallest number → frame 0).
 

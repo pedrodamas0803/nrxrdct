@@ -988,7 +988,7 @@ def plot_layer_contributions(
 
     Parameters
     ----------
-    spots   : list of dicts from ``layer_contributions_spots()``
+    spots   : list of dicts from `layer_contributions_spots()`
     stack   : LayeredCrystal
     camera  : Camera
     out_path: str
@@ -1332,15 +1332,15 @@ def plot_strain_broadening(
 
     Panel A — Detector map
         Each spot is drawn as an ellipse whose semi-axes come from the
-        eigenvalues of the 2×2 pixel-space covariance ``cov_pix``, coloured
-        by ``sigma_strain_pix`` (semi-major axis).
+        eigenvalues of the 2×2 pixel-space covariance `cov_pix`, coloured
+        by `sigma_strain_pix` (semi-major axis).
 
     Panel B — σ_strain vs 2θ
         Scatter plot of the major (solid) and minor (dashed) broadening
         semi-axes versus 2θ for every spot.  The most-broadened spots are
         labelled with their (hkl) index.
 
-    Panel C — Jacobian heat-map  *(only when* ``jacobians`` *is provided)*
+    Panel C — Jacobian heat-map  *(only when* `jacobians` *is provided)*
         Rows = top_n most-broadened spots; columns = the 6 Voigt strain
         components.  Cell colour = |∂xcam/∂εᵢⱼ| or |∂ycam/∂εᵢⱼ|
         (RMS of both rows of J), so you can read off which strain components
@@ -1350,8 +1350,8 @@ def plot_strain_broadening(
     ----------
     spots_b : list of dict
         Output of :func:`~nrxrdct.laue.simulation.strain_broadening`.
-        Must contain ``'cov_pix'``, ``'sigma_strain_pix'``,
-        ``'sigma_strain_minor'``, ``'pix'``, ``'tth'``, ``'hkl'``.
+        Must contain `'cov_pix'`, `'sigma_strain_pix'`,
+        `'sigma_strain_minor'`, `'pix'`, `'tth'`, `'hkl'`.
     camera : Camera
         Used for detector dimensions in Panel A.
     jacobians : dict {(h,k,l): ndarray (2,6)}, optional
@@ -1359,7 +1359,7 @@ def plot_strain_broadening(
         When supplied, Panel C is drawn; otherwise it is replaced with a
         colour-bar for Panel A.
     out_path : str, optional
-        File path to save the figure.  ``None`` → do not save.
+        File path to save the figure.  `None` → do not save.
     top_n : int, optional
         Number of most-broadened spots to label / show in Panel C.
 
@@ -1578,17 +1578,17 @@ def plot_compare_spots(
         Spot dicts from :func:`~nrxrdct.laue.simulation.simulate_laue` or
         compatible sources.  Each dict must contain:
 
-        * ``'tth'``         – 2θ in degrees
-        * ``'chi'``         – χ in degrees
-        * ``'pix'``         – ``(col, row)`` pixel coordinate on the detector
-        * ``'E'``           – photon energy in eV
-        * ``'hkl'``         – Miller indices tuple ``(h, k, l)``
-        * ``'intensity'``   – normalised intensity [0, 1]
-        * ``'is_superlattice'`` – bool
+        * `'tth'`         – 2θ in degrees
+        * `'chi'`         – χ in degrees
+        * `'pix'`         – `(col, row)` pixel coordinate on the detector
+        * `'E'`           – photon energy in eV
+        * `'hkl'`         – Miller indices tuple `(h, k, l)`
+        * `'intensity'`   – normalised intensity [0, 1]
+        * `'is_superlattice'` – bool
 
-    space : ``'angles'`` | ``'detector'``
-        ``'angles'``   – x-axis = 2θ (degrees), y-axis = χ (degrees).
-        ``'detector'`` – x-axis = column pixel,  y-axis = row pixel.
+    space : `'angles'` | `'detector'`
+        `'angles'`   – x-axis = 2θ (degrees), y-axis = χ (degrees).
+        `'detector'` – x-axis = column pixel,  y-axis = row pixel.
 
     label_a, label_b : str
         Legend labels for the two spot sets.
@@ -1600,7 +1600,7 @@ def plot_compare_spots(
         Number of strongest spots in each set to annotate with (hkl).
 
     out_path : str or None
-        File path for the saved PNG.  ``None`` → do not save.
+        File path for the saved PNG.  `None` → do not save.
 
     Returns
     -------
@@ -1759,17 +1759,17 @@ def plot_measured_vs_simulated(
 
     spots : list of dict
         Output of :func:`~nrxrdct.laue.simulation.simulate_laue` or compatible
-        functions.  Each dict must contain ``'pix'`` (col, row), ``'E'``,
-        ``'intensity'``, and ``'hkl'``.
+        functions.  Each dict must contain `'pix'` (col, row), `'E'`,
+        `'intensity'`, and `'hkl'`.
 
     image : ndarray of shape (Nv, Nh) or None
         Optional raw detector image shown as a background on both panels.
-        Displayed with a logarithmic normalisation and the ``'inferno'``
+        Displayed with a logarithmic normalisation and the `'inferno'`
         colormap.
 
     camera : Camera or None
-        When provided, ``camera.Nh`` and ``camera.Nv`` are used to set fixed
-        axis limits.  If ``None``, limits are derived from the data extent.
+        When provided, `camera.Nh` and `camera.Nv` are used to set fixed
+        axis limits.  If `None`, limits are derived from the data extent.
 
     n_label : int
         Number of strongest simulated spots to annotate with their (hkl) Miller
@@ -1779,10 +1779,10 @@ def plot_measured_vs_simulated(
         Energy range for the simulated-spot colour scale (keV).
 
     figsize : tuple of (float, float)
-        Figure size in inches passed to ``plt.subplots``.  Default ``(14, 6)``.
+        Figure size in inches passed to `plt.subplots`.  Default `(14, 6)`.
 
     show_arrows : bool
-        When ``True`` (default), draw displacement arrows on the simulated panel
+        When `True` (default), draw displacement arrows on the simulated panel
         from each simulated spot to its nearest measured spot.  Arrows are
         coloured by displacement distance; a mean-displacement annotation and
         colour bar are added automatically.
@@ -1790,10 +1790,10 @@ def plot_measured_vs_simulated(
     max_match_dist : float
         Maximum nearest-neighbour distance in pixels below which a simulated
         spot is matched to a measured spot and an arrow is drawn.
-        Default ``50.0`` pixels.
+        Default `50.0` pixels.
 
     out_path : str or None
-        Path to save the PNG figure.  ``None`` (default) → do not save.
+        Path to save the PNG figure.  `None` (default) → do not save.
 
     Returns
     -------
@@ -2015,8 +2015,8 @@ def plot_layer_scheme(
     the LaueTools lab frame (x = beam direction, z = vertical up).
 
     The view is the XZ side-plane.  Each layer is drawn as a scaled
-    parallelogram whose normal is ``stack.n_hat`` projected onto XZ.
-    Layers too thin to label inside (< ``min_display_frac`` of total height)
+    parallelogram whose normal is `stack.n_hat` projected onto XZ.
+    Layers too thin to label inside (< `min_display_frac` of total height)
     are annotated with an external callout.
 
     Parameters
@@ -2317,7 +2317,7 @@ def plot_layer_scheme(
 # LAYERED STACK SPOT MAP
 # ─────────────────────────────────────────────────────────────────────────────
 
-#: Marker cycle for phases — each new unique ``phase_label`` gets the next one.
+#: Marker cycle for phases — each new unique `phase_label` gets the next one.
 _PHASE_MARKERS = ["o", "s", "^", "D", "v", "p", "h", "X", "<", ">", "*"]
 
 #: Per-phase base colour palette (one hue per phase, used for the Bragg peaks).
@@ -2349,11 +2349,11 @@ def plot_laue_stack_spots(
     """
     Visualise the spot table from :func:`~nrxrdct.laue.simulate_laue_stack`.
 
-    Each phase (unique ``phase_label``) gets a distinct **marker shape**.
+    Each phase (unique `phase_label`) gets a distinct **marker shape**.
     Within a phase, the **marker colour** encodes the satellite / fringe order:
 
-    * ``satellite_order = 0``   — Bragg peak:  brightest colour of the phase palette.
-    * ``satellite_order = ±m``  — fringe / superlattice satellite:  progressively
+    * `satellite_order = 0`   — Bragg peak:  brightest colour of the phase palette.
+    * `satellite_order = ±m`  — fringe / superlattice satellite:  progressively
       darker / more saturated shades along the same palette (negative and positive
       orders share the same colour sequence, distinguished by the legend).
 
@@ -2363,35 +2363,35 @@ def plot_laue_stack_spots(
     ----------
     spots : list[dict]
         Spot list returned by :func:`~nrxrdct.laue.simulate_laue_stack`.
-        Required keys: ``'phase_label'``, ``'satellite_order'``, ``'tth'``,
-        ``'chi'``, ``'pix'``, ``'intensity'``.
-    space : ``'angles'`` | ``'detector'``
+        Required keys: `'phase_label'`, `'satellite_order'`, `'tth'`,
+        `'chi'`, `'pix'`, `'intensity'`.
+    space : `'angles'` | `'detector'`
         Coordinate space to plot in.
 
-        * ``'angles'``   — x = 2θ (°), y = χ (°).
-        * ``'detector'`` — x = column pixel, y = row pixel.
+        * `'angles'`   — x = 2θ (°), y = χ (°).
+        * `'detector'` — x = column pixel, y = row pixel.
     n_label : int
-        Number of the strongest spots to annotate with ``(hkl)`` labels.
+        Number of the strongest spots to annotate with `(hkl)` labels.
     size_scale : float
-        Maximum marker area (``s`` kwarg in ``ax.scatter``).
+        Maximum marker area (`s` kwarg in `ax.scatter`).
     min_size : float
         Minimum marker area so that weak spots remain visible.
     show_divergence : bool
-        When ``True`` (default), draw a divergence-broadening ellipse around
+        When `True` (default), draw a divergence-broadening ellipse around
         each spot that carries the keys added by
         :func:`~nrxrdct.laue.beam_divergence_ellipses`.  Ellipses are shown
-        at the ``divergence_nsigma``-σ confidence level.  No ellipses are
+        at the `divergence_nsigma`-σ confidence level.  No ellipses are
         drawn for spots with zero broadening (i.e. when the simulation was
         run without divergence parameters).
     divergence_nsigma : float
-        Size of the drawn ellipse in units of σ.  Default ``2.0`` (≈ 86 %
+        Size of the drawn ellipse in units of σ.  Default `2.0` (≈ 86 %
         enclosed probability in 2-D).
     figsize : (float, float)
         Figure size in inches (ignored if *ax* is supplied).
     ax : matplotlib.axes.Axes, optional
         Draw into an existing Axes; if *None* a new figure is created.
     out_path : str or None
-        Save the figure to this path.  ``None`` → do not save.
+        Save the figure to this path.  `None` → do not save.
 
     Returns
     -------
@@ -2573,15 +2573,15 @@ def _draw_divergence_ellipses(ax, spots, xs, ys, frame, nsigma, colors):
     Add per-spot broadening ellipses to *ax*.
 
     Uses the keys written by :func:`~nrxrdct.laue.beam_divergence_ellipses`:
-    angle-space keys for ``frame='tth_chi'``, pixel-space keys for
-    ``frame='detector'``.  Spots with zero broadening are silently skipped.
+    angle-space keys for `frame='tth_chi'`, pixel-space keys for
+    `frame='detector'`.  Spots with zero broadening are silently skipped.
 
     Parameters
     ----------
     ax     : Axes
     spots  : list of spot dicts (aligned with xs/ys)
     xs, ys : 1-D arrays of centre coordinates in display units
-    frame  : ``'tth_chi'`` | ``'detector'``
+    frame  : `'tth_chi'` | `'detector'`
     nsigma : float  — ellipse scale in σ units
     colors : list or str  — edge colours, one per spot or a single string
     """
@@ -2661,7 +2661,7 @@ def _attach_hover_tooltip(fig, ax, spots, tths, chis):
     Attach a hover tooltip to *ax* for the given spot list.
 
     *tths* and *chis* must be numpy arrays whose indices correspond 1-to-1
-    with *spots*.  The tooltip is implemented via ``motion_notify_event``
+    with *spots*.  The tooltip is implemented via `motion_notify_event`
     and requires no extra dependencies beyond matplotlib.
     """
     annot = ax.annotate(
@@ -2742,7 +2742,7 @@ def plot_interactive_tth_chi(
 
     Hovering the mouse over a marker displays a tooltip containing:
 
-    * Miller indices ``(hkl)``
+    * Miller indices `(hkl)`
     * 2θ and χ in degrees
     * Photon energy (eV)
     * Normalised intensity
@@ -2758,31 +2758,31 @@ def plot_interactive_tth_chi(
     Parameters
     ----------
     spots : list[dict]
-        Spot list from any ``simulate_laue*`` function.  Required keys:
-        ``'tth'``, ``'chi'``, ``'hkl'``, ``'E'``, ``'intensity'``.
-        Optional: ``'satellite_order'``, ``'is_superlattice'``,
-        ``'phase_label'``.
+        Spot list from any `simulate_laue*` function.  Required keys:
+        `'tth'`, `'chi'`, `'hkl'`, `'E'`, `'intensity'`.
+        Optional: `'satellite_order'`, `'is_superlattice'`,
+        `'phase_label'`.
     i_thresh : float
         Minimum intensity threshold as a fraction of the brightest **Bragg
-        peak** (``satellite_order == 0``).  Spots with
-        ``intensity < i_thresh * I_bragg_max`` are dropped before plotting.
-        Default: ``0.01`` (1 % of the strongest Bragg peak).
-        Pass ``0.0`` to show all spots.
-    color_by : ``'energy'`` | ``'intensity'`` | ``'phase'``
+        peak** (`satellite_order == 0`).  Spots with
+        `intensity < i_thresh * I_bragg_max` are dropped before plotting.
+        Default: `0.01` (1 % of the strongest Bragg peak).
+        Pass `0.0` to show all spots.
+    color_by : `'energy'` | `'intensity'` | `'phase'`
         Quantity mapped to spot colour:
 
-        * ``'energy'``    — photon energy (plasma colormap)
-        * ``'intensity'`` — normalised intensity (viridis colormap)
-        * ``'phase'``     — phase label (tab10; requires ``'phase_label'`` key)
+        * `'energy'`    — photon energy (plasma colormap)
+        * `'intensity'` — normalised intensity (viridis colormap)
+        * `'phase'`     — phase label (tab10; requires `'phase_label'` key)
     size_scale : float
-        Maximum marker area (``s`` in ``scatter``).
+        Maximum marker area (`s` in `scatter`).
     min_size : float
         Minimum marker area so that weak spots remain visible.
     figsize : (float, float)
         Figure size in inches.
     out_path : str or None
         If given, save a **static** PNG snapshot on figure close.
-        ``None`` (default) → do not save.
+        `None` (default) → do not save.
 
     Returns
     -------
@@ -2792,7 +2792,7 @@ def plot_interactive_tth_chi(
     Notes
     -----
     The interactive hover is implemented with matplotlib's built-in event
-    system (no extra dependencies).  Call ``plt.show()`` after this function
+    system (no extra dependencies).  Call `plt.show()` after this function
     to display the interactive window.
     """
     if not spots:
@@ -2925,7 +2925,7 @@ def warp_image_to_tth_chi(
     unit vector is computed, projected back onto the detector via
     :meth:`~nrxrdct.laue.Camera.kf_to_pixel`, and the source image is
     sampled by bilinear interpolation.  Output pixels that map outside the
-    detector active area are set to ``NaN``.
+    detector active area are set to `NaN`.
 
     Parameters
     ----------
@@ -2935,10 +2935,10 @@ def warp_image_to_tth_chi(
     camera : Camera
         Detector geometry used for the forward/inverse projections.
     tth_range : (float, float), optional
-        2θ range in degrees ``(tth_min, tth_max)``.  Defaults to the range
+        2θ range in degrees `(tth_min, tth_max)`.  Defaults to the range
         covered by the four detector corners.
     chi_range : (float, float), optional
-        χ range in degrees ``(chi_min, chi_max)``.  Defaults to the range
+        χ range in degrees `(chi_min, chi_max)`.  Defaults to the range
         covered by the four detector corners.
     n_tth, n_chi : int
         Number of output pixels along the 2θ and χ axes.
@@ -3044,13 +3044,13 @@ def plot_tth_chi_overlay(
 
     Two display frames are available via the *frame* parameter:
 
-    * ``'tth_chi'`` *(default)* — the detector image is warped from pixel
+    * `'tth_chi'` *(default)* — the detector image is warped from pixel
       coordinates into an evenly-spaced 2θ / χ grid using
       :func:`warp_image_to_tth_chi`, and simulated spots are overlaid at
       their angular positions.
-    * ``'detector'`` — the raw pixel image is displayed without any
+    * `'detector'` — the raw pixel image is displayed without any
       remapping.  Simulated spots are projected to detector pixel coordinates
-      (using the ``'pix'`` key when present, or back-projected from their
+      (using the `'pix'` key when present, or back-projected from their
       2θ / χ angles via :meth:`~Camera.kf_to_pixel`).
 
     Hovering over a spot in either frame shows the same tooltip (hkl, 2θ,
@@ -3066,8 +3066,8 @@ def plot_tth_chi_overlay(
         Spot list from :func:`~nrxrdct.laue.simulate_laue`,
         :func:`~nrxrdct.laue.simulate_laue_stack`, or
         :func:`~nrxrdct.laue.simulate_mixed_phases`.
-        Required keys: ``'tth'``, ``'chi'``.
-    frame : ``'tth_chi'`` | ``'detector'``
+        Required keys: `'tth'`, `'chi'`.
+    frame : `'tth_chi'` | `'detector'`
         Coordinate frame for the display (see above).
     tth_range, chi_range : (float, float), optional
         Angular range to display (*tth_chi* frame only).
@@ -3075,22 +3075,22 @@ def plot_tth_chi_overlay(
     n_tth, n_chi : int
         Warp output resolution (*tth_chi* frame only).
     log_scale : bool
-        Apply ``log1p`` scaling to the image before display.
+        Apply `log1p` scaling to the image before display.
     cmap : str
         Matplotlib colormap for the image.
     spot_marker : str
-        Marker style for simulated spots (default ``'+'``).
+        Marker style for simulated spots (default `'+'`).
     spot_size : float
         Marker size for simulated spots.
     spot_color : str or None
-        Single colour for all spots.  When ``None``, colours are assigned
-        per ``color_spots_by``.
-    color_spots_by : ``'phase'`` | ``'order'`` | ``'energy'``
-        How to colour spots when ``spot_color`` is ``None``.
+        Single colour for all spots.  When `None`, colours are assigned
+        per `color_spots_by`.
+    color_spots_by : `'phase'` | `'order'` | `'energy'`
+        How to colour spots when `spot_color` is `None`.
     i_thresh : float
         Minimum intensity as a fraction of the brightest Bragg peak
-        (``satellite_order == 0``).  Spots below the cutoff are not
-        overlaid.  Default: ``0.01`` (1 %).  Pass ``0.0`` to show all spots.
+        (`satellite_order == 0`).  Spots below the cutoff are not
+        overlaid.  Default: `0.01` (1 %).  Pass `0.0` to show all spots.
     figsize : (float, float)
     out_path : str or None
         Save figure to this path if provided.
@@ -3101,8 +3101,8 @@ def plot_tth_chi_overlay(
     ax  : matplotlib.axes.Axes
     display_image : ndarray
         The image array that was actually plotted — the warped 2θ / χ grid
-        when ``frame='tth_chi'``, or the (optionally log-scaled) raw pixel
-        image when ``frame='detector'``.
+        when `frame='tth_chi'`, or the (optionally log-scaled) raw pixel
+        image when `frame='detector'`.
     """
     if frame not in ("tth_chi", "detector"):
         raise ValueError(f"frame must be 'tth_chi' or 'detector', got {frame!r}")
@@ -3289,15 +3289,15 @@ def plot_laue_comparison(
     camera : Camera
         Detector geometry (shared by both panels).
     spots : list[dict], optional
-        Spot list from any ``simulate_laue*`` function.  Overlaid on the
+        Spot list from any `simulate_laue*` function.  Overlaid on the
         right (simulation) panel only.
-    frame : ``'tth_chi'`` | ``'detector'``
+    frame : `'tth_chi'` | `'detector'`
         Display coordinate frame.
 
-        * ``'tth_chi'`` — both images are warped to an evenly-spaced 2θ / χ
+        * `'tth_chi'` — both images are warped to an evenly-spaced 2θ / χ
           grid; spots are placed at their angular coordinates.
-        * ``'detector'`` — raw pixel images; spots projected via their
-          ``'pix'`` key or back-projected from 2θ / χ.
+        * `'detector'` — raw pixel images; spots projected via their
+          `'pix'` key or back-projected from 2θ / χ.
     tth_range, chi_range : (float, float), optional
         Angular display range (*tth_chi* frame only).
     n_tth, n_chi : int
@@ -3305,16 +3305,16 @@ def plot_laue_comparison(
     cmap : str
         Matplotlib colormap (applied to both panels).
     spot_marker : str
-        Marker style for simulated spots (default ``'+'``).
+        Marker style for simulated spots (default `'+'`).
     spot_size : float
         Marker size.
     spot_color : str or None
-        Fixed colour for all spots.  ``None`` → colour by ``color_spots_by``.
-    color_spots_by : ``'phase'`` | ``'order'`` | ``'energy'``
-        Colouring scheme when *spot_color* is ``None``.
+        Fixed colour for all spots.  `None` → colour by `color_spots_by`.
+    color_spots_by : `'phase'` | `'order'` | `'energy'`
+        Colouring scheme when *spot_color* is `None`.
     i_thresh : float
-        Minimum ``I/Imax`` to show a spot (0 = show all).  Spots with
-        ``intensity < i_thresh`` are hidden.  The toggle button shows /
+        Minimum `I/Imax` to show a spot (0 = show all).  Spots with
+        `intensity < i_thresh` are hidden.  The toggle button shows /
         hides satellite spots on top of this threshold.
     figsize : (float, float)
     out_path : str or None
@@ -3607,17 +3607,17 @@ def plot_segmentation(
         Peak table from :func:`~nrxrdct.laue.convert_spotsfile2peaklist`.
         Column layout (from that function):
 
-        * 0 – ``peak_X``  (xcam, column pixel)
-        * 1 – ``peak_Y``  (ycam, row pixel)
-        * 2 – ``peak_I``  (fitted peak intensity, optional)
-        * 3 – ``peak_fwaxmaj``   \\
-        * 4 – ``peak_fwaxmin``    > required for *show_ellipses*
-        * 5 – ``peak_inclination`` (degrees) /
+        * 0 – `peak_X`  (xcam, column pixel)
+        * 1 – `peak_Y`  (ycam, row pixel)
+        * 2 – `peak_I`  (fitted peak intensity, optional)
+        * 3 – `peak_fwaxmaj`   \\
+        * 4 – `peak_fwaxmin`    > required for *show_ellipses*
+        * 5 – `peak_inclination` (degrees) /
 
         A plain (N, 2) array of pixel positions also works.
     log_scale : bool
-        Apply ``log1p`` compression to the image before display (default
-        ``True``).
+        Apply `log1p` compression to the image before display (default
+        `True`).
     color_by_intensity : bool
         Colour "+" markers by peak intensity (log-scaled, column 2).
         Falls back to a fixed green if column 2 is absent.
@@ -3626,15 +3626,15 @@ def plot_segmentation(
     marker_size : float
         Marker area in points².
     cmap_image : str
-        Colormap for the image (default ``"inferno"``).
+        Colormap for the image (default `"inferno"`).
     cmap_markers : str
-        Colormap for intensity-coded markers (default ``"plasma"``).
+        Colormap for intensity-coded markers (default `"plasma"`).
     vmin_pct, vmax_pct : float
         Percentile clip for the image display range.
     figsize : (w, h)
         Figure size in inches (ignored when *ax* is supplied).
     title : str or None
-        Axes title.  Defaults to ``"Segmentation — N spots found"``.
+        Axes title.  Defaults to `"Segmentation — N spots found"`.
     ax : matplotlib.axes.Axes or None
         Draw into an existing axes rather than creating a new figure.
 
@@ -3758,7 +3758,7 @@ def plot_multigrain(
 
     Each grain's simulated spots are drawn in a distinct colour; thin lines
     connect each simulated spot to its nearest observed counterpart (within
-    *match_px*).  When *color_obs_by_grain* is ``True`` the observed spots are
+    *match_px*).  When *color_obs_by_grain* is `True` the observed spots are
     also coloured by whichever grain's simulation is closest to them, giving an
     immediate visual assignment map.
 
@@ -3774,20 +3774,20 @@ def plot_multigrain(
     Parameters
     ----------
     obs_xy : (N, 2) array-like
-        Observed pixel positions ``[xcam, ycam]``.
+        Observed pixel positions `[xcam, ycam]`.
     spots_per_grain : list of spot-lists
         One spot list per grain, each in the format returned by
         :func:`~nrxrdct.laue.simulation.simulate_laue`.
-        Each spot dict must contain a ``'pix'`` key ``(xcam, ycam)``.
+        Each spot dict must contain a `'pix'` key `(xcam, ycam)`.
     camera : Camera
-        Detector geometry; ``camera.Nh`` and ``camera.Nv`` set the axis limits.
+        Detector geometry; `camera.Nh` and `camera.Nv` set the axis limits.
     image : (Nv, Nh) array or None
         Optional raw detector image displayed as a log-scaled background.
     match_px : float
         Maximum pixel distance for drawing a match line between a simulated
-        spot and its nearest observed spot.  Default ``10.0``.
+        spot and its nearest observed spot.  Default `10.0`.
     color_obs_by_grain : bool
-        When ``True`` (default), repaint each observed spot in the colour of
+        When `True` (default), repaint each observed spot in the colour of
         its closest grain.  Unmatched spots (all grains farther than
         *match_px*) are shown in white.
     figsize : (float, float)

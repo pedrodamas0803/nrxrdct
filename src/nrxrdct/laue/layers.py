@@ -110,9 +110,9 @@ def crystal_to_cartesian(uvw, crystal):
 def orientation_along_z(zone_axis_crystal, crystal, up_crystal=None):
     """
     Build a 3×3 orientation matrix U that places the crystal direction
-    ``zone_axis_crystal`` along the lab +z axis (stacking direction).
+    `zone_axis_crystal` along the lab +z axis (stacking direction).
 
-    Optionally align ``up_crystal`` as close as possible to lab +x.
+    Optionally align `up_crystal` as close as possible to lab +x.
 
     Parameters
     ----------
@@ -174,8 +174,8 @@ def _or_from_two_pairs(v1_A, v2_A, v1_B, v2_B):
 def or_from_directions(crystal_A, dir1_A, dir2_A, crystal_B, dir1_B, dir2_B):
     """
     Compute the orientation relationship rotation  R_OR  such that
-    crystal direction ``dir1_A`` in phase A is parallel to ``dir1_B`` in B,
-    and ``dir2_A`` is as close as possible to ``dir2_B``.
+    crystal direction `dir1_A` in phase A is parallel to `dir1_B` in B,
+    and `dir2_A` is as close as possible to `dir2_B`.
 
     Usage:
         R_OR = or_from_directions(Fe, [1,1,1], [1,-1,0],
@@ -283,18 +283,18 @@ def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str =
 
     Parameters
     ----------
-    material : ``'GaN'`` | ``'InN'`` | ``'AlN'``
-        First end-member (or the only material when ``x=0``).
+    material : `'GaN'` | `'InN'` | `'AlN'`
+        First end-member (or the only material when `x=0`).
     x : float, optional
-        Alloy fraction of ``material`` in the ternary (default 0).
+        Alloy fraction of `material` in the ternary (default 0).
         Example: for In₀.₂Ga₀.₈N pass
-        ``material='InN', x=0.2, end_material='GaN'``.
-    end_material : ``'GaN'`` | ``'InN'`` | ``'AlN'``, optional
-        Second end-member (default ``'GaN'``).
+        `material='InN', x=0.2, end_material='GaN'`.
+    end_material : `'GaN'` | `'InN'` | `'AlN'`, optional
+        Second end-member (default `'GaN'`).
 
     Returns
     -------
-    dict with keys ``'C11'``, ``'C12'``, ``'C13'``, ``'C33'``, ``'C44'``
+    dict with keys `'C11'`, `'C12'`, `'C13'`, `'C33'`, `'C44'`
     (all in GPa).
 
     Examples
@@ -317,20 +317,19 @@ def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str =
 
 def d_spacing_hkl(crystal, h, k, l):
     """
-    Interplanar spacing of the ``(hkl)`` family for *crystal*.
+    Interplanar spacing of the `(hkl)` family for *crystal*.
 
     Uses the reciprocal lattice directly, so it is valid for any crystal
     system (cubic, hexagonal, orthorhombic, triclinic, …):
 
-    .. math::
-
-        d_{hkl} = \\frac{2\\pi}{|\\mathbf{G}_{hkl}|}
-        \\qquad
-        \\mathbf{G}_{hkl} = h\\,\\mathbf{b}_1 + k\\,\\mathbf{b}_2 + l\\,\\mathbf{b}_3
-
-    where :math:`\\mathbf{b}_i` are the reciprocal-lattice basis vectors in
-    the xrayutilities convention (:math:`\\mathbf{b}_i \\cdot \\mathbf{a}_j =
-    2\\pi\\,\\delta_{ij}`).
+    $$
+    d_{hkl} = \\frac{2\\pi}{|\\mathbf{G}_{hkl}|}
+    \\qquad
+    \\mathbf{G}_{hkl} = h\\,\\mathbf{b}_1 + k\\,\\mathbf{b}_2 + l\\,\\mathbf{b}_3
+    $$
+    where $\\mathbf{b}_i$ are the reciprocal-lattice basis vectors in
+    the xrayutilities convention ($\\mathbf{b}_i \\cdot \\mathbf{a}_j =
+    2\\pi\\,\\delta_{ij}$).
 
     Parameters
     ----------
@@ -368,28 +367,26 @@ def pseudomorphic_d_spacing(
     Assuming biaxial in-plane stress with a free surface perpendicular to the
     growth direction, the out-of-plane strain is:
 
-    .. math::
-
-        \\varepsilon_\\perp = -\\frac{2C_{13}}{C_{33}}\\,\\varepsilon_\\parallel
-        \\qquad
-        \\varepsilon_\\parallel = \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
-
-    The strained repeat along ``growth_dir`` is then
-    :math:`d = d_{\\text{bulk}}(1 + \\varepsilon_\\perp)`.
+    $$
+    \\varepsilon_\\perp = -\\frac{2C_{13}}{C_{33}}\\,\\varepsilon_\\parallel
+    \\qquad
+    \\varepsilon_\\parallel = \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
+    $$
+    The strained repeat along `growth_dir` is then
+    $d = d_{\\text{bulk}}(1 + \\varepsilon_\\perp)$.
 
     This formula is exact for hexagonal **c-axis** growth and for cubic
-    **[001]** growth (substitute :math:`C_{12}/C_{11}` for
-    :math:`C_{13}/C_{33}`).
+    **[001]** growth (substitute $C_{12}/C_{11}$ for
+    $C_{13}/C_{33}$).
 
-    .. warning::
-
+    !!! warning
         **Not valid for non-c-axis hexagonal or off-axis cubic growth.**
         For semipolar / non-polar orientations (e.g. GaN grown along
         [2,-2,0], [1,1,-2,3], etc.) the in-plane strain is anisotropic and
         the correct out-of-plane response requires rotating the full
         elastic stiffness tensor into the growth frame.  Calling this
-        function with a non-c-axis ``growth_dir`` for a hexagonal crystal
-        will raise ``ValueError``.
+        function with a non-c-axis `growth_dir` for a hexagonal crystal
+        will raise `ValueError`.
 
     Parameters
     ----------
@@ -397,26 +394,26 @@ def pseudomorphic_d_spacing(
         Bulk (relaxed) film crystal.
     a_substrate : float  or  xu.materials.Crystal
         In-plane lattice parameter of the template / substrate (Å).
-        If a Crystal is passed its ``.lattice.a`` is used.
+        If a Crystal is passed its `.lattice.a` is used.
     C13, C33 : float
         Elastic stiffness constants in any consistent units (GPa or Pa).
 
-        * Hexagonal c-axis growth  → :math:`C_{13}`, :math:`C_{33}`
-        * Cubic [001] growth       → :math:`C_{12}`, :math:`C_{11}`
+        * Hexagonal c-axis growth  → $C_{13}$, $C_{33}$
+        * Cubic [001] growth       → $C_{12}$, $C_{11}$
     growth_dir : array-like (3,), optional
         Miller direction of the stacking / growth axis in the **film's crystal
-        frame** (default: ``(0, 0, 1)``).
-        For hexagonal crystals only ``(0, 0, 1)`` (c-axis) is supported.
+        frame** (default: `(0, 0, 1)`).
+        For hexagonal crystals only `(0, 0, 1)` (c-axis) is supported.
 
     Returns
     -------
     d_strained : float
-        Strained repeat along ``growth_dir`` (Å).  Pass directly as
-        ``d_spacing`` to :meth:`LayeredCrystal.add_layer`.
+        Strained repeat along `growth_dir` (Å).  Pass directly as
+        `d_spacing` to :meth:`LayeredCrystal.add_layer`.
     eps_par : float
-        In-plane strain :math:`\\varepsilon_\\parallel` (positive = tensile).
+        In-plane strain $\\varepsilon_\\parallel$ (positive = tensile).
     eps_perp : float
-        Out-of-plane strain :math:`\\varepsilon_\\perp`.
+        Out-of-plane strain $\\varepsilon_\\perp$.
 
     Examples
     --------
@@ -500,21 +497,21 @@ class Layer:
     thickness   : float   physical thickness of the layer in Å
     n_hat       : array-like (3,), optional
         Unit vector in the **lab frame** that defines the stacking / growth
-        direction (= sample-surface normal).  Defaults to ``[0, 0, 1]``
-        (lab Z), which is correct when ``U`` was obtained from
-        ``orientation_along_z``.  When ``U`` comes from a Laue indexation
+        direction (= sample-surface normal).  Defaults to `[0, 0, 1]`
+        (lab Z), which is correct when `U` was obtained from
+        `orientation_along_z`.  When `U` comes from a Laue indexation
         result, pass the growth-direction vector explicitly:
-        ``n_hat = U @ growth_dir_crystal / np.linalg.norm(...)``.
+        `n_hat = U @ growth_dir_crystal / np.linalg.norm(...)`.
 
         The growth direction always coincides with the sample-surface normal
-        (the plane given as ``growth_crystal`` is parallel to the sample
+        (the plane given as `growth_crystal` is parallel to the sample
         surface).  The angle between the incident beam (LT-frame x-axis,
-        ``[1,0,0]``) and this vector is therefore fixed by the sample
+        `[1,0,0]`) and this vector is therefore fixed by the sample
         mounting and is used to correct the Beer-Lambert absorption depth
-        when ``absorption_limit=True``.
+        when `absorption_limit=True`.
     d_spacing   : float, optional
         Repeat distance along the stacking direction (Å).
-        If ``None``, computed as the primitive lattice repeat along ``n_hat``.
+        If `None`, computed as the primitive lattice repeat along `n_hat`.
     label       : str, optional   name for this layer
     """
 
@@ -575,7 +572,7 @@ class Layer:
         """
         Linear absorption coefficient μ (Å⁻¹) for this material at *energy_eV*.
 
-        Returns ``0.0`` if material data are unavailable or absorption is zero.
+        Returns `0.0` if material data are unavailable or absorption is zero.
         """
         _HC_ANG = 12398.419843
         try:
@@ -599,13 +596,13 @@ class Layer:
         """
         Effective number of unit cells after Beer-Lambert absorption limiting.
 
-        With only the incident beam considered (``kf_hat=None``):
+        With only the incident beam considered (`kf_hat=None`):
 
             n_eff = cos_in / (μ · d)
 
             cos_in = |n̂ · x̂| = |n_hat[0]|
 
-        When the diffracted-beam direction ``kf_hat`` is supplied, the
+        When the diffracted-beam direction `kf_hat` is supplied, the
         **two-beam** formula accounts for both the incident and exit paths
         through the layer:
 
@@ -620,7 +617,7 @@ class Layer:
         which is the standard symmetric absorption correction used in
         surface-diffraction and thin-film rocking-curve analysis.
 
-        Returns ``self.n_cells`` unchanged if the material lookup fails or if
+        Returns `self.n_cells` unchanged if the material lookup fails or if
         the absorption depth exceeds the real layer thickness.
         """
         mu = self._linear_mu(energy_eV)
@@ -649,7 +646,7 @@ class Layer:
 
         F_layer(Q) = F_uc(Q_crystal) · Σ_{n=0}^{N-1} exp(i (Q·n̂)(z0 + n·d))
 
-        The phase uses the projection of Q onto the stacking direction ``n_hat``
+        The phase uses the projection of Q onto the stacking direction `n_hat`
         (not Q_z), so the result is correct for any sample orientation.
 
         Parameters
@@ -710,9 +707,9 @@ class LayeredCrystal:
     A stack of crystalline layers with specified orientations,
     optionally repeated as a superlattice.
 
-    The stacking direction is a lab-frame unit vector ``n_hat`` (default
-    ``[0, 0, 1]``, i.e. lab Z).  All phase calculations use the projection
-    ``Q · n_hat`` rather than ``Q_z``, so the structure factor is correct
+    The stacking direction is a lab-frame unit vector `n_hat` (default
+    `[0, 0, 1]`, i.e. lab Z).  All phase calculations use the projection
+    `Q · n_hat` rather than `Q_z`, so the structure factor is correct
     regardless of how the sample sits on the diffractometer.
 
     Parameters
@@ -722,11 +719,11 @@ class LayeredCrystal:
         Unit vector in the **lab frame** defining the growth / stacking
         direction (sample-surface normal).
 
-        - When all ``U`` matrices come from ``orientation_along_z``, the
-          stacking direction is lab Z and the default ``[0, 0, 1]`` is correct.
-        - When ``U`` comes from a Laue indexation result, pass the actual
-          growth direction:  ``stacking_direction = U @ growth_dir_crystal``
-          (e.g. ``U @ [0, 0, 1]`` for GaN grown along its c-axis).
+        - When all `U` matrices come from `orientation_along_z`, the
+          stacking direction is lab Z and the default `[0, 0, 1]` is correct.
+        - When `U` comes from a Laue indexation result, pass the actual
+          growth direction:  `stacking_direction = U @ growth_dir_crystal`
+          (e.g. `U @ [0, 0, 1]` for GaN grown along its c-axis).
 
     Example — using orientation_along_z (default n_hat = Z)
     --------------------------------------------------------
@@ -796,7 +793,7 @@ class LayeredCrystal:
 
         Layers are stacked in the order they are added; the first call
         places the layer at the bottom of the unit, the last at the top.
-        The full unit is then repeated ``n_rep`` times above the buffer layers.
+        The full unit is then repeated `n_rep` times above the buffer layers.
 
         Parameters
         ----------
@@ -830,16 +827,15 @@ class LayeredCrystal:
         The out-of-plane repeat distance is computed from the biaxial strain
         state imposed by the in-plane lattice constraint:
 
-        .. math::
-
-            d = d_{\\text{bulk}}\\left(1 - \\frac{2C_{13}}{C_{33}}\\,
-            \\varepsilon_\\parallel\\right)
-            \\qquad
-            \\varepsilon_\\parallel =
-            \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
-
+        $$
+        d = d_{\\text{bulk}}\\left(1 - \\frac{2C_{13}}{C_{33}}\\,
+        \\varepsilon_\\parallel\\right)
+        \\qquad
+        \\varepsilon_\\parallel =
+        \\frac{a_{\\text{sub}} - a_{\\text{film}}}{a_{\\text{film}}}
+        $$
         Equivalent to calling :func:`pseudomorphic_d_spacing` then
-        :meth:`add_layer` with the computed ``d_spacing``.
+        :meth:`add_layer` with the computed `d_spacing`.
 
         Parameters
         ----------
@@ -851,15 +847,15 @@ class LayeredCrystal:
             Physical thickness of the layer in Å.
         a_substrate : float  or  xu.materials.Crystal
             In-plane lattice parameter of the template (Å), or a Crystal
-            whose ``.lattice.a`` is used.
+            whose `.lattice.a` is used.
         C13, C33 : float
             Elastic stiffness constants (GPa).
 
-            * Hexagonal c-axis growth → :math:`C_{13}`, :math:`C_{33}`
-            * Cubic [001] growth      → :math:`C_{12}`, :math:`C_{11}`
+            * Hexagonal c-axis growth → $C_{13}$, $C_{33}$
+            * Cubic [001] growth      → $C_{12}$, $C_{11}$
         growth_dir : array-like (3,), optional
             Growth direction in the **film's crystal frame**.
-            Default: ``(0, 0, 1)`` (c-axis).
+            Default: `(0, 0, 1)` (c-axis).
         label : str, optional
 
         Returns
@@ -893,12 +889,12 @@ class LayeredCrystal:
 
         Two calling forms:
 
-        **Global** — apply one ``U`` to every layer::
+        **Global** — apply one `U` to every layer::
 
             stack.set_U(U)
 
-        **Per-material** — supply a dict mapping crystal name to ``U``; only
-        layers whose ``crystal.name`` matches a key are updated::
+        **Per-material** — supply a dict mapping crystal name to `U`; only
+        layers whose `crystal.name` matches a key are updated::
 
             stack.set_U({'GaN': U_GaN, 'InGaN': U_InGaN})
 
@@ -910,7 +906,7 @@ class LayeredCrystal:
         ----------
         U : array-like (3, 3) or dict[str, array-like (3, 3)]
             A single orientation matrix applied to all layers, or a mapping
-            ``{crystal_name: U_matrix}``.
+            `{crystal_name: U_matrix}`.
 
         Returns
         -------
@@ -979,21 +975,21 @@ class LayeredCrystal:
 
                F_buf(Q) = Σ_j  T_above_j · F_layer_j(Q, z0_j)
 
-           where ``T_above_j`` is the amplitude attenuation from all layers
+           where `T_above_j` is the amplitude attenuation from all layers
            above layer *j* (both the MQW block and the shallower buffer layers).
 
         2. **Repeating unit** (MQW / bilayer, sitting on top of the buffer):
 
                F_MQW(Q) = exp(i·Qₙ·z_buf) · F_unit(Q) · S_rep(Q)
 
-           where ``z_buf`` is the total buffer thickness,
-           ``F_unit`` is the single-bilayer structure factor, and
+           where `z_buf` is the total buffer thickness,
+           `F_unit` is the single-bilayer structure factor, and
 
                S_rep(Q) = Σ_{m=0}^{N_rep-1} exp(i·m·Qₙ·Λ)
 
            is the superlattice geometric factor.
 
-        The total structure factor is ``F_buf + F_MQW``.
+        The total structure factor is `F_buf + F_MQW`.
 
         Parameters
         ----------
@@ -1006,9 +1002,9 @@ class LayeredCrystal:
 
                 T = exp(−μ · t · (1/cos_in + 1/cos_out))
 
-            where ``cos_in = |n̂ · x̂|`` and ``cos_out = |n̂ · k̂_f|``.
-            If ``None``, only the incident-path (one-beam) correction already
-            embedded in each buffer layer's ``_effective_n_cells`` is applied.
+            where `cos_in = |n̂ · x̂|` and `cos_out = |n̂ · k̂_f|`.
+            If `None`, only the incident-path (one-beam) correction already
+            embedded in each buffer layer's `_effective_n_cells` is applied.
 
         Returns
         -------
@@ -1077,9 +1073,9 @@ class LayeredCrystal:
         Structure factor of the thickness-weighted average unit cell at Q_lab.
 
         Instead of summing layer amplitudes with their relative depth phases
-        (the coherent model), this method sums ``F_uc_i × N_eff_i`` over all
+        (the coherent model), this method sums `F_uc_i × N_eff_i` over all
         layers **without** the inter-layer phase factors
-        ``exp(i Q_n z_{0,i})``.  The result is the *structural envelope* of
+        `exp(i Q_n z_{0,i})`.  The result is the *structural envelope* of
         the diffraction pattern: the intensity it predicts at any Q is the
         maximum each satellite could reach if all unit cells happened to
         scatter perfectly in phase.
@@ -1291,19 +1287,19 @@ class LayeredCrystal:
         """
         Plot a lattice parameter profile through the stack depth.
 
-        Draws a step function showing how *param* (``'a'``, ``'b'``, or
-        ``'c'``) varies with depth, with buffer layers at the bottom and the
+        Draws a step function showing how *param* (`'a'`, `'b'`, or
+        `'c'`) varies with depth, with buffer layers at the bottom and the
         surface at the top.  The repeating MQW unit is unrolled across all
-        ``n_rep`` repetitions.
+        `n_rep` repetitions.
 
         Parameters
         ----------
-        param : ``'a'`` | ``'b'`` | ``'c'``
+        param : `'a'` | `'b'` | `'c'`
             Which lattice parameter to plot.
-        unit : ``'A'`` | ``'nm'``
+        unit : `'A'` | `'nm'`
             Display unit for the depth axis (Å or nm).
         ax : matplotlib.axes.Axes, optional
-            Draw into an existing axes; a new figure is created if ``None``.
+            Draw into an existing axes; a new figure is created if `None`.
         figsize : (float, float)
 
         Returns
@@ -1406,26 +1402,25 @@ class LayeredCrystal:
 
         Strain is defined as
 
-        .. math::
-
-            \\varepsilon = \\frac{p_{\\text{layer}} - p_{\\text{ref}}}{p_{\\text{ref}}}
-
-        where *p* is the chosen lattice parameter (``'a'``, ``'b'``, or
-        ``'c'``).
+        $$
+        \\varepsilon = \\frac{p_{\\text{layer}} - p_{\\text{ref}}}{p_{\\text{ref}}}
+        $$
+        where *p* is the chosen lattice parameter (`'a'`, `'b'`, or
+        `'c'`).
 
         Parameters
         ----------
-        param : ``'a'`` | ``'b'`` | ``'c'``
+        param : `'a'` | `'b'` | `'c'`
             Lattice parameter to use.
         reference : float, xu.materials.Crystal, or None
             Reference value for zero strain.
 
             * **float** — use this value directly (Å).
-            * **Crystal** — use ``crystal.lattice.<param>``.
+            * **Crystal** — use `crystal.lattice.<param>`.
             * **None** *(default)* — use the lattice parameter of the first
               buffer layer; if there are no buffer layers, use the first
               repeating layer.
-        unit : ``'A'`` | ``'nm'``
+        unit : `'A'` | `'nm'`
             Display unit for the depth axis.
         ax : matplotlib.axes.Axes, optional
         figsize : (float, float)

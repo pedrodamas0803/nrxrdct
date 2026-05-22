@@ -5,11 +5,11 @@ SLURM worker for the orientation-fitting step of a micro-Laue map.
 
 For each assigned frame the worker:
 
-1. Loads the observed spot list from ``seg_dir/frame_{idx:05d}.h5``.
-2. Tries every ``UB*.npy`` reference matrix in turn.
+1. Loads the observed spot list from `seg_dir/frame_{idx:05d}.h5`.
+2. Tries every `UB*.npy` reference matrix in turn.
 3. Runs :func:`~nrxrdct.laue.fitting.fit_orientation` with optional staged
-   ``max_match_px``.
-4. Saves a ``.npz`` result to ``ubs_dir/frame_{idx:05d}_g{gi:02d}.npz``
+   `max_match_px`.
+4. Saves a `.npz` result to `ubs_dir/frame_{idx:05d}_g{gi:02d}.npz`
    **only if** the fit passes the quality thresholds.
 
 Invoked by :meth:`GrainMap.submit_orientation` via::

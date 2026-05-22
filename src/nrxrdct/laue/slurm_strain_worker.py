@@ -5,13 +5,13 @@ SLURM worker for the strain-fitting step of a micro-Laue map.
 
 For each assigned frame the worker:
 
-1. Loads the observed spot list from ``seg_dir/frame_{idx:05d}.h5``.
-2. For each grain index ``gi``, checks whether an orientation result exists at
-   ``ubs_dir/frame_{idx:05d}_g{gi:02d}.npz``.
+1. Loads the observed spot list from `seg_dir/frame_{idx:05d}.h5`.
+2. For each grain index `gi`, checks whether an orientation result exists at
+   `ubs_dir/frame_{idx:05d}_g{gi:02d}.npz`.
 3. Runs :func:`~nrxrdct.laue.fitting.fit_strain_orientation` starting from the
    fitted U matrix.
 4. Saves the full strain result to
-   ``strain_dir/frame_{idx:05d}_g{gi:02d}.npz``.
+   `strain_dir/frame_{idx:05d}_g{gi:02d}.npz`.
 
 Invoked by :meth:`GrainMap.submit_strain` via::
 

@@ -60,10 +60,10 @@ class CalibrationResult:
                        :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
                        Columns 0 and 1 are used as (xcam, ycam) pixel positions.
         image        : (Nv, Nh) array or None  — optional detector image
-                       (``'detector'`` space only; ignored for ``'angular'``).
+                       (`'detector'` space only; ignored for `'angular'`).
         max_match_px : float  — pixel-space match radius for spot pairing.
-        space        : ``'detector'`` or ``'angular'``  — coordinate frame for
-                       the main panel.  ``'angular'`` plots 2θ (x) vs χ (y) in
+        space        : `'detector'` or `'angular'`  — coordinate frame for
+                       the main panel.  `'angular'` plots 2θ (x) vs χ (y) in
                        degrees.  Matching is always done in detector (pixel)
                        space; the histogram shows pixel distances in detector
                        mode and Euclidean (2θ, χ) distances in angular mode.
@@ -663,31 +663,31 @@ class Camera:
         Simulate Poissonian photon-counting statistics on a detector image.
 
         The image is treated as a map of *relative* intensities.  It is
-        scaled so that the brightest pixel has ``peak_counts`` expected
+        scaled so that the brightest pixel has `peak_counts` expected
         photons, then every pixel is sampled independently from a Poisson
         distribution with its own expected count λᵢ:
 
-        .. math::
-
-            \\lambda_i = I_i \\cdot \\frac{\\text{peak\\_counts}}{\\max(I)}
-            \\qquad
-            n_i \\sim \\operatorname{Poisson}(\\lambda_i)
+        $$
+        \lambda_i = I_i \cdot \frac{\text{peak\_counts}}{\max(I)}
+        \qquad
+        n_i \sim \operatorname{Poisson}(\lambda_i)
+        $$
 
         This reproduces the correct counting statistics: the noise standard
-        deviation at pixel *i* is :math:`\\sqrt{\\lambda_i}`, so bright spots
+        deviation at pixel *i* is $\sqrt{\lambda_i}$, so bright spots
         have more absolute noise but better signal-to-noise than dim pixels.
 
-        .. note::
+        !!! note
             Pass a **linear** (non-log-scaled) image so that relative
             intensities are preserved.  Use
-            ``camera.render(spots, log_scale=False)`` before calling this
+            `camera.render(spots, log_scale=False)` before calling this
             method, then optionally apply log-scaling to the returned noisy
             image for display.
 
         Parameters
         ----------
         image : numpy.ndarray, shape (Nv, Nh)
-            Linear intensity image from :meth:`render` (``log_scale=False``).
+            Linear intensity image from :meth:`render` (`log_scale=False`).
             All values must be ≥ 0.
         peak_counts : float
             Expected photon count at the brightest pixel.  Controls the
@@ -695,7 +695,7 @@ class Camera:
             SNR ∝ √peak_counts.
         rng : numpy.random.Generator or int or None
             Random-number source.  Pass an integer seed for reproducibility,
-            or ``None`` (default) to use a fresh default RNG.
+            or `None` (default) to use a fresh default RNG.
 
         Returns
         -------
@@ -729,33 +729,33 @@ class Camera:
         """
         Render a synthetic detector image (float32, shape Nv x Nh).
 
-        Each spot is drawn as an isotropic 2-D Gaussian weighted by ``I_raw``
+        Each spot is drawn as an isotropic 2-D Gaussian weighted by `I_raw`
         (the un-normalised kinematical intensity).  By default the image is
         returned in raw intensity units with no scaling applied.
 
         Parameters
         ----------
         spots : list of dicts
-            Spot list from any ``simulate_laue*`` function.
-            Required keys: ``'pix'`` (xcam, ycam), ``'I_raw'``.
-            The key ``'tth'`` (degrees) is required when *sigma_pix* is a
+            Spot list from any `simulate_laue*` function.
+            Required keys: `'pix'` (xcam, ycam), `'I_raw'`.
+            The key `'tth'` (degrees) is required when *sigma_pix* is a
             callable or a broadening result dict.
         sigma_pix : float | callable | dict
             Controls the Gaussian σ (pixels) for each spot:
 
             * **float** *(default)*  — fixed width for every spot.
-            * **callable** ``f(tth_deg) → float``  — per-spot width as a
-              function of 2θ.  Pass the ``'model'`` callable returned by
+            * **callable** `f(tth_deg) → float`  — per-spot width as a
+              function of 2θ.  Pass the `'model'` callable returned by
               :func:`~nrxrdct.laue.estimate_instrument_broadening`.
             * **dict** — the full result dict from
               :func:`~nrxrdct.laue.estimate_instrument_broadening`; the
-              ``'model'`` key is extracted automatically.
+              `'model'` key is extracted automatically.
 
         log_scale : bool
-            Apply ``log1p`` compression before returning (default ``False``).
+            Apply `log1p` compression before returning (default `False`).
         normalize : bool
             Divide by the image maximum after all other processing
-            (default ``False``).
+            (default `False`).
         """
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
@@ -798,7 +798,7 @@ class Camera:
 
     def to_det(self, path) -> None:
         """
-        Write a LaueTools-compatible ``.det`` calibration file.
+        Write a LaueTools-compatible `.det` calibration file.
 
         Format (4 data lines, preceded by a comment header)::
 
@@ -831,12 +831,12 @@ class Camera:
     @classmethod
     def from_det(cls, path, pixelsize=None, framedim=None, kf_direction=None):
         """
-        Read a LaueTools-compatible ``.det`` calibration file.
+        Read a LaueTools-compatible `.det` calibration file.
 
         Parameters
         ----------
         path : path-like
-            Path to the ``.det`` file.
+            Path to the `.det` file.
         pixelsize : float or None
             Override the pixel size (mm) read from the file.
         framedim : (Nh, Nv) or None
@@ -893,7 +893,7 @@ class Camera:
 
         The cost function is the mean squared nearest-neighbour distance from
         each observed spot to the closest simulated spot, capped at
-        ``max_match_px``.  This soft matching gives a smooth landscape suitable
+        `max_match_px`.  This soft matching gives a smooth landscape suitable
         for derivative-free optimisation.
 
         When bounds are specified the optimizer switches to L-BFGS-B (which
@@ -904,19 +904,19 @@ class Camera:
         crystal : Crystal
             Crystal structure of the calibration standard.
         U : (3, 3) array
-            Initial orientation matrix.  Updated in the result if ``fit_U=True``.
+            Initial orientation matrix.  Updated in the result if `fit_U=True`.
         obs_xy : (N, 2) array
-            Observed spot pixel positions ``[[xcam, ycam], ...]``.
+            Observed spot pixel positions `[[xcam, ycam], ...]`.
         fit_params : sequence of str
             Camera parameters to optimise.  Any subset of
-            ``{"dd", "xcen", "ycen", "xbet", "xgam"}``.
+            `{"dd", "xcen", "ycen", "xbet", "xgam"}`.
         fit_U : bool
-            If ``True``, also refine the orientation matrix via three small-angle
+            If `True`, also refine the orientation matrix via three small-angle
             Euler rotations around lab x, y, z (degrees).
         E_min, E_max : float
             Energy range (eV) for the Laue simulation.
         source : str
-            Source model passed to ``simulate_laue``.
+            Source model passed to `simulate_laue`.
         source_kwargs : dict or None
             Extra kwargs for the spectrum function.
         f2_thresh : float
@@ -925,32 +925,32 @@ class Camera:
             Cap distance (pixels) used in the cost function and for
             reporting the final match rate.  Pass a list to run staged
             refinement: the optimizer restarts from the previous result
-            at each successively tighter cap, e.g. ``[30, 10, 3]``.
+            at each successively tighter cap, e.g. `[30, 10, 3]`.
         top_n_sim : int or None
             Restrict cost evaluation to the brightest *N* simulated spots.
         bounds : dict or None
-            Explicit parameter bounds as ``{param_name: (lo, hi)}``.  Values
-            are absolute (not relative).  Keys are the same as ``fit_params``
-            plus ``"U_rx"``, ``"U_ry"``, ``"U_rz"`` for orientation angles.
+            Explicit parameter bounds as `{param_name: (lo, hi)}`.  Values
+            are absolute (not relative).  Keys are the same as `fit_params`
+            plus `"U_rx"`, `"U_ry"`, `"U_rz"` for orientation angles.
             Takes priority over the convenience range parameters below.
         dd_range : float or None
-            Maximum allowed deviation of ``dd`` from its starting value (mm).
-            E.g. ``dd_range=5.0`` → bounds ``(dd0 - 5, dd0 + 5)``.
+            Maximum allowed deviation of `dd` from its starting value (mm).
+            E.g. `dd_range=5.0` → bounds `(dd0 - 5, dd0 + 5)`.
         cen_range_px : float or None
-            Maximum allowed deviation of ``xcen`` / ``ycen`` from their
+            Maximum allowed deviation of `xcen` / `ycen` from their
             starting values (pixels).
         angle_range_deg : float or None
-            Maximum allowed deviation of ``xbet`` / ``xgam`` from their
+            Maximum allowed deviation of `xbet` / `xgam` from their
             starting values (degrees).
         U_range_deg : float or None
-            Maximum allowed rotation of the orientation angles ``U_rx``,
-            ``U_ry``, ``U_rz`` from zero (degrees).  Only relevant when
-            ``fit_U=True``.
+            Maximum allowed rotation of the orientation angles `U_rx`,
+            `U_ry`, `U_rz` from zero (degrees).  Only relevant when
+            `fit_U=True`.
         method : str or None
-            Scipy optimisation method.  Defaults to ``"L-BFGS-B"`` when any
-            bounds are active, ``"Nelder-Mead"`` otherwise.
+            Scipy optimisation method.  Defaults to `"L-BFGS-B"` when any
+            bounds are active, `"Nelder-Mead"` otherwise.
         options : dict or None
-            Options forwarded to ``scipy.optimize.minimize``, overriding
+            Options forwarded to `scipy.optimize.minimize`, overriding
             defaults.
 
         Returns
@@ -1222,14 +1222,14 @@ class Camera:
         phaseA_fit_U : bool
             Allow a small orientation correction in Phase A.  Default False.
         phaseA_dd_range : float
-            Phase A bound on ``dd`` (mm, ± from starting value).
+            Phase A bound on `dd` (mm, ± from starting value).
         phaseA_cen_range_px : float
-            Phase A bound on ``xcen`` / ``ycen`` (pixels).
+            Phase A bound on `xcen` / `ycen` (pixels).
         phaseA_angle_range_deg : float
-            Phase A bound on ``xbet`` / ``xgam`` (degrees).
+            Phase A bound on `xbet` / `xgam` (degrees).
         phaseA_U_range_deg : float
             Phase A bound on orientation angles (degrees), only used when
-            ``phaseA_fit_U=True``.
+            `phaseA_fit_U=True`.
         phaseA_options : dict or None
             Extra options for the Phase A optimizer.
 
@@ -1248,11 +1248,11 @@ class Camera:
         phaseC_fit_U : bool
             Refine U in Phase C.  Default True.
         phaseC_dd_range : float
-            Phase C bound on ``dd`` (mm).
+            Phase C bound on `dd` (mm).
         phaseC_cen_range_px : float
-            Phase C bound on ``xcen`` / ``ycen`` (pixels).
+            Phase C bound on `xcen` / `ycen` (pixels).
         phaseC_angle_range_deg : float
-            Phase C bound on ``xbet`` / ``xgam`` (degrees).
+            Phase C bound on `xbet` / `xgam` (degrees).
         phaseC_U_range_deg : float
             Phase C bound on orientation angles (degrees).
         phaseC_options : dict or None
@@ -1260,7 +1260,7 @@ class Camera:
 
         E_min, E_max : float
             Energy range (eV) shared by all phases.  The allowed-HKL
-            sphere cutoff is derived automatically from ``E_max``.
+            sphere cutoff is derived automatically from `E_max`.
         source, source_kwargs, f2_thresh, max_match_px, top_n_sim
             Forwarded unchanged to each :meth:`fit_calibration` call.
         verbose : bool
@@ -1270,7 +1270,7 @@ class Camera:
         -------
         CalibrationResult
             Result of Phase C (the final global refinement).  Intermediate
-            results are available via ``verbose=True`` output.
+            results are available via `verbose=True` output.
         """
         _shared = dict(
             E_min=E_min, E_max=E_max,

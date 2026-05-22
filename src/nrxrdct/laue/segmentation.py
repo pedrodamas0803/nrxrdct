@@ -92,11 +92,11 @@ def segment_image(
     iterations : int
         Number of binary-opening iterations. Each iteration with a 3×3 element
         erodes features by ~1 pixel per side; spots smaller than roughly
-        ``(2*iterations + 1)² `` pixels may be completely erased. Default 1
+        `(2*iterations + 1)² ` pixels may be completely erased. Default 1
         (single pass) to preserve small spots. Set to 0 to disable opening.
     threshold : float or None
         Intensity threshold. If None (default), the triangle auto-threshold
-        from ``skimage.filters.threshold_triangle`` is used.
+        from `skimage.filters.threshold_triangle` is used.
 
     Returns
     -------
@@ -516,7 +516,7 @@ def write_h5_spotsfile(
 
     Tries to fit a Gaussian mixture on a cropped ROI of size 2d around the
     region weighted centroid.  Spots whose fit reaches r² ≥ r_squared_min are
-    stored in ``spot_{ii}_{jj}`` groups (jj = 1, 2, …).
+    stored in `spot_{ii}_{jj}` groups (jj = 1, 2, …).
 
     Parameters
     ----------
@@ -534,18 +534,18 @@ def write_h5_spotsfile(
         Maximum number of Gaussian components tried per spot.
     include_unfitted : bool
         If True (default), spots whose best fit has r² < r_squared_min are
-        still written to the file in a ``spot_{ii}_0`` group (fallback
+        still written to the file in a `spot_{ii}_0` group (fallback
         position from the weighted centroid, shape fields set to 0).
         If False, those spots are silently skipped.  Ignored when
-        *fit_spots* is ``False``.
+        *fit_spots* is `False`.
     r_squared_min : float
         Minimum r² to consider a Gaussian fit acceptable (default 0.9).
-        Ignored when *fit_spots* is ``False``.
+        Ignored when *fit_spots* is `False`.
     fit_spots : bool
-        If ``True`` (default), attempt a 2-D Gaussian mixture fit for each
-        spot ROI.  If ``False``, skip fitting entirely and write each spot
+        If `True` (default), attempt a 2-D Gaussian mixture fit for each
+        spot ROI.  If `False`, skip fitting entirely and write each spot
         using the weighted centroid from *regionprops* directly; shape
-        fields are set to 0 and ``r_squared`` is stored as ``-1`` to
+        fields are set to 0 and `r_squared` is stored as `-1` to
         indicate that no fit was attempted.  This is much faster and
         suitable when peak positions are all that is needed.
     """
@@ -580,8 +580,8 @@ def write_h5_spotsfile(
                 hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
                 hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
                 hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
-                hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
-                hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
                 hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
                 hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
                 hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
@@ -638,8 +638,8 @@ def write_h5_spotsfile(
                     hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
                     hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
                     hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
-                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
-                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C0, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
                     hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
@@ -703,8 +703,8 @@ def write_h5_spotsfile(
                     C0 = init_params_1[-1]
                     hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
                     hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
-                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = round(A, 2)
-                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = round(A - C0, 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
                     hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
                     hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
@@ -715,8 +715,8 @@ def write_h5_spotsfile(
                     # init_params_1 itself failed — last resort: centroid only
                     hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
                     hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
-                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = Ipix
-                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = Ipix
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
                     hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
                     hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
                     hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
@@ -773,10 +773,10 @@ def convert_spotsfile2peaklist(
     h5path : str
         Path to the spots HDF5 file produced by the segmentation pipeline.
     include_unfitted : bool
-        If ``False`` (default) only spots with r_squared >= r_squared_min are
-        returned.  If ``True``, spots whose Gaussian fit did not meet the
+        If `False` (default) only spots with r_squared >= r_squared_min are
+        returned.  If `True`, spots whose Gaussian fit did not meet the
         threshold are also included: their pixel position is taken from the
-        weighted centroid (``yxcen``), intensity from the peak pixel value of
+        weighted centroid (`yxcen`), intensity from the peak pixel value of
         the stored sub-image, and all shape / background columns are set to 0.
     r_squared_min : float
         Minimum r² to consider a fit acceptable (default 0.9).  Spots stored
@@ -891,23 +891,23 @@ def convert_spotsfiles_to_dat(
     overwrite: bool = False,
 ) -> int:
     """
-    Convert all ``frame_?????.h5`` spot files in *seg_dir* to DAT files in
+    Convert all `frame_?????.h5` spot files in *seg_dir* to DAT files in
     *target_dir*, using a process pool for true parallelism.
 
     Parameters
     ----------
     seg_dir : str
-        Directory containing ``frame_?????.h5`` spot files.
+        Directory containing `frame_?????.h5` spot files.
     target_dir : str
-        Directory where ``frame_?????.dat`` files will be written.
+        Directory where `frame_?????.dat` files will be written.
     include_unfitted : bool
         Passed to :func:`convert_spotsfile2peaklist`.
     r_squared_min : float
         Passed to :func:`convert_spotsfile2peaklist`.
     n_workers : int or None
-        Number of worker processes.  Defaults to ``os.cpu_count()``.
+        Number of worker processes.  Defaults to `os.cpu_count()`.
     overwrite : bool
-        If ``False`` (default), skip files that already exist in *target_dir*.
+        If `False` (default), skip files that already exist in *target_dir*.
 
     Returns
     -------
@@ -992,7 +992,7 @@ def WTH_segmentation(
     """
     Segment diffraction spots using a white top-hat transform.
 
-    The white top-hat ``WTH(I) = I - opening(I)`` suppresses slowly varying
+    The white top-hat `WTH(I) = I - opening(I)` suppresses slowly varying
     background while preserving bright compact features (spots) smaller than
     the structuring element.  It is complementary to
     :func:`LoG_segmentation`: LoG excels at ring/blob detection; WTH is more
@@ -1004,22 +1004,22 @@ def WTH_segmentation(
     image : (Nv, Nh) ndarray
         Raw detector image (uint or float).
     mask : (Nv, Nh) bool ndarray
-        Valid-pixel mask (``True`` = active detector area).
+        Valid-pixel mask (`True` = active detector area).
     disk_radius : int or list of int
         Radius (or list of radii) of the disk structuring element in pixels.
         When a list is given, the WTH response is computed at every radius and
         the pixel-wise maximum is taken, analogous to multi-scale LoG.
         Each radius should be larger than the largest spot but smaller than
-        the background correlation length.  Default ``7``.
+        the background correlation length.  Default `7`.
     threshold_percentile : float
         Percentile of the WTH response (within *mask*) used as the binary
         threshold.  Raise to keep only the brightest spots; lower to be more
-        inclusive.  Default ``99.9``.
+        inclusive.  Default `99.9`.
 
     Returns
     -------
     mask_final : (Nv, Nh) bool ndarray
-        Binary segmentation mask (``True`` = spot pixel).
+        Binary segmentation mask (`True` = spot pixel).
 
     See Also
     --------
@@ -1069,7 +1069,7 @@ def hybrid_segmentation(
     (small/sharp spots) responses.
 
     All scales from both methods are submitted to a single
-    ``ThreadPoolExecutor`` so every allocated CPU is used without
+    `ThreadPoolExecutor` so every allocated CPU is used without
     thread-pool nesting or oversubscription.  The two families are
     thresholded independently at *threshold_percentile* and the results
     are combined with a logical OR.
@@ -1081,12 +1081,12 @@ def hybrid_segmentation(
     mask : (Nv, Nh) bool ndarray
         Valid-pixel mask.
     log_sigmas : float or list of float
-        Sigma(s) for the Laplacian-of-Gaussian filter.  Default ``[2, 4, 8]``.
+        Sigma(s) for the Laplacian-of-Gaussian filter.  Default `[2, 4, 8]`.
     wth_disk_radius : int or list of int
-        Disk radius/radii for the white top-hat transform.  Default ``[5, 7]``.
+        Disk radius/radii for the white top-hat transform.  Default `[5, 7]`.
     threshold_percentile : float
         Detection threshold percentile applied independently to each family.
-        Default ``99.9``.
+        Default `99.9`.
 
     Returns
     -------
@@ -1149,7 +1149,7 @@ def clean_segmentation(
     detector_mask : (Ny, Nx) bool ndarray
         Valid-pixel mask (True = active pixel).
     intensity_image : (Ny, Nx) ndarray
-        Intensity image forwarded to ``skimage.measure.regionprops``.
+        Intensity image forwarded to `skimage.measure.regionprops`.
     min_size, max_size : int
         Minimum / maximum connected-component area in pixels.
     gap_exclude : int
@@ -1160,7 +1160,7 @@ def clean_segmentation(
         gap-exclusion dilation.  Binary closing fills isolated bad pixels
         (single dead pixels, small clusters) that are surrounded by valid
         pixels, so that spots near those bad pixels are not incorrectly
-        excluded.  Set to ``0`` to disable.  Default ``3``.
+        excluded.  Set to `0` to disable.  Default `3`.
 
     Returns
     -------
@@ -1202,7 +1202,7 @@ def gaussian_background(image, valid_mask, sigma=251):
     """Estimate a smooth background via FFT-based Gaussian filtering.
 
     Uses FFT convolution (O(N log N)) so large sigma values are fast.
-    ``workers=-1`` lets scipy use all available CPU cores for the FFT.
+    `workers=-1` lets scipy use all available CPU cores for the FFT.
     """
     def _fft_gauss(arr):
         f = sp_fft.fft2(arr, workers=-1)
@@ -1332,14 +1332,14 @@ def run_segmentation_local(
 
     Mirrors the SLURM worker pipeline (background subtraction → segmentation
     → cleaning → Gaussian fitting → HDF5 output) but runs in-process using
-    a ``ProcessPoolExecutor`` instead of submitting cluster jobs.
+    a `ProcessPoolExecutor` instead of submitting cluster jobs.
 
     Parameters
     ----------
     image_stack : (N, Ny, Nx) ndarray
         Stack of raw detector frames, already loaded into memory.
     seg_dir : str
-        Output directory.  One ``frame_{idx:05d}.h5`` file is written per frame.
+        Output directory.  One `frame_{idx:05d}.h5` file is written per frame.
     detector_mask : (Ny, Nx) bool ndarray or None
         Valid-pixel mask (True = active pixel).  None → all pixels active.
     method : {'LoG', 'WTH', 'HYBRID'}
@@ -1353,13 +1353,13 @@ def run_segmentation_local(
     gap_closing : int
         Closing radius (pixels) applied to the valid-pixel mask before the
         gap-exclusion dilation.  Fills isolated dead pixels so spots near bad
-        pixels are not incorrectly excluded.  Default ``3``.
+        pixels are not incorrectly excluded.  Default `3`.
     bg_sigma : float
         Sigma (pixels) for the Gaussian background estimate.
     max_components : int
         Maximum number of Gaussian components fitted per spot.
     n_workers : int or None
-        Number of worker processes.  None → ``os.cpu_count()``.
+        Number of worker processes.  None → `os.cpu_count()`.
     overwrite : bool
         If False (default), skip frames whose output file already exists.
     frame_indices : sequence of int or None

@@ -1567,13 +1567,9 @@ def precompute_allowed_hkl(
     hkl_sphere = hkl_all[in_sphere]
     G_sphere   = G_all[in_sphere]
 
-    allowed = set()
-    for i in range(len(hkl_sphere)):
-        F2 = abs(crystal.StructureFactor(G_sphere[i], en=E_ref_eV)) ** 2
-        if F2 >= f2_thresh:
-            h, k, l = int(hkl_sphere[i, 0]), int(hkl_sphere[i, 1]), int(hkl_sphere[i, 2])
-            allowed.add((h, k, l))
-    result = frozenset(allowed)
+    F2_arr = np.abs(crystal.StructureFactorForQ(G_sphere, en0=E_ref_eV)) ** 2
+    mask   = F2_arr >= f2_thresh
+    result = frozenset(map(tuple, hkl_sphere[mask].tolist()))
     _allowed_hkl_cache[_key] = result
     return result
 

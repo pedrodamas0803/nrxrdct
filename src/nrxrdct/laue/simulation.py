@@ -1805,87 +1805,84 @@ def simulate_laue(
                             "I_raw":           1.0,
                         })
     else:
-        # ── SCALAR PATH (geometry_only=False or no allowed_hkl) ───────────────
-        # Spectrum, LP, and structure factor are computed per spot.
+        # ── VECTORISED GEOMETRY + PER-SPOT STRUCTURE FACTOR ──────────────────
+        # Geometry filters (sphere, kdG, lambda, detector) are applied in bulk
+        # with numpy; StructureFactor / LP / spectrum are evaluated only for the
+        # small number of on-detector survivors.
         _B = _get_B()
-
-        def _process_hkl(h, k, l, G_cry=None):
-            if G_cry is None:
-                G_cry = _B @ np.array([h, k, l], dtype=float)
-            G_lab = U @ G_cry
-            Gm2 = float(np.dot(G_lab, G_lab))
-            kdG = float(np.dot(ki_hat, G_lab))
-
-            if kdG >= 0:
-                return
-
-            lam = -4.0 * np.pi * kdG / Gm2
-            if not (lam_lo <= lam <= lam_hi):
-                return
-
-            E = lam2en(lam)
-            km = 2.0 * np.pi / lam
-            kf_vec = ki_hat * km + G_lab
-            kf_hat = kf_vec / np.linalg.norm(kf_vec)
-
-            pix = camera.project(kf_hat)
-            if pix is None:
-                return
-
-            cos2th = np.clip(kf_hat[0], -1.0, 1.0)
-            tth = np.degrees(np.arccos(cos2th))
-            chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-            az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-
-            LP = lorentz_pol(tth)
-            if LP == 0.0:
-                return
-
-            sw = _spectrum(E)
-            if sw <= 0.0:
-                return
-
-            if geometry_only:
-                F2 = 1.0
-            else:
-                F = crystal.StructureFactor(G_cry, en=E)
-                F2 = abs(F) ** 2
-                if F2 < f2_thresh:
-                    return
-
-            spots.append({
-                "hkl": (h, k, l),
-                "satellite_order": 0,
-                "is_superlattice": False,
-                "E": E,
-                "lambda": lam,
-                "tth": tth,
-                "chi": chi,
-                "az": az,
-                "pix": pix,
-                "F2": F2,
-                "LP": LP,
-                "sw": sw,
-                "I_raw": F2 * LP * sw,
-            })
-
         _H2, _K2, _L2 = np.meshgrid(
             np.arange(-h_lim, h_lim + 1, dtype=np.int32),
             np.arange(-k_lim, k_lim + 1, dtype=np.int32),
             np.arange(-l_lim, l_lim + 1, dtype=np.int32),
             indexing="ij",
         )
-        _hkl2 = np.column_stack([_H2.ravel(), _K2.ravel(), _L2.ravel()])
-        _hkl2 = _hkl2[np.any(_hkl2 != 0, axis=1)]
-        _G2 = (_B @ _hkl2.T).T
-        _mask2 = np.einsum("ij,ij->i", _G2, _G2) <= G_max_sq
-        _hkl2_f = _hkl2[_mask2]
-        _G2_f   = _G2[_mask2]
-        for _i in range(len(_hkl2_f)):
-            _process_hkl(
-                int(_hkl2_f[_i, 0]), int(_hkl2_f[_i, 1]), int(_hkl2_f[_i, 2]),
-                G_cry=_G2_f[_i],
-            )
+        _hkl = np.column_stack([_H2.ravel(), _K2.ravel(), _L2.ravel()])
+        _hkl = _hkl[np.any(_hkl != 0, axis=1)]
+        G_cry_all = (_B @ _hkl.T).T                                    # (N, 3)
+
+        # Sphere filter (U orthogonal → |G_lab| = |G_cry|)
+        G_sq = np.einsum("ij,ij->i", G_cry_all, G_cry_all)
+        v0 = G_sq <= G_max_sq
+        G_cry_all = G_cry_all[v0];  _hkl = _hkl[v0]
+
+        G_lab_all = G_cry_all @ U.T                                     # (M, 3)
+
+        kdG = G_lab_all @ ki_hat                                        # (M,)
+        v1 = kdG < 0
+        G_cry_all = G_cry_all[v1];  G_lab_all = G_lab_all[v1]
+        _hkl = _hkl[v1];           kdG       = kdG[v1]
+
+        Gm2 = np.einsum("ij,ij->i", G_lab_all, G_lab_all)
+        lam = -4.0 * np.pi * kdG / Gm2
+        v2 = (lam >= lam_lo) & (lam <= lam_hi)
+        G_cry_all = G_cry_all[v2];  G_lab_all = G_lab_all[v2]
+        _hkl      = _hkl[v2];      lam       = lam[v2]
+
+        if len(lam) > 0:
+            E_arr = HC / lam
+            km    = 2.0 * np.pi / lam
+            kf_v  = ki_hat[None, :] * km[:, None] + G_lab_all          # (K, 3)
+            kf_v /= np.linalg.norm(kf_v, axis=1, keepdims=True)
+            pix_arr, on_det = camera.project_batch(kf_v)
+            if np.any(on_det):
+                G_cry_all = G_cry_all[on_det];  _hkl    = _hkl[on_det]
+                lam       = lam[on_det];        E_arr   = E_arr[on_det]
+                kf_v      = kf_v[on_det];       pix_arr = pix_arr[on_det]
+                cos2th  = np.clip(kf_v[:, 0], -1.0, 1.0)
+                tth_arr = np.degrees(np.arccos(cos2th))
+                chi_arr = np.degrees(np.arctan2(kf_v[:, 1], kf_v[:, 2] + 1e-17))
+                az_arr  = np.degrees(np.arctan2(kf_v[:, 2], kf_v[:, 1]))
+                for _i in range(len(lam)):
+                    LP = lorentz_pol(float(tth_arr[_i]))
+                    if LP == 0.0:
+                        continue
+                    E  = float(E_arr[_i])
+                    sw = _spectrum(E)
+                    if sw <= 0.0:
+                        continue
+                    if geometry_only:
+                        F2 = 1.0
+                    else:
+                        F  = crystal.StructureFactor(G_cry_all[_i], en=E)
+                        F2 = abs(F) ** 2
+                        if F2 < f2_thresh:
+                            continue
+                    h, k, l = int(_hkl[_i, 0]), int(_hkl[_i, 1]), int(_hkl[_i, 2])
+                    spots.append({
+                        "hkl":             (h, k, l),
+                        "satellite_order": 0,
+                        "is_superlattice": False,
+                        "E":               E,
+                        "lambda":          float(lam[_i]),
+                        "tth":             float(tth_arr[_i]),
+                        "chi":             float(chi_arr[_i]),
+                        "az":              float(az_arr[_i]),
+                        "pix":             (float(pix_arr[_i, 0]), float(pix_arr[_i, 1])),
+                        "F2":              F2,
+                        "LP":              LP,
+                        "sw":              sw,
+                        "I_raw":           F2 * LP * sw,
+                    })
 
     if spots:
         imax = max(s["I_raw"] for s in spots)
@@ -2268,22 +2265,98 @@ def simulate_laue_stack(
         _G_lab_s = (U @ (_B @ _hkl_s.T)).T  # (M, 3)
 
         n_added = 0
-        for _si in range(len(_hkl_s)):
-            h, k, l = int(_hkl_s[_si, 0]), int(_hkl_s[_si, 1]), int(_hkl_s[_si, 2])
-            G_lab = _G_lab_s[_si]
 
-            # ── Main Bragg peak (satellite order 0) ───────────────
-            n_added += _try_append(G_lab, (h, k, l), 0, label)
+        # ── Vectorised geometry filter for main Bragg peaks ───────────────────
+        _G_lab_b = _G_lab_s.copy()
+        _hkl_b   = _hkl_s.copy()
 
-            # ── Thickness fringes / satellites ───────────────────
-            # Only evaluated for repeating-unit (MQW) layers.
-            # Buffer / substrate layers give Bragg peaks only.
-            if layer_has_satellites:
-                for q_fringe_vec, _ in fringe_q_vecs:
-                    for m in sat_orders:
-                        frac = m + 0.5 if m > 0 else m - 0.5
-                        G_sat = G_lab + frac * q_fringe_vec
-                        n_added += _try_append(G_sat, (h, k, l), m, label)
+        kdG_b = _G_lab_b @ ki
+        v1b   = kdG_b < 0
+        _G_lab_b = _G_lab_b[v1b];  _hkl_b = _hkl_b[v1b];  kdG_b = kdG_b[v1b]
+
+        if len(kdG_b) > 0:
+            Gm2_b = np.einsum("ij,ij->i", _G_lab_b, _G_lab_b)
+            lam_b = -4.0 * np.pi * kdG_b / Gm2_b
+            v2b   = (lam_b >= lam_lo) & (lam_b <= lam_hi)
+            _G_lab_b = _G_lab_b[v2b];  _hkl_b = _hkl_b[v2b];  lam_b = lam_b[v2b]
+        else:
+            lam_b = np.empty(0)
+
+        if len(lam_b) > 0:
+            E_b  = HC_eV_ANG / lam_b
+            km_b = 2.0 * np.pi / lam_b
+            kf_b = ki[None, :] * km_b[:, None] + _G_lab_b
+            kf_b /= np.linalg.norm(kf_b, axis=1, keepdims=True)
+            pix_b, on_det_b = camera.project_batch(kf_b)
+
+            if np.any(on_det_b):
+                _G_lab_b = _G_lab_b[on_det_b];  _hkl_b = _hkl_b[on_det_b]
+                lam_b    = lam_b[on_det_b];     E_b    = E_b[on_det_b]
+                kf_b     = kf_b[on_det_b];      pix_b  = pix_b[on_det_b]
+
+                tth_b = np.degrees(np.arccos(np.clip(kf_b[:, 0], -1.0, 1.0)))
+                chi_b = np.degrees(np.arctan2(kf_b[:, 1], kf_b[:, 2] + 1e-17))
+                az_b  = np.degrees(np.arctan2(kf_b[:, 2], kf_b[:, 1]))
+
+                for _si in range(len(lam_b)):
+                    G_lab   = _G_lab_b[_si]
+                    h, k, l = int(_hkl_b[_si, 0]), int(_hkl_b[_si, 1]), int(_hkl_b[_si, 2])
+                    pix_key = (round(float(pix_b[_si, 0])), round(float(pix_b[_si, 1])))
+                    if pix_key in seen_pix:
+                        continue
+                    tth = float(tth_b[_si])
+                    LP  = lorentz_pol(tth)
+                    if LP == 0.0:
+                        continue
+                    E  = float(E_b[_si])
+                    sw = spectrum(E)
+                    if sw <= 0.0:
+                        continue
+                    kf_hat = kf_b[_si]
+                    if _layer_allowed_hkl is not None:
+                        if (h, k, l) not in _layer_allowed_hkl:
+                            continue
+                        F2 = 1.0
+                    elif geometry_only:
+                        F2 = 1.0
+                    else:
+                        if structure_model == "average":
+                            F_stack = stack.average_structure_factor(G_lab, energy_eV=E, kf_hat=kf_hat)
+                        else:
+                            F_stack = stack.structure_factor(G_lab, energy_eV=E, kf_hat=kf_hat)
+                        F2 = abs(F_stack) ** 2
+                        if f2_thresh == 0.0:
+                            f2_thresh = max(1.0, F2 * 1e-3)
+                        if F2 < f2_thresh:
+                            continue
+                    seen_pix.add(pix_key)
+                    spots.append({
+                        "phase_label":     label,
+                        "hkl":             (h, k, l),
+                        "satellite_order": 0,
+                        "is_superlattice": False,
+                        "G_lab":           G_lab.copy(),
+                        "E":               E,
+                        "lambda":          float(lam_b[_si]),
+                        "tth":             tth,
+                        "chi":             float(chi_b[_si]),
+                        "az":              float(az_b[_si]),
+                        "pix":             (float(pix_b[_si, 0]), float(pix_b[_si, 1])),
+                        "F2":              F2,
+                        "F2_stack":        F2,
+                        "LP":              LP,
+                        "sw":              sw,
+                        "I_raw":           F2 * LP * sw,
+                    })
+                    n_added += 1
+
+                    # ── Thickness fringes / satellites for this Bragg peak ─────
+                    if layer_has_satellites:
+                        for q_fringe_vec, _ in fringe_q_vecs:
+                            for m in sat_orders:
+                                frac  = m + 0.5 if m > 0 else m - 0.5
+                                G_sat = G_lab + frac * q_fringe_vec
+                                n_added += _try_append(G_sat, (h, k, l), m, label)
 
         if verbose:
             print(f" {n_added} spots")

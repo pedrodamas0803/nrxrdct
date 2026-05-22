@@ -668,9 +668,9 @@ class Camera:
         distribution with its own expected count λᵢ:
 
         $$
-        \lambda_i = I_i \cdot \frac{\text{peak\_counts}}{\max(I)}
-        \qquad
-        n_i \sim \operatorname{Poisson}(\lambda_i)
+        \\lambda_i = I_i \\cdot \\frac{\\text{peak\\_counts}}{\\max(I)}
+        \\qquad
+        n_i \\sim \\operatorname{Poisson}(\\lambda_i)
         $$
 
         This reproduces the correct counting statistics: the noise standard

@@ -760,8 +760,8 @@ class GrainMap:
         the matrix trace:
 
         $$
-        s^*(\text{iy, ix}) = \underset{s}{\operatorname{argmax}}\;
-                              \operatorname{tr}\!\bigl(R^T U^{(s)}\bigr)
+        s^*(\\text{iy, ix}) = \\underset{s}{\\operatorname{argmax}}\\;
+                              \\operatorname{tr}\\!\\bigl(R^T U^{(s)}\\bigr)
         $$
 
         This is equivalent to minimising the geodesic misorientation angle
@@ -792,7 +792,7 @@ class GrainMap:
         consistently with the symmetry operation:
 
         $$
-        \boldsymbol{\varepsilon}' = S^T \boldsymbol{\varepsilon}\, S
+        \\boldsymbol{\\varepsilon}' = S^T \\boldsymbol{\\varepsilon}\\, S
         $$
 
         where **S** = `ops[s*]`.  The Voigt representation is rebuilt from

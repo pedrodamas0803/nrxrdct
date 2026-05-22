@@ -153,7 +153,7 @@ KI_HAT = np.array([1.0, 0.0, 0.0])  # LT frame: beam along +x  (do not change)
 
 # ── Simulation ────────────────────────────────────────────────────────────────
 HMAX = 12
-F2_THRESHOLD = 0.01
+F2_THRESHOLD = 1e-6
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & UTILITIES
@@ -1649,7 +1649,7 @@ def simulate_laue(
         *xrayutilities* output).  Reflections below this value are treated as
         systematically absent or too weak and discarded before the LP / spectrum
         weighting step.
-        Default: `F2_THRESHOLD` (0.5).
+        Default: `F2_THRESHOLD` (1e-6).
 
     Returns
     -------

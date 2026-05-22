@@ -159,7 +159,7 @@ def main() -> None:
         allowed_hkl = precompute_allowed_hkl(
             _crystal_tmp,
             E_max_eV=meta.get("E_max_eV", E_MAX_eV),
-            f2_thresh=fit_kwargs.get("f2_thresh", 1e-4),
+            f2_thresh=fit_kwargs.get("f2_thresh", 1e-6),
         )
         print(
             f"  allowed_hkl: {len(allowed_hkl)} reflections "

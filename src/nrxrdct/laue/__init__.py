@@ -26,7 +26,12 @@ from .fitting import (
     laue_stack_residuals,
     laue_strain_residuals,
     remove_grain_spots,
+    run_orientation_local,
+    run_orientation_mixed_local,
+    run_strain_local,
+    run_strain_mixed_local,
 )
+from .segmentation import run_segmentation_local
 from .laue_plotting import (
     plot_2theta_chi,
     plot_all,
@@ -207,6 +212,11 @@ __all__ = [
     "fit_orientation_mixed",
     "fit_strain_orientation",
     "remove_grain_spots",
+    "run_orientation_local",
+    "run_orientation_mixed_local",
+    "run_strain_local",
+    "run_strain_mixed_local",
+    "run_segmentation_local",
     # Plotting
     "plot_2theta_chi",
     "plot_all",

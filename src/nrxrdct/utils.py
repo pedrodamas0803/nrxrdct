@@ -1,5 +1,5 @@
 """
-Miscellaneous utility functions for XRD-CT data processing.
+Miscellaneous utility functions.
 
 Covers percentile estimation for spot removal, XRD baseline fitting,
 circular mask generation, powder pattern simulation and peak listing via

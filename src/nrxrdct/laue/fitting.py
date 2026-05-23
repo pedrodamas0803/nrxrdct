@@ -209,6 +209,7 @@ class MixedFitResult:
     rotvecs    : list[np.ndarray]
     cost       : float
     rms_px     : float
+    mean_px    : float
     n_matched  : int
     n_obs      : int
     n_sim      : int
@@ -2526,6 +2527,487 @@ def run_strain_local(
 
     print(
         f"\nStrain local done — {n_saved} fits saved  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return n_saved
+
+
+# ── mixed-phase orientation ───────────────────────────────────────────────────
+
+_g_crystals     = None
+_g_allowed_list = None   # list of allowed_hkl arrays, one per crystal
+
+
+def _mixed_pool_init(crystals_pkl: str, camera, allowed_hkl_list) -> None:
+    global _g_crystals, _g_camera, _g_allowed_list
+    with open(crystals_pkl, "rb") as fh:
+        _g_crystals = _dill.load(fh)
+    _g_camera        = camera
+    _g_allowed_list  = allowed_hkl_list
+
+
+def _mixed_process_frame(
+    frame_idx: int,
+    obs_xy: "np.ndarray | None",
+    *,
+    mixed_dir: str,
+    ub_arrays: list,
+    shared: bool,
+    max_match_px,
+    min_matched: int,
+    min_match_rate: float,
+    max_rms_px: "float | None",
+    fit_kwargs: dict,
+    overwrite: bool,
+) -> tuple:
+    """Process one frame for mixed-phase orientation fitting.  Returns (frame_idx, ok)."""
+    if obs_xy is None or len(obs_xy) < min_matched:
+        return frame_idx, False
+
+    out_path = os.path.join(mixed_dir, f"frame_{frame_idx:05d}.npz")
+    if os.path.exists(out_path) and not overwrite:
+        return frame_idx, True
+
+    crystals = _g_crystals
+    camera   = _g_camera
+
+    # Rebuild allowed_hkl dict keyed by process-local id(crystal).
+    allowed = None
+    if _g_allowed_list is not None:
+        allowed = {id(c): a for c, a in zip(crystals, _g_allowed_list)}
+
+    stages = max_match_px if isinstance(max_match_px, (list, tuple)) else [max_match_px]
+
+    phases = [
+        {"crystal": c, "U": np.asarray(U, dtype=float).copy(),
+         "volume_fraction": 1.0 / len(crystals)}
+        for c, U in zip(crystals, ub_arrays)
+    ]
+
+    try:
+        result = None
+        for px in stages:
+            result = fit_orientation_mixed(
+                phases, camera, obs_xy,
+                shared=shared,
+                max_match_px=float(px),
+                geometry_only=False,
+                allowed_hkl=allowed,
+                update_phases=True,   # phases[i]["U"] updated in-place for next stage
+                **fit_kwargs,
+            )
+    except Exception as exc:
+        print(f"  ✗  frame {frame_idx}: mixed fit: {exc}", flush=True)
+        return frame_idx, False
+
+    if result.n_matched < min_matched:
+        return frame_idx, False
+    if result.match_rate < min_match_rate:
+        return frame_idx, False
+    if max_rms_px is not None and result.rms_px > max_rms_px:
+        return frame_idx, False
+
+    save_dict = {
+        "rms_px":     np.array(result.rms_px),
+        "mean_px":    np.array(result.mean_px),
+        "n_matched":  np.array(result.n_matched),
+        "match_rate": np.array(result.match_rate),
+        "cost":       np.array(result.cost),
+    }
+    for i, (U, rv) in enumerate(zip(result.U_phases, result.rotvecs)):
+        save_dict[f"U_{i}"]      = U
+        save_dict[f"rotvec_{i}"] = rv
+
+    tmp = out_path + ".tmp.npz"
+    np.savez(tmp, **save_dict)
+    os.replace(tmp, out_path)
+    return frame_idx, True
+
+
+def run_orientation_mixed_local(
+    crystals: list,
+    camera,
+    ub_arrays: list,
+    seg_dir: str,
+    mixed_dir: str,
+    *,
+    shared: bool = False,
+    r_squared_min: float = 0.9,
+    include_unfitted: bool = False,
+    max_match_px=(30, 10, 3),
+    min_matched: int = 5,
+    min_match_rate: float = 0.2,
+    max_rms_px: "float | None" = None,
+    f2_thresh: float = 1e-4,
+    geometry_only: bool = True,
+    n_workers: "int | None" = None,
+    overwrite: bool = False,
+    frame_indices: "list | None" = None,
+    **fit_kwargs,
+) -> int:
+    """Mixed-phase orientation fitting on local cores.
+
+    Fits all phases simultaneously for each frame using
+    :func:`fit_orientation_mixed`, sharing the detector image and observed
+    spot list across all phases.
+
+    Parameters
+    ----------
+    crystals    : list of Crystal  One crystal per phase, in grain-index order.
+    camera      : Camera
+    ub_arrays   : list of (3,3)    Reference U matrix per phase (same order as crystals).
+    seg_dir     : str              Directory with ``frame_{idx:05d}.h5`` peaklist files.
+    mixed_dir   : str              Output directory; one ``frame_{idx:05d}.npz`` per frame
+                                   containing ``U_0``, ``U_1``, … and shared quality metrics.
+    shared      : bool             If True, one shared rotation for all phases.
+                                   If False (default), independent rotation per phase.
+    frame_indices : list or None   Subset of frames; defaults to all found in seg_dir.
+
+    Returns
+    -------
+    n_saved : int  Number of frames successfully fitted and written.
+    """
+    from .segmentation import convert_spotsfile2peaklist
+    import glob
+
+    if len(crystals) != len(ub_arrays):
+        raise ValueError("crystals and ub_arrays must have the same length")
+
+    os.makedirs(mixed_dir, exist_ok=True)
+
+    if frame_indices is None:
+        h5s = sorted(glob.glob(os.path.join(seg_dir, "frame_?????.h5")))
+        frame_indices = [int(os.path.basename(p)[6:11]) for p in h5s]
+
+    # Precompute allowed HKL once per crystal.
+    t_hkl = time.time()
+    allowed_hkl_list = None
+    if geometry_only:
+        allowed_hkl_list = [
+            precompute_allowed_hkl(c, f2_thresh=f2_thresh)
+            for c in crystals
+        ]
+        n_refs = sum(len(a) for a in allowed_hkl_list)
+        print(
+            f"  allowed_hkl: {n_refs} reflections total across {len(crystals)} phases "
+            f"({time.time() - t_hkl:.1f}s)",
+            flush=True,
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tf:
+        crystals_pkl = tf.name
+    try:
+        with open(crystals_pkl, "wb") as fh:
+            _dill.dump(crystals, fh)
+
+        t_io = time.time()
+        peaklists: dict[int, np.ndarray] = {}
+        for fi in frame_indices:
+            seg_path = os.path.join(seg_dir, f"frame_{fi:05d}.h5")
+            if not os.path.exists(seg_path):
+                continue
+            try:
+                pl = convert_spotsfile2peaklist(
+                    seg_path,
+                    r_squared_min=r_squared_min,
+                    include_unfitted=include_unfitted,
+                )
+                if len(pl) >= min_matched:
+                    peaklists[fi] = pl[:, :2]
+            except Exception as exc:
+                print(f"  ✗  frame {fi}: load peaklist: {exc}", flush=True)
+
+        n_total = len(frame_indices)
+        print(
+            f"Mixed local — {n_total} frames | {len(crystals)} phase(s) | "
+            f"{len(peaklists)} with enough spots | "
+            f"shared={shared} | I/O: {time.time() - t_io:.1f}s",
+            flush=True,
+        )
+
+        _fk = dict(fit_kwargs)
+
+        common = dict(
+            mixed_dir      = mixed_dir,
+            ub_arrays      = ub_arrays,
+            shared         = shared,
+            max_match_px   = max_match_px,
+            min_matched    = min_matched,
+            min_match_rate = min_match_rate,
+            max_rms_px     = max_rms_px,
+            fit_kwargs     = _fk,
+            overwrite      = overwrite,
+        )
+        n_workers = min(len(peaklists) or 1, n_workers or os.cpu_count() or 1)
+        tick = max(1, n_total // 20)
+
+        t0 = time.time()
+        n_saved = 0
+        done = 0
+        with ProcessPoolExecutor(
+            max_workers = n_workers,
+            initializer = _mixed_pool_init,
+            initargs    = (crystals_pkl, camera, allowed_hkl_list),
+        ) as pool:
+            futs = {
+                pool.submit(_mixed_process_frame, fi, peaklists.get(fi), **common): fi
+                for fi in frame_indices
+            }
+            for fut in as_completed(futs):
+                done += 1
+                try:
+                    _, ok = fut.result()
+                    n_saved += ok
+                except Exception as exc:
+                    print(f"  ✗  frame {futs[fut]}: {exc}", flush=True)
+
+                if done % tick == 0 or done == n_total:
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else float("inf")
+                    eta  = (n_total - done) / rate if rate > 0 else float("inf")
+                    print(
+                        f"  {done}/{n_total}  {n_saved} fits saved  "
+                        f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                        flush=True,
+                    )
+
+    finally:
+        os.unlink(crystals_pkl)
+
+    print(
+        f"\nMixed local done — {n_saved}/{n_total} frames fitted  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return n_saved
+
+
+# ── mixed-phase strain ────────────────────────────────────────────────────────
+
+def _mixed_strain_process_frame(
+    frame_idx: int,
+    obs_xy: "np.ndarray | None",
+    *,
+    mixed_dir: str,
+    strain_dir: str,
+    n_grains: int,
+    max_match_px,
+    fit_strain: tuple,
+    fit_kwargs: dict,
+    overwrite: bool,
+) -> tuple:
+    """Per-phase strain fitting starting from mixed orientation results.  Returns (frame_idx, n_saved)."""
+    if obs_xy is None or len(obs_xy) < 3:
+        return frame_idx, 0
+
+    mixed_path = os.path.join(mixed_dir, f"frame_{frame_idx:05d}.npz")
+    if not os.path.exists(mixed_path):
+        return frame_idx, 0
+
+    d_mixed  = np.load(mixed_path)
+    crystals = _g_crystals
+    camera   = _g_camera
+    n_saved  = 0
+
+    for gi in range(n_grains):
+        u_key = f"U_{gi}"
+        if u_key not in d_mixed:
+            continue
+
+        out_path = os.path.join(strain_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+        if os.path.exists(out_path) and not overwrite:
+            n_saved += 1
+            continue
+
+        crystal = crystals[gi]
+        allowed = _g_allowed_list[gi] if _g_allowed_list is not None else None
+
+        try:
+            U0     = d_mixed[u_key]
+            result = fit_strain_orientation(
+                crystal, camera, obs_xy, U0,
+                max_match_px = list(max_match_px),
+                fit_strain   = fit_strain,
+                allowed_hkl  = allowed,
+                **fit_kwargs,
+            )
+
+            tmp = out_path + ".tmp.npz"
+            np.savez(
+                tmp,
+                U             = result.U,
+                U_eff         = result.U_eff,
+                strain_tensor = result.strain_tensor,
+                strain_voigt  = result.strain_voigt,
+                rotvec        = result.rotvec,
+                rms_px        = np.array(result.rms_px),
+                mean_px       = np.array(result.mean_px),
+                n_matched     = np.array(result.n_matched),
+                match_rate    = np.array(result.match_rate),
+                cost          = np.array(result.cost),
+            )
+            os.replace(tmp, out_path)
+            n_saved += 1
+
+        except Exception as exc:
+            print(f"  ✗  frame {frame_idx} g{gi}: mixed strain fit: {exc}", flush=True)
+
+    return frame_idx, n_saved
+
+
+def run_strain_mixed_local(
+    crystals: list,
+    camera,
+    seg_dir: str,
+    mixed_dir: str,
+    strain_dir: str,
+    n_grains: int,
+    *,
+    fit_strain=("e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"),
+    r_squared_min: float = 0.9,
+    include_unfitted: bool = False,
+    max_match_px=(10, 3),
+    f2_thresh: float = 1e-4,
+    geometry_only: bool = True,
+    n_workers: "int | None" = None,
+    overwrite: bool = False,
+    frame_indices: "list | None" = None,
+    **fit_kwargs,
+) -> int:
+    """Per-phase strain fitting on local cores, starting from mixed orientation results.
+
+    Reads ``mixed_dir/frame_{idx:05d}.npz`` (written by
+    :func:`run_orientation_mixed_local`) for the starting U of each phase,
+    then calls :func:`fit_strain_orientation` independently per phase.
+    Output is written to ``strain_dir/frame_{idx:05d}_g{gi:02d}.npz`` — the
+    same format as :func:`run_strain_local` — so :meth:`GrainMap.collect_strain`
+    works unchanged.
+
+    Parameters
+    ----------
+    crystals   : list of Crystal  One crystal per phase, in grain-index order.
+    camera     : Camera
+    seg_dir    : str              Directory with ``frame_{idx:05d}.h5`` peaklist files.
+    mixed_dir  : str              Directory with mixed orientation ``frame_{idx:05d}.npz`` files.
+    strain_dir : str              Output directory for strain results.
+    n_grains   : int              Number of phases (grain indices 0 … n_grains-1).
+    frame_indices : list or None  Subset of frames; defaults to all found in mixed_dir.
+
+    Returns
+    -------
+    n_saved : int  Total number of per-phase strain files written.
+    """
+    from .segmentation import convert_spotsfile2peaklist
+    import glob
+
+    if len(crystals) != n_grains:
+        raise ValueError(f"len(crystals)={len(crystals)} must equal n_grains={n_grains}")
+
+    os.makedirs(strain_dir, exist_ok=True)
+
+    if frame_indices is None:
+        npzs = sorted(glob.glob(os.path.join(mixed_dir, "frame_?????.npz")))
+        frame_indices = [int(os.path.basename(p)[6:11]) for p in npzs]
+
+    # Precompute allowed HKL once per crystal.
+    t_hkl = time.time()
+    allowed_hkl_list = None
+    if geometry_only:
+        allowed_hkl_list = [
+            precompute_allowed_hkl(c, f2_thresh=f2_thresh)
+            for c in crystals
+        ]
+        n_refs = sum(len(a) for a in allowed_hkl_list)
+        print(
+            f"  allowed_hkl: {n_refs} reflections across {n_grains} phases "
+            f"({time.time() - t_hkl:.1f}s)",
+            flush=True,
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tf:
+        crystals_pkl = tf.name
+    try:
+        with open(crystals_pkl, "wb") as fh:
+            _dill.dump(crystals, fh)
+
+        t_io = time.time()
+        peaklists: dict[int, np.ndarray] = {}
+        for fi in frame_indices:
+            seg_path = os.path.join(seg_dir, f"frame_{fi:05d}.h5")
+            if not os.path.exists(seg_path):
+                continue
+            try:
+                pl = convert_spotsfile2peaklist(
+                    seg_path,
+                    r_squared_min=r_squared_min,
+                    include_unfitted=include_unfitted,
+                )
+                if len(pl) >= 3:
+                    peaklists[fi] = pl[:, :2]
+            except Exception as exc:
+                print(f"  ✗  frame {fi}: load peaklist: {exc}", flush=True)
+
+        n_total = len(frame_indices)
+        print(
+            f"Mixed strain local — {n_total} frames | {n_grains} phase(s) | "
+            f"{len(peaklists)} with spots | "
+            f"fit_strain={list(fit_strain)} | "
+            f"I/O: {time.time() - t_io:.1f}s",
+            flush=True,
+        )
+
+        _fk = dict(fit_kwargs)
+        if geometry_only:
+            _fk["geometry_only"] = True
+
+        common = dict(
+            mixed_dir    = mixed_dir,
+            strain_dir   = strain_dir,
+            n_grains     = n_grains,
+            max_match_px = max_match_px,
+            fit_strain   = tuple(fit_strain),
+            fit_kwargs   = _fk,
+            overwrite    = overwrite,
+        )
+        n_workers = min(len(peaklists) or 1, n_workers or os.cpu_count() or 1)
+        tick = max(1, n_total // 20)
+
+        t0 = time.time()
+        n_saved = 0
+        done = 0
+        with ProcessPoolExecutor(
+            max_workers = n_workers,
+            initializer = _mixed_pool_init,
+            initargs    = (crystals_pkl, camera, allowed_hkl_list),
+        ) as pool:
+            futs = {
+                pool.submit(_mixed_strain_process_frame, fi, peaklists.get(fi), **common): fi
+                for fi in frame_indices
+            }
+            for fut in as_completed(futs):
+                done += 1
+                try:
+                    _, n = fut.result()
+                    n_saved += n
+                except Exception as exc:
+                    print(f"  ✗  frame {futs[fut]}: {exc}", flush=True)
+
+                if done % tick == 0 or done == n_total:
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else float("inf")
+                    eta  = (n_total - done) / rate if rate > 0 else float("inf")
+                    print(
+                        f"  {done}/{n_total}  {n_saved} fits saved  "
+                        f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                        flush=True,
+                    )
+
+    finally:
+        os.unlink(crystals_pkl)
+
+    print(
+        f"\nMixed strain local done — {n_saved} fits saved  "
         f"({time.time() - t0:.1f}s total)",
         flush=True,
     )

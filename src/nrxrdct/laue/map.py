@@ -6064,6 +6064,178 @@ class GrainMap:
         print(f"Orientation: {len(job_ids)} jobs → {dirs['ubs']}")
         return job_ids
 
+    def submit_orientation_mixed(
+        self,
+        base_dir: str,
+        crystals: list,
+        camera,
+        n_jobs: int = 10,
+        *,
+        shared: bool = False,
+        partition: str = "all",
+        time: str = "02:00:00",
+        mem: str = "4G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        max_match_px=(30, 10, 3),
+        min_matched: int = 5,
+        min_match_rate: float = 0.2,
+        max_rms_px: float | None = None,
+        r_squared_min: "float | None" = None,
+        include_unfitted: "bool | None" = None,
+        f2_thresh: float | None = None,
+        top_n_sim: int | None = None,
+        top_n_obs: int | None = None,
+        method: str = "lm",
+        ftol: float = 1e-6,
+        xtol: float = 1e-6,
+        gtol: float = 1e-8,
+        max_nfev: int | None = None,
+        source: str | None = None,
+        source_kwargs: dict | None = None,
+        extra_sbatch: dict | None = None,
+        overwrite: bool = False,
+    ) -> list:
+        """
+        Submit mixed-phase orientation-fitting jobs to SLURM.
+
+        All phases are fitted simultaneously for each frame using
+        :func:`~nrxrdct.laue.fitting.fit_orientation_mixed`.  Results are
+        written to ``base_dir/mixed/frame_{idx:05d}.npz``, one file per frame,
+        containing the refined U matrix for every phase.
+
+        Parameters
+        ----------
+        crystals : list of Crystal
+            One crystal per phase, in grain-index order.  Must match
+            ``len(self.ub_files)`` and ``self.n_grains``.
+        camera : Camera
+            Detector geometry.
+        shared : bool
+            If ``True``, all phases share a single rotation vector (3 free
+            parameters).  If ``False`` (default), each phase has an
+            independent rotation (3 × N_phases parameters).
+        """
+        if len(crystals) != len(self.ub_files):
+            raise ValueError(
+                f"len(crystals)={len(crystals)} must equal "
+                f"len(self.ub_files)={len(self.ub_files)}"
+            )
+        if len(crystals) != self.n_grains:
+            raise ValueError(
+                f"len(crystals)={len(crystals)} must equal "
+                f"self.n_grains={self.n_grains}"
+            )
+
+        dirs = self.setup_processing_dirs(base_dir)
+        mixed_dir = os.path.join(base_dir, "mixed")
+        os.makedirs(mixed_dir, exist_ok=True)
+
+        _seg = self._seg_defaults(base_dir)
+        if r_squared_min is None:
+            r_squared_min = _seg.get("r_squared_min", 0.9)
+        if include_unfitted is None:
+            include_unfitted = _seg.get("include_unfitted", False)
+
+        crystals_pkl = os.path.join(dirs["job_meta"], "crystals.pkl")
+        with open(crystals_pkl, "wb") as fh:
+            pickle.dump(crystals, fh)
+
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+        meta: dict = {
+            "seg_dir":        dirs["seg"],
+            "mixed_dir":      mixed_dir,
+            "crystals_pkl":   crystals_pkl,
+            "camera":         self._camera_to_dict(camera),
+            "ub_files":       self.ub_files,
+            "shared":         shared,
+            "max_match_px":   max_match_px if isinstance(max_match_px, list)
+                              else list(max_match_px),
+            "min_matched":    min_matched,
+            "min_match_rate": min_match_rate,
+            "max_rms_px":     max_rms_px,
+            "r_squared_min":  r_squared_min,
+            "include_unfitted": include_unfitted,
+            "overwrite":      overwrite,
+            "method":         method,
+            "ftol":           ftol,
+            "xtol":           xtol,
+            "gtol":           gtol,
+            "geometry_only":  True,
+        }
+        for key, val in [
+            ("f2_thresh", f2_thresh), ("top_n_sim", top_n_sim),
+            ("top_n_obs", top_n_obs), ("max_nfev", max_nfev),
+            ("source", source), ("source_kwargs", source_kwargs),
+        ]:
+            if val is not None:
+                meta[key] = val
+
+        meta_path = os.path.join(dirs["job_meta"], "mixed_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "mixed", "nrxrdct.laue.slurm_mixed_worker", meta_path, chunks,
+            dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
+        )
+        print(f"Mixed orientation: {len(job_ids)} jobs → {mixed_dir}")
+        return job_ids
+
+    def collect_orientation_mixed(self, base_dir: str) -> int:
+        """
+        Load mixed-phase orientation results into the map arrays.
+
+        Reads ``base_dir/mixed/frame_{idx:05d}.npz`` files produced by the
+        mixed worker or :func:`~nrxrdct.laue.fitting.run_orientation_mixed_local`.
+        Fills ``self.U[gi]``, ``self.rms_px[gi]``, ``self.n_matched[gi]``,
+        ``self.match_rate[gi]``, and ``self.cost[gi]`` for every grain index
+        *gi* from 0 to N_phases-1.  Quality metrics are shared across all
+        phases (joint fit).
+
+        Returns the number of frames loaded.
+        """
+        mixed_dir = os.path.join(base_dir, "mixed")
+        files = sorted(glob.glob(os.path.join(mixed_dir, "frame_?????.npz")))
+        n_loaded = 0
+        for fpath in files:
+            m = re.search(r"frame_(\d{5})\.npz$", os.path.basename(fpath))
+            if not m:
+                continue
+            frame_idx = int(m.group(1))
+            iy, ix    = self.map_index(frame_idx)
+            if iy >= self.ny or ix >= self.nx:
+                continue
+            try:
+                d = np.load(fpath)
+                rms_px     = float(d["rms_px"])
+                mean_px    = float(d["mean_px"]) if "mean_px" in d else np.nan
+                n_matched  = int(d["n_matched"])
+                match_rate = float(d["match_rate"])
+                cost       = float(d["cost"])
+                for gi in range(self.n_grains):
+                    key = f"U_{gi}"
+                    if key not in d:
+                        break
+                    self.U[gi, iy, ix]          = d[key]
+                    self.rms_px[gi, iy, ix]     = rms_px
+                    self.mean_px[gi, iy, ix]    = mean_px
+                    self.n_matched[gi, iy, ix]  = n_matched
+                    self.match_rate[gi, iy, ix] = match_rate
+                    self.cost[gi, iy, ix]        = cost
+                n_loaded += 1
+            except Exception as exc:
+                print(f"  ✗  {fpath}: {exc}", flush=True)
+        print(f"collect_orientation_mixed: {n_loaded} frames loaded from {mixed_dir}")
+        return n_loaded
+
     def submit_strain(
         self,
         base_dir: str,
@@ -6262,6 +6434,121 @@ class GrainMap:
             python_bin=python_bin, extra_sbatch=extra_sbatch,
         )
         print(f"Strain: {len(job_ids)} jobs → {dirs['strain']}")
+        return job_ids
+
+    def submit_strain_mixed(
+        self,
+        base_dir: str,
+        crystals: list,
+        camera,
+        n_jobs: int = 10,
+        *,
+        partition: str = "all",
+        time: str = "02:00:00",
+        mem: str = "4G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        max_match_px=(10, 3),
+        fit_strain: list | None = None,
+        r_squared_min: "float | None" = None,
+        include_unfitted: "bool | None" = None,
+        f2_thresh: float | None = None,
+        top_n_sim: int | None = None,
+        top_n_obs: int | None = None,
+        method: str = "lm",
+        ftol: float = 1e-6,
+        xtol: float = 1e-6,
+        gtol: float = 1e-6,
+        max_nfev: int | None = None,
+        strain_scale: float | None = None,
+        source: str | None = None,
+        source_kwargs: dict | None = None,
+        extra_sbatch: dict | None = None,
+        overwrite: bool = False,
+    ) -> list:
+        """
+        Submit per-phase strain-fitting jobs to SLURM, starting from mixed
+        orientation results.
+
+        Reads ``base_dir/mixed/frame_{idx:05d}.npz`` for the starting U of
+        each phase (produced by :meth:`submit_orientation_mixed`), then runs
+        :func:`~nrxrdct.laue.fitting.fit_strain_orientation` independently
+        per phase.  Output is written to
+        ``strain_dir/frame_{idx:05d}_g{gi:02d}.npz`` — the same format as
+        :meth:`submit_strain` — so :meth:`collect_strain` works unchanged.
+
+        Parameters
+        ----------
+        crystals : list of Crystal
+            One crystal per phase, in grain-index order.  Must match
+            ``self.n_grains``.
+        """
+        if len(crystals) != self.n_grains:
+            raise ValueError(
+                f"len(crystals)={len(crystals)} must equal "
+                f"self.n_grains={self.n_grains}"
+            )
+
+        dirs = self.setup_processing_dirs(base_dir)
+        mixed_dir = os.path.join(base_dir, "mixed")
+
+        _seg = self._seg_defaults(base_dir)
+        if r_squared_min is None:
+            r_squared_min = _seg.get("r_squared_min", 0.9)
+        if include_unfitted is None:
+            include_unfitted = _seg.get("include_unfitted", False)
+
+        crystals_pkl = os.path.join(dirs["job_meta"], "crystals.pkl")
+        if not os.path.exists(crystals_pkl):
+            with open(crystals_pkl, "wb") as fh:
+                pickle.dump(crystals, fh)
+
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+        meta: dict = {
+            "seg_dir":        dirs["seg"],
+            "mixed_dir":      mixed_dir,
+            "strain_dir":     dirs["strain"],
+            "crystals_pkl":   crystals_pkl,
+            "camera":         self._camera_to_dict(camera),
+            "n_grains":       self.n_grains,
+            "max_match_px":   max_match_px if isinstance(max_match_px, list)
+                              else list(max_match_px),
+            "fit_strain":     fit_strain or
+                              ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"],
+            "r_squared_min":  r_squared_min,
+            "include_unfitted": include_unfitted,
+            "overwrite":      overwrite,
+            "method":         method,
+            "ftol":           ftol,
+            "xtol":           xtol,
+            "gtol":           gtol,
+            "geometry_only":  True,
+        }
+        for key, val in [
+            ("f2_thresh", f2_thresh), ("top_n_sim", top_n_sim),
+            ("top_n_obs", top_n_obs), ("max_nfev", max_nfev),
+            ("strain_scale", strain_scale),
+            ("source", source), ("source_kwargs", source_kwargs),
+        ]:
+            if val is not None:
+                meta[key] = val
+
+        meta_path = os.path.join(dirs["job_meta"], "mixed_strain_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "mixed_strain", "nrxrdct.laue.slurm_mixed_strain_worker",
+            meta_path, chunks, dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
+        )
+        print(f"Mixed strain: {len(job_ids)} jobs → {dirs['strain']}")
         return job_ids
 
     def collect_orientation(self, base_dir: str) -> int:

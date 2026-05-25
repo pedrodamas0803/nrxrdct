@@ -176,6 +176,7 @@ class GrainMap:
         entry: str = "1.1",
         motor_x: str | None = None,
         motor_y: str | None = None,
+        save_path: str | None = None,
     ):
         self.ny = int(ny)
         self.nx = int(nx)
@@ -190,6 +191,13 @@ class GrainMap:
             else:
                 processing_dir = os.getcwd()
         self.processing_dir = processing_dir
+
+        if save_path is None and processing_dir is not None:
+            self.save_path: str | None = os.path.join(self.processing_dir, "grain_map.h5")
+        elif save_path is None:
+            self.save_path = os.path.join(os.getcwd(), "grain_map.h5")
+        else:
+            self.save_path = save_path
 
         self._load_ub_matrices()
         self._init_arrays()
@@ -3562,11 +3570,11 @@ class GrainMap:
                 )
                 return
             self.set_result(iy, ix, gi, fit_result)
-            if self.h5_path:
-                self.save(self.h5_path)
-                save_note = f" — saved to {os.path.basename(self.h5_path)}"
+            if self.save_path:
+                self.save(self.save_path)
+                save_note = f" — saved to {os.path.basename(self.save_path)}"
             else:
-                save_note = " — <b style='color:#ffaa33'>no h5_path set, results in memory only</b>"
+                save_note = " — <b style='color:#ffaa33'>no save_path set, results in memory only</b>"
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
@@ -3576,7 +3584,7 @@ class GrainMap:
                 f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
                 f"rms={fit_result.rms_px:.2f} px  "
                 f"match={fit_result.match_rate:.0%}"
-                + (f"  → saved to {self.h5_path}" if self.h5_path else "  (in memory only)")
+                + (f"  → saved to {self.save_path}" if self.save_path else "  (in memory only)")
             )
 
         def _cb_save(_) -> None:
@@ -4434,11 +4442,11 @@ class GrainMap:
             self.set_result(iy, ix, gi, fit_result)
             _state["stored_result"] = fit_result
             btn_remove.disabled = False
-            if self.h5_path:
-                self.save(self.h5_path)
-                save_note = f" — saved to {os.path.basename(self.h5_path)}"
+            if self.save_path:
+                self.save(self.save_path)
+                save_note = f" — saved to {os.path.basename(self.save_path)}"
             else:
-                save_note = " — <b style='color:#ffaa33'>no h5_path set, results in memory only</b>"
+                save_note = " — <b style='color:#ffaa33'>no save_path set, results in memory only</b>"
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
@@ -5279,6 +5287,11 @@ class GrainMap:
         All numeric arrays are stored under `/grain_{i:02d}/` groups.
         Metadata (ny, nx, ub_files, h5_path, entry) go into `/meta`.
         """
+        if self.h5_path and os.path.abspath(path) == os.path.abspath(self.h5_path):
+            raise ValueError(
+                f"save path {path!r} is the same as the input scan file (h5_path) — "
+                "refusing to overwrite"
+            )
         with h5py.File(path, "w") as f:
             meta = f.create_group("meta")
             meta.attrs["ny"]            = self.ny
@@ -5468,6 +5481,7 @@ class GrainMap:
             obj.ny             = ny
             obj.nx             = nx
             obj.h5_path        = h5_path if h5_path else None
+            obj.save_path      = path
             obj.entry          = entry
             obj.processing_dir = processing_dir
             obj.n_grains       = n_grains

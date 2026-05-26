@@ -48,22 +48,18 @@ def check(
     """
     Verify integration progress and/or merge completeness.
 
-    Parameters
-    ----------
-    tmp_dir     : Path, optional
-        Tmp directory written by workers. If provided, counts completed
-        .npy files and reports missing indices.
-    output_file : Path, optional
-        Output HDF5 file. If provided, counts merged scan datasets.
+    Args:
+        tmp_dir (Path, optional): Tmp directory written by workers. If provided,
+            counts completed .npy files and reports missing indices.
+        output_file (Path, optional): Output HDF5 file. If provided, counts
+            merged scan datasets.
 
-    Returns
-    -------
-    dict with keys:
-        'n_total'         — total expected scans
-        'n_integrated'    — .npy files present in tmp_dir
-        'n_merged'        — datasets present in output_file
-        'missing_tmp'     — indices not yet integrated
-        'missing_h5'      — indices not yet merged
+    Returns:
+        dict: With keys ``'n_total'`` (total expected scans),
+            ``'n_integrated'`` (.npy files present in tmp_dir),
+            ``'n_merged'`` (datasets present in output_file),
+            ``'missing_tmp'`` (indices not yet integrated),
+            ``'missing_h5'`` (indices not yet merged).
     """
     if tmp_dir is None and output_file is None:
         raise ValueError("Provide at least one of tmp_dir or output_file.")
@@ -241,17 +237,16 @@ def repair(
     you don't need to repeat them. Pass **kwargs to override any individual
     setting (e.g. partition, mem, n_workers).
 
-    Parameters
-    ----------
-    tmp_dir     : Path  — tmp directory from the original launch()
-    master_file : Path  — override master HDF5 (default: from launch_meta)
-    poni_file   : Path  — override calibration file (default: from launch_meta)
-    mask_file   : Path  — override mask file (default: from launch_meta)
-    output_file : Path  — only used to check merge status if provided
-    n_jobs      : int   — number of repair jobs (default 1)
-    watch       : bool  — block until repair jobs finish
-    interval    : int   — polling interval in seconds when watch=True
-    **kwargs    : override any setting from launch_meta (partition, mem, etc.)
+    Args:
+        tmp_dir (Path): Tmp directory from the original launch().
+        master_file (Path, optional): Override master HDF5 (default: from launch_meta).
+        poni_file (Path, optional): Override calibration file (default: from launch_meta).
+        mask_file (Path, optional): Override mask file (default: from launch_meta).
+        output_file (Path, optional): Only used to check merge status if provided.
+        n_jobs (int): Number of repair jobs. Defaults to 1.
+        watch (bool): Block until repair jobs finish.
+        interval (int): Polling interval in seconds when watch=True.
+        **kwargs: Override any setting from launch_meta (partition, mem, etc.).
     """
     from .launch_jobs import _split_indices, _submit_job
 

@@ -9,8 +9,7 @@ Provides ipywidgets-based GUIs for:
   orientation and the camera geometry (dd, xcen, ycen, xbet, xgam) to produce
   a good initial guess before running :meth:`~nrxrdct.laue.Camera.fit_calibration`.
 
-Typical workflow
-----------------
+**Typical workflow**
 1. Get a rough starting guess from EBSD, LaueTools, or even just zeros::
 
        U0 = euler_to_U(0, 0, 0, sample_tilt_deg=40)
@@ -30,8 +29,7 @@ Typical workflow
 
        result = fit_orientation(crystal, camera, obs_xy, state.U)
 
-Backend note
-------------
+**Backend note**
 Requires `%matplotlib widget` (ipympl) and `ipywidgets` in Jupyter::
 
     %matplotlib widget
@@ -77,14 +75,12 @@ def _gnomonic(tth_deg, chi_deg):
     (lat₀ = 45°, long₀ = 0°), which corresponds to 2θ = 90°, χ = 0°.
     Zone axes appear as straight lines in this projection.
 
-    Parameters
-    ----------
+    Args:
     tth_deg, chi_deg : array-like  —  2θ and χ in degrees.
 
-    Returns
-    -------
+    Returns:
     gX, gY : ndarray  —  gnomonic coordinates.
-    """
+"""
     theta = np.asarray(tth_deg, float) / 2.0
     chi   = np.asarray(chi_deg, float)
     tan_t = np.tan(theta * _DEG)
@@ -108,7 +104,7 @@ def _gnomonic_inv(gX: float, gY: float) -> np.ndarray:
     Inverts the geographic gnomonic centred at lat₀=π/4 (2θ=90°, χ=0°).
     Used by the drag handler to convert a drop position back to a scattering
     direction so the correct U rotation can be computed.
-    """
+"""
     r = float(np.sqrt(gX ** 2 + gY ** 2))
     if r < 1e-12:
         # Centre of projection: 2θ=90°, χ=0° → kf = (0, 0, 1)
@@ -149,8 +145,7 @@ class OrientationState:
     """
     Live orientation state returned by :func:`interactive_orientation`.
 
-    Attributes
-    ----------
+    Attributes:
     U        : (3, 3) ndarray  — current orientation (updates as sliders move).
     U0       : (3, 3) ndarray  — current base orientation (updated by
                                  "Set as U₀" button).
@@ -158,7 +153,7 @@ class OrientationState:
     U_layers : list or None    — per-layer U matrices when a
                                  :class:`~nrxrdct.laue.layers.LayeredCrystal`
                                  was passed.
-    """
+"""
 
     def __init__(self, U0: np.ndarray, U0_layers: list | None = None):
         self.U        = U0.copy()
@@ -213,8 +208,7 @@ def interactive_orientation(
     buttons) are rendered as ipywidgets below the figure so they work on
     remote Jupyter-Slurm servers.
 
-    Parameters
-    ----------
+    Args:
     crystal   : xrayutilities Crystal **or** LayeredCrystal
     camera    : Camera
     obs_xy    : (N, 2) ndarray  — observed pixel positions from segmentation.
@@ -234,12 +228,11 @@ def interactive_orientation(
         which helps identify multiple grains.  `'detector'` plots raw pixel
         positions.  Matching is always done in detector (pixel) space.
 
-    Returns
-    -------
+    Returns:
     OrientationState
         `state.U`  — final orientation (pass to :func:`fit_orientation`).
         `state.accepted` — True if "✓ Accept" was clicked.
-    """
+"""
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display
 
@@ -956,14 +949,13 @@ class CalibrationState:
     """
     Live calibration state returned by :func:`interactive_calibration`.
 
-    Attributes
-    ----------
+    Attributes:
     camera   : Camera  — current camera (updates as sliders move).
     camera0  : Camera  — current base camera (updated by "Set as reference").
     U        : (3, 3) ndarray  — current orientation.
     U0       : (3, 3) ndarray  — current base orientation.
     accepted : bool  — True after the "✓ Accept" button is clicked.
-    """
+"""
 
     def __init__(self, camera0, U0: np.ndarray):
         self.camera    = camera0
@@ -1027,8 +1019,7 @@ def interactive_calibration(
     and resets all sliders to zero.  "✓ Accept" prints the final parameters
     and a ready-to-run :meth:`~Camera.fit_calibration` call.
 
-    Parameters
-    ----------
+    Args:
     crystal : xrayutilities Crystal
         Calibration standard crystal (not LayeredCrystal).
     camera : Camera
@@ -1060,13 +1051,12 @@ def interactive_calibration(
         `'detector'` plots raw pixel positions.
         Matching is always done in detector (pixel) space regardless of this flag.
 
-    Returns
-    -------
+    Returns:
     CalibrationState
         `state.camera`   — pass to :meth:`~Camera.fit_calibration`.
         `state.U`        — pass to :meth:`~Camera.fit_calibration`.
         `state.accepted` — True if "✓ Accept" was clicked.
-    """
+"""
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display
     from .camera import Camera as _Camera

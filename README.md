@@ -130,6 +130,7 @@ python -m ipykernel install --user --name nrxrdct --display-name "nrxrdct"
 | `pandas >= 3.0` | Peak table output |
 | `xraylib >= 4.2` | XRF emission line energies |
 | `xrayutilities >= 1.7` | Powder pattern simulation and peak listing |
+| `tqdm >= 4.67` | Progress bars |
 
 ### Additional runtime dependencies
 
@@ -137,13 +138,12 @@ These are used by specific modules but are not yet declared in `pyproject.toml` 
 
 | Package | Module | Purpose |
 |---|---|---|
-| `astra-toolbox` | `reconstruction` | Tomographic reconstruction (GPU + CPU) |
-| `GSAS-II` | `reconstruction`, `refinement` | Rietveld refinement scripting |
-| `fabio` | `integration` | Reading mask files |
-| `hdf5plugin` | `reconstruction` | Compressed HDF5 dataset support |
-| `napari` | `visualization` | Interactive 3-D volume viewer |
+| `astra-toolbox` | `xrdct.reconstruction` | Tomographic reconstruction (GPU + CPU) |
+| `GSAS-II` | `xrdct.reconstruction`, `rietveld.refinement` | Rietveld refinement scripting |
+| `fabio` | `azimuthal.integration` | Reading mask files |
+| `hdf5plugin` | `xrdct.reconstruction` | Compressed HDF5 dataset support |
+| `napari` | `xrdct.visualization` | Interactive 3-D volume viewer |
 | `pybaselines` | `utils` | XRD baseline fitting |
-| `tqdm` | `integration`, `fluorescence`, `nmf` | Progress bars |
 | `dill` | `laue` | Crystal object serialisation for SLURM workers |
 | `ipywidgets` | `laue` | Interactive orientation / calibration widgets |
 
@@ -153,20 +153,43 @@ These are used by specific modules but are not yet declared in `pyproject.toml` 
 
 ```text
 src/nrxrdct/
-├── __init__.py          # Package entry point
-├── parameters.py        # Scan metadata container (Scan class)
-├── preprocessing.py     # Zinger removal
-├── integration.py       # pyFAI azimuthal integration pipeline
-├── reconstruction.py    # ASTRA reconstruction + ReconstructedVolume
-├── refinement.py        # GSAS-II refinement wrappers
-├── refine_dict.py       # Pre-built GSAS-II refinement dictionary templates
-├── fluorescence.py      # XRF sinogram loading
-├── nmf.py               # NMF decomposition for hyperspectral volumes
+├── __init__.py          # Top-level public API re-exports
 ├── utils.py             # Baseline fitting, simulation, masking, padding
-├── plotting.py          # CAKE integration plotting
-├── visualization.py     # napari-based interactive viewers
-├── io.py                # HDF5 and .xy file I/O, GSAS-II instprm export
-└── laue/
+├── azimuthal/           # pyFAI azimuthal integration
+│   ├── __init__.py
+│   ├── integration.py   # 1-D and CAKE integration, parallel pipeline
+│   └── slurm_integration/
+│       ├── __init__.py
+│       ├── cli.py           # nrxrdct-slurm entry point
+│       ├── launch_jobs.py   # SLURM job submission
+│       ├── monitor.py       # Job progress monitoring
+│       ├── check_repair.py  # Output validation and repair
+│       └── integrate_worker.py
+├── fitting/             # Peak fitting and NMF
+│   ├── __init__.py
+│   ├── peakfit.py       # 1-D peak fitting utilities
+│   └── nmf.py           # NMF decomposition for hyperspectral volumes
+├── fluo/                # X-ray fluorescence
+│   ├── __init__.py
+│   ├── constants.py     # Default emission line sets
+│   └── fluorescence.py  # XRF sinogram loading and fitting
+├── rietveld/            # GSAS-II Rietveld refinement
+│   ├── __init__.py
+│   ├── refinement.py    # BaseRefinement, InstrumentCalibration wrappers
+│   └── refine_dict.py   # Pre-built refinement dictionary templates
+├── xrdct/               # XRD-CT pipeline core
+│   ├── __init__.py
+│   ├── io.py            # HDF5 and .xy file I/O, GSAS-II instprm export
+│   ├── parameters.py    # Scan metadata container (Scan class)
+│   ├── preprocessing.py # Zinger removal
+│   ├── sinogram.py      # Sinogram assembly and XRF ROI extraction
+│   ├── reconstruction.py# ASTRA tomographic reconstruction
+│   ├── volume.py        # ReconstructedVolume — per-voxel refinement and maps
+│   ├── visualization.py # napari-based interactive viewers
+│   └── slurm_reconstruction/
+│       ├── __init__.py
+│       └── cli.py           # nrxrdct-slurm-recon entry point
+└── laue/                # Polychromatic (Laue) diffraction — self-contained
     ├── __init__.py              # Laue sub-package public API
     ├── camera.py                # Detector geometry (Camera, CalibrationResult, fit_calibration)
     ├── crystal.py               # Crystal structure builders (from CIF, BCC, B2)
@@ -188,9 +211,9 @@ src/nrxrdct/
 
 ```python
 from pathlib import Path
-from nrxrdct.parameters import Scan
-from nrxrdct.integration import integrate_powder_parallel
-from nrxrdct.reconstruction import assemble_sinogram, reconstruct_slice, ReconstructedVolume
+from nrxrdct.xrdct import Scan
+from nrxrdct.azimuthal import integrate_powder_parallel
+from nrxrdct.xrdct import assemble_sinogram, reconstruct_slice, ReconstructedVolume
 import numpy as np
 
 # 1. Describe the scan
@@ -236,7 +259,7 @@ a_map, b_map, c_map = rv.get_cell_map()
 ### Instrument calibration
 
 ```python
-from nrxrdct.refinement import InstrumentCalibration
+from nrxrdct.rietveld import InstrumentCalibration
 
 cal = InstrumentCalibration(
     acquisition_file=Path("data/calib.h5"),
@@ -269,7 +292,7 @@ Python API:
 
 ```python
 from pathlib import Path
-from nrxrdct.slurm_integration import launch
+from nrxrdct.azimuthal.slurm_integration import launch
 
 slurm_ids = launch(
     master_file  = Path("/data/raw/sample_master.h5"),
@@ -321,7 +344,7 @@ Sbatch scripts and logs are written to `<output_file_dir>/slurm_logs/`.
 Python API:
 
 ```python
-from nrxrdct.slurm_integration import monitor
+from nrxrdct.azimuthal.slurm_integration import monitor
 
 # Single snapshot (non-blocking)
 result = monitor(
@@ -380,7 +403,7 @@ After all jobs finish, verify that every scan was written correctly.
 Python API:
 
 ```python
-from nrxrdct.slurm_integration import check, repair
+from nrxrdct.azimuthal.slurm_integration import check, repair
 
 # Check only — report missing and corrupted scans
 result = check(output_file=Path("/data/processed/integrated.h5"))
@@ -433,7 +456,7 @@ nrxrdct-slurm check \
 If the output HDF5 is deeply corrupted (damaged B-tree), use `rebuild` to salvage all readable scans into a fresh file before repairing:
 
 ```python
-from nrxrdct.slurm_integration import rebuild
+from nrxrdct.azimuthal.slurm_integration import rebuild
 
 rebuild(
     output_file = Path("/data/processed/integrated.h5"),

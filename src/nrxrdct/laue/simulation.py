@@ -6,8 +6,7 @@ in reflection geometry, with a full pixelated camera model.
 
 System  : equiatomic AlCoCrFeNi HEA  –  BCC (Im-3m) + B2 (Pm-3m)
 
-Physics
--------
+**Physics**
 Laue condition (Ewald construction):
     lambda_hkl = -4*pi * (k_i_hat . G_hkl) / |G_hkl|^2
 
@@ -21,8 +20,7 @@ Spot intensity:
   S(E)      – synchrotron spectrum (bending magnet, wiggler, or undulator)
                NO bremsstrahlung
 
-Synchrotron spectra
--------------------
+**Synchrotron spectra**
   Bending magnet / wiggler (on-axis, Kim 1989):
       S(E) ∝ (E/Ec)^2 * K_{2/3}^2(E / 2*Ec)
       Peak at E ≈ 0.83*Ec.  Wiggler: flux x 2*N_poles.
@@ -30,8 +28,7 @@ Synchrotron spectra
   Undulator (planar, odd harmonics):
       S(E) = sum_n (1/n) * exp[-0.5*((E - n*E1)/sigma_n)^2]
 
-Camera model
-------------
+**Camera model**
   The detector is a flat pixelated area detector (e.g. Eiger, Pilatus,
   MAR, Perkin-Elmer, ...) described by:
 
@@ -52,8 +49,7 @@ Camera model
   The direct-beam footprint on the detector is also computed (if it
   would hit) so you can check the geometry is sensible.
 
-Orientation
------------
+**Orientation**
   Full orientation via Bunge ZXZ Euler angles (phi1, Phi, phi2).
   A Bragg-energy reference table is printed at runtime.
 """
@@ -200,8 +196,7 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
     sample is tilted on the stage the two frames differ by a rotation around
     the horizontal axis (y in LT).
 
-    Parameters
-    ----------
+    Args:
     phi1, Phi, phi2 : float
         Bunge ZXZ Euler angles in degrees.
     sample_tilt_deg : float, optional
@@ -212,13 +207,11 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
         - BM32 / ID01 Z>0 geometry, 40° grazing incidence → `sample_tilt_deg=40`
         - LaueTools refined UB matrix (already in lab frame) → `sample_tilt_deg=0`
 
-    Returns
-    -------
+    Returns:
     U : ndarray, shape (3, 3)
         Orientation matrix such that `G_lab = U @ G_crystal`.
 
-    Notes
-    -----
+    Note:
     The sample tilt is the **sample→lab** rotation about **+y** (horizontal
     axis perpendicular to the beam) by `sample_tilt_deg`:
 
@@ -238,7 +231,7 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
     When Euler angles come from a LaueTools indexing result (grain_matrix /
     deviatoric matrix) they are already expressed in the lab frame; pass
     `sample_tilt_deg=0` (the default) in that case.
-    """
+"""
     U_sample = Rotation.from_euler("ZXZ", [phi1, Phi, phi2], degrees=True).as_matrix()
     if sample_tilt_deg == 0.0:
         return U_sample
@@ -259,8 +252,7 @@ def rotate_U_about_axis(U, angle_deg, axis: str = "z"):
     """
     Rotate an orientation matrix by *angle_deg* about a lab-frame axis.
 
-    Parameters
-    ----------
+    Args:
     U : array-like, shape (3, 3)
         Orientation matrix in the lab frame (`G_lab = U @ G_crystal`).
     angle_deg : float
@@ -270,13 +262,11 @@ def rotate_U_about_axis(U, angle_deg, axis: str = "z"):
         standard BM32 / LT geometry; `'x'` is along the beam; `'y'` is
         horizontal and perpendicular to the beam.
 
-    Returns
-    -------
+    Returns:
     U_rot : ndarray, shape (3, 3)
         Rotated orientation matrix: `U_rot = R(axis, angle_deg) @ U`.
 
-    Examples
-    --------
+    Example:
     Rotate a GaN (001) orientation by 30° around the surface normal (z)::
 
         U0  = orientation_along_z(GaN, [0, 0, 1], [1, 0, 0])
@@ -285,7 +275,7 @@ def rotate_U_about_axis(U, angle_deg, axis: str = "z"):
     Tilt by 2° around the beam direction (x) to simulate a small miscut::
 
         U_tilt = rotate_U_about_axis(U0, 2.0, axis='x')
-    """
+"""
     axis = axis.lower().strip()
     if axis not in ("x", "y", "z"):
         raise ValueError(f"axis must be 'x', 'y', or 'z', got {axis!r}")
@@ -306,8 +296,7 @@ def rotate_U_about_crystal_axis(
     This is the natural way to express rotations such as "60° about the
     c-axis [0001]" or "180° about an in-plane direction [1, 0, 0]".
 
-    Parameters
-    ----------
+    Args:
     U : array-like, shape (3, 3)
         Orientation matrix in the lab frame (`G_lab = U @ G_crystal`).
     angle_deg : float
@@ -321,13 +310,11 @@ def rotate_U_about_crystal_axis(
         * `[1, 0, 0]` — $a$-axis
         * `[1, 1, 0]` — diagonal in-plane direction
 
-    Returns
-    -------
+    Returns:
     U_rot : ndarray, shape (3, 3)
         Rotated orientation matrix.
 
-    Examples
-    --------
+    Example:
     60° rotation about the GaN $c$-axis (rotational domain variant)::
 
         U_domain = rotate_U_about_crystal_axis(U, 60.0, [0, 0, 1])
@@ -335,7 +322,7 @@ def rotate_U_about_crystal_axis(
     180° flip about the in-plane $a$-axis::
 
         U_flip = rotate_U_about_crystal_axis(U, 180.0, [1, 0, 0])
-    """
+"""
     U = np.asarray(U, dtype=float)
     axis_cry = np.asarray(crystal_axis, dtype=float)
     axis_cry = axis_cry / np.linalg.norm(axis_cry)
@@ -370,7 +357,7 @@ def _matstarlab_to_F(matstarlab, crystal):
     F = U @ P  where U is pure rotation and P is the right-stretch tensor.
     F maps crystal-frame reciprocal vectors to LT lab-frame vectors:
         G_LT = F @ G_crystal   (with G_crystal = B0 @ [h,k,l])
-    """
+"""
     B0 = _build_B0(crystal)
     matstarlab_LT = _R_LT2_TO_LT @ (np.asarray(matstarlab, dtype=float) * 2.0 * np.pi)
     return matstarlab_LT @ np.linalg.inv(B0)
@@ -398,21 +385,19 @@ def U_from_matstarlab(matstarlab, crystal):
     1. **Frame change LT2→LT**: `x_LT = y_LT2`, `y_LT = −x_LT2`, `z_LT = z_LT2`
     2. **2π rescaling**: LaueTools uses |G| = 1/d; xrayutilities uses |G| = 2π/d.
 
-    Parameters
-    ----------
+    Args:
     matstarlab : array-like, shape (3, 3)
         LaueTools grain matrix in LT2/OR frame (columns = a*, b*, c* in lab,
         in Å⁻¹ **without** the 2π factor).
     crystal : xu.materials.Crystal
         Reference (unstrained) phase — same object passed to `simulate_laue`.
 
-    Returns
-    -------
+    Returns:
     F : ndarray, shape (3, 3)
         Deformation gradient in LT frame.  Pass directly to `simulate_laue`
         as the `U` argument to include strain in the spot geometry.
         For a strain-free grain F is a pure rotation matrix.
-    """
+"""
     return _matstarlab_to_F(matstarlab, crystal)
 
 
@@ -433,15 +418,13 @@ def decompose_matstarlab(matstarlab, crystal):
 
     The small-strain tensor is extracted from P as `ε = P − I`.
 
-    Parameters
-    ----------
+    Args:
     matstarlab : array-like, shape (3, 3)
         LaueTools grain matrix in LT2/OR frame (no 2π).
     crystal : xu.materials.Crystal
         Reference (unstrained) crystal — same object passed to `simulate_laue`.
 
-    Returns
-    -------
+    Returns:
     U : ndarray, shape (3, 3)
         Pure rotation in LT frame (orthogonal, det ≈ +1).  Use this in
         `simulate_laue` when you want rotation-only simulation (strain
@@ -456,22 +439,20 @@ def decompose_matstarlab(matstarlab, crystal):
     eps_voigt : ndarray, shape (6,)
         Voigt representation `[ε₁₁, ε₂₂, ε₃₃, ε₂₃, ε₁₃, ε₁₂]`.
 
-    Notes
-    -----
+    Note:
     * The decomposition is exact (no small-strain approximation).
     * For strains ≲ 10⁻³ (typical elastic), P ≈ I and F ≈ U.
     * The strain ε is expressed in the **crystal frame** (principal axes of P).
       To express it in the lab frame: `ε_lab = U @ ε @ U.T`.
     * To check: `np.allclose(U @ (eps + np.eye(3)) @ B0, F @ B0)` should hold.
 
-    Example
-    -------
+    Example:
     >>> U, F, eps, eps_v = decompose_matstarlab(matstarlab, crystal)
     >>> spots_rot_only = simulate_laue(crystal, U, camera)   # rotation only
     >>> spots_with_strain = simulate_laue(crystal, F, camera) # rotation + strain
     >>> print("normal strains:", np.diag(eps))
     >>> print("shear  strains:", eps[0,1], eps[0,2], eps[1,2])
-    """
+"""
     from scipy.linalg import polar
 
     F = _matstarlab_to_F(matstarlab, crystal)
@@ -560,8 +541,7 @@ def kb_reflectivity(
     Névot–Croce roughness damping.  The result is raised to the power
     `n_mirrors` to model paired mirrors.
 
-    Parameters
-    ----------
+    Args:
     energy_eV : float
         Photon energy (eV).
     material : str
@@ -575,13 +555,11 @@ def kb_reflectivity(
         RMS surface roughness (Å).  Used in the Névot–Croce factor
         `exp(-(2 k sinθ σ)²)`.
 
-    Returns
-    -------
+    Returns:
     float
         Total reflectivity in [0, 1].
 
-    Notes
-    -----
+    Note:
     The Fresnel reflectivity for s-polarisation is:
 
     $$
@@ -597,7 +575,7 @@ def kb_reflectivity(
     $$
     The two KB mirrors are assumed identical, giving
     $R_{\\text{total}} = R_{\\text{single}}^{n_{\\text{mirrors}}}$.
-    """
+"""
     import xrayutilities as xu
 
     theta = grazing_angle_mrad * 1e-3  # rad
@@ -685,8 +663,7 @@ def strain_spot_jacobian(spots, crystal, U, camera, eps_step=1e-5):
     *deviatoric* part of the strain (which rotates G) moves spots.  The
     Jacobian captures this automatically.
 
-    Parameters
-    ----------
+    Args:
     spots : list of dict
         Output of :func:`simulate_laue` (must contain `'hkl'` and `'pix'`).
     crystal : xu.materials.Crystal
@@ -702,8 +679,7 @@ def strain_spot_jacobian(spots, crystal, U, camera, eps_step=1e-5):
         Finite-difference step size for each strain component (dimensionless).
         Default 1e-5 is safe for typical elastic strains ~10⁻³.
 
-    Returns
-    -------
+    Returns:
     jacobians : dict  {(h,k,l): ndarray shape (2, 6)}
         Maps each hkl tuple to its 2×6 Jacobian matrix J where::
 
@@ -711,7 +687,7 @@ def strain_spot_jacobian(spots, crystal, U, camera, eps_step=1e-5):
 
         Spots for which the perturbed beam misses the detector for one or
         more components will have those columns set to zero.
-    """
+"""
     ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
     U = np.asarray(U, dtype=float)
     jacobians = {}
@@ -772,8 +748,7 @@ def strain_broadening(
     largest eigenvalue of Σ_pix) and the full 2×2 pixel covariance, from
     which the ellipse axes and orientation can be extracted.
 
-    Parameters
-    ----------
+    Args:
     spots : list of dict
         Output of :func:`simulate_laue`.
     crystal : xu.materials.Crystal
@@ -794,8 +769,7 @@ def strain_broadening(
     eps_step : float, optional
         Finite-difference step for the Jacobian computation.
 
-    Returns
-    -------
+    Returns:
     list of dict
         Copy of `spots` with three new keys added to each entry:
 
@@ -808,8 +782,7 @@ def strain_broadening(
             Full pixel-space covariance matrix.  Its eigenvectors give the
             orientations of the broadening ellipse on the detector.
 
-    Notes
-    -----
+    Note:
     * The broadening is relative to the spot centre; it does **not** include
       the intrinsic diffraction spot width (set by `sigma_pix` in
       :meth:`Camera.render`).
@@ -819,7 +792,7 @@ def strain_broadening(
     * The Jacobian approach is linear (first-order); it is accurate for
       strain spreads ≪ 1 and fails if strain is so large that spots migrate
       by more than ~10 px.
-    """
+"""
     if eps_cov is not None:
         Sigma_eps = np.asarray(eps_cov, dtype=float)
     else:
@@ -884,8 +857,7 @@ def fit_strain_distribution(
         otherwise, since trace ≥ λ_max).
         Solved by non-negative least squares (:func:`scipy.optimize.nnls`).
 
-    Parameters
-    ----------
+    Args:
     jacobians : dict  {(h,k,l): ndarray (2, 6)}
         Output of :func:`strain_spot_jacobian`.
     sigma_meas_pix : dict  {(h,k,l): float}
@@ -912,8 +884,7 @@ def fit_strain_distribution(
         spot to be included.  Spots with `sqrt(mean(J**2)) < min_sensitivity`
         are insensitive to strain and are excluded.  Default: 0.1.
 
-    Returns
-    -------
+    Returns:
     result : dict with keys:
 
         `'sigma_eps'` : float
@@ -936,13 +907,11 @@ def fit_strain_distribution(
         `'mode'` : str
             The mode that was used.
 
-    Raises
-    ------
+    Raises:
     ValueError
         If fewer than 2 spots survive the sensitivity cut.
 
-    Notes
-    -----
+    Note:
     * Feed the returned `'Sigma_eps'` to :func:`strain_broadening` to verify
       the fit: the predicted `sigma_strain_pix` values should match
       `sigma_meas_pix - sigma_instrument` (in quadrature).
@@ -951,8 +920,7 @@ def fit_strain_distribution(
     * Negative excess variance (`sigma_meas < sigma_instrument`) is clamped
       to zero rather than treated as an error.
 
-    Example
-    -------
+    Example:
     >>> # Calibrate instrument broadening from a strain-free reference
     >>> res_cal = estimate_instrument_broadening(spots_cal, sigma_meas_cal,
     ...                                          mode='linear_tth')
@@ -966,7 +934,7 @@ def fit_strain_distribution(
     >>> print(f"σ_ε = {res['sigma_eps']:.2e}")
     >>> spots_check = strain_broadening(spots, crystal, U, camera,
     ...                                 eps_cov=res['Sigma_eps'])
-    """
+"""
     from scipy.optimize import nnls
 
     # ── Resolve sigma_instrument → per-spot lookup + scalar fallback ─────────
@@ -1073,8 +1041,7 @@ def measure_spot_widths(
     and return the measured 1σ widths as a dict compatible with
     :func:`estimate_instrument_broadening`.
 
-    Parameters
-    ----------
+    Args:
     spots : list of dicts
         Spot list from any `simulate_laue*` function.
         Required keys: `'hkl'`, `'pix'` (pixel position as (xcam, ycam)).
@@ -1085,8 +1052,7 @@ def measure_spot_widths(
         patch centred on each spot is extracted for the Gaussian fit.
         Default: 9.
 
-    Returns
-    -------
+    Returns:
     sigma_meas_pix : dict  {(h, k, l): float}
         Measured 1σ spot width in pixels (mean of σ_x and σ_y from the
         2-D Gaussian fit) for each indexed reflection.
@@ -1094,7 +1060,7 @@ def measure_spot_widths(
         silently skipped.
         Pass directly to :func:`estimate_instrument_broadening` as
         `sigma_meas_pix`.
-    """
+"""
     from .segmentation import auto_init_gaussian_mixture_global, fit_gaussian_mixture_2d
 
     meas = np.asarray(meas)
@@ -1149,8 +1115,7 @@ def estimate_instrument_broadening(
     passed directly to :func:`fit_strain_distribution` to subtract the
     instrumental baseline before fitting strain.
 
-    Parameters
-    ----------
+    Args:
     spots : list of dicts
         Simulated spots for the **calibrant** crystal, from :func:`simulate_laue`.
         Must contain `hkl`, `tth`, and `chi` keys.
@@ -1180,8 +1145,7 @@ def estimate_instrument_broadening(
     min_spots : int, optional
         Minimum number of matching spots required. Default: 3.
 
-    Returns
-    -------
+    Returns:
     result : dict with keys:
 
         `'sigma_instrument'` : float
@@ -1207,14 +1171,12 @@ def estimate_instrument_broadening(
         `'mode'` : str
             The mode that was used.
 
-    Raises
-    ------
+    Raises:
     ValueError
         If fewer than `min_spots` spots match (wrong hkl, out of range filters,
         or too few calibrant reflections on the detector).
 
-    Notes
-    -----
+    Note:
     * Robust to a few outlier spots in `'constant'` mode (median used).
     * For parametric modes the fit is an ordinary least-squares polynomial;
       strongly deviant spots can be manually excluded via `tth_range`.
@@ -1224,8 +1186,7 @@ def estimate_instrument_broadening(
       absorption and no texture — Si (powder or single crystal cut along
       low-index direction), CeO₂, LaB₆, or Al₂O₃ are common choices.
 
-    Example
-    -------
+    Example:
     >>> # Simulate calibrant spots
     >>> si = crystal_from_cif('silicon.cif')
     >>> U_si = np.eye(3)  # known orientation
@@ -1246,7 +1207,7 @@ def estimate_instrument_broadening(
     >>> sigma_inst_per_spot = {
     ...     hkl: sigma_inst_fn(spots_sample_dict[hkl]['two_theta'])
     ...     for hkl in J}
-    """
+"""
     # ── Build a lookup: hkl → (two_theta, chi) from simulated spots ──────────
     spot_info = {}
     for s in spots:
@@ -1335,8 +1296,7 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
     `'tabulated'` sources it pre-computes a linear interpolator so that
     per-spot evaluation is O(1) regardless of the source complexity.
 
-    Parameters
-    ----------
+    Args:
     source : str
         One of:
 
@@ -1382,12 +1342,11 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
         Silently ignored for `'shadow4'` and `'tabulated'` because mirror
         reflectivity is already embedded in those spectra.
 
-    Returns
-    -------
+    Returns:
     fn : callable `(E_eV: float) -> float`
         Spectrum weight at photon energy *E_eV*.  Values are normalised so that
         `max(fn) ≈ 1`; only relative weights matter for spot intensities.
-    """
+"""
     source_kwargs = source_kwargs or {}
 
     # ── Interpolated sources (pre-compute once) ───────────────────────────────
@@ -1485,8 +1444,7 @@ def precompute_allowed_hkl(
     For a :class:`~nrxrdct.laue.layers.LayeredCrystal`, the union of allowed
     sets across all unique constituent crystals is returned.
 
-    Parameters
-    ----------
+    Args:
     crystal   : Crystal or LayeredCrystal
     E_max_eV  : float   Maximum photon energy (eV) that controls the
                         enumeration cutoff via G_max = 4π·E_max_eV/12398.4.
@@ -1497,11 +1455,10 @@ def precompute_allowed_hkl(
                         Must be a valid energy within the Henke table range.
     f2_thresh : float   Same threshold used in the simulation.
 
-    Returns
-    -------
+    Returns:
     frozenset of (int, int, int)
         Immutable, hashable set; safe to share across threads.
-    """
+"""
     from .layers import LayeredCrystal
 
     # Resolve default before building the cache key so that None and the
@@ -1632,8 +1589,7 @@ def simulate_laue(
     5. Normalises all surviving `I_raw` values by the brightest spot so that
        `intensity` lies in `(0, 1]`.
 
-    Parameters
-    ----------
+    Args:
     crystal : Crystal-like
         An *xrayutilities*-compatible crystal object that exposes:
 
@@ -1679,8 +1635,7 @@ def simulate_laue(
         weighting step.
         Default: `F2_THRESHOLD` (1e-6).
 
-    Returns
-    -------
+    Returns:
     list of dict
         One dictionary per spot that satisfies all selection criteria, sorted
         by **descending** `intensity`.  Each dictionary contains:
@@ -1709,15 +1664,14 @@ def simulate_laue(
 
         Returns an **empty list** if no reflection satisfies all criteria.
 
-    Notes
-    -----
+    Note:
     * The incident beam is fixed along `+x` in the LaueTools lab frame
       (`KI_HAT = [1, 0, 0]`).  Do not modify this without updating the
       camera geometry accordingly.
     * `intensity` is a *relative* quantity within a single call.  When
       comparing patterns from different phases or orientations use `I_raw`
       and apply an external weighting (see `simulate_mixed_phases`).
-    """
+"""
     lam_lo = en2lam(E_max)
     lam_hi = en2lam(E_min)
     ki_hat = KI_HAT / np.linalg.norm(KI_HAT)
@@ -1932,8 +1886,7 @@ def simulate_laue_stack(
     This ensures coherent superposition of all layers and natural emergence of
     superlattice satellites.
 
-    Parameters
-    ----------
+    Args:
     stack : LayeredCrystal
         The layered structure (from layers.py).
     camera : Camera
@@ -2023,27 +1976,24 @@ def simulate_laue_stack(
         Typical BM32/ESRF value: 0.2–0.5 mrad.  Default: 0.
     verbose : bool
 
-    Returns
-    -------
+    Returns:
     spots : list of dicts
         Same format as `simulate_laue()` in laue_white_synchrotron.py,
         plus extra keys:
           `'phase_label'`  – which phase's hkl triggered this candidate
           `'F2_stack'`     – |F_stack|² (full coherent stack)
 
-    Notes
-    -----
+    Note:
     For a stack with many layers / large N_cells the absolute values of
     `F2_stack` can be large (~N² × single-cell value at Bragg peaks).
     The returned `intensity` key is always normalised 0–1 within the
     returned list.
 
-    Performance
-    -----------
+    **Performance**
     Each spot requires one `stack.structure_factor()` call, which itself
     calls `crystal.StructureFactor()` once per layer.  For a 2-layer stack
     with ~4000 candidate spots, total time is ~2 s on a modern CPU.
-    """
+"""
     stack._update_offsets()
     source_kwargs = source_kwargs or {}
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
@@ -2419,7 +2369,7 @@ def _darwin_n_eff(
 
     * N ≪ N_ext  →  N_eff ≈ N          (kinematical, thin crystal)
     * N ≫ N_ext  →  N_eff ≈ N_ext      (dynamical saturation, thick crystal)
-    """
+"""
     if F_abs < 1e-10 or d < 1e-6:
         return float(n_cells)
     sin_th = max(abs(np.sin(np.radians(tth_deg / 2.0))), 1e-6)
@@ -2456,8 +2406,7 @@ def simulate_laue_darwin(
     come from the same Laue condition and camera geometry.  The difference is
     in how the **intensity** of each spot is computed.
 
-    Kinematical vs Darwin
-    ---------------------
+    **Kinematical vs Darwin**
     The kinematical model gives
 
         I ∝ |F_uc|² × N²
@@ -2483,16 +2432,14 @@ def simulate_laue_darwin(
     Absorption limiting (Beer-Lambert) is applied on top of extinction:
     the effective cell count is `min(N_eff_darwin, N_eff_absorption)`.
 
-    Alloys
-    ------
+    **Alloys**
     Any `xu.materials.Crystal`-compatible object can be used as the layer
     crystal, including alloys created with xrayutilities (e.g.
     `xu.materials.HexagonalAlloy`, VCA compositions, etc.).  The
     composition enters through the structure factor `F_uc` and the unit-cell
     volume `V_uc`.
 
-    Parameters
-    ----------
+    Args:
     stack : LayeredCrystal
         Same input as :func:`simulate_laue_stack`.
     camera : Camera
@@ -2519,8 +2466,7 @@ def simulate_laue_darwin(
         still computed and reported in the returned `'N_eff'` key.
     verbose : bool
 
-    Returns
-    -------
+    Returns:
     spots : list[dict]
         Same keys as :func:`simulate_laue_stack` plus:
 
@@ -2528,7 +2474,7 @@ def simulate_laue_darwin(
                         buffer_layers + n_rep × layers)
         `'N_ext'`   – list of extinction lengths (unit cells) per layer
         `'F2_darwin'` – |F_total_darwin|²  (Darwin-corrected structure factor)
-    """
+"""
     stack._update_offsets()
     source_kwargs = source_kwargs or {}
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
@@ -2582,7 +2528,7 @@ def simulate_laue_darwin(
         applied to each buffer layer's contribution.
 
         Returns (F_total, n_eff_list, n_ext_list).
-        """
+"""
         Qn = float(np.dot(G_vec, stack.n_hat))
 
         # ── Overlying-layer transmission helper ───────────────────────────────
@@ -2855,8 +2801,7 @@ def simulate_mixed_phases(
     phase is weighted by its volume fraction and unit-cell number density
     before the spot lists are merged into one.
 
-    Intensity weighting
-    -------------------
+    **Intensity weighting**
     The number of unit cells of phase p contributing to diffraction scales as:
 
         N_uc_p  ∝  f_p / V_uc_p
@@ -2877,8 +2822,7 @@ def simulate_mixed_phases(
       `'none'`     — no rescaling; I_raw values are kept as-is from each
                        phase's simulation
 
-    Parameters
-    ----------
+    Args:
     phases : list of dicts or list of tuples
         Each entry describes one phase.  Accepted formats:
 
@@ -2942,8 +2886,7 @@ def simulate_mixed_phases(
         :func:`simulate_laue`).
     verbose : bool
 
-    Returns
-    -------
+    Returns:
     spots : list of dicts
         Merged, weighted, and renormalised spot list.  Each dict has all the
         standard keys plus:
@@ -2954,13 +2897,11 @@ def simulate_mixed_phases(
           `'intensity'`        – normalised 0–1 over the full mixed pattern
           `'intensity_phase'`  – normalised 0–1 within that phase alone
 
-    Raises
-    ------
+    Raises:
     ValueError
         If volume fractions do not sum to approximately 1.0 (within ±0.01).
 
-    Examples
-    --------
+    Example:
     >>> import xrayutilities as xu
     >>> from simulate_laue_layered import simulate_mixed_phases
     >>> from layered_structure_factor import orientation_along_z, or_kurdjumov_sachs
@@ -2977,13 +2918,12 @@ def simulate_mixed_phases(
     >>> spots = simulate_mixed_phases(phases, camera)
     >>> plot_detector_image(spots, camera, colour_by='phase')
 
-    Notes
-    -----
+    Note:
     Orientation relationship between phases does NOT produce interference
     fringes here — use `LayeredCrystal` + `simulate_laue_stack` for that.
     This function is for incoherent multi-grain mixtures (e.g. a polycrystal
     with two phases, or a transformed microstructure).
-    """
+"""
     import os
     import sys
 
@@ -3232,8 +3172,7 @@ def beam_divergence_ellipses(
     A second Jacobian  J_pa = ∂(2θ, χ)/∂pix  maps the combined result into
     angle space.  Both representations are stored in each spot dict.
 
-    New keys written to every spot
-    --------------------------------
+    **New keys written to every spot**
     `cov_px`              (2, 2) ndarray  total pixel covariance (px²)
     `sigma_major_px`      float           semi-major axis, 1σ (px)
     `sigma_minor_px`      float           semi-minor axis, 1σ (px)
@@ -3245,8 +3184,7 @@ def beam_divergence_ellipses(
     `sigma_tth_deg`       float           marginal 1σ along 2θ (°)
     `sigma_chi_deg`       float           marginal 1σ along χ  (°)
 
-    Parameters
-    ----------
+    Args:
     spots         : list of dicts from :func:`simulate_laue_stack` etc.
     camera        : Camera
     sigma_h_mrad  : float  horizontal beam divergence 1σ (mrad).
@@ -3267,17 +3205,15 @@ def beam_divergence_ellipses(
                     e.g. `[0, 0, 1]` for a horizontal flat sample or the
                     crystal normal obtained from the orientation matrix.
 
-    Returns
-    -------
+    Returns:
     spots  (modified in-place and returned for chaining)
 
-    Notes
-    -----
+    Note:
     The divergence Jacobian is evaluated with a 0.5 mrad central-difference
     step; the footprint Jacobian with a 10 µm step.  Spots whose G vector
     does not satisfy the Laue condition after perturbation are assigned zero
     broadening for that direction.
-    """
+"""
     _zero2 = np.zeros((2, 2))
     _zero_keys = {
         "cov_px": _zero2, "sigma_major_px": 0.0, "sigma_minor_px": 0.0,
@@ -3473,33 +3409,29 @@ def layer_contributions_spots(spots, stack):
     exactly to I_total over all layers (including interference terms):
         Σ_l  Re(F_l · F_total*) = |F_total|²
 
-    Parameters
-    ----------
+    Args:
     spots : list of dicts
         Output of `simulate_laue_stack()`.  Must contain `'G_lab'` and
         `'E'` keys (present by default).
     stack : LayeredCrystal
 
-    Returns
-    -------
+    Returns:
     spots : the same list, each dict extended with:
         `'layer_F'`      : dict  { label : complex amplitude F_l }
         `'layer_I'`      : dict  { label : float  absolute intensity I_l }
         `'layer_I_frac'` : dict  { label : float  fraction 0-1 (sums to 1) }
 
-    Notes
-    -----
+    Note:
     Negative fractions are physically meaningful — they indicate a layer
     that **destructively interferes** with the rest of the stack at that Q.
     The sum over all layers is still exactly 1.
 
-    Example
-    -------
+    Example:
     >>> spots = simulate_laue_stack(stack, camera)
     >>> spots = layer_contributions_spots(spots, stack)
     >>> for s in spots[:5]:
     ...     print(s['hkl'], s['layer_I_frac'])
-    """
+"""
     stack._update_offsets()
     Lambda = stack._bilayer_thickness
     labels = [layer.label for layer in stack.layers]
@@ -3557,7 +3489,7 @@ def print_layer_contributions(spots, n=15):
     """
     Pretty-print per-layer intensity contributions for the top N spots.
     Requires `layer_contributions_spots()` to have been called first.
-    """
+"""
     if not spots or "layer_I_frac" not in spots[0]:
         raise ValueError("Call layer_contributions_spots(spots, stack) first.")
 
@@ -3594,11 +3526,10 @@ def print_mixed_summary(spots, top_n=20):
     Print a summary table of the strongest spots in a mixed-phase pattern,
     grouped by phase.
 
-    Parameters
-    ----------
+    Args:
     spots : list of dicts from `simulate_mixed_phases()`
     top_n : int  number of strongest spots to list per phase
-    """
+"""
     from collections import defaultdict
 
     import numpy as np
@@ -3663,15 +3594,14 @@ def print_hkl_family(spots: list, h: int, k: int, l: int, n: int = 5) -> None:
     Searches for spots with hkl = m*(h, k, l) for m = 1, 2, …, n, covering
     both positive and negative orders (m and -m).
 
-    Parameters
-    ----------
+    Args:
     spots : list[dict]
         Spot list from any `simulate_laue*` function.
     h, k, l : int
         Base Miller indices of the family.
     n : int
         Highest multiple to include (default 5).  Checks ±1·hkl … ±n·hkl.
-    """
+"""
     h0, k0, l0 = int(h), int(k), int(l)
     targets = set()
     for m in range(1, n + 1):

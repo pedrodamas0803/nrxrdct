@@ -1,3 +1,3 @@
 # integration
 
-::: nrxrdct.integration
+::: nrxrdct.azimuthal.integration

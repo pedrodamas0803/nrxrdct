@@ -624,7 +624,7 @@ class ReconstructedVolume:
             maps = vol.fit_peak_map(center=3.56, window=0.4,
                                     fit_mask=austenite_mask, plot=True)
         """
-        from .peakfit import fit_peak as _fit_peak
+        from ..fitting.peakfit import fit_peak as _fit_peak
 
         nx, ny = self.volume.shape[1], self.volume.shape[2]
 

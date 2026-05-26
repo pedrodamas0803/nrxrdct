@@ -10,23 +10,23 @@
 
 [`uv`](https://docs.astral.sh/uv/) is a fast Python package and project manager. If you do not have it installed yet:
 
-=== "Linux / macOS"
+**Linux / macOS**
 
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-=== "Windows (PowerShell)"
+**Windows (PowerShell)**
 
-    ```powershell
-    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-    ```
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-=== "Via pip (any platform)"
+**Via pip (any platform)**
 
-    ```bash
-    pip install uv
-    ```
+```bash
+pip install uv
+```
 
 After installing, restart your terminal so the `uv` command is on your `PATH`.
 
@@ -42,17 +42,17 @@ uv sync
 
 To activate the environment manually:
 
-=== "Linux / macOS"
+**Linux / macOS**
 
-    ```bash
-    source .venv/bin/activate
-    ```
+```bash
+source .venv/bin/activate
+```
 
-=== "Windows (PowerShell)"
+**Windows (PowerShell)**
 
-    ```powershell
-    .venv\Scripts\Activate.ps1
-    ```
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
 Alternatively, prefix any command with `uv run` to execute it inside the managed environment without activating it:
 

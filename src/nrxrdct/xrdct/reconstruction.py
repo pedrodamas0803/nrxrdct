@@ -9,19 +9,13 @@ re-exported here for backwards compatibility.
 """
 
 import os
-from pathlib import Path
 
-import astra
-import h5py
-import hdf5plugin  # noqa: F401 — registers hdf5plugin codecs with h5py
+import astra  # type: ignore
 import numpy as np
-from scipy.ndimage import gaussian_filter
-from tqdm.auto import tqdm
 
-from .io import save_sinogram
-from .refinement import BaseRefinement
-from .utils import calculate_padding_widths_2D
-from .volume import ReconstructedVolume
+from .io import save_sinogram  # noqa: F401 — re-exported for backwards compat
+from ..rietveld.refinement import BaseRefinement  # noqa: F401 — re-exported for backwards compat
+from .volume import ReconstructedVolume  # noqa: F401 — re-exported for backwards compat
 
 HAS_GPU = True if "nvidia" in astra.get_gpu_info().lower() else False
 NTHREADS = os.cpu_count() - 2
@@ -303,48 +297,4 @@ def reconstruct_slice(
     return slc
 
 
-def assemble_sinogram(
-    integrated_file: Path, n_rot: int, n_tth_angles: int, n_lines: int = 10
-) -> np.ndarray:
-    """
-    Build a 3-D sinogram from an HDF5 file of integrated patterns.
 
-    Scans stored under ``integrated/scan*`` keys are background-subtracted
-    (using the mean of the first and last scans), zero-padded to
-    ``(n_rot, n_tth_angles)``, and stacked.  The resulting array is rolled so
-    that the 2θ axis comes first: shape ``(n_tth_angles, n_lines, n_rot)``.
-
-    Args:
-        integrated_file (Path): HDF5 file containing integrated patterns under
-            the ``"integrated"`` group.
-        n_rot (int): Number of rotation steps (sinogram angular dimension).
-        n_tth_angles (int): Number of 2θ bins (spectral dimension).
-        n_lines (int, optional): Expected number of translation lines; currently
-            unused (default 10).
-
-    Returns:
-        np.ndarray: Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)``
-            as ``float32``.
-    """
-    with h5py.File(integrated_file, "r") as hin:
-        keys = list(hin["integrated"].keys())
-        valid_keys = [key for key in keys if "scan" in key]
-        bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][0:10]), axis=0)
-        bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][0:10]), axis=0)
-        bkg = (bkg1 + bkg2) / 2
-        bkg /= bkg.max()
-        sino = np.zeros((len(valid_keys), n_rot, n_tth_angles), dtype=np.float32)
-        for ii, scan in enumerate(valid_keys):
-            im = hin[f"integrated/{scan}"][:]
-            for jj, line in enumerate(im):
-                im[jj] /= line.max()
-                im[jj] = line - bkg
-            # bkg = gaussian_filter(im, (10, 100))
-            # im -= bkg
-
-            padding_width = calculate_padding_widths_2D(im.shape, (n_rot, n_tth_angles))
-            im = np.pad(im, padding_width)
-            sino[ii] = im
-        sino = np.rollaxis(sino, 2, 0)
-
-    return np.rollaxis(sino, 1, 2)

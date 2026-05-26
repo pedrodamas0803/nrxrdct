@@ -1,3 +1,3 @@
 # reconstruction
 
-::: nrxrdct.reconstruction
+::: nrxrdct.xrdct.reconstruction

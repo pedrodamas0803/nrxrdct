@@ -165,18 +165,16 @@ def monitor(
     Progress is measured by counting completed .npy files in tmp_dir,
     giving an accurate per-scan view independent of SLURM job boundaries.
 
-    Parameters
-    ----------
-    slurm_ids  : list[str]  — SLURM job IDs returned by launch()
-    tmp_dir    : Path       — tmp directory written by workers
-    watch      : bool       — block until all jobs finish (default: False)
-    interval   : int        — seconds between polls when watch=True
-    start_time : float      — unix timestamp of job submission (default: now)
+    Args:
+        slurm_ids (list[str]): SLURM job IDs returned by launch().
+        tmp_dir (Path): Tmp directory written by workers.
+        watch (bool): Block until all jobs finish. Defaults to False.
+        interval (int): Seconds between polls when watch=True.
+        start_time (float, optional): Unix timestamp of job submission. Defaults to now.
 
-    Returns
-    -------
-    dict with keys 'states', 'n_done', 'n_total', 'elapsed',
-    'all_done', 'any_failed'.
+    Returns:
+        dict: With keys ``'states'``, ``'n_done'``, ``'n_total'``, ``'elapsed'``,
+            ``'all_done'``, ``'any_failed'``.
     """
     tmp_dir = Path(tmp_dir)
     t0      = start_time or time.time()

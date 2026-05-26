@@ -44,20 +44,15 @@ def merge(
     """
     Assemble the output HDF5 from per-scan tmp files.
 
-    Parameters
-    ----------
-    tmp_dir     : Path
-        Directory containing scan_XXXX.npy and scan_XXXX.meta.json files,
-        plus the launch_meta.json sidecar written by launch().
-    output_file : Path
-        Path to the output HDF5 file to create (or append to).
-    overwrite   : bool
-        If True, overwrite any existing scan datasets in the output file.
-        If False (default), skip scans already present (safe to re-run).
+    Args:
+        tmp_dir (Path): Directory containing scan_XXXX.npy and scan_XXXX.meta.json
+            files, plus the launch_meta.json sidecar written by launch().
+        output_file (Path): Path to the output HDF5 file to create (or append to).
+        overwrite (bool): If True, overwrite any existing scan datasets in the output
+            file. If False (default), skip scans already present (safe to re-run).
 
-    Returns
-    -------
-    dict with keys 'n_merged', 'n_skipped', 'n_missing'.
+    Returns:
+        dict: With keys ``'n_merged'``, ``'n_skipped'``, ``'n_missing'``.
     """
     tmp_dir     = Path(tmp_dir)
     output_file = Path(output_file)

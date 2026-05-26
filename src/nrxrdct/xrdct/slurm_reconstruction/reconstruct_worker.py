@@ -28,7 +28,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from nrxrdct.reconstruction import reconstruct_slice
+from nrxrdct.xrdct.reconstruction import reconstruct_slice
 
 # Exposed for launch-side validation
 RECONSTRUCTION_ALGOS_GPU = ("SART_CUDA", "SIRT_CUDA", "FBP_CUDA", "CGLS_CUDA")

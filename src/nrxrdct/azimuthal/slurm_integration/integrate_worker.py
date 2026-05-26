@@ -32,7 +32,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from nrxrdct.integration import (
+from nrxrdct.azimuthal.integration import (
     azimuthal_integration_1d,
     azimuthal_integration_1d_filter,
     azimuthal_integration_1d_sigma_clip,

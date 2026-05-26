@@ -12,8 +12,7 @@ Supports:
   - Isotropic displacement parameters (Biso / Uiso -> b-factor)
   - All crystal systems handled by xrayutilities.materials.CIFFile
 
-Quick usage
------------
+**Quick usage**
     from crystal_from_cif import crystal_from_cif
 
     # From a file on disk
@@ -48,8 +47,7 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     """
     Build an `xu.materials.Crystal` from a CIF file or CIF string.
 
-    Parameters
-    ----------
+    Args:
     cif_source : str
         Either a path to a `.cif` file OR the raw CIF text as a string.
         xrayutilities automatically detects which one is provided.
@@ -73,14 +71,12 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     verbose : bool, optional
         Print a summary of the parsed structure. Default: True.
 
-    Returns
-    -------
+    Returns:
     crystal : xu.materials.Crystal
         Ready-to-use Crystal object with the correct SGLattice (space group,
         lattice parameters, Wyckoff positions, occupancies, B-factors).
 
-    Raises
-    ------
+    Raises:
     FileNotFoundError
         If `cif_source` looks like a file path but the file does not exist.
     ValueError
@@ -89,8 +85,7 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     RuntimeError
         If xrayutilities cannot identify the space group from the CIF data.
 
-    Notes
-    -----
+    Note:
     xrayutilities uses the Cromer-Mann parameterisation for atomic scattering
     factors f0(Q) and the Henke tables for anomalous corrections f'(E), f''(E).
     These are automatically assigned based on the element symbols in the CIF.
@@ -98,15 +93,13 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     The `_atom_site_U_iso_or_equiv` tag (if present) is converted to the
     B-factor used by xrayutilities via  B = 8*pi^2 * U.
 
-    Common CIF sources
-    ------------------
+    **Common CIF sources**
     - Crystallography Open Database (COD):  https://www.crystallography.net/cod/
     - ICSD (subscription):                 https://icsd.fiz-karlsruhe.de/
     - Materials Project:                   https://next-gen.materialsproject.org/
     - CCDC (organics):                     https://www.ccdc.cam.ac.uk/
 
-    Examples
-    --------
+    Example:
     >>> # From a file
     >>> fe = crystal_from_cif('bcc_iron.cif')
 
@@ -128,7 +121,7 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     >>> tt = np.linspace(20, 100, 2000)
     >>> pattern = pm.simulate(tt)
     >>> pm.close()
-    """
+"""
 
     # ── Input validation ──────────────────────────────────────────────────────
     if not isinstance(cif_source, str):
@@ -252,8 +245,7 @@ def crystals_from_cifs(cif_sources, names=None, verbose=True):
     """
     Load multiple Crystal objects from a list of CIF files or strings.
 
-    Parameters
-    ----------
+    Args:
     cif_sources : list of str
         List of file paths or CIF text strings.
     names : list of str, optional
@@ -261,14 +253,12 @@ def crystals_from_cifs(cif_sources, names=None, verbose=True):
     verbose : bool, optional
         Print summaries. Default True.
 
-    Returns
-    -------
+    Returns:
     crystals : list of xu.materials.Crystal
 
-    Example
-    -------
+    Example:
     >>> bcc, b2 = crystals_from_cifs(['bcc.cif', 'b2.cif'])
-    """
+"""
     if names is None:
         names = [None] * len(cif_sources)
     if len(names) != len(cif_sources):

@@ -18,8 +18,8 @@ import numpy as np
 from GSASII import GSASIIscriptable as G2sc
 from matplotlib import gridspec
 
-from .io import read_xy_file, write_starting_instrument_pars
-from .parameters import Scan
+from ..xrdct.io import read_xy_file, write_starting_instrument_pars
+from ..xrdct.parameters import Scan
 from .refine_dict import *
 
 COLORS = ["magenta", "darkgreen", "blue", "red"]
@@ -1355,7 +1355,7 @@ class BaseRefinement(Scan):
 
         Each flag in ``flags`` is applied to the target atoms and a full
         refinement cycle is run before moving to the next flag.  This staged
-        approach lets less-correlated parameters (e.g. U\ :sub:`iso`)
+        approach lets less-correlated parameters (e.g. U\\ :sub:`iso`)
         converge before adding more (e.g. fractional coordinates).
 
         Args:
@@ -1368,9 +1368,9 @@ class BaseRefinement(Scan):
                     any structural refinement begins.
 
                 ``"U"``
-                    Isotropic displacement parameter U\ :sub:`iso` only.
+                    Isotropic displacement parameter U\\ :sub:`iso` only.
                     Good first step once scale and background are stable:
-                    U\ :sub:`iso` is weakly correlated with most structural
+                    U\\ :sub:`iso` is weakly correlated with most structural
                     parameters and converges quickly.
 
                 ``"X"``
@@ -1379,7 +1379,7 @@ class BaseRefinement(Scan):
                     to let the atoms relax to their equilibrium positions.
 
                 ``"XU"``
-                    Fractional coordinates + U\ :sub:`iso`.  Standard choice
+                    Fractional coordinates + U\\ :sub:`iso`.  Standard choice
                     for a well-conditioned Rietveld refinement.  Default second
                     stage after ``"U"``.
 
@@ -1390,17 +1390,17 @@ class BaseRefinement(Scan):
 
                 ``"XF"``
                     Fractional coordinates + site occupancy.  Use when
-                    U\ :sub:`iso` is already stable and occupancy needs to
+                    U\\ :sub:`iso` is already stable and occupancy needs to
                     be freed simultaneously with positional parameters.
 
                 ``"XUF"``
-                    Fractional coordinates + U\ :sub:`iso` + occupancy.  Most
-                    complete isotropic refinement.  Occupancy and U\ :sub:`iso`
+                    Fractional coordinates + U\\ :sub:`iso` + occupancy.  Most
+                    complete isotropic refinement.  Occupancy and U\\ :sub:`iso`
                     are often correlated — converge them separately first if
                     the refinement is unstable.
 
                 Note:
-                    Anisotropic displacement parameters (ADP / U\ :sub:`ij`
+                    Anisotropic displacement parameters (ADP / U\\ :sub:`ij`
                     tensor) are **not** controlled through this flag string.
                     They require changing the atom's displacement model from
                     isotropic (``'I'``) to anisotropic (``'A'``) via the
@@ -1467,7 +1467,7 @@ class BaseRefinement(Scan):
                 all atoms in the target phases.
 
         Note:
-            Occupancy and U\ :sub:`iso` are often correlated, particularly for
+            Occupancy and U\\ :sub:`iso` are often correlated, particularly for
             light atoms or when the site is close to fully occupied.  Converge
             the displacement parameters first (via :meth:`refine_atomic_positions`
             with flag ``"U"`` or ``"XU"``) before freeing occupancy.
@@ -1523,20 +1523,20 @@ class BaseRefinement(Scan):
         freeze: bool = False,
     ) -> None:
         """
-        Refine the isotropic atomic displacement parameter U\ :sub:`iso` for
+        Refine the isotropic atomic displacement parameter U\\ :sub:`iso` for
         selected atoms, then optionally freeze the flag.
 
-        U\ :sub:`iso` (also written B\ :sub:`iso` / 8π²U\ :sub:`iso` in older
+        U\\ :sub:`iso` (also written B\\ :sub:`iso` / 8π²U\\ :sub:`iso` in older
         notation) describes the mean-square displacement of an atom from its
         equilibrium site, averaged over all directions.  It combines genuine
         thermal vibrations with static disorder (positional spread across the
-        unit cells of the crystal).  Physically, U\ :sub:`iso` enters the
+        unit cells of the crystal).  Physically, U\\ :sub:`iso` enters the
         structure factor as a Debye-Waller factor:
 
-            T(sinθ/λ) = exp(−8π² U\ :sub:`iso` sin²θ / λ²)
+            T(sinθ/λ) = exp(−8π² U\\ :sub:`iso` sin²θ / λ²)
 
         which attenuates the calculated intensity increasingly at high 2θ
-        angles.  Refining U\ :sub:`iso` therefore corrects the high-angle
+        angles.  Refining U\\ :sub:`iso` therefore corrects the high-angle
         intensity fall-off and is one of the earliest structural parameters
         to stabilise in a Rietveld refinement sequence.
 
@@ -1559,7 +1559,7 @@ class BaseRefinement(Scan):
                 (e.g. ``"Fe"``).  ``None`` (default) refines all isotropic atoms in the target phases.
             freeze (bool, optional): If ``True`` (default), remove the ``'U'`` flag after the
                 refinement cycle, restoring the original flag state.  Set to ``False`` to keep
-                U\ :sub:`iso` free for subsequent cycles (e.g. when continuing with
+                U\\ :sub:`iso` free for subsequent cycles (e.g. when continuing with
                 :meth:`refine_atomic_positions`).
 
         Note:
@@ -1571,25 +1571,25 @@ class BaseRefinement(Scan):
            displacement parameters absorb residual scale errors before
            freeing atomic positions.
         4. :meth:`refine_atomic_positions` with flag ``"XU"`` — refine
-           positions and U\ :sub:`iso` simultaneously once the model is stable.
+           positions and U\\ :sub:`iso` simultaneously once the model is stable.
 
         **Correlations to watch:**
 
-        * U\ :sub:`iso` is positively correlated with the overall scale factor
+        * U\\ :sub:`iso` is positively correlated with the overall scale factor
           (both scale the calculated pattern) and with site occupancy.  Ensure
-          the scale is well determined before freeing U\ :sub:`iso`.
+          the scale is well determined before freeing U\\ :sub:`iso`.
         * For light atoms (Z ≲ 10) the Debye-Waller attenuation is weak and
-          U\ :sub:`iso` may refine to unphysical values; consider fixing it.
-        * Very large U\ :sub:`iso` (> 0.05 Å²) often indicates a wrong atom
+          U\\ :sub:`iso` may refine to unphysical values; consider fixing it.
+        * Very large U\\ :sub:`iso` (> 0.05 Å²) often indicates a wrong atom
           type, split site, or structural disorder rather than genuine thermal
           motion.
-        * Very small or negative U\ :sub:`iso` usually means the calculated
+        * Very small or negative U\\ :sub:`iso` usually means the calculated
           intensities are too low at high angles — check for preferred
           orientation, absorption, or an incorrect structure model.
 
         **Typical values:**
 
-        At room temperature, U\ :sub:`iso` for most inorganic phases falls in
+        At room temperature, U\\ :sub:`iso` for most inorganic phases falls in
         the range 0.003–0.020 Å².  Lighter atoms and softer bonding
         environments tend toward the upper end.
         """
@@ -1975,7 +1975,7 @@ class BaseRefinement(Scan):
             or with absorption, which is handled separately through the histogram
             sample parameters.  Refine extinction only after the structure is
             well determined; it is correlated with the overall scale factor and
-            with U\ :sub:`iso` for the heaviest scatterers.
+            with U\\ :sub:`iso` for the heaviest scatterers.
         """
         available = {ph.name: ph for ph in self.gpx.phases()}
         if phase is None:
@@ -3510,7 +3510,7 @@ class InstrumentCalibration(BaseRefinement):
             the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).
 
         **Bottom-left — Difference plot** (``ax_diff``, shares x-axis)
-            Observed minus calculated residuals (I\ :sub:`obs` − I\ :sub:`calc`)
+            Observed minus calculated residuals (I\\ :sub:`obs` − I\\ :sub:`calc`)
             in intensity units.  A horizontal dashed line marks zero.  A good
             calibration should show a flat, featureless residual with amplitude
             well below the peak heights.  Systematic wiggles indicate
@@ -3546,7 +3546,7 @@ class InstrumentCalibration(BaseRefinement):
             (TCH) combined total (black).  The TCH pseudo-Voigt combination
             rule is:
 
-                FWHM\ :sub:`total`\ ⁵ = FWHM\ :sub:`G`\ ⁵ + FWHM\ :sub:`L`\ ⁵
+                FWHM\\ :sub:`total`\\ ⁵ = FWHM\\ :sub:`G`\\ ⁵ + FWHM\\ :sub:`L`\\ ⁵
 
             Use this panel to judge whether the peak-width model is
             physically reasonable across the full angular range.  If the

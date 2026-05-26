@@ -20,7 +20,7 @@ def load_images(dirpath: str) -> np.ndarray:
     """
     Load all .tif images in a directory into a 3D array: (Nimages, ny, nx).
     Uses ProcessPoolExecutor to parallelize skimage.io.imread.
-    """
+"""
     im_files = glob.glob(f"{dirpath}/*.tif")
     im_files.sort()
 
@@ -40,7 +40,7 @@ def filter_and_rescale_images(
     Reduce a stack of images (N, ny, nx) to a 2D image by applying a reduction
     along axis 0 (min/max/mean/std/median), then apply a Butterworth filter and
     rescale to float32 in a [0,1]-like range (min-subtracted).
-    """
+"""
     if im_array.ndim == 3:
         print(f"3D image will be reduced with the {filter_type} filter along axis 0.")
 
@@ -79,8 +79,7 @@ def segment_image(
     """
     Segment image into a boolean mask.
 
-    Parameters
-    ----------
+    Args:
     im_array : ndarray
         2-D intensity image, or 3-D stack reduced by max(axis=0).
     kernel_size : int
@@ -98,11 +97,10 @@ def segment_image(
         Intensity threshold. If None (default), the triangle auto-threshold
         from `skimage.filters.threshold_triangle` is used.
 
-    Returns
-    -------
+    Returns:
     mask : ndarray of bool
         Boolean segmentation mask, same spatial shape as the input.
-    """
+"""
     if im_array.ndim != 2:
         im_array = im_array.max(axis=0)
 
@@ -130,7 +128,7 @@ def label_segmented_image(im_array: np.ndarray, intensity_image=None):
     """
     Label segmented boolean image, clear borders, return:
     (label_image, n_labels, label_img_rgb)
-    """
+"""
     if im_array.dtype != bool:
         print("I need a boolean array. Quiting...")
         return 1
@@ -147,7 +145,7 @@ def label_segmented_image(im_array: np.ndarray, intensity_image=None):
 def plot_labeled_image(label_img_rgb, regionprops, cmap="turbo"):
     """
     Show labeled image and plot bounding boxes of regionprops.
-    """
+"""
     f, ax = plt.subplots(figsize=(9, 9))
     ax.imshow(label_img_rgb, cmap=cmap)
 
@@ -171,7 +169,7 @@ def plot_labeled_image(label_img_rgb, regionprops, cmap="turbo"):
 def measure_peaks(labeled_image, intensity_image):
     """
     Wrapper for skimage.measure.regionprops.
-    """
+"""
     return sk.measure.regionprops(labeled_image, intensity_image=intensity_image)
 
 
@@ -179,7 +177,7 @@ def gaussian_2d_rotated(coords, A, x0, y0, sigma_x, sigma_y, theta, C):
     """
     Rotated 2D Gaussian + offset, returns raveled model.
     coords = (x, y) as 2 arrays (meshgrid flattened later).
-    """
+"""
     x, y = coords
 
     x0 = float(x0)
@@ -205,7 +203,7 @@ def fit_gaussian_2d_rotated(image):
     """
     Fit a single rotated 2D gaussian to an image using curve_fit.
     Returns (popt, pcov, fit_img, x, y)
-    """
+"""
     image = np.asarray(image)
     ny, nx = image.shape
 
@@ -247,7 +245,7 @@ def gaussian_mixture_2d(coords, *params):
     Sum of n rotated Gaussians + constant background C (last param).
     params layout:
       [A1, x01, y01, sx1, sy1, th1,  A2, x02, y02, sx2, sy2, th2, ..., C]
-    """
+"""
     x, y = coords
     n = (len(params) - 1) // 6
     C = params[-1]
@@ -276,7 +274,7 @@ def fit_gaussian_mixture_2d(image, n_components: int, init_params):
     Fit mixture of n_components rotated Gaussians + constant background.
     init_params should be a list of length 6*n_components + 1 (including C).
     Returns (popt, pcov, fitted, X, Y)
-    """
+"""
     image = np.asarray(image)
     ny, nx = image.shape
 
@@ -322,7 +320,7 @@ def auto_init_gaussian_mixture_global(
     - for each component: weighted mean + covariance -> (A, xm, ym, sx, sy, theta)
     - background C0 = median(img)
     - clamp params within bounds
-    """
+"""
     img = np.asarray(image, float)
     ny, nx = img.shape
 
@@ -408,7 +406,7 @@ def r_squared_image(data, model, mask=None):
     """
     R^2 = 1 - SS_res / SS_tot, computed on flattened arrays,
     optionally using boolean mask.
-    """
+"""
     data = np.asarray(data, float)
     model = np.asarray(model, float)
 
@@ -428,7 +426,7 @@ def reduced_chi_squared(data, model, n_params: int = 2, noise_std=None, mask=Non
     """
     Reduced chi^2 with optional per-pixel noise_std.
     If noise_std is None, estimate using MAD of residuals.
-    """
+"""
     data = np.asarray(data, float)
     model = np.asarray(model, float)
 
@@ -476,7 +474,7 @@ def reduced_chi_squared_poisson(
     Reduced chi^2 assuming Poisson + read noise.
     Converts ADU->e- using gain.
     variance = model_e + read_noise^2, clipped by eps.
-    """
+"""
     data = np.asarray(data, float)
     model = np.asarray(model, float)
 
@@ -518,8 +516,7 @@ def write_h5_spotsfile(
     region weighted centroid.  Spots whose fit reaches r² ≥ r_squared_min are
     stored in `spot_{ii}_{jj}` groups (jj = 1, 2, …).
 
-    Parameters
-    ----------
+    Args:
     image_array : (Nv, Nh) ndarray
         Full detector image from which ROIs are extracted.
     regionprops : list
@@ -548,7 +545,7 @@ def write_h5_spotsfile(
         fields are set to 0 and `r_squared` is stored as `-1` to
         indicate that no fit was attempted.  This is much faster and
         suitable when peak positions are all that is needed.
-    """
+"""
     n_labels = len(regionprops)
     n_success = 0
 
@@ -768,8 +765,7 @@ def convert_spotsfile2peaklist(
     Columns: peak_X, peak_Y, peak_I (Isub), peak_fwaxmaj, peak_fwaxmin,
              peak_inclination, Xdev, Ydev, peak_bkg.
 
-    Parameters
-    ----------
+    Args:
     h5path : str
         Path to the spots HDF5 file produced by the segmentation pipeline.
     include_unfitted : bool
@@ -783,10 +779,9 @@ def convert_spotsfile2peaklist(
         in the HDF5 file with r_squared below this value are treated as
         unfitted regardless of how they were written.
 
-    Returns
-    -------
+    Returns:
     peaklist : (N, 9) ndarray  — empty (0, 9) if no spots are found.
-    """
+"""
     peak_X = []
     peak_Y = []
     peak_I = []
@@ -894,8 +889,7 @@ def convert_spotsfiles_to_dat(
     Convert all `frame_?????.h5` spot files in *seg_dir* to DAT files in
     *target_dir*, using a process pool for true parallelism.
 
-    Parameters
-    ----------
+    Args:
     seg_dir : str
         Directory containing `frame_?????.h5` spot files.
     target_dir : str
@@ -909,11 +903,10 @@ def convert_spotsfiles_to_dat(
     overwrite : bool
         If `False` (default), skip files that already exist in *target_dir*.
 
-    Returns
-    -------
+    Returns:
     int
         Number of files successfully converted.
-    """
+"""
     os.makedirs(target_dir, exist_ok=True)
 
     h5_files = sorted(glob.glob(os.path.join(seg_dir, "frame_*.h5")))
@@ -999,8 +992,7 @@ def WTH_segmentation(
     robust when spots sit on a strong, uneven background (e.g. fluorescence
     or detector artefacts).
 
-    Parameters
-    ----------
+    Args:
     image : (Nv, Nh) ndarray
         Raw detector image (uint or float).
     mask : (Nv, Nh) bool ndarray
@@ -1016,16 +1008,14 @@ def WTH_segmentation(
         threshold.  Raise to keep only the brightest spots; lower to be more
         inclusive.  Default `99.9`.
 
-    Returns
-    -------
+    Returns:
     mask_final : (Nv, Nh) bool ndarray
         Binary segmentation mask (`True` = spot pixel).
 
-    See Also
-    --------
+    See Also:
     LoG_segmentation : Laplacian-of-Gaussian based segmentation.
     clean_segmentation : Post-processing (size filter, border removal, etc.).
-    """
+"""
     image = fill_gaps_nearest(image, mask)
 
     img = np.log1p(image.astype(float))
@@ -1074,8 +1064,7 @@ def hybrid_segmentation(
     thresholded independently at *threshold_percentile* and the results
     are combined with a logical OR.
 
-    Parameters
-    ----------
+    Args:
     image : (Nv, Nh) ndarray
         Raw detector image.
     mask : (Nv, Nh) bool ndarray
@@ -1088,11 +1077,10 @@ def hybrid_segmentation(
         Detection threshold percentile applied independently to each family.
         Default `99.9`.
 
-    Returns
-    -------
+    Returns:
     mask_final : (Nv, Nh) bool ndarray
         Union of the LoG and WTH binary masks.
-    """
+"""
     from concurrent.futures import ThreadPoolExecutor
 
     if log_sigmas is None:
@@ -1142,8 +1130,7 @@ def clean_segmentation(
     """
     Post-process a binary segmentation mask.
 
-    Parameters
-    ----------
+    Args:
     segmented_image : (Ny, Nx) bool ndarray
         Raw binary mask from the segmentation step.
     detector_mask : (Ny, Nx) bool ndarray
@@ -1162,11 +1149,10 @@ def clean_segmentation(
         pixels, so that spots near those bad pixels are not incorrectly
         excluded.  Set to `0` to disable.  Default `3`.
 
-    Returns
-    -------
+    Returns:
     final_mask : (Ny, Nx) bool ndarray
     valid_props : list of RegionProperties
-    """
+"""
     seg = ndi.binary_fill_holes(segmented_image)
     seg = sk.morphology.remove_small_objects(seg, max_size=min_size - 1)
     seg = sk.morphology.closing(seg, sk.morphology.disk(1))
@@ -1203,7 +1189,7 @@ def gaussian_background(image, valid_mask, sigma=251):
 
     Uses FFT convolution (O(N log N)) so large sigma values are fast.
     `workers=-1` lets scipy use all available CPU cores for the FFT.
-    """
+"""
     def _fft_gauss(arr):
         f = sp_fft.fft2(arr, workers=-1)
         ndi.fourier_gaussian(f, sigma=sigma, output=f)
@@ -1334,8 +1320,7 @@ def run_segmentation_local(
     → cleaning → Gaussian fitting → HDF5 output) but runs in-process using
     a `ProcessPoolExecutor` instead of submitting cluster jobs.
 
-    Parameters
-    ----------
+    Args:
     image_stack : (N, Ny, Nx) ndarray
         Stack of raw detector frames, already loaded into memory.
     seg_dir : str
@@ -1365,11 +1350,10 @@ def run_segmentation_local(
     frame_indices : sequence of int or None
         Subset of frame indices to process.  None → all frames.
 
-    Returns
-    -------
+    Returns:
     out_paths : list of str
         Paths of successfully written HDF5 files, sorted by frame index.
-    """
+"""
     import time
 
     os.makedirs(seg_dir, exist_ok=True)

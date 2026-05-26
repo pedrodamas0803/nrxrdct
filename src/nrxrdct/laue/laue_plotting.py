@@ -62,7 +62,7 @@ def _gnomonic(tth_deg, chi_deg):
     For 2θ = 90°  |g| = 1.
     For 2θ > 90°  |g| > 1 (back-hemisphere).
     Straight lines in gnomonic space = crystallographic zones.
-    """
+"""
     tth = np.asarray(tth_deg, float)
     chi = np.asarray(chi_deg, float)
     denom = 1.0 + np.cos(np.radians(tth))
@@ -98,11 +98,10 @@ def plot_2theta_chi(
     Fundamental reflections: circles (○).
     B2 superlattice reflections: stars (★) in orange.
 
-    Parameters
-    ----------
+    Args:
     spots_bcc, spots_b2 : lists of spot dicts from simulate_laue()
     out_path            : output PNG path
-    """
+"""
     import matplotlib.colors as mcolors
     import matplotlib.gridspec as mgridspec
     import matplotlib.pyplot as plt
@@ -986,13 +985,12 @@ def plot_layer_contributions(
     each layer's fractional intensity contribution at that spot position.
     A summary panel shows the dominant-layer map across the full detector.
 
-    Parameters
-    ----------
+    Args:
     spots   : list of dicts from `layer_contributions_spots()`
     stack   : LayeredCrystal
     camera  : Camera
     out_path: str
-    """
+"""
     import matplotlib.cm as mcm
     import matplotlib.colors as mcolors
     import matplotlib.gridspec as mgridspec
@@ -1346,8 +1344,7 @@ def plot_strain_broadening(
         (RMS of both rows of J), so you can read off which strain components
         most affect which spots.
 
-    Parameters
-    ----------
+    Args:
     spots_b : list of dict
         Output of :func:`~nrxrdct.laue.simulation.strain_broadening`.
         Must contain `'cov_pix'`, `'sigma_strain_pix'`,
@@ -1363,10 +1360,9 @@ def plot_strain_broadening(
     top_n : int, optional
         Number of most-broadened spots to label / show in Panel C.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
-    """
+"""
     from matplotlib.patches import Ellipse
 
     has_jac = jacobians is not None
@@ -1572,8 +1568,7 @@ def plot_compare_spots(
     """
     Overlay two spot tables on a single axes for direct comparison.
 
-    Parameters
-    ----------
+    Args:
     spots_a, spots_b : list of dict
         Spot dicts from :func:`~nrxrdct.laue.simulation.simulate_laue` or
         compatible sources.  Each dict must contain:
@@ -1602,10 +1597,9 @@ def plot_compare_spots(
     out_path : str or None
         File path for the saved PNG.  `None` → do not save.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
-    """
+"""
     if space not in ("angles", "detector"):
         raise ValueError(f"space must be 'angles' or 'detector', got {space!r}")
 
@@ -1750,8 +1744,7 @@ def plot_measured_vs_simulated(
     Side-by-side comparison of segmented measured spots and simulated Laue spots
     in detector pixel coordinates.
 
-    Parameters
-    ----------
+    Args:
     peaklist : ndarray, shape (N, 9)
         Output of :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
         Columns: peak_X (col), peak_Y (row), peak_I, peak_fwaxmaj, peak_fwaxmin,
@@ -1795,10 +1788,9 @@ def plot_measured_vs_simulated(
     out_path : str or None
         Path to save the PNG figure.  `None` (default) → do not save.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
-    """
+"""
     peaklist = np.asarray(peaklist, dtype=float)
 
     fig, (ax_m, ax_s) = plt.subplots(
@@ -2019,8 +2011,7 @@ def plot_layer_scheme(
     Layers too thin to label inside (< `min_display_frac` of total height)
     are annotated with an external callout.
 
-    Parameters
-    ----------
+    Args:
     stack : LayeredCrystal
     figsize : (float, float)
     layer_width : float
@@ -2036,10 +2027,9 @@ def plot_layer_scheme(
     out_path : str, optional
         Save figure to this path if provided.
 
-    Returns
-    -------
+    Returns:
     fig, ax
-    """
+"""
     import matplotlib.patches as mpatches
 
     standalone = ax is None
@@ -2359,8 +2349,7 @@ def plot_laue_stack_spots(
 
     Marker *size* scales with normalised intensity.
 
-    Parameters
-    ----------
+    Args:
     spots : list[dict]
         Spot list returned by :func:`~nrxrdct.laue.simulate_laue_stack`.
         Required keys: `'phase_label'`, `'satellite_order'`, `'tth'`,
@@ -2393,11 +2382,10 @@ def plot_laue_stack_spots(
     out_path : str or None
         Save the figure to this path.  `None` → do not save.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
-    """
+"""
     if not spots:
         raise ValueError("spots list is empty")
 
@@ -2576,15 +2564,14 @@ def _draw_divergence_ellipses(ax, spots, xs, ys, frame, nsigma, colors):
     angle-space keys for `frame='tth_chi'`, pixel-space keys for
     `frame='detector'`.  Spots with zero broadening are silently skipped.
 
-    Parameters
-    ----------
+    Args:
     ax     : Axes
     spots  : list of spot dicts (aligned with xs/ys)
     xs, ys : 1-D arrays of centre coordinates in display units
     frame  : `'tth_chi'` | `'detector'`
     nsigma : float  — ellipse scale in σ units
     colors : list or str  — edge colours, one per spot or a single string
-    """
+"""
     from matplotlib.patches import Ellipse
 
     if frame == "tth_chi":
@@ -2663,7 +2650,7 @@ def _attach_hover_tooltip(fig, ax, spots, tths, chis):
     *tths* and *chis* must be numpy arrays whose indices correspond 1-to-1
     with *spots*.  The tooltip is implemented via `motion_notify_event`
     and requires no extra dependencies beyond matplotlib.
-    """
+"""
     annot = ax.annotate(
         "",
         xy=(0, 0),
@@ -2755,8 +2742,7 @@ def plot_interactive_tth_chi(
     :func:`~nrxrdct.laue.simulate_laue_stack`, and
     :func:`~nrxrdct.laue.simulate_mixed_phases`.
 
-    Parameters
-    ----------
+    Args:
     spots : list[dict]
         Spot list from any `simulate_laue*` function.  Required keys:
         `'tth'`, `'chi'`, `'hkl'`, `'E'`, `'intensity'`.
@@ -2784,17 +2770,15 @@ def plot_interactive_tth_chi(
         If given, save a **static** PNG snapshot on figure close.
         `None` (default) → do not save.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
 
-    Notes
-    -----
+    Note:
     The interactive hover is implemented with matplotlib's built-in event
     system (no extra dependencies).  Call `plt.show()` after this function
     to display the interactive window.
-    """
+"""
     if not spots:
         raise ValueError("spots list is empty")
 
@@ -2927,8 +2911,7 @@ def warp_image_to_tth_chi(
     sampled by bilinear interpolation.  Output pixels that map outside the
     detector active area are set to `NaN`.
 
-    Parameters
-    ----------
+    Args:
     image : array-like, shape (Nv, Nh)
         Detector image in pixel space (e.g. from :meth:`~Camera.render` or
         a real experimental frame loaded as a numpy array).
@@ -2946,15 +2929,14 @@ def warp_image_to_tth_chi(
         Interpolation order passed to :func:`scipy.ndimage.map_coordinates`
         (0 = nearest, 1 = bilinear (default), 3 = cubic).
 
-    Returns
-    -------
+    Returns:
     warped : ndarray, shape (n_chi, n_tth)
         Remapped image.  NaN where the output pixel falls outside the detector.
     tth_ax : ndarray, shape (n_tth,)
         2θ values of the output columns (degrees).
     chi_ax : ndarray, shape (n_chi,)
         χ values of the output rows (degrees).
-    """
+"""
     from scipy.ndimage import map_coordinates
 
     image = np.asarray(image, dtype=np.float64)
@@ -3056,8 +3038,7 @@ def plot_tth_chi_overlay(
     Hovering over a spot in either frame shows the same tooltip (hkl, 2θ,
     χ, energy, intensity, reflection type, phase).
 
-    Parameters
-    ----------
+    Args:
     image : array-like, shape (Nv, Nh)
         Detector image in pixel space.
     camera : Camera
@@ -3095,15 +3076,14 @@ def plot_tth_chi_overlay(
     out_path : str or None
         Save figure to this path if provided.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
     display_image : ndarray
         The image array that was actually plotted — the warped 2θ / χ grid
         when `frame='tth_chi'`, or the (optionally log-scaled) raw pixel
         image when `frame='detector'`.
-    """
+"""
     if frame not in ("tth_chi", "detector"):
         raise ValueError(f"frame must be 'tth_chi' or 'detector', got {frame!r}")
 
@@ -3280,8 +3260,7 @@ def plot_laue_comparison(
     Side-by-side comparison of an experimental Laue image and a simulated one,
     with simulated spot positions overlaid on the right panel.
 
-    Parameters
-    ----------
+    Args:
     exp_image : array-like, shape (Nv, Nh)
         Experimental detector image.
     sim_image : array-like, shape (Nv, Nh)
@@ -3320,12 +3299,11 @@ def plot_laue_comparison(
     out_path : str or None
         Save figure to this path if provided.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax_exp : matplotlib.axes.Axes   — left (experimental) panel
     ax_sim : matplotlib.axes.Axes   — right (simulation) panel
-    """
+"""
     from matplotlib.widgets import CheckButtons
 
     if frame not in ("tth_chi", "detector"):
@@ -3599,8 +3577,7 @@ def plot_segmentation(
         peaklist = convert_spotsfile2peaklist("scan_spots.h5")
         fig, ax  = plot_segmentation(image, peaklist)
 
-    Parameters
-    ----------
+    Args:
     image : (Nv, Nh) array
         Raw detector frame.
     peaklist : (N, ≥2) array
@@ -3638,11 +3615,10 @@ def plot_segmentation(
     ax : matplotlib.axes.Axes or None
         Draw into an existing axes rather than creating a new figure.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
-    """
+"""
     pl  = np.asarray(peaklist, dtype=float)
     img = np.asarray(image, dtype=float)
     n_spots = len(pl)
@@ -3771,8 +3747,7 @@ def plot_multigrain(
         ]
         fig, ax = plot_multigrain(peaks[:, :2], spots_per_grain, camera)
 
-    Parameters
-    ----------
+    Args:
     obs_xy : (N, 2) array-like
         Observed pixel positions `[xcam, ycam]`.
     spots_per_grain : list of spot-lists
@@ -3795,11 +3770,10 @@ def plot_multigrain(
     out_path : str or None
         If given, save the figure to this path at 150 dpi.
 
-    Returns
-    -------
+    Returns:
     fig : matplotlib.figure.Figure
     ax  : matplotlib.axes.Axes
-    """
+"""
     obs_xy = np.asarray(obs_xy, dtype=float)
 
     fig, ax = plt.subplots(figsize=figsize)

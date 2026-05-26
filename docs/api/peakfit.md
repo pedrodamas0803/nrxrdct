@@ -1,0 +1,3 @@
+# peakfit
+
+::: nrxrdct.fitting.peakfit

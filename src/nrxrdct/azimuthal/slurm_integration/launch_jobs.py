@@ -41,7 +41,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from nrxrdct.integration import azimuthal_integration_1d, cake_integration
+from nrxrdct.azimuthal.integration import azimuthal_integration_1d, cake_integration
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
@@ -276,7 +276,7 @@ def launch(
     -------
     dict with keys 'slurm_ids', 'tmp_dir', 'n_scans'.
     """
-    from nrxrdct.slurm_integration.integrate_worker import INTEGRATION_METHODS
+    from nrxrdct.azimuthal.slurm_integration.integrate_worker import INTEGRATION_METHODS
 
     if method not in INTEGRATION_METHODS:
         raise ValueError(f"method must be one of {INTEGRATION_METHODS}, got '{method}'")

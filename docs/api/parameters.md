@@ -1,3 +1,3 @@
 # parameters
 
-::: nrxrdct.parameters
+::: nrxrdct.xrdct.parameters

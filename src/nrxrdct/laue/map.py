@@ -48,8 +48,7 @@ def parse_scan_title(title: str) -> dict:
     """
     Parse an ESRF/SPEC scan-command string and return scan geometry.
 
-    Supported commands
-    ------------------
+    **Supported commands**
     `dmesh` / `mesh`
         `dmesh motor1 start1 stop1 n1 motor2 start2 stop2 n2 [exposure]`
         → `ny = n1+1`,  `nx = n2+1`
@@ -60,16 +59,14 @@ def parse_scan_title(title: str) -> dict:
         `loopscan n [exposure]`
         → `ny = 1`,  `nx = n`
 
-    Returns
-    -------
+    Returns:
     dict with keys: `cmd`, `ny`, `nx`, `n_frames`,
     and optionally `motor1`, `motor2`, `start1/2`, `stop1/2`, `n1/2`.
 
-    Raises
-    ------
+    Raises:
     ValueError
         If the command is not recognised.
-    """
+"""
     tokens = title.strip().split()
     cmd = tokens[0].lower().lstrip("#").strip()
 
@@ -125,8 +122,7 @@ class GrainMap:
     """
     Multi-grain orientation-fit results on a 2-D micro-Laue raster scan.
 
-    Parameters
-    ----------
+    Args:
     ny, nx : int
         Number of map rows (slow motor) and columns (fast motor).
     h5_path : str
@@ -147,8 +143,7 @@ class GrainMap:
         Name of the vertical (row) motor, e.g. `"yech"`.  Populates
         `motors["y"]` as an alias.
 
-    Attributes
-    ----------
+    Attributes:
     ny, nx : int
     n_grains : int          Number of UB files found.
     U_ref : (n_grains, 3, 3) ndarray
@@ -163,7 +158,7 @@ class GrainMap:
     motors : dict[str, (ny, nx) ndarray]
         Motor positions reshaped to the map grid (if h5_path is given and
         motors are found).
-    """
+"""
 
     # ── Construction ──────────────────────────────────────────────────────────
 
@@ -262,8 +257,7 @@ class GrainMap:
         `None`; if it survives the drop its index is remapped to the new
         position.
 
-        Parameters
-        ----------
+        Args:
         *indices : int
             One or more grain slot indices to remove.  Duplicates are ignored.
             Pass a single iterable with `*` unpacking if you have a list::
@@ -271,11 +265,10 @@ class GrainMap:
                 gmap.drop_grain(0, 2)        # drop grains 0 and 2
                 gmap.drop_grain(*[0, 2])     # same, from a list
 
-        Raises
-        ------
+        Raises:
         ValueError
             If any index is out of range or if the call would drop all grains.
-        """
+"""
         drop_set = set(indices)
         out_of_range = [i for i in drop_set if not (0 <= i < self.n_grains)]
         if out_of_range:
@@ -375,7 +368,7 @@ class GrainMap:
         *result* can be an :class:`~nrxrdct.laue.fitting.OrientationFitResult`,
         :class:`~nrxrdct.laue.fitting.StrainFitResult`, or `None` (marks the
         point as attempted but failed / no convergence).
-        """
+"""
         self._results[grain][iy][ix] = result
         if result is not None:
             self.U[grain, iy, ix]          = result.U
@@ -403,8 +396,7 @@ class GrainMap:
         """
         Select the best-fitting grain at every map position.
 
-        Background
-        ----------
+        **Background**
         A micro-Laue raster scan is processed independently for each
         reference grain (each `UB*.npy` file).  At every pixel the
         diffraction pattern may be explained well by one grain, poorly by
@@ -417,8 +409,7 @@ class GrainMap:
         afterwards to register the result as a new grain slot that all
         existing analysis and plotting methods can use transparently.
 
-        Quality metric choice
-        ---------------------
+        **Quality metric choice**
         `"match_rate"` (default) is the recommended primary criterion.
         It is defined as `n_matched / n_observed` and therefore lies in
         [0, 1] regardless of how many spots are in the pattern.  This makes
@@ -430,16 +421,14 @@ class GrainMap:
         `min_match_rate` is already enforced, because a low RMS among
         few matches can be misleading.
 
-        Quality filters
-        ---------------
+        **Quality filters**
         Grains that fail *any* of the three filters
         (`min_match_rate`, `min_n_matched`, `max_rms_px`) are masked
         out before scoring.  A map position where *all* grains fail the
         filters receives `best_grain = -1` and `NaN` metrics — it
         appears white in IPF / scalar maps.
 
-        Parameters
-        ----------
+        Args:
         metric : str
             Quality metric used to rank grains at each position.  One of:
 
@@ -474,8 +463,7 @@ class GrainMap:
             `"auto"` (default, prefers `strain/` over `ubs/`),
             `"ubs"`, or `"strain"`.
 
-        Returns
-        -------
+        Returns:
         best_grain : (ny, nx) int ndarray
             Index (0-based) of the winning grain slot at each map
             position.  `-1` where no grain passed the quality filters.
@@ -496,13 +484,12 @@ class GrainMap:
             Values are `NaN` / `-1` at positions where
             `best_grain == -1`.
 
-        See also
-        --------
+        **See also**
         :meth:`apply_merge` : register the selection as a new grain slot.
         :meth:`write_merge_links` : persist the selection as disk symlinks.
         :meth:`reduce_to_fundamental_zone` : resolve symmetry-equivalent
             orientation jumps before merging.
-        """
+"""
         _higher_better = {"match_rate", "n_matched"}
         _lower_better  = {"rms_px", "mean_px", "cost"}
         _all_metrics   = _higher_better | _lower_better
@@ -589,15 +576,13 @@ class GrainMap:
         **replaces** that same slot in-place, so repeated merging with
         different thresholds never adds extra slots.
 
-        Parameters
-        ----------
+        Args:
         best_grain : (ny, nx) int ndarray
             First return value of :meth:`merge`.
         metrics : dict
             Second return value of :meth:`merge`.
 
-        Returns
-        -------
+        Returns:
         int
             Index of the merged grain slot.  Pass it directly to any method
             that accepts a `grain` argument::
@@ -608,7 +593,7 @@ class GrainMap:
                 gmap.kam_map(gi)
                 gmap.plot_ipf_map(gi)
                 gmap.plot_map("match_rate", grain=gi)
-        """
+"""
         shape2d = (self.ny, self.nx)
         valid = (best_grain >= 0)[..., None, None]  # (ny, nx, 1, 1)
 
@@ -657,13 +642,12 @@ class GrainMap:
         Return the proper rotations of the chosen crystal point group as a
         (N, 3, 3) array.
 
-        Supported
-        ---------
+        **Supported**
         `'cubic'`     24 proper rotations of Oh (m-3m).
         `'hexagonal'` 12 proper rotations of D6h (6/mmm).
         `'tetragonal'` 8 proper rotations of D4h (4/mmm).
         `'orthorhombic'` 4 proper rotations of D2h (mmm).
-        """
+"""
         from itertools import permutations, product as _product
         if symmetry == "cubic":
             ops = []
@@ -734,8 +718,7 @@ class GrainMap:
         closest to a common reference, resolving spurious isolated pixels that
         converged to a different member of the symmetry-equivalent family.
 
-        Background: why isolated pixels appear
-        ---------------------------------------
+        **Background: why isolated pixels appear**
         In polychromatic Laue diffraction the peak *positions* on the detector
         are determined jointly by the orientation matrix **U** and the crystal
         lattice **B**, but are independent of the absolute X-ray wavelength.
@@ -743,12 +726,12 @@ class GrainMap:
         equivalent `U' = U @ S` (where **S** is any proper rotation in the
         crystal's point group) produces an *identical* set of predicted spot
         positions.  No residual-based optimizer can distinguish between the
-        N\ :sub:`sym` members of this family.
+        N\\ :sub:`sym` members of this family.
 
         During a map fit every pixel is refined independently, starting from
         the same pre-indexed reference orientation.  Pixels near a grain
         boundary or in a strained region are more sensitive to the starting
-        point, and the optimizer can converge to *any* of the N\ :sub:`sym`
+        point, and the optimizer can converge to *any* of the N\\ :sub:`sym`
         symmetry equivalents.  The result is a map that is correct in the
         physical sense (every U is a valid fit) but inconsistent in the
         representation sense: neighbouring pixels that should have the same
@@ -757,9 +740,8 @@ class GrainMap:
         causes isolated pixels with an "orientation" that looks very different
         from its neighbours, purely as an artefact of the representation.
 
-        Algorithm
-        ---------
-        For each pixel the N\ :sub:`sym` candidate matrices are formed as
+        **Algorithm**
+        For each pixel the N\\ :sub:`sym` candidate matrices are formed as
         `U_equiv[s] = U @ ops[s]`, where `ops` is the set of proper
         rotations in the point group (24 for cubic, 12 for hexagonal, 8 for
         tetragonal, 4 for orthorhombic).
@@ -777,8 +759,7 @@ class GrainMap:
         which lies in $[0°, 180°]$.  The computation is vectorised over
         all map pixels simultaneously.
 
-        Reference orientation
-        ---------------------
+        **Reference orientation**
         When `reference=None` the target is computed as the quaternion mean
         of all *valid* (non-NaN) pixels in the map:
 
@@ -793,8 +774,7 @@ class GrainMap:
         in the map, which is almost always sufficient.  A custom reference can
         be supplied when the grain of interest occupies a minority of pixels.
 
-        Strain tensor rotation
-        ----------------------
+        **Strain tensor rotation**
         When strain data are present (`self.strain_tensor[grain]` contains
         finite values), the strain tensor at corrected pixels is transformed
         consistently with the symmetry operation:
@@ -814,8 +794,7 @@ class GrainMap:
             the rotated tensor is an approximation that is exact only in the
             limit of a purely rotational symmetry operation.
 
-        Parameters
-        ----------
+        Args:
         grain : int
             Grain slot to correct.  Default `0`.
         symmetry : str
@@ -827,27 +806,24 @@ class GrainMap:
             the symmetry-equivalent closest to this matrix.
             `None` (default) uses the quaternion mean of all valid pixels.
 
-        Returns
-        -------
+        Returns:
         changed : (ny, nx) bool ndarray
             `True` at positions where a different symmetry equivalent was
             selected (i.e. where the operator index `s* ≠ 0`).
 
-        See also
-        --------
+        **See also**
         :meth:`merge` : combine fits from multiple reference grains into one
             best-grain map.
         :meth:`apply_merge` : register the merged selection as a new grain slot.
         :meth:`_symmetry_ops` : returns the rotation matrices for a given
             crystal point-group symmetry.
 
-        Notes
-        -----
+        Note:
         `reduce_to_fundamental_zone` modifies `self.U[grain]` and
         `self.strain_tensor[grain]` / `self.strain_voigt[grain]` **in
         place**.  Run it before calling :meth:`merge` or :meth:`apply_merge`
         if you want the merged grain to also benefit from the correction.
-        """
+"""
         ops = self._symmetry_ops(symmetry)          # (N_sym, 3, 3)
         U   = self.U[grain]                         # (ny, nx, 3, 3)
         valid = ~np.any(np.isnan(U), axis=(-2, -1)) # (ny, nx) bool
@@ -928,10 +904,9 @@ class GrainMap:
         """
         Euler angles for every map point.
 
-        Returns
-        -------
+        Returns:
         angles : (ny, nx, 3) ndarray, degrees.  `NaN` where no fit exists.
-        """
+"""
         angles = np.full((self.ny, self.nx, 3), np.nan)
         for iy in range(self.ny):
             for ix in range(self.nx):
@@ -950,12 +925,11 @@ class GrainMap:
         """
         Misorientation angle (degrees) relative to a reference.
 
-        Parameters
-        ----------
+        Args:
         reference : (3, 3) ndarray or None
             Reference orientation.  Defaults to `U_ref[grain]` if available,
             otherwise the mean of all fitted points.
-        """
+"""
         if reference is None:
             if self.n_grains > grain:
                 reference = self.U_ref[grain]
@@ -993,8 +967,7 @@ class GrainMap:
         exceeds *max_misor_deg* are excluded so that grain-boundary pixels do
         not inflate the KAM inside grains.
 
-        Parameters
-        ----------
+        Args:
         grain : int
             Grain index (0-based).  Default `0`.
         kernel : int
@@ -1006,12 +979,11 @@ class GrainMap:
             Set to `None` to include all neighbours regardless of angle.
             Default `5.0`°.
 
-        Returns
-        -------
+        Returns:
         kam : (ny, nx) ndarray
             KAM values in degrees.  `NaN` at unfitted points or points
             with no valid neighbours.
-        """
+"""
         U     = self.U[grain]                                    # (ny, nx, 3, 3)
         valid = ~np.any(np.isnan(U), axis=(-2, -1))             # (ny, nx) bool
 
@@ -1069,8 +1041,7 @@ class GrainMap:
         """
         Plot a scalar map for a given grain.
 
-        Parameters
-        ----------
+        Args:
         quantity : str
             One of `'match_rate'`, `'rms_px'`, `'cost'`,
             `'n_matched'`, `'misorientation'`,
@@ -1080,7 +1051,7 @@ class GrainMap:
         motor_x, motor_y : str or None
             Motor names to use as axis tick labels (from `self.motors`).
             If `None`, integer pixel indices are shown.
-        """
+"""
         # ── build data array ──────────────────────────────────────────────────
         if isinstance(quantity, np.ndarray):
             data  = quantity
@@ -1194,8 +1165,7 @@ class GrainMap:
         is created automatically.  Pass `ax` to place a single-grain plot on
         an existing axes.
 
-        Parameters
-        ----------
+        Args:
         grains : list[int] or None
             Grain indices to plot.  `None` plots all grains.
         ax : Axes or None
@@ -1211,7 +1181,7 @@ class GrainMap:
             Units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
         share_scale : bool
             If `True` (default), all subplots share the same `vmin`/`vmax`.
-        """
+"""
         grains = list(range(self.n_grains)) if grains is None else list(grains)
         cmap   = cmap or "plasma_r"
 
@@ -1317,8 +1287,7 @@ class GrainMap:
         within a square kernel of half-size *kernel*, excluding pairs above
         *max_misor_deg* (grain boundaries).
 
-        Parameters
-        ----------
+        Args:
         grain : int
             Grain index (0-based).  Default `0`.
         kernel : int
@@ -1346,11 +1315,10 @@ class GrainMap:
         colorbar : bool
             Whether to add a colorbar.  Default `True`.
 
-        Returns
-        -------
+        Returns:
         fig : Figure
         ax  : Axes
-        """
+"""
         data = self.kam_map(grain, kernel=kernel, max_misor_deg=max_misor_deg)
         cmap = cmap or "inferno"
 
@@ -1461,8 +1429,7 @@ class GrainMap:
         """
         Plot a single strain-tensor component for a given grain.
 
-        Parameters
-        ----------
+        Args:
         component : str
             One of `'e_xx'`, `'e_yy'`, `'e_zz'`,
             `'e_xy'`, `'e_xz'`, `'e_yz'`.
@@ -1486,7 +1453,7 @@ class GrainMap:
             Default `'y'`.
         motor_x, motor_y : str or None
             Motor names to use as axis tick labels.
-        """
+"""
         if component not in self._STRAIN_INDICES:
             raise ValueError(
                 f"Unknown component {component!r}. "
@@ -1573,15 +1540,14 @@ class GrainMap:
         """
         Return the 6×6 Voigt stiffness matrix in GPa.
 
-        Resolution order
-        ----------------
+        **Resolution order**
         1. *cij* parameter if given directly.
         2. `crystal.cij` (xrayutilities stores this in Pa → converted to GPa).
         3. `crystal.cijkl` (4th-rank tensor in Pa) → Mandel/Voigt reduction.
 
         The returned matrix uses the standard crystallographic Voigt ordering
         `[xx, yy, zz, yz, xz, xy]`.
-        """
+"""
         if cij is not None:
             return np.asarray(cij, dtype=float)
 
@@ -1627,8 +1593,7 @@ class GrainMap:
         matrix extracted from *crystal* and *ε* is the fitted strain tensor
         stored in `self.strain_tensor[grain]`.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal or LayeredCrystal
             Source of elastic constants.  The stiffness matrix is extracted
             automatically (see :meth:`_extract_cij`).
@@ -1648,12 +1613,11 @@ class GrainMap:
                 Lab frame further rotated by *sample_tilt_deg* about
                 *sample_tilt_axis*.
 
-        Returns
-        -------
+        Returns:
         stress : (ny, nx, 6) ndarray, GPa
             Stress in code Voigt ordering `[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]`.
             `NaN` where strain data are absent.
-        """
+"""
         C = self._extract_cij(crystal, cij)          # (6,6) GPa, std Voigt
         eps_code = self.strain_tensor[grain]          # (ny, nx, 3, 3)
 
@@ -1724,8 +1688,7 @@ class GrainMap:
         """
         Plot a single stress-tensor component for a given grain.
 
-        Parameters
-        ----------
+        Args:
         component : str
             One of `'s_xx'`, `'s_yy'`, `'s_zz'`,
             `'s_xy'`, `'s_xz'`, `'s_yz'`.
@@ -1748,7 +1711,7 @@ class GrainMap:
         motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
         title, figsize, colorbar
             Same as :meth:`plot_strain_component`.
-        """
+"""
         if component not in self._STRESS_INDICES:
             raise ValueError(
                 f"Unknown component {component!r}. "
@@ -1832,8 +1795,7 @@ class GrainMap:
         requested their distributions are overlaid with different colours.
         A vertical dashed line marks the mean of each distribution.
 
-        Parameters
-        ----------
+        Args:
         components : list of str or None
             Strain components to plot.  Valid values: `'e_xx'`, `'e_yy'`,
             `'e_zz'`, `'e_xy'`, `'e_xz'`, `'e_yz'`.  `None` plots
@@ -1873,11 +1835,10 @@ class GrainMap:
         title : str or None
             Overall figure suptitle.  Auto-generated if `None`.
 
-        Returns
-        -------
+        Returns:
         fig : Figure
         axes : ndarray of Axes  (shape matches the subplot grid)
-        """
+"""
         _all_components = list(self._STRAIN_INDICES.keys())
         components = list(components) if components is not None else _all_components
 
@@ -1960,16 +1921,14 @@ class GrainMap:
 
         Colour convention: [001] → blue, [011] → green, [111] → red.
 
-        Parameters
-        ----------
+        Args:
         c : (…, 3) array
             Crystal-frame directions.  Need not be unit vectors; NaN rows
             produce NaN RGB output.
 
-        Returns
-        -------
+        Returns:
         rgb : same leading shape + (3,), float in [0, 1].
-        """
+"""
         c       = np.asarray(c, dtype=float)
         leading = c.shape[:-1]
         flat    = c.reshape(-1, 3).copy()
@@ -2005,7 +1964,7 @@ class GrainMap:
         have alpha=0 (transparent).  Rows correspond to increasing *p*
         (phi, bottom = [001]–[011] edge) and columns to increasing *t*
         (theta, left = [001]).
-        """
+"""
         t_vals = np.linspace(0.0, 1.0, N)
         p_vals = np.linspace(0.0, 1.0, N)
         T, P   = np.meshgrid(t_vals, p_vals)
@@ -2037,13 +1996,12 @@ class GrainMap:
     def _ipf_colorkey_inset(parent_ax, c_mean: "np.ndarray | None" = None) -> None:
         """Add the cubic IPF color-key as a small inset in *parent_ax*.
 
-        Parameters
-        ----------
+        Args:
         c_mean : (3,) array or None
             Mean crystal direction (already in the fundamental zone, i.e.
             sorted absolute values).  If given, a marker is drawn at the
             corresponding position in the triangle.
-        """
+"""
         try:
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
         except ImportError:
@@ -2109,13 +2067,12 @@ class GrainMap:
         then a zoomed inset of the data region coloured with the *stretched*
         colours so you can read off absolute orientations.
 
-        Parameters
-        ----------
+        Args:
         t_vals, p_vals : (N,) flat arrays
             (t, p) coordinates in [0,1]² of all valid map pixels.
         rgb_stretched : (N, 3) float array
             Stretched RGB for each valid pixel.
-        """
+"""
         try:
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
         except ImportError:
@@ -2218,8 +2175,7 @@ class GrainMap:
           *strain_components* (default: all six).  Only shown when
           *show_strain* is `True` **and** the grain has non-NaN strain data.
 
-        Parameters
-        ----------
+        Args:
         grain : int
             Grain index (0-based).  Use the index returned by
             :meth:`apply_merge` to plot the merged result.
@@ -2259,11 +2215,10 @@ class GrainMap:
         title : str or None
             Overall figure title.  Auto-generated if `None`.
 
-        Returns
-        -------
+        Returns:
         fig : Figure
         axes : (n_rows, n_cols) ndarray of Axes
-        """
+"""
         ipf_axes       = list(ipf_axes or ["x", "y", "z"])
         quality_metrics = list(quality_metrics or ["match_rate", "rms_px", "kam"])
         strain_comps   = list(
@@ -2404,8 +2359,7 @@ class GrainMap:
         Inverse pole figure (IPF) map coloured by which crystal direction is
         parallel to a chosen reference axis.
 
-        Parameters
-        ----------
+        Args:
         axis : str or (3,) array-like
             Reference direction in the chosen *frame*.
             Shortcuts: `'x'`, `'y'`, `'z'`; or a custom 3-vector.
@@ -2454,7 +2408,7 @@ class GrainMap:
         best_grain : (ny, nx) int ndarray or None
             Grain-label array required for `stretch="local"`.  Positions
             with value `-1` are treated as invalid (white).
-        """
+"""
         _shortcuts = {
             "x": np.array([1.0, 0.0, 0.0]),
             "y": np.array([0.0, 1.0, 0.0]),
@@ -2612,8 +2566,7 @@ class GrainMap:
         map pixel.  Points are coloured with the same IPF scheme as
         :meth:`plot_ipf_map` (cubic: [001] → blue, [011] → green, [111] → red).
 
-        Parameters
-        ----------
+        Args:
         grain : int
             Grain index (0-based).
         frame : str
@@ -2628,7 +2581,7 @@ class GrainMap:
             IPF colour symmetry.  Currently only `'cubic'`.
         s, alpha : float
             Scatter marker size and transparency.
-        """
+"""
         U = self.U[grain]   # (ny, nx, 3, 3)
 
         if frame == "sample":
@@ -2721,8 +2674,7 @@ class GrainMap:
           Standard matplotlib zoom / pan tools work on this panel; the
           zoom level is preserved across clicks.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal or LayeredCrystal
             Crystal structure used for spot simulation.
         camera : Camera
@@ -2770,11 +2722,10 @@ class GrainMap:
         figsize : tuple
             Figure size.  Default `(14, 7)`.
 
-        Returns
-        -------
+        Returns:
         fig : Figure
         axes : (ax_map, ax_det)
-        """
+"""
         from .simulation import simulate_laue
         from .fitting import _match_spots
         from .segmentation import convert_spotsfile2peaklist
@@ -3088,8 +3039,7 @@ class GrainMap:
         4. **💾 Save UB** — writes the best available U to an auto-numbered
            `UB<n>.npy` file in the current directory.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal
             xrayutilities crystal structure used for indexing and simulation.
         camera : Camera
@@ -3135,7 +3085,7 @@ class GrainMap:
             Include raw centroids (fit failed) from the spot file.
         figsize : tuple
             Figure size.  Default `(14, 7)`.
-        """
+"""
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
         from .simulation import simulate_laue as _sim_laue
@@ -3728,8 +3678,7 @@ class GrainMap:
 
         Right-click on the detector panel cancels a pending sim-spot selection.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal
             xrayutilities crystal structure.
         camera : Camera
@@ -3778,7 +3727,7 @@ class GrainMap:
             stored grain are removed.  Default `5`.
         figsize : tuple
             Figure size.  Default `(14, 7)`.
-        """
+"""
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
         from .simulation import simulate_laue as _sim_laue
@@ -4617,8 +4566,7 @@ class GrainMap:
         result.  When satisfied press **💾 Save** to write the spots file to
         `<base_dir>/seg/frame_NNNNN.h5`.
 
-        Segmentation methods
-        --------------------
+        **Segmentation methods**
         Selected via the **Method** dropdown in the widget:
 
         * **LoG** — Laplacian-of-Gaussian.  *Sigmas* controls the blob scales;
@@ -4629,8 +4577,7 @@ class GrainMap:
         * **Hybrid** — LoG and WTH combined (logical OR); use when spot sizes
           vary strongly across the detector.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Processing directory.  Segmentation files are written to
             `<base_dir>/seg/`.
@@ -4676,7 +4623,7 @@ class GrainMap:
         figsize : tuple
             Matplotlib figure size `(width, height)` in inches.
             Default `(14, 7)`.
-        """
+"""
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
         from .segmentation import (
@@ -5242,17 +5189,15 @@ class GrainMap:
         that pre-date this attribute the number of unique spot groups is
         counted directly from the HDF5 keys (slower but backwards-compatible).
 
-        Parameters
-        ----------
+        Args:
         seg_dir : str
             Directory containing `frame_NNNNN.h5` segmentation files.
 
-        Returns
-        -------
+        Returns:
         n_obs : (ny, nx) int ndarray
             Per-pixel spot count.  Pixels with no seg file are set to `-1`.
             The same array is stored on `self.n_obs` for subsequent use.
-        """
+"""
         import re as _re
         n_obs = np.full((self.ny, self.nx), -1, dtype=int)
         pat = _re.compile(r'^frame_(\d+)\.h5$', _re.IGNORECASE)
@@ -5286,7 +5231,7 @@ class GrainMap:
 
         All numeric arrays are stored under `/grain_{i:02d}/` groups.
         Metadata (ny, nx, ub_files, h5_path, entry) go into `/meta`.
-        """
+"""
         if self.h5_path and os.path.abspath(path) == os.path.abspath(self.h5_path):
             raise ValueError(
                 f"save path {path!r} is the same as the input scan file (h5_path) — "
@@ -5341,8 +5286,7 @@ class GrainMap:
         exchange).  Every dataset is a plain array — no GrainMap class is
         needed to read it back.
 
-        Layout
-        ------
+        **Layout**
         `/meta`
             Scalar metadata (`ny`, `nx`, `grain_index`,
             `h5_path`, `processing_dir`).
@@ -5367,8 +5311,7 @@ class GrainMap:
         `/motors/`
             One dataset per motor name, each (ny, nx).
 
-        Parameters
-        ----------
+        Args:
         path : str
             Output HDF5 file path.  Overwritten if it already exists.
         grain : int or None
@@ -5381,7 +5324,7 @@ class GrainMap:
             `"ZXZ"` (Bunge convention commonly used in EBSD).
         compress : bool
             Apply gzip compression to numeric datasets.  Default `True`.
-        """
+"""
         if grain is None:
             grain = self._merged_grain if self._merged_grain is not None else 0
         if not (0 <= grain < self.n_grains):
@@ -5467,7 +5410,7 @@ class GrainMap:
         UB reference matrices and motor positions are re-read from the file;
         the `_results` list (which holds full Python objects) is not
         persisted and will be all-`None` after loading.
-        """
+"""
         with h5py.File(path, "r") as f:
             meta = f["meta"]
             ny           = int(meta.attrs["ny"])
@@ -5620,14 +5563,13 @@ class GrainMap:
         """
         Cancel SLURM jobs by ID.
 
-        Parameters
-        ----------
+        Args:
         job_ids : list[str | int]
             Job IDs returned by :meth:`submit_segmentation`,
             :meth:`submit_orientation`, or :meth:`submit_strain`.
         dry_run : bool
             If `True`, print the `scancel` command without executing it.
-        """
+"""
         if not job_ids:
             print("cancel_jobs: no job IDs provided.")
             return
@@ -5705,8 +5647,7 @@ class GrainMap:
            each centroid.
         5. Write results to `seg_dir/frame_{idx:05d}.h5`.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Root processing directory.  The sub-directories `seg/`,
             `ubs/`, `strain/`, `slurm_logs/`, and `job_meta/` are
@@ -5810,11 +5751,10 @@ class GrainMap:
             Additional `sbatch` options passed as `--key=value` flags,
             e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
 
-        Returns
-        -------
+        Returns:
         list of str
             SLURM job IDs, one per submitted job.
-        """
+"""
         if h5_dataset is None and tiff_dir is None:
             raise ValueError(
                 "Provide either h5_dataset (HDF5 image stack) "
@@ -5917,8 +5857,7 @@ class GrainMap:
         Results are collected into the map arrays by
         :meth:`collect_orientation`.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Root processing directory — the same path used for
             :meth:`submit_segmentation`.  Sub-directories `seg/`,
@@ -6013,11 +5952,10 @@ class GrainMap:
             Additional `sbatch` options passed as `--key=value` flags,
             e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
 
-        Returns
-        -------
+        Returns:
         list of str
             SLURM job IDs, one per submitted job.
-        """
+"""
         dirs = self.setup_processing_dirs(base_dir)
 
         # Inherit filtering thresholds from the segmentation step if not set.
@@ -6118,8 +6056,7 @@ class GrainMap:
         written to ``base_dir/mixed/frame_{idx:05d}.npz``, one file per frame,
         containing the refined U matrix for every phase.
 
-        Parameters
-        ----------
+        Args:
         crystals : list of Crystal
             One crystal per phase, in grain-index order.  Must match
             ``len(self.ub_files)`` and ``self.n_grains``.
@@ -6129,7 +6066,7 @@ class GrainMap:
             If ``True``, all phases share a single rotation vector (3 free
             parameters).  If ``False`` (default), each phase has an
             independent rotation (3 × N_phases parameters).
-        """
+"""
         if len(crystals) != len(self.ub_files):
             raise ValueError(
                 f"len(crystals)={len(crystals)} must equal "
@@ -6215,7 +6152,7 @@ class GrainMap:
         phases (joint fit).
 
         Returns the number of frames loaded.
-        """
+"""
         mixed_dir = os.path.join(base_dir, "mixed")
         files = sorted(glob.glob(os.path.join(mixed_dir, "frame_?????.npz")))
         n_loaded = 0
@@ -6302,8 +6239,7 @@ class GrainMap:
 
         Results are collected into the map arrays by :meth:`collect_strain`.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Root processing directory — the same path used for
             :meth:`submit_segmentation` and :meth:`submit_orientation`.
@@ -6384,11 +6320,10 @@ class GrainMap:
             Additional `sbatch` options, e.g.
             `{'account': 'myproject'}`.
 
-        Returns
-        -------
+        Returns:
         list of str
             SLURM job IDs, one per submitted job.
-        """
+"""
         dirs = self.setup_processing_dirs(base_dir)
 
         # Inherit filtering thresholds from the segmentation step if not set.
@@ -6491,12 +6426,11 @@ class GrainMap:
         ``strain_dir/frame_{idx:05d}_g{gi:02d}.npz`` — the same format as
         :meth:`submit_strain` — so :meth:`collect_strain` works unchanged.
 
-        Parameters
-        ----------
+        Args:
         crystals : list of Crystal
             One crystal per phase, in grain-index order.  Must match
             ``self.n_grains``.
-        """
+"""
         if len(crystals) != self.n_grains:
             raise ValueError(
                 f"len(crystals)={len(crystals)} must equal "
@@ -6570,7 +6504,7 @@ class GrainMap:
         Load orientation npz files produced by SLURM workers into the map arrays.
 
         Returns the number of results loaded.
-        """
+"""
         ubs_dir = os.path.join(base_dir, "ubs")
         files = glob.glob(os.path.join(ubs_dir, "frame_*_g*.npz"))
         n_loaded = 0
@@ -6602,7 +6536,7 @@ class GrainMap:
         Load strain npz files produced by SLURM workers into the map arrays.
 
         Returns the number of results loaded.
-        """
+"""
         strain_dir = os.path.join(base_dir, "strain")
         files = glob.glob(os.path.join(strain_dir, "frame_*_g*.npz"))
         n_loaded = 0
@@ -6652,8 +6586,7 @@ class GrainMap:
         The folder can later be fed to :meth:`collect_merged` to restore the
         merged grain slot into a freshly-loaded :class:`GrainMap`.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Root of the processing directory tree (same root passed to
             `submit_orientation` / `collect_orientation`).
@@ -6678,13 +6611,12 @@ class GrainMap:
             If `True`, existing entries in `merged/` are removed before
             writing.  Default `False`.
 
-        Returns
-        -------
+        Returns:
         merged_dir : str
             Absolute path of the created `merged/` directory.
         n_links : int
             Number of symlinks written.
-        """
+"""
         gi_merged = self.n_grains - 1 if grain_index is None else int(grain_index)
         if source is None:
             source = (metrics or {}).get("source", "auto")
@@ -6751,8 +6683,7 @@ class GrainMap:
         grain slot.  Strain fields (`strain_voigt`, `strain_tensor`) are
         loaded automatically when present.
 
-        Parameters
-        ----------
+        Args:
         base_dir : str
             Same root directory passed to :meth:`write_merge_links`.
         grain_index : int or None
@@ -6762,11 +6693,10 @@ class GrainMap:
             only results; `"strain"` loads results that include strain tensors.
             Must match the `source` used when calling :meth:`write_merge_links`.
 
-        Returns
-        -------
+        Returns:
         int
             Number of results loaded.
-        """
+"""
         if source not in ("ubs", "strain"):
             raise ValueError(f"source must be 'ubs' or 'strain', got {source!r}")
         merged_dir = os.path.join(base_dir, "merged", source)

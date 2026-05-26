@@ -54,7 +54,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from nrxrdct.slurm_reconstruction.reconstruct_worker import RECONSTRUCTION_ALGOS
+from nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker import RECONSTRUCTION_ALGOS
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ def build_sinogram(
     Returns:
         Path: Path to the written sinogram file.
     """
-    from nrxrdct.reconstruction import assemble_sinogram
+    from nrxrdct.xrdct.reconstruction import assemble_sinogram
 
     sinogram_file = Path(sinogram_file)
     integrated_file = Path(integrated_file)

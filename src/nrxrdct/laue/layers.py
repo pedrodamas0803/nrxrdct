@@ -4,8 +4,7 @@ layered_structure_factor.py
 Model a stack of crystalline layers with known orientation relationships (OR)
 and compute the total kinematical structure factor  F(Q)  and intensity  |F(Q)|².
 
-Physics
--------
+**Physics**
 In the kinematical (Born) approximation the total scattered amplitude is the
 coherent sum of contributions from every unit cell in the stack:
 
@@ -27,8 +26,7 @@ The geometric sum  Σ exp(i n φ)  is evaluated analytically:
 For a superlattice with N_rep bilayer repetitions an additional geometric
 factor is applied over the full bilayer period Λ.
 
-Orientation relationship
-------------------------
+**Orientation relationship**
 The orientation U of each layer maps crystal-frame vectors to the lab frame:
     G_lab = U @ G_crystal
 
@@ -42,8 +40,7 @@ Common ORs implemented as helpers:
     or_baker_nutting         (BN)  – BCC/rock-salt (e.g. Fe/MgO)
     or_from_directions            – generic two-direction specification
 
-Usage
------
+**Usage**
     from layered_structure_factor import LayeredCrystal, or_kurdjumov_sachs
     import xrayutilities as xu
     import numpy as np
@@ -92,15 +89,13 @@ def crystal_to_cartesian(uvw, crystal):
     For a general crystal with lattice parameters a, b, c, α, β, γ the direct
     metric tensor G is used:  x_cart = A · [uvw]  where A is the lattice matrix.
 
-    Parameters
-    ----------
+    Args:
     uvw     : array-like, shape (3,)   Miller direction indices
     crystal : xu.materials.Crystal
 
-    Returns
-    -------
+    Returns:
     cart : ndarray, shape (3,)   Cartesian vector (Å)
-    """
+"""
     lat = crystal.lattice
     # Build direct lattice matrix A (columns = a1, a2, a3 vectors)
     A = lat._ai  # shape (3,3), rows are a1, a2, a3
@@ -114,16 +109,14 @@ def orientation_along_z(zone_axis_crystal, crystal, up_crystal=None):
 
     Optionally align `up_crystal` as close as possible to lab +x.
 
-    Parameters
-    ----------
+    Args:
     zone_axis_crystal : array-like  Miller direction [uvw] in the crystal frame
     crystal           : xu.materials.Crystal
     up_crystal        : array-like, optional  secondary alignment direction
 
-    Returns
-    -------
+    Returns:
     U : ndarray, shape (3,3)   orientation matrix  (G_lab = U @ G_crystal)
-    """
+"""
     b = crystal_to_cartesian(zone_axis_crystal, crystal)
     b /= np.linalg.norm(b)
     z = np.array([0.0, 0.0, 1.0])
@@ -157,7 +150,7 @@ def _or_from_two_pairs(v1_A, v2_A, v1_B, v2_B):
     Rotation R such that R maps v1_A -> v1_B (primary)
     and R @ v2_A is as close as possible to v2_B (secondary).
     All vectors are in Cartesian (lab or crystal) coordinates.
-    """
+"""
 
     def make_frame(e1, e2):
         e1 = e1 / np.linalg.norm(e1)
@@ -182,16 +175,14 @@ def or_from_directions(crystal_A, dir1_A, dir2_A, crystal_B, dir1_B, dir2_B):
                                   Cu, [1,1,0], [1,-1,-2])
         U_Cu = R_OR @ U_Fe
 
-    Parameters
-    ----------
+    Args:
     crystal_A, crystal_B : xu.materials.Crystal
     dir1_A, dir2_A       : Miller direction in phase A  [u,v,w]
     dir1_B, dir2_B       : Miller direction in phase B  [u,v,w]
 
-    Returns
-    -------
+    Returns:
     R_OR : ndarray, shape (3,3)   rotation matrix
-    """
+"""
     v1A = crystal_to_cartesian(dir1_A, crystal_A)
     v2A = crystal_to_cartesian(dir2_A, crystal_A)
     v1B = crystal_to_cartesian(dir1_B, crystal_B)
@@ -210,7 +201,7 @@ def or_kurdjumov_sachs(crystal_bcc, crystal_fcc):
 
     Returns R_OR  (rotation from BCC crystal frame to FCC crystal frame).
     To derive U_FCC from U_BCC use:   U_FCC = U_BCC @ R_OR.T
-    """
+"""
     return or_from_directions(
         crystal_bcc, [1, 1, 1], [1, -1, 0], crystal_fcc, [1, 1, 0], [1, -1, -2]
     )
@@ -224,7 +215,7 @@ def or_nishiyama_wassermann(crystal_bcc, crystal_fcc):
 
     Returns R_OR  (rotation from BCC crystal frame to FCC crystal frame).
     To derive U_FCC from U_BCC use:   U_FCC = U_BCC @ R_OR.T
-    """
+"""
     return or_from_directions(
         crystal_bcc, [1, 1, 0], [0, 0, 1], crystal_fcc, [1, 1, 1], [0, 1, -1]
     )
@@ -238,7 +229,7 @@ def or_baker_nutting(crystal_bcc, crystal_rocksalt):
         <110>_BCC ∥ <010>_RS
 
     Returns R_OR (BCC->rock-salt). Use: U_RS = U_BCC @ R_OR.T
-    """
+"""
     return or_from_directions(
         crystal_bcc, [1, 0, 0], [1, 1, 0], crystal_rocksalt, [1, 0, 0], [0, 1, 0]
     )  # [010]_RS perpendicular to primary
@@ -252,7 +243,7 @@ def or_pitsch(crystal_bcc, crystal_fcc):
 
     Returns R_OR  (rotation from BCC crystal frame to FCC crystal frame).
     To derive U_FCC from U_BCC use:   U_FCC = U_BCC @ R_OR.T
-    """
+"""
     return or_from_directions(
         crystal_bcc, [0, 1, 1], [1, 0, 0], crystal_fcc, [1, 1, 1], [1, 0, -1]
     )
@@ -281,8 +272,7 @@ def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str =
     For ternary alloys the constants are linearly interpolated between the
     two binary end-members (Vegard's law approximation).
 
-    Parameters
-    ----------
+    Args:
     material : `'GaN'` | `'InN'` | `'AlN'`
         First end-member (or the only material when `x=0`).
     x : float, optional
@@ -292,18 +282,16 @@ def nitride_elastic_constants(material: str, x: float = 0.0, end_material: str =
     end_material : `'GaN'` | `'InN'` | `'AlN'`, optional
         Second end-member (default `'GaN'`).
 
-    Returns
-    -------
+    Returns:
     dict with keys `'C11'`, `'C12'`, `'C13'`, `'C33'`, `'C44'`
     (all in GPa).
 
-    Examples
-    --------
+    Example:
     >>> c = nitride_elastic_constants('GaN')
     >>> c = nitride_elastic_constants('InN', x=0.20, end_material='GaN')
     >>> d, eps_par, eps_perp = pseudomorphic_d_spacing(
     ...     InGaN, GaN.lattice.a, C13=c['C13'], C33=c['C33'])
-    """
+"""
     for m in (material, end_material):
         if m not in _NITRIDE_ELASTIC:
             raise ValueError(
@@ -331,24 +319,21 @@ def d_spacing_hkl(crystal, h, k, l):
     the xrayutilities convention ($\\mathbf{b}_i \\cdot \\mathbf{a}_j =
     2\\pi\\,\\delta_{ij}$).
 
-    Parameters
-    ----------
+    Args:
     crystal : xu.materials.Crystal
     h, k, l : int or float
         Miller indices.
 
-    Returns
-    -------
+    Returns:
     float
         d-spacing in Å.
 
-    Examples
-    --------
+    Example:
     >>> import xrayutilities as xu
     >>> GaN = xu.materials.GaN
     >>> d_spacing_hkl(GaN, 0, 0, 2)   # GaN 002 reflection
     2.593...
-    """
+"""
     b1, b2, b3 = crystal.lattice._bi   # reciprocal vectors, Å⁻¹ (2π convention)
     G = h * np.asarray(b1) + k * np.asarray(b2) + l * np.asarray(b3)
     return float(2 * np.pi / np.linalg.norm(G))
@@ -388,8 +373,7 @@ def pseudomorphic_d_spacing(
         function with a non-c-axis `growth_dir` for a hexagonal crystal
         will raise `ValueError`.
 
-    Parameters
-    ----------
+    Args:
     crystal_film : xu.materials.Crystal
         Bulk (relaxed) film crystal.
     a_substrate : float  or  xu.materials.Crystal
@@ -405,8 +389,7 @@ def pseudomorphic_d_spacing(
         frame** (default: `(0, 0, 1)`).
         For hexagonal crystals only `(0, 0, 1)` (c-axis) is supported.
 
-    Returns
-    -------
+    Returns:
     d_strained : float
         Strained repeat along `growth_dir` (Å).  Pass directly as
         `d_spacing` to :meth:`LayeredCrystal.add_layer`.
@@ -415,15 +398,14 @@ def pseudomorphic_d_spacing(
     eps_perp : float
         Out-of-plane strain $\\varepsilon_\\perp$.
 
-    Examples
-    --------
+    Example:
     GaN/InGaN LED — pseudomorphic InGaN well on GaN buffer::
 
         d_InGaN, eps_par, eps_perp = pseudomorphic_d_spacing(
             InGaN, GaN.lattice.a, C13=92.0, C33=224.0)
         stack.add_layer(InGaN, U_InGaN, thickness=n_InGaN * d_InGaN,
                         d_spacing=d_InGaN, label="InGaN (strained)")
-    """
+"""
     # Resolve substrate in-plane parameter
     if hasattr(a_substrate, "lattice"):
         a_sub = float(a_substrate.lattice.a)
@@ -490,8 +472,7 @@ class Layer:
     """
     One crystalline layer in the stack.
 
-    Parameters
-    ----------
+    Args:
     crystal     : xu.materials.Crystal
     U           : (3,3) orientation matrix   G_lab = U @ G_crystal
     thickness   : float   physical thickness of the layer in Å
@@ -513,7 +494,7 @@ class Layer:
         Repeat distance along the stacking direction (Å).
         If `None`, computed as the primitive lattice repeat along `n_hat`.
     label       : str, optional   name for this layer
-    """
+"""
 
     def __init__(
         self,
@@ -573,7 +554,7 @@ class Layer:
         Linear absorption coefficient μ (Å⁻¹) for this material at *energy_eV*.
 
         Returns `0.0` if material data are unavailable or absorption is zero.
-        """
+"""
         _HC_ANG = 12398.419843
         try:
             if hasattr(self.crystal, "delta_beta"):
@@ -619,7 +600,7 @@ class Layer:
 
         Returns `self.n_cells` unchanged if the material lookup fails or if
         the absorption depth exceeds the real layer thickness.
-        """
+"""
         mu = self._linear_mu(energy_eV)
         if mu <= 0:
             # Absorption lookup failed (e.g. custom CIF crystal, older xrayutilities).
@@ -649,16 +630,14 @@ class Layer:
         The phase uses the projection of Q onto the stacking direction `n_hat`
         (not Q_z), so the result is correct for any sample orientation.
 
-        Parameters
-        ----------
+        Args:
         Q_lab    : array-like (3,)   scattering vector in lab frame  (Å⁻¹)
         energy_eV: float             photon energy  (eV)
         z0       : float             cumulative offset along n_hat (Å)
 
-        Returns
-        -------
+        Returns:
         F : complex   kinematical structure factor (electron units)
-        """
+"""
         Q = np.asarray(Q_lab, dtype=float)
 
         # Q in crystal frame
@@ -712,8 +691,7 @@ class LayeredCrystal:
     `Q · n_hat` rather than `Q_z`, so the structure factor is correct
     regardless of how the sample sits on the diffractometer.
 
-    Parameters
-    ----------
+    Args:
     name : str, optional
     stacking_direction : array-like (3,), optional
         Unit vector in the **lab frame** defining the growth / stacking
@@ -725,21 +703,19 @@ class LayeredCrystal:
           growth direction:  `stacking_direction = U @ growth_dir_crystal`
           (e.g. `U @ [0, 0, 1]` for GaN grown along its c-axis).
 
-    Example — using orientation_along_z (default n_hat = Z)
-    --------------------------------------------------------
+    **Example — using orientation_along_z (default n_hat = Z)**
     >>> stack = LayeredCrystal(name='Fe/Cu KS superlattice')
     >>> stack.add_layer(Fe, U_Fe, thickness=57.4, label='Fe')
     >>> stack.add_layer(Cu, U_Cu, thickness=72.6, label='Cu')
     >>> stack.set_repetitions(10)
 
-    Example — using a U matrix from Laue indexation (GaN grown along c)
-    --------------------------------------------------------------------
+    **Example — using a U matrix from Laue indexation (GaN grown along c)**
     >>> n_hat = U_GaN @ np.array([0., 0., 1.])   # growth dir in lab frame
     >>> stack = LayeredCrystal(name='GaN/InGaN', stacking_direction=n_hat)
     >>> stack.add_layer(GaN,   U_GaN,   thickness=51800.0, label='GaN')    # ~1000 cells
     >>> stack.add_layer(InGaN, U_InGaN, thickness=259.0,   label='InGaN')  # ~50 cells
 
-    """
+"""
 
     def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
@@ -766,14 +742,13 @@ class LayeredCrystal:
         the first call places the layer closest to the substrate, subsequent
         calls place layers closer to the surface.
 
-        Parameters
-        ----------
+        Args:
         crystal   : xu.materials.Crystal
         U         : (3,3) orientation matrix   G_lab = U @ G_crystal
         thickness : float   physical thickness of the layer in Å
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
-        """
+"""
         layer = Layer(
             crystal,
             U,
@@ -795,14 +770,13 @@ class LayeredCrystal:
         places the layer at the bottom of the unit, the last at the top.
         The full unit is then repeated `n_rep` times above the buffer layers.
 
-        Parameters
-        ----------
+        Args:
         crystal   : xu.materials.Crystal
         U         : (3,3) orientation matrix
         thickness : float   physical thickness of the layer in Å
         d_spacing : float, optional   stacking repeat distance (Å)
         label     : str, optional
-        """
+"""
         layer = Layer(
             crystal, U, thickness, n_hat=self.n_hat, d_spacing=d_spacing, label=label
         )
@@ -837,8 +811,7 @@ class LayeredCrystal:
         Equivalent to calling :func:`pseudomorphic_d_spacing` then
         :meth:`add_layer` with the computed `d_spacing`.
 
-        Parameters
-        ----------
+        Args:
         crystal : xu.materials.Crystal
             Bulk (relaxed) film crystal.
         U : (3,3) ndarray
@@ -858,15 +831,13 @@ class LayeredCrystal:
             Default: `(0, 0, 1)` (c-axis).
         label : str, optional
 
-        Returns
-        -------
+        Returns:
         self  (for method chaining)
 
-        Notes
-        -----
+        Note:
         The strain values are printed on addition so you can verify the
         mismatch.
-        """
+"""
         d_strained, eps_par, eps_perp = pseudomorphic_d_spacing(
             crystal, a_substrate, C13, C33, growth_dir
         )
@@ -902,16 +873,14 @@ class LayeredCrystal:
         Useful for modelling domain variants or orientation relationships
         between different materials in the same stack without rebuilding it.
 
-        Parameters
-        ----------
+        Args:
         U : array-like (3, 3) or dict[str, array-like (3, 3)]
             A single orientation matrix applied to all layers, or a mapping
             `{crystal_name: U_matrix}`.
 
-        Returns
-        -------
+        Returns:
         self  (for method chaining)
-        """
+"""
         if isinstance(U, dict):
             U_map = {name: np.asarray(mat, dtype=float) for name, mat in U.items()}
             for layer in self.buffer_layers + self.layers:
@@ -991,8 +960,7 @@ class LayeredCrystal:
 
         The total structure factor is `F_buf + F_MQW`.
 
-        Parameters
-        ----------
+        Args:
         Q_lab    : array-like (3,)   scattering vector in lab frame  (Å⁻¹)
         energy_eV: float             photon energy  (eV)
         kf_hat   : array-like (3,) or None
@@ -1006,10 +974,9 @@ class LayeredCrystal:
             If `None`, only the incident-path (one-beam) correction already
             embedded in each buffer layer's `_effective_n_cells` is applied.
 
-        Returns
-        -------
+        Returns:
         F : complex   total structure factor (electron units)
-        """
+"""
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
         Qn = float(np.dot(Q, self.n_hat))
@@ -1093,8 +1060,7 @@ class LayeredCrystal:
         overlying-layer attenuation) are applied identically to
         :meth:`structure_factor`.
 
-        Parameters
-        ----------
+        Args:
         Q_lab : array-like (3,)
             Scattering vector in the lab frame (Å⁻¹).
         energy_eV : float
@@ -1102,10 +1068,9 @@ class LayeredCrystal:
         kf_hat : array-like (3,) or None
             Diffracted beam unit vector for the two-beam absorption correction.
 
-        Returns
-        -------
+        Returns:
         F : complex  (electron units)
-        """
+"""
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
         Qn = float(np.dot(Q, self.n_hat))
@@ -1175,15 +1140,13 @@ class LayeredCrystal:
         """
         Compute |F(Q)|² for an array of Q-points.
 
-        Parameters
-        ----------
+        Args:
         Q_arr    : array-like, shape (N, 3)  scattering vectors in lab frame
         energy_eV: float                      photon energy (eV)
 
-        Returns
-        -------
+        Returns:
         I : ndarray, shape (N,)   |F(Q)|² in (electron units)²
-        """
+"""
         Q_arr = np.asarray(Q_arr, dtype=float)
         return np.array([abs(self.structure_factor(Q, energy_eV)) ** 2 for Q in Q_arr])
 
@@ -1197,15 +1160,13 @@ class LayeredCrystal:
         unit layers are included for the *first* repetition only (z0 relative
         to the start of the MQW section), without the superlattice factor.
 
-        Parameters
-        ----------
+        Args:
         Q_lab    : array-like (3,)
         energy_eV: float
 
-        Returns
-        -------
+        Returns:
         dict  { label : complex F_layer }
-        """
+"""
         self._update_offsets()
         Q = np.asarray(Q_lab, dtype=float)
         result = {}
@@ -1292,8 +1253,7 @@ class LayeredCrystal:
         surface at the top.  The repeating MQW unit is unrolled across all
         `n_rep` repetitions.
 
-        Parameters
-        ----------
+        Args:
         param : `'a'` | `'b'` | `'c'`
             Which lattice parameter to plot.
         unit : `'A'` | `'nm'`
@@ -1302,10 +1262,9 @@ class LayeredCrystal:
             Draw into an existing axes; a new figure is created if `None`.
         figsize : (float, float)
 
-        Returns
-        -------
+        Returns:
         fig, ax
-        """
+"""
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
 
@@ -1408,8 +1367,7 @@ class LayeredCrystal:
         where *p* is the chosen lattice parameter (`'a'`, `'b'`, or
         `'c'`).
 
-        Parameters
-        ----------
+        Args:
         param : `'a'` | `'b'` | `'c'`
             Lattice parameter to use.
         reference : float, xu.materials.Crystal, or None
@@ -1425,10 +1383,9 @@ class LayeredCrystal:
         ax : matplotlib.axes.Axes, optional
         figsize : (float, float)
 
-        Returns
-        -------
+        Returns:
         fig, ax
-        """
+"""
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
 

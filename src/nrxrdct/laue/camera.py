@@ -53,8 +53,7 @@ class CalibrationResult:
         """
         Plot the calibration result: observed vs simulated spot positions.
 
-        Parameters
-        ----------
+        Args:
         crystal      : Crystal  — calibration standard used during fitting.
         peaklist     : (N, ≥2) array  — peak list from
                        :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
@@ -71,10 +70,9 @@ class CalibrationResult:
         top_n_sim    : int or None  — restrict to the N brightest simulated spots.
         figsize      : (w, h)  — figure size in inches.
 
-        Returns
-        -------
+        Returns:
         fig, (ax_det, ax_info, ax_hist)
-        """
+"""
         import matplotlib.colors as mcolors
         import matplotlib.gridspec as gridspec
         import matplotlib.pyplot as plt
@@ -281,8 +279,7 @@ class Camera:
     """
     Pixelated area detector fully compatible with LaueTools calibration files.
 
-    Public frame convention (LT frame)
-    -----------------------------------
+    **Public frame convention (LT frame)**
     All public methods (kf_to_pixel, pixel_to_kf, project) use the canonical
     LaueTools LT frame:
 
@@ -297,8 +294,7 @@ class Camera:
         LT → LT2 :  x_LT2 = −y_LT,   y_LT2 =  x_LT,  z_LT2 = z_LT
         LT2 → LT :  x_LT  =  y_LT2,  y_LT  = −x_LT2, z_LT  = z_LT2
 
-    Calibration parameters  (CCDCalibParameters = [dd, xcen, ycen, xbet, xgam])
-    ---------------------------------------------------------------------------
+    **Calibration parameters  (CCDCalibParameters = [dd, xcen, ycen, xbet, xgam])**
     dd   : distance sample → detector reference point O  (mm)
     xcen : pixel X of point O  (normal-incidence / beam-footprint pixel)
     ycen : pixel Y of point O
@@ -312,16 +308,14 @@ class Camera:
         'X>0'  transmission (forward)
         'X<0'  back-reflection
 
-    Pixel convention  (identical to LaueTools)
-    ------------------------------------------
+    **Pixel convention  (identical to LaueTools)**
     (xcam=0, ycam=0) : top-left corner of the array
     xcam increases to the right (columns)
     ycam increases downward    (rows)
     (xcen, ycen) : sub-pixel reference point where the detector normal
                    intersects the pixel array.
 
-    The IO vector and detector normal  (in LT2 frame)
-    --------------------------------------------------
+    **The IO vector and detector normal  (in LT2 frame)**
     For Z>0 geometry:
         beta  = pi/2 - xbet * pi/180
         IO    = dd * [0,  cos(beta),  sin(beta)]
@@ -331,7 +325,7 @@ class Camera:
     The two key public functions:
         kf_to_pixel  : uflab (N×3, LT)  →  (xcam, ycam)   [LaueTools: calc_xycam]
         pixel_to_kf  : (xcam, ycam)     →  uflab (N×3, LT) [LaueTools: calc_uflab]
-    """
+"""
 
     def __init__(
         self,
@@ -405,15 +399,13 @@ class Camera:
         Map scattered unit vectors to pixel coordinates.
         Implements LaueTools calc_xycam() for Z>0 geometry.
 
-        Parameters
-        ----------
+        Args:
         uflab_arr : (N, 3) array of unit scattered vectors in LT frame (x // beam)
 
-        Returns
-        -------
+        Returns:
         xcam, ycam : (N,) arrays of pixel coordinates (float, sub-pixel precision)
                      Returns NaN for beams that miss the detector or go backward.
-        """
+"""
         # Convert LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
         uf_lt = np.atleast_2d(np.array(uflab_arr, dtype=float))
         norms = np.linalg.norm(uf_lt, axis=1, keepdims=True)
@@ -450,14 +442,12 @@ class Camera:
         Map pixel coordinates to scattered unit vectors.
         Implements LaueTools calc_uflab() for Z>0 geometry.
 
-        Parameters
-        ----------
+        Args:
         xcam_arr, ycam_arr : array-like of pixel coordinates
 
-        Returns
-        -------
+        Returns:
         uflab : (N, 3) unit scattered vectors in LT frame  (x // ki)
-        """
+"""
         xcam1 = (np.asarray(xcam_arr, float) - self.xcen) * self.pixel_mm
         ycam1 = (np.asarray(ycam_arr, float) - self.ycen) * self.pixel_mm
 
@@ -482,7 +472,7 @@ class Camera:
         """
         Project one scattered beam direction (in LT frame, x // beam) onto
         the detector.  Returns (xcam, ycam) in pixels, or None if beam misses.
-        """
+"""
         # Convert LT -> LT2 for camera geometry
         kf_lt = np.array(kf_hat, dtype=float)
         kf_lt = kf_lt / np.linalg.norm(kf_lt)
@@ -511,19 +501,17 @@ class Camera:
         """
         Vectorised :meth:`project` for N directions at once.
 
-        Parameters
-        ----------
+        Args:
         kf_hat_arr : ndarray, shape (N, 3)
             Unit vectors in the LT frame (x // beam).  Need not be
             pre-normalised — they are normalised internally.
 
-        Returns
-        -------
+        Returns:
         pix : ndarray, shape (N, 2)
             Pixel coordinates (xcam, ycam).  Rows for rays that miss the
             detector contain NaN.
         on_det : ndarray, shape (N,), dtype bool
-        """
+"""
         kf_lt = kf_hat_arr / np.linalg.norm(kf_hat_arr, axis=1, keepdims=True)
         kf = np.column_stack([-kf_lt[:, 1], kf_lt[:, 0], kf_lt[:, 2]])
         scal = kf @ self.normal
@@ -560,7 +548,7 @@ class Camera:
 
             2theta = arccos(uf_x)
             chi    = arctan2(uf_y, uf_z)
-        """
+"""
         uf_lt = self.pixel_to_kf([xcam], [ycam])[0]
         tth = np.degrees(np.arccos(np.clip(uf_lt[0], -1, 1)))
         chi = np.degrees(np.arctan2(uf_lt[1], uf_lt[2] + 1e-17))
@@ -572,7 +560,7 @@ class Camera:
         """
         Return a 2theta map over the whole detector (shape Nv x Nh).
         Useful for contour overlays on detector images.
-        """
+"""
         if step is None:
             step = max(1, self.Nh // 40)
         cs = np.arange(0, self.Nh, step)
@@ -628,14 +616,13 @@ class Camera:
         """
         Build a Camera from a LaueTools calibration.
 
-        Parameters
-        ----------
+        Args:
         calib : list or array  [dd, xcen, ycen, xbet, xgam]
                 (= CCDCalibParameters in LaueTools)
         pixelsize : float, mm  (= xpixelsize in LaueTools dict)
         framedim  : (Nh, Nv)   (= framedim in LaueTools dict)
         kf_direction : str     (= kf_direction in LaueTools dict)
-        """
+"""
         dd, xcen, ycen, xbet, xgam = calib[:5]
         px = pixelsize if pixelsize is not None else PIXEL_SIZE_MM
         Nh, Nv = framedim if framedim is not None else (N_PIX_H, N_PIX_V)
@@ -674,7 +661,7 @@ class Camera:
         $$
 
         This reproduces the correct counting statistics: the noise standard
-        deviation at pixel *i* is $\sqrt{\lambda_i}$, so bright spots
+        deviation at pixel *i* is $\\sqrt{\\lambda_i}$, so bright spots
         have more absolute noise but better signal-to-noise than dim pixels.
 
         !!! note
@@ -684,8 +671,7 @@ class Camera:
             method, then optionally apply log-scaling to the returned noisy
             image for display.
 
-        Parameters
-        ----------
+        Args:
         image : numpy.ndarray, shape (Nv, Nh)
             Linear intensity image from :meth:`render` (`log_scale=False`).
             All values must be ≥ 0.
@@ -697,17 +683,15 @@ class Camera:
             Random-number source.  Pass an integer seed for reproducibility,
             or `None` (default) to use a fresh default RNG.
 
-        Returns
-        -------
+        Returns:
         noisy : numpy.ndarray, shape (Nv, Nh), dtype float32
             Poisson-sampled photon-count image.
 
-        Examples
-        --------
+        Example:
         >>> img_linear = camera.render(spots, log_scale=False)
         >>> img_noisy  = camera.add_poisson_noise(img_linear, peak_counts=500)
         >>> img_display = np.log1p(img_noisy / img_noisy.max() * 1000)
-        """
+"""
         img = np.asarray(image, dtype=np.float64)
         img_max = img.max()
         if img_max > 0:
@@ -733,8 +717,7 @@ class Camera:
         (the un-normalised kinematical intensity).  By default the image is
         returned in raw intensity units with no scaling applied.
 
-        Parameters
-        ----------
+        Args:
         spots : list of dicts
             Spot list from any `simulate_laue*` function.
             Required keys: `'pix'` (xcam, ycam), `'I_raw'`.
@@ -756,7 +739,7 @@ class Camera:
         normalize : bool
             Divide by the image maximum after all other processing
             (default `False`).
-        """
+"""
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
             _model = sigma_pix["model"]
@@ -809,7 +792,7 @@ class Camera:
             pixelsize
             Nh Nv
             kf_direction
-        """
+"""
         import datetime
         from pathlib import Path
 
@@ -833,8 +816,7 @@ class Camera:
         """
         Read a LaueTools-compatible `.det` calibration file.
 
-        Parameters
-        ----------
+        Args:
         path : path-like
             Path to the `.det` file.
         pixelsize : float or None
@@ -843,7 +825,7 @@ class Camera:
             Override the frame dimensions read from the file.
         kf_direction : str or None
             Override the kf_direction read from the file.
-        """
+"""
         from pathlib import Path
 
         lines = [
@@ -899,8 +881,7 @@ class Camera:
         When bounds are specified the optimizer switches to L-BFGS-B (which
         enforces them natively); otherwise Nelder-Mead is used.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal
             Crystal structure of the calibration standard.
         U : (3, 3) array
@@ -953,10 +934,9 @@ class Camera:
             Options forwarded to `scipy.optimize.minimize`, overriding
             defaults.
 
-        Returns
-        -------
+        Returns:
         CalibrationResult
-        """
+"""
         from scipy.optimize import minimize
         from scipy.spatial import cKDTree
         from .simulation import simulate_laue, precompute_allowed_hkl
@@ -1207,8 +1187,7 @@ class Camera:
             solution with tighter bounds.  Resolves the remaining correlation
             between small geometry shifts and orientation corrections.
 
-        Parameters
-        ----------
+        Args:
         crystal : Crystal
             Calibration standard.
         U : (3, 3) array
@@ -1266,12 +1245,11 @@ class Camera:
         verbose : bool
             Print a one-line summary after each phase.
 
-        Returns
-        -------
+        Returns:
         CalibrationResult
             Result of Phase C (the final global refinement).  Intermediate
             results are available via `verbose=True` output.
-        """
+"""
         _shared = dict(
             E_min=E_min, E_max=E_max,
             source=source, source_kwargs=source_kwargs,

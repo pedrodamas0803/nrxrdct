@@ -1,7 +1,7 @@
 [project]
 name = "nrxrdct"
 version = "0.1.0"
-description = "Add your description here"
+description = "Far-field X-ray diffraction computed tomography — full data-reduction pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,14 +16,14 @@ dependencies = [
     "scikit-image>=0.26.0",
     "scikit-learn>=1.8.0",
     "scipy>=1.17.1",
+    "tqdm>=4.67.0",
     "xraylib>=4.2.1",
     "xrayutilities>=1.7.12",
 ]
 
 [project.scripts]
-nrxrdct = "nrxrdct:main"
-nrxrdct-slurm = "nrxrdct.slurm_integration.cli:main"
-nrxrdct-slurm-recon = "nrxrdct.slurm_reconstruction.cli:main"
+nrxrdct-slurm = "nrxrdct.azimuthal.slurm_integration.cli:main"
+nrxrdct-slurm-recon = "nrxrdct.xrdct.slurm_reconstruction.cli:main"
 
 [project.optional-dependencies]
 docs = [

@@ -25,8 +25,8 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.special import voigt_profile as _scipy_voigt
 
-from .io import read_xy_file
-from .utils import calculate_xrd_baseline
+from ..xrdct.io import read_xy_file
+from ..utils import calculate_xrd_baseline
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,3 @@
 # nmf
 
-::: nrxrdct.nmf
+::: nrxrdct.fitting.nmf

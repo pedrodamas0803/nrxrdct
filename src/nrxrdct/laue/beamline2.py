@@ -3,8 +3,7 @@
 BM32 beamline — element-by-element API
 =======================================
 
-Design principles
------------------
+**Design principles**
 * Every optical element is a function  element_*(beam) -> (beam_out, extra)
   that reads geometry from module-level variables and is stateless otherwise.
 * All positions, angles, and apertures are module-level variables so they
@@ -16,8 +15,7 @@ Design principles
 * Slits are generic: element_slit(beam, H, V, p) clips the beam at a plane
   located p metres from the current beam origin.
 
-Notebook usage
---------------
+**Notebook usage**
     import beamline2 as bm          # works regardless of filename
 
     # Override any parameter
@@ -138,7 +136,7 @@ def mm(gap_mm):
     Usage:
         bm.SL2_H = bm.mm(0.2)    # 0.2 mm total gap
         bm.SL1_V = bm.mm(4.0)    # 4 mm total gap
-    """
+"""
     return gap_mm * 1e-3
 
 
@@ -148,7 +146,7 @@ def mrad(value_mrad):
     Usage:
         bm.G_M1  = bm.mrad(3.062)   # 3.062 mrad
         bm.G_KB1 = bm.mrad(2.2)     # 2.2 mrad
-    """
+"""
     return value_mrad * 1e-3
 
 # ── Energy range [eV] ────────────────────────────────────────────────────────
@@ -181,7 +179,7 @@ def _geo():
     Return a dict of all derived distances from current module globals.
     Called at the start of every element function so geometry overrides
     take effect immediately.
-    """
+"""
     m = _self()
     return dict(
         # Source to each element
@@ -266,8 +264,7 @@ def plot_beam(beam, label="beam", position_m=None, n_bins=200,
     performance is O(pixels) regardless of ray count.  A scatter overlay
     is added only when n_rays <= scatter_max, coloured by energy.
 
-    Parameters
-    ----------
+    Args:
     beam        : S4Beam
     label       : str
     position_m  : float  longitudinal position for title
@@ -275,7 +272,7 @@ def plot_beam(beam, label="beam", position_m=None, n_bins=200,
     figsize     : tuple
     scatter_max : int    max rays for scatter overlay (default 5000)
                          set to 0 to always use histogram only
-    """
+"""
     g = _good(beam)
     if len(g) == 0:
         print(f"  [plot_beam] {label}: no surviving rays"); return
@@ -382,7 +379,7 @@ def plot_footprint(footprint_beam, label="footprint", figsize=(7, 6),
     """
     Mirror footprint in local (sagittal x tangential) frame.
     Rendered as a 2D density histogram for speed with large ray counts.
-    """
+"""
     g = _good(footprint_beam)
     if len(g) == 0:
         print(f"  [plot_footprint] {label}: no rays"); return
@@ -422,17 +419,15 @@ def beam_at_distance(beam, distance_m):
     Propagate beam forward by distance_m along its current direction.
     Returns a new beam at the new plane — the input beam is not modified.
 
-    Parameters
-    ----------
+    Args:
     beam       : S4Beam
     distance_m : float  [m]  positive = forward, negative = backward
 
-    Example
-    -------
+    Example:
     # Beam at KB1 entrance (from SL2)
     beam_at_kb1 = bm.beam_at_distance(beam_sl2, bm._geo()['L_SL2_KB1'])
     bm.plot_beam(beam_at_kb1, "At KB1 entrance")
-    """
+"""
     from shadow4.beam.s4_beam import S4Beam
     new_rays = beam.rays.copy()
     good = new_rays[:, 9] > 0
@@ -457,8 +452,7 @@ def element_slit(beam, H, V, p,
     the beam is first propagated to the slit plane (p metres from the
     current beam origin), then rays outside the aperture are flagged lost.
 
-    Parameters
-    ----------
+    Args:
     beam  : S4Beam  incoming beam (any upstream position)
     H     : float   slit horizontal half-opening [m]
     V     : float   slit vertical   half-opening [m]
@@ -467,12 +461,10 @@ def element_slit(beam, H, V, p,
     label : str     name for printout and plots (auto-generated if None)
     plot  : bool    show cross-section before/after
 
-    Returns
-    -------
+    Returns:
     S4Beam  with rays outside aperture flagged lost
 
-    Examples
-    --------
+    Example:
     # SL2 from M2 exit:
     beam_sl2 = bm.element_slit(beam_m2, bm.SL2_H, bm.SL2_V,
                                 p=bm._geo()['L_M2_SL2'], label="SL2")
@@ -485,7 +477,7 @@ def element_slit(beam, H, V, p,
     bm.SL2_H = 0.050e-3
     beam_sl2_tight = bm.element_slit(beam_m2, bm.SL2_H, bm.SL2_V,
                                       p=bm._geo()['L_M2_SL2'], label="SL2 tight")
-    """
+"""
     # H, V are FULL gaps; half-openings used for clipping
     H_half = H / 2
     V_half = V / 2
@@ -545,7 +537,7 @@ def source_bm32(nrays=500_000, seed=5676561):
     Sample rays from the SBM32 bending-magnet source.
 
     Returns (beam, norm_factor) where norm_factor is ph/s per surviving ray.
-    """
+"""
     m = _self(); _print_geometry()
     print(f"\n[Source] SBM32  ({nrays} rays) ...")
     ebeam = S4ElectronBeam(energy_in_GeV=m.E_GEV,
@@ -620,8 +612,7 @@ def source_bm32_build_pool(nrays=500_000, ncores=None, force=False):
     so resampling is statistically equivalent to generating fresh rays,
     provided the pool is large enough to cover the full phase space.
 
-    Minimum pool size guidelines
-    ----------------------------
+    **Minimum pool size guidelines**
     The BM source has structure in 3 dimensions: energy, vertical angle,
     and horizontal angle (plus emittance spread).  The pool needs to cover
     all of these densely enough that resampling doesn't introduce artefacts.
@@ -639,18 +630,15 @@ def source_bm32_build_pool(nrays=500_000, ncores=None, force=False):
     stored in the module-level variables _BM_POOL_RAYS / _BM_POOL_NORM.
     It is reused across multiple simulation conditions without regeneration.
 
-    Parameters
-    ----------
+    Args:
     nrays  : int   pool size (default 500_000; use 5_000_000+ for production)
     ncores : int   parallel workers (default = all CPUs)
     force  : bool  if True, regenerate even if pool already exists
 
-    Returns
-    -------
+    Returns:
     norm_factor : float   ph/s per ray
 
-    Example
-    -------
+    Example:
     # Build pool once at start of session (or once per notebook):
     bm.source_bm32_build_pool(nrays=5_000_000, ncores=40)
 
@@ -660,7 +648,7 @@ def source_bm32_build_pool(nrays=500_000, ncores=None, force=False):
         beams = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=500_000)
         res_m1 = bm.pmap(bm.element_m1, ...)
         ...
-    """
+"""
     import multiprocessing as mp
     import time
     from shadow4.beam.s4_beam import S4Beam
@@ -726,29 +714,26 @@ def source_bm32_from_pool(nrays=None, n_chunks=None, rays_per_chunk=None,
     - A single merged beam:  nrays=N
     - A list of chunks:      n_chunks=K, rays_per_chunk=M
 
-    Parameters
-    ----------
+    Args:
     nrays          : int   total rays to draw (returns single S4Beam + norm)
     n_chunks       : int   number of chunks (returns list of S4Beam + norm)
     rays_per_chunk : int   rays per chunk (used with n_chunks)
     seed           : int   random seed (None = random)
 
-    Returns
-    -------
+    Returns:
     If nrays is given:
         (S4Beam, norm_factor)
     If n_chunks is given:
         (list of S4Beam, norm_factor)
 
-    Example
-    -------
+    Example:
     # Single beam
     beam, norm = bm.source_bm32_from_pool(nrays=2_000_000)
 
     # Chunked (for pmap)
     beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=500_000)
     beams_sl1   = bm.pmap(bm.element_slit, beams, ...)
-    """
+"""
     import time
     from shadow4.beam.s4_beam import S4Beam
 
@@ -824,13 +809,11 @@ def save_pool(path):
     the first build and reload it in all future sessions to skip the
     expensive shadow4 generation step entirely.
 
-    Parameters
-    ----------
+    Args:
     path : str   output path, e.g. "bm32_pool_100M.npz"
                  The .npz extension is added automatically if absent.
 
-    Example
-    -------
+    Example:
     # First session:
     bm.source_bm32_build_pool(nrays=100_000_000, ncores=40)
     bm.save_pool("bm32_pool_100M.npz")
@@ -838,7 +821,7 @@ def save_pool(path):
     # All future sessions:
     bm.load_pool("bm32_pool_100M.npz")
     beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=2_500_000)
-    """
+"""
     import os, datetime
     m = _self()
     if m._BM_POOL_RAYS is None:
@@ -887,18 +870,16 @@ def load_pool(path):
     the current module settings (which would mean the pool was built for
     a different source configuration).
 
-    Parameters
-    ----------
+    Args:
     path : str   path to a .npz file written by save_pool()
 
-    Example
-    -------
+    Example:
     # Instead of source_bm32_build_pool():
     bm.load_pool("bm32_pool_100M.npz")
     bm.source_bm32_pool_info()
 
     beams, norm = bm.source_bm32_from_pool(n_chunks=40, rays_per_chunk=2_500_000)
-    """
+"""
     import time
     m = _self()
 
@@ -953,22 +934,19 @@ def source_bm32_parallel(nrays=2_000_000, ncores=None):
     The speedup is nearly linear with ncores for the BM source step,
     which is the main bottleneck for large ray counts.
 
-    Parameters
-    ----------
+    Args:
     nrays  : int   total number of rays (split evenly across cores)
     ncores : int   number of parallel workers (default = all CPUs)
 
-    Returns
-    -------
+    Returns:
     beam        : S4Beam  merged beam from all workers
     norm_factor : float   ph/s per surviving ray
 
-    Example
-    -------
+    Example:
     beam, norm = bm.source_bm32_parallel(nrays=2_000_000, ncores=8)
     beam_sl1 = bm.element_slit(beam, bm.SL1_H, bm.SL1_V,
                                 p=bm.D_SL1, label='SL1')
-    """
+"""
     import multiprocessing as mp
     from shadow4.beam.s4_beam import S4Beam
 
@@ -1028,19 +1006,16 @@ def merge_beams(beams):
     Ray numbers are re-assigned sequentially so they are unique across chunks.
     Only surviving rays (flag > 0) from each chunk are kept.
 
-    Parameters
-    ----------
+    Args:
     beams : list of S4Beam
 
-    Returns
-    -------
+    Returns:
     S4Beam  with all surviving rays concatenated
 
-    Example
-    -------
+    Example:
     beams_m2 = bm.pmap(bm.element_m2, beams_m1)
     beam_m2  = bm.merge_beams([b for b, _ in beams_m2])
-    """
+"""
     from shadow4.beam.s4_beam import S4Beam
     chunks = []
     for b in beams:
@@ -1068,8 +1043,7 @@ def recommend_chunks(total_gb=302, ncores=40,
     Computes how many source rays to generate given the cluster memory,
     number of cores, and the expected survival rate through the slit chain.
 
-    Parameters
-    ----------
+    Args:
     total_gb           : float  total cluster RAM [GB]
     ncores             : int    CPU cores available
     survival_pct       : float  percentage of source rays surviving to the
@@ -1078,19 +1052,17 @@ def recommend_chunks(total_gb=302, ncores=40,
                                 Measure your own with a quick 1M-ray test.
     target_after_slits : int    desired number of surviving rays after slits
 
-    Returns
-    -------
+    Returns:
     dict with nrays, ncores, nchunks, rays_per_core,
          gb_per_core_peak, expected_after_slits
 
-    Example
-    -------
+    Example:
     cfg = bm.recommend_chunks(total_gb=302, ncores=40,
                               survival_pct=0.009,
                               target_after_slits=100_000)
     beams, norm = bm.source_bm32_chunks(**{k: cfg[k]
                                            for k in ('nrays','ncores','nchunks')})
-    """
+"""
     # Peak memory per worker = 2 x chunk x 144 bytes (input + output in trace_beam)
     # Reserve 10% RAM for OS / Python / shadow4
     gb_per_core   = total_gb * 0.90 / ncores / 2.0
@@ -1146,19 +1118,17 @@ def source_bm32_chunks(nrays=10_000_000, ncores=None, nchunks=None):
         ...
         beam_final  = bm.merge_beams([b for b, _ in beams_m2])
 
-    Parameters
-    ----------
+    Args:
     nrays   : int   total number of rays (split across chunks)
     ncores  : int   number of parallel workers (default = all CPUs)
     nchunks : int   number of chunks (default = ncores).
                     You can set nchunks > ncores to get more chunks than cores,
                     which allows finer-grained progress reporting.
 
-    Returns
-    -------
+    Returns:
     beams       : list of S4Beam  (length = nchunks)
     norm_factor : float   ph/s per ray (same for all chunks)
-    """
+"""
     import multiprocessing as mp
     import time
     from shadow4.beam.s4_beam import S4Beam
@@ -1226,8 +1196,7 @@ def pmap(fn, beams, *args, ncores=None, verbose=True, **kwargs):
     Every element function in this module works with pmap.
     plot=False is set automatically on each chunk.
 
-    Parameters
-    ----------
+    Args:
     fn     : callable   module-level element function (e.g. bm.element_m1)
     beams  : list of S4Beam
     *args  : positional args forwarded to fn after the beam
@@ -1235,14 +1204,12 @@ def pmap(fn, beams, *args, ncores=None, verbose=True, **kwargs):
     verbose: bool       print survival summary
     **kwargs            keyword args forwarded to fn
 
-    Returns
-    -------
+    Returns:
     list — one result per input beam.
       element_slit / beam_at_distance -> list of S4Beam
       element_m1/m2/kb1/kb2           -> list of (S4Beam, footprint)
 
-    Examples
-    --------
+    Example:
     g = bm._geo()
     beams, norm = bm.source_bm32_chunks(nrays=10_000_000, ncores=8)
 
@@ -1261,7 +1228,7 @@ def pmap(fn, beams, *args, ncores=None, verbose=True, **kwargs):
 
     bm.plot_beam(beam_m2, "After M2")
     bm.plot_spectrum(beam_m2, norm_factor=norm)
-    """
+"""
     import multiprocessing as mp
     import time
 
@@ -1333,7 +1300,7 @@ def element_m1(beam, p_from=None):
     """
     Mirror 1 - Ir, deflects beam UP (azimuthal=0).
     Flat or bent cylinder depending on MIRROR_CURVED.
-    """
+"""
     m = _self(); g = _geo()
     curved = m.MIRROR_CURVED
     # p_from: distance from the last element to M1.
@@ -1364,7 +1331,7 @@ def element_m2(beam):
     """
     Mirror 2 - Ir, deflects beam DOWN (azimuthal=pi), restores direction.
     Flat or bent cylinder depending on MIRROR_CURVED.
-    """
+"""
     m = _self(); g = _geo()
     curved = m.MIRROR_CURVED
     print(f"\n[M2] D={m.D_M2:.3f} m  G={m.G_M2*1e3:.4f} mrad  "
@@ -1397,7 +1364,7 @@ def element_kb1(beam):
 
     Note: this function is self-contained. For the full KB simulation use
     element_kb_sample() which correctly combines V (from KB1) and H (from KB2).
-    """
+"""
     m = _self(); g = _geo()
     accept_v_mirror = (m.KB1_LENGTH/2) * np.sin(m.KB1_THETA) / g['L_SL2_KB1']
     accept_v_sl2    = (m.SL2_V / 2) / m.D_SL2
@@ -1443,7 +1410,7 @@ def element_kb2(beam):
     col1 = lab V (unfocused, sagittal of KB2).
 
     Note: use element_kb_sample() to get the correctly combined sample beam.
-    """
+"""
     m = _self(); g = _geo()
     accept_h_mirror = (m.KB2_LENGTH/2) * np.sin(m.KB2_THETA) / g['L_SL2_KB2']
     accept_h_sl2    = (m.SL2_H / 2) / m.D_SL2
@@ -1499,23 +1466,20 @@ def element_kb_sample(beam):
     This correctly handles the fact that shadow4 cannot sequentially trace
     a nested KB pair with independent p/q for each mirror.
 
-    Parameters
-    ----------
+    Args:
     beam : S4Beam  — KB source beam at SL2 plane (from set_kb_source_from_beam)
 
-    Returns
-    -------
+    Returns:
     beam_sample : S4Beam  — combined beam at sample (col1=H focused, col3=V focused)
     fp_kb1      : S4Beam  — KB1 footprint
     fp_kb2      : S4Beam  — KB2 footprint
 
-    Example
-    -------
+    Example:
     beam_kb = bm.set_kb_source_from_beam(beam_sl3, nrays=500_000)
     beam_sample, fp_kb1, fp_kb2 = bm.element_kb_sample(beam_kb)
     bm.plot_beam(beam_sample, "At sample")
     info = bm.plot_sample_footprint(beam_sample, tilt_deg=40.0, norm_factor=norm)
-    """
+"""
     from shadow4.beam.s4_beam import S4Beam
     import copy
 
@@ -1576,18 +1540,16 @@ def set_spectrum_from_beam(beam, n_bins=300, plot=True,
     Store the energy distribution of beam in SPECTRUM_ENERGY_EV / SPECTRUM_FLUX
     so element_kb_source() uses it automatically.
 
-    Parameters
-    ----------
+    Args:
     beam    : S4Beam  -- any beam (e.g. after M2 or after SL2)
     n_bins  : int
     plot    : bool
     label   : str
     save_fig: str
 
-    Returns
-    -------
+    Returns:
     energy_eV, flux
-    """
+"""
     m = _self()
     from shadow4.beam.s4_beam import A2EV
     e_eV = beam.get_column(26, nolost=1)
@@ -1627,7 +1589,7 @@ def compute_spectrum_at_sl2(nrays=500_000, n_bins=300,
     """
     Trace BM -> M1 -> M2 and store the resulting spectrum.
     Respects MIRROR_CURVED flag. Stores result in SPECTRUM_*.
-    """
+"""
     m = _self(); g = _geo()
     print(f"\n[Spectrum@SL2] BM -> M1 -> M2  ({nrays} rays)  "
           f"({'curved' if m.MIRROR_CURVED else 'flat'} mirrors) ...")
@@ -1680,7 +1642,7 @@ def element_kb_source(nrays=500_000, seed=1234):
 
     For a physically accurate footprint, use set_kb_source_from_beam() with
     an actual simulated beam instead.
-    """
+"""
     m = _self(); g = _geo()
     accept_v = min((m.KB1_LENGTH/2)*np.sin(m.G_KB1)/g['L_SL2_KB1'],
                    (m.SL2_V/2)/m.D_SL2,
@@ -1728,8 +1690,7 @@ def set_kb_source_from_beam(beam, nrays=500_000, seed=1234,
     Preserves the angular distribution (and thus footprint shape) from
     the real simulated beam. Also updates SPECTRUM_ENERGY_EV/FLUX.
 
-    Parameters
-    ----------
+    Args:
     beam          : S4Beam  -- beam after M2, SL2, SL3 or any upstream element
     nrays         : int     -- number of resampled rays
     seed          : int
@@ -1739,10 +1700,9 @@ def set_kb_source_from_beam(beam, nrays=500_000, seed=1234,
     label         : str
     save_fig      : str
 
-    Returns
-    -------
+    Returns:
     S4Beam  ready for element_kb1()
-    """
+"""
     m = _self(); g = _geo()
     from shadow4.beam.s4_beam import A2EV, S4Beam
 
@@ -1861,18 +1821,15 @@ def load_from_h5(h5file, scan="1.1"):
     The HDF5 structure expected is:
         {scan}/instrument/positioners/{motor_name}  -> scalar value
 
-    Parameters
-    ----------
+    Args:
     h5file : str   path to the .h5 file
     scan   : str   scan entry name, e.g. "1.1", "2.1", "3.1"
                    (default "1.1")
 
-    Returns
-    -------
+    Returns:
     dict   all motor values read from the file (raw, in original units)
 
-    Motor mapping
-    -------------
+    **Motor mapping**
     Slits (gap in mm, converted via bm.mm()):
         vg1, hg1  -> SL1_V, SL1_H   (x20 multiplier — full gap = 20 * vg1/hg1)
         vg2, hg2  -> SL2_V, SL2_H
@@ -1887,8 +1844,7 @@ def load_from_h5(h5file, scan="1.1"):
     Mirror height offset:
         mh1, mh2  -> DZ_M1_M2 = mm(mh2 - mh1)
 
-    Example
-    -------
+    Example:
     import beamline2 as bm
 
     motors = bm.load_from_h5(
@@ -1899,7 +1855,7 @@ def load_from_h5(h5file, scan="1.1"):
     g = bm._geo()
     bm._print_geometry()
     bm.plot_beam_path()
-    """
+"""
     import h5py
     m = _self()
 
@@ -2001,8 +1957,7 @@ def save_results(path, norm_factor,
     full geometry snapshot and a plain-text summary so the file is
     self-describing.  Any beam can be omitted (pass None).
 
-    Parameters
-    ----------
+    Args:
     path        : str   output path, e.g. "results/run_001.npz"
                         The .npz extension is added automatically if absent.
     norm_factor : float ph/s per ray (from source_bm32 / source_bm32_chunks)
@@ -2011,12 +1966,10 @@ def save_results(path, norm_factor,
     label       : str   short run label, e.g. "G_KB1=2.2mrad SL2=0.2mm"
     notes       : str   free-text notes stored in the archive
 
-    Returns
-    -------
+    Returns:
     str  — actual path written
 
-    Example
-    -------
+    Example:
     bm.save_results(
         "results/nominal.npz",
         norm_factor = norm,
@@ -2028,7 +1981,7 @@ def save_results(path, norm_factor,
         footprint_kb2 = fp_kb2,
         label = "nominal  G_KB1=2.2mrad  SL2=0.2mm",
     )
-    """
+"""
     import os, datetime
     from shadow4.beam.s4_beam import A2EV
 
@@ -2155,12 +2108,10 @@ def load_results(path):
     Also restores the module-level geometry variables so that element functions
     called after load_results() use the same geometry as when the file was saved.
 
-    Parameters
-    ----------
+    Args:
     path : str   path to a .npz file written by save_results()
 
-    Returns
-    -------
+    Returns:
     dict with keys:
         summary, label, notes, norm_factor, geometry (dict), focus_fwhm_nm,
         beam_source, beam_sl1, beam_m1, beam_m2, beam_sl2, beam_sl3,
@@ -2168,13 +2119,12 @@ def load_results(path):
         footprint_m1, footprint_m2, footprint_kb1, footprint_kb2
         (missing beams are not present in the dict)
 
-    Example
-    -------
+    Example:
     r = bm.load_results("results/nominal.npz")
     print(r["summary"])
     bm.plot_beam(r["beam_kb2"], "At sample (loaded)")
     bm.plot_spectrum(r["beam_kb2"], norm_factor=r["norm_factor"])
-    """
+"""
     from shadow4.beam.s4_beam import S4Beam
 
     m   = _self()
@@ -2241,18 +2191,16 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
     The slit openings SL2_H/V and SL3_H/V act as real spatial boundaries.
     Change them and re-run to evaluate their effect on flux and footprints.
 
-    Parameters
-    ----------
+    Args:
     nrays_bm  : int   BM source rays for Stage 1 (recommend >= 1M)
     nrays_kb  : int   KB source rays for Stage 2 (recommend >= 200k)
     plot_each : bool  plot beam after every element
     plot_final: bool  plot spectrum + footprints at sample
 
-    Returns
-    -------
+    Returns:
     dict: beam_m1, beam_m2, beam_sl2, beam_sl3, beam_kb_source,
           beam_kb1, footprint_kb1, beam_kb2, footprint_kb2, norm_factor
-    """
+"""
     m = _self(); g = _geo()
     print("=" * 60)
     print("Stage 1  BM -> M1 -> M2 -> slits")
@@ -2331,8 +2279,7 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
     in the vertical (V) direction by 1/cos(tilt) and modifies the effective
     divergence seen by the sample.
 
-    Geometry
-    --------
+    **Geometry**
     Lab frame:  beam travels along +Y, H = X, V = Z.
     Sample tilt around X by angle theta:
       - Sample surface normal rotates from Z toward Y.
@@ -2341,23 +2288,20 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
         stretched by 1/cos(theta).
       - The effective incidence angle is (90 - theta) degrees.
 
-    Divergence
-    ----------
+    **Divergence**
     The beam convergence half-angles at the focal plane are:
       alpha_V = SL2_V / (2 * D_SL2)  [rad]  (or BM divergence if SL2 wide open)
       alpha_H = SL2_H / (2 * D_SL2)
     On the tilted surface the effective V divergence becomes alpha_V / cos(theta).
 
-    Parameters
-    ----------
+    Args:
     beam       : S4Beam   beam at the sample plane (output of element_kb2)
     tilt_deg   : float    sample tilt angle [degrees] around X axis (default 40)
     norm_factor: float    ph/s per ray (from source_bm32)
     figsize    : tuple
     label      : str
 
-    Returns
-    -------
+    Returns:
     dict with keys:
         fwhm_H_nm, fwhm_V_nm,
         footprint_H_nm, footprint_V_nm,   (on tilted surface)
@@ -2367,13 +2311,12 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
         tilt_deg
     fig
 
-    Example
-    -------
+    Example:
     beam_kb2, _ = bm.element_kb2(beam_kb1)
     info = bm.plot_sample_footprint(beam_kb2, tilt_deg=40.0,
                                      norm_factor=norm)
     print(f"Footprint: {info['footprint_H_nm']:.0f} x {info['footprint_V_nm']:.0f} nm")
-    """
+"""
     from shadow4.beam.s4_beam import A2EV
     import matplotlib.gridspec as gridspec
     from matplotlib.patches import Ellipse
@@ -2624,8 +2567,7 @@ def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
     The beam envelope (±1 sigma) is shown at each position, computed
     analytically from the BM source emittance and the optical geometry.
 
-    Parameters
-    ----------
+    Args:
     results : dict (optional)
         Output of run_full_kb_chain().  If provided, the actual beam
         sizes from the simulation are overlaid on the analytic envelope.
@@ -2634,10 +2576,9 @@ def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
     figsize : tuple
     save_fig : str   filename to save ('' = don't save)
 
-    Returns
-    -------
+    Returns:
     matplotlib Figure
-    """
+"""
     m = _self(); g = _geo()
 
     # ── Beamline element positions and labels ─────────────────────────────────

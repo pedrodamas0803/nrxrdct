@@ -21,7 +21,7 @@ import xrayutilities as xu
 from pybaselines import Baseline
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from nrxrdct.integration import _get_integrator, azimuthal_integration_1d
+from nrxrdct.azimuthal.integration import _get_integrator, azimuthal_integration_1d
 
 NTHREAD = os.cpu_count() - 1
 
@@ -84,7 +84,7 @@ def dezinger(image, medsize: int = 3, nsigma: int = 5) -> np.ndarray:
     print(f"It took {(t1-t0):.2f}s to dezinger {N} images.")
     return out_image
 
-from .io import save_xy_file
+from .xrdct.io import save_xy_file
 
 
 def estimate_percentile_from_separate(

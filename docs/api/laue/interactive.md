@@ -1,0 +1,3 @@
+# interactive
+
+::: nrxrdct.laue.interactive

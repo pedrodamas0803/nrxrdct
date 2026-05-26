@@ -1,0 +1,3 @@
+# segmentation
+
+::: nrxrdct.laue.segmentation

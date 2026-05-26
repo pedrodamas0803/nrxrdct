@@ -1616,6 +1616,131 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    def plot_deviatoric_panel(
+        self,
+        grain: int = 0,
+        *,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        symmetric_clim: bool = True,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        figsize: tuple | None = None,
+        title: str | None = None,
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot all six deviatoric strain components in a 2×3 panel.
+
+        Components are arranged as::
+
+            ε'_xx  ε'_yy  ε'_zz
+            ε'_xy  ε'_xz  ε'_yz
+
+        By default the colour scale is symmetric around zero and shared
+        across all six panels (``symmetric_clim=True``), so that the maps
+        are directly comparable.
+
+        Args:
+            grain (int): Grain index (0-based).
+            frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            cmap (str or None): Colormap.  Defaults to ``'RdBu_r'``.
+            vmin, vmax (float or None): Shared colour-scale limits.  When both are
+                ``None`` and ``symmetric_clim=True``, limits are set to
+                ``±max(|ε'|)`` over all six components.  When either is given
+                explicitly, ``symmetric_clim`` is ignored.
+            symmetric_clim (bool): Auto-set ``vmin = -vmax`` from the data.
+                Default ``True``.
+            motor_x, motor_y (str or None): Motor names for physical-coordinate axis labels.
+            motor_units (dict or None): Units per motor name, e.g. ``{'pz': 'mm'}``.
+            figsize (tuple or None): Figure size in inches.  Defaults to ``(12, 7)``.
+            title (str or None): Figure suptitle.  Auto-generated when ``None``.
+            colorbar (bool): Add a single shared colorbar on the right.  Default ``True``.
+
+        Returns:
+            tuple: ``(fig, axes)`` where *axes* is a ``(2, 3)`` ndarray of Axes.
+        """
+        _order = ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"]
+        cmap = cmap or "RdBu_r"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        # ── collect data and determine shared colour limits ────────────────────
+        maps = {
+            comp: self._deviatoric_component_map(
+                comp, grain, frame, sample_tilt_deg, sample_tilt_axis
+            )
+            for comp in _order
+        }
+
+        if vmin is None and vmax is None and symmetric_clim:
+            finite = np.concatenate([m[np.isfinite(m)].ravel() for m in maps.values()])
+            if finite.size:
+                vmax = float(np.abs(finite).max())
+            vmin = -vmax if vmax is not None else None
+        elif vmin is None and vmax is not None:
+            vmin = -vmax if symmetric_clim else None
+        elif vmax is None and vmin is not None:
+            vmax = -vmin if symmetric_clim else None
+
+        # ── figure ────────────────────────────────────────────────────────────
+        fig, axes = plt.subplots(
+            2, 3,
+            figsize=figsize or (12, 7),
+            squeeze=False,
+        )
+
+        im = None
+        for ax, comp in zip(axes.ravel(), _order):
+            im = ax.imshow(
+                maps[comp],
+                origin="upper",
+                extent=extent,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                interpolation="nearest",
+                aspect="auto",
+            )
+            ax.set_title(self._STRAIN_DEV_LABELS[comp], fontsize=10)
+            ax.set_xlabel(xlabel, fontsize=8)
+            ax.set_ylabel(ylabel, fontsize=8)
+
+        if colorbar and im is not None:
+            fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.02)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }.get(frame, frame)
+        fig.suptitle(
+            title or f"Grain {grain + 1}  —  deviatoric strain  [{_frame_label}]",
+            fontsize=11,
+        )
+        fig.tight_layout()
+        return fig, axes
+
     # ── Stress analysis ───────────────────────────────────────────────────────
 
     # Code Voigt ordering: [xx=0, yy=1, zz=2, xy=3, xz=4, yz=5]
@@ -1982,6 +2107,117 @@ class GrainMap:
         }[frame]
         fig.suptitle(
             title or f"Strain histogram  [{_frame_label}]",
+            fontsize=11, y=1.01,
+        )
+        fig.tight_layout()
+        return fig, axes
+
+    def plot_deviatoric_strain_histogram(
+        self,
+        components: "list[str] | None" = None,
+        grains: "list[int] | None" = None,
+        *,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        bins: int = 40,
+        density: bool = False,
+        scale: float = 1e3,
+        alpha: float = 0.7,
+        figsize: tuple | None = None,
+        title: str | None = None,
+    ) -> tuple:
+        """
+        Histogram of deviatoric strain components for one or more grains.
+
+        Each component gets its own subplot; when multiple grains are
+        requested their distributions are overlaid with different colours.
+        A vertical dashed line marks the mean of each distribution.
+
+        Args:
+            components (list of str or None): Deviatoric components to plot.  Valid values:
+                ``'e_xx'``, ``'e_yy'``, ``'e_zz'``, ``'e_xy'``, ``'e_xz'``, ``'e_yz'``.
+                ``None`` plots all six.  Default ``None``.
+            grains (list of int or None): Grain indices to include.  ``None`` uses all grains.
+                Default ``None``.
+            frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            bins (int): Number of histogram bins.  Default ``40``.
+            density (bool): Normalise each histogram to unit area.  Default ``False``.
+            scale (float): Multiplicative factor applied before plotting.  Default ``1e3``
+                converts to millistrain (×10⁻³).
+            alpha (float): Bar transparency (0–1).  Default ``0.7``.
+            figsize (tuple or None): Figure size.  Auto-sized when ``None``.
+            title (str or None): Figure suptitle.  Auto-generated when ``None``.
+
+        Returns:
+            tuple: ``(fig, axes)`` where *axes* is a 2-D ndarray matching the subplot grid.
+        """
+        _all_components = list(self._STRAIN_INDICES.keys())
+        components = list(components) if components is not None else _all_components
+
+        invalid = [c for c in components if c not in self._STRAIN_INDICES]
+        if invalid:
+            raise ValueError(
+                f"Unknown component(s) {invalid}. Choose from: {_all_components}"
+            )
+
+        grains = list(grains) if grains is not None else list(range(self.n_grains))
+
+        n     = len(components)
+        ncols = min(n, 3)
+        nrows = int(np.ceil(n / ncols))
+
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=figsize or (4.5 * ncols, 3.5 * nrows),
+            squeeze=False,
+        )
+
+        prop_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        scale_str  = "  ×10⁻³" if scale == 1e3 else (
+                     f"  ×{scale:.0e}" if scale != 1.0 else "")
+
+        for idx, comp in enumerate(components):
+            row, col = divmod(idx, ncols)
+            ax       = axes[row, col]
+            label    = self._STRAIN_DEV_LABELS[comp] + scale_str
+
+            for gi, grain in enumerate(grains):
+                data = self._deviatoric_component_map(
+                    comp, grain, frame, sample_tilt_deg, sample_tilt_axis
+                )
+                vals = data[np.isfinite(data)].ravel() * scale
+                if vals.size == 0:
+                    continue
+
+                color  = prop_cycle[gi % len(prop_cycle)]
+                glabel = f"Grain {grain + 1}" if self.n_grains > 1 else None
+                ax.hist(vals, bins=bins, density=density,
+                        color=color, alpha=alpha, label=glabel)
+                ax.axvline(float(np.mean(vals)), color=color,
+                           linestyle="--", linewidth=1.2, alpha=0.9)
+
+            ax.set_xlabel(label, fontsize=9)
+            ax.set_ylabel("Density" if density else "Count", fontsize=9)
+            ax.set_title(self._STRAIN_DEV_LABELS[comp], fontsize=10)
+            ax.tick_params(labelsize=8)
+
+            if self.n_grains > 1 and idx == 0:
+                ax.legend(fontsize=7, framealpha=0.7)
+
+        for idx in range(n, nrows * ncols):
+            row, col = divmod(idx, ncols)
+            axes[row, col].set_visible(False)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }.get(frame, frame)
+        fig.suptitle(
+            title or f"Deviatoric strain histogram  [{_frame_label}]",
             fontsize=11, y=1.01,
         )
         fig.tight_layout()

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Orientation Plotting - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Orientation Plotting";
+        var mkdocs_page_input_path = "user-guide/laue_orientation_plotting.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Orientation Plotting</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#background-the-orientation-matrix-u">Background: the orientation matrix U</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#scalar-quality-maps">Scalar quality maps</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#pixel-deviation-maps">Pixel deviation maps</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#misorientation-map">Misorientation map</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#euler-angle-maps">Euler angle maps</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#inverse-pole-figure-ipf-map">Inverse Pole Figure (IPF) map</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#concept">Concept</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#reference-directions-and-frames">Reference directions and frames</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#the-colour-key">The colour key</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#interpretation">Interpretation</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#ipf-scatter-plot">IPF scatter plot</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#what-is-plotted">What is plotted</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#when-to-use-scatter-vs-map">When to use scatter vs map</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#reference-frames-summary">Reference frames summary</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#practical-workflow">Practical workflow</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Orientation Plotting</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_orientation_plotting.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="orientation-mapping-and-visualisation">Orientation mapping and visualisation<a class="headerlink" href="#orientation-mapping-and-visualisation" title="Permanent link">&para;</a></h1>
+<p>This page describes the orientation-related plots available in <code>GrainMap</code>,
+the crystallographic concepts behind them, the reference frames involved, and
+how to interpret the output.</p>
+<hr />
+<h2 id="background-the-orientation-matrix-u">Background: the orientation matrix U<a class="headerlink" href="#background-the-orientation-matrix-u" title="Permanent link">&para;</a></h2>
+<p>After fitting, each map pixel stores a <strong>3×3 orientation matrix</strong> <span class="arithmatex">\(\mathbf{U}\)</span>
+that describes how the crystal is rotated relative to the laboratory frame:</p>
+<div class="arithmatex">\[
+\mathbf{r}_\text{lab} = \mathbf{U}\,\mathbf{r}_\text{crystal}
+\]</div>
+<ul>
+<li>Columns of <span class="arithmatex">\(\mathbf{U}\)</span> are the crystal axes <strong>a</strong>, <strong>b</strong>, <strong>c</strong> expressed in
+  lab coordinates.</li>
+<li>Rows of <span class="arithmatex">\(\mathbf{U}\)</span> are the lab axes <strong>X</strong>, <strong>Y</strong>, <strong>Z</strong> expressed in
+  crystal coordinates.</li>
+</ul>
+<p>A pixel where the orientation fit failed stores <code>NaN</code> in all U entries and is
+shown as a neutral colour (white or grey) in every orientation map.</p>
+<hr />
+<h2 id="scalar-quality-maps">Scalar quality maps<a class="headerlink" href="#scalar-quality-maps" title="Permanent link">&para;</a></h2>
+<p><code>GrainMap.plot_map</code> plots per-pixel scalar quantities.  The quantities most
+relevant to orientation quality are:</p>
+<table>
+<thead>
+<tr>
+<th><code>quantity</code> argument</th>
+<th>Description</th>
+<th>Good values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"match_rate"</code></td>
+<td>Fraction of observed spots matched to a simulated reflection</td>
+<td>≥ 0.3–0.5</td>
+</tr>
+<tr>
+<td><code>"n_matched"</code></td>
+<td>Absolute number of matched spots</td>
+<td>≥ 5–10</td>
+</tr>
+<tr>
+<td><code>"rms_px"</code></td>
+<td>RMS Euclidean distance (pixels) between observed and simulated spot positions</td>
+<td>≤ 2–5 px</td>
+</tr>
+<tr>
+<td><code>"mean_px"</code></td>
+<td>Mean Euclidean distance (pixels) — less sensitive to outlier spots than RMS</td>
+<td>≤ 2–5 px</td>
+</tr>
+<tr>
+<td><code>"cost"</code></td>
+<td>Final value of the least-squares cost function</td>
+<td>lower = better</td>
+</tr>
+<tr>
+<td><code>"misorientation"</code></td>
+<td>Rotation angle (°) from a reference orientation</td>
+<td>≈ 0° for a uniform grain</td>
+</tr>
+<tr>
+<td><code>"euler_phi1"</code> / <code>"euler_Phi"</code> / <code>"euler_phi2"</code></td>
+<td>ZXZ Euler angles (°)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pixel-deviation-maps">Pixel deviation maps<a class="headerlink" href="#pixel-deviation-maps" title="Permanent link">&para;</a></h3>
+<p><code>plot_map("rms_px")</code> and <code>plot_map("mean_px")</code> (or the convenience wrapper
+<code>plot_mean_px</code>) visualise the <em>goodness of fit</em> spatially.</p>
+<ul>
+<li>A <strong>uniform, low-residual</strong> map means the Laue pattern can be explained
+  consistently across the scan — the grain is well-identified.</li>
+<li><strong>Localised hot-spots</strong> (high residuals at isolated pixels) often indicate
+  double-grain positions, sub-grain boundaries, or strong local strain
+  gradients that violate the single-crystal assumption.</li>
+<li>A <strong>gradually increasing</strong> residual towards the sample edges can signal
+  detector calibration drift or a systematic error in the sample geometry.</li>
+</ul>
+<p><code>mean_px</code> is preferred over <code>rms_px</code> when the spot list contains a few
+unusually bright or anomalous spots: the mean is less sensitive to those
+outliers.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># All grains in one figure, shared colour scale</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_mean_px</span><span class="p">(</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Single grain, manual colour range</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_mean_px</span><span class="p">(</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">grains</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># Via the general interface</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;rms_px&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>                        <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                        <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+</code></pre></div>
+<h3 id="misorientation-map">Misorientation map<a class="headerlink" href="#misorientation-map" title="Permanent link">&para;</a></h3>
+<p>The misorientation map shows, for each pixel, the smallest rotation angle
+(in degrees) required to bring the local orientation into coincidence with a
+reference orientation:</p>
+<div class="arithmatex">\[
+\omega_\text{misor} = \left|\text{Rotation}(\mathbf{U}\,\mathbf{U}_\text{ref}^{\top})\right|
+\]</div>
+<p>The reference defaults to <code>U_ref[grain]</code> (the starting matrix used for
+indexing); it can be overridden via <code>GrainMap.misorientation_map(grain,
+reference=my_U)</code>.</p>
+<p><strong>Interpretation:</strong></p>
+<ul>
+<li>Values close to <strong>0°</strong> indicate that the crystal orientation at that pixel
+  matches the reference — the grain is nearly strain-free and defect-free.</li>
+<li><strong>Low-angle variations</strong> (&lt; 1°) across a single grain arise from lattice
+  curvature, long-range elastic strain gradients, or gentle sub-grain
+  misorientation.</li>
+<li><strong>Sharp jumps</strong> at grain boundaries are expected and confirm that the map
+  correctly separates distinct orientations.</li>
+<li>Typical elastic misorientation in lightly strained thin films is a few
+  tenths of a degree; heavily deformed metals can reach several degrees.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;misorientation&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">vmax</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>           <span class="c1"># clip colour scale at 2°</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="euler-angle-maps">Euler angle maps<a class="headerlink" href="#euler-angle-maps" title="Permanent link">&para;</a></h3>
+<p>The ZXZ Euler angles <span class="arithmatex">\((\varphi_1, \Phi, \varphi_2)\)</span> parametrise the rotation
+from the crystal frame to the lab frame.  They are a compact representation of
+orientation but are <strong>not unique</strong> near <span class="arithmatex">\(\Phi = 0\)</span> (gimbal lock) and are
+<strong>non-linearly related</strong> to physical rotation axes, so spatial gradients should
+be interpreted with care.</p>
+<p>Prefer the <strong>misorientation map</strong> or the <strong>IPF map</strong> for quantitative analysis;
+Euler maps are most useful for getting a quick overview of orientation spread.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;euler_phi1&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;hsv&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;euler_Phi&quot;</span><span class="p">,</span>  <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;euler_phi2&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;hsv&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="inverse-pole-figure-ipf-map">Inverse Pole Figure (IPF) map<a class="headerlink" href="#inverse-pole-figure-ipf-map" title="Permanent link">&para;</a></h2>
+<p><code>GrainMap.plot_ipf_map</code> colours each map pixel by the crystal direction that
+is aligned with a chosen reference direction in the lab or sample frame.</p>
+<h3 id="concept">Concept<a class="headerlink" href="#concept" title="Permanent link">&para;</a></h3>
+<p>For a given reference direction <span class="arithmatex">\(\hat{\mathbf{n}}\)</span> (expressed in the lab
+frame), the <strong>crystal direction</strong> parallel to it at each pixel is:</p>
+<div class="arithmatex">\[
+\hat{\mathbf{c}} = \mathbf{U}^{\top}\,\hat{\mathbf{n}}
+\]</div>
+<p>This vector is then <strong>mapped to an RGB colour</strong> using the standard cubic IPF
+colour scheme:</p>
+<table>
+<thead>
+<tr>
+<th>Colour</th>
+<th>Crystal direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Blue</td>
+<td>⟨001⟩ family</td>
+</tr>
+<tr>
+<td>Green</td>
+<td>⟨011⟩ family</td>
+</tr>
+<tr>
+<td>Red</td>
+<td>⟨111⟩ family</td>
+</tr>
+<tr>
+<td>Intermediate</td>
+<td>Directions between the above poles</td>
+</tr>
+</tbody>
+</table>
+<p>White pixels indicate positions where no orientation was fitted.</p>
+<h3 id="reference-directions-and-frames">Reference directions and frames<a class="headerlink" href="#reference-directions-and-frames" title="Permanent link">&para;</a></h3>
+<p>The <code>axis</code> parameter selects the reference direction, and <code>frame</code> selects
+the coordinate system in which that direction is defined:</p>
+<table>
+<thead>
+<tr>
+<th><code>frame</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"lab"</code></td>
+<td>Axis is in the lab frame (X, Y, Z of the diffractometer)</td>
+</tr>
+<tr>
+<td><code>"sample"</code></td>
+<td>Axis is in the sample frame; converted to lab via the inverse of the sample tilt</td>
+</tr>
+</tbody>
+</table>
+<p>The sample frame is related to the lab frame by a rotation of <code>sample_tilt_deg</code>
+degrees about <code>sample_tilt_axis</code> (default −40° about Y).  Specifying
+<code>frame="sample"</code> and <code>axis="z"</code> therefore asks <em>"which crystal direction is
+parallel to the sample surface normal?"</em></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Which crystal direction is parallel to the lab Z axis?</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">axis</span><span class="o">=</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">show_colorkey</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Which crystal direction is parallel to the sample surface normal?</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">axis</span><span class="o">=</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># Custom reference direction (arbitrary lab vector)</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="n">axis</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="the-colour-key">The colour key<a class="headerlink" href="#the-colour-key" title="Permanent link">&para;</a></h3>
+<p>Pass <code>show_colorkey=True</code> (the default) to overlay the standard [001]–[011]–[111]
+triangle in the lower-right corner of the plot.  The triangle is rendered with
+the same colour function used for the map itself, so the colour of any pixel
+corresponds directly to a position within the triangle.</p>
+<h3 id="interpretation">Interpretation<a class="headerlink" href="#interpretation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A <strong>uniform colour</strong> across the map means the crystal orientation is nearly
+  the same everywhere — a single, defect-free grain.</li>
+<li><strong>Gradual colour drift</strong> indicates a systematic lattice rotation (e.g. grain
+  curvature, tilt from mounting).</li>
+<li><strong>Sharp colour boundaries</strong> are grain boundaries or twin boundaries.</li>
+<li><strong>Speckle</strong> (random pixel-to-pixel colour variation) arises from poor fit
+  quality: check the <code>match_rate</code> and <code>rms_px</code> maps to confirm.</li>
+</ul>
+<hr />
+<h2 id="ipf-scatter-plot">IPF scatter plot<a class="headerlink" href="#ipf-scatter-plot" title="Permanent link">&para;</a></h2>
+<p><code>GrainMap.plot_ipf_scatter</code> creates a three-panel scatter pole figure showing
+where the <strong>a</strong>, <strong>b</strong>, and <strong>c</strong> crystal axes point in the chosen frame, for
+every fitted map pixel.</p>
+<h3 id="what-is-plotted">What is plotted<a class="headerlink" href="#what-is-plotted" title="Permanent link">&para;</a></h3>
+<p>Each panel projects the tip of the unit crystal-axis vector onto the XY plane
+of the chosen frame.  For <code>frame="lab"</code> the horizontal axis is the lab X
+direction and the vertical axis is lab Y.  Points are coloured with the same
+cubic IPF scheme (colour = crystal direction → RGB), so the colour encodes
+which crystal family is pointing in that direction.</p>
+<p>The black circle marks the unit sphere equator; the cross-hairs mark the X and
+Y axes.</p>
+<h3 id="when-to-use-scatter-vs-map">When to use scatter vs map<a class="headerlink" href="#when-to-use-scatter-vs-map" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>IPF map</th>
+<th>IPF scatter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Spatial distribution</strong></td>
+<td>Yes — colour encodes orientation at each pixel</td>
+<td>No — spatial information is lost</td>
+</tr>
+<tr>
+<td><strong>Full orientation spread</strong></td>
+<td>No — only one axis shown at a time</td>
+<td>Yes — all three crystal axes in one figure</td>
+</tr>
+<tr>
+<td><strong>Fibre texture detection</strong></td>
+<td>Weak</td>
+<td>Strong — a fibre shows as an arc in one panel</td>
+</tr>
+<tr>
+<td><strong>Point texture</strong></td>
+<td>Visible as uniform colour in map</td>
+<td>Visible as tight cluster in scatter</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Scatter in the lab frame</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_scatter</span><span class="p">(</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">s</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Scatter in the sample frame</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_scatter</span><span class="p">(</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="reference-frames-summary">Reference frames summary<a class="headerlink" href="#reference-frames-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Frame</th>
+<th>Definition</th>
+<th>How to select</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lab</strong></td>
+<td>Instrument coordinate system; Z along beam or detector normal, X/Y in the detector plane</td>
+<td><code>frame="lab"</code></td>
+</tr>
+<tr>
+<td><strong>Sample</strong></td>
+<td>Lab frame rotated by <code>sample_tilt_deg</code> about <code>sample_tilt_axis</code> to align with the physical sample surface</td>
+<td><code>frame="sample"</code></td>
+</tr>
+<tr>
+<td><strong>Crystal</strong></td>
+<td>Unit cell axes as defined by the xrayutilities <code>Crystal</code> object</td>
+<td>Implicit in <code>plot_map</code> (orientation matrix U relates crystal ↔ lab)</td>
+</tr>
+</tbody>
+</table>
+<p>The sample tilt defaults to −40° about the lab Y axis, which is the standard
+incidence geometry at many Laue micro-diffraction beamlines.  Override with
+<code>sample_tilt_deg</code> and <code>sample_tilt_axis</code> on any plot method.</p>
+<hr />
+<h2 id="practical-workflow">Practical workflow<a class="headerlink" href="#practical-workflow" title="Permanent link">&para;</a></h2>
+<p>A typical orientation-analysis session after collecting results:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 1. Overview: how many spots were matched, and how well?</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>              <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>              <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_mean_px</span><span class="p">(</span><span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>                  <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># 2. Spatial orientation map — which crystal direction faces the beam?</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>                  <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>                  <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># 3. Misorientation — how much does the grain rotate across the scan?</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;misorientation&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>              <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>              <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># 4. Full orientation texture — scatter of all three crystal axes</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_scatter</span><span class="p">(</span><span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Combining maps</p>
+<p>For a quick side-by-side comparison use the <code>ax</code> argument to place multiple
+plots on a shared figure:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;misorientation&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="s2">&quot;z&quot;</span><span class="p">,</span>          <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</code></pre></div>
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_darwin/" class="btn btn-neutral float-left" title="Darwin Model (Thick Layers)"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_strain/" class="btn btn-neutral float-right" title="Strain Analysis">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_darwin/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_strain/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

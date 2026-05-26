@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -44,6 +45,22 @@
                 <li class="toctree-l1 current"><a class="reference internal current" href="#">Home</a>
     <ul class="current">
     <li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctazimuthal-integration">nrxrdct.azimuthal — Integration</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctxrdct-xrd-ct-pipeline-core">nrxrdct.xrdct — XRD-CT Pipeline Core</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctrietveld-rietveld-refinement">nrxrdct.rietveld — Rietveld Refinement</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctfitting-peak-fitting-and-nmf">nrxrdct.fitting — Peak Fitting and NMF</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctfluo-x-ray-fluorescence">nrxrdct.fluo — X-ray Fluorescence</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctlaue-polychromatic-laue-diffraction">nrxrdct.laue — Polychromatic (Laue) Diffraction</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdctutils-utilities">nrxrdct.utils — Utilities</a>
+    </li>
+        </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#quick-links">Quick links</a>
     </li>
@@ -66,6 +83,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -74,35 +111,59 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="api/parameters/">parameters</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/nmf/">nmf</a>
-                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="api/utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/io/">io</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/roi/">roi</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/slurm_integration/">slurm_integration</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="api/slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="api/laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -133,19 +194,39 @@
 <p><strong>Far-field X-ray diffraction computed tomography</strong> — a Python toolkit for the full XRD-CT data-reduction pipeline, from raw detector images to spatially-resolved maps of crystallographic parameters.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>nrxrdct</code> covers every step of a synchrotron XRD-CT experiment:</p>
-<ol>
+<p><code>nrxrdct</code> covers every step of a synchrotron XRD-CT experiment and is organised into focused subpackages:</p>
+<h3 id="nrxrdctazimuthal-integration"><code>nrxrdct.azimuthal</code> — Integration<a class="headerlink" href="#nrxrdctazimuthal-integration" title="Permanent link">&para;</a></h3>
+<p>Parallelised 1-D azimuthal integration and 2-D CAKE regrouping via pyFAI. Supports standard, sigma-clipping, and percentile-filtering strategies for single-crystal spot rejection. Includes a full SLURM pipeline (<code>slurm_integration</code>) for distributing integration across cluster nodes, with job submission, progress monitoring, output validation, and automatic repair.</p>
+<h3 id="nrxrdctxrdct-xrd-ct-pipeline-core"><code>nrxrdct.xrdct</code> — XRD-CT Pipeline Core<a class="headerlink" href="#nrxrdctxrdct-xrd-ct-pipeline-core" title="Permanent link">&para;</a></h3>
+<p>End-to-end XRD-CT data reduction:</p>
+<ul>
 <li><strong>Preprocessing</strong> — hot-pixel (zinger) removal from detector images.</li>
-<li><strong>Integration</strong> — parallelised 1-D azimuthal integration and 2-D CAKE regrouping with pyFAI, including sigma-clipping and percentile-filtering strategies for single-crystal spot rejection.</li>
-<li><strong>Sinogram assembly</strong> — stacking integrated patterns from HDF5 master files into sinogram arrays with background subtraction and monitor normalisation.</li>
-<li><strong>Tomographic reconstruction</strong> — GPU-accelerated (SIRT3D, CGLS3D, SART, SIRT) and CPU (FBP) reconstruction via the ASTRA Toolbox, with automatic GPU detection.</li>
-<li><strong>Rietveld refinement</strong> — GSAS-II scripting wrappers (<code>BaseRefinement</code>, <code>InstrumentCalibration</code>) for sequential step-by-step refinement (background, scale, zero shift, peak broadening, cell parameters, preferred orientation, crystallite size, microstrain, extinction).</li>
-<li><strong>Volume analysis</strong> — the <code>ReconstructedVolume</code> class manages per-voxel <code>.xy</code> file I/O and parallelised GSAS-II refinement, with map extractors for Rwp, unit-cell lengths, and crystallite sizes.</li>
-<li><strong>Fluorescence</strong> — loading of XRF ROI and full-spectrum sinograms from HDF5 files, with emission line look-up via xraylib.</li>
-<li><strong>NMF decomposition</strong> — non-negative matrix factorisation of hyperspectral volumes for phase mapping (<code>HyperspectralNMF</code>).</li>
-<li><strong>Utilities</strong> — baseline fitting, powder pattern simulation, circular masking, peak listing from CIF files.</li>
+<li><strong>Sinogram assembly</strong> — stacking integrated patterns from HDF5 master files with background subtraction and monitor normalisation.</li>
+<li><strong>Reconstruction</strong> — GPU-accelerated (SIRT3D, CGLS3D, SART, SIRT) and CPU (FBP) reconstruction via the ASTRA Toolbox, with automatic GPU detection.</li>
+<li><strong>Volume analysis</strong> — <code>ReconstructedVolume</code> manages per-voxel <code>.xy</code> file I/O and parallelised GSAS-II refinement, with map extractors for Rwp, unit-cell lengths, and crystallite sizes.</li>
 <li><strong>Visualisation</strong> — napari-based interactive 3-D volume and slice viewers with live Z-profile extraction on pixel click.</li>
-</ol>
+<li><strong>I/O</strong> — HDF5 and <code>.xy</code> file reading/writing, GSAS-II instrument parameter export.</li>
+</ul>
+<h3 id="nrxrdctrietveld-rietveld-refinement"><code>nrxrdct.rietveld</code> — Rietveld Refinement<a class="headerlink" href="#nrxrdctrietveld-rietveld-refinement" title="Permanent link">&para;</a></h3>
+<p>GSAS-II scripting wrappers (<code>BaseRefinement</code>, <code>InstrumentCalibration</code>) for sequential step-by-step refinement: background, scale, zero shift, peak broadening, cell parameters, preferred orientation, crystallite size, microstrain, and extinction. Pre-built refinement dictionary templates in <code>refine_dict</code>.</p>
+<h3 id="nrxrdctfitting-peak-fitting-and-nmf"><code>nrxrdct.fitting</code> — Peak Fitting and NMF<a class="headerlink" href="#nrxrdctfitting-peak-fitting-and-nmf" title="Permanent link">&para;</a></h3>
+<p>1-D peak fitting utilities (<code>peakfit</code>) and non-negative matrix factorisation of hyperspectral volumes for phase mapping (<code>HyperspectralNMF</code>).</p>
+<h3 id="nrxrdctfluo-x-ray-fluorescence"><code>nrxrdct.fluo</code> — X-ray Fluorescence<a class="headerlink" href="#nrxrdctfluo-x-ray-fluorescence" title="Permanent link">&para;</a></h3>
+<p>Loading of XRF ROI and full-spectrum sinograms from HDF5 files, emission line look-up via xraylib, and spectral fitting.</p>
+<h3 id="nrxrdctlaue-polychromatic-laue-diffraction"><code>nrxrdct.laue</code> — Polychromatic (Laue) Diffraction<a class="headerlink" href="#nrxrdctlaue-polychromatic-laue-diffraction" title="Permanent link">&para;</a></h3>
+<p>A self-contained subpackage for micro-Laue diffraction analysis targeting synchrotron experiments (e.g. BM32 at the ESRF):</p>
+<ul>
+<li><strong>Forward simulation</strong> — <code>simulate_laue</code>, <code>simulate_laue_stack</code> (thin-film satellites), <code>simulate_laue_darwin</code> (dynamical model for thick layers).</li>
+<li><strong>Crystal structures</strong> — load from CIF, build BCC/B2 analytically, vectorised B-matrix for fast HKL enumeration.</li>
+<li><strong>Detector geometry</strong> — <code>Camera</code> with multi-stage calibration and gnomonic projection.</li>
+<li><strong>Spot segmentation</strong> — LoG, white-top-hat, and hybrid strategies with 2-D Gaussian peak fitting.</li>
+<li><strong>Orientation indexing and fitting</strong> — exhaustive angular search, interactive IPyWidgets indexing, multi-stage Nelder-Mead minimisation.</li>
+<li><strong>Strain fitting</strong> — simultaneous deviatoric strain tensor and orientation refinement.</li>
+<li><strong>Layered structures</strong> — <code>Layer</code> / <code>LayeredCrystal</code> with built-in orientation relationships (K–S, N–W, Pitsch, …).</li>
+<li><strong>Grain maps</strong> — <code>GrainMap</code> for raster micro-Laue maps with SLURM-based segmentation, orientation, and strain steps.</li>
+</ul>
+<h3 id="nrxrdctutils-utilities"><code>nrxrdct.utils</code> — Utilities<a class="headerlink" href="#nrxrdctutils-utilities" title="Permanent link">&para;</a></h3>
+<p>Baseline fitting, powder pattern simulation, circular masking, and peak listing from CIF files.</p>
 <hr />
 <h2 id="quick-links">Quick links<a class="headerlink" href="#quick-links" title="Permanent link">&para;</a></h2>
 <ul>
@@ -153,11 +234,11 @@
 <li><a href="user-guide/quickstart/">Quickstart</a></li>
 <li><a href="user-guide/workflow/">Typical Workflow</a></li>
 <li><a href="user-guide/slurm/">SLURM / HPC Integration</a></li>
-<li><a href="api/parameters/">API Reference</a></li>
+<li><a href="api/utils/">API Reference</a></li>
 </ul>
 <hr />
 <h2 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">&para;</a></h2>
-<p>The NMF module (<code>nmf.py</code>) was partially developed by <strong>Beatriz G. Foschiani</strong> (CEA Grenoble).</p>
+<p>The NMF module (<code>nrxrdct.fitting.nmf</code>) was partially developed by <strong>Beatriz G. Foschiani</strong> (CEA Grenoble).</p>
               
             </div>
           </div><footer>
@@ -198,6 +279,7 @@
     <script>var base_url = ".";</script>
     <script src="js/theme_extra.js"></script>
     <script src="js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="search/main.js"></script>
     <script>
         jQuery(function () {
@@ -210,5 +292,5 @@
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2026-04-13 15:06:18.782451+00:00
+Build Date UTC : 2026-05-26 13:02:09.092519+00:00
 -->

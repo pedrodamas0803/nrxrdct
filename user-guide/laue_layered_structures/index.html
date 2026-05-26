@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Layered Structures - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Layered Structures";
+        var mkdocs_page_input_path = "user-guide/laue_layered_structures.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Layered Structures</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-the-stacking-model">1. The stacking model</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-kinematical-structure-factor">2. Kinematical structure factor</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#21-single-layer-amplitude">2.1 Single-layer amplitude</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#22-full-stack-structure-factor">2.2 Full stack structure factor</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#23-intensity">2.3 Intensity</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-structure-model">3. Structure model</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#31-coherent-model">3.1 Coherent model</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#32-average-model-default">3.2 Average model (default)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#33-comparison">3.3 Comparison</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-pseudomorphic-layers-physics-and-simulation-model">4. Pseudomorphic layers — physics and simulation model</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#41-what-pseudomorphic-means">4.1 What "pseudomorphic" means</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#42-biaxial-strain-state">4.2 Biaxial strain state</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#43-out-of-plane-poisson-response">4.3 Out-of-plane Poisson response</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#44-how-the-simulation-represents-a-pseudomorphic-layer">4.4 How the simulation represents a pseudomorphic layer</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#45-effect-on-the-diffraction-pattern">4.5 Effect on the diffraction pattern</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#46-critical-thickness">4.6 Critical thickness</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#47-elastic-constants-for-iii-nitrides">4.7 Elastic constants for III-nitrides</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#48-validity-limits">4.8 Validity limits</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#49-worked-example-in_020ga_080n-on-gan">4.9 Worked example — In\(_{0.20}\)Ga\(_{0.80}\)N on GaN</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-stacking-repeat-distance">5. Stacking repeat distance</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-coordinate-frames-and-orientation-matrix">6. Coordinate frames and orientation matrix</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#61-lab-frame">6.1 Lab frame</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#62-crystal-frame-and-u-matrix">6.2 Crystal frame and \(U\) matrix</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#63-stacking-direction">6.3 Stacking direction</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-absorption-corrections-two-beam-path-and-overlying-layers">7. Absorption corrections — two-beam path and overlying layers</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#71-two-beam-effective-depth-within-a-layer">7.1 Two-beam effective depth (within a layer)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#72-overlying-layer-attenuation">7.2 Overlying-layer attenuation</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#73-practical-impact">7.3 Practical impact</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-orientation-relationships-between-phases">8. Orientation relationships between phases</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#81-standard-ors-implemented">8.1 Standard ORs implemented</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#82-computation">8.2 Computation</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#9-alloy-crystals-vegards-law">9. Alloy crystals — Vegard's law</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#10-quick-reference-stack-construction">10. Quick reference — stack construction</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#references">References</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Layered Structures</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_layered_structures.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="layered-crystalline-structures-model-and-theory">Layered crystalline structures — model and theory<a class="headerlink" href="#layered-crystalline-structures-model-and-theory" title="Permanent link">&para;</a></h1>
+<p>This page describes the physical model behind <code>LayeredCrystal</code> and its
+associated utilities.  It covers the stacking geometry, the kinematical
+structure factor for a multilayer stack, pseudomorphic epitaxial strain
+mechanics (including the Poisson response, critical thickness, and how the
+strained <span class="arithmatex">\(d\)</span>-spacing is used in the simulation), and orientation relationships
+between phases.</p>
+<hr />
+<h2 id="1-the-stacking-model">1. The stacking model<a class="headerlink" href="#1-the-stacking-model" title="Permanent link">&para;</a></h2>
+<p>A <code>LayeredCrystal</code> represents an epitaxial thin-film stack divided into two
+sections:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌───────────────────────────────────────┐  ← surface (top)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│  repeating unit  (layer A + layer B)  │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│  ×  n_rep                             │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├───────────────────────────────────────┤
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│  repeating unit  (layer A + layer B)  │
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│  …                                    │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├───────────────────────────────────────┤
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│  buffer layer  (e.g. template layer)  │
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├───────────────────────────────────────┤
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│  buffer layer  (e.g. substrate)       │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└───────────────────────────────────────┘  ← bottom (deepest)
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Buffer layers</strong></td>
+<td>Non-repeating layers at the bottom of the stack (substrate, thick template layers). Added deepest-first via <code>add_buffer_layer</code>. Absorption limiting is applied automatically.</td>
+</tr>
+<tr>
+<td><strong>Repeating unit</strong></td>
+<td>One bilayer period (e.g. QW + barrier). Added in bottom-to-top order via <code>add_layer</code> or <code>add_pseudomorphic_layer</code>. Repeated <code>n_rep</code> times above the buffer.</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>stacking direction</strong> <span class="arithmatex">\(\hat{n}\)</span> is a unit vector in the lab frame pointing
+from the substrate toward the surface.  All structure-factor phase calculations
+use the projection <span class="arithmatex">\(Q_n = \mathbf{Q}\cdot\hat{n}\)</span>, so the model is correct for
+any sample mounting angle.</p>
+<hr />
+<h2 id="2-kinematical-structure-factor">2. Kinematical structure factor<a class="headerlink" href="#2-kinematical-structure-factor" title="Permanent link">&para;</a></h2>
+<h3 id="21-single-layer-amplitude">2.1 Single-layer amplitude<a class="headerlink" href="#21-single-layer-amplitude" title="Permanent link">&para;</a></h3>
+<p>In the kinematical (Born) approximation, the scattered amplitude from a single
+crystalline layer is the coherent sum over all unit cells:</p>
+<div class="arithmatex">\[
+F_\text{layer}(\mathbf{Q}) = F_\text{uc}(\mathbf{Q}_\text{cry})\;
+\sum_{n=0}^{N-1} e^{\,i\mathbf{Q}\cdot\mathbf{R}_n}
+\]</div>
+<p>where:</p>
+<ul>
+<li><span class="arithmatex">\(F_\text{uc}(\mathbf{Q}_\text{cry})\)</span> — the <strong>unit-cell structure factor</strong>, evaluated at the
+  scattering vector expressed in the crystal frame
+  <span class="arithmatex">\(\mathbf{Q}_\text{cry} = U^T \mathbf{Q}\)</span> (see <a href="#6-coordinate-frames-and-orientation-matrix">Section 6</a>);</li>
+<li><span class="arithmatex">\(\mathbf{R}_n = (z_0 + n\,d)\,\hat{n}\)</span> — the position of the <span class="arithmatex">\(n\)</span>-th unit cell
+  along the stacking direction, with <span class="arithmatex">\(z_0\)</span> the layer's depth offset and <span class="arithmatex">\(d\)</span> the
+  stacking repeat distance;</li>
+<li><span class="arithmatex">\(N\)</span> — the number of unit cells in the layer; <span class="arithmatex">\(Nd = t\)</span> is the physical thickness.</li>
+</ul>
+<p>Because the positions are collinear along <span class="arithmatex">\(\hat{n}\)</span>, the sum depends only on
+<span class="arithmatex">\(Q_n = \mathbf{Q}\cdot\hat{n}\)</span>:</p>
+<div class="arithmatex">\[
+\sum_{n=0}^{N-1} e^{\,i n Q_n d}
+= \begin{cases}
+  N &amp; Q_n d \equiv 0 \pmod{2\pi} \\[4pt]
+  \dfrac{1 - e^{\,i N Q_n d}}{1 - e^{\,i Q_n d}} &amp; \text{otherwise}
+\end{cases}
+\]</div>
+<p>The squared modulus of this sum is the <strong>Laue interference function</strong> (see the
+<a href="../laue_thin_film_satellites/">Thin-Film Satellites</a> page for its fringe structure).</p>
+<h3 id="22-full-stack-structure-factor">2.2 Full stack structure factor<a class="headerlink" href="#22-full-stack-structure-factor" title="Permanent link">&para;</a></h3>
+<p>For a stack of buffer layers plus <span class="arithmatex">\(N_\text{rep}\)</span> repetitions of a bilayer unit,
+the total amplitude is</p>
+<div class="arithmatex">\[
+\boxed{
+F_\text{total}(\mathbf{Q})
+= \underbrace{
+    \sum_{j \in \text{buf}} F_j(\mathbf{Q},\, z_{0,j})
+  }_{F_\text{buf}}
++ \underbrace{
+    e^{\,i Q_n z_\text{buf}}\;
+    F_\text{unit}(\mathbf{Q})\;
+    S_\text{rep}(Q_n \Lambda)
+  }_{F_\text{MQW}}
+}
+\]</div>
+<p>where:</p>
+<ul>
+<li><span class="arithmatex">\(z_\text{buf}\)</span> — total thickness of the buffer section (phase shift placing
+  the MQW above the buffer);</li>
+<li><span class="arithmatex">\(F_\text{unit}(\mathbf{Q}) = \sum_{j \in \text{unit}} F_j(\mathbf{Q},\, z_{0,j}^\text{rel})\)</span> —
+  the structure factor of one bilayer period (phases relative to the period
+  bottom);</li>
+<li><span class="arithmatex">\(\Lambda = \sum_j t_j\)</span> — the bilayer period thickness;</li>
+<li><span class="arithmatex">\(S_\text{rep}\)</span> — the <strong>superlattice geometric factor</strong>:</li>
+</ul>
+<div class="arithmatex">\[
+S_\text{rep}(Q_n \Lambda) = \sum_{m=0}^{N_\text{rep}-1} e^{\,i m Q_n \Lambda}
+= \begin{cases}
+  N_\text{rep} &amp; Q_n \Lambda \equiv 0 \pmod{2\pi} \\[4pt]
+  \dfrac{1 - e^{\,i N_\text{rep} Q_n \Lambda}}{1 - e^{\,i Q_n \Lambda}}
+  &amp; \text{otherwise}
+\end{cases}
+\]</div>
+<p>The modulus of <span class="arithmatex">\(S_\text{rep}\)</span> peaks sharply at the <strong>superlattice Bragg
+conditions</strong> <span class="arithmatex">\(Q_n \Lambda = 2\pi m\)</span> (<span class="arithmatex">\(m\)</span> integer), where
+<span class="arithmatex">\(|S_\text{rep}|^2 = N_\text{rep}^2\)</span>.  Between these peaks it creates a pattern
+of satellite fringes with spacing <span class="arithmatex">\(\Delta Q_n = 2\pi/\Lambda\)</span>.</p>
+<h3 id="23-intensity">2.3 Intensity<a class="headerlink" href="#23-intensity" title="Permanent link">&para;</a></h3>
+<p>The observable intensity at a Laue spot is</p>
+<div class="arithmatex">\[
+I = |F_\text{total}(\mathbf{G})|^2 \times LP(2\theta) \times S(E)
+\]</div>
+<p>where <span class="arithmatex">\(LP\)</span> is the Lorentz–polarisation factor and <span class="arithmatex">\(S(E)\)</span> is the synchrotron
+source spectrum at the Bragg energy <span class="arithmatex">\(E_{hkl}\)</span> (see the
+<a href="../laue_theory/">Theory</a> page for both).</p>
+<hr />
+<h2 id="3-structure-model">3. Structure model<a class="headerlink" href="#3-structure-model" title="Permanent link">&para;</a></h2>
+<p>The <code>structure_model</code> parameter accepted by <code>simulate_laue_stack</code>,
+<code>simulate_laue_darwin</code>, and <code>simulate_mixed_phases</code> controls <strong>two things at
+once</strong>: which crystals are enumerated to generate candidate Bragg reflections,
+and how the structure factor amplitude is computed at each of those
+reflections.  The default is <code>'average'</code>.</p>
+<hr />
+<h3 id="31-coherent-model">3.1 Coherent model<a class="headerlink" href="#31-coherent-model" title="Permanent link">&para;</a></h3>
+<p><code>structure_model='coherent'</code> reproduces the physical kinematical sum exactly.</p>
+<p><strong>G-vector enumeration.</strong> Every unique crystal in the stack (buffer layers and
+all MQW layers) contributes its own set of reciprocal-lattice vectors.  For an
+InGaN/GaN MQW this means both the GaN and InGaN sub-lattices are enumerated,
+producing <em>two slightly displaced sets of Bragg peaks</em> — one for GaN
+(<span class="arithmatex">\(d_\text{GaN}\)</span>) and one for the strained InGaN (<span class="arithmatex">\(d_\text{InGaN, strained}\)</span>).</p>
+<p><strong>Structure factor.</strong> The full coherent sum over all layers is evaluated at
+each candidate <span class="arithmatex">\(\mathbf{G}\)</span>:</p>
+<div class="arithmatex">\[
+F_\text{total}(\mathbf{Q})
+= F_\text{buf}(\mathbf{Q})
++ e^{\,i Q_n z_\text{buf}}\;F_\text{unit}(\mathbf{Q})\;S_\text{rep}(Q_n\Lambda)
+\]</div>
+<p>where every layer contributes with its exact depth phase <span class="arithmatex">\(e^{\,i Q_n z_j}\)</span>
+(see <a href="#22-full-stack-structure-factor">Section 2.2</a>).  This preserves the full
+inter-layer interference pattern: superlattice satellites and thickness fringes
+appear with their correct relative intensities.</p>
+<p><strong>When to use.</strong> Coherent mode is appropriate when you need physically accurate
+fringe intensities — for example to fit satellite sidelobes and infer
+individual layer thicknesses — or when the layer contrast is large enough that
+separate GaN / InGaN Bragg peaks are meaningful.</p>
+<hr />
+<h3 id="32-average-model-default">3.2 Average model (default)<a class="headerlink" href="#32-average-model-default" title="Permanent link">&para;</a></h3>
+<p><code>structure_model='average'</code> treats the MQW as a single effective material,
+matching the appearance of the pattern as seen in a <strong>monochromatic
+rocking-curve</strong> scan.</p>
+<p><strong>G-vector enumeration.</strong> Only the buffer layers are enumerated (or the first
+MQW layer if no buffer layers exist).  This produces a <em>single set of Bragg
+positions</em> — the average-lattice positions — with no separate InGaN peak.</p>
+<p><strong>Structure factor.</strong> The repeating unit is replaced by a
+<em>composition-weighted average over one bilayer period</em>:</p>
+<div class="arithmatex">\[
+\boxed{
+F_\text{unit}^\text{avg}(\mathbf{Q})
+= \sum_{j \in \text{unit}} F_{\text{uc},j}(\mathbf{Q})\; N_{\text{eff},j}
+}
+\]</div>
+<p>where the intra-period depth phases <span class="arithmatex">\(e^{\,i Q_n z_j^\text{rel}}\)</span> are omitted.
+The inter-period geometric series <span class="arithmatex">\(S_\text{rep}\)</span> is <strong>retained</strong>:</p>
+<div class="arithmatex">\[
+F_\text{total}^\text{avg}(\mathbf{Q})
+= F_\text{buf}(\mathbf{Q})
++ e^{\,i Q_n z_\text{buf}}\;
+  F_\text{unit}^\text{avg}(\mathbf{Q})\;
+  S_\text{rep}(Q_n\Lambda)
+\]</div>
+<p>Buffer layer phase offsets <span class="arithmatex">\(e^{\,i Q_n z_{0,j}}\)</span> are always preserved; only
+the <em>intra-period</em> phases are averaged out.</p>
+<p><strong>Physical interpretation.</strong> <span class="arithmatex">\(S_\text{rep}\)</span> still peaks sharply at
+<span class="arithmatex">\(Q_n\Lambda = 2\pi m\)</span>, so satellite spots appear at exactly the same detector
+positions as in the coherent model.  What changes is the amplitude at each
+satellite: instead of depending on the layer <em>ordering</em> within the period
+(which creates strong intensity asymmetry between <span class="arithmatex">\(+m\)</span> and <span class="arithmatex">\(-m\)</span> satellites),
+every satellite order carries an amplitude proportional to
+<span class="arithmatex">\(F_\text{unit}^\text{avg}\)</span> evaluated at that <span class="arithmatex">\(\mathbf{Q}\)</span>.  The result is the
+<em>structural envelope</em> — the maximum intensity each satellite order could carry
+if all unit cells in the period scattered in phase.</p>
+<p><strong>Effect of strain.</strong> The strained <span class="arithmatex">\(d\)</span>-spacing from
+<code>add_pseudomorphic_layer</code> enters through
+<span class="arithmatex">\(N_\text{eff} = t / d_\text{strained}\)</span> in <span class="arithmatex">\(F_\text{unit}^\text{avg}\)</span>, so the
+composition weighting correctly accounts for how many unit cells each strained
+layer contributes.  The unit-cell structure factor amplitude <span class="arithmatex">\(F_{\text{uc},j}\)</span>
+is still evaluated at the bulk crystal positions in both models (the
+tetragonal distortion changes the inter-plane spacing, not the in-plane atom
+arrangement, as explained in <a href="#44-how-the-simulation-represents-a-pseudomorphic-layer">Section 4.3</a>).</p>
+<p><strong>When to use.</strong> Average mode is the right default for most Laue measurements.
+It gives a pattern that looks like a monochromatic scan: one average Bragg
+peak per reflection family with satellites symmetrically distributed around
+it, without artefacts from the doubled enumeration of strained and unstrained
+sub-lattices.</p>
+<hr />
+<h3 id="33-comparison">3.3 Comparison<a class="headerlink" href="#33-comparison" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>'coherent'</code></th>
+<th><code>'average'</code> (default)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G-vector sources</td>
+<td>all layers</td>
+<td>buffer layers only</td>
+</tr>
+<tr>
+<td>Separate InGaN / GaN peaks</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Satellite positions</td>
+<td>correct</td>
+<td>identical</td>
+</tr>
+<tr>
+<td>Satellite intensities</td>
+<td>full interference, layer-ordering effects</td>
+<td>structural envelope, composition-weighted</td>
+</tr>
+<tr>
+<td>Intra-period depth phases</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(S_\text{rep}\)</span> inter-period sum</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Buffer layer depth phases</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Absorption corrections</td>
+<td>same</td>
+<td>same</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-pseudomorphic-layers-physics-and-simulation-model">4. Pseudomorphic layers — physics and simulation model<a class="headerlink" href="#4-pseudomorphic-layers-physics-and-simulation-model" title="Permanent link">&para;</a></h2>
+<h3 id="41-what-pseudomorphic-means">4.1 What "pseudomorphic" means<a class="headerlink" href="#41-what-pseudomorphic-means" title="Permanent link">&para;</a></h3>
+<p>A layer is <strong>pseudomorphic</strong> (also called <em>coherently strained</em> or <em>fully strained</em>)
+when every atomic plane in the film is registry-matched to the substrate: the
+in-plane atom spacings are identical to those of the template below, regardless
+of the film's natural (bulk, relaxed) lattice parameter.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Substrate (GaN):   |  a_sub  |  a_sub  |  a_sub  |  a_sub  |
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                   ──────────────────────────────────────────
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Film (InGaN bulk): | a_film  | a_film  | a_film  |            ← relaxed
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>                   ──────────────────────────────────────────
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>Film (strained):   |  a_sub  |  a_sub  |  a_sub  |  a_sub  |  ← pseudomorphic
+</code></pre></div>
+<p>The lateral constraint compresses or stretches the film's in-plane bond lengths.
+To conserve volume (to first order), the film responds by distorting its
+out-of-plane lattice parameter in the <strong>opposite sense</strong> — the so-called
+<em>Poisson response</em>.  For InGaN on GaN (<span class="arithmatex">\(a_\text{film} &gt; a_\text{sub}\)</span>), the
+film is compressed in-plane and the <span class="arithmatex">\(c\)</span>-axis <strong>expands</strong> beyond the bulk value.</p>
+<p>This tetragonal distortion persists as long as the layer is thinner than the
+<strong>critical thickness</strong> <span class="arithmatex">\(h_c\)</span> (see <a href="#46-critical-thickness">Section 3.6</a>).
+Above <span class="arithmatex">\(h_c\)</span>, misfit dislocations nucleate and partially relax the strain.</p>
+<h3 id="42-biaxial-strain-state">4.2 Biaxial strain state<a class="headerlink" href="#42-biaxial-strain-state" title="Permanent link">&para;</a></h3>
+<p>The in-plane mismatch strain is</p>
+<div class="arithmatex">\[
+\varepsilon_\parallel
+= \frac{a_\text{sub} - a_\text{film}}{a_\text{film}}
+\]</div>
+<table>
+<thead>
+<tr>
+<th>Sign</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(\varepsilon_\parallel &lt; 0\)</span></td>
+<td>film compressed in-plane</td>
+<td>InGaN on GaN (<span class="arithmatex">\(a_\text{InGaN} &gt; a_\text{GaN}\)</span>)</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\varepsilon_\parallel &gt; 0\)</span></td>
+<td>film stretched in-plane</td>
+<td>AlGaN on GaN (<span class="arithmatex">\(a_\text{AlGaN} &lt; a_\text{GaN}\)</span>)</td>
+</tr>
+</tbody>
+</table>
+<p>Because the strain is <strong>biaxial</strong> (equal in both in-plane directions for a
+hexagonal or cubic layer on a (001)/(0001) substrate), the stress tensor has
+the form <span class="arithmatex">\(\sigma_{xx} = \sigma_{yy} = \sigma\)</span>, <span class="arithmatex">\(\sigma_{zz} = 0\)</span> (free surface).
+Inverting Hooke's law under this constraint yields the out-of-plane strain.</p>
+<h3 id="43-out-of-plane-poisson-response">4.3 Out-of-plane Poisson response<a class="headerlink" href="#43-out-of-plane-poisson-response" title="Permanent link">&para;</a></h3>
+<p>For a <strong>hexagonal (wurtzite) crystal grown along its <span class="arithmatex">\(c\)</span>-axis</strong> <span class="arithmatex">\([0001]\)</span> with a
+free surface, the biaxial stress–strain relation in the Voigt notation reduces to</p>
+<div class="arithmatex">\[
+\boxed{
+\varepsilon_\perp = -\frac{2C_{13}}{C_{33}}\,\varepsilon_\parallel
+}
+\]</div>
+<p>where <span class="arithmatex">\(C_{13}\)</span> and <span class="arithmatex">\(C_{33}\)</span> are elastic stiffness constants (GPa).</p>
+<p>The negative sign means an in-plane compression (<span class="arithmatex">\(\varepsilon_\parallel &lt; 0\)</span>)
+gives an out-of-plane expansion (<span class="arithmatex">\(\varepsilon_\perp &gt; 0\)</span>).</p>
+<p>For a <strong>cubic crystal grown along [001]</strong>, the same formula holds with
+<span class="arithmatex">\(C_{12}\)</span> in place of <span class="arithmatex">\(C_{13}\)</span> and <span class="arithmatex">\(C_{11}\)</span> in place of <span class="arithmatex">\(C_{33}\)</span>.</p>
+<h3 id="44-how-the-simulation-represents-a-pseudomorphic-layer">4.4 How the simulation represents a pseudomorphic layer<a class="headerlink" href="#44-how-the-simulation-represents-a-pseudomorphic-layer" title="Permanent link">&para;</a></h3>
+<p><code>add_pseudomorphic_layer</code> internally calls <code>pseudomorphic_d_spacing</code>, which:</p>
+<ol>
+<li>Reads the <strong>bulk</strong> out-of-plane repeat <span class="arithmatex">\(d_\text{bulk}\)</span> by projecting the
+   direct-lattice basis vectors of the relaxed film crystal onto the growth
+   direction.</li>
+<li>Computes <span class="arithmatex">\(\varepsilon_\parallel\)</span> from the lattice mismatch.</li>
+<li>Applies the Poisson formula to get <span class="arithmatex">\(\varepsilon_\perp\)</span>.</li>
+<li>Returns the <strong>strained</strong> repeat distance:</li>
+</ol>
+<div class="arithmatex">\[
+d_\text{strained} = d_\text{bulk}\,(1 + \varepsilon_\perp)
+\]</div>
+<p>This value is passed as the <code>d_spacing</code> argument to <code>add_layer</code>.  The unit-cell
+structure factor <span class="arithmatex">\(F_\text{uc}\)</span> is still evaluated using the <strong>original
+(relaxed) crystal</strong> object and its atomic positions — only the <strong>inter-plane
+spacing</strong> is changed.  This is the correct kinematical treatment: the
+tetragonal distortion shifts the atom positions along <span class="arithmatex">\(\hat{n}\)</span> by a uniform
+scale factor, but does not change the scattering power of any atom.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>                   ↑ n̂ (stacking direction)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                   │
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>          ─── d_strained ───     ←  phase φ = Q_n · d_strained
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>          ─── d_strained ───
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>          ─── d_strained ───     N = round(thickness / d_strained) planes
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>          ─── d_strained ───
+</code></pre></div>
+<p>The number of planes is <span class="arithmatex">\(N = \text{round}(t / d_\text{strained})\)</span> where <span class="arithmatex">\(t\)</span> is
+the requested physical thickness.</p>
+<h3 id="45-effect-on-the-diffraction-pattern">4.5 Effect on the diffraction pattern<a class="headerlink" href="#45-effect-on-the-diffraction-pattern" title="Permanent link">&para;</a></h3>
+<p>The strained <span class="arithmatex">\(d\)</span>-spacing shifts the Bragg condition for the film peak relative
+to the substrate.  For a reflection along <span class="arithmatex">\(\hat{n}\)</span> (e.g. GaN / InGaN <span class="arithmatex">\(0002\)</span>),
+the difference in the reciprocal-lattice vector magnitude is</p>
+<div class="arithmatex">\[
+\Delta Q_n = \frac{2\pi}{d_\text{strained}} - \frac{2\pi}{d_\text{sub}}
+= \frac{2\pi}{d_\text{sub}}\,\frac{-\varepsilon_\perp}{1 + \varepsilon_\perp}
+\approx -\frac{2\pi\,\varepsilon_\perp}{d_\text{sub}}
+\]</div>
+<p>For InGaN on GaN with <span class="arithmatex">\(\varepsilon_\perp \approx +0.01\)</span> (1% <span class="arithmatex">\(c\)</span>-axis expansion),
+the InGaN <span class="arithmatex">\(0002\)</span> peak is shifted to <strong>smaller</strong> <span class="arithmatex">\(Q_n\)</span> (larger <span class="arithmatex">\(d\)</span>, longer
+wavelength in Laue) relative to the GaN substrate peak.</p>
+<p>In the <strong>white-beam Laue geometry</strong> this peak shift manifests as a slightly
+different photon energy selected for the InGaN <span class="arithmatex">\(0002\)</span> reflection compared to
+GaN <span class="arithmatex">\(0002\)</span>.  Both reflections appear at <strong>the same pixel</strong> on the detector
+(same <span class="arithmatex">\(2\theta\)</span>, <span class="arithmatex">\(\chi\)</span>), but the colour (energy) differs.  The Laue pattern
+therefore does not directly resolve the peak splitting — for that, a
+monochromatic rocking curve is needed.</p>
+<p>However, in a <strong>coherent superlattice</strong> the interference between the strained
+QW layers and the unstrained barriers produces <strong>satellite peaks</strong> at positions
+offset from the substrate Bragg peak by <span class="arithmatex">\(\Delta Q_n = 2\pi m / \Lambda\)</span>
+(the superlattice periodicity).  The satellite positions encode <span class="arithmatex">\(\Lambda\)</span>
+directly, and the satellite intensities carry information about the QW
+thickness, composition, and strain state.  These satellites appear at different
+pixels on the Laue detector because their <span class="arithmatex">\(Q_n\)</span> differs from the substrate
+Bragg condition — they satisfy the Laue condition at shifted photon energies.</p>
+<h3 id="46-critical-thickness">4.6 Critical thickness<a class="headerlink" href="#46-critical-thickness" title="Permanent link">&para;</a></h3>
+<p>A pseudomorphic layer can only exist below the <strong>critical thickness</strong> <span class="arithmatex">\(h_c\)</span>,
+beyond which it becomes energetically favourable to nucleate misfit dislocations
+and partially relax the strain.
+The Matthews–Blakeslee equilibrium critical thickness for a single layer is
+approximately</p>
+<div class="arithmatex">\[
+h_c \approx \frac{b(1 - \nu\cos^2\alpha)}{8\pi\,|\varepsilon_\parallel|(1+\nu)\cos\lambda}
+\left[\ln\!\left(\frac{h_c}{b}\right) + 1\right]
+\]</div>
+<p>where <span class="arithmatex">\(b\)</span> is the Burgers vector length, <span class="arithmatex">\(\nu\)</span> is the Poisson ratio, and
+<span class="arithmatex">\(\alpha\)</span>, <span class="arithmatex">\(\lambda\)</span> are angles between the dislocation line, Burgers vector,
+and slip plane.  For practical purposes with III-nitrides:</p>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th><span class="arithmatex">\(\lvert\varepsilon_\parallel\rvert\)</span> (%)</th>
+<th>Typical <span class="arithmatex">\(h_c\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>In<span class="arithmatex">\(_{0.10}\)</span>GaN / GaN</td>
+<td>0.57</td>
+<td>~10–15 nm</td>
+</tr>
+<tr>
+<td>In<span class="arithmatex">\(_{0.20}\)</span>GaN / GaN</td>
+<td>1.15</td>
+<td>~3–5 nm</td>
+</tr>
+<tr>
+<td>Al<span class="arithmatex">\(_{0.20}\)</span>GaN / GaN</td>
+<td>0.51</td>
+<td>~15–25 nm</td>
+</tr>
+</tbody>
+</table>
+<p>The simulation assumes perfect pseudomorphic growth.  If a layer is thicker
+than <span class="arithmatex">\(h_c\)</span>, part of the strain is relaxed and the effective <span class="arithmatex">\(\varepsilon_\parallel\)</span>
+is reduced.  In that case <code>pseudomorphic_d_spacing</code> should be called with a
+corrected <span class="arithmatex">\(a_\text{sub}\)</span> reflecting the partially relaxed in-plane parameter.</p>
+<h3 id="47-elastic-constants-for-iii-nitrides">4.7 Elastic constants for III-nitrides<a class="headerlink" href="#47-elastic-constants-for-iii-nitrides" title="Permanent link">&para;</a></h3>
+<p>The stiffness constants <span class="arithmatex">\(C_{ij}\)</span> (GPa) used by <code>nitride_elastic_constants</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Material</th>
+<th><span class="arithmatex">\(C_{11}\)</span></th>
+<th><span class="arithmatex">\(C_{12}\)</span></th>
+<th><span class="arithmatex">\(C_{13}\)</span></th>
+<th><span class="arithmatex">\(C_{33}\)</span></th>
+<th><span class="arithmatex">\(C_{44}\)</span></th>
+<th><span class="arithmatex">\(2C_{13}/C_{33}\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GaN</td>
+<td>390</td>
+<td>145</td>
+<td>106</td>
+<td>398</td>
+<td>105</td>
+<td>0.533</td>
+</tr>
+<tr>
+<td>InN</td>
+<td>223</td>
+<td>115</td>
+<td>92</td>
+<td>224</td>
+<td>48</td>
+<td>0.821</td>
+</tr>
+<tr>
+<td>AlN</td>
+<td>396</td>
+<td>137</td>
+<td>108</td>
+<td>373</td>
+<td>116</td>
+<td>0.579</td>
+</tr>
+</tbody>
+</table>
+<p>Sources: Wright (1997) <em>Phys. Rev. B</em> <strong>55</strong>, 6250 and
+Vurgaftman &amp; Meyer (2003) <em>J. Appl. Phys.</em> <strong>94</strong>, 3675.</p>
+<p>The ratio <span class="arithmatex">\(2C_{13}/C_{33}\)</span> is the <strong>biaxial Poisson ratio</strong>: it quantifies how
+strongly the <span class="arithmatex">\(c\)</span>-axis responds to in-plane strain.  InN has the largest ratio
+(~0.82), meaning InGaN alloys at high indium content develop a larger <span class="arithmatex">\(c\)</span>-axis
+expansion per unit mismatch strain than GaN or AlN.</p>
+<p>For ternary alloys (Vegard's law):</p>
+<div class="arithmatex">\[
+C_{ij}^\text{alloy}(x) = x\,C_{ij}^\text{InN} + (1-x)\,C_{ij}^\text{GaN}
+\]</div>
+<h3 id="48-validity-limits">4.8 Validity limits<a class="headerlink" href="#48-validity-limits" title="Permanent link">&para;</a></h3>
+<p>The scalar biaxial formula is valid for:</p>
+<ul>
+<li>Hexagonal wurtzite grown along <span class="arithmatex">\([0001]\)</span> (<span class="arithmatex">\(c\)</span>-axis).</li>
+<li>Cubic crystals grown along <span class="arithmatex">\([001]\)</span> (use <span class="arithmatex">\(C_{12}/C_{11}\)</span>).</li>
+</ul>
+<p>It is <strong>not valid</strong> for semipolar hexagonal orientations (e.g. <span class="arithmatex">\([10\bar{1}3]\)</span>,
+<span class="arithmatex">\([11\bar{2}2]\)</span>) or off-axis cubic growth, where the in-plane strain is
+anisotropic and requires rotating the full stiffness tensor into the growth
+frame.  <code>pseudomorphic_d_spacing</code> raises <code>ValueError</code> for these cases.</p>
+<h3 id="49-worked-example-in_020ga_080n-on-gan">4.9 Worked example — In<span class="arithmatex">\(_{0.20}\)</span>Ga<span class="arithmatex">\(_{0.80}\)</span>N on GaN<a class="headerlink" href="#49-worked-example-in_020ga_080n-on-gan" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">GaN</span>   <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">GaN</span>          <span class="c1"># a = 3.189 Å, c = 5.186 Å</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">InGaN</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">InGaN</span><span class="p">(</span><span class="mf">0.20</span><span class="p">)</span>  <span class="c1"># a ≈ 3.260 Å, c ≈ 5.342 Å (Vegard)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">C</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">nitride_elastic_constants</span><span class="p">(</span><span class="s1">&#39;InN&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span> <span class="n">end_material</span><span class="o">=</span><span class="s1">&#39;GaN&#39;</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># C13 ≈ 95.2 GPa, C33 ≈ 253.6 GPa</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">d_strained</span><span class="p">,</span> <span class="n">eps_par</span><span class="p">,</span> <span class="n">eps_perp</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">pseudomorphic_d_spacing</span><span class="p">(</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">InGaN</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">a_substrate</span> <span class="o">=</span> <span class="n">GaN</span><span class="o">.</span><span class="n">lattice</span><span class="o">.</span><span class="n">a</span><span class="p">,</span>     <span class="c1"># 3.189 Å — in-plane constraint</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">C13</span> <span class="o">=</span> <span class="n">C</span><span class="p">[</span><span class="s1">&#39;C13&#39;</span><span class="p">],</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">C33</span> <span class="o">=</span> <span class="n">C</span><span class="p">[</span><span class="s1">&#39;C33&#39;</span><span class="p">],</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># eps_par  ≈ −0.0220   (2.2 % compressive in-plane)</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># eps_perp ≈ +0.0164   (1.64 % tensile out-of-plane, c expands)</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># d_strained ≈ 2.714 Å  vs. d_bulk = 2.671 Å</span>
+</code></pre></div>
+<p>The strained repeat <span class="arithmatex">\(d_\text{strained} \approx 2.714\)</span> Å is used in the
+superlattice phase factor instead of the bulk value <span class="arithmatex">\(d_\text{bulk} \approx
+2.671\)</span> Å.  The GaN barrier uses the unmodified <span class="arithmatex">\(d_\text{GaN} = 2.593\)</span> Å.
+The coherent interference between these two values of <span class="arithmatex">\(d\)</span> is what generates
+the superlattice satellite peaks in the Laue pattern.</p>
+<hr />
+<h2 id="5-stacking-repeat-distance">5. Stacking repeat distance<a class="headerlink" href="#5-stacking-repeat-distance" title="Permanent link">&para;</a></h2>
+<p>The stacking repeat distance <span class="arithmatex">\(d\)</span> is the periodicity of the lattice along <span class="arithmatex">\(\hat{n}\)</span>.
+It is used for:</p>
+<ul>
+<li>Computing <span class="arithmatex">\(N = t/d\)</span> (the number of unit cells from the physical thickness);</li>
+<li>The phase increment <span class="arithmatex">\(\phi = Q_n d\)</span> in the geometric sum.</li>
+</ul>
+<p><code>d_spacing_hkl(crystal, h, k, l)</code> computes the interplanar spacing of the
+<span class="arithmatex">\((hkl)\)</span> family using the reciprocal lattice directly:</p>
+<div class="arithmatex">\[
+d_{hkl} = \frac{2\pi}{|\mathbf{G}_{hkl}|}
+= \frac{2\pi}{|h\,\mathbf{b}_1 + k\,\mathbf{b}_2 + l\,\mathbf{b}_3|}
+\]</div>
+<p>This is valid for any crystal system.  For <span class="arithmatex">\(c\)</span>-axis growth the relevant
+repeat is the <span class="arithmatex">\(d_{0002}\)</span> spacing (<span class="arithmatex">\(= c/2\)</span> for a 2-atom hexagonal primitive
+cell, or <span class="arithmatex">\(c\)</span> if the structure factor of 0001 is non-zero).</p>
+<p>If <code>d_spacing</code> is not supplied to <code>add_layer</code>, the <code>Layer</code> class finds <span class="arithmatex">\(d\)</span>
+automatically by projecting each direct-lattice basis vector onto <span class="arithmatex">\(\hat{n}\)</span>
+and taking the shortest non-zero projection.</p>
+<hr />
+<h2 id="6-coordinate-frames-and-orientation-matrix">6. Coordinate frames and orientation matrix<a class="headerlink" href="#6-coordinate-frames-and-orientation-matrix" title="Permanent link">&para;</a></h2>
+<h3 id="61-lab-frame">6.1 Lab frame<a class="headerlink" href="#61-lab-frame" title="Permanent link">&para;</a></h3>
+<p>The <code>nrxrdct.laue</code> lab frame (LaueTools LT frame) has:</p>
+<table>
+<thead>
+<tr>
+<th>Axis</th>
+<th>Direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(x\)</span></td>
+<td>along the incident beam</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(z\)</span></td>
+<td>vertical up</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(y\)</span></td>
+<td><span class="arithmatex">\(y = z \times x\)</span> (horizontal)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-crystal-frame-and-u-matrix">6.2 Crystal frame and <span class="arithmatex">\(U\)</span> matrix<a class="headerlink" href="#62-crystal-frame-and-u-matrix" title="Permanent link">&para;</a></h3>
+<p>The orientation matrix <span class="arithmatex">\(U\)</span> is a <span class="arithmatex">\(3\times3\)</span> rotation that maps crystal-frame
+vectors to the lab frame:</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{lab} = U\,\mathbf{G}_\text{crystal}
+\qquad
+\mathbf{Q}_\text{crystal} = U^T\,\mathbf{Q}_\text{lab}
+\]</div>
+<p><span class="arithmatex">\(U\)</span> can be obtained in two ways:</p>
+<ol>
+<li><strong><code>euler_to_U(phi1, Phi, phi2, sample_tilt_deg)</code></strong> — from Bunge ZXZ Euler
+   angles describing the crystal orientation relative to the sample surface,
+   plus the sample tilt on the diffractometer.</li>
+<li><strong><code>U_from_matstarlab(matstarlab)</code></strong> — from a LaueTools refined <code>matstarlab</code>
+   9-element array (already in the lab frame).</li>
+</ol>
+<p>For a stack where all layers share the same crystallographic orientation (e.g.
+epitaxial GaN / InGaN both grown along <span class="arithmatex">\(c\)</span>), all layers share the <strong>same</strong> <span class="arithmatex">\(U\)</span>.
+The strained <span class="arithmatex">\(d\)</span>-spacing (not the <span class="arithmatex">\(U\)</span> matrix) encodes the tetragonal distortion.</p>
+<h3 id="63-stacking-direction">6.3 Stacking direction<a class="headerlink" href="#63-stacking-direction" title="Permanent link">&para;</a></h3>
+<p>The stacking direction in the lab frame is</p>
+<div class="arithmatex">\[
+\hat{n}_\text{lab} = U\,\hat{n}_\text{crystal} / |U\,\hat{n}_\text{crystal}|
+\]</div>
+<p>where <span class="arithmatex">\(\hat{n}_\text{crystal}\)</span> is the growth direction in the crystal frame
+(e.g. <span class="arithmatex">\([001]\)</span> for <span class="arithmatex">\(c\)</span>-axis wurtzite).  Pass this vector as
+<code>stacking_direction</code> when constructing a <code>LayeredCrystal</code> from a Laue-indexed
+<span class="arithmatex">\(U\)</span>.</p>
+<hr />
+<h2 id="7-absorption-corrections-two-beam-path-and-overlying-layers">7. Absorption corrections — two-beam path and overlying layers<a class="headerlink" href="#7-absorption-corrections-two-beam-path-and-overlying-layers" title="Permanent link">&para;</a></h2>
+<p>Photoelectric absorption attenuates the X-ray amplitude along <strong>both</strong> the
+incident and exit paths through the sample.  The simulation applies two related
+but distinct corrections.</p>
+<h3 id="71-two-beam-effective-depth-within-a-layer">7.1 Two-beam effective depth (within a layer)<a class="headerlink" href="#71-two-beam-effective-depth-within-a-layer" title="Permanent link">&para;</a></h3>
+<p>The classical one-beam estimate limits the effective depth of a thick buffer
+layer using the incident path only:</p>
+<div class="arithmatex">\[
+N_\text{abs}^\text{1-beam} = \frac{\cos\alpha_\text{in}}{\mu\,d},
+\qquad \cos\alpha_\text{in} = |\hat{n}\cdot\hat{x}|
+\]</div>
+<p>This underestimates the total absorption because the diffracted photon also
+travels obliquely back through the same layer on its way to the detector.  The
+<strong>two-beam</strong> correction accounts for both legs of the path:</p>
+<div class="arithmatex">\[
+\boxed{
+N_\text{abs} = \frac{\cos\alpha_\text{in}\,\cos\alpha_\text{out}}
+                     {\mu\,d\;(\cos\alpha_\text{in} + \cos\alpha_\text{out})}
+}
+\]</div>
+<p>where</p>
+<div class="arithmatex">\[
+\cos\alpha_\text{out} = |\hat{n}\cdot\hat{k}_f|
+\]</div>
+<p>Here <span class="arithmatex">\(\cos\alpha_\text{out}\)</span> is the cosine of the angle between the <strong>diffracted</strong> beam direction
+<span class="arithmatex">\(\hat{k}_f\)</span> and the surface normal.  This is the standard <em>symmetric
+absorption correction</em> used in surface-diffraction analysis.</p>
+<p>The one-beam and two-beam limits:</p>
+<table>
+<thead>
+<tr>
+<th>Geometry</th>
+<th><span class="arithmatex">\(\alpha_\text{out}\)</span></th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Near-normal exit (<span class="arithmatex">\(\cos\alpha_\text{out} \approx 1\)</span>)</td>
+<td>small</td>
+<td><span class="arithmatex">\(\approx\)</span> one-beam result</td>
+</tr>
+<tr>
+<td>Grazing exit (<span class="arithmatex">\(\cos\alpha_\text{out} \to 0\)</span>)</td>
+<td>large</td>
+<td>strongly reduced <span class="arithmatex">\(N_\text{abs}\)</span>, layer appears very thin</td>
+</tr>
+<tr>
+<td>Symmetric (<span class="arithmatex">\(\alpha_\text{in} = \alpha_\text{out}\)</span>)</td>
+<td>equal</td>
+<td><span class="arithmatex">\(N_\text{abs} = \cos\alpha / (2\mu d)\)</span> — exactly half the one-beam value</td>
+</tr>
+</tbody>
+</table>
+<p>Because <span class="arithmatex">\(\hat{k}_f\)</span> is spot-specific (it depends on the particular <span class="arithmatex">\((hkl)\)</span>
+reflection being computed), the two-beam correction is applied <strong>per spot</strong>
+inside <code>simulate_laue_stack</code> and <code>simulate_laue_darwin</code>.  It activates
+automatically whenever these functions are called; there is no user-visible
+parameter to set.</p>
+<h3 id="72-overlying-layer-attenuation">7.2 Overlying-layer attenuation<a class="headerlink" href="#72-overlying-layer-attenuation" title="Permanent link">&para;</a></h3>
+<p>A photon must also pass through every layer <strong>above</strong> the layer of interest
+twice: once on the way in and once on the way out.  For a layer at depth
+<span class="arithmatex">\(z_i\)</span> below the surface, all shallower layers (buffer layers <span class="arithmatex">\(j &gt; i\)</span> and the
+entire MQW block) contribute a multiplicative transmission factor</p>
+<div class="arithmatex">\[
+T_\text{above}^{(i)} = \prod_{j &gt; i} T_j \;\times\; T_\text{MQW}
+\]</div>
+<div class="arithmatex">\[
+T_j = \exp\!\left[
+  -\mu_j\, t_j \left(\frac{1}{\cos\alpha_\text{in}} + \frac{1}{\cos\alpha_\text{out}}\right)
+\right]
+\]</div>
+<p>This amplitude factor is applied coherently — the structure-factor sum becomes</p>
+<div class="arithmatex">\[
+F_\text{buf}(\mathbf{Q}) = \sum_i T_\text{above}^{(i)}\; F_i(\mathbf{Q},\, z_{0,i})
+\]</div>
+<p>Deeper buffer layers (substrate) are therefore dimmer than shallower ones (template
+layers, thin interlayers) independently of their own extinction.</p>
+<p>The MQW block sits at the top of the stack and has no overlying buffer
+material, so no <span class="arithmatex">\(T_\text{above}\)</span> factor is applied to the repeating-unit
+amplitude.</p>
+<h3 id="73-practical-impact">7.3 Practical impact<a class="headerlink" href="#73-practical-impact" title="Permanent link">&para;</a></h3>
+<p>For typical III-nitride heterostructures at BM32 energies (10–22 keV) the
+corrections have the following effect:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Dominant correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GaN/sapphire substrate (0.5 mm)</td>
+<td>Self-absorption (one-beam → two-beam halves <span class="arithmatex">\(N_\text{abs}\)</span>)</td>
+</tr>
+<tr>
+<td>GaN buffer (2 μm)</td>
+<td>Overlying-layer <span class="arithmatex">\(T_\text{above}\)</span> from MQW (~30 nm) — negligible at 15 keV</td>
+</tr>
+<tr>
+<td>InGaN QW (3 nm)</td>
+<td>Essentially transparent; corrections <span class="arithmatex">\(&lt; 0.1\%\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>For a grazing-exit geometry (e.g. high-angle Bragg reflection with small <span class="arithmatex">\(\alpha_\text{out}\)</span>),
+the two-beam correction can reduce the substrate amplitude by an order of
+magnitude relative to the one-beam estimate and is the dominant effect.</p>
+<p><code>add_buffer_layer</code> sets <code>absorption_limit=True</code> on the layer; <code>add_layer</code> does
+not.  For repeating MQW layers the individual thicknesses are always much
+smaller than <span class="arithmatex">\(t_\text{abs}\)</span>, so no depth-limiting cap is needed (the
+<span class="arithmatex">\(T_\text{above}\)</span> overlying-layer factor still applies).</p>
+<p>For the Darwin model (<code>simulate_laue_darwin</code>), an additional <strong>primary
+extinction</strong> correction is applied on top of absorption limiting — see the
+<a href="../laue_darwin/">Darwin Model</a> page.</p>
+<hr />
+<h2 id="8-orientation-relationships-between-phases">8. Orientation relationships between phases<a class="headerlink" href="#8-orientation-relationships-between-phases" title="Permanent link">&para;</a></h2>
+<p>When two crystalline phases are epitaxially related, their orientation matrices
+satisfy</p>
+<div class="arithmatex">\[
+U_B = R_\text{OR}\, U_A
+\]</div>
+<p>where <span class="arithmatex">\(R_\text{OR}\)</span> is the <strong>orientation relationship rotation</strong> between the
+two crystal frames.  <span class="arithmatex">\(R_\text{OR}\)</span> is fully specified by two direction pairs:</p>
+<div class="arithmatex">\[
+R_\text{OR}\,\mathbf{v}_{1,A} \parallel \mathbf{v}_{1,B}
+\quad\text{(primary — exact)},
+\qquad
+R_\text{OR}\,\mathbf{v}_{2,A} \text{ as close as possible to } \mathbf{v}_{2,B}
+\quad\text{(secondary — minimised angle)}
+\]</div>
+<p><code>or_from_directions(crystal_A, dir1_A, dir2_A, crystal_B, dir1_B, dir2_B)</code>
+implements this for any pair of Miller directions.</p>
+<h3 id="81-standard-ors-implemented">8.1 Standard ORs implemented<a class="headerlink" href="#81-standard-ors-implemented" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Name</th>
+<th>Primary constraint</th>
+<th>Secondary constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>or_kurdjumov_sachs</code></td>
+<td>Kurdjumov–Sachs (KS)</td>
+<td><span class="arithmatex">\(\{110\}_\text{BCC} \parallel \{111\}_\text{FCC}\)</span></td>
+<td><span class="arithmatex">\(\langle 111\rangle_\text{BCC} \parallel \langle 110\rangle_\text{FCC}\)</span></td>
+</tr>
+<tr>
+<td><code>or_nishiyama_wassermann</code></td>
+<td>Nishiyama–Wassermann (NW)</td>
+<td><span class="arithmatex">\(\{110\}_\text{BCC} \parallel \{111\}_\text{FCC}\)</span></td>
+<td><span class="arithmatex">\(\langle 100\rangle_\text{BCC} \parallel \langle 011\rangle_\text{FCC}\)</span></td>
+</tr>
+<tr>
+<td><code>or_baker_nutting</code></td>
+<td>Baker–Nutting (BN)</td>
+<td><span class="arithmatex">\(\{100\}_\text{BCC} \parallel \{100\}_\text{RS}\)</span></td>
+<td><span class="arithmatex">\(\langle 110\rangle_\text{BCC} \parallel \langle 010\rangle_\text{RS}\)</span></td>
+</tr>
+<tr>
+<td><code>or_pitsch</code></td>
+<td>Pitsch</td>
+<td><span class="arithmatex">\(\{100\}_\text{BCC} \parallel \{110\}_\text{FCC}\)</span></td>
+<td><span class="arithmatex">\(\langle 011\rangle_\text{BCC} \parallel \langle 111\rangle_\text{FCC}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>The KS and NW relationships both satisfy <span class="arithmatex">\(\{110\}_\text{BCC} \parallel \{111\}_\text{FCC}\)</span>
+but differ in the secondary direction.  They are related by a small <span class="arithmatex">\(5.26°\)</span>
+rotation about the common plane normal and frequently coexist in the same
+martensitic microstructure.</p>
+<h3 id="82-computation">8.2 Computation<a class="headerlink" href="#82-computation" title="Permanent link">&para;</a></h3>
+<p>Internally, <code>_or_from_two_pairs</code> builds orthonormal frames from each pair of
+directions and computes the rotation <span class="arithmatex">\(R\)</span> that maps one frame to the other:</p>
+<div class="arithmatex">\[
+R_\text{OR} = F_B\,F_A^T
+\]</div>
+<p>where <span class="arithmatex">\(F_A\)</span>, <span class="arithmatex">\(F_B\)</span> are <span class="arithmatex">\(3\times3\)</span> matrices whose columns are the Gram-Schmidt
+orthonormalised direction pairs.  This is exact for the primary direction and
+least-squares optimal for the secondary.</p>
+<hr />
+<h2 id="9-alloy-crystals-vegards-law">9. Alloy crystals — Vegard's law<a class="headerlink" href="#9-alloy-crystals-vegards-law" title="Permanent link">&para;</a></h2>
+<p>For solid-solution alloys (e.g. In<span class="arithmatex">\(_x\)</span>Ga<span class="arithmatex">\(_{1-x}\)</span>N), lattice parameters and
+elastic constants vary linearly with composition:</p>
+<div class="arithmatex">\[
+a_\text{alloy}(x) = x\,a_\text{InN} + (1-x)\,a_\text{GaN}
+\]</div>
+<div class="arithmatex">\[
+C_{ij}^\text{alloy}(x) = x\,C_{ij}^\text{InN} + (1-x)\,C_{ij}^\text{GaN}
+\]</div>
+<p>This is the <strong>Vegard's law</strong> approximation, which is accurate to within a few
+percent for most III-nitride alloys.  Larger deviations (bowing) occur near
+the miscibility gap; for high In-content alloys a bowing parameter
+<span class="arithmatex">\(b = C_{ij}^\text{A} + C_{ij}^\text{B} - 2C_{ij}^\text{AB}\)</span> can be added
+manually if needed.</p>
+<p>The alloy crystal for the simulation is constructed using xrayutilities.  Its
+<code>StructureFactor</code> method uses the virtual-crystal approximation (VCA), weighting
+each sublattice site by the occupancy fractions.  The composition enters the
+structure factor through the atomic form factors, so even weak composition
+modulations affect the diffracted intensities via anomalous scattering near
+absorption edges.</p>
+<hr />
+<h2 id="10-quick-reference-stack-construction">10. Quick reference — stack construction<a class="headerlink" href="#10-quick-reference-stack-construction" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">GaN</span>   <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">GaN</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">InGaN</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">InGaN</span><span class="p">(</span><span class="mf">0.20</span><span class="p">)</span>   <span class="c1"># In₀.₂₀Ga₀.₈₀N</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">U</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">euler_to_U</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Elastic constants (Vegard interpolation)</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">C</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">nitride_elastic_constants</span><span class="p">(</span><span class="s1">&#39;InN&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span> <span class="n">end_material</span><span class="o">=</span><span class="s1">&#39;GaN&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># d-spacings</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">d_GaN</span>   <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">d_spacing_hkl</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>   <span class="c1"># = c_GaN / 2 ≈ 2.593 Å</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">d_InGaN</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">d_spacing_hkl</span><span class="p">(</span><span class="n">InGaN</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>   <span class="c1"># relaxed (bulk)</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Build stack: GaN buffer + 10× (InGaN QW + GaN barrier)</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">LayeredCrystal</span><span class="p">(</span><span class="n">n_hat</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_buffer_layer</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">5000.0</span><span class="p">,</span>     <span class="c1"># 500 nm</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>                       <span class="n">d_spacing</span><span class="o">=</span><span class="n">d_GaN</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;GaN buffer&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_pseudomorphic_layer</span><span class="p">(</span>                        <span class="c1"># computes d_strained</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="n">InGaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>                         <span class="c1"># 3 nm QW</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>    <span class="n">a_substrate</span><span class="o">=</span><span class="n">GaN</span><span class="o">.</span><span class="n">lattice</span><span class="o">.</span><span class="n">a</span><span class="p">,</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="n">C13</span><span class="o">=</span><span class="n">C</span><span class="p">[</span><span class="s1">&#39;C13&#39;</span><span class="p">],</span> <span class="n">C33</span><span class="o">=</span><span class="n">C</span><span class="p">[</span><span class="s1">&#39;C33&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;InGaN QW&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>              <span class="c1"># 10 nm barrier</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>                <span class="n">d_spacing</span><span class="o">=</span><span class="n">d_GaN</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;GaN barrier&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="n">stack</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="c1"># Visualise</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="n">stack</span><span class="o">.</span><span class="n">plot_lattice_parameter</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;nm&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="n">stack</span><span class="o">.</span><span class="n">plot_strain_profile</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="n">GaN</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Matthews, J. W. &amp; Blakeslee, A. E.</strong> Defects in epitaxial multilayers. <em>J. Cryst. Growth</em> <strong>27</strong>, 118–125 (1974). <em>(Critical thickness for pseudomorphic growth.)</em></li>
+<li><strong>Wright, A. F.</strong> Elastic properties of zinc-blende and wurtzite AlN, GaN, and InN. <em>Phys. Rev. B</em> <strong>55</strong>, 6250–6258 (1997).</li>
+<li><strong>Vurgaftman, I. &amp; Meyer, J. R.</strong> Band parameters for nitrogen-containing semiconductors. <em>J. Appl. Phys.</em> <strong>94</strong>, 3675–3696 (2003). <em>(Elastic constants and Vegard's law for III-nitrides.)</em></li>
+<li><strong>Kurdjumov, G. &amp; Sachs, G.</strong> Über den Mechanismus der Stahlhärtung. <em>Z. Phys.</em> <strong>64</strong>, 325–343 (1930). <em>(Original KS orientation relationship.)</em></li>
+<li><strong>Nishiyama, Z.</strong> <em>Martensitic Transformation</em>. Academic Press, New York, 1978. <em>(NW relationship and transformation crystallography.)</em></li>
+<li><strong>Authier, A.</strong> <em>Dynamical Theory of X-Ray Diffraction</em>. Oxford University Press, 2001. <em>(Chapter 2 — kinematical limit and the structure factor of a finite crystal.)</em></li>
+</ol>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_thin_film_satellites/" class="btn btn-neutral float-left" title="Thin-Film Satellites"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_darwin/" class="btn btn-neutral float-right" title="Darwin Model (Thick Layers)">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_thin_film_satellites/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_darwin/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

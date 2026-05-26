@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>References — diffraction and Laue theory - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "References \u2014 diffraction and Laue theory";
+        var mkdocs_page_input_path = "user-guide/laue_theory_refs.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">References — diffraction and Laue theory</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_theory_refs.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="references-diffraction-and-laue-theory">References — diffraction and Laue theory<a class="headerlink" href="#references-diffraction-and-laue-theory" title="Permanent link">&para;</a></h1>
+<p>Draft references for <code>laue_theory.md</code>.
+<strong>Please verify DOIs and page numbers before merging.</strong></p>
+<hr />
+<h2 id="textbooks-general-x-ray-diffraction">Textbooks — general X-ray diffraction<a class="headerlink" href="#textbooks-general-x-ray-diffraction" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Warren, B. E.</strong>
+   <em>X-Ray Diffraction.</em>
+   Dover Publications, New York, 1990.  (Unabridged reprint of the 1969 Addison-Wesley edition.)
+   <em>Chapters 1–4 cover kinematical scattering, the structure factor, systematic
+   absences, and the Lorentz–polarisation factor — the canonical reference for
+   Sections 1–4.</em></p>
+</li>
+<li>
+<p><strong>Als-Nielsen, J. &amp; McMorrow, D.</strong>
+   <em>Elements of Modern X-ray Physics</em>, 2nd ed.
+   Wiley, Chichester, 2011.  ISBN 978-0-470-97395-0.
+   <em>Chapters 1–3 give a clear modern derivation of scattering amplitudes,
+   anomalous dispersion, and the Ewald sphere construction.</em></p>
+</li>
+<li>
+<p><strong>Authier, A.</strong>
+   <em>Dynamical Theory of X-Ray Diffraction.</em>
+   Oxford University Press, Oxford, 2001.  ISBN 978-0-19-855960-2.
+   <em>Chapter 1 reviews the kinematical (Born) limit used throughout <code>nrxrdct.laue</code>.</em></p>
+</li>
+<li>
+<p><strong>Cullity, B. D. &amp; Stock, S. R.</strong>
+   <em>Elements of X-Ray Diffraction</em>, 3rd ed.
+   Pearson/Prentice Hall, Upper Saddle River NJ, 2001.  ISBN 978-0-201-61091-0.
+   <em>A pedagogical introduction to Bragg's law, the reciprocal lattice, and
+   systematic absences, suitable as background reading for Section 1–2.</em></p>
+</li>
+<li>
+<p><strong>Hammond, C.</strong>
+   <em>The Basics of Crystallography and Diffraction</em>, 4th ed.
+   Oxford University Press, Oxford, 2015.  ISBN 978-0-19-873868-8.
+   <em>Covers direct and reciprocal lattices, Laue and powder methods, and the
+   gnomonic projection (Section 7.1).</em></p>
+</li>
+</ol>
+<hr />
+<h2 id="synchrotron-radiation-and-source-spectra">Synchrotron radiation and source spectra<a class="headerlink" href="#synchrotron-radiation-and-source-spectra" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Kim, K.-J.</strong>
+   Characteristics of synchrotron radiation.
+   In <em>AIP Conference Proceedings</em> <strong>184</strong>, 565–632 (1989).
+   DOI: <a href="https://doi.org/10.1063/1.38046">10.1063/1.38046</a>
+   ⚠️ <em>Verify volume and page range.</em>
+   <em>Derives the on-axis bending-magnet / wiggler spectral flux formula
+   (the <code>spectrum_bm</code> function) used in Section 4.3.</em></p>
+</li>
+<li>
+<p><strong>Attwood, D.</strong>
+   <em>Soft X-Rays and Extreme Ultraviolet Radiation.</em>
+   Cambridge University Press, Cambridge, 1999.  ISBN 978-0-521-02997-1.
+   <em>Chapter 5 covers synchrotron radiation characteristics, critical energy,
+   and undulator harmonics.</em></p>
+</li>
+</ol>
+<hr />
+<h2 id="kb-mirrors-and-x-ray-optics">KB mirrors and X-ray optics<a class="headerlink" href="#kb-mirrors-and-x-ray-optics" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Kirkpatrick, P. &amp; Baez, A. V.</strong>
+   Formation of optical images by X-rays.
+   <em>J. Opt. Soc. Am.</em> <strong>38</strong>, 766–774 (1948).
+   DOI: <a href="https://doi.org/10.1364/JOSA.38.000766">10.1364/JOSA.38.000766</a>
+   <em>The original paper introducing the KB mirror geometry (Section 4.4).</em></p>
+</li>
+<li>
+<p><strong>Névot, L. &amp; Croce, P.</strong>
+   Caractérisation des surfaces par réflexion rasante de rayons X.
+   Application à l'étude du polissage de quelques verres silicates.
+   <em>Rev. Phys. Appl.</em> <strong>15</strong>, 761–779 (1980).
+   DOI: <a href="https://doi.org/10.1051/rphysap:01980001503076100">10.1051/rphysap:01980001503076100</a>
+   ⚠️ <em>Verify DOI.</em>
+   <em>Introduces the roughness damping factor for mirror reflectivity used in
+   <code>kb_reflectivity</code>.</em></p>
+</li>
+<li>
+<p><strong>Parratt, L. G.</strong>
+    Surface studies of solids by total reflection of X-rays.
+    <em>Phys. Rev.</em> <strong>95</strong>, 359–369 (1954).
+    DOI: <a href="https://doi.org/10.1103/PhysRev.95.359">10.1103/PhysRev.95.359</a>
+    <em>Fresnel reflectivity near the critical angle for total external reflection —
+    the basis of the single-mirror reflectivity calculation.</em></p>
+</li>
+</ol>
+<hr />
+<h2 id="white-beam-laue-diffraction-and-lauetools">White-beam Laue diffraction and LaueTools<a class="headerlink" href="#white-beam-laue-diffraction-and-lauetools" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Robach, O., Micha, J.-S., Ulrich, O. &amp; Gergaud, P.</strong>
+    Full local elastic strain tensor from Laue microdiffraction: simultaneous
+    Laue pattern and scanning-electron-microscopy measurements.
+    <em>J. Appl. Cryst.</em> <strong>44</strong>, 688–696 (2011).
+    DOI: <a href="https://doi.org/10.1107/S0021889811003099">10.1107/S0021889811003099</a>
+    ⚠️ <em>Verify DOI.</em>
+    <em>Describes the LaueTools framework: frame conventions, detector calibration,
+    and the <code>matstarlab</code> orientation representation used throughout <code>nrxrdct.laue</code>.</em></p>
+</li>
+<li>
+<p><strong>Chung, J.-S. &amp; Ice, G. E.</strong>
+    Automated indexing for texture and strain measurement with broad-bandpass
+    x-ray microbeams.
+    <em>J. Appl. Phys.</em> <strong>86</strong>, 5249–5255 (1999).
+    DOI: <a href="https://doi.org/10.1063/1.371507">10.1063/1.371507</a>
+    ⚠️ <em>Verify DOI.</em>
+    <em>Introduces the inter-spot angle matching strategy for automated Laue
+    indexing described in Section 7.2.</em></p>
+</li>
+<li>
+<p><strong>Ice, G. E., Budai, J. D. &amp; Pang, J. W. L.</strong>
+    The race to X-ray microbeam and nanobeam science.
+    <em>Science</em> <strong>334</strong>, 1234–1239 (2011).
+    DOI: <a href="https://doi.org/10.1126/science.1202366">10.1126/science.1202366</a>
+    <em>Reviews white-beam Laue microdiffraction for strain and orientation mapping,
+    providing motivation for the <code>simulate_laue_stack</code> approach.</em></p>
+</li>
+</ol>
+<hr />
+<h2 id="strain-analysis-from-laue-patterns">Strain analysis from Laue patterns<a class="headerlink" href="#strain-analysis-from-laue-patterns" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Tamura, N. <em>et al.</em></strong>
+    Scanning X-ray microdiffraction with submicrometer white beam for strain/stress
+    and orientation mapping in thin films.
+    <em>J. Synchrotron Rad.</em> <strong>10</strong>, 137–143 (2003).
+    DOI: <a href="https://doi.org/10.1107/S0909049502021362">10.1107/S0909049502021362</a>
+    ⚠️ <em>Verify authors and page numbers.</em>
+    <em>Describes the deviatoric strain determination from Laue peak-shift Jacobians
+    (Section 8.2) and the insensitivity to hydrostatic strain.</em></p>
+</li>
+<li>
+<p><strong>Barabash, R. I. &amp; Ice, G. E.</strong> (eds.)
+    <em>Strain and Dislocation Gradients from Diffraction.</em>
+    Imperial College Press, London, 2014.  ISBN 978-1-908979-62-9.
+    ⚠️ <em>Verify ISBN.</em>
+    <em>Comprehensive treatment of deviatoric vs. hydrostatic strain separation and
+    the Laue diffraction strain tensor formalism.</em></p>
+</li>
+</ol>
+<hr />
+<h2 id="anomalous-scattering-form-factors">Anomalous scattering (form factors)<a class="headerlink" href="#anomalous-scattering-form-factors" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Henke, B. L., Gullikson, E. M. &amp; Davis, J. C.</strong>
+    X-ray interactions: photoabsorption, scattering, transmission, and reflection
+    at E = 50–30,000 eV, Z = 1–92.
+    <em>At. Data Nucl. Data Tables</em> <strong>54</strong>, 181–342 (1993).
+    DOI: <a href="https://doi.org/10.1006/adnd.1993.1013">10.1006/adnd.1993.1013</a>
+    <em>The tabulated <span class="arithmatex">\(f'(E)\)</span> and <span class="arithmatex">\(f''(E)\)</span> anomalous form factors used by
+    xrayutilities and referenced in Section 1.1 and 4.1.</em></li>
+</ol>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

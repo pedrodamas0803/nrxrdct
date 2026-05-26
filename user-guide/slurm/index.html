@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -70,6 +71,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -78,35 +99,59 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/parameters/">parameters</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/nmf/">nmf</a>
-                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/io/">io</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/roi/">roi</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -137,91 +182,87 @@
                 <h1 id="slurm-hpc-integration">SLURM / HPC Integration<a class="headerlink" href="#slurm-hpc-integration" title="Permanent link">&para;</a></h1>
 <p>For large datasets, <code>nrxrdct</code> provides a SLURM pipeline that splits integration work across cluster nodes. All functionality is exposed through a Python API and the <code>nrxrdct-slurm</code> CLI.</p>
 <h2 id="submitting-jobs">Submitting jobs<a class="headerlink" href="#submitting-jobs" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Python API</label><label for="__tabbed_1_2">CLI</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.slurm_integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">launch</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">slurm_ids</span> <span class="o">=</span> <span class="n">launch</span><span class="p">(</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">master_file</span>  <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/raw/sample_master.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">output_file</span>  <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">poni_file</span>    <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/detector.poni&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">mask_file</span>    <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/mask.edf&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">n_jobs</span>       <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>          <span class="c1"># number of SLURM jobs</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">n_points</span>     <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>       <span class="c1"># radial bins</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">n_workers</span>    <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>         <span class="c1"># integration threads per job</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">batch_size</span>   <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>         <span class="c1"># frames streamed per batch (RAM control)</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">method</span>       <span class="o">=</span> <span class="s2">&quot;filter&quot;</span><span class="p">,</span>   <span class="c1"># &quot;standard&quot; | &quot;filter&quot; | &quot;sigma_clip&quot;</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">percentile</span>   <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">90</span><span class="p">),</span>   <span class="c1"># used with method=&quot;filter&quot;</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">partition</span>    <span class="o">=</span> <span class="s2">&quot;nice&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">time</span>         <span class="o">=</span> <span class="s2">&quot;04:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">mem</span>          <span class="o">=</span> <span class="s2">&quot;64G&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">cpus</span>         <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">conda_env</span>    <span class="o">=</span> <span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="p">)</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Submitted job IDs:&quot;</span><span class="p">,</span> <span class="n">slurm_ids</span><span class="p">)</span>
+<p>=== "Python API"</p>
+<div class="highlight"><pre><span></span><code>```python
+from pathlib import Path
+from nrxrdct.slurm_integration import launch
+
+slurm_ids = launch(
+    master_file  = Path(&quot;/data/raw/sample_master.h5&quot;),
+    output_file  = Path(&quot;/data/processed/integrated.h5&quot;),
+    poni_file    = Path(&quot;/data/calib/detector.poni&quot;),
+    mask_file    = Path(&quot;/data/calib/mask.edf&quot;),
+    n_jobs       = 8,          # number of SLURM jobs
+    n_points     = 1000,       # radial bins
+    n_workers    = 16,         # integration threads per job
+    batch_size   = 32,         # frames streamed per batch (RAM control)
+    method       = &quot;filter&quot;,   # &quot;standard&quot; | &quot;filter&quot; | &quot;sigma_clip&quot;
+    percentile   = (10, 90),   # used with method=&quot;filter&quot;
+    partition    = &quot;nice&quot;,
+    time         = &quot;04:00:00&quot;,
+    mem          = &quot;64G&quot;,
+    cpus         = 16,
+    conda_env    = &quot;nrxrdct&quot;,
+)
+
+print(&quot;Submitted job IDs:&quot;, slurm_ids)
+```
 </code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nrxrdct-slurm<span class="w"> </span>launch<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span>--master-file<span class="w">  </span>/data/raw/sample_master.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--output-file<span class="w">  </span>/data/processed/integrated.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--poni-file<span class="w">    </span>/data/calib/detector.poni<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--mask-file<span class="w">    </span>/data/calib/mask.edf<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--n-jobs<span class="w">       </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--n-points<span class="w">     </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>--n-workers<span class="w">    </span><span class="m">16</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--method<span class="w">       </span>filter<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span>--percentile<span class="w">   </span><span class="m">10</span>,90<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span>--partition<span class="w">    </span>nice<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--time<span class="w">         </span><span class="m">04</span>:00:00<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--mem<span class="w">          </span>64G<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--cpus<span class="w">         </span><span class="m">16</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--conda-env<span class="w">    </span>nrxrdct
+<p>=== "CLI"</p>
+<div class="highlight"><pre><span></span><code>```bash
+nrxrdct-slurm launch \
+    --master-file  /data/raw/sample_master.h5 \
+    --output-file  /data/processed/integrated.h5 \
+    --poni-file    /data/calib/detector.poni \
+    --mask-file    /data/calib/mask.edf \
+    --n-jobs       8 \
+    --n-points     1000 \
+    --n-workers    16 \
+    --method       filter \
+    --percentile   10,90 \
+    --partition    nice \
+    --time         04:00:00 \
+    --mem          64G \
+    --cpus         16 \
+    --conda-env    nrxrdct
+```
 </code></pre></div>
-</div>
-</div>
-</div>
 <p>Sbatch scripts and logs are written to <code>&lt;output_file_dir&gt;/slurm_logs/</code>.</p>
 <hr />
 <h2 id="monitoring-progress">Monitoring progress<a class="headerlink" href="#monitoring-progress" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Python API</label><label for="__tabbed_2_2">CLI</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.slurm_integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">monitor</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Single snapshot (non-blocking)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">monitor</span><span class="p">(</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">slurm_ids</span>   <span class="o">=</span> <span class="n">slurm_ids</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Block until all jobs finish, polling every 60 s</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">monitor</span><span class="p">(</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">slurm_ids</span>   <span class="o">=</span> <span class="n">slurm_ids</span><span class="p">,</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">watch</span>       <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">interval</span>    <span class="o">=</span> <span class="mi">60</span><span class="p">,</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">)</span>
+<p>=== "Python API"</p>
+<div class="highlight"><pre><span></span><code>```python
+from nrxrdct.slurm_integration import monitor
+
+# Single snapshot (non-blocking)
+result = monitor(
+    slurm_ids   = slurm_ids,
+    output_file = Path(&quot;/data/processed/integrated.h5&quot;),
+)
+
+# Block until all jobs finish, polling every 60 s
+result = monitor(
+    slurm_ids   = slurm_ids,
+    output_file = Path(&quot;/data/processed/integrated.h5&quot;),
+    watch       = True,
+    interval    = 60,
+)
+```
 </code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Single snapshot</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>nrxrdct-slurm<span class="w"> </span>monitor<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--slurm-ids<span class="w">   </span><span class="m">12345</span>,12346,12347<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--output-file<span class="w"> </span>/data/processed/integrated.h5
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Blocking watch</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>nrxrdct-slurm<span class="w"> </span>monitor<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span>--slurm-ids<span class="w">   </span><span class="m">12345</span>,12346,12347<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span>--output-file<span class="w"> </span>/data/processed/integrated.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span>--watch<span class="w"> </span>--interval<span class="w"> </span><span class="m">60</span>
+<p>=== "CLI"</p>
+<div class="highlight"><pre><span></span><code>```bash
+# Single snapshot
+nrxrdct-slurm monitor \
+    --slurm-ids   12345,12346,12347 \
+    --output-file /data/processed/integrated.h5
+
+# Blocking watch
+nrxrdct-slurm monitor \
+    --slurm-ids   12345,12346,12347 \
+    --output-file /data/processed/integrated.h5 \
+    --watch --interval 60
+```
 </code></pre></div>
-</div>
-</div>
-</div>
 <p>The monitor prints a status table:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>────────────────────────────────────────────────────────
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  nrxrdct SLURM monitor   elapsed: 0:42:17
@@ -240,53 +281,51 @@
 <hr />
 <h2 id="checking-and-repairing-output">Checking and repairing output<a class="headerlink" href="#checking-and-repairing-output" title="Permanent link">&para;</a></h2>
 <p>After all jobs finish, verify that every scan was written correctly.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Python API</label><label for="__tabbed_3_2">CLI</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.slurm_integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">check</span><span class="p">,</span> <span class="n">repair</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Check only — report missing and corrupted scans</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">check</span><span class="p">(</span><span class="n">output_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">))</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># result[&quot;missing&quot;]   → list of scan indices not written</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># result[&quot;corrupted&quot;] → list of scan indices with truncated/corrupt datasets</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Automatic repair — delete corrupted entries and resubmit SLURM jobs</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">repair_ids</span> <span class="o">=</span> <span class="n">repair</span><span class="p">(</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/processed/integrated.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">master_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/raw/sample_master.h5&quot;</span><span class="p">),</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">poni_file</span>   <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/detector.poni&quot;</span><span class="p">),</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">mask_file</span>   <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/data/calib/mask.edf&quot;</span><span class="p">),</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">n_jobs</span>      <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">watch</span>       <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">partition</span>   <span class="o">=</span> <span class="s2">&quot;nice&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">conda_env</span>   <span class="o">=</span> <span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="p">)</span>
+<p>=== "Python API"</p>
+<div class="highlight"><pre><span></span><code>```python
+from nrxrdct.slurm_integration import check, repair
+
+# Check only — report missing and corrupted scans
+result = check(output_file=Path(&quot;/data/processed/integrated.h5&quot;))
+# result[&quot;missing&quot;]   → list of scan indices not written
+# result[&quot;corrupted&quot;] → list of scan indices with truncated/corrupt datasets
+
+# Automatic repair — delete corrupted entries and resubmit SLURM jobs
+repair_ids = repair(
+    output_file = Path(&quot;/data/processed/integrated.h5&quot;),
+    master_file = Path(&quot;/data/raw/sample_master.h5&quot;),
+    poni_file   = Path(&quot;/data/calib/detector.poni&quot;),
+    mask_file   = Path(&quot;/data/calib/mask.edf&quot;),
+    n_jobs      = 2,
+    watch       = True,
+    partition   = &quot;nice&quot;,
+    conda_env   = &quot;nrxrdct&quot;,
+)
+```
 </code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Check only</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>nrxrdct-slurm<span class="w"> </span>check<span class="w"> </span>--output-file<span class="w"> </span>/data/processed/integrated.h5
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Check with manual resubmit hints</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>nrxrdct-slurm<span class="w"> </span>check<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span>--output-file<span class="w"> </span>/data/processed/integrated.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span>--resubmit
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Automatic repair</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>nrxrdct-slurm<span class="w"> </span>check<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>--output-file<span class="w">  </span>/data/processed/integrated.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span>--repair<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span>--master-file<span class="w">  </span>/data/raw/sample_master.h5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>--poni-file<span class="w">    </span>/data/calib/detector.poni<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>--mask-file<span class="w">    </span>/data/calib/mask.edf<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span>--n-jobs<span class="w">       </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span>--partition<span class="w">    </span>nice<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">    </span>--conda-env<span class="w">    </span>nrxrdct<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">    </span>--watch
+<p>=== "CLI"</p>
+<div class="highlight"><pre><span></span><code>```bash
+# Check only
+nrxrdct-slurm check --output-file /data/processed/integrated.h5
+
+# Check with manual resubmit hints
+nrxrdct-slurm check \
+    --output-file /data/processed/integrated.h5 \
+    --resubmit
+
+# Automatic repair
+nrxrdct-slurm check \
+    --output-file  /data/processed/integrated.h5 \
+    --repair \
+    --master-file  /data/raw/sample_master.h5 \
+    --poni-file    /data/calib/detector.poni \
+    --mask-file    /data/calib/mask.edf \
+    --n-jobs       2 \
+    --partition    nice \
+    --conda-env    nrxrdct \
+    --watch
+```
 </code></pre></div>
-</div>
-</div>
-</div>
 <hr />
 <h2 id="rebuilding-a-corrupted-hdf5">Rebuilding a corrupted HDF5<a class="headerlink" href="#rebuilding-a-corrupted-hdf5" title="Permanent link">&para;</a></h2>
 <p>If the output HDF5 is deeply corrupted (damaged B-tree), use <code>rebuild</code> to salvage all readable scans into a fresh file:</p>
@@ -350,6 +389,7 @@
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

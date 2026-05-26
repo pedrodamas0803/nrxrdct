@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,159 +87,69 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">parameters</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../integration/">integration</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">refinement</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >rietveld</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.refinement">refinement</a>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">refinement</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.rietveld.refinement">refinement</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement">BaseRefinement</a>
-        <ul>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.__init__">__init__</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.rietveld.refinement.BaseRefinement">BaseRefinement</a>
     </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.add_excluded_region">add_excluded_region</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.add_phase">add_phase</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.backup_model">backup_model</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.create_model">create_model</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.export_pattern">export_pattern</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.fix_all_parameters">fix_all_parameters</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.free_and_refine_cell">free_and_refine_cell</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.freeze_HAP_parameter">freeze_HAP_parameter</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.freeze_cell">freeze_cell</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.get_Rwp">get_Rwp</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.get_chi2">get_chi2</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.list_backups">list_backups</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.load_model">load_model</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.plot_covariance_matrix">plot_covariance_matrix</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.plot_results">plot_results</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_HAP_parameters">print_HAP_parameters</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_atoms">print_atoms</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_covariance_matrix">print_covariance_matrix</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_instrument_parameters">print_instrument_parameters</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_parameter_info">print_parameter_info</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_phases">print_phases</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_refined_variables">print_refined_variables</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.print_refinement_results">print_refinement_results</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_Uiso">refine_Uiso</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_atomic_positions">refine_atomic_positions</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_babinet">refine_babinet</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_background">refine_background</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_crystallite_size">refine_crystallite_size</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_extinction">refine_extinction</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_gaussian_broadening">refine_gaussian_broadening</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_histogram_scale">refine_histogram_scale</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_hstrain">refine_hstrain</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_lorentzian_broadening">refine_lorentzian_broadening</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_mustrain">refine_mustrain</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_occupancy">refine_occupancy</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_peak_profile">refine_peak_profile</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_phase_content">refine_phase_content</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_phase_scale">refine_phase_scale</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_preferential_orientation">refine_preferential_orientation</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_sample_displacement">refine_sample_displacement</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_wavelength">refine_wavelength</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.refine_zero_shift">refine_zero_shift</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.restore_backup">restore_backup</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.save">save</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_HAP_parameter">set_HAP_parameter</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_LeBail">set_LeBail</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_absorption">set_absorption</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_instrument_parameter">set_instrument_parameter</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_limits">set_limits</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.BaseRefinement.set_sample_parameter">set_sample_parameter</a>
-    </li>
-        </ul>
-    </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.refinement.InstrumentCalibration">InstrumentCalibration</a>
-        <ul>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.InstrumentCalibration.__init__">__init__</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.InstrumentCalibration.plot_calibration_results">plot_calibration_results</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.InstrumentCalibration.refine_instrument_parameters">refine_instrument_parameters</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.refinement.InstrumentCalibration.write_calibrated_instrument_pars">write_calibrated_instrument_pars</a>
-    </li>
-        </ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.rietveld.refinement.InstrumentCalibration">InstrumentCalibration</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../nmf/">nmf</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../io/">io</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -236,6 +167,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">rietveld</li>
       <li class="breadcrumb-item active">refinement</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/refinement.md">Edit on nrxrdct</a>
@@ -253,11 +185,11 @@
 
 
 
-<h2 id="nrxrdct.refinement" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.refinement</span>
+<h2 id="nrxrdct.rietveld.refinement" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.rietveld.refinement</span>
 
 
-<a href="#nrxrdct.refinement" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.rietveld.refinement" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -291,16 +223,16 @@ calibrant-based instrument parameter calibration with dedicated plotting.</p>
 
 
 
-<h3 id="nrxrdct.refinement.BaseRefinement" class="doc doc-heading">
+<h3 id="nrxrdct.rietveld.refinement.BaseRefinement" class="doc doc-heading">
             <span class="doc doc-object-name doc-class-name">BaseRefinement</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="Scan (nrxrdct.parameters.Scan)" href="../parameters/#nrxrdct.parameters.Scan">Scan</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="Scan (nrxrdct.xrdct.parameters.Scan)" href="../parameters/#nrxrdct.xrdct.parameters.Scan">Scan</a></code></p>
 
 
 
@@ -316,7 +248,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 
 
               <details class="quote">
-                <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+                <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
                 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-28">  28</a></span>
 <span class="normal"><a href="#__codelineno-0-29">  29</a></span>
 <span class="normal"><a href="#__codelineno-0-30">  30</a></span>
@@ -4896,7 +4828,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1355" name="__codelineno-0-1355"></a>
 <a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">        Each flag in ``flags`` is applied to the target atoms and a full</span>
 <a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">        refinement cycle is run before moving to the next flag.  This staged</span>
-<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">        approach lets less-correlated parameters (e.g. U\ :sub:`iso`)</span>
+<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">        approach lets less-correlated parameters (e.g. U\\ :sub:`iso`)</span>
 <a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">        converge before adding more (e.g. fractional coordinates).</span>
 <a id="__codelineno-0-1360" name="__codelineno-0-1360"></a>
 <a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">        Args:</span>
@@ -4909,9 +4841,9 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1368" name="__codelineno-0-1368"></a><span class="sd">                    any structural refinement begins.</span>
 <a id="__codelineno-0-1369" name="__codelineno-0-1369"></a>
 <a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">                ``&quot;U&quot;``</span>
-<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">                    Isotropic displacement parameter U\ :sub:`iso` only.</span>
+<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">                    Isotropic displacement parameter U\\ :sub:`iso` only.</span>
 <a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">                    Good first step once scale and background are stable:</span>
-<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">                    U\ :sub:`iso` is weakly correlated with most structural</span>
+<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">                    U\\ :sub:`iso` is weakly correlated with most structural</span>
 <a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">                    parameters and converges quickly.</span>
 <a id="__codelineno-0-1375" name="__codelineno-0-1375"></a>
 <a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">                ``&quot;X&quot;``</span>
@@ -4920,7 +4852,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">                    to let the atoms relax to their equilibrium positions.</span>
 <a id="__codelineno-0-1380" name="__codelineno-0-1380"></a>
 <a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><span class="sd">                ``&quot;XU&quot;``</span>
-<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">                    Fractional coordinates + U\ :sub:`iso`.  Standard choice</span>
+<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">                    Fractional coordinates + U\\ :sub:`iso`.  Standard choice</span>
 <a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><span class="sd">                    for a well-conditioned Rietveld refinement.  Default second</span>
 <a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><span class="sd">                    stage after ``&quot;U&quot;``.</span>
 <a id="__codelineno-0-1385" name="__codelineno-0-1385"></a>
@@ -4931,17 +4863,17 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1390" name="__codelineno-0-1390"></a>
 <a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">                ``&quot;XF&quot;``</span>
 <a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">                    Fractional coordinates + site occupancy.  Use when</span>
-<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">                    U\ :sub:`iso` is already stable and occupancy needs to</span>
+<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">                    U\\ :sub:`iso` is already stable and occupancy needs to</span>
 <a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">                    be freed simultaneously with positional parameters.</span>
 <a id="__codelineno-0-1395" name="__codelineno-0-1395"></a>
 <a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><span class="sd">                ``&quot;XUF&quot;``</span>
-<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">                    Fractional coordinates + U\ :sub:`iso` + occupancy.  Most</span>
-<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">                    complete isotropic refinement.  Occupancy and U\ :sub:`iso`</span>
+<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">                    Fractional coordinates + U\\ :sub:`iso` + occupancy.  Most</span>
+<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">                    complete isotropic refinement.  Occupancy and U\\ :sub:`iso`</span>
 <a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">                    are often correlated — converge them separately first if</span>
 <a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">                    the refinement is unstable.</span>
 <a id="__codelineno-0-1401" name="__codelineno-0-1401"></a>
 <a id="__codelineno-0-1402" name="__codelineno-0-1402"></a><span class="sd">                Note:</span>
-<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">                    Anisotropic displacement parameters (ADP / U\ :sub:`ij`</span>
+<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">                    Anisotropic displacement parameters (ADP / U\\ :sub:`ij`</span>
 <a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><span class="sd">                    tensor) are **not** controlled through this flag string.</span>
 <a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">                    They require changing the atom&#39;s displacement model from</span>
 <a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">                    isotropic (``&#39;I&#39;``) to anisotropic (``&#39;A&#39;``) via the</span>
@@ -5008,7 +4940,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1467" name="__codelineno-0-1467"></a><span class="sd">                all atoms in the target phases.</span>
 <a id="__codelineno-0-1468" name="__codelineno-0-1468"></a>
 <a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">        Note:</span>
-<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">            Occupancy and U\ :sub:`iso` are often correlated, particularly for</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">            Occupancy and U\\ :sub:`iso` are often correlated, particularly for</span>
 <a id="__codelineno-0-1471" name="__codelineno-0-1471"></a><span class="sd">            light atoms or when the site is close to fully occupied.  Converge</span>
 <a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="sd">            the displacement parameters first (via :meth:`refine_atomic_positions`</span>
 <a id="__codelineno-0-1473" name="__codelineno-0-1473"></a><span class="sd">            with flag ``&quot;U&quot;`` or ``&quot;XU&quot;``) before freeing occupancy.</span>
@@ -5064,20 +4996,20 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1523" name="__codelineno-0-1523"></a>        <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-1524" name="__codelineno-0-1524"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-1525" name="__codelineno-0-1525"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="sd">        Refine the isotropic atomic displacement parameter U\ :sub:`iso` for</span>
+<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="sd">        Refine the isotropic atomic displacement parameter U\\ :sub:`iso` for</span>
 <a id="__codelineno-0-1527" name="__codelineno-0-1527"></a><span class="sd">        selected atoms, then optionally freeze the flag.</span>
 <a id="__codelineno-0-1528" name="__codelineno-0-1528"></a>
-<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">        U\ :sub:`iso` (also written B\ :sub:`iso` / 8π²U\ :sub:`iso` in older</span>
+<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">        U\\ :sub:`iso` (also written B\\ :sub:`iso` / 8π²U\\ :sub:`iso` in older</span>
 <a id="__codelineno-0-1530" name="__codelineno-0-1530"></a><span class="sd">        notation) describes the mean-square displacement of an atom from its</span>
 <a id="__codelineno-0-1531" name="__codelineno-0-1531"></a><span class="sd">        equilibrium site, averaged over all directions.  It combines genuine</span>
 <a id="__codelineno-0-1532" name="__codelineno-0-1532"></a><span class="sd">        thermal vibrations with static disorder (positional spread across the</span>
-<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a><span class="sd">        unit cells of the crystal).  Physically, U\ :sub:`iso` enters the</span>
+<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a><span class="sd">        unit cells of the crystal).  Physically, U\\ :sub:`iso` enters the</span>
 <a id="__codelineno-0-1534" name="__codelineno-0-1534"></a><span class="sd">        structure factor as a Debye-Waller factor:</span>
 <a id="__codelineno-0-1535" name="__codelineno-0-1535"></a>
-<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a><span class="sd">            T(sinθ/λ) = exp(−8π² U\ :sub:`iso` sin²θ / λ²)</span>
+<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a><span class="sd">            T(sinθ/λ) = exp(−8π² U\\ :sub:`iso` sin²θ / λ²)</span>
 <a id="__codelineno-0-1537" name="__codelineno-0-1537"></a>
 <a id="__codelineno-0-1538" name="__codelineno-0-1538"></a><span class="sd">        which attenuates the calculated intensity increasingly at high 2θ</span>
-<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a><span class="sd">        angles.  Refining U\ :sub:`iso` therefore corrects the high-angle</span>
+<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a><span class="sd">        angles.  Refining U\\ :sub:`iso` therefore corrects the high-angle</span>
 <a id="__codelineno-0-1540" name="__codelineno-0-1540"></a><span class="sd">        intensity fall-off and is one of the earliest structural parameters</span>
 <a id="__codelineno-0-1541" name="__codelineno-0-1541"></a><span class="sd">        to stabilise in a Rietveld refinement sequence.</span>
 <a id="__codelineno-0-1542" name="__codelineno-0-1542"></a>
@@ -5100,7 +5032,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1559" name="__codelineno-0-1559"></a><span class="sd">                (e.g. ``&quot;Fe&quot;``).  ``None`` (default) refines all isotropic atoms in the target phases.</span>
 <a id="__codelineno-0-1560" name="__codelineno-0-1560"></a><span class="sd">            freeze (bool, optional): If ``True`` (default), remove the ``&#39;U&#39;`` flag after the</span>
 <a id="__codelineno-0-1561" name="__codelineno-0-1561"></a><span class="sd">                refinement cycle, restoring the original flag state.  Set to ``False`` to keep</span>
-<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a><span class="sd">                U\ :sub:`iso` free for subsequent cycles (e.g. when continuing with</span>
+<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a><span class="sd">                U\\ :sub:`iso` free for subsequent cycles (e.g. when continuing with</span>
 <a id="__codelineno-0-1563" name="__codelineno-0-1563"></a><span class="sd">                :meth:`refine_atomic_positions`).</span>
 <a id="__codelineno-0-1564" name="__codelineno-0-1564"></a>
 <a id="__codelineno-0-1565" name="__codelineno-0-1565"></a><span class="sd">        Note:</span>
@@ -5112,25 +5044,25 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1571" name="__codelineno-0-1571"></a><span class="sd">           displacement parameters absorb residual scale errors before</span>
 <a id="__codelineno-0-1572" name="__codelineno-0-1572"></a><span class="sd">           freeing atomic positions.</span>
 <a id="__codelineno-0-1573" name="__codelineno-0-1573"></a><span class="sd">        4. :meth:`refine_atomic_positions` with flag ``&quot;XU&quot;`` — refine</span>
-<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a><span class="sd">           positions and U\ :sub:`iso` simultaneously once the model is stable.</span>
+<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a><span class="sd">           positions and U\\ :sub:`iso` simultaneously once the model is stable.</span>
 <a id="__codelineno-0-1575" name="__codelineno-0-1575"></a>
 <a id="__codelineno-0-1576" name="__codelineno-0-1576"></a><span class="sd">        **Correlations to watch:**</span>
 <a id="__codelineno-0-1577" name="__codelineno-0-1577"></a>
-<a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="sd">        * U\ :sub:`iso` is positively correlated with the overall scale factor</span>
+<a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="sd">        * U\\ :sub:`iso` is positively correlated with the overall scale factor</span>
 <a id="__codelineno-0-1579" name="__codelineno-0-1579"></a><span class="sd">          (both scale the calculated pattern) and with site occupancy.  Ensure</span>
-<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a><span class="sd">          the scale is well determined before freeing U\ :sub:`iso`.</span>
+<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a><span class="sd">          the scale is well determined before freeing U\\ :sub:`iso`.</span>
 <a id="__codelineno-0-1581" name="__codelineno-0-1581"></a><span class="sd">        * For light atoms (Z ≲ 10) the Debye-Waller attenuation is weak and</span>
-<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">          U\ :sub:`iso` may refine to unphysical values; consider fixing it.</span>
-<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">        * Very large U\ :sub:`iso` (&gt; 0.05 Å²) often indicates a wrong atom</span>
+<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">          U\\ :sub:`iso` may refine to unphysical values; consider fixing it.</span>
+<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">        * Very large U\\ :sub:`iso` (&gt; 0.05 Å²) often indicates a wrong atom</span>
 <a id="__codelineno-0-1584" name="__codelineno-0-1584"></a><span class="sd">          type, split site, or structural disorder rather than genuine thermal</span>
 <a id="__codelineno-0-1585" name="__codelineno-0-1585"></a><span class="sd">          motion.</span>
-<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">        * Very small or negative U\ :sub:`iso` usually means the calculated</span>
+<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">        * Very small or negative U\\ :sub:`iso` usually means the calculated</span>
 <a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><span class="sd">          intensities are too low at high angles — check for preferred</span>
 <a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><span class="sd">          orientation, absorption, or an incorrect structure model.</span>
 <a id="__codelineno-0-1589" name="__codelineno-0-1589"></a>
 <a id="__codelineno-0-1590" name="__codelineno-0-1590"></a><span class="sd">        **Typical values:**</span>
 <a id="__codelineno-0-1591" name="__codelineno-0-1591"></a>
-<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">        At room temperature, U\ :sub:`iso` for most inorganic phases falls in</span>
+<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">        At room temperature, U\\ :sub:`iso` for most inorganic phases falls in</span>
 <a id="__codelineno-0-1593" name="__codelineno-0-1593"></a><span class="sd">        the range 0.003–0.020 Å².  Lighter atoms and softer bonding</span>
 <a id="__codelineno-0-1594" name="__codelineno-0-1594"></a><span class="sd">        environments tend toward the upper end.</span>
 <a id="__codelineno-0-1595" name="__codelineno-0-1595"></a><span class="sd">        &quot;&quot;&quot;</span>
@@ -5516,7 +5448,7 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <a id="__codelineno-0-1975" name="__codelineno-0-1975"></a><span class="sd">            or with absorption, which is handled separately through the histogram</span>
 <a id="__codelineno-0-1976" name="__codelineno-0-1976"></a><span class="sd">            sample parameters.  Refine extinction only after the structure is</span>
 <a id="__codelineno-0-1977" name="__codelineno-0-1977"></a><span class="sd">            well determined; it is correlated with the overall scale factor and</span>
-<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">            with U\ :sub:`iso` for the heaviest scatterers.</span>
+<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">            with U\\ :sub:`iso` for the heaviest scatterers.</span>
 <a id="__codelineno-0-1979" name="__codelineno-0-1979"></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-1980" name="__codelineno-0-1980"></a>        <span class="n">available</span> <span class="o">=</span> <span class="p">{</span><span class="n">ph</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">ph</span> <span class="k">for</span> <span class="n">ph</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpx</span><span class="o">.</span><span class="n">phases</span><span class="p">()}</span>
 <a id="__codelineno-0-1981" name="__codelineno-0-1981"></a>        <span class="k">if</span> <span class="n">phase</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -6835,11 +6767,11 @@ step.  Subclass or use directly for calibrant and sample refinements.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.__init__" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.__init__" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">__init__</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__init__</span><span class="p">(</span><span class="n">acquisition_file</span><span class="p">,</span> <span class="n">sample_name</span><span class="p">,</span> <span class="n">scan_type</span><span class="o">=</span><span class="s1">&#39;half-turn&#39;</span><span class="p">,</span> <span class="n">translation_motor</span><span class="o">=</span><span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="o">=</span><span class="s1">&#39;rot&#39;</span><span class="p">,</span> <span class="n">outer_loop_motor</span><span class="o">=</span><span class="s1">&#39;translation&#39;</span><span class="p">,</span> <span class="n">beam_size</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">,</span> <span class="n">beam_energy</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span> <span class="n">tth_lims</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">xy_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;integrated_data.xy&#39;</span><span class="p">),</span> <span class="n">param_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;calibrated_instrument.instprm&#39;</span><span class="p">),</span> <span class="n">polarization</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.99</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -6982,7 +6914,7 @@ instrument parameter file (default 0.99).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-37"> 37</a></span>
 <span class="normal"><a href="#__codelineno-0-38"> 38</a></span>
 <span class="normal"><a href="#__codelineno-0-39"> 39</a></span>
@@ -7119,11 +7051,11 @@ instrument parameter file (default 0.99).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.add_excluded_region" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.add_excluded_region" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">add_excluded_region</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.add_excluded_region" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.add_excluded_region" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">add_excluded_region</span><span class="p">(</span><span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -7169,7 +7101,7 @@ or detector artefacts.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-308">308</a></span>
 <span class="normal"><a href="#__codelineno-0-309">309</a></span>
 <span class="normal"><a href="#__codelineno-0-310">310</a></span>
@@ -7220,11 +7152,11 @@ or detector artefacts.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.add_phase" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.add_phase" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">add_phase</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.add_phase" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.add_phase" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">add_phase</span><span class="p">(</span><span class="n">cif_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;cif_file&#39;</span><span class="p">),</span> <span class="n">phase_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;LaB6&#39;</span><span class="p">,</span> <span class="n">block_cell</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">G2sc</span><span class="o">.</span><span class="n">G2Phase</span>
 </code></pre></div>
 
@@ -7304,7 +7236,7 @@ instrumental parameters are refined in subsequent steps (default <code>True</cod
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-260">260</a></span>
 <span class="normal"><a href="#__codelineno-0-261">261</a></span>
 <span class="normal"><a href="#__codelineno-0-262">262</a></span>
@@ -7371,11 +7303,11 @@ instrumental parameters are refined in subsequent steps (default <code>True</cod
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.backup_model" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.backup_model" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">backup_model</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.backup_model" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.backup_model" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">backup_model</span><span class="p">(</span><span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </code></pre></div>
 
@@ -7442,7 +7374,7 @@ uses the timestamp alone.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-129">129</a></span>
 <span class="normal"><a href="#__codelineno-0-130">130</a></span>
 <span class="normal"><a href="#__codelineno-0-131">131</a></span>
@@ -7517,11 +7449,11 @@ uses the timestamp alone.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.create_model" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.create_model" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">create_model</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.create_model" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.create_model" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">create_model</span><span class="p">(</span><span class="n">gpx_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;model.gpx&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="nb">tuple</span>
 </code></pre></div>
 
@@ -7580,7 +7512,7 @@ uses the timestamp alone.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-241">241</a></span>
 <span class="normal"><a href="#__codelineno-0-242">242</a></span>
 <span class="normal"><a href="#__codelineno-0-243">243</a></span>
@@ -7625,11 +7557,11 @@ uses the timestamp alone.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.export_pattern" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.export_pattern" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">export_pattern</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.export_pattern" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.export_pattern" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">export_pattern</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">&#39;pattern.csv&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -7677,7 +7609,7 @@ extension determines the format:</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2307">2307</a></span>
 <span class="normal"><a href="#__codelineno-0-2308">2308</a></span>
 <span class="normal"><a href="#__codelineno-0-2309">2309</a></span>
@@ -7754,11 +7686,11 @@ extension determines the format:</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.fix_all_parameters" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.fix_all_parameters" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">fix_all_parameters</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.fix_all_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.fix_all_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fix_all_parameters</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -7772,7 +7704,7 @@ microstrain, and preferred orientation.  Does not run a refinement cycle.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2653">2653</a></span>
 <span class="normal"><a href="#__codelineno-0-2654">2654</a></span>
 <span class="normal"><a href="#__codelineno-0-2655">2655</a></span>
@@ -7873,11 +7805,11 @@ microstrain, and preferred orientation.  Does not run a refinement cycle.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.free_and_refine_cell" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.free_and_refine_cell" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">free_and_refine_cell</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.free_and_refine_cell" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.free_and_refine_cell" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">free_and_refine_cell</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">freeze_after</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -7930,7 +7862,7 @@ subsequent steps (default <code>False</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1073">1073</a></span>
 <span class="normal"><a href="#__codelineno-0-1074">1074</a></span>
 <span class="normal"><a href="#__codelineno-0-1075">1075</a></span>
@@ -8029,11 +7961,11 @@ subsequent steps (default <code>False</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.freeze_HAP_parameter" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.freeze_HAP_parameter" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">freeze_HAP_parameter</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.freeze_HAP_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.freeze_HAP_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">freeze_HAP_parameter</span><span class="p">(</span><span class="n">parameters</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -8106,7 +8038,7 @@ phases in the project.  Names must match those passed to
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1147">1147</a></span>
 <span class="normal"><a href="#__codelineno-0-1148">1148</a></span>
 <span class="normal"><a href="#__codelineno-0-1149">1149</a></span>
@@ -8241,11 +8173,11 @@ phases in the project.  Names must match those passed to
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.freeze_cell" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.freeze_cell" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">freeze_cell</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.freeze_cell" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.freeze_cell" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">freeze_cell</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -8284,7 +8216,7 @@ project.  Names must match those passed to :meth:<code>add_phase</code>.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1119">1119</a></span>
 <span class="normal"><a href="#__codelineno-0-1120">1120</a></span>
 <span class="normal"><a href="#__codelineno-0-1121">1121</a></span>
@@ -8347,11 +8279,11 @@ project.  Names must match those passed to :meth:<code>add_phase</code>.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.get_Rwp" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.get_Rwp" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">get_Rwp</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.get_Rwp" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.get_Rwp" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_Rwp</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -8389,7 +8321,7 @@ is defined as::</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2263">2263</a></span>
 <span class="normal"><a href="#__codelineno-0-2264">2264</a></span>
 <span class="normal"><a href="#__codelineno-0-2265">2265</a></span>
@@ -8428,11 +8360,11 @@ is defined as::</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.get_chi2" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.get_chi2" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">get_chi2</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.get_chi2" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.get_chi2" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_chi2</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -8471,7 +8403,7 @@ fit; values ≫ 1 suggest systematic misfit or underestimated errors.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2279">2279</a></span>
 <span class="normal"><a href="#__codelineno-0-2280">2280</a></span>
 <span class="normal"><a href="#__codelineno-0-2281">2281</a></span>
@@ -8512,11 +8444,11 @@ fit; values ≫ 1 suggest systematic misfit or underestimated errors.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.list_backups" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.list_backups" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">list_backups</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.list_backups" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.list_backups" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_backups</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
 </code></pre></div>
 
@@ -8549,7 +8481,7 @@ fit; values ≫ 1 suggest systematic misfit or underestimated errors.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-220">220</a></span>
 <span class="normal"><a href="#__codelineno-0-221">221</a></span>
 <span class="normal"><a href="#__codelineno-0-222">222</a></span>
@@ -8598,11 +8530,11 @@ fit; values ≫ 1 suggest systematic misfit or underestimated errors.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.load_model" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.load_model" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">load_model</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.load_model" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.load_model" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_model</span><span class="p">(</span><span class="n">gpx_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span>
 </code></pre></div>
 
@@ -8664,7 +8596,7 @@ immediately after loading.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-102">102</a></span>
 <span class="normal"><a href="#__codelineno-0-103">103</a></span>
 <span class="normal"><a href="#__codelineno-0-104">104</a></span>
@@ -8725,11 +8657,11 @@ immediately after loading.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.plot_covariance_matrix" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.plot_covariance_matrix" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">plot_covariance_matrix</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.plot_covariance_matrix" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.plot_covariance_matrix" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_covariance_matrix</span><span class="p">(</span><span class="n">show</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="nb">tuple</span>
 </code></pre></div>
 
@@ -8817,7 +8749,7 @@ correlation coefficients in [-1, 1].</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2822">2822</a></span>
 <span class="normal"><a href="#__codelineno-0-2823">2823</a></span>
 <span class="normal"><a href="#__codelineno-0-2824">2824</a></span>
@@ -8928,11 +8860,11 @@ correlation coefficients in [-1, 1].</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.plot_results" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.plot_results" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">plot_results</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.plot_results" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.plot_results" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_results</span><span class="p">(</span><span class="n">image_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">&#39;calibration_plot.png&#39;</span><span class="p">,</span> <span class="n">show</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -8989,7 +8921,7 @@ correlation coefficients in [-1, 1].</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3188">3188</a></span>
 <span class="normal"><a href="#__codelineno-0-3189">3189</a></span>
 <span class="normal"><a href="#__codelineno-0-3190">3190</a></span>
@@ -9178,11 +9110,11 @@ correlation coefficients in [-1, 1].</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_HAP_parameters" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_HAP_parameters" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_HAP_parameters</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_HAP_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_HAP_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_HAP_parameters</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -9252,7 +9184,7 @@ Babinet
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2342">2342</a></span>
 <span class="normal"><a href="#__codelineno-0-2343">2343</a></span>
 <span class="normal"><a href="#__codelineno-0-2344">2344</a></span>
@@ -9549,11 +9481,11 @@ Babinet
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_atoms" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_atoms" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_atoms</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_atoms" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_atoms" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_atoms</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -9592,7 +9524,7 @@ those used in :meth:<code>add_phase</code>.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2874">2874</a></span>
 <span class="normal"><a href="#__codelineno-0-2875">2875</a></span>
 <span class="normal"><a href="#__codelineno-0-2876">2876</a></span>
@@ -9685,11 +9617,11 @@ those used in :meth:<code>add_phase</code>.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_covariance_matrix" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_covariance_matrix" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_covariance_matrix</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_covariance_matrix" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_covariance_matrix" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_covariance_matrix</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -9699,7 +9631,7 @@ those used in :meth:<code>add_phase</code>.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2784">2784</a></span>
 <span class="normal"><a href="#__codelineno-0-2785">2785</a></span>
 <span class="normal"><a href="#__codelineno-0-2786">2786</a></span>
@@ -9782,11 +9714,11 @@ those used in :meth:<code>add_phase</code>.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_instrument_parameters" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_instrument_parameters" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_instrument_parameters</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_instrument_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_instrument_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_instrument_parameters</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -9800,7 +9732,7 @@ arguments to :meth:<code>set_instrument_parameter</code>.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-555">555</a></span>
 <span class="normal"><a href="#__codelineno-0-556">556</a></span>
 <span class="normal"><a href="#__codelineno-0-557">557</a></span>
@@ -9867,11 +9799,11 @@ arguments to :meth:<code>set_instrument_parameter</code>.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_parameter_info" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_parameter_info" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_parameter_info</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_parameter_info" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_parameter_info" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_parameter_info</span><span class="p">(</span><span class="n">category</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -9915,7 +9847,7 @@ or <code>"background"</code>.  <code>None</code> (default) prints all categories
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2917">2917</a></span>
 <span class="normal"><a href="#__codelineno-0-2918">2918</a></span>
 <span class="normal"><a href="#__codelineno-0-2919">2919</a></span>
@@ -10134,11 +10066,11 @@ or <code>"background"</code>.  <code>None</code> (default) prints all categories
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_phases" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_phases" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_phases</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_phases" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_phases" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_phases</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -10225,7 +10157,7 @@ specific to the combination of a phase and a powder histogram):</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3023">3023</a></span>
 <span class="normal"><a href="#__codelineno-0-3024">3024</a></span>
 <span class="normal"><a href="#__codelineno-0-3025">3025</a></span>
@@ -10562,11 +10494,11 @@ specific to the combination of a phase and a powder histogram):</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_refined_variables" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_refined_variables" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_refined_variables</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_refined_variables" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_refined_variables" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_refined_variables</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -10576,7 +10508,7 @@ specific to the combination of a phase and a powder histogram):</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2751">2751</a></span>
 <span class="normal"><a href="#__codelineno-0-2752">2752</a></span>
 <span class="normal"><a href="#__codelineno-0-2753">2753</a></span>
@@ -10649,11 +10581,11 @@ specific to the combination of a phase and a powder histogram):</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.print_refinement_results" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.print_refinement_results" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">print_refinement_results</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.print_refinement_results" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.print_refinement_results" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">print_refinement_results</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -10663,7 +10595,7 @@ specific to the combination of a phase and a powder histogram):</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2069">2069</a></span>
 <span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
 <span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
@@ -11050,11 +10982,11 @@ specific to the combination of a phase and a powder histogram):</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_Uiso" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_Uiso" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_Uiso</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_Uiso" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_Uiso" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_Uiso</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">atoms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -11167,7 +11099,7 @@ environments tend toward the upper end.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1519">1519</a></span>
 <span class="normal"><a href="#__codelineno-0-1520">1520</a></span>
 <span class="normal"><a href="#__codelineno-0-1521">1521</a></span>
@@ -11289,20 +11221,20 @@ environments tend toward the upper end.</p>
 <a id="__codelineno-0-1523" name="__codelineno-0-1523"></a>    <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-1524" name="__codelineno-0-1524"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-1525" name="__codelineno-0-1525"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="sd">    Refine the isotropic atomic displacement parameter U\ :sub:`iso` for</span>
+<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="sd">    Refine the isotropic atomic displacement parameter U\\ :sub:`iso` for</span>
 <a id="__codelineno-0-1527" name="__codelineno-0-1527"></a><span class="sd">    selected atoms, then optionally freeze the flag.</span>
 <a id="__codelineno-0-1528" name="__codelineno-0-1528"></a>
-<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">    U\ :sub:`iso` (also written B\ :sub:`iso` / 8π²U\ :sub:`iso` in older</span>
+<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">    U\\ :sub:`iso` (also written B\\ :sub:`iso` / 8π²U\\ :sub:`iso` in older</span>
 <a id="__codelineno-0-1530" name="__codelineno-0-1530"></a><span class="sd">    notation) describes the mean-square displacement of an atom from its</span>
 <a id="__codelineno-0-1531" name="__codelineno-0-1531"></a><span class="sd">    equilibrium site, averaged over all directions.  It combines genuine</span>
 <a id="__codelineno-0-1532" name="__codelineno-0-1532"></a><span class="sd">    thermal vibrations with static disorder (positional spread across the</span>
-<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a><span class="sd">    unit cells of the crystal).  Physically, U\ :sub:`iso` enters the</span>
+<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a><span class="sd">    unit cells of the crystal).  Physically, U\\ :sub:`iso` enters the</span>
 <a id="__codelineno-0-1534" name="__codelineno-0-1534"></a><span class="sd">    structure factor as a Debye-Waller factor:</span>
 <a id="__codelineno-0-1535" name="__codelineno-0-1535"></a>
-<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a><span class="sd">        T(sinθ/λ) = exp(−8π² U\ :sub:`iso` sin²θ / λ²)</span>
+<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a><span class="sd">        T(sinθ/λ) = exp(−8π² U\\ :sub:`iso` sin²θ / λ²)</span>
 <a id="__codelineno-0-1537" name="__codelineno-0-1537"></a>
 <a id="__codelineno-0-1538" name="__codelineno-0-1538"></a><span class="sd">    which attenuates the calculated intensity increasingly at high 2θ</span>
-<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a><span class="sd">    angles.  Refining U\ :sub:`iso` therefore corrects the high-angle</span>
+<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a><span class="sd">    angles.  Refining U\\ :sub:`iso` therefore corrects the high-angle</span>
 <a id="__codelineno-0-1540" name="__codelineno-0-1540"></a><span class="sd">    intensity fall-off and is one of the earliest structural parameters</span>
 <a id="__codelineno-0-1541" name="__codelineno-0-1541"></a><span class="sd">    to stabilise in a Rietveld refinement sequence.</span>
 <a id="__codelineno-0-1542" name="__codelineno-0-1542"></a>
@@ -11325,7 +11257,7 @@ environments tend toward the upper end.</p>
 <a id="__codelineno-0-1559" name="__codelineno-0-1559"></a><span class="sd">            (e.g. ``&quot;Fe&quot;``).  ``None`` (default) refines all isotropic atoms in the target phases.</span>
 <a id="__codelineno-0-1560" name="__codelineno-0-1560"></a><span class="sd">        freeze (bool, optional): If ``True`` (default), remove the ``&#39;U&#39;`` flag after the</span>
 <a id="__codelineno-0-1561" name="__codelineno-0-1561"></a><span class="sd">            refinement cycle, restoring the original flag state.  Set to ``False`` to keep</span>
-<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a><span class="sd">            U\ :sub:`iso` free for subsequent cycles (e.g. when continuing with</span>
+<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a><span class="sd">            U\\ :sub:`iso` free for subsequent cycles (e.g. when continuing with</span>
 <a id="__codelineno-0-1563" name="__codelineno-0-1563"></a><span class="sd">            :meth:`refine_atomic_positions`).</span>
 <a id="__codelineno-0-1564" name="__codelineno-0-1564"></a>
 <a id="__codelineno-0-1565" name="__codelineno-0-1565"></a><span class="sd">    Note:</span>
@@ -11337,25 +11269,25 @@ environments tend toward the upper end.</p>
 <a id="__codelineno-0-1571" name="__codelineno-0-1571"></a><span class="sd">       displacement parameters absorb residual scale errors before</span>
 <a id="__codelineno-0-1572" name="__codelineno-0-1572"></a><span class="sd">       freeing atomic positions.</span>
 <a id="__codelineno-0-1573" name="__codelineno-0-1573"></a><span class="sd">    4. :meth:`refine_atomic_positions` with flag ``&quot;XU&quot;`` — refine</span>
-<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a><span class="sd">       positions and U\ :sub:`iso` simultaneously once the model is stable.</span>
+<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a><span class="sd">       positions and U\\ :sub:`iso` simultaneously once the model is stable.</span>
 <a id="__codelineno-0-1575" name="__codelineno-0-1575"></a>
 <a id="__codelineno-0-1576" name="__codelineno-0-1576"></a><span class="sd">    **Correlations to watch:**</span>
 <a id="__codelineno-0-1577" name="__codelineno-0-1577"></a>
-<a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="sd">    * U\ :sub:`iso` is positively correlated with the overall scale factor</span>
+<a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="sd">    * U\\ :sub:`iso` is positively correlated with the overall scale factor</span>
 <a id="__codelineno-0-1579" name="__codelineno-0-1579"></a><span class="sd">      (both scale the calculated pattern) and with site occupancy.  Ensure</span>
-<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a><span class="sd">      the scale is well determined before freeing U\ :sub:`iso`.</span>
+<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a><span class="sd">      the scale is well determined before freeing U\\ :sub:`iso`.</span>
 <a id="__codelineno-0-1581" name="__codelineno-0-1581"></a><span class="sd">    * For light atoms (Z ≲ 10) the Debye-Waller attenuation is weak and</span>
-<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">      U\ :sub:`iso` may refine to unphysical values; consider fixing it.</span>
-<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">    * Very large U\ :sub:`iso` (&gt; 0.05 Å²) often indicates a wrong atom</span>
+<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">      U\\ :sub:`iso` may refine to unphysical values; consider fixing it.</span>
+<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">    * Very large U\\ :sub:`iso` (&gt; 0.05 Å²) often indicates a wrong atom</span>
 <a id="__codelineno-0-1584" name="__codelineno-0-1584"></a><span class="sd">      type, split site, or structural disorder rather than genuine thermal</span>
 <a id="__codelineno-0-1585" name="__codelineno-0-1585"></a><span class="sd">      motion.</span>
-<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">    * Very small or negative U\ :sub:`iso` usually means the calculated</span>
+<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">    * Very small or negative U\\ :sub:`iso` usually means the calculated</span>
 <a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><span class="sd">      intensities are too low at high angles — check for preferred</span>
 <a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><span class="sd">      orientation, absorption, or an incorrect structure model.</span>
 <a id="__codelineno-0-1589" name="__codelineno-0-1589"></a>
 <a id="__codelineno-0-1590" name="__codelineno-0-1590"></a><span class="sd">    **Typical values:**</span>
 <a id="__codelineno-0-1591" name="__codelineno-0-1591"></a>
-<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">    At room temperature, U\ :sub:`iso` for most inorganic phases falls in</span>
+<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">    At room temperature, U\\ :sub:`iso` for most inorganic phases falls in</span>
 <a id="__codelineno-0-1593" name="__codelineno-0-1593"></a><span class="sd">    the range 0.003–0.020 Å².  Lighter atoms and softer bonding</span>
 <a id="__codelineno-0-1594" name="__codelineno-0-1594"></a><span class="sd">    environments tend toward the upper end.</span>
 <a id="__codelineno-0-1595" name="__codelineno-0-1595"></a><span class="sd">    &quot;&quot;&quot;</span>
@@ -11406,11 +11338,11 @@ environments tend toward the upper end.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_atomic_positions" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_atomic_positions" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_atomic_positions</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_atomic_positions" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_atomic_positions" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_atomic_positions</span><span class="p">(</span><span class="n">flags</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;U&#39;</span><span class="p">,</span> <span class="s1">&#39;XU&#39;</span><span class="p">],</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">atoms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -11514,7 +11446,7 @@ refines all atoms.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1347">1347</a></span>
 <span class="normal"><a href="#__codelineno-0-1348">1348</a></span>
 <span class="normal"><a href="#__codelineno-0-1349">1349</a></span>
@@ -11623,7 +11555,7 @@ refines all atoms.</p>
 <a id="__codelineno-0-1355" name="__codelineno-0-1355"></a>
 <a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">    Each flag in ``flags`` is applied to the target atoms and a full</span>
 <a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">    refinement cycle is run before moving to the next flag.  This staged</span>
-<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">    approach lets less-correlated parameters (e.g. U\ :sub:`iso`)</span>
+<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">    approach lets less-correlated parameters (e.g. U\\ :sub:`iso`)</span>
 <a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">    converge before adding more (e.g. fractional coordinates).</span>
 <a id="__codelineno-0-1360" name="__codelineno-0-1360"></a>
 <a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">    Args:</span>
@@ -11636,9 +11568,9 @@ refines all atoms.</p>
 <a id="__codelineno-0-1368" name="__codelineno-0-1368"></a><span class="sd">                any structural refinement begins.</span>
 <a id="__codelineno-0-1369" name="__codelineno-0-1369"></a>
 <a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">            ``&quot;U&quot;``</span>
-<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">                Isotropic displacement parameter U\ :sub:`iso` only.</span>
+<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">                Isotropic displacement parameter U\\ :sub:`iso` only.</span>
 <a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">                Good first step once scale and background are stable:</span>
-<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">                U\ :sub:`iso` is weakly correlated with most structural</span>
+<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">                U\\ :sub:`iso` is weakly correlated with most structural</span>
 <a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">                parameters and converges quickly.</span>
 <a id="__codelineno-0-1375" name="__codelineno-0-1375"></a>
 <a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">            ``&quot;X&quot;``</span>
@@ -11647,7 +11579,7 @@ refines all atoms.</p>
 <a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">                to let the atoms relax to their equilibrium positions.</span>
 <a id="__codelineno-0-1380" name="__codelineno-0-1380"></a>
 <a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><span class="sd">            ``&quot;XU&quot;``</span>
-<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">                Fractional coordinates + U\ :sub:`iso`.  Standard choice</span>
+<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">                Fractional coordinates + U\\ :sub:`iso`.  Standard choice</span>
 <a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><span class="sd">                for a well-conditioned Rietveld refinement.  Default second</span>
 <a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><span class="sd">                stage after ``&quot;U&quot;``.</span>
 <a id="__codelineno-0-1385" name="__codelineno-0-1385"></a>
@@ -11658,17 +11590,17 @@ refines all atoms.</p>
 <a id="__codelineno-0-1390" name="__codelineno-0-1390"></a>
 <a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">            ``&quot;XF&quot;``</span>
 <a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">                Fractional coordinates + site occupancy.  Use when</span>
-<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">                U\ :sub:`iso` is already stable and occupancy needs to</span>
+<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">                U\\ :sub:`iso` is already stable and occupancy needs to</span>
 <a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">                be freed simultaneously with positional parameters.</span>
 <a id="__codelineno-0-1395" name="__codelineno-0-1395"></a>
 <a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><span class="sd">            ``&quot;XUF&quot;``</span>
-<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">                Fractional coordinates + U\ :sub:`iso` + occupancy.  Most</span>
-<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">                complete isotropic refinement.  Occupancy and U\ :sub:`iso`</span>
+<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">                Fractional coordinates + U\\ :sub:`iso` + occupancy.  Most</span>
+<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">                complete isotropic refinement.  Occupancy and U\\ :sub:`iso`</span>
 <a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">                are often correlated — converge them separately first if</span>
 <a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">                the refinement is unstable.</span>
 <a id="__codelineno-0-1401" name="__codelineno-0-1401"></a>
 <a id="__codelineno-0-1402" name="__codelineno-0-1402"></a><span class="sd">            Note:</span>
-<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">                Anisotropic displacement parameters (ADP / U\ :sub:`ij`</span>
+<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">                Anisotropic displacement parameters (ADP / U\\ :sub:`ij`</span>
 <a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><span class="sd">                tensor) are **not** controlled through this flag string.</span>
 <a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">                They require changing the atom&#39;s displacement model from</span>
 <a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">                isotropic (``&#39;I&#39;``) to anisotropic (``&#39;A&#39;``) via the</span>
@@ -11719,11 +11651,11 @@ refines all atoms.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_babinet" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_babinet" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_babinet</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_babinet" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_babinet" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_babinet</span><span class="p">(</span><span class="n">refine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BabA&#39;</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -11796,7 +11728,7 @@ both before introducing Babinet terms.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1999">1999</a></span>
 <span class="normal"><a href="#__codelineno-0-2000">2000</a></span>
 <span class="normal"><a href="#__codelineno-0-2001">2001</a></span>
@@ -11943,11 +11875,11 @@ both before introducing Babinet terms.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_background" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_background" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_background</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_background" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_background" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_background</span><span class="p">(</span><span class="n">number_coeff</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">do_refine</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">function</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;chebyschev&#39;</span><span class="p">,</span> <span class="n">debye_terms</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -12039,7 +11971,7 @@ defaults):</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-377">377</a></span>
 <span class="normal"><a href="#__codelineno-0-378">378</a></span>
 <span class="normal"><a href="#__codelineno-0-379">379</a></span>
@@ -12246,11 +12178,11 @@ defaults):</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_crystallite_size" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_crystallite_size" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_crystallite_size</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_crystallite_size" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_crystallite_size" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_crystallite_size</span><span class="p">(</span><span class="n">refine_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;isotropic&#39;</span><span class="p">,</span> <span class="n">refine_dict</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -12361,7 +12293,7 @@ Rietveld refinement.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1651">1651</a></span>
 <span class="normal"><a href="#__codelineno-0-1652">1652</a></span>
 <span class="normal"><a href="#__codelineno-0-1653">1653</a></span>
@@ -12600,11 +12532,11 @@ Rietveld refinement.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_extinction" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_extinction" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_extinction</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_extinction" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_extinction" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_extinction</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -12668,7 +12600,7 @@ with U\ :sub:<code>iso</code> for the heaviest scatterers.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1943">1943</a></span>
 <span class="normal"><a href="#__codelineno-0-1944">1944</a></span>
 <span class="normal"><a href="#__codelineno-0-1945">1945</a></span>
@@ -12758,7 +12690,7 @@ with U\ :sub:<code>iso</code> for the heaviest scatterers.</p>
 <a id="__codelineno-0-1975" name="__codelineno-0-1975"></a><span class="sd">        or with absorption, which is handled separately through the histogram</span>
 <a id="__codelineno-0-1976" name="__codelineno-0-1976"></a><span class="sd">        sample parameters.  Refine extinction only after the structure is</span>
 <a id="__codelineno-0-1977" name="__codelineno-0-1977"></a><span class="sd">        well determined; it is correlated with the overall scale factor and</span>
-<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">        with U\ :sub:`iso` for the heaviest scatterers.</span>
+<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">        with U\\ :sub:`iso` for the heaviest scatterers.</span>
 <a id="__codelineno-0-1979" name="__codelineno-0-1979"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-1980" name="__codelineno-0-1980"></a>    <span class="n">available</span> <span class="o">=</span> <span class="p">{</span><span class="n">ph</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">ph</span> <span class="k">for</span> <span class="n">ph</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpx</span><span class="o">.</span><span class="n">phases</span><span class="p">()}</span>
 <a id="__codelineno-0-1981" name="__codelineno-0-1981"></a>    <span class="k">if</span> <span class="n">phase</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -12787,11 +12719,11 @@ with U\ :sub:<code>iso</code> for the heaviest scatterers.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_gaussian_broadening" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_gaussian_broadening" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_gaussian_broadening</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_gaussian_broadening" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_gaussian_broadening" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_gaussian_broadening</span><span class="p">(</span><span class="n">refine</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;U&#39;</span><span class="p">,</span> <span class="s1">&#39;V&#39;</span><span class="p">,</span> <span class="s1">&#39;W&#39;</span><span class="p">,</span> <span class="s1">&#39;SH/L&#39;</span><span class="p">],</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -12863,7 +12795,7 @@ desired list via the <code>parameters</code> argument.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-780">780</a></span>
 <span class="normal"><a href="#__codelineno-0-781">781</a></span>
 <span class="normal"><a href="#__codelineno-0-782">782</a></span>
@@ -13004,11 +12936,11 @@ desired list via the <code>parameters</code> argument.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_histogram_scale" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_histogram_scale" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_histogram_scale</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_histogram_scale" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_histogram_scale" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_histogram_scale</span><span class="p">(</span><span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -13018,7 +12950,7 @@ desired list via the <code>parameters</code> argument.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-477">477</a></span>
 <span class="normal"><a href="#__codelineno-0-478">478</a></span>
 <span class="normal"><a href="#__codelineno-0-479">479</a></span>
@@ -13047,11 +12979,11 @@ desired list via the <code>parameters</code> argument.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_hstrain" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_hstrain" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_hstrain</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_hstrain" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_hstrain" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_hstrain</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -13117,7 +13049,7 @@ d-spacing observations.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1886">1886</a></span>
 <span class="normal"><a href="#__codelineno-0-1887">1887</a></span>
 <span class="normal"><a href="#__codelineno-0-1888">1888</a></span>
@@ -13238,11 +13170,11 @@ d-spacing observations.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_lorentzian_broadening" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_lorentzian_broadening" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_lorentzian_broadening</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_lorentzian_broadening" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_lorentzian_broadening" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_lorentzian_broadening</span><span class="p">(</span><span class="n">refine</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">,</span> <span class="s1">&#39;Y&#39;</span><span class="p">],</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -13301,7 +13233,7 @@ desired list via the <code>parameters</code> argument.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-847">847</a></span>
 <span class="normal"><a href="#__codelineno-0-848">848</a></span>
 <span class="normal"><a href="#__codelineno-0-849">849</a></span>
@@ -13410,11 +13342,11 @@ desired list via the <code>parameters</code> argument.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_mustrain" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_mustrain" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_mustrain</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_mustrain" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_mustrain" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_mustrain</span><span class="p">(</span><span class="n">refine_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;isotropic&#39;</span><span class="p">,</span> <span class="n">refine_dict</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -13525,7 +13457,7 @@ support it.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1767">1767</a></span>
 <span class="normal"><a href="#__codelineno-0-1768">1768</a></span>
 <span class="normal"><a href="#__codelineno-0-1769">1769</a></span>
@@ -13770,11 +13702,11 @@ support it.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_occupancy" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_occupancy" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_occupancy</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_occupancy" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_occupancy" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_occupancy</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">atoms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -13842,7 +13774,7 @@ the scale factor and may cause divergence.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1446">1446</a></span>
 <span class="normal"><a href="#__codelineno-0-1447">1447</a></span>
 <span class="normal"><a href="#__codelineno-0-1448">1448</a></span>
@@ -13938,7 +13870,7 @@ the scale factor and may cause divergence.</p>
 <a id="__codelineno-0-1467" name="__codelineno-0-1467"></a><span class="sd">            all atoms in the target phases.</span>
 <a id="__codelineno-0-1468" name="__codelineno-0-1468"></a>
 <a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">        Occupancy and U\ :sub:`iso` are often correlated, particularly for</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">        Occupancy and U\\ :sub:`iso` are often correlated, particularly for</span>
 <a id="__codelineno-0-1471" name="__codelineno-0-1471"></a><span class="sd">        light atoms or when the site is close to fully occupied.  Converge</span>
 <a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="sd">        the displacement parameters first (via :meth:`refine_atomic_positions`</span>
 <a id="__codelineno-0-1473" name="__codelineno-0-1473"></a><span class="sd">        with flag ``&quot;U&quot;`` or ``&quot;XU&quot;``) before freeing occupancy.</span>
@@ -13995,11 +13927,11 @@ the scale factor and may cause divergence.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_peak_profile" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_peak_profile" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_peak_profile</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_peak_profile" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_peak_profile" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_peak_profile</span><span class="p">(</span><span class="n">profile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FCJVoigt&#39;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -14130,7 +14062,7 @@ If <code>None</code> (default), a sensible starting set is used:</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-898"> 898</a></span>
 <span class="normal"><a href="#__codelineno-0-899"> 899</a></span>
 <span class="normal"><a href="#__codelineno-0-900"> 900</a></span>
@@ -14487,11 +14419,11 @@ If <code>None</code> (default), a sensible starting set is used:</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_phase_content" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_phase_content" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_phase_content</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_phase_content" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_phase_content" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_phase_content</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -14502,7 +14434,7 @@ If <code>None</code> (default), a sensible starting set is used:</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1635">1635</a></span>
 <span class="normal"><a href="#__codelineno-0-1636">1636</a></span>
 <span class="normal"><a href="#__codelineno-0-1637">1637</a></span>
@@ -14541,11 +14473,11 @@ If <code>None</code> (default), a sensible starting set is used:</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_phase_scale" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_phase_scale" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_phase_scale</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_phase_scale" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_phase_scale" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_phase_scale</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -14591,7 +14523,7 @@ should be refined.  Names must match those used in :meth:<code>add_phase</code>.
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-488">488</a></span>
 <span class="normal"><a href="#__codelineno-0-489">489</a></span>
 <span class="normal"><a href="#__codelineno-0-490">490</a></span>
@@ -14654,11 +14586,11 @@ should be refined.  Names must match those used in :meth:<code>add_phase</code>.
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_preferential_orientation" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_preferential_orientation" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_preferential_orientation</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_preferential_orientation" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_preferential_orientation" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_preferential_orientation</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;MD&#39;</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">parsMD</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">MD_DICT</span><span class="p">,</span> <span class="n">parsSH</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">SH_DICT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -14702,7 +14634,7 @@ See model descriptions below.</p>
             <li>
               <b><code>parsMD</code></b>
                   (<code><span title="dict">dict</span></code>, default:
-                      <code><span title="nrxrdct.refine_dict.MD_DICT">MD_DICT</span></code>
+                      <code><span title="nrxrdct.rietveld.refine_dict.MD_DICT">MD_DICT</span></code>
 )
               –
               <div class="doc-md-description">
@@ -14714,7 +14646,7 @@ when overriding any value — partial updates are not merged automatically.</p>
             <li>
               <b><code>parsSH</code></b>
                   (<code><span title="dict">dict</span></code>, default:
-                      <code><span title="nrxrdct.refine_dict.SH_DICT">SH_DICT</span></code>
+                      <code><span title="nrxrdct.rietveld.refine_dict.SH_DICT">SH_DICT</span></code>
 )
               –
               <div class="doc-md-description">
@@ -14816,7 +14748,7 @@ Default::
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1211">1211</a></span>
 <span class="normal"><a href="#__codelineno-0-1212">1212</a></span>
 <span class="normal"><a href="#__codelineno-0-1213">1213</a></span>
@@ -15095,11 +15027,11 @@ Default::
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_sample_displacement" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_sample_displacement" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_sample_displacement</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_sample_displacement" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_sample_displacement" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_sample_displacement</span><span class="p">(</span><span class="n">parameter</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Shift&#39;</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15161,7 +15093,7 @@ weighting.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-638">638</a></span>
 <span class="normal"><a href="#__codelineno-0-639">639</a></span>
 <span class="normal"><a href="#__codelineno-0-640">640</a></span>
@@ -15266,11 +15198,11 @@ weighting.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_wavelength" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_wavelength" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_wavelength</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_wavelength" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_wavelength" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_wavelength</span><span class="p">(</span><span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15313,7 +15245,7 @@ so the wavelength stays fixed in subsequent steps (default <code>False</code>).<
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-527">527</a></span>
 <span class="normal"><a href="#__codelineno-0-528">528</a></span>
 <span class="normal"><a href="#__codelineno-0-529">529</a></span>
@@ -15376,11 +15308,11 @@ so the wavelength stays fixed in subsequent steps (default <code>False</code>).<
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.refine_zero_shift" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.refine_zero_shift" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_zero_shift</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.refine_zero_shift" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.refine_zero_shift" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_zero_shift</span><span class="p">(</span><span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15390,7 +15322,7 @@ so the wavelength stays fixed in subsequent steps (default <code>False</code>).<
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-516">516</a></span>
 <span class="normal"><a href="#__codelineno-0-517">517</a></span>
 <span class="normal"><a href="#__codelineno-0-518">518</a></span>
@@ -15419,11 +15351,11 @@ so the wavelength stays fixed in subsequent steps (default <code>False</code>).<
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.restore_backup" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.restore_backup" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">restore_backup</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.restore_backup" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.restore_backup" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">restore_backup</span><span class="p">(</span><span class="n">backup</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15505,7 +15437,7 @@ calls reflect the restored state.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-163">163</a></span>
 <span class="normal"><a href="#__codelineno-0-164">164</a></span>
 <span class="normal"><a href="#__codelineno-0-165">165</a></span>
@@ -15626,11 +15558,11 @@ calls reflect the restored state.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.save" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.save" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">save</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.save" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.save" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15643,7 +15575,7 @@ reflects the current in-memory state.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2296">2296</a></span>
 <span class="normal"><a href="#__codelineno-0-2297">2297</a></span>
 <span class="normal"><a href="#__codelineno-0-2298">2298</a></span>
@@ -15672,11 +15604,11 @@ reflects the current in-memory state.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_HAP_parameter" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_HAP_parameter" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_HAP_parameter</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_HAP_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_HAP_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_HAP_parameter</span><span class="p">(</span><span class="n">parameter</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -15790,7 +15722,7 @@ set as a single scalar.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2487">2487</a></span>
 <span class="normal"><a href="#__codelineno-0-2488">2488</a></span>
 <span class="normal"><a href="#__codelineno-0-2489">2489</a></span>
@@ -16129,11 +16061,11 @@ set as a single scalar.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_LeBail" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_LeBail" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_LeBail</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_LeBail" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_LeBail" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_LeBail</span><span class="p">(</span><span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">enable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -16194,7 +16126,7 @@ to Rietveld mode.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-330">330</a></span>
 <span class="normal"><a href="#__codelineno-0-331">331</a></span>
 <span class="normal"><a href="#__codelineno-0-332">332</a></span>
@@ -16295,11 +16227,11 @@ to Rietveld mode.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_absorption" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_absorption" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_absorption</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_absorption" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_absorption" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_absorption</span><span class="p">(</span><span class="n">absorption</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">refine</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -16376,7 +16308,7 @@ Default <code>False</code> (parameter fixed at the supplied value).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-687">687</a></span>
 <span class="normal"><a href="#__codelineno-0-688">688</a></span>
 <span class="normal"><a href="#__codelineno-0-689">689</a></span>
@@ -16485,11 +16417,11 @@ Default <code>False</code> (parameter fixed at the supplied value).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_instrument_parameter" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_instrument_parameter" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_instrument_parameter</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_instrument_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_instrument_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_instrument_parameter</span><span class="p">(</span><span class="n">parameter</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -16582,7 +16514,7 @@ metadata field such as <code>"Type"</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-585">585</a></span>
 <span class="normal"><a href="#__codelineno-0-586">586</a></span>
 <span class="normal"><a href="#__codelineno-0-587">587</a></span>
@@ -16695,11 +16627,11 @@ metadata field such as <code>"Type"</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_limits" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_limits" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_limits</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_limits" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_limits" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_limits</span><span class="p">(</span><span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -16744,7 +16676,7 @@ the range without rebuilding the project.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-290">290</a></span>
 <span class="normal"><a href="#__codelineno-0-291">291</a></span>
 <span class="normal"><a href="#__codelineno-0-292">292</a></span>
@@ -16787,11 +16719,11 @@ the range without rebuilding the project.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.BaseRefinement.set_sample_parameter" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.BaseRefinement.set_sample_parameter" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">set_sample_parameter</span>
 
 
-<a href="#nrxrdct.refinement.BaseRefinement.set_sample_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.BaseRefinement.set_sample_parameter" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_sample_parameter</span><span class="p">(</span><span class="n">parameter</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">freeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -16880,7 +16812,7 @@ so the parameter stays fixed in subsequent cycles (default <code>False</code>).<
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-738">738</a></span>
 <span class="normal"><a href="#__codelineno-0-739">739</a></span>
 <span class="normal"><a href="#__codelineno-0-740">740</a></span>
@@ -16981,16 +16913,16 @@ so the parameter stays fixed in subsequent cycles (default <code>False</code>).<
 
 
 
-<h3 id="nrxrdct.refinement.InstrumentCalibration" class="doc doc-heading">
+<h3 id="nrxrdct.rietveld.refinement.InstrumentCalibration" class="doc doc-heading">
             <span class="doc doc-object-name doc-class-name">InstrumentCalibration</span>
 
 
-<a href="#nrxrdct.refinement.InstrumentCalibration" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.rietveld.refinement.InstrumentCalibration" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="BaseRefinement (nrxrdct.refinement.BaseRefinement)" href="#nrxrdct.refinement.BaseRefinement">BaseRefinement</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="BaseRefinement (nrxrdct.rietveld.refinement.BaseRefinement)" href="#nrxrdct.rietveld.refinement.BaseRefinement">BaseRefinement</a></code></p>
 
 
 
@@ -17006,7 +16938,7 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 
 
               <details class="quote">
-                <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+                <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
                 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3280">3280</a></span>
 <span class="normal"><a href="#__codelineno-0-3281">3281</a></span>
 <span class="normal"><a href="#__codelineno-0-3282">3282</a></span>
@@ -17689,7 +17621,7 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 <a id="__codelineno-0-3510" name="__codelineno-0-3510"></a><span class="sd">            the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).</span>
 <a id="__codelineno-0-3511" name="__codelineno-0-3511"></a>
 <a id="__codelineno-0-3512" name="__codelineno-0-3512"></a><span class="sd">        **Bottom-left — Difference plot** (``ax_diff``, shares x-axis)</span>
-<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">            Observed minus calculated residuals (I\ :sub:`obs` − I\ :sub:`calc`)</span>
+<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">            Observed minus calculated residuals (I\\ :sub:`obs` − I\\ :sub:`calc`)</span>
 <a id="__codelineno-0-3514" name="__codelineno-0-3514"></a><span class="sd">            in intensity units.  A horizontal dashed line marks zero.  A good</span>
 <a id="__codelineno-0-3515" name="__codelineno-0-3515"></a><span class="sd">            calibration should show a flat, featureless residual with amplitude</span>
 <a id="__codelineno-0-3516" name="__codelineno-0-3516"></a><span class="sd">            well below the peak heights.  Systematic wiggles indicate</span>
@@ -17725,7 +17657,7 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 <a id="__codelineno-0-3546" name="__codelineno-0-3546"></a><span class="sd">            (TCH) combined total (black).  The TCH pseudo-Voigt combination</span>
 <a id="__codelineno-0-3547" name="__codelineno-0-3547"></a><span class="sd">            rule is:</span>
 <a id="__codelineno-0-3548" name="__codelineno-0-3548"></a>
-<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a><span class="sd">                FWHM\ :sub:`total`\ ⁵ = FWHM\ :sub:`G`\ ⁵ + FWHM\ :sub:`L`\ ⁵</span>
+<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a><span class="sd">                FWHM\\ :sub:`total`\\ ⁵ = FWHM\\ :sub:`G`\\ ⁵ + FWHM\\ :sub:`L`\\ ⁵</span>
 <a id="__codelineno-0-3550" name="__codelineno-0-3550"></a>
 <a id="__codelineno-0-3551" name="__codelineno-0-3551"></a><span class="sd">            Use this panel to judge whether the peak-width model is</span>
 <a id="__codelineno-0-3552" name="__codelineno-0-3552"></a><span class="sd">            physically reasonable across the full angular range.  If the</span>
@@ -17925,11 +17857,11 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.InstrumentCalibration.__init__" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.InstrumentCalibration.__init__" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">__init__</span>
 
 
-<a href="#nrxrdct.refinement.InstrumentCalibration.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.InstrumentCalibration.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__init__</span><span class="p">(</span><span class="n">acquisition_file</span><span class="p">,</span> <span class="n">sample_name</span><span class="p">,</span> <span class="n">scan_type</span><span class="o">=</span><span class="s1">&#39;half-turn&#39;</span><span class="p">,</span> <span class="n">translation_motor</span><span class="o">=</span><span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="o">=</span><span class="s1">&#39;rot&#39;</span><span class="p">,</span> <span class="n">outer_loop_motor</span><span class="o">=</span><span class="s1">&#39;translation&#39;</span><span class="p">,</span> <span class="n">beam_size</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">,</span> <span class="n">beam_energy</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span> <span class="n">tth_lims</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">xy_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s1">&#39;integrated_data.xy&#39;</span><span class="p">),</span> <span class="n">param_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s1">&#39;calibrated_instrument.instprm&#39;</span><span class="p">),</span> <span class="n">polarization</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span> <span class="n">image_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;calibration_results.png&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -18082,7 +18014,7 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3289">3289</a></span>
 <span class="normal"><a href="#__codelineno-0-3290">3290</a></span>
 <span class="normal"><a href="#__codelineno-0-3291">3291</a></span>
@@ -18227,11 +18159,11 @@ a richer diagnostic plot (parameter bar chart, FWHM model, parameter table).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.InstrumentCalibration.plot_calibration_results" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.InstrumentCalibration.plot_calibration_results" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">plot_calibration_results</span>
 
 
-<a href="#nrxrdct.refinement.InstrumentCalibration.plot_calibration_results" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.InstrumentCalibration.plot_calibration_results" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_calibration_results</span><span class="p">(</span><span class="n">show</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -18348,7 +18280,7 @@ The <code>calibration/</code> directory is created automatically in
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3491">3491</a></span>
 <span class="normal"><a href="#__codelineno-0-3492">3492</a></span>
 <span class="normal"><a href="#__codelineno-0-3493">3493</a></span>
@@ -18609,7 +18541,7 @@ The <code>calibration/</code> directory is created automatically in
 <a id="__codelineno-0-3510" name="__codelineno-0-3510"></a><span class="sd">        the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).</span>
 <a id="__codelineno-0-3511" name="__codelineno-0-3511"></a>
 <a id="__codelineno-0-3512" name="__codelineno-0-3512"></a><span class="sd">    **Bottom-left — Difference plot** (``ax_diff``, shares x-axis)</span>
-<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">        Observed minus calculated residuals (I\ :sub:`obs` − I\ :sub:`calc`)</span>
+<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">        Observed minus calculated residuals (I\\ :sub:`obs` − I\\ :sub:`calc`)</span>
 <a id="__codelineno-0-3514" name="__codelineno-0-3514"></a><span class="sd">        in intensity units.  A horizontal dashed line marks zero.  A good</span>
 <a id="__codelineno-0-3515" name="__codelineno-0-3515"></a><span class="sd">        calibration should show a flat, featureless residual with amplitude</span>
 <a id="__codelineno-0-3516" name="__codelineno-0-3516"></a><span class="sd">        well below the peak heights.  Systematic wiggles indicate</span>
@@ -18645,7 +18577,7 @@ The <code>calibration/</code> directory is created automatically in
 <a id="__codelineno-0-3546" name="__codelineno-0-3546"></a><span class="sd">        (TCH) combined total (black).  The TCH pseudo-Voigt combination</span>
 <a id="__codelineno-0-3547" name="__codelineno-0-3547"></a><span class="sd">        rule is:</span>
 <a id="__codelineno-0-3548" name="__codelineno-0-3548"></a>
-<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a><span class="sd">            FWHM\ :sub:`total`\ ⁵ = FWHM\ :sub:`G`\ ⁵ + FWHM\ :sub:`L`\ ⁵</span>
+<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a><span class="sd">            FWHM\\ :sub:`total`\\ ⁵ = FWHM\\ :sub:`G`\\ ⁵ + FWHM\\ :sub:`L`\\ ⁵</span>
 <a id="__codelineno-0-3550" name="__codelineno-0-3550"></a>
 <a id="__codelineno-0-3551" name="__codelineno-0-3551"></a><span class="sd">        Use this panel to judge whether the peak-width model is</span>
 <a id="__codelineno-0-3552" name="__codelineno-0-3552"></a><span class="sd">        physically reasonable across the full angular range.  If the</span>
@@ -18835,11 +18767,11 @@ The <code>calibration/</code> directory is created automatically in
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.InstrumentCalibration.refine_instrument_parameters" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.InstrumentCalibration.refine_instrument_parameters" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">refine_instrument_parameters</span>
 
 
-<a href="#nrxrdct.refinement.InstrumentCalibration.refine_instrument_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.InstrumentCalibration.refine_instrument_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">refine_instrument_parameters</span><span class="p">(</span><span class="n">profile_params</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;W&#39;</span><span class="p">,</span> <span class="s1">&#39;X&#39;</span><span class="p">,</span> <span class="s1">&#39;Y&#39;</span><span class="p">],</span> <span class="n">profile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;FCJVoigt&#39;</span><span class="p">,</span> <span class="n">n_background_coeff</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">background_function</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;chebyschev&#39;</span><span class="p">,</span> <span class="n">use_lebail</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -18944,7 +18876,7 @@ exact structure is well-known and whose scale should not contaminate the profile
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3358">3358</a></span>
 <span class="normal"><a href="#__codelineno-0-3359">3359</a></span>
 <span class="normal"><a href="#__codelineno-0-3360">3360</a></span>
@@ -19113,11 +19045,11 @@ exact structure is well-known and whose scale should not contaminate the profile
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.refinement.InstrumentCalibration.write_calibrated_instrument_pars" class="doc doc-heading">
+<h4 id="nrxrdct.rietveld.refinement.InstrumentCalibration.write_calibrated_instrument_pars" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">write_calibrated_instrument_pars</span>
 
 
-<a href="#nrxrdct.refinement.InstrumentCalibration.write_calibrated_instrument_pars" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.rietveld.refinement.InstrumentCalibration.write_calibrated_instrument_pars" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_calibrated_instrument_pars</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -19129,7 +19061,7 @@ values are also printed to stdout for quick verification.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/refinement.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/rietveld/refinement.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3439">3439</a></span>
 <span class="normal"><a href="#__codelineno-0-3440">3440</a></span>
 <span class="normal"><a href="#__codelineno-0-3441">3441</a></span>
@@ -19258,7 +19190,7 @@ values are also printed to stdout for quick verification.</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../reconstruction/" class="btn btn-neutral float-left" title="reconstruction"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../fluorescence/" class="btn btn-neutral float-left" title="fluorescence"><span class="icon icon-circle-arrow-left"></span> Previous</a>
         <a href="../refine_dict/" class="btn btn-neutral float-right" title="refine_dict">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
@@ -19286,7 +19218,7 @@ values are also printed to stdout for quick verification.</p>
         </span>
     
     
-      <span><a href="../reconstruction/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../fluorescence/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
       <span><a href="../refine_dict/" style="color: #fcfcfc">Next &raquo;</a></span>
@@ -19297,6 +19229,7 @@ values are also printed to stdout for quick verification.</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

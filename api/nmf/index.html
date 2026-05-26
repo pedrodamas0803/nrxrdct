@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,51 +87,67 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">parameters</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">nmf</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >fitting</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.nmf">nmf</a>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">nmf</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.fitting.nmf">nmf</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.nmf.HyperspectralNMF">HyperspectralNMF</a>
-        <ul>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.nmf.HyperspectralNMF.__init__">__init__</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.nmf.HyperspectralNMF.fit_data">fit_data</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.nmf.HyperspectralNMF.plot">plot</a>
-    </li>
-        </ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.fitting.nmf.HyperspectralNMF">HyperspectralNMF</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../io/">io</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -128,6 +165,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">fitting</li>
       <li class="breadcrumb-item active">nmf</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/nmf.md">Edit on nrxrdct</a>
@@ -145,11 +183,11 @@
 
 
 
-<h2 id="nrxrdct.nmf" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.nmf</span>
+<h2 id="nrxrdct.fitting.nmf" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.fitting.nmf</span>
 
 
-<a href="#nrxrdct.nmf" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.fitting.nmf" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -182,11 +220,11 @@ interface and private helpers for fitting and visualisation.</p>
 
 
 
-<h3 id="nrxrdct.nmf.HyperspectralNMF" class="doc doc-heading">
+<h3 id="nrxrdct.fitting.nmf.HyperspectralNMF" class="doc doc-heading">
             <span class="doc doc-object-name doc-class-name">HyperspectralNMF</span>
 
 
-<a href="#nrxrdct.nmf.HyperspectralNMF" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.fitting.nmf.HyperspectralNMF" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
@@ -308,7 +346,7 @@ Set after calling :meth:<code>fit_data</code>.</p>
 
 
               <details class="quote">
-                <summary>Source code in <code>src/nrxrdct/nmf.py</code></summary>
+                <summary>Source code in <code>src/nrxrdct/fitting/nmf.py</code></summary>
                 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-18"> 18</a></span>
 <span class="normal"><a href="#__codelineno-0-19"> 19</a></span>
 <span class="normal"><a href="#__codelineno-0-20"> 20</a></span>
@@ -647,11 +685,11 @@ Set after calling :meth:<code>fit_data</code>.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.nmf.HyperspectralNMF.__init__" class="doc doc-heading">
+<h4 id="nrxrdct.fitting.nmf.HyperspectralNMF.__init__" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">__init__</span>
 
 
-<a href="#nrxrdct.nmf.HyperspectralNMF.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.fitting.nmf.HyperspectralNMF.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__init__</span><span class="p">(</span><span class="n">volume</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">n_components</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">spectral_axis</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">unit_name</span><span class="o">=</span><span class="s1">&#39;energy (keV)&#39;</span><span class="p">,</span> <span class="n">loss_function</span><span class="o">=</span><span class="s1">&#39;frobenius&#39;</span><span class="p">,</span> <span class="n">solver</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="s1">&#39;nndsvdar&#39;</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">l1_ratio</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">alpha_W</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">alpha_H</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">clip_negative</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
@@ -810,7 +848,7 @@ input are clipped to zero before fitting (default <code>True</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/nmf.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/fitting/nmf.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46"> 46</a></span>
 <span class="normal"><a href="#__codelineno-0-47"> 47</a></span>
 <span class="normal"><a href="#__codelineno-0-48"> 48</a></span>
@@ -939,11 +977,11 @@ input are clipped to zero before fitting (default <code>True</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.nmf.HyperspectralNMF.fit_data" class="doc doc-heading">
+<h4 id="nrxrdct.fitting.nmf.HyperspectralNMF.fit_data" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">fit_data</span>
 
 
-<a href="#nrxrdct.nmf.HyperspectralNMF.fit_data" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.fitting.nmf.HyperspectralNMF.fit_data" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_data</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -961,7 +999,7 @@ input are clipped to zero before fitting (default <code>True</code>).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/nmf.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/fitting/nmf.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-107">107</a></span>
 <span class="normal"><a href="#__codelineno-0-108">108</a></span>
 <span class="normal"><a href="#__codelineno-0-109">109</a></span>
@@ -1040,11 +1078,11 @@ input are clipped to zero before fitting (default <code>True</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.nmf.HyperspectralNMF.plot" class="doc doc-heading">
+<h4 id="nrxrdct.fitting.nmf.HyperspectralNMF.plot" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">plot</span>
 
 
-<a href="#nrxrdct.nmf.HyperspectralNMF.plot" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.fitting.nmf.HyperspectralNMF.plot" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot</span><span class="p">(</span><span class="n">normalize_spectra</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">titles</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="n">extent</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -1125,7 +1163,7 @@ to <code>["Component 1", ...]</code>.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/nmf.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/fitting/nmf.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-143">143</a></span>
 <span class="normal"><a href="#__codelineno-0-144">144</a></span>
 <span class="normal"><a href="#__codelineno-0-145">145</a></span>
@@ -1222,8 +1260,8 @@ to <code>["Component 1", ...]</code>.</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../fluorescence/" class="btn btn-neutral float-left" title="fluorescence"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../utils/" class="btn btn-neutral float-right" title="utils">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../peakfit/" class="btn btn-neutral float-left" title="peakfit"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../fluorescence/" class="btn btn-neutral float-right" title="fluorescence">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -1250,10 +1288,10 @@ to <code>["Component 1", ...]</code>.</p>
         </span>
     
     
-      <span><a href="../fluorescence/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../peakfit/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../utils/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../fluorescence/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -1261,6 +1299,7 @@ to <code>["Component 1", ...]</code>.</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

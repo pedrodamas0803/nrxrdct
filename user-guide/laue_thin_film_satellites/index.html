@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Thin-Film Satellites - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Thin-Film Satellites";
+        var mkdocs_page_input_path = "user-guide/laue_thin_film_satellites.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Thin-Film Satellites</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-single-layer-interference-the-laue-function">1. Single-layer interference — the Laue function</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#bragg-peaks">Bragg peaks</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#zeros-between-bragg-peaks">Zeros between Bragg peaks</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#side-maxima-observable-thickness-fringes">Side maxima (observable thickness fringes)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-satellite-positions-in-the-lab-frame">2. Satellite positions in the lab frame</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-layered-superlattice-structures">3. Layered / superlattice structures</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-detector-displacement-direction">4. Detector displacement direction</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#why-flipping-hatn-alone-does-not-flip-the-satellite-side">Why flipping \(\hat{n}\) alone does not flip the satellite side</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-signal-to-noise-considerations">5. Signal-to-noise considerations</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-implementation-in-simulate_laue_stack">6. Implementation in simulate_laue_stack</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Thin-Film Satellites</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_thin_film_satellites.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="thin-film-satellites-and-thickness-fringes-in-laue-diffraction">Thin-film satellites and thickness fringes in Laue diffraction<a class="headerlink" href="#thin-film-satellites-and-thickness-fringes-in-laue-diffraction" title="Permanent link">&para;</a></h1>
+<p>White-beam Laue diffraction can reveal <strong>thickness fringes</strong> and
+<strong>superlattice satellites</strong> from thin epitaxial films and multilayer stacks.
+This page derives the positions and intensities of those features and explains
+the conventions used by <code>simulate_laue_stack</code>.</p>
+<hr />
+<h2 id="1-single-layer-interference-the-laue-function">1. Single-layer interference — the Laue function<a class="headerlink" href="#1-single-layer-interference-the-laue-function" title="Permanent link">&para;</a></h2>
+<p>A crystalline slab of <span class="arithmatex">\(N\)</span> unit cells, each of thickness <span class="arithmatex">\(d\)</span> along the stacking
+direction <span class="arithmatex">\(\hat{n}\)</span>, contributes a scattering amplitude</p>
+<div class="arithmatex">\[
+F_\text{slab}(\mathbf{Q}) = f_\text{cell}(\mathbf{Q})\,
+\sum_{n=0}^{N-1} e^{\,i n \varphi}, \qquad
+\varphi = \mathbf{Q}\cdot d\,\hat{n}
+\]</div>
+<p>where <span class="arithmatex">\(f_\text{cell}\)</span> is the unit-cell structure factor and <span class="arithmatex">\(t = Nd\)</span> is the
+total layer thickness.  The geometric sum evaluates to</p>
+<div class="arithmatex">\[
+F_\text{slab} = f_\text{cell}\,
+\frac{\sin(N\varphi/2)}{\sin(\varphi/2)}\,
+e^{\,i(N-1)\varphi/2}
+\]</div>
+<p>and its squared modulus — the <strong>Laue interference function</strong> — is</p>
+<div class="arithmatex">\[
+\left|F_\text{slab}\right|^2 = \left|f_\text{cell}\right|^2
+\frac{\sin^2(N\varphi/2)}{\sin^2(\varphi/2)}.
+\]</div>
+<h3 id="bragg-peaks">Bragg peaks<a class="headerlink" href="#bragg-peaks" title="Permanent link">&para;</a></h3>
+<p>At reciprocal-lattice vectors <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>, <span class="arithmatex">\(\varphi = 2\pi\ell\)</span>
+(integer), and <span class="arithmatex">\(|F_\text{slab}|^2 = N^2\,|f_\text{cell}|^2\)</span>.</p>
+<h3 id="zeros-between-bragg-peaks">Zeros between Bragg peaks<a class="headerlink" href="#zeros-between-bragg-peaks" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(|F_\text{slab}|^2 = 0\)</span> whenever <span class="arithmatex">\(\varphi = 2\pi\ell + 2\pi m/N\)</span>, i.e.</p>
+<div class="arithmatex">\[
+\Delta q_n \equiv (\mathbf{Q} - \mathbf{G}_{hkl})\cdot\hat{n}
+= \frac{2\pi m}{t}, \qquad m = \pm 1,\pm 2,\ldots
+\]</div>
+<blockquote>
+<p><strong>Important:</strong> these integer-<span class="arithmatex">\(m\)</span> positions are <em>dark</em> fringes (zeros), <strong>not</strong>
+the observable bright fringes.</p>
+</blockquote>
+<h3 id="side-maxima-observable-thickness-fringes">Side maxima (observable thickness fringes)<a class="headerlink" href="#side-maxima-observable-thickness-fringes" title="Permanent link">&para;</a></h3>
+<p>The subsidiary maxima of <span class="arithmatex">\(\sin^2(N\varphi/2)/\sin^2(\varphi/2)\)</span> occur
+between consecutive zeros.  For large <span class="arithmatex">\(N\)</span> they converge to the
+<em>half-integer</em> positions</p>
+<div class="arithmatex">\[
+\boxed{
+\Delta q_n \approx \left(|m| + \tfrac{1}{2}\right)\frac{2\pi}{t},
+\qquad m = \pm 1, \pm 2, \ldots
+}
+\]</div>
+<p>The first side maximum (<span class="arithmatex">\(|m|=1\)</span>) lies at <span class="arithmatex">\(\approx 1.43\,(2\pi/t)\)</span>
+(converging toward <span class="arithmatex">\(1.5\,(2\pi/t)\)</span> for large <span class="arithmatex">\(N\)</span>).</p>
+<p>The intensity of the <span class="arithmatex">\(m\)</span>-th side maximum relative to the Bragg peak is</p>
+<div class="arithmatex">\[
+\frac{|F_\text{sat}|^2}{|F_\text{Bragg}|^2}
+\approx \frac{4}{\pi^2(2|m|+1)^2} \approx
+\begin{cases}
+4.5\,\% &amp; |m|=1 \\
+0.8\,\% &amp; |m|=2 \\
+0.3\,\% &amp; |m|=3
+\end{cases}
+\]</div>
+<hr />
+<h2 id="2-satellite-positions-in-the-lab-frame">2. Satellite positions in the lab frame<a class="headerlink" href="#2-satellite-positions-in-the-lab-frame" title="Permanent link">&para;</a></h2>
+<p>In the LaueTools lab frame (<span class="arithmatex">\(x \parallel\)</span> beam, <span class="arithmatex">\(z\)</span> vertical), the stacking
+direction is</p>
+<div class="arithmatex">\[
+\hat{n}_\text{lab} = U\,\hat{n}_\text{crystal}
+\]</div>
+<p>where <span class="arithmatex">\(U\)</span> is the <span class="arithmatex">\(3\times3\)</span> orientation matrix from Laue indexation
+(columns are crystal basis vectors expressed in lab coordinates) and
+<span class="arithmatex">\(\hat{n}_\text{crystal}\)</span> is the growth direction in the crystal frame
+(e.g.\ <span class="arithmatex">\([001]\)</span> for <span class="arithmatex">\(c\)</span>-axis GaN).</p>
+<p>The satellite wavevectors are</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{sat}^{(m)} = \mathbf{G}_{hkl}
++ \left(|m| + \tfrac{1}{2}\right)\operatorname{sgn}(m)\,
+\frac{2\pi}{t}\,\hat{n}_\text{lab},
+\qquad m = \pm 1, \pm 2, \ldots
+\]</div>
+<p>Each satellite satisfies the Laue condition at its own photon energy</p>
+<div class="arithmatex">\[
+E_\text{sat}^{(m)} = -\frac{\hbar c\,|\mathbf{G}_\text{sat}|^2}
+{2\,G_{\text{sat},x}}
+\]</div>
+<p>which is slightly different from the Bragg energy <span class="arithmatex">\(E_0\)</span> of the parent
+reflection.  Whether a given satellite falls within the white-beam energy
+window <span class="arithmatex">\([E_\text{min}, E_\text{max}]\)</span> depends on the geometry; typically
+only one of <span class="arithmatex">\(m=+1\)</span> or <span class="arithmatex">\(m=-1\)</span> is accessible for a given reflection.</p>
+<hr />
+<h2 id="3-layered-superlattice-structures">3. Layered / superlattice structures<a class="headerlink" href="#3-layered-superlattice-structures" title="Permanent link">&para;</a></h2>
+<p>For a bilayer stack with <span class="arithmatex">\(N_\text{rep}\)</span> repetitions, the period
+<span class="arithmatex">\(\Lambda = t_A + t_B\)</span> gives additional <strong>superlattice satellites</strong> at</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{SL}^{(m)} = \mathbf{G}_{hkl}
++ m\,\frac{2\pi}{\Lambda}\,\hat{n}_\text{lab}, \qquad m = \pm 1,\pm 2,\ldots
+\]</div>
+<p>These are true satellites (not zeros) because the superlattice period <span class="arithmatex">\(\Lambda\)</span>
+is the repeat unit, not the individual-layer thickness.  For <span class="arithmatex">\(N_\text{rep}=1\)</span>
+only the single-layer thickness fringes at <span class="arithmatex">\(\pm(2\pi/t)\)</span> exist.</p>
+<p>The total stack structure factor coherently sums all layer contributions
+weighted by their phase offsets <span class="arithmatex">\(z_j\)</span> along <span class="arithmatex">\(\hat{n}\)</span>:</p>
+<div class="arithmatex">\[
+F_\text{stack}(\mathbf{Q}) =
+\sum_j F_j(\mathbf{Q})\,e^{\,i\mathbf{Q}\cdot z_j\hat{n}}
+\]</div>
+<hr />
+<h2 id="4-detector-displacement-direction">4. Detector displacement direction<a class="headerlink" href="#4-detector-displacement-direction" title="Permanent link">&para;</a></h2>
+<p>The displacement of a satellite on the detector relative to its parent Bragg
+spot is set by how <span class="arithmatex">\(\delta\mathbf{G} = \mathbf{G}_\text{sat} - \mathbf{G}_{hkl}\)</span>
+rotates the scattered wavevector <span class="arithmatex">\(\mathbf{k}_f = \mathbf{k}_i + \mathbf{G}\)</span>.
+For small displacements</p>
+<div class="arithmatex">\[
+\delta\mathbf{k}_f \approx \delta\mathbf{G}
+- \left(\delta\mathbf{G}\cdot\hat{k}_f\right)\hat{k}_f
+\]</div>
+<p>(the component along <span class="arithmatex">\(\hat{k}_f\)</span> changes only the energy, not the direction).
+The <strong>in-plane</strong> part of <span class="arithmatex">\(\delta\mathbf{G}\)</span> — i.e.\ the projection of
+<span class="arithmatex">\(\hat{n}_\text{lab}\)</span> onto the detector plane — determines the pixel
+displacement direction.</p>
+<h3 id="why-flipping-hatn-alone-does-not-flip-the-satellite-side">Why flipping <span class="arithmatex">\(\hat{n}\)</span> alone does not flip the satellite side<a class="headerlink" href="#why-flipping-hatn-alone-does-not-flip-the-satellite-side" title="Permanent link">&para;</a></h3>
+<p>Both <span class="arithmatex">\(m=+1\)</span> (at <span class="arithmatex">\(+\Delta q_n\)</span>) and <span class="arithmatex">\(m=-1\)</span> (at <span class="arithmatex">\(-\Delta q_n\)</span>) are always
+enumerated.  The satellite energies <span class="arithmatex">\(E^{(m)}\)</span> depend on the actual
+<span class="arithmatex">\(\mathbf{G}_\text{sat}\)</span> vectors, which are unchanged by relabelling <span class="arithmatex">\(m\)</span>.
+Thus flipping <span class="arithmatex">\(\hat{n} \to -\hat{n}\)</span> merely swaps the <span class="arithmatex">\(m\)</span>-labels; it does
+not move any spot to a new detector position.</p>
+<p>The correct way to control which side the fringe appears on is to ensure the
+stacking direction <span class="arithmatex">\(\hat{n}_\text{crystal}\)</span> points <strong>from substrate toward
+surface</strong> (the growth direction).  For <span class="arithmatex">\(c\)</span>-axis GaN use <span class="arithmatex">\([001]\)</span> not <span class="arithmatex">\([00\bar 1]\)</span>.</p>
+<hr />
+<h2 id="5-signal-to-noise-considerations">5. Signal-to-noise considerations<a class="headerlink" href="#5-signal-to-noise-considerations" title="Permanent link">&para;</a></h2>
+<p>Satellite spots are intrinsically weaker than Bragg peaks:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th><span class="arithmatex">\(\lvert F\rvert^2 / \lvert F_\text{Bragg}\rvert^2\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bragg peak</td>
+<td><span class="arithmatex">\(1\)</span></td>
+</tr>
+<tr>
+<td>1st thickness fringe</td>
+<td><span class="arithmatex">\(\approx 0.045\)</span></td>
+</tr>
+<tr>
+<td>2nd thickness fringe</td>
+<td><span class="arithmatex">\(\approx 0.008\)</span></td>
+</tr>
+<tr>
+<td>Superlattice satellite (<span class="arithmatex">\(N_\text{rep} \gg 1\)</span>)</td>
+<td><span class="arithmatex">\(\approx 4/(\pi^2 m^2)\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>In <code>simulate_laue_stack</code> the structure-factor threshold <code>f2_thresh</code> is
+auto-calibrated from the strongest Bragg peak.  Satellite spots use an
+effective threshold of <code>f2_thresh × 1e-4</code> so that thin-layer fringes are
+not suppressed.</p>
+<hr />
+<h2 id="6-implementation-in-simulate_laue_stack">6. Implementation in <code>simulate_laue_stack</code><a class="headerlink" href="#6-implementation-in-simulate_laue_stack" title="Permanent link">&para;</a></h2>
+<p>The key steps in the simulation are:</p>
+<ol>
+<li><strong>Collect fringe periods</strong> — for each layer thinner than 2 µm compute
+   <span class="arithmatex">\(\mathbf{q}_\text{fringe} = (2\pi/t)\,\hat{n}_\text{lab}\)</span>.</li>
+<li><strong>Select enumeration crystals</strong> — determined by <code>structure_model</code> (see
+   <a href="../laue_layered_structures/#3-structure-model">Structure model</a>):
+   all layers in <code>'coherent'</code> mode, buffer layers only in <code>'average'</code> mode.</li>
+<li><strong>Probe satellite positions</strong> — for each Bragg reflection <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>
+   and each fringe period, evaluate<br />
+<span class="arithmatex">\(\mathbf{G}_\text{sat} = \mathbf{G}_{hkl} + (|m|+\tfrac{1}{2})\operatorname{sgn}(m)\,\mathbf{q}_\text{fringe}\)</span><br />
+   for <span class="arithmatex">\(m = \pm 1, \ldots, \pm m_\text{max}\)</span>.</li>
+<li><strong>Laue condition</strong> — compute the required wavelength and check it lies in
+   <span class="arithmatex">\([\lambda_\text{lo}, \lambda_\text{hi}]\)</span>.</li>
+<li><strong>Project onto detector</strong> — use the <code>Camera</code> geometry to find the pixel;
+   discard spots that miss the active area.</li>
+<li><strong>Structure factor</strong> — evaluate <span class="arithmatex">\(|F_\text{stack}(\mathbf{G}_\text{sat})|^2\)</span>
+   using either the full coherent sum or the average-period model depending on
+   <code>structure_model</code>; apply relaxed threshold for <span class="arithmatex">\(m \neq 0\)</span>.</li>
+<li><strong>Intensity</strong> — <span class="arithmatex">\(I \propto |F|^2 \times LP(2\theta) \times S(E)\)</span>, where
+   <span class="arithmatex">\(LP\)</span> is the Lorentz–polarisation factor and <span class="arithmatex">\(S(E)\)</span> is the synchrotron
+   spectrum.</li>
+</ol>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_theory/" class="btn btn-neutral float-left" title="Diffraction and Laue Theory"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_layered_structures/" class="btn btn-neutral float-right" title="Layered Structures">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_theory/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_layered_structures/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

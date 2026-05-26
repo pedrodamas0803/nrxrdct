@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,61 +87,85 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">parameters</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../nmf/">nmf</a>
-                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">io</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >xrdct</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.io">io</a>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">io</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.xrdct.io">io</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.add_array_to_output">add_array_to_output</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.add_array_to_output">add_array_to_output</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.get_array_from_file">get_array_from_file</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.get_array_from_file">get_array_from_file</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.read_sinogram_from_file">read_sinogram_from_file</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.read_sinogram_from_file">read_sinogram_from_file</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.read_volume_from_file">read_volume_from_file</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.read_volume_from_file">read_volume_from_file</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.read_xy_file">read_xy_file</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.read_xy_file">read_xy_file</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.save_sinogram">save_sinogram</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.save_sinogram">save_sinogram</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.save_volume">save_volume</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.save_volume">save_volume</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.save_xy_file">save_xy_file</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.save_xy_file">save_xy_file</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.write_calibrated_intrument_pars">write_calibrated_intrument_pars</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.write_calibrated_intrument_pars">write_calibrated_intrument_pars</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.io.write_starting_instrument_pars">write_starting_instrument_pars</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.io.write_starting_instrument_pars">write_starting_instrument_pars</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -138,6 +183,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">xrdct</li>
       <li class="breadcrumb-item active">io</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/io.md">Edit on nrxrdct</a>
@@ -155,11 +201,11 @@
 
 
 
-<h2 id="nrxrdct.io" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.io</span>
+<h2 id="nrxrdct.xrdct.io" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.xrdct.io</span>
 
 
-<a href="#nrxrdct.io" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.xrdct.io" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -191,11 +237,11 @@ instrument parameter files (<code>.instprm</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.add_array_to_output" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.add_array_to_output" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">add_array_to_output</span>
 
 
-<a href="#nrxrdct.io.add_array_to_output" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.add_array_to_output" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">add_array_to_output</span><span class="p">(</span><span class="n">array</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">array_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -245,7 +291,7 @@ instrument parameter files (<code>.instprm</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-40">40</a></span>
 <span class="normal"><a href="#__codelineno-0-41">41</a></span>
 <span class="normal"><a href="#__codelineno-0-42">42</a></span>
@@ -276,11 +322,11 @@ instrument parameter files (<code>.instprm</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.get_array_from_file" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.get_array_from_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">get_array_from_file</span>
 
 
-<a href="#nrxrdct.io.get_array_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.get_array_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_array_from_file</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">array_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
@@ -345,7 +391,7 @@ instrument parameter files (<code>.instprm</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-53">53</a></span>
 <span class="normal"><a href="#__codelineno-0-54">54</a></span>
 <span class="normal"><a href="#__codelineno-0-55">55</a></span>
@@ -388,11 +434,11 @@ instrument parameter files (<code>.instprm</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.read_sinogram_from_file" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.read_sinogram_from_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">read_sinogram_from_file</span>
 
 
-<a href="#nrxrdct.io.read_sinogram_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.read_sinogram_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">read_sinogram_from_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">slicing</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
@@ -461,7 +507,7 @@ sub-region. If <code>None</code>, the full sinogram is loaded.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-72">72</a></span>
 <span class="normal"><a href="#__codelineno-0-73">73</a></span>
 <span class="normal"><a href="#__codelineno-0-74">74</a></span>
@@ -522,11 +568,11 @@ sub-region. If <code>None</code>, the full sinogram is loaded.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.read_volume_from_file" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.read_volume_from_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">read_volume_from_file</span>
 
 
-<a href="#nrxrdct.io.read_volume_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.read_volume_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">read_volume_from_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">slicing</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
 </code></pre></div>
 
@@ -595,7 +641,7 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-100">100</a></span>
 <span class="normal"><a href="#__codelineno-0-101">101</a></span>
 <span class="normal"><a href="#__codelineno-0-102">102</a></span>
@@ -650,11 +696,11 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.read_xy_file" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.read_xy_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">read_xy_file</span>
 
 
-<a href="#nrxrdct.io.read_xy_file" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.read_xy_file" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">read_xy_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">&#39;integrated_data.xy&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
 </code></pre></div>
 
@@ -713,7 +759,7 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-160">160</a></span>
 <span class="normal"><a href="#__codelineno-0-161">161</a></span>
 <span class="normal"><a href="#__codelineno-0-162">162</a></span>
@@ -744,11 +790,11 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.save_sinogram" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.save_sinogram" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">save_sinogram</span>
 
 
-<a href="#nrxrdct.io.save_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.save_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_sinogram</span><span class="p">(</span><span class="n">sinogram</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -790,7 +836,7 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-16">16</a></span>
 <span class="normal"><a href="#__codelineno-0-17">17</a></span>
 <span class="normal"><a href="#__codelineno-0-18">18</a></span>
@@ -819,11 +865,11 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.save_volume" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.save_volume" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">save_volume</span>
 
 
-<a href="#nrxrdct.io.save_volume" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.save_volume" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_volume</span><span class="p">(</span><span class="n">volume</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -865,7 +911,7 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-28">28</a></span>
 <span class="normal"><a href="#__codelineno-0-29">29</a></span>
 <span class="normal"><a href="#__codelineno-0-30">30</a></span>
@@ -894,11 +940,11 @@ sub-region. If <code>None</code>, the full volume is loaded.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.save_xy_file" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.save_xy_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">save_xy_file</span>
 
 
-<a href="#nrxrdct.io.save_xy_file" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.save_xy_file" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_xy_file</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">err</span><span class="p">:</span> <span class="n">ndarray</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;integrated_data.xy&#39;</span><span class="p">),</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -984,7 +1030,7 @@ the header (default <code>"2th_deg"</code>).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-125">125</a></span>
 <span class="normal"><a href="#__codelineno-0-126">126</a></span>
 <span class="normal"><a href="#__codelineno-0-127">127</a></span>
@@ -1059,11 +1105,11 @@ the header (default <code>"2th_deg"</code>).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.write_calibrated_intrument_pars" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.write_calibrated_intrument_pars" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">write_calibrated_intrument_pars</span>
 
 
-<a href="#nrxrdct.io.write_calibrated_intrument_pars" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.write_calibrated_intrument_pars" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_calibrated_intrument_pars</span><span class="p">(</span><span class="n">hist</span><span class="p">,</span> <span class="n">wavelength</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5418</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;calibrated_instrument.instprm&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -1121,7 +1167,7 @@ the file (default 1.5418 Å).</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-218">218</a></span>
 <span class="normal"><a href="#__codelineno-0-219">219</a></span>
 <span class="normal"><a href="#__codelineno-0-220">220</a></span>
@@ -1256,11 +1302,11 @@ the file (default 1.5418 Å).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.io.write_starting_instrument_pars" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.io.write_starting_instrument_pars" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">write_starting_instrument_pars</span>
 
 
-<a href="#nrxrdct.io.write_starting_instrument_pars" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.io.write_starting_instrument_pars" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_starting_instrument_pars</span><span class="p">(</span><span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;instrument_init.instprm&#39;</span><span class="p">),</span> <span class="n">polarization</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.99</span><span class="p">,</span> <span class="n">wavelength</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5418</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </code></pre></div>
 
@@ -1343,7 +1389,7 @@ safe to call at the start of a workflow.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/io.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/io.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-173">173</a></span>
 <span class="normal"><a href="#__codelineno-0-174">174</a></span>
 <span class="normal"><a href="#__codelineno-0-175">175</a></span>
@@ -1446,8 +1492,8 @@ safe to call at the start of a workflow.</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../visualization/" class="btn btn-neutral float-left" title="visualization"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../roi/" class="btn btn-neutral float-right" title="roi">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../refine_dict/" class="btn btn-neutral float-left" title="refine_dict"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../parameters/" class="btn btn-neutral float-right" title="parameters">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -1474,10 +1520,10 @@ safe to call at the start of a workflow.</p>
         </span>
     
     
-      <span><a href="../visualization/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../refine_dict/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../roi/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../parameters/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -1485,6 +1531,7 @@ safe to call at the start of a workflow.</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

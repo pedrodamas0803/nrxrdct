@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,51 +87,75 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">parameters</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">integration</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >azimuthal</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.integration">integration</a>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">integration</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.azimuthal.integration">integration</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.integration.azimuthal_integration_1d">azimuthal_integration_1d</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d">azimuthal_integration_1d</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.integration.azimuthal_integration_1d_filter">azimuthal_integration_1d_filter</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d_filter">azimuthal_integration_1d_filter</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.integration.azimuthal_integration_1d_sigma_clip">azimuthal_integration_1d_sigma_clip</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d_sigma_clip">azimuthal_integration_1d_sigma_clip</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.integration.cake_integration">cake_integration</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.azimuthal.integration.cake_integration">cake_integration</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.integration.integrate_powder_parallel">integrate_powder_parallel</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.azimuthal.integration.integrate_powder_parallel">integrate_powder_parallel</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refinement/">refinement</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../nmf/">nmf</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../io/">io</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -128,6 +173,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">azimuthal</li>
       <li class="breadcrumb-item active">integration</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/integration.md">Edit on nrxrdct</a>
@@ -145,11 +191,11 @@
 
 
 
-<h2 id="nrxrdct.integration" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.integration</span>
+<h2 id="nrxrdct.azimuthal.integration" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.azimuthal.integration</span>
 
 
-<a href="#nrxrdct.integration" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.azimuthal.integration" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -183,11 +229,11 @@ normalisation.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.integration.azimuthal_integration_1d" class="doc doc-heading">
+<h3 id="nrxrdct.azimuthal.integration.azimuthal_integration_1d" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">azimuthal_integration_1d</span>
 
 
-<a href="#nrxrdct.integration.azimuthal_integration_1d" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">azimuthal_integration_1d</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">npt</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flat</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">error_model</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">radial_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">azimuth_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
 </code></pre></div>
 
@@ -385,7 +431,7 @@ print(q.shape, I.shape)  # (500,) (500,)</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/integration.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/azimuthal/integration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-167">167</a></span>
 <span class="normal"><a href="#__codelineno-0-168">168</a></span>
 <span class="normal"><a href="#__codelineno-0-169">169</a></span>
@@ -518,11 +564,11 @@ print(q.shape, I.shape)  # (500,) (500,)</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.integration.azimuthal_integration_1d_filter" class="doc doc-heading">
+<h3 id="nrxrdct.azimuthal.integration.azimuthal_integration_1d_filter" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">azimuthal_integration_1d_filter</span>
 
 
-<a href="#nrxrdct.integration.azimuthal_integration_1d_filter" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d_filter" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">azimuthal_integration_1d_filter</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">npt</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flat</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">error_model</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">radial_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">azimuth_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">percentile</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">99</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
 </code></pre></div>
 
@@ -734,7 +780,7 @@ print(q.shape, I.shape)  # (500,) (500,)</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/integration.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/azimuthal/integration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-231">231</a></span>
 <span class="normal"><a href="#__codelineno-0-232">232</a></span>
 <span class="normal"><a href="#__codelineno-0-233">233</a></span>
@@ -883,11 +929,11 @@ print(q.shape, I.shape)  # (500,) (500,)</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.integration.azimuthal_integration_1d_sigma_clip" class="doc doc-heading">
+<h3 id="nrxrdct.azimuthal.integration.azimuthal_integration_1d_sigma_clip" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">azimuthal_integration_1d_sigma_clip</span>
 
 
-<a href="#nrxrdct.integration.azimuthal_integration_1d_sigma_clip" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.azimuthal.integration.azimuthal_integration_1d_sigma_clip" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">azimuthal_integration_1d_sigma_clip</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">npt</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flat</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">error_model</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;hybrid&#39;</span><span class="p">,</span> <span class="n">radial_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">azimuth_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">thres</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">3.0</span><span class="p">,</span> <span class="n">max_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
 </code></pre></div>
 
@@ -1099,7 +1145,7 @@ pure photon-counting noise.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/integration.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/azimuthal/integration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
 <span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
 <span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
@@ -1252,11 +1298,11 @@ pure photon-counting noise.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.integration.cake_integration" class="doc doc-heading">
+<h3 id="nrxrdct.azimuthal.integration.cake_integration" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">cake_integration</span>
 
 
-<a href="#nrxrdct.integration.cake_integration" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.azimuthal.integration.cake_integration" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cake_integration</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">npt_rad</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">npt_azim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">360</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flat</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">radial_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">azimuth_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">180</span><span class="p">,</span> <span class="mi">180</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
 </code></pre></div>
 
@@ -1415,7 +1461,7 @@ pure photon-counting noise.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/integration.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/azimuthal/integration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-36">36</a></span>
 <span class="normal"><a href="#__codelineno-0-37">37</a></span>
 <span class="normal"><a href="#__codelineno-0-38">38</a></span>
@@ -1534,11 +1580,11 @@ pure photon-counting noise.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.integration.integrate_powder_parallel" class="doc doc-heading">
+<h3 id="nrxrdct.azimuthal.integration.integrate_powder_parallel" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">integrate_powder_parallel</span>
 
 
-<a href="#nrxrdct.integration.integrate_powder_parallel" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.azimuthal.integration.integrate_powder_parallel" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">integrate_powder_parallel</span><span class="p">(</span><span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">rot</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">n_points</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;2th_deg&#39;</span><span class="p">,</span> <span class="n">remove_spots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">percentile</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">90</span><span class="p">),</span> <span class="n">camera_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;eiger&#39;</span><span class="p">,</span> <span class="n">monitor_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;fpico6&#39;</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;rot&#39;</span><span class="p">)</span>
 </code></pre></div>
 
@@ -1709,7 +1755,7 @@ to match the rotation axis name at your beamline.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/integration.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/azimuthal/integration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-303">303</a></span>
 <span class="normal"><a href="#__codelineno-0-304">304</a></span>
 <span class="normal"><a href="#__codelineno-0-305">305</a></span>
@@ -2134,8 +2180,8 @@ to match the rotation axis name at your beamline.</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../preprocessing/" class="btn btn-neutral float-left" title="preprocessing"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../reconstruction/" class="btn btn-neutral float-right" title="reconstruction">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../utils/" class="btn btn-neutral float-left" title="utils"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../slurm_integration/" class="btn btn-neutral float-right" title="slurm_integration">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -2162,10 +2208,10 @@ to match the rotation axis name at your beamline.</p>
         </span>
     
     
-      <span><a href="../preprocessing/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../utils/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../reconstruction/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../slurm_integration/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -2173,6 +2219,7 @@ to match the rotation axis name at your beamline.</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Strain Analysis - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Strain Analysis";
+        var mkdocs_page_input_path = "user-guide/laue_strain.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Strain Analysis</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#the-strain-tensor">The strain tensor</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#volumetric-and-deviatoric-decomposition">Volumetric and deviatoric decomposition</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Limitation of polychromatic Laue: the hydrostatic blind spot</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#the-fitting-model">The fitting model</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#effective-orientation-matrix">Effective orientation matrix</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#free-parameters">Free parameters</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#residuals-and-matching">Residuals and matching</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#reference-frames">Reference frames</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#crystal-frame-storage-frame">Crystal frame (storage frame)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#lab-frame">Lab frame</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#sample-frame">Sample frame</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#available-output-quantities">Available output quantities</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#from-fit_strain_orientation">From fit_strain_orientation</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#from-grainmap-after-collect_strain">From GrainMap (after collect_strain)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#plotting-and-frame-selection">Plotting and frame selection</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#single-component-map">Single-component map</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#manual-frame-rotation">Manual frame rotation</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#practical-notes">Practical notes</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Strain Analysis</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_strain.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="strain-analysis-in-white-beam-laue-diffraction">Strain analysis in white-beam Laue diffraction<a class="headerlink" href="#strain-analysis-in-white-beam-laue-diffraction" title="Permanent link">&para;</a></h1>
+<p>This page covers the theoretical background of the strain calculations in
+<code>nrxrdct</code>, the fitting model, the available output quantities, the reference-frame
+transformations, and the inherent limitations of polychromatic Laue for strain
+measurement.</p>
+<hr />
+<h2 id="the-strain-tensor">The strain tensor<a class="headerlink" href="#the-strain-tensor" title="Permanent link">&para;</a></h2>
+<p>A small, homogeneous deformation of a crystal is described by the <strong>infinitesimal
+strain tensor</strong> <span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span>, a symmetric <span class="arithmatex">\(3 \times 3\)</span> second-rank
+tensor:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon} =
+\begin{pmatrix}
+\varepsilon_{xx} &amp; \varepsilon_{xy} &amp; \varepsilon_{xz} \\
+\varepsilon_{xy} &amp; \varepsilon_{yy} &amp; \varepsilon_{yz} \\
+\varepsilon_{xz} &amp; \varepsilon_{yz} &amp; \varepsilon_{zz}
+\end{pmatrix}
+\]</div>
+<p>The diagonal components <span class="arithmatex">\(\varepsilon_{xx}\)</span>, <span class="arithmatex">\(\varepsilon_{yy}\)</span>, <span class="arithmatex">\(\varepsilon_{zz}\)</span>
+are <strong>normal strains</strong> — relative changes in length along each axis.  The
+off-diagonal components <span class="arithmatex">\(\varepsilon_{xy}\)</span>, <span class="arithmatex">\(\varepsilon_{xz}\)</span>, <span class="arithmatex">\(\varepsilon_{yz}\)</span>
+are <strong>shear strains</strong>.</p>
+<p>Because <span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span> is symmetric, only six independent components
+exist.  In <strong>Voigt notation</strong> these are written as a vector:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_{\text{Voigt}}
+= [\,\varepsilon_{xx},\; \varepsilon_{yy},\; \varepsilon_{zz},\;
+         \varepsilon_{xy},\; \varepsilon_{xz},\; \varepsilon_{yz}\,]
+\]</div>
+<h3 id="volumetric-and-deviatoric-decomposition">Volumetric and deviatoric decomposition<a class="headerlink" href="#volumetric-and-deviatoric-decomposition" title="Permanent link">&para;</a></h3>
+<p>Any strain tensor can be split into a <strong>hydrostatic</strong> (isotropic) part and a
+<strong>deviatoric</strong> part:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}
+= \underbrace{\frac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{hydrostatic}}
++ \underbrace{\boldsymbol{\varepsilon}
+  - \frac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{deviatoric}}
+\]</div>
+<p>The trace <span class="arithmatex">\(\operatorname{tr}(\boldsymbol{\varepsilon}) = \varepsilon_{xx} +
+\varepsilon_{yy} + \varepsilon_{zz}\)</span> is the <strong>volumetric strain</strong> — the relative
+change in unit-cell volume <span class="arithmatex">\(\Delta V / V\)</span>.</p>
+<hr />
+<h2 id="limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Limitation of polychromatic Laue: the hydrostatic blind spot<a class="headerlink" href="#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot" title="Permanent link">&para;</a></h2>
+<p>In a <strong>monochromatic</strong> experiment the diffraction angle <span class="arithmatex">\(2\theta\)</span> of a reflection
+<span class="arithmatex">\((hkl)\)</span> depends directly on the <span class="arithmatex">\(d\)</span>-spacing via Bragg's law, so absolute lattice
+parameters — and therefore the full strain tensor including its hydrostatic part
+— are measurable.</p>
+<p>In a <strong>polychromatic (white-beam)</strong> Laue experiment, the detector only records
+spot <em>positions</em>, not the wavelength used for each reflection.  A pure hydrostatic
+strain <span class="arithmatex">\(\boldsymbol{\varepsilon} = \alpha\,\mathbf{I}\)</span> uniformly scales every
+<span class="arithmatex">\(d\)</span>-spacing by the same factor, which is exactly equivalent to illuminating the
+unstrained crystal at a slightly different wavelength.  The spot positions on the
+detector are therefore <strong>unchanged</strong>, making the hydrostatic component
+<strong>inaccessible</strong>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Hydrostatic strain is not measurable by white-beam Laue alone</p>
+<p>Polychromatic Laue is sensitive only to the <strong>deviatoric</strong> part of the strain
+tensor (shape changes of the unit cell).  The absolute lattice parameters, and
+therefore the volumetric strain, cannot be determined without additional
+information such as a monochromatic measurement or knowledge of one lattice
+parameter from an independent source (e.g. a reference layer with known strain
+state).</p>
+</div>
+<p>In practice this means:</p>
+<ul>
+<li>The <strong>five</strong> independent deviatoric components are well-determined.</li>
+<li>The <strong>sixth</strong> component (the hydrostatic contribution to any one normal strain) has
+  a large, correlated uncertainty that is entirely absorbed by the fitted rotation
+  <span class="arithmatex">\(\delta\boldsymbol{\omega}\)</span>.</li>
+<li>Fitting all six components (<code>fit_strain</code> default) is valid but the user should
+  interpret the <em>individual</em> normal strains <span class="arithmatex">\(\varepsilon_{xx}\)</span>, <span class="arithmatex">\(\varepsilon_{yy}\)</span>,
+  <span class="arithmatex">\(\varepsilon_{zz}\)</span> with this in mind — only their <strong>differences</strong> and the shear
+  components are truly independent.</li>
+</ul>
+<hr />
+<h2 id="the-fitting-model">The fitting model<a class="headerlink" href="#the-fitting-model" title="Permanent link">&para;</a></h2>
+<p><code>fit_strain_orientation</code> fits a rotation increment <strong>and</strong> a strain tensor
+simultaneously by minimising the pixel-distance residuals between observed and
+simulated Laue spots.</p>
+<h3 id="effective-orientation-matrix">Effective orientation matrix<a class="headerlink" href="#effective-orientation-matrix" title="Permanent link">&para;</a></h3>
+<p>The strained crystal is modelled through an <strong>effective orientation matrix</strong>:</p>
+<div class="arithmatex">\[
+\mathbf{U}_\text{eff}
+= \mathbf{R}(\delta\boldsymbol{\omega})\;\mathbf{U}_0\;(\mathbf{I} + \boldsymbol{\varepsilon})
+\]</div>
+<p>where:</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(\mathbf{U}_0\)</span></td>
+<td>Starting orientation matrix (from <code>fit_orientation</code> or supplied by the user)</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\mathbf{R}(\delta\boldsymbol{\omega})\)</span></td>
+<td>Small rotation increment parametrised as a rotation vector <span class="arithmatex">\(\delta\boldsymbol{\omega} \in \mathbb{R}^3\)</span></td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span></td>
+<td>Symmetric strain tensor in the <strong>crystal</strong> frame</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\mathbf{U}_\text{eff}\)</span></td>
+<td>Effective orientation passed to the Laue simulator</td>
+</tr>
+</tbody>
+</table>
+<p>The strain modifies the reciprocal-lattice vectors, shifting each spot to its
+strained position on the detector.  The rotation increment <span class="arithmatex">\(\delta\boldsymbol{\omega}\)</span>
+absorbs any residual misalignment from the previous orientation fit.</p>
+<h3 id="free-parameters">Free parameters<a class="headerlink" href="#free-parameters" title="Permanent link">&para;</a></h3>
+<p>The optimisation vector is</p>
+<div class="arithmatex">\[
+\mathbf{x} = [\,\delta\omega_x,\;\delta\omega_y,\;\delta\omega_z,\;
+               s\,\varepsilon_{xx},\; s\,\varepsilon_{yy},\; s\,\varepsilon_{zz},\;
+               s\,\varepsilon_{xy},\; s\,\varepsilon_{xz},\; s\,\varepsilon_{yz}\,]
+\]</div>
+<p>where <span class="arithmatex">\(s\)</span> is <code>strain_scale</code> (<span class="arithmatex">\(10^{-4}\)</span> by default), used to bring the strain
+parameters to the same order of magnitude as the rotation angles (radians) so that
+the Levenberg–Marquardt optimiser performs well.</p>
+<p>The <code>fit_strain</code> parameter selects a <strong>subset</strong> of the six strain components to
+refine; the remainder are held at zero.  For example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Fit only the two in-plane normal strains and all shear components</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">fit_strain_orientation</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span> <span class="n">U0</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                       <span class="n">fit_strain</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;e_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_xy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_xz&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yz&quot;</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="residuals-and-matching">Residuals and matching<a class="headerlink" href="#residuals-and-matching" title="Permanent link">&para;</a></h3>
+<p>At each function evaluation the simulator generates the predicted spot positions
+with the current <span class="arithmatex">\(\mathbf{U}_\text{eff}\)</span>.  Observed and simulated spots are
+matched one-to-one using the Hungarian algorithm within a matching radius
+<code>max_match_px</code>, and the residual vector is the stack of pixel-distance components
+of all matched pairs.  <code>scipy.optimize.least_squares</code> (Levenberg–Marquardt by
+default) minimises the sum of squared residuals.</p>
+<p>Staged refinement is supported via a list of decreasing <code>max_match_px</code> values; each
+stage warm-starts from the solution of the previous one.</p>
+<hr />
+<h2 id="reference-frames">Reference frames<a class="headerlink" href="#reference-frames" title="Permanent link">&para;</a></h2>
+<h3 id="crystal-frame-storage-frame">Crystal frame (storage frame)<a class="headerlink" href="#crystal-frame-storage-frame" title="Permanent link">&para;</a></h3>
+<p>The strain tensor as stored in <code>StrainFitResult.strain_tensor</code> (and in
+<code>GrainMap.strain_tensor</code>) is expressed in the <strong>crystal coordinate system</strong> — the
+axes are those of the unit cell as defined by the xrayutilities <code>Crystal</code> object.
+This is the frame in which the fitting is performed.</p>
+<h3 id="lab-frame">Lab frame<a class="headerlink" href="#lab-frame" title="Permanent link">&para;</a></h3>
+<p>The <strong>lab frame</strong> is the instrument coordinate system.  The orientation matrix
+<span class="arithmatex">\(\mathbf{U}\)</span> maps crystal vectors to lab vectors:</p>
+<div class="arithmatex">\[
+\mathbf{r}_\text{lab} = \mathbf{U}\,\mathbf{r}_\text{crystal}
+\]</div>
+<p>The strain tensor in the lab frame is obtained by the standard second-rank tensor
+rotation:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_\text{lab}
+= \mathbf{U}\;\boldsymbol{\varepsilon}_\text{crystal}\;\mathbf{U}^\top
+\]</div>
+<h3 id="sample-frame">Sample frame<a class="headerlink" href="#sample-frame" title="Permanent link">&para;</a></h3>
+<p>The <strong>sample frame</strong> accounts for the physical orientation of the sample on the
+diffractometer.  In the default configuration it is related to the lab frame by a
+rotation <span class="arithmatex">\(\mathbf{R}_s\)</span> of <span class="arithmatex">\(-40°\)</span> about the lab <span class="arithmatex">\(Y\)</span> axis (the sample tilt):</p>
+<div class="arithmatex">\[
+\mathbf{r}_\text{sample} = \mathbf{R}_s\,\mathbf{r}_\text{lab}
+\]</div>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_\text{sample}
+= \mathbf{R}_s\;\boldsymbol{\varepsilon}_\text{lab}\;\mathbf{R}_s^\top
+= \mathbf{R}_s\,\mathbf{U}\;\boldsymbol{\varepsilon}_\text{crystal}\;
+  \mathbf{U}^\top\mathbf{R}_s^\top
+\]</div>
+<p>The tilt angle and axis are configurable in all analysis functions via
+<code>sample_tilt_deg</code> and <code>sample_tilt_axis</code>.</p>
+<hr />
+<h2 id="available-output-quantities">Available output quantities<a class="headerlink" href="#available-output-quantities" title="Permanent link">&para;</a></h2>
+<h3 id="from-fit_strain_orientation">From <code>fit_strain_orientation</code><a class="headerlink" href="#from-fit_strain_orientation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>result.strain_tensor</code></td>
+<td><code>(3, 3)</code></td>
+<td>Symmetric strain tensor in the crystal frame</td>
+</tr>
+<tr>
+<td><code>result.strain_voigt</code></td>
+<td><code>(6,)</code></td>
+<td>Voigt vector <span class="arithmatex">\([\varepsilon_{xx}, \varepsilon_{yy}, \varepsilon_{zz}, \varepsilon_{xy}, \varepsilon_{xz}, \varepsilon_{yz}]\)</span> in the crystal frame</td>
+</tr>
+<tr>
+<td><code>result.U</code></td>
+<td><code>(3, 3)</code></td>
+<td>Refined orientation matrix (rotation only; no strain)</td>
+</tr>
+<tr>
+<td><code>result.U_eff</code></td>
+<td><code>(3, 3)</code></td>
+<td>Effective orientation <span class="arithmatex">\(= \mathbf{R}\,\mathbf{U}_0\,(\mathbf{I}+\boldsymbol{\varepsilon})\)</span> used by the simulator</td>
+</tr>
+<tr>
+<td><code>result.rms_px</code></td>
+<td>scalar</td>
+<td>RMS pixel residual of matched spots</td>
+</tr>
+<tr>
+<td><code>result.mean_px</code></td>
+<td>scalar</td>
+<td>Mean pixel residual of matched spots</td>
+</tr>
+<tr>
+<td><code>result.n_matched</code></td>
+<td>int</td>
+<td>Number of matched spots</td>
+</tr>
+<tr>
+<td><code>result.match_rate</code></td>
+<td>scalar</td>
+<td>Fraction of observed spots matched</td>
+</tr>
+</tbody>
+</table>
+<h3 id="from-grainmap-after-collect_strain">From <code>GrainMap</code> (after <code>collect_strain</code>)<a class="headerlink" href="#from-grainmap-after-collect_strain" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Array</th>
+<th>Shape</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gmap.strain_tensor</code></td>
+<td><code>(n_grains, ny, nx, 3, 3)</code></td>
+<td>Full strain tensor — crystal frame</td>
+</tr>
+<tr>
+<td><code>gmap.strain_voigt</code></td>
+<td><code>(n_grains, ny, nx, 6)</code></td>
+<td>Voigt vector — crystal frame</td>
+</tr>
+<tr>
+<td><code>gmap.U</code></td>
+<td><code>(n_grains, ny, nx, 3, 3)</code></td>
+<td>Orientation matrices</td>
+</tr>
+<tr>
+<td><code>gmap.rms_px</code></td>
+<td><code>(n_grains, ny, nx)</code></td>
+<td>RMS pixel residual</td>
+</tr>
+<tr>
+<td><code>gmap.mean_px</code></td>
+<td><code>(n_grains, ny, nx)</code></td>
+<td>Mean pixel residual</td>
+</tr>
+<tr>
+<td><code>gmap.n_matched</code></td>
+<td><code>(n_grains, ny, nx)</code></td>
+<td>Matched spot count</td>
+</tr>
+<tr>
+<td><code>gmap.match_rate</code></td>
+<td><code>(n_grains, ny, nx)</code></td>
+<td>Match rate</td>
+</tr>
+</tbody>
+</table>
+<p>Unfitted pixels have <code>NaN</code> (float arrays) or <code>-1</code> (<code>n_matched</code>).</p>
+<hr />
+<h2 id="plotting-and-frame-selection">Plotting and frame selection<a class="headerlink" href="#plotting-and-frame-selection" title="Permanent link">&para;</a></h2>
+<h3 id="single-component-map">Single-component map<a class="headerlink" href="#single-component-map" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Crystal frame (default)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Lab frame</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Sample frame (−40° about Y by default)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Custom tilt</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                           <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">35.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                           <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>                           <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
+</code></pre></div>
+<p>Component names: <code>"e_xx"</code>, <code>"e_yy"</code>, <code>"e_zz"</code>, <code>"e_xy"</code>, <code>"e_xz"</code>, <code>"e_yz"</code>.</p>
+<h3 id="manual-frame-rotation">Manual frame rotation<a class="headerlink" href="#manual-frame-rotation" title="Permanent link">&para;</a></h3>
+<p>To rotate to an arbitrary frame, use <code>GrainMap._strain_component_map</code> directly or
+apply the rotation manually:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">strain_tensor</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>           <span class="c1"># (ny, nx, 3, 3) — crystal frame</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">U</span>   <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                       <span class="c1"># (ny, nx, 3, 3)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Lab frame (vectorised)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">eps_lab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;...ik,...kl,...jl-&gt;...ij&quot;</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">U</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Custom rotation R applied on top of the lab frame</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">R</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">spatial</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">Rotation</span><span class="o">.</span><span class="n">from_euler</span><span class="p">(</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="o">-</span><span class="mi">40</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">eps_custom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;ik,...kl,jl-&gt;...ij&quot;</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">eps_lab</span><span class="p">,</span> <span class="n">R</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Extract a component</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">e_zz_custom</span> <span class="o">=</span> <span class="n">eps_custom</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>   <span class="c1"># (ny, nx)</span>
+</code></pre></div>
+<hr />
+<h2 id="practical-notes">Practical notes<a class="headerlink" href="#practical-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>Units</strong>: strain is dimensionless (relative deformation).  Typical elastic
+  strains in thin films and strained crystals are in the range <span class="arithmatex">\(10^{-4}\)</span> to
+  <span class="arithmatex">\(10^{-2}\)</span>.</p>
+</li>
+<li>
+<p><strong>Sign convention</strong>: tensile strain along an axis is <strong>positive</strong>; compressive
+  strain is <strong>negative</strong>.</p>
+</li>
+<li>
+<p><strong>Shear components</strong>: <span class="arithmatex">\(\varepsilon_{xy}\)</span>, <span class="arithmatex">\(\varepsilon_{xz}\)</span>, <span class="arithmatex">\(\varepsilon_{yz}\)</span>
+  are the <em>engineering</em> shear strains divided by two (i.e. the tensor components,
+  not the full engineering shear <span class="arithmatex">\(\gamma = 2\varepsilon\)</span>).</p>
+</li>
+<li>
+<p><strong>Fitting stability</strong>: because the hydrostatic component is poorly constrained,
+  the individual normal strains may have large absolute uncertainties even when the
+  deviatoric components are well-determined.  Comparing <code>e_zz</code> maps across grains
+  is most meaningful when the grains share the same reference state.</p>
+</li>
+<li>
+<p><strong>Staged refinement</strong>: always run orientation fitting first (<code>fit_orientation</code> or
+  <code>submit_orientation</code>), then strain fitting starting from the converged orientation.
+  A typical <code>max_match_px</code> sequence for strain is <code>[10, 3]</code> — looser initial
+  matching to survive small orientation errors, tightening to sharpen the strain
+  estimate.</p>
+</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_orientation_plotting/" class="btn btn-neutral float-left" title="Orientation Plotting"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_stress/" class="btn btn-neutral float-right" title="Elastic Stress from Strain Maps">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_orientation_plotting/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_stress/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

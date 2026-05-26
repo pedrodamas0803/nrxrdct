@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -50,8 +51,16 @@
     <li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#with-uv-recommended">With uv (recommended)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#registering-a-jupyter-kernel">Registering a Jupyter kernel</a>
+    </li>
+        </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#with-pip">With pip</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#registering-a-jupyter-kernel_1">Registering a Jupyter kernel</a>
+    </li>
+        </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#building-the-documentation-locally">Building the documentation locally</a>
     </li>
@@ -76,6 +85,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -84,35 +113,59 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/parameters/">parameters</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/nmf/">nmf</a>
-                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../api/utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/io/">io</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/roi/">roi</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/slurm_integration/">slurm_integration</a>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../api/slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -147,19 +200,68 @@
 <li><a href="https://astra-toolbox.com/">ASTRA Toolbox</a> (GPU reconstruction requires an NVIDIA GPU and CUDA)</li>
 </ul>
 <h2 id="with-uv-recommended">With <code>uv</code> (recommended)<a class="headerlink" href="#with-uv-recommended" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>sync
+<p><a href="https://docs.astral.sh/uv/"><code>uv</code></a> is a fast Python package and project manager. If you do not have it installed yet:</p>
+<p><strong>Linux / macOS</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+</code></pre></div>
+<p><strong>Windows (PowerShell)</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">&quot;irm https://astral.sh/uv/install.ps1 | iex&quot;</span>
+</code></pre></div>
+<p><strong>Via pip (any platform)</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>uv
+</code></pre></div>
+<p>After installing, restart your terminal so the <code>uv</code> command is on your <code>PATH</code>.</p>
+<p>Then clone and install the project:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>uv<span class="w"> </span>sync
+</code></pre></div>
+<p><code>uv sync</code> creates an isolated virtual environment in <code>.venv/</code>, installs all declared dependencies, and installs <code>nrxrdct</code> in editable mode — no separate <code>pip install -e .</code> step is needed.</p>
+<p>To activate the environment manually:</p>
+<p><strong>Linux / macOS</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+</code></pre></div>
+<p><strong>Windows (PowerShell)</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">Activate</span><span class="p">.</span><span class="n">ps1</span>
+</code></pre></div>
+<p>Alternatively, prefix any command with <code>uv run</code> to execute it inside the managed environment without activating it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>my_script.py
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>uv<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
+</code></pre></div>
+<h3 id="registering-a-jupyter-kernel">Registering a Jupyter kernel<a class="headerlink" href="#registering-a-jupyter-kernel" title="Permanent link">&para;</a></h3>
+<p>On shared Jupyter servers such as the ESRF Jupyter-SLURM portal, you need to register the environment as a named kernel so it appears in the launcher.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Install ipykernel into the uv-managed environment</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>add<span class="w"> </span>ipykernel
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Register the kernel — the --name must be unique on the server</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">&quot;nrxrdct&quot;</span>
+</code></pre></div>
+<p>After refreshing the JupyterLab page the kernel <strong>nrxrdct</strong> will appear in the kernel selector.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>If you are on a SLURM-based Jupyter server (e.g. ESRF's <a href="https://jupyter-slurm.esrf.fr">jupyter-slurm</a>), the kernel registration only needs to be done once per user account — the <code>--user</code> flag writes to <code>~/.local/share/jupyter/kernels/</code> which is shared across all sessions.</p>
+</div>
+<p>To remove the kernel later:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>jupyter<span class="w"> </span>kernelspec<span class="w"> </span>remove<span class="w"> </span>nrxrdct
 </code></pre></div>
 <h2 id="with-pip">With <code>pip</code><a class="headerlink" href="#with-pip" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">cd</span><span class="w"> </span>nrxrdct
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </code></pre></div>
+<h3 id="registering-a-jupyter-kernel_1">Registering a Jupyter kernel<a class="headerlink" href="#registering-a-jupyter-kernel_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pip<span class="w"> </span>install<span class="w"> </span>ipykernel
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">&quot;nrxrdct&quot;</span>
+</code></pre></div>
+<p>After refreshing the JupyterLab page the kernel <strong>nrxrdct</strong> will appear in the kernel selector.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Run these commands with the virtual environment that contains <code>nrxrdct</code> already activated, so the registered kernel points to the correct Python interpreter.</p>
+</div>
 <h2 id="building-the-documentation-locally">Building the documentation locally<a class="headerlink" href="#building-the-documentation-locally" title="Permanent link">&para;</a></h2>
 <p>Install the docs extras and serve:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>docs
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>docs
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
 </code></pre></div>
 <p>Then open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>.</p>
 <hr />
@@ -306,6 +408,7 @@
     <script>var base_url = "..";</script>
     <script src="../js/theme_extra.js"></script>
     <script src="../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../search/main.js"></script>
     <script>
         jQuery(function () {

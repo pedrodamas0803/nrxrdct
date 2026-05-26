@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Elastic Stress from Strain Maps - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Elastic Stress from Strain Maps";
+        var mkdocs_page_input_path = "user-guide/laue_stress.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Elastic Stress from Strain Maps</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-hookes-law">1. Hooke's law</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-voigt-ordering-conventions">2. Voigt ordering conventions</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-elastic-constants">3. Elastic constants</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#from-an-xrayutilities-crystal-object">From an xrayutilities Crystal object</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#supplying-elastic-constants-manually">Supplying elastic constants manually</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-stress_voigt-full-stress-map">4. stress_voigt — full stress map</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#reference-frames">Reference frames</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-plot_stress_component-single-component-map">5. plot_stress_component — single-component map</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-extracting-components-manually">6. Extracting components manually</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-important-caveats">7. Important caveats</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#hydrostatic-stress-is-unconstrained">Hydrostatic stress is unconstrained</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#elastic-constants-must-match-the-crystal-frame">Elastic constants must match the crystal frame</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#single-crystal-assumption">Single-crystal assumption</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-complete-example">8. Complete example</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Elastic Stress from Strain Maps</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_stress.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="elastic-stress-from-laue-strain-maps">Elastic stress from Laue strain maps<a class="headerlink" href="#elastic-stress-from-laue-strain-maps" title="Permanent link">&para;</a></h1>
+<p>This page covers the conversion of fitted Laue strain maps to elastic stress
+maps using Hooke's law, the required elastic-constant input, the Voigt
+notation conventions used internally, and the available reference-frame
+transformations.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: stress calculation requires per-pixel strain data.  Run
+<code>fit_strain_orientation</code> and collect results into a <code>GrainMap</code> before
+proceeding.  See <a href="../laue_strain/">Strain Analysis</a> for that workflow.</p>
+</blockquote>
+<hr />
+<h2 id="1-hookes-law">1. Hooke's law<a class="headerlink" href="#1-hookes-law" title="Permanent link">&para;</a></h2>
+<p>In the linear-elastic regime the Cauchy stress tensor
+<span class="arithmatex">\(\boldsymbol{\sigma}\)</span> and the strain tensor <span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span> are
+related by the <strong>generalised Hooke's law</strong>:</p>
+<div class="arithmatex">\[
+\sigma_{ij} = C_{ijkl}\,\varepsilon_{kl}
+\]</div>
+<p>where <span class="arithmatex">\(C_{ijkl}\)</span> is the <strong>fourth-rank elastic stiffness tensor</strong> (24 independent
+components for the most general triclinic crystal; far fewer for higher
+symmetries).</p>
+<p>In <strong>Voigt notation</strong> the rank-4 tensor is reduced to a symmetric <span class="arithmatex">\(6\times6\)</span>
+matrix <span class="arithmatex">\(\mathbf{C}\)</span> and the law becomes a simple matrix–vector product:</p>
+<div class="arithmatex">\[
+\boldsymbol{\sigma}_V = \mathbf{C}\,\boldsymbol{\varepsilon}_V^{(\text{eng})}
+\]</div>
+<p>where <span class="arithmatex">\(\boldsymbol{\varepsilon}_V^{(\text{eng})}\)</span> uses the <strong>engineering</strong> shear
+convention (factor-of-two on off-diagonal components):</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_V^{(\text{eng})}
+= [\,\varepsilon_{xx},\; \varepsilon_{yy},\; \varepsilon_{zz},\;
+    \underbrace{2\varepsilon_{yz}}_{\gamma_{yz}},\;
+    \underbrace{2\varepsilon_{xz}}_{\gamma_{xz}},\;
+    \underbrace{2\varepsilon_{xy}}_{\gamma_{xy}}\,]
+\]</div>
+<p>The factor of 2 on the shear components is required for <span class="arithmatex">\(\mathbf{C}\)</span> to be the
+same matrix as in the rank-4 contraction.  The strain values stored by <code>nrxrdct</code>
+are <em>tensor</em> components (no factor of 2), so the code multiplies the off-diagonal
+elements by 2 internally before applying <span class="arithmatex">\(\mathbf{C}\)</span>.</p>
+<hr />
+<h2 id="2-voigt-ordering-conventions">2. Voigt ordering conventions<a class="headerlink" href="#2-voigt-ordering-conventions" title="Permanent link">&para;</a></h2>
+<p>Two Voigt orderings are in common use:</p>
+<table>
+<thead>
+<tr>
+<th>Index</th>
+<th>Standard crystallographic</th>
+<th><code>nrxrdct</code> internal</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><span class="arithmatex">\(xx\)</span></td>
+<td><span class="arithmatex">\(xx\)</span></td>
+</tr>
+<tr>
+<td>1</td>
+<td><span class="arithmatex">\(yy\)</span></td>
+<td><span class="arithmatex">\(yy\)</span></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="arithmatex">\(zz\)</span></td>
+<td><span class="arithmatex">\(zz\)</span></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="arithmatex">\(yz\)</span></td>
+<td><span class="arithmatex">\(xy\)</span></td>
+</tr>
+<tr>
+<td>4</td>
+<td><span class="arithmatex">\(xz\)</span></td>
+<td><span class="arithmatex">\(xz\)</span></td>
+</tr>
+<tr>
+<td>5</td>
+<td><span class="arithmatex">\(xy\)</span></td>
+<td><span class="arithmatex">\(yz\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>The standard crystallographic ordering (used by xrayutilities <code>crystal.cij</code>)
+is <span class="arithmatex">\([xx, yy, zz, yz, xz, xy]\)</span>.  <code>nrxrdct</code> stores strain and stress internally
+in the ordering <span class="arithmatex">\([xx, yy, zz, xy, xz, yz]\)</span>.</p>
+<p>The permutation between the two is <span class="arithmatex">\([0, 1, 2, 5, 4, 3]\)</span>, which is its own
+inverse — the same index array maps in both directions.  The code applies this
+reordering automatically; users supply and receive arrays in the
+<code>nrxrdct</code>-internal ordering unless working with <code>cij</code> directly.</p>
+<hr />
+<h2 id="3-elastic-constants">3. Elastic constants<a class="headerlink" href="#3-elastic-constants" title="Permanent link">&para;</a></h2>
+<h3 id="from-an-xrayutilities-crystal-object">From an xrayutilities <code>Crystal</code> object<a class="headerlink" href="#from-an-xrayutilities-crystal-object" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">fe</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Fe</span>    <span class="c1"># body-centred cubic iron</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># The stiffness matrix is in crystal.cij  (6×6, Pa)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># nrxrdct converts to GPa automatically</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">fe</span><span class="o">.</span><span class="n">cij</span> <span class="o">*</span> <span class="mf">1e-9</span><span class="p">)</span>    <span class="c1"># GPa</span>
+</code></pre></div>
+<p>Pass the crystal object directly to <code>stress_voigt</code> or <code>plot_stress_component</code>
+and the stiffness matrix is extracted automatically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">)</span>
+</code></pre></div>
+<p>Resolution order inside <code>_extract_cij</code>:</p>
+<ol>
+<li>Explicit <code>cij</code> keyword (6×6 array, GPa, standard Voigt ordering).</li>
+<li><code>crystal.cij</code> — xrayutilities <code>Crystal</code> attribute (converted Pa → GPa when
+   <code>max(cij) &gt; 1e6</code>).</li>
+<li><code>crystal.cijkl</code> — full rank-4 tensor (contracted to Voigt + converted).</li>
+</ol>
+<h3 id="supplying-elastic-constants-manually">Supplying elastic constants manually<a class="headerlink" href="#supplying-elastic-constants-manually" title="Permanent link">&para;</a></h3>
+<p>If the crystal object does not carry <code>cij</code>, or you want to use literature
+values, pass a <code>(6, 6)</code> array directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Cubic iron (GPa), standard Voigt ordering [xx,yy,zz,yz,xz,xy]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">C_Fe</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="p">[</span><span class="mi">230</span><span class="p">,</span> <span class="mi">135</span><span class="p">,</span> <span class="mi">135</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="p">[</span><span class="mi">135</span><span class="p">,</span> <span class="mi">230</span><span class="p">,</span> <span class="mi">135</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="p">[</span><span class="mi">135</span><span class="p">,</span> <span class="mi">135</span><span class="p">,</span> <span class="mi">230</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="p">[</span>  <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span> <span class="mi">117</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="p">[</span>  <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span> <span class="mi">117</span><span class="p">,</span>   <span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="p">[</span>  <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span>   <span class="mi">0</span><span class="p">,</span> <span class="mi">117</span><span class="p">],</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cij</span><span class="o">=</span><span class="n">C_Fe</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="4-stress_voigt-full-stress-map">4. <code>stress_voigt</code> — full stress map<a class="headerlink" href="#4-stress_voigt-full-stress-map" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">crystal</span><span class="p">,</span>           <span class="c1"># xrayutilities Crystal, or None if cij is given</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>   <span class="c1"># grain slot index</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">cij</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>          <span class="c1"># optional explicit (6,6) stiffness matrix in GPa</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>   <span class="c1"># &quot;crystal&quot; | &quot;lab&quot; | &quot;sample&quot;</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># sig shape: (ny, nx, 6)  —  GPa, code ordering [s_xx,s_yy,s_zz,s_xy,s_xz,s_yz]</span>
+</code></pre></div>
+<p><code>NaN</code> is returned at pixels where no strain data exist.</p>
+<h3 id="reference-frames">Reference frames<a class="headerlink" href="#reference-frames" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>frame</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"crystal"</code></td>
+<td>Stress components in the crystal coordinate system (same frame as the fitted strain).</td>
+</tr>
+<tr>
+<td><code>"lab"</code></td>
+<td>Rotated to the lab frame via <span class="arithmatex">\(\boldsymbol{\sigma}_\text{lab} = \mathbf{U}\,\boldsymbol{\sigma}_\text{crystal}\,\mathbf{U}^T\)</span>.</td>
+</tr>
+<tr>
+<td><code>"sample"</code></td>
+<td>Lab frame further rotated by <code>sample_tilt_deg</code> about <code>sample_tilt_axis</code> (default −40° about <span class="arithmatex">\(Y\)</span>).</td>
+</tr>
+</tbody>
+</table>
+<p>The transformation between frames follows the standard second-rank tensor
+rotation law.  See <a href="../laue_strain/#reference-frames">Strain Analysis — Reference frames</a>
+for the equivalent derivation for the strain tensor.</p>
+<hr />
+<h2 id="5-plot_stress_component-single-component-map">5. <code>plot_stress_component</code> — single-component map<a class="headerlink" href="#5-plot_stress_component-single-component-map" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">component</span><span class="o">=</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span>       <span class="c1"># one of s_xx, s_yy, s_zz, s_xy, s_xz, s_yz</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>              <span class="c1"># GPa → MPa (default)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">,</span>          <span class="c1"># diverging map centred at zero</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">vmin</span><span class="o">=-</span><span class="mi">200</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>    <span class="c1"># MPa</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
+</code></pre></div>
+<p>Available component strings:</p>
+<table>
+<thead>
+<tr>
+<th>String</th>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"s_xx"</code></td>
+<td><span class="arithmatex">\(\sigma_{xx}\)</span></td>
+<td>Normal stress along crystal <span class="arithmatex">\(x\)</span></td>
+</tr>
+<tr>
+<td><code>"s_yy"</code></td>
+<td><span class="arithmatex">\(\sigma_{yy}\)</span></td>
+<td>Normal stress along crystal <span class="arithmatex">\(y\)</span></td>
+</tr>
+<tr>
+<td><code>"s_zz"</code></td>
+<td><span class="arithmatex">\(\sigma_{zz}\)</span></td>
+<td>Normal stress along crystal <span class="arithmatex">\(z\)</span></td>
+</tr>
+<tr>
+<td><code>"s_xy"</code></td>
+<td><span class="arithmatex">\(\sigma_{xy}\)</span></td>
+<td>In-plane shear <span class="arithmatex">\(xy\)</span></td>
+</tr>
+<tr>
+<td><code>"s_xz"</code></td>
+<td><span class="arithmatex">\(\sigma_{xz}\)</span></td>
+<td>Shear <span class="arithmatex">\(xz\)</span></td>
+</tr>
+<tr>
+<td><code>"s_yz"</code></td>
+<td><span class="arithmatex">\(\sigma_{yz}\)</span></td>
+<td>Shear <span class="arithmatex">\(yz\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>The default colour scale is <code>"RdBu_r"</code> with units of MPa (<code>scale=1e3</code>).
+Use <code>scale=1.0</code> for GPa.</p>
+<hr />
+<h2 id="6-extracting-components-manually">6. Extracting components manually<a class="headerlink" href="#6-extracting-components-manually" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 6)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Code ordering: [s_xx=0, s_yy=1, s_zz=2, s_xy=3, s_xz=4, s_yz=5]</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">s_xx</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># MPa</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">s_zz</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">s_xy</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>
+</code></pre></div>
+<hr />
+<h2 id="7-important-caveats">7. Important caveats<a class="headerlink" href="#7-important-caveats" title="Permanent link">&para;</a></h2>
+<h3 id="hydrostatic-stress-is-unconstrained">Hydrostatic stress is unconstrained<a class="headerlink" href="#hydrostatic-stress-is-unconstrained" title="Permanent link">&para;</a></h3>
+<p>White-beam Laue diffraction cannot measure the <strong>hydrostatic</strong> part of the
+strain tensor (see <a href="../laue_strain/#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Strain Analysis — Hydrostatic blind spot</a>).
+Because only the five deviatoric strain components are reliably determined,
+the stress tensor derived from them also reflects only the <strong>deviatoric</strong> stress:</p>
+<div class="arithmatex">\[
+\boldsymbol{\sigma} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{deviatoric}
+\]</div>
+<p>The <strong>mean stress</strong> (pressure) <span class="arithmatex">\(p = -\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})\)</span>
+is not well-constrained.  Individual normal stresses (<span class="arithmatex">\(\sigma_{xx}\)</span>, <span class="arithmatex">\(\sigma_{yy}\)</span>,
+<span class="arithmatex">\(\sigma_{zz}\)</span>) contain contributions from both the deviatoric and hydrostatic
+parts, so they carry larger absolute uncertainties than the shear components or
+the differences between normal components.</p>
+<p>In practice:</p>
+<ul>
+<li><strong>Shear stresses</strong> <span class="arithmatex">\(\sigma_{xy}\)</span>, <span class="arithmatex">\(\sigma_{xz}\)</span>, <span class="arithmatex">\(\sigma_{yz}\)</span> are the most
+  reliable outputs — they are directly proportional to the corresponding shear
+  strain components, which <em>are</em> measurable.</li>
+<li><strong>Differences</strong> of normal stresses (e.g. <span class="arithmatex">\(\sigma_{xx} - \sigma_{zz}\)</span>) are
+  reliable — they probe the deviatoric part.</li>
+<li><strong>Individual</strong> normal stresses and the mean stress should be interpreted with
+  caution unless the hydrostatic component is constrained by an independent
+  measurement.</li>
+</ul>
+<h3 id="elastic-constants-must-match-the-crystal-frame">Elastic constants must match the crystal frame<a class="headerlink" href="#elastic-constants-must-match-the-crystal-frame" title="Permanent link">&para;</a></h3>
+<p>The stiffness matrix <span class="arithmatex">\(\mathbf{C}\)</span> must be expressed in the same coordinate
+system as the strain tensor — i.e. the <strong>crystal frame</strong> as defined by the
+xrayutilities <code>Crystal</code> object.  If you supply <code>cij</code> manually, make sure the
+axes of your stiffness matrix match the crystal axes used in the simulation.</p>
+<h3 id="single-crystal-assumption">Single-crystal assumption<a class="headerlink" href="#single-crystal-assumption" title="Permanent link">&para;</a></h3>
+<p>Hooke's law as applied here assumes the crystal is <strong>elastically homogeneous</strong>
+within each fitted pixel.  For polycrystalline pixels (overlapping grains,
+sub-grain boundaries) the result is an effective average that may not correspond
+to the stress in any single crystallite.</p>
+<hr />
+<h2 id="8-complete-example">8. Complete example<a class="headerlink" href="#8-complete-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrainMap</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Load a pre-fitted map</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">gmap</span> <span class="o">=</span> <span class="n">GrainMap</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;grainmap.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Crystal object with elastic constants</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">fe</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Fe</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Merge grains</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">metric</span><span class="o">=</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">min_match_rate</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">gi</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Plot all normal-stress components in the crystal frame (MPa)</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;s_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;s_zz&quot;</span><span class="p">):</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        <span class="n">comp</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        <span class="n">vmin</span><span class="o">=-</span><span class="mi">500</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="p">)</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1"># Plot shear stress in the sample frame</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="s2">&quot;s_xz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span> <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="p">)</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="c1"># Access the full stress array for custom analysis</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">sig_MPa</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1e3</span>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="c1"># Biaxial stress proxy: (σ_xx + σ_yy) / 2</span>
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="n">biaxial</span> <span class="o">=</span> <span class="p">(</span><span class="n">sig_MPa</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sig_MPa</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_strain/" class="btn btn-neutral float-left" title="Strain Analysis"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_grain_map_merge/" class="btn btn-neutral float-right" title="Grain Map Merging and Symmetry Reduction">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_strain/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_grain_map_merge/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

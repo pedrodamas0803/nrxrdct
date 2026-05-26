@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Darwin Model (Thick Layers) - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Darwin Model (Thick Layers)";
+        var mkdocs_page_input_path = "user-guide/laue_darwin.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Darwin Model (Thick Layers)</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-the-problem-with-the-kinematical-model">1. The problem with the kinematical model</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-the-darwin-extinction-length">2. The Darwin extinction length</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-primary-extinction-correction-darwin-factor">3. Primary extinction correction — Darwin factor</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-absorption-corrections-two-beam-path-and-overlying-layers">4. Absorption corrections — two-beam path and overlying layers</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#41-linear-absorption-coefficient">4.1 Linear absorption coefficient</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#42-two-beam-effective-depth">4.2 Two-beam effective depth</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#43-overlying-layer-attenuation">4.3 Overlying-layer attenuation</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-coherent-multilayer-sum">5. Coherent multilayer sum</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-superlattice-satellites-in-the-darwin-model">6. Superlattice satellites in the Darwin model</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-when-to-use-simulate_laue_darwin-vs-simulate_laue_stack">7. When to use simulate_laue_darwin vs. simulate_laue_stack</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-example-ingangan-mqw">8. Example — InGaN/GaN MQW</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#references">References</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Darwin Model (Thick Layers)</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_darwin.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="darwin-model-for-thick-layer-laue-diffraction">Darwin model for thick-layer Laue diffraction<a class="headerlink" href="#darwin-model-for-thick-layer-laue-diffraction" title="Permanent link">&para;</a></h1>
+<p>This page describes the <strong>Darwin primary extinction</strong> correction implemented in
+<code>simulate_laue_darwin</code> and explains when and why it is necessary compared to the
+kinematical model used by <code>simulate_laue_stack</code>.</p>
+<hr />
+<h2 id="1-the-problem-with-the-kinematical-model">1. The problem with the kinematical model<a class="headerlink" href="#1-the-problem-with-the-kinematical-model" title="Permanent link">&para;</a></h2>
+<p>In the kinematical (Born) approximation, the diffracted amplitude from a perfect
+crystal slab of <span class="arithmatex">\(N\)</span> unit cells is simply proportional to <span class="arithmatex">\(N\)</span>, so the intensity
+scales as</p>
+<div class="arithmatex">\[
+I_\text{kin} \propto \lvert F_\text{uc}\rvert^2 \, N^2.
+\]</div>
+<p>This is accurate for <strong>thin</strong> layers (epitaxial films, quantum wells) where each
+photon interacts with the crystal at most once before leaving.  For <strong>thick</strong>
+perfect-crystal regions — a substrate, a thick buffer layer, or any slab with
+<span class="arithmatex">\(N \gtrsim N_\text{ext}\)</span> — the assumption breaks down:</p>
+<ul>
+<li>The diffracted beam begins to re-diffract back into the forward beam
+  (<em>primary extinction</em>).</li>
+<li>The leading unit cells act as a partial mirror, shadowing the deeper ones.</li>
+<li>The intensity saturates rather than continuing to grow as <span class="arithmatex">\(N^2\)</span>.</li>
+</ul>
+<p>Ignoring this effect produces substrate peaks that are unrealistically strong
+relative to the thin-film signals of interest.</p>
+<hr />
+<h2 id="2-the-darwin-extinction-length">2. The Darwin extinction length<a class="headerlink" href="#2-the-darwin-extinction-length" title="Permanent link">&para;</a></h2>
+<p>Darwin (1914, 1922) showed that for a perfect plane-wave incident on a perfect
+crystal, the <em>extinction length</em> <span class="arithmatex">\(N_\text{ext}\)</span> is the number of reflecting planes
+at which the diffracted amplitude equals the incident amplitude.  For X-ray
+diffraction it is</p>
+<div class="arithmatex">\[
+\boxed{
+N_\text{ext} = \frac{V_\text{uc}\,\sin\theta}{r_e\,\lambda\,\lvert F_\text{uc}\rvert\,d_{hkl}}
+}
+\]</div>
+<p>where</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+<th>Typical value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(V_\text{uc}\)</span></td>
+<td>unit-cell volume (Å³)</td>
+<td>~45 Å³ for GaN</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\sin\theta\)</span></td>
+<td>sine of the Bragg angle</td>
+<td>0.1–0.9</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(r_e\)</span></td>
+<td>classical electron radius</td>
+<td><span class="arithmatex">\(2.818 \times 10^{-5}\)</span> Å</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\lambda\)</span></td>
+<td>X-ray wavelength (Å)</td>
+<td>0.5–2.5 Å</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\lvert F_\text{uc}\rvert\)</span></td>
+<td>unit-cell structure factor amplitude</td>
+<td>depends on reflection</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(d_{hkl}\)</span></td>
+<td>interplanar spacing (Å)</td>
+<td>e.g. 2.59 Å for GaN 0002</td>
+</tr>
+</tbody>
+</table>
+<p>For a strong reflection in a high-<span class="arithmatex">\(Z\)</span> material <span class="arithmatex">\(N_\text{ext}\)</span> can be as small as
+a few hundred unit cells (<span class="arithmatex">\(\sim 100\)</span> nm); for a weak reflection or a light-element
+material it can reach tens of thousands.</p>
+<hr />
+<h2 id="3-primary-extinction-correction-darwin-factor">3. Primary extinction correction — Darwin factor<a class="headerlink" href="#3-primary-extinction-correction-darwin-factor" title="Permanent link">&para;</a></h2>
+<p>The effective number of coherently scattering unit cells under primary extinction is</p>
+<div class="arithmatex">\[
+\boxed{
+N_\text{eff} = N_\text{ext}\,\tanh\!\left(\frac{N}{N_\text{ext}}\right)
+}
+\]</div>
+<p>This formula has two natural limits:</p>
+<table>
+<thead>
+<tr>
+<th>Regime</th>
+<th>Condition</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thin (kinematical)</td>
+<td><span class="arithmatex">\(N \ll N_\text{ext}\)</span></td>
+<td><span class="arithmatex">\(\tanh(N/N_\text{ext}) \approx N/N_\text{ext}\)</span>, so <span class="arithmatex">\(N_\text{eff} \approx N\)</span></td>
+</tr>
+<tr>
+<td>Thick (saturation)</td>
+<td><span class="arithmatex">\(N \gg N_\text{ext}\)</span></td>
+<td><span class="arithmatex">\(\tanh \to 1\)</span>, so <span class="arithmatex">\(N_\text{eff} \to N_\text{ext}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>The intensity correction is therefore</p>
+<div class="arithmatex">\[
+I_\text{Darwin} \propto \lvert F_\text{uc}\rvert^2\,N_\text{eff}^2
+\]</div>
+<p>For a thick substrate with <span class="arithmatex">\(N = 10^6\)</span> cells and <span class="arithmatex">\(N_\text{ext} = 500\)</span>, the kinematical
+model overestimates the intensity by a factor of <span class="arithmatex">\((10^6/500)^2 = 4\times 10^6\)</span>.
+The Darwin correction reduces it to the physically correct saturation level.</p>
+<div class="admonition note">
+<p class="admonition-title">Primary vs. secondary extinction</p>
+<p><em>Primary extinction</em> (corrected here) arises within a single perfect-crystal
+domain — the diffracted beam re-enters the forward direction and interferes
+destructively.  <em>Secondary extinction</em> is a mosaic / grain-statistics effect
+that reduces intensity when many grains are simultaneously in the Bragg
+condition.  Only primary extinction is implemented in <code>simulate_laue_darwin</code>.</p>
+</div>
+<hr />
+<h2 id="4-absorption-corrections-two-beam-path-and-overlying-layers">4. Absorption corrections — two-beam path and overlying layers<a class="headerlink" href="#4-absorption-corrections-two-beam-path-and-overlying-layers" title="Permanent link">&para;</a></h2>
+<p>In addition to primary extinction, <strong>photoelectric absorption</strong> limits the
+effective depth and attenuates the amplitude from each layer.  Three effects are
+modelled.</p>
+<h3 id="41-linear-absorption-coefficient">4.1 Linear absorption coefficient<a class="headerlink" href="#41-linear-absorption-coefficient" title="Permanent link">&para;</a></h3>
+<p>The Beer-Lambert attenuation length for a material with imaginary refractive
+index <span class="arithmatex">\(\beta\)</span> at energy <span class="arithmatex">\(E\)</span> is</p>
+<div class="arithmatex">\[
+t_\text{abs}(E) = \frac{1}{\mu(E)}, \qquad \mu = \frac{4\pi\beta}{\lambda}
+\]</div>
+<p>The corresponding maximum number of contributing unit cells is
+<span class="arithmatex">\(N_\text{abs} = t_\text{abs} / d\)</span>.</p>
+<h3 id="42-two-beam-effective-depth">4.2 Two-beam effective depth<a class="headerlink" href="#42-two-beam-effective-depth" title="Permanent link">&para;</a></h3>
+<p>The incident beam and the diffracted beam both travel obliquely through each
+layer.  The one-beam estimate uses only the incident angle:</p>
+<div class="arithmatex">\[
+N_\text{abs}^\text{1-beam} = \frac{\cos\alpha_\text{in}}{\mu\,d}
+\]</div>
+<p>The <strong>two-beam</strong> correction used by the simulation accounts for both legs:</p>
+<div class="arithmatex">\[
+\boxed{
+N_\text{abs} = \frac{\cos\alpha_\text{in}\,\cos\alpha_\text{out}}
+                     {\mu\,d\;(\cos\alpha_\text{in} + \cos\alpha_\text{out})}
+}
+\]</div>
+<div class="arithmatex">\[
+\cos\alpha_\text{in}  = |\hat{n}\cdot\hat{x}|, \qquad
+\cos\alpha_\text{out} = |\hat{n}\cdot\hat{k}_f|
+\]</div>
+<p>Because <span class="arithmatex">\(\hat{k}_f\)</span> is spot-specific, this correction is evaluated per spot.
+For a symmetric geometry (<span class="arithmatex">\(\alpha_\text{in} = \alpha_\text{out}\)</span>) the two-beam
+result is exactly half the one-beam value.  For near-grazing exit the reduction
+is much larger.</p>
+<p>The combined Darwin + absorption limit becomes</p>
+<div class="arithmatex">\[
+N_\text{eff}^\text{final} = \min\!\left(N_\text{eff}^\text{Darwin},\; N_\text{abs}\right)
+\]</div>
+<h3 id="43-overlying-layer-attenuation">4.3 Overlying-layer attenuation<a class="headerlink" href="#43-overlying-layer-attenuation" title="Permanent link">&para;</a></h3>
+<p>A photon scattered from a buffer layer must also pass through all <strong>shallower
+layers</strong> (other buffer layers and the MQW block) on the exit path.  Each
+overlying layer of thickness <span class="arithmatex">\(t_j\)</span> and attenuation coefficient <span class="arithmatex">\(\mu_j\)</span>
+contributes a transmission factor</p>
+<div class="arithmatex">\[
+T_j = \exp\!\left[
+  -\mu_j\, t_j \left(\frac{1}{\cos\alpha_\text{in}} + \frac{1}{\cos\alpha_\text{out}}\right)
+\right]
+\]</div>
+<p>The amplitude from buffer layer <span class="arithmatex">\(i\)</span> is therefore scaled by</p>
+<div class="arithmatex">\[
+T_\text{above}^{(i)} = T_\text{MQW} \times \prod_{j &gt; i} T_j
+\]</div>
+<p>The product runs over all buffer layers shallower than <span class="arithmatex">\(i\)</span> and
+<span class="arithmatex">\(T_\text{MQW}\)</span> is the transmission through the full MQW block.  The total
+buffer structure factor becomes</p>
+<div class="arithmatex">\[
+F_\text{buf}(\mathbf{G}) = \sum_i T_\text{above}^{(i)}\; F_i^{\text{uc}}\, N_\text{eff,i}\,
+e^{\,i Q_n z_i}
+\]</div>
+<p>The MQW block sits at the top of the stack and receives no <span class="arithmatex">\(T_\text{above}\)</span>
+correction.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Repeating MQW layers have individual thicknesses always much
+smaller than <span class="arithmatex">\(t_\text{abs}\)</span>, so no absorption depth cap is applied to them.
+The <span class="arithmatex">\(T_\text{above}\)</span> overlying-layer factor still modulates the amplitude
+from deeper buffer layers as described above.</p>
+</div>
+<hr />
+<h2 id="5-coherent-multilayer-sum">5. Coherent multilayer sum<a class="headerlink" href="#5-coherent-multilayer-sum" title="Permanent link">&para;</a></h2>
+<p>Like <code>simulate_laue_stack</code>, <code>simulate_laue_darwin</code> sums all layer amplitudes
+<strong>coherently</strong>.  The coherence preserves superlattice satellites and thickness
+fringes.  For a stack of buffer layers plus <span class="arithmatex">\(N_\text{rep}\)</span> repetitions of a
+bilayer unit, the total diffracted amplitude is</p>
+<div class="arithmatex">\[
+F_\text{total}(\mathbf{G}) = F_\text{buffer}(\mathbf{G})
++ e^{\,i Q_n z_\text{buf}}\, F_\text{unit}(\mathbf{G})\, S_\text{rep}(Q_n \Lambda)
+\]</div>
+<p>where</p>
+<div class="arithmatex">\[
+F_\text{buffer}(\mathbf{G}) = \sum_j F_j^{\text{uc}} N_\text{eff,j}\, e^{\,i Q_n z_j}
+\]</div>
+<div class="arithmatex">\[
+F_\text{unit}(\mathbf{G}) = \sum_j F_j^{\text{uc}} N_\text{eff,j}\, e^{\,i Q_n z_j^\text{rel}}
+\]</div>
+<div class="arithmatex">\[
+S_\text{rep}(Q_n \Lambda) =
+\frac{1 - e^{\,i N_\text{rep} Q_n \Lambda}}{1 - e^{\,i Q_n \Lambda}}
+\]</div>
+<p>Here <span class="arithmatex">\(Q_n = \mathbf{G}\cdot\hat{n}\)</span> is the component of the reciprocal-lattice vector
+along the stacking direction <span class="arithmatex">\(\hat{n}\)</span>, <span class="arithmatex">\(z_j\)</span> is the absolute depth of each layer,
+<span class="arithmatex">\(z_j^\text{rel}\)</span> is the relative depth within one bilayer period, and <span class="arithmatex">\(\Lambda\)</span> is the
+bilayer period.</p>
+<p>The structure of the sum is identical to the kinematical case in
+<code>simulate_laue_stack</code> — the <strong>only difference</strong> is that each layer's <span class="arithmatex">\(N\)</span> is replaced
+by its Darwin-corrected <span class="arithmatex">\(N_\text{eff}\)</span>.</p>
+<hr />
+<h2 id="6-superlattice-satellites-in-the-darwin-model">6. Superlattice satellites in the Darwin model<a class="headerlink" href="#6-superlattice-satellites-in-the-darwin-model" title="Permanent link">&para;</a></h2>
+<p>Satellite peak positions are determined purely by geometry (the Laue condition),
+not by the diffraction model.  <code>simulate_laue_darwin</code> therefore probes the same
+satellite wavevectors as <code>simulate_laue_stack</code>:</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{sat}^{(m)} = \mathbf{G}_{hkl}
++ \left(|m| + \tfrac{1}{2}\right)\operatorname{sgn}(m)\,
+\frac{2\pi}{t}\,\hat{n}
+\]</div>
+<p>for both per-layer thickness fringes ($t = $ layer thickness) and superlattice
+satellites (<span class="arithmatex">\(t = \Lambda\)</span>, only when <span class="arithmatex">\(N_\text{rep} &gt; 1\)</span>).</p>
+<p>The key difference from <code>simulate_laue_stack</code> is in the <strong>amplitude</strong> at each
+satellite <span class="arithmatex">\(\mathbf{G}_\text{sat}\)</span>: the Darwin-corrected <span class="arithmatex">\(N_\text{eff}\)</span> is
+recomputed at the shifted wavevector (because <span class="arithmatex">\(Q_n\)</span> and <span class="arithmatex">\(\sin\theta\)</span> both change),
+so the relative satellite / Bragg-peak intensity is automatically modified by the
+extinction correction.</p>
+<hr />
+<h2 id="7-when-to-use-simulate_laue_darwin-vs-simulate_laue_stack">7. When to use <code>simulate_laue_darwin</code> vs. <code>simulate_laue_stack</code><a class="headerlink" href="#7-when-to-use-simulate_laue_darwin-vs-simulate_laue_stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th><code>simulate_laue_stack</code></th>
+<th><code>simulate_laue_darwin</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thin epitaxial layers (<span class="arithmatex">\(N \ll N_\text{ext}\)</span>)</td>
+<td>✓ accurate</td>
+<td>✓ reduces to kinematical</td>
+</tr>
+<tr>
+<td>Thick substrate / buffer (<span class="arithmatex">\(N \gg N_\text{ext}\)</span>)</td>
+<td>✗ over-predicts</td>
+<td>✓ saturates correctly</td>
+</tr>
+<tr>
+<td>Superlattice satellites</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>Mosaic / strained crystals</td>
+<td>✓ (effective N broadening)</td>
+<td>use kinematical</td>
+</tr>
+<tr>
+<td>Computation speed</td>
+<td>faster</td>
+<td>slightly slower</td>
+</tr>
+</tbody>
+</table>
+<p>For a typical InGaN/GaN MQW on a GaN substrate, the QW and barrier layers are
+always in the kinematical regime (<span class="arithmatex">\(N \sim 10\)</span>–<span class="arithmatex">\(200 \ll N_\text{ext} \sim 10^3\)</span>),
+while the GaN substrate can be many micrometres thick.  In this situation
+<code>simulate_laue_darwin</code> gives the most physically meaningful relative
+intensities between the substrate Bragg peak and the MQW satellites.</p>
+<p>Both functions accept the <code>structure_model</code> parameter (<code>'average'</code> by default,
+<code>'coherent'</code> for the full inter-layer interference pattern).  See the
+<a href="../laue_layered_structures/#3-structure-model">Structure model</a>
+section of the Layered Structures page for a full description of what each
+mode computes and when to use each.</p>
+<hr />
+<h2 id="8-example-ingangan-mqw">8. Example — InGaN/GaN MQW<a class="headerlink" href="#8-example-ingangan-mqw" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">GaN</span>   <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">GaN</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">InGaN</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">InGaN</span><span class="p">(</span><span class="mf">0.20</span><span class="p">)</span>   <span class="c1"># In₀.₂₀Ga₀.₈₀N  (Vegard&#39;s law)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">U</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">euler_to_U</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">C</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">nitride_elastic_constants</span><span class="p">(</span><span class="s1">&#39;InN&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span> <span class="n">end_material</span><span class="o">=</span><span class="s1">&#39;GaN&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">LayeredCrystal</span><span class="p">(</span><span class="n">n_hat</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_buffer_layer</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">5000.0</span><span class="p">,</span>           <span class="c1"># 500 nm buffer</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                       <span class="n">d_spacing</span><span class="o">=</span><span class="n">laue</span><span class="o">.</span><span class="n">d_spacing_hkl</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                       <span class="n">label</span><span class="o">=</span><span class="s1">&#39;GaN buffer&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_pseudomorphic_layer</span><span class="p">(</span><span class="n">InGaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>    <span class="c1"># 3 nm QW</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>                              <span class="n">a_substrate</span><span class="o">=</span><span class="n">GaN</span><span class="o">.</span><span class="n">lattice</span><span class="o">.</span><span class="n">a</span><span class="p">,</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>                              <span class="n">C13</span><span class="o">=</span><span class="n">C</span><span class="p">[</span><span class="s1">&#39;C13&#39;</span><span class="p">],</span> <span class="n">C33</span><span class="o">=</span><span class="n">C</span><span class="p">[</span><span class="s1">&#39;C33&#39;</span><span class="p">],</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                              <span class="n">label</span><span class="o">=</span><span class="s1">&#39;InGaN QW&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">stack</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>                   <span class="c1"># 10 nm barrier</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>                <span class="n">d_spacing</span><span class="o">=</span><span class="n">laue</span><span class="o">.</span><span class="n">d_spacing_hkl</span><span class="p">(</span><span class="n">GaN</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;GaN barrier&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="n">camera</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">Camera</span><span class="p">()</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="n">spots</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">simulate_laue_darwin</span><span class="p">(</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">E_min_eV</span><span class="o">=</span><span class="mi">5_000</span><span class="p">,</span> <span class="n">E_max_eV</span><span class="o">=</span><span class="mi">22_000</span><span class="p">,</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">max_satellites</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="p">)</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="n">laue</span><span class="o">.</span><span class="n">print_hkl_family</span><span class="p">(</span><span class="n">spots</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>  <span class="c1"># GaN 000ℓ family + MQW satellites</span>
+</code></pre></div>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Darwin, C. G.</strong> The theory of X-ray reflexion. <em>Philos. Mag.</em> <strong>27</strong>, 315–333 and 675–690 (1914).</li>
+<li><strong>Darwin, C. G.</strong> The reflexion of X-rays from imperfect crystals. <em>Philos. Mag.</em> <strong>43</strong>, 800–829 (1922).</li>
+<li><strong>Zachariasen, W. H.</strong> <em>Theory of X-Ray Diffraction in Crystals.</em> Dover, New York, 1945. (Chapter 3 — extinction in perfect crystals.)</li>
+<li><strong>Als-Nielsen, J. &amp; McMorrow, D.</strong> <em>Elements of Modern X-ray Physics</em>, 2nd ed.  Wiley, 2011. (Section 6.4 — Darwin width and primary extinction.)</li>
+<li><strong>Authier, A.</strong> <em>Dynamical Theory of X-Ray Diffraction.</em> Oxford University Press, 2001. (Chapters 2–4 — full dynamical treatment of which the Darwin model is the plane-wave limiting case.)</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_layered_structures/" class="btn btn-neutral float-left" title="Layered Structures"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_orientation_plotting/" class="btn btn-neutral float-right" title="Orientation Plotting">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_layered_structures/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_orientation_plotting/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

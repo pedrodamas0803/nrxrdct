@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Diffraction and Laue Theory - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Diffraction and Laue Theory";
+        var mkdocs_page_input_path = "user-guide/laue_theory.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Diffraction and Laue Theory</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-kinematical-x-ray-scattering">1. Kinematical X-ray scattering</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#11-scattering-from-a-single-atom">1.1 Scattering from a single atom</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#12-structure-factor-of-a-unit-cell">1.2 Structure factor of a unit cell</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#13-braggs-law">1.3 Bragg's law</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-reciprocal-space-and-the-ewald-sphere">2. Reciprocal space and the Ewald sphere</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#21-reciprocal-lattice">2.1 Reciprocal lattice</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#22-ewald-sphere-construction">2.2 Ewald sphere construction</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-white-beam-laue-diffraction">3. White-beam Laue diffraction</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#31-monochromatic-vs-white-beam">3.1 Monochromatic vs. white-beam</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#32-the-laue-condition-and-wavelength-selection">3.2 The Laue condition and wavelength selection</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#33-scattered-beam-direction">3.3 Scattered beam direction</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-spot-intensity">4. Spot intensity</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#41-structure-factor">4.1 Structure factor</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#42-lorentzpolarisation-factor">4.2 Lorentz–polarisation factor</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#43-synchrotron-source-spectrum">4.3 Synchrotron source spectrum</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#44-kb-mirror-reflectivity">4.4 KB mirror reflectivity</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-coordinate-frames-and-orientation-matrix">5. Coordinate frames and orientation matrix</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#51-lauetools-lab-frame-lt-frame">5.1 LaueTools lab frame (LT frame)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#52-crystal-frame-and-orientation-matrix-u">5.2 Crystal frame and orientation matrix \(U\)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#53-matstarlab-convention">5.3 matstarlab convention</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-detector-geometry">6. Detector geometry</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#61-projection-onto-a-flat-detector">6.1 Projection onto a flat detector</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#62-angular-coordinates">6.2 Angular coordinates</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-laue-pattern-indexing">7. Laue pattern indexing</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#71-the-gnomonic-projection">7.1 The gnomonic projection</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#72-indexing-strategy">7.2 Indexing strategy</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#73-refinement">7.3 Refinement</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-strain-determination">8. Strain determination</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#81-deviatoric-vs-hydrostatic-strain">8.1 Deviatoric vs. hydrostatic strain</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#82-peak-shift-jacobian">8.2 Peak-shift Jacobian</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#9-quick-reference-key-equations">9. Quick-reference: key equations</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Diffraction and Laue Theory</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_theory.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="x-ray-diffraction-and-white-beam-laue-theory">X-ray diffraction and white-beam Laue theory<a class="headerlink" href="#x-ray-diffraction-and-white-beam-laue-theory" title="Permanent link">&para;</a></h1>
+<p>This page provides the theoretical foundations for X-ray diffraction and
+white-beam Laue diffraction as implemented in <code>nrxrdct.laue</code>.  It covers
+kinematical scattering, the Laue condition, spot intensities, coordinate
+conventions, and pattern indexing.</p>
+<hr />
+<h2 id="1-kinematical-x-ray-scattering">1. Kinematical X-ray scattering<a class="headerlink" href="#1-kinematical-x-ray-scattering" title="Permanent link">&para;</a></h2>
+<h3 id="11-scattering-from-a-single-atom">1.1 Scattering from a single atom<a class="headerlink" href="#11-scattering-from-a-single-atom" title="Permanent link">&para;</a></h3>
+<p>An X-ray photon with wavevector <span class="arithmatex">\(\mathbf{k}_i = (2\pi/\lambda)\hat{k}_i\)</span>
+scatters elastically into direction <span class="arithmatex">\(\hat{k}_f\)</span>.  The momentum transfer is</p>
+<div class="arithmatex">\[
+\mathbf{Q} = \mathbf{k}_f - \mathbf{k}_i,
+\qquad
+\lvert\mathbf{Q}\rvert = \frac{4\pi\sin\theta}{\lambda}
+\]</div>
+<p>where <span class="arithmatex">\(\theta\)</span> is the half-scattering angle (Bragg angle).
+The amplitude scattered by atom <span class="arithmatex">\(j\)</span> at position <span class="arithmatex">\(\mathbf{r}_j\)</span> is</p>
+<div class="arithmatex">\[
+A_j(\mathbf{Q}) = f_j(\mathbf{Q})\,e^{\,i\mathbf{Q}\cdot\mathbf{r}_j}
+\]</div>
+<p>where <span class="arithmatex">\(f_j\)</span> is the <strong>atomic scattering factor</strong> (form factor).  For X-rays
+near an absorption edge the form factor has anomalous (dispersion) corrections:</p>
+<div class="arithmatex">\[
+f_j(Q, E) = f_j^0(Q) + f_j'(E) + i\,f_j''(E)
+\]</div>
+<p><span class="arithmatex">\(f^0\)</span> is the Thomson scattering term (Fourier transform of the electron
+density); <span class="arithmatex">\(f'\)</span> and <span class="arithmatex">\(f''\)</span> are the real and imaginary anomalous corrections
+tabulated by Henke <em>et al.</em></p>
+<h3 id="12-structure-factor-of-a-unit-cell">1.2 Structure factor of a unit cell<a class="headerlink" href="#12-structure-factor-of-a-unit-cell" title="Permanent link">&para;</a></h3>
+<p>The total amplitude from one unit cell containing atoms at fractional
+coordinates <span class="arithmatex">\((x_j, y_j, z_j)\)</span> is</p>
+<div class="arithmatex">\[
+F_{hkl} = \sum_j f_j\,
+e^{\,2\pi i(h x_j + k y_j + \ell z_j)}
+\]</div>
+<p><span class="arithmatex">\(F_{hkl}\)</span> is complex; the observable intensity is proportional to
+<span class="arithmatex">\(\lvert F_{hkl}\rvert^2\)</span>.  Systematic absences arise when translational
+symmetry forces <span class="arithmatex">\(F_{hkl} = 0\)</span> for certain <span class="arithmatex">\((h,k,\ell)\)</span> combinations
+(e.g.\ BCC: <span class="arithmatex">\(h+k+\ell\)</span> odd; FCC: mixed parity).</p>
+<h3 id="13-braggs-law">1.3 Bragg's law<a class="headerlink" href="#13-braggs-law" title="Permanent link">&para;</a></h3>
+<p>Constructive interference from parallel lattice planes with spacing <span class="arithmatex">\(d_{hkl}\)</span>
+requires</p>
+<div class="arithmatex">\[
+\boxed{2\,d_{hkl}\sin\theta = n\lambda}
+\]</div>
+<p>In vector form: <span class="arithmatex">\(\mathbf{Q} = \mathbf{G}_{hkl}\)</span>, where <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>
+is a reciprocal-lattice vector of magnitude <span class="arithmatex">\(2\pi/d_{hkl}\)</span>.</p>
+<hr />
+<h2 id="2-reciprocal-space-and-the-ewald-sphere">2. Reciprocal space and the Ewald sphere<a class="headerlink" href="#2-reciprocal-space-and-the-ewald-sphere" title="Permanent link">&para;</a></h2>
+<h3 id="21-reciprocal-lattice">2.1 Reciprocal lattice<a class="headerlink" href="#21-reciprocal-lattice" title="Permanent link">&para;</a></h3>
+<p>Given direct-lattice basis vectors <span class="arithmatex">\(\mathbf{a}, \mathbf{b}, \mathbf{c}\)</span>, the
+reciprocal-lattice basis vectors are</p>
+<div class="arithmatex">\[
+\mathbf{a}^* = \frac{2\pi\,\mathbf{b}\times\mathbf{c}}{V}, \quad
+\mathbf{b}^* = \frac{2\pi\,\mathbf{c}\times\mathbf{a}}{V}, \quad
+\mathbf{c}^* = \frac{2\pi\,\mathbf{a}\times\mathbf{b}}{V}
+\]</div>
+<p>where <span class="arithmatex">\(V = \mathbf{a}\cdot(\mathbf{b}\times\mathbf{c})\)</span> is the unit-cell
+volume.  Every reciprocal-lattice vector is</p>
+<div class="arithmatex">\[
+\mathbf{G}_{hkl} = h\,\mathbf{a}^* + k\,\mathbf{b}^* + \ell\,\mathbf{c}^*
+\]</div>
+<p>with <span class="arithmatex">\(d_{hkl} = 2\pi/\lvert\mathbf{G}_{hkl}\rvert\)</span>.</p>
+<h3 id="22-ewald-sphere-construction">2.2 Ewald sphere construction<a class="headerlink" href="#22-ewald-sphere-construction" title="Permanent link">&para;</a></h3>
+<p>The Ewald sphere has radius <span class="arithmatex">\(\lvert\mathbf{k}_i\rvert = 2\pi/\lambda\)</span> and is
+centred at <span class="arithmatex">\(-\hat{k}_i \cdot (2\pi/\lambda)\)</span> (the tail of <span class="arithmatex">\(\mathbf{k}_i\)</span>).
+A reciprocal-lattice point <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span> diffracts <strong>if and only if</strong>
+it lies on the Ewald sphere surface:</p>
+<div class="arithmatex">\[
+\lvert\mathbf{k}_i + \mathbf{G}_{hkl}\rvert = \lvert\mathbf{k}_i\rvert
+\;\Longrightarrow\;
+\lvert\mathbf{G}_{hkl}\rvert^2 + 2\,\mathbf{k}_i\cdot\mathbf{G}_{hkl} = 0
+\]</div>
+<p>This is the <strong>Laue condition</strong> in vector form.</p>
+<hr />
+<h2 id="3-white-beam-laue-diffraction">3. White-beam Laue diffraction<a class="headerlink" href="#3-white-beam-laue-diffraction" title="Permanent link">&para;</a></h2>
+<h3 id="31-monochromatic-vs-white-beam">3.1 Monochromatic vs. white-beam<a class="headerlink" href="#31-monochromatic-vs-white-beam" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Fixed</th>
+<th>Varied</th>
+<th>Bragg condition met by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Monochromatic</td>
+<td><span class="arithmatex">\(\lambda\)</span></td>
+<td>crystal <span class="arithmatex">\(\theta\)</span> (rotation)</td>
+<td>rotating sample to bring <span class="arithmatex">\(\mathbf{G}\)</span> onto Ewald sphere</td>
+</tr>
+<tr>
+<td>White-beam Laue</td>
+<td>crystal orientation</td>
+<td><span class="arithmatex">\(\lambda \in [\lambda_\text{lo}, \lambda_\text{hi}]\)</span></td>
+<td>wavelength self-selects for each <span class="arithmatex">\(\mathbf{G}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>In white-beam geometry the Ewald sphere sweeps a <strong>shell</strong> in reciprocal
+space: all <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span> whose magnitude falls in the range</p>
+<div class="arithmatex">\[
+\frac{4\pi\sin\theta_\text{min}}{\lambda_\text{hi}}
+\;\leq\; \lvert\mathbf{G}_{hkl}\rvert \;\leq\;
+\frac{4\pi\sin\theta_\text{max}}{\lambda_\text{lo}}
+\]</div>
+<p>simultaneously diffract.  A single exposure can record dozens to hundreds of
+spots from an unstrained single crystal without any sample rotation.</p>
+<h3 id="32-the-laue-condition-and-wavelength-selection">3.2 The Laue condition and wavelength selection<a class="headerlink" href="#32-the-laue-condition-and-wavelength-selection" title="Permanent link">&para;</a></h3>
+<p>From the vector Laue condition, the wavelength (and photon energy) at which
+reflection <span class="arithmatex">\(hkl\)</span> is excited is</p>
+<div class="arithmatex">\[
+\lambda_{hkl} = \frac{-4\pi\,(\hat{k}_i \cdot \mathbf{G}_{hkl})}
+                     {\lvert\mathbf{G}_{hkl}\rvert^2},
+\qquad
+E_{hkl} = \frac{hc}{\lambda_{hkl}}
+\]</div>
+<p>The dot product <span class="arithmatex">\(\hat{k}_i \cdot \mathbf{G}_{hkl}\)</span> must be <strong>negative</strong>
+(backscattering / reflection geometry) for <span class="arithmatex">\(\lambda &gt; 0\)</span>.  Reflections with
+<span class="arithmatex">\(\hat{k}_i \cdot \mathbf{G} \geq 0\)</span> cannot diffract in reflection geometry.</p>
+<h3 id="33-scattered-beam-direction">3.3 Scattered beam direction<a class="headerlink" href="#33-scattered-beam-direction" title="Permanent link">&para;</a></h3>
+<p>The scattered wavevector is</p>
+<div class="arithmatex">\[
+\mathbf{k}_f = \mathbf{k}_i + \mathbf{G}_{hkl},
+\qquad
+\hat{k}_f = \frac{\mathbf{k}_f}{\lvert\mathbf{k}_f\rvert}
+\]</div>
+<p>The scattering angle <span class="arithmatex">\(2\theta\)</span> is <span class="arithmatex">\(\arccos(\hat{k}_i \cdot \hat{k}_f)\)</span>.</p>
+<hr />
+<h2 id="4-spot-intensity">4. Spot intensity<a class="headerlink" href="#4-spot-intensity" title="Permanent link">&para;</a></h2>
+<p>The measured intensity of a Laue spot is</p>
+<div class="arithmatex">\[
+I_{hkl} = \lvert F_{hkl}\rvert^2 \cdot LP(2\theta) \cdot S(E_{hkl})
+\]</div>
+<h3 id="41-structure-factor">4.1 Structure factor<a class="headerlink" href="#41-structure-factor" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(\lvert F_{hkl}\rvert^2\)</span> is evaluated at the reflection energy <span class="arithmatex">\(E_{hkl}\)</span>
+using the energy-dependent anomalous form factors <span class="arithmatex">\(f'(E)\)</span>, <span class="arithmatex">\(f''(E)\)</span> from the
+Henke tables.  <em>xrayutilities</em> handles this automatically via
+<code>crystal.StructureFactor(G, en=E)</code>.</p>
+<h3 id="42-lorentzpolarisation-factor">4.2 Lorentz–polarisation factor<a class="headerlink" href="#42-lorentzpolarisation-factor" title="Permanent link">&para;</a></h3>
+<p>For an <strong>unpolarised</strong> beam the Lorentz–polarisation (LP) factor is</p>
+<div class="arithmatex">\[
+LP(2\theta) = \frac{1 + \cos^2 2\theta}{2\sin^2\theta\cos\theta}
+\]</div>
+<p>This accounts for:</p>
+<ul>
+<li><strong>Lorentz factor</strong> <span class="arithmatex">\(1/\sin^2\theta\cos\theta\)</span> — the time a reciprocal-lattice
+  point spends intersecting the Ewald sphere (here it is absorbed into the
+  angular width of the white-beam window);</li>
+<li><strong>Polarisation factor</strong> <span class="arithmatex">\((1+\cos^2 2\theta)/2\)</span> — for an unpolarised incident
+  beam the scattered intensity is reduced by the projection of the polarisation
+  onto the scattering plane.</li>
+</ul>
+<h3 id="43-synchrotron-source-spectrum">4.3 Synchrotron source spectrum<a class="headerlink" href="#43-synchrotron-source-spectrum" title="Permanent link">&para;</a></h3>
+<p>The effective flux weight <span class="arithmatex">\(S(E)\)</span> applied to each Laue spot is the product of
+the source spectrum and the KB mirror transmission:</p>
+<div class="arithmatex">\[
+S_\text{eff}(E) = S_\text{source}(E) \times R_\text{KB}(E)
+\]</div>
+<p>Three source types are implemented in <code>spectrum_bm</code> / <code>spectrum_undulator</code>.</p>
+<hr />
+<h4 id="431-bending-magnet">4.3.1 Bending magnet<a class="headerlink" href="#431-bending-magnet" title="Permanent link">&para;</a></h4>
+<p><strong>Physical origin.</strong>  An electron moving on a curved path (magnetic field <span class="arithmatex">\(B\)</span>,
+beam energy <span class="arithmatex">\(E_e\)</span>) radiates synchrotron light over a broad spectrum.
+The characteristic frequency is set by the <strong>critical energy</strong></p>
+<div class="arithmatex">\[
+\boxed{
+E_c = 0.665\;B\,[\text{T}]\;\left(E_e\,[\text{GeV}]\right)^2\;\text{keV}
+}
+\]</div>
+<p>Half the total radiated power lies below <span class="arithmatex">\(E_c\)</span> and half above.</p>
+<table>
+<thead>
+<tr>
+<th>Facility</th>
+<th><span class="arithmatex">\(E_e\)</span> (GeV)</th>
+<th><span class="arithmatex">\(B\)</span> (T)</th>
+<th><span class="arithmatex">\(E_c\)</span> (keV)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ESRF (6 GeV)</td>
+<td>6.04</td>
+<td>0.86</td>
+<td>20.0</td>
+</tr>
+<tr>
+<td>APS (7 GeV)</td>
+<td>7.00</td>
+<td>0.60</td>
+<td>19.5</td>
+</tr>
+<tr>
+<td>SOLEIL (2.75 GeV)</td>
+<td>2.75</td>
+<td>1.72</td>
+<td>8.6</td>
+</tr>
+<tr>
+<td>Diamond (3 GeV)</td>
+<td>3.00</td>
+<td>1.40</td>
+<td>8.4</td>
+</tr>
+</tbody>
+</table>
+<p><strong>On-axis spectral flux</strong> (Kim 1989):</p>
+<div class="arithmatex">\[
+\boxed{
+S_\text{BM}(E) = 2N\left(\frac{E}{E_c}\right)^{\!2}
+K_{2/3}^2\!\left(\frac{E}{2E_c}\right)
+}
+\]</div>
+<p>where <span class="arithmatex">\(K_{2/3}\)</span> is the <strong>modified Bessel function of the second kind</strong> of order
+<span class="arithmatex">\(\frac{2}{3}\)</span> (<code>scipy.special.kv(2/3, x)</code>), and <span class="arithmatex">\(N = 1\)</span> for a single bending
+magnet pole.</p>
+<p><strong>Asymptotic behaviour.</strong>  The Bessel function has known limits:</p>
+<ul>
+<li><span class="arithmatex">\(E \ll E_c\)</span>: <span class="arithmatex">\(K_{2/3}(x) \to \Gamma(2/3)\,(x/2)^{-2/3}/\sqrt{\pi}\)</span> as <span class="arithmatex">\(x \to 0\)</span>,
+  so <span class="arithmatex">\(S_\text{BM}(E) \propto E^{2/3}\)</span> — a gentle power-law rise.</li>
+<li><span class="arithmatex">\(E \gg E_c\)</span>: <span class="arithmatex">\(K_{2/3}(x) \to \sqrt{\pi/2x}\,e^{-x}\)</span> as <span class="arithmatex">\(x \to \infty\)</span>,
+  so <span class="arithmatex">\(S_\text{BM}(E) \propto E^{3/2}\,e^{-E/E_c}\)</span> — an exponential cutoff.</li>
+<li><strong>Peak</strong> at <span class="arithmatex">\(E \approx 0.83\,E_c\)</span>.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">kv</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">spectrum_bm</span><span class="p">(</span><span class="n">E_eV</span><span class="p">,</span> <span class="n">Ec_eV</span><span class="o">=</span><span class="mi">20_000</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">y</span> <span class="o">=</span> <span class="n">E_eV</span> <span class="o">/</span> <span class="n">Ec_eV</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">N</span> <span class="o">*</span> <span class="n">y</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">kv</span><span class="p">(</span><span class="mi">2</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="n">y</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+</code></pre></div>
+<hr />
+<h4 id="432-wiggler">4.3.2 Wiggler<a class="headerlink" href="#432-wiggler" title="Permanent link">&para;</a></h4>
+<p>A wiggler is an insertion device with <span class="arithmatex">\(2N_\text{poles}\)</span> alternating magnetic
+poles.  Each pole produces a bending-magnet-like arc, and the contributions add
+<strong>incoherently</strong> (the arcs are too short and widely spaced for interference).
+The spectrum is therefore the same shape as a bending magnet but with a flux
+multiplied by the number of poles:</p>
+<div class="arithmatex">\[
+S_\text{wiggler}(E) = 2N_\text{poles}\left(\frac{E}{E_c}\right)^{\!2}
+K_{2/3}^2\!\left(\frac{E}{2E_c}\right)
+\]</div>
+<p>The critical energy uses the <strong>peak</strong> magnetic field of the wiggler, which is
+typically stronger than the ring bending magnets, shifting the spectrum to
+higher energies.  <code>spectrum_bm(E, Ec_eV, N=N_poles)</code> covers this by passing
+<code>N = N_poles</code> (the factor of 2 is absorbed into the formula) and an
+appropriately large <code>Ec_eV</code>.</p>
+<hr />
+<h4 id="433-undulator">4.3.3 Undulator<a class="headerlink" href="#433-undulator" title="Permanent link">&para;</a></h4>
+<p><strong>Physical origin.</strong>  A planar undulator has <span class="arithmatex">\(N_u\)</span> identical alternating-pole
+periods of length <span class="arithmatex">\(\lambda_u\)</span>.  The electron oscillates transversely, and the
+radiation from each period interferes <strong>constructively</strong> at specific resonant
+energies.  The result is a spectrum of narrow <strong>harmonic peaks</strong> rather than a
+broad continuum.</p>
+<p><strong>Deflection parameter:</strong></p>
+<div class="arithmatex">\[
+K = \frac{eB_0\lambda_u}{2\pi m_e c} \approx 0.934\;B_0\,[\text{T}]\;\lambda_u\,[\text{cm}]
+\]</div>
+<p><strong>Fundamental energy</strong> (on-axis, in the electron rest frame boosted to the lab):</p>
+<div class="arithmatex">\[
+E_1 = \frac{2\gamma^2 h c / \lambda_u}{1 + K^2/2}
+\]</div>
+<p>where <span class="arithmatex">\(\gamma = E_e / m_e c^2\)</span> is the Lorentz factor.  For typical undulators
+<span class="arithmatex">\(E_1\)</span> is tunable between <span class="arithmatex">\(\sim 5\)</span> and <span class="arithmatex">\(20\)</span> keV by adjusting <span class="arithmatex">\(B_0\)</span> (the magnet
+gap).</p>
+<p><strong>Harmonic structure.</strong>  On-axis, only <strong>odd</strong> harmonics <span class="arithmatex">\(n = 1, 3, 5, \ldots\)</span>
+are emitted.  The <span class="arithmatex">\(n\)</span>-th harmonic appears at energy <span class="arithmatex">\(E_n = n E_1\)</span>.  The
+on-axis intensity of the <span class="arithmatex">\(n\)</span>-th harmonic scales as <span class="arithmatex">\(1/n\)</span> (for a planar
+undulator in the far-field limit).</p>
+<p><strong>Implemented model</strong> — Gaussian harmonic approximation:</p>
+<div class="arithmatex">\[
+\boxed{
+S_\text{und}(E) = \sum_{\substack{n=1,3,5,\ldots \\ n \leq n_\text{max}}}
+\frac{1}{n}\exp\!\left[
+-\frac{(E - nE_1)^2}{2\,(nE_1\,\sigma_\text{rel})^2}
+\right]
+}
+\]</div>
+<p>where <span class="arithmatex">\(\sigma_\text{rel}\)</span> is the <strong>relative harmonic width</strong> (dimensionless),
+which is set by the angular acceptance of the downstream optics and typically
+lies in the range 0.01–0.05.  The Gaussian shape is a valid approximation when
+the angular divergence of the beam dominates the natural line width <span class="arithmatex">\(\sim 1/N_u\)</span>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>E1_eV</code></td>
+<td>17 000 eV</td>
+<td>Fundamental energy</td>
+</tr>
+<tr>
+<td><code>n_harm</code></td>
+<td>7</td>
+<td>Number of odd harmonics computed (up to <span class="arithmatex">\(n = 13\)</span>)</td>
+</tr>
+<tr>
+<td><code>sig_rel</code></td>
+<td>0.015</td>
+<td>Relative harmonic width <span class="arithmatex">\(\sigma_\text{rel}\)</span></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">spectrum_undulator</span><span class="p">(</span><span class="n">E_eV</span><span class="p">,</span> <span class="n">E1_eV</span><span class="o">=</span><span class="mi">17_000</span><span class="p">,</span> <span class="n">n_harm</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">sig_rel</span><span class="o">=</span><span class="mf">0.015</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">s</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="n">n_harm</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>   <span class="c1"># n = 1, 3, 5, ..., 2*n_harm-1</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="n">En</span> <span class="o">=</span> <span class="n">n</span> <span class="o">*</span> <span class="n">E1_eV</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="n">s</span> <span class="o">+=</span> <span class="p">(</span><span class="mf">1.0</span><span class="o">/</span><span class="n">n</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">E_eV</span> <span class="o">-</span> <span class="n">En</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">En</span> <span class="o">*</span> <span class="n">sig_rel</span><span class="p">))</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">s</span>
+</code></pre></div>
+<hr />
+<h3 id="44-kb-mirror-reflectivity">4.4 KB mirror reflectivity<a class="headerlink" href="#44-kb-mirror-reflectivity" title="Permanent link">&para;</a></h3>
+<p>Kirkpatrick–Baez (KB) mirrors focus the beam by grazing-incidence total
+external reflection.  They also act as a high-energy bandpass filter: photons
+above a <strong>hard-edge energy</strong> <span class="arithmatex">\(E_\text{cut}\)</span> are not reflected.</p>
+<h4 id="441-complex-refractive-index">4.4.1 Complex refractive index<a class="headerlink" href="#441-complex-refractive-index" title="Permanent link">&para;</a></h4>
+<p>For X-rays, the refractive index of a material is</p>
+<div class="arithmatex">\[
+n = 1 - \delta + i\beta
+\qquad
+\delta, \beta \ll 1
+\]</div>
+<p>where <span class="arithmatex">\(\delta\)</span> causes refraction and <span class="arithmatex">\(\beta\)</span> causes absorption.  Both depend on
+energy through the atomic scattering factors:</p>
+<div class="arithmatex">\[
+\delta = \frac{r_e \lambda^2}{2\pi} \sum_j \rho_j\,f_j^0(0)
+\qquad
+\beta = \frac{r_e \lambda^2}{2\pi} \sum_j \rho_j\,f_j''(E)
+\]</div>
+<p>where <span class="arithmatex">\(\rho_j\)</span> is the number density of atom <span class="arithmatex">\(j\)</span> and <span class="arithmatex">\(r_e\)</span> is the classical
+electron radius.  At hard X-ray energies <span class="arithmatex">\(\delta \propto E^{-2}\)</span> and
+<span class="arithmatex">\(\beta \propto E^{-3}\)</span> to <span class="arithmatex">\(E^{-4}\)</span> (between edges).</p>
+<p>The <strong>critical angle for total external reflection</strong> is</p>
+<div class="arithmatex">\[
+\theta_c(E) = \sqrt{2\delta} \approx \sqrt{\frac{r_e \lambda^2 \rho Z}{\pi}}
+\;\propto\; E^{-1}
+\]</div>
+<p>Photons incident at <span class="arithmatex">\(\theta &lt; \theta_c\)</span> are totally reflected
+(<span class="arithmatex">\(R \approx 1\)</span>); above <span class="arithmatex">\(\theta_c\)</span> the reflectivity drops sharply.  Because
+<span class="arithmatex">\(\theta_c \propto E^{-1}\)</span>, at a fixed grazing angle <span class="arithmatex">\(\theta_m\)</span> the mirror
+transmits only energies <span class="arithmatex">\(E &lt; E_\text{cut}\)</span>, where</p>
+<div class="arithmatex">\[
+E_\text{cut} \approx \frac{hc}{\lambda_\text{cut}},
+\qquad
+\lambda_\text{cut} = \frac{\pi}{\rho Z r_e} \cdot \frac{2\pi}{\theta_m^2}
+\]</div>
+<h4 id="442-fresnel-reflectivity-s-polarisation">4.4.2 Fresnel reflectivity (s-polarisation)<a class="headerlink" href="#442-fresnel-reflectivity-s-polarisation" title="Permanent link">&para;</a></h4>
+<p>The exact reflectivity at a flat interface for s-polarised X-rays is</p>
+<div class="arithmatex">\[
+r_s = \frac{\sin\theta - \sqrt{n^2 - \cos^2\theta}}
+           {\sin\theta + \sqrt{n^2 - \cos^2\theta}},
+\qquad
+R_\text{smooth} = |r_s|^2
+\]</div>
+<p>The square root is complex (the transmitted field decays exponentially below
+<span class="arithmatex">\(\theta_c\)</span>).  In the limit <span class="arithmatex">\(\delta, \beta \to 0\)</span>, <span class="arithmatex">\(R_\text{smooth} \to 0\)</span> for
+<span class="arithmatex">\(\theta &gt; \theta_c\)</span> (Snell's law).</p>
+<h4 id="443-nevotcroce-roughness-correction">4.4.3 Névot–Croce roughness correction<a class="headerlink" href="#443-nevotcroce-roughness-correction" title="Permanent link">&para;</a></h4>
+<p>Real mirror surfaces have an RMS roughness <span class="arithmatex">\(\sigma\)</span> (typically 2–5 Å for
+polished optics).  Roughness damps the specular reflectivity via the
+Névot–Croce factor:</p>
+<div class="arithmatex">\[
+R_\text{rough} = R_\text{smooth} \cdot \exp\!\left[-(2k\sin\theta\,\sigma)^2\right]
+\]</div>
+<p>where <span class="arithmatex">\(k = 2\pi/\lambda\)</span> is the X-ray wavenumber.  At high energies (small
+<span class="arithmatex">\(\lambda\)</span>) <span class="arithmatex">\(k\)</span> is large, so the roughness suppression is stronger — an
+additional reason why flux drops above <span class="arithmatex">\(E_\text{cut}\)</span>.</p>
+<h4 id="444-two-mirror-kb-system">4.4.4 Two-mirror KB system<a class="headerlink" href="#444-two-mirror-kb-system" title="Permanent link">&para;</a></h4>
+<p>A KB system uses two independent mirrors (horizontal + vertical focusing).
+Assuming both mirrors have identical coatings and grazing angles, the total
+reflectivity is</p>
+<div class="arithmatex">\[
+R_\text{KB}(E) = R_\text{single}(E)^{n_\text{mirrors}}
+\]</div>
+<p>For <span class="arithmatex">\(n_\text{mirrors} = 2\)</span> (the standard BM32 setup) this squares the single-mirror
+curve, sharpening the cutoff.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># BM32 / ESRF defaults</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">BM32_KB</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">material</span>        <span class="o">=</span> <span class="s1">&#39;Rh&#39;</span><span class="p">,</span>       <span class="c1"># Rhodium coating</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">grazing_angle_mrad</span> <span class="o">=</span> <span class="mf">2.5</span><span class="p">,</span>     <span class="c1"># 2.5 mrad ≈ 0.143°</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">n_mirrors</span>       <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>          <span class="c1"># HFM + VFM</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">roughness_ang</span>   <span class="o">=</span> <span class="mf">3.0</span><span class="p">,</span>        <span class="c1"># 3 Å RMS roughness</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>The Rh <span class="arithmatex">\(L\)</span>-edge is at <span class="arithmatex">\(\sim 3\)</span> keV (outside the useful range) and the <span class="arithmatex">\(K\)</span>-edge
+at <span class="arithmatex">\(\sim 23\)</span> keV introduces a small jump in reflectivity near the cutoff.</p>
+<h4 id="445-effective-spectral-weight">4.4.5 Effective spectral weight<a class="headerlink" href="#445-effective-spectral-weight" title="Permanent link">&para;</a></h4>
+<p>Combining source and mirrors:</p>
+<div class="arithmatex">\[
+\boxed{
+S_\text{eff}(E) = S_\text{source}(E) \times R_\text{KB}(E)
+}
+\]</div>
+<p>For BM32 with bending-magnet source (<span class="arithmatex">\(E_c = 20\)</span> keV), Rh mirrors at 2.5 mrad,
+and a 3 Å roughness, the effective bandpass is approximately <strong>5–22 keV</strong>:</p>
+<ul>
+<li>Below 5 keV: detector sensitivity drops and the mirror reflectivity is high
+  but the source flux is low.</li>
+<li>Above ~22 keV: the Rh mirror cutoff (<span class="arithmatex">\(\theta_c \approx \theta_m\)</span> at ~22 keV
+  for 2.5 mrad) and the exponential tail of the BM spectrum jointly suppress
+  the flux.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Contribution</th>
+<th>Shape</th>
+<th>Controls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(S_\text{BM}(E)\)</span></td>
+<td>broad, peaks at <span class="arithmatex">\(0.83\,E_c\)</span></td>
+<td><span class="arithmatex">\(E_c\)</span> (ring energy + <span class="arithmatex">\(B\)</span>)</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(R_\text{KB}(E)\)</span></td>
+<td>flat below <span class="arithmatex">\(E_\text{cut}\)</span>, hard edge above</td>
+<td>mirror material, <span class="arithmatex">\(\theta_m\)</span></td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(R_\text{rough}\)</span></td>
+<td>gentle high-energy damping</td>
+<td>surface roughness <span class="arithmatex">\(\sigma\)</span></td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(S_\text{eff}(E)\)</span></td>
+<td>effective bandpass</td>
+<td>all of the above</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-coordinate-frames-and-orientation-matrix">5. Coordinate frames and orientation matrix<a class="headerlink" href="#5-coordinate-frames-and-orientation-matrix" title="Permanent link">&para;</a></h2>
+<h3 id="51-lauetools-lab-frame-lt-frame">5.1 LaueTools lab frame (LT frame)<a class="headerlink" href="#51-lauetools-lab-frame-lt-frame" title="Permanent link">&para;</a></h3>
+<p><code>nrxrdct.laue</code> uses the <strong>LaueTools LT frame</strong> throughout:</p>
+<table>
+<thead>
+<tr>
+<th>Axis</th>
+<th>Direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(x\)</span></td>
+<td>along the incident beam ($+x = $ beam direction)</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(z\)</span></td>
+<td>vertical, pointing up</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(y\)</span></td>
+<td><span class="arithmatex">\(y = z \times x\)</span> (horizontal, pointing away from the ring)</td>
+</tr>
+</tbody>
+</table>
+<p>The sample surface is typically tilted <span class="arithmatex">\(\sim 40°\)</span> from the beam so that the
+surface normal lies <span class="arithmatex">\(\sim 50°\)</span> from <span class="arithmatex">\(+x\)</span>.  The area detector is placed near
+<span class="arithmatex">\(z\)</span> (i.e.\ <span class="arithmatex">\(2\theta_\text{centre} \approx 90°\)</span>) in top-reflection geometry.</p>
+<h3 id="52-crystal-frame-and-orientation-matrix-u">5.2 Crystal frame and orientation matrix <span class="arithmatex">\(U\)</span><a class="headerlink" href="#52-crystal-frame-and-orientation-matrix-u" title="Permanent link">&para;</a></h3>
+<p>A reciprocal-lattice vector expressed in the crystal frame is</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{crystal} = h\,\mathbf{a}^* + k\,\mathbf{b}^* + \ell\,\mathbf{c}^*
+\]</div>
+<p>The orientation matrix <span class="arithmatex">\(U\)</span> (a <span class="arithmatex">\(3\times3\)</span> rotation) maps it to the lab frame:</p>
+<div class="arithmatex">\[
+\mathbf{G}_\text{lab} = U\,\mathbf{G}_\text{crystal}
+\]</div>
+<p><span class="arithmatex">\(U\)</span> is obtained either from Laue pattern indexing or by specifying Bunge ZXZ
+Euler angles <span class="arithmatex">\((\varphi_1, \Phi, \varphi_2)\)</span>:</p>
+<div class="arithmatex">\[
+U = R_z(\varphi_1)\,R_x(\Phi)\,R_z(\varphi_2)
+\]</div>
+<p>The columns of <span class="arithmatex">\(U\)</span> are the crystal basis vectors expressed in lab coordinates.</p>
+<h3 id="53-matstarlab-convention">5.3 <code>matstarlab</code> convention<a class="headerlink" href="#53-matstarlab-convention" title="Permanent link">&para;</a></h3>
+<p>LaueTools stores orientations as the <strong><span class="arithmatex">\(3\times3\)</span> matrix of reciprocal basis
+vectors in lab coordinates</strong>, flattened to a 9-element array in the order
+<span class="arithmatex">\([a^*_x, a^*_y, a^*_z, b^*_x, \ldots, c^*_z]\)</span>.  The conversion utilities
+<code>euler_to_U</code>, <code>U_from_matstarlab</code>, and <code>decompose_matstarlab</code> handle
+interconversion.</p>
+<hr />
+<h2 id="6-detector-geometry">6. Detector geometry<a class="headerlink" href="#6-detector-geometry" title="Permanent link">&para;</a></h2>
+<h3 id="61-projection-onto-a-flat-detector">6.1 Projection onto a flat detector<a class="headerlink" href="#61-projection-onto-a-flat-detector" title="Permanent link">&para;</a></h3>
+<p>The detector is described by:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Symbol</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DET_DIST_MM</code></td>
+<td><span class="arithmatex">\(D\)</span></td>
+<td>sample-to-detector-centre distance (mm)</td>
+</tr>
+<tr>
+<td><code>TTH_CENTER_DEG</code></td>
+<td><span class="arithmatex">\(2\theta_0\)</span></td>
+<td><span class="arithmatex">\(2\theta\)</span> angle of detector centre</td>
+</tr>
+<tr>
+<td><code>NU_DEG</code></td>
+<td><span class="arithmatex">\(\nu\)</span></td>
+<td>out-of-plane (elevation) tilt of detector centre</td>
+</tr>
+<tr>
+<td><code>CHI_DEG</code></td>
+<td><span class="arithmatex">\(\chi_D\)</span></td>
+<td>in-plane rotation of detector about its own normal</td>
+</tr>
+<tr>
+<td><code>PIXEL_SIZE_MM</code></td>
+<td><span class="arithmatex">\(p\)</span></td>
+<td>pixel pitch (mm)</td>
+</tr>
+</tbody>
+</table>
+<p>For each scattered beam <span class="arithmatex">\(\hat{k}_f\)</span>, the ray is intersected with the detector
+plane (defined by its centre and normal) to give a pixel coordinate
+<span class="arithmatex">\((x_\text{cam}, y_\text{cam})\)</span> in the LaueTools convention.</p>
+<h3 id="62-angular-coordinates">6.2 Angular coordinates<a class="headerlink" href="#62-angular-coordinates" title="Permanent link">&para;</a></h3>
+<p>Two angular coordinates describe the position of a spot:</p>
+<div class="arithmatex">\[
+2\theta = \arccos\!\left(\hat{k}_{f,x}\right),
+\qquad
+\chi = \arctan2\!\left(\hat{k}_{f,y},\, \hat{k}_{f,z}\right)
+\]</div>
+<p><span class="arithmatex">\(\chi = 0\)</span> for spots in the vertical plane; <span class="arithmatex">\(\chi\)</span> increases counter-clockwise
+when viewed from the detector side.</p>
+<hr />
+<h2 id="7-laue-pattern-indexing">7. Laue pattern indexing<a class="headerlink" href="#7-laue-pattern-indexing" title="Permanent link">&para;</a></h2>
+<h3 id="71-the-gnomonic-projection">7.1 The gnomonic projection<a class="headerlink" href="#71-the-gnomonic-projection" title="Permanent link">&para;</a></h3>
+<p>Spots in a Laue pattern lie on <strong>zones</strong> — great circles on the unit sphere
+of <span class="arithmatex">\(\hat{k}_f\)</span> directions.  All reflections <span class="arithmatex">\(hkl\)</span> with the same zone axis
+<span class="arithmatex">\([uvw]\)</span> (i.e.\ <span class="arithmatex">\(hu + kv + \ell w = 0\)</span>) map to the same great circle.</p>
+<p>The <strong>gnomonic projection</strong> maps <span class="arithmatex">\(\hat{k}_f\)</span> to a plane tangent to the unit
+sphere at <span class="arithmatex">\(\hat{k}_i\)</span>.  In this projection, great circles become <strong>straight
+lines</strong>, making zone axes easy to identify visually.</p>
+<h3 id="72-indexing-strategy">7.2 Indexing strategy<a class="headerlink" href="#72-indexing-strategy" title="Permanent link">&para;</a></h3>
+<p>Automated indexing (as in LaueTools) proceeds in three stages:</p>
+<ol>
+<li>
+<p><strong>Peak detection</strong> — locate spot centres in the detector image to
+   sub-pixel accuracy.</p>
+</li>
+<li>
+<p><strong>Inter-spot angles</strong> — compute the angle between every pair of spots:</p>
+<div class="arithmatex">\[
+\cos\alpha_{ij} = \hat{k}_{f,i}\cdot\hat{k}_{f,j}
+\]</div>
+<p>This angle is independent of the orientation matrix and depends only on
+the crystal metric tensor.</p>
+</li>
+<li>
+<p><strong>Look-up and match</strong> — compare measured angles against a pre-computed
+   table of all <span class="arithmatex">\(\cos\alpha_{hkl,h'k'l'}\)</span> for the candidate lattice.
+   Consistent triples <span class="arithmatex">\((hkl)\)</span>, <span class="arithmatex">\((h'k'l')\)</span>, <span class="arithmatex">\((h''k''l'')\)</span> uniquely determine
+   <span class="arithmatex">\(U\)</span> up to a small refinement.</p>
+</li>
+</ol>
+<h3 id="73-refinement">7.3 Refinement<a class="headerlink" href="#73-refinement" title="Permanent link">&para;</a></h3>
+<p>Once an initial <span class="arithmatex">\(U\)</span> is found, it is refined by minimising the reprojection
+error between simulated and measured spot positions:</p>
+<div class="arithmatex">\[
+\min_{U,\,\mathbf{p}} \sum_i
+\left\lVert \mathbf{x}_i^\text{meas}
+- \mathbf{x}_i^\text{sim}(U, \mathbf{p})\right\rVert^2
+\]</div>
+<p>where <span class="arithmatex">\(\mathbf{p}\)</span> are the detector calibration parameters
+<span class="arithmatex">\((D, 2\theta_0, \nu, \chi_D, \ldots)\)</span>.</p>
+<hr />
+<h2 id="8-strain-determination">8. Strain determination<a class="headerlink" href="#8-strain-determination" title="Permanent link">&para;</a></h2>
+<p>A strained crystal has a distorted reciprocal lattice.  The observed
+reciprocal-lattice vector <span class="arithmatex">\(\mathbf{G}_{hkl}^\text{obs}\)</span> is related to the
+unstrained reference <span class="arithmatex">\(\mathbf{G}_{hkl}^0\)</span> by the strain tensor <span class="arithmatex">\(\varepsilon\)</span>:</p>
+<div class="arithmatex">\[
+\mathbf{G}_{hkl}^\text{obs} = (\mathbf{I} + \varepsilon)\,\mathbf{G}_{hkl}^0
+\]</div>
+<h3 id="81-deviatoric-vs-hydrostatic-strain">8.1 Deviatoric vs. hydrostatic strain<a class="headerlink" href="#81-deviatoric-vs-hydrostatic-strain" title="Permanent link">&para;</a></h3>
+<p>White-beam Laue is sensitive <strong>only to deviatoric (shape-changing) strain</strong>,
+not to hydrostatic (volume-changing) strain.  This is because the Laue
+condition fixes the <em>direction</em> of <span class="arithmatex">\(\mathbf{G}\)</span> but not its magnitude (the
+wavelength self-adjusts).  Hydrostatic expansion/contraction changes
+<span class="arithmatex">\(\lvert\mathbf{G}\rvert\)</span> uniformly and shifts <span class="arithmatex">\(E_{hkl}\)</span> without moving spots
+on the detector.</p>
+<p>The <strong>deviatoric strain tensor</strong> <span class="arithmatex">\(\varepsilon'\)</span> is defined as</p>
+<div class="arithmatex">\[
+\varepsilon' = \varepsilon - \tfrac{1}{3}\operatorname{tr}(\varepsilon)\,\mathbf{I}
+\]</div>
+<p>It has 5 independent components (a traceless symmetric <span class="arithmatex">\(3\times3\)</span> tensor).</p>
+<h3 id="82-peak-shift-jacobian">8.2 Peak-shift Jacobian<a class="headerlink" href="#82-peak-shift-jacobian" title="Permanent link">&para;</a></h3>
+<p>The shift in the <span class="arithmatex">\((2\theta, \chi)\)</span> position of spot <span class="arithmatex">\(hkl\)</span> due to a small
+deviatoric strain <span class="arithmatex">\(\delta\varepsilon'\)</span> is</p>
+<div class="arithmatex">\[
+\begin{pmatrix}\delta(2\theta)\\\delta\chi\end{pmatrix}
+= J_{hkl}\,\delta\varepsilon'_\text{Voigt}
+\]</div>
+<p>where <span class="arithmatex">\(J_{hkl}\)</span> is a <span class="arithmatex">\(2\times5\)</span> Jacobian matrix that depends on <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>
+and the detector geometry.  With enough spots (<span class="arithmatex">\(\geq 3\)</span> independent reflections)
+the 5-component deviatoric strain tensor can be extracted by least-squares.
+The function <code>strain_spot_jacobian</code> in <code>nrxrdct.laue</code> computes <span class="arithmatex">\(J_{hkl}\)</span>
+analytically.</p>
+<hr />
+<h2 id="9-quick-reference-key-equations">9. Quick-reference: key equations<a class="headerlink" href="#9-quick-reference-key-equations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Formula</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wavelength at Bragg condition</td>
+<td><span class="arithmatex">\(\lambda_{hkl} = -4\pi\,(\hat{k}_i\cdot\mathbf{G}) / \lvert\mathbf{G}\rvert^2\)</span></td>
+</tr>
+<tr>
+<td>Photon energy</td>
+<td><span class="arithmatex">\(E = hc/\lambda \approx 12398\,\text{eV}/\lambda[\text{Å}]\)</span></td>
+</tr>
+<tr>
+<td>Bragg angle</td>
+<td><span class="arithmatex">\(\sin\theta = \lvert\mathbf{G}\rvert\lambda/(4\pi)\)</span></td>
+</tr>
+<tr>
+<td>Scattering angle</td>
+<td><span class="arithmatex">\(2\theta = \arccos(\hat{k}_i\cdot\hat{k}_f)\)</span></td>
+</tr>
+<tr>
+<td>LP factor (unpolarised)</td>
+<td><span class="arithmatex">\(LP = (1+\cos^2 2\theta)/(2\sin^2\theta\cos\theta)\)</span></td>
+</tr>
+<tr>
+<td>BM critical energy (ESRF)</td>
+<td><span class="arithmatex">\(E_c \approx 0.665\,B[\text{T}]\,(E_e[\text{GeV}])^2\,\text{keV}\)</span></td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../gpu/" class="btn btn-neutral float-left" title="GPU Support"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_thin_film_satellites/" class="btn btn-neutral float-right" title="Thin-Film Satellites">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../gpu/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_thin_film_satellites/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

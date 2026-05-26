@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,49 +87,73 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">parameters</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../nmf/">nmf</a>
-                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../nmf/">nmf</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../io/">io</a>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">slurm_reconstruction</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >xrdct</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.slurm_reconstruction">slurm_reconstruction</a>
+                <li class="toctree-l2"><a class="reference internal" href="../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">slurm_reconstruction</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.xrdct.slurm_reconstruction">slurm_reconstruction</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.slurm_reconstruction--nrxrdctslurm_reconstruction">nrxrdct.slurm_reconstruction</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.slurm_reconstruction--nrxrdctslurm_reconstruction">nrxrdct.slurm_reconstruction</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.slurm_reconstruction--python-api">Python API</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.slurm_reconstruction--python-api">Python API</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.slurm_reconstruction--cli">CLI</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.slurm_reconstruction--cli">CLI</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.slurm_reconstruction.build_sinogram">build_sinogram</a>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.slurm_reconstruction.build_sinogram">build_sinogram</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -126,6 +171,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">xrdct</li>
       <li class="breadcrumb-item active">slurm_reconstruction</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/slurm_reconstruction.md">Edit on nrxrdct</a>
@@ -143,17 +189,17 @@
 
 
 
-<h2 id="nrxrdct.slurm_reconstruction" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.slurm_reconstruction</span>
+<h2 id="nrxrdct.xrdct.slurm_reconstruction" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.xrdct.slurm_reconstruction</span>
 
 
-<a href="#nrxrdct.slurm_reconstruction" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.xrdct.slurm_reconstruction" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
-        <h4 id="nrxrdct.slurm_reconstruction--nrxrdctslurm_reconstruction">nrxrdct.slurm_reconstruction<a class="headerlink" href="#nrxrdct.slurm_reconstruction--nrxrdctslurm_reconstruction" title="Permanent link">&para;</a></h4>
+        <h4 id="nrxrdct.xrdct.slurm_reconstruction--nrxrdctslurm_reconstruction">nrxrdct.slurm_reconstruction<a class="headerlink" href="#nrxrdct.xrdct.slurm_reconstruction--nrxrdctslurm_reconstruction" title="Permanent link">&para;</a></h4>
 <p>Tools for distributing tomographic reconstruction across SLURM HPC clusters.</p>
-<h4 id="nrxrdct.slurm_reconstruction--python-api">Python API<a class="headerlink" href="#nrxrdct.slurm_reconstruction--python-api" title="Permanent link">&para;</a></h4>
+<h4 id="nrxrdct.xrdct.slurm_reconstruction--python-api">Python API<a class="headerlink" href="#nrxrdct.xrdct.slurm_reconstruction--python-api" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code>from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
 
 # Step 1 (optional) — assemble sinogram from integrated HDF5
@@ -176,7 +222,7 @@ launch_recon(
     conda_env     = &quot;nrxrdct&quot;,
 )
 </code></pre></div>
-<h4 id="nrxrdct.slurm_reconstruction--cli">CLI<a class="headerlink" href="#nrxrdct.slurm_reconstruction--cli" title="Permanent link">&para;</a></h4>
+<h4 id="nrxrdct.xrdct.slurm_reconstruction--cli">CLI<a class="headerlink" href="#nrxrdct.xrdct.slurm_reconstruction--cli" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code>nrxrdct-slurm-recon build  --help
 nrxrdct-slurm-recon launch --help
 </code></pre></div>
@@ -204,11 +250,11 @@ nrxrdct-slurm-recon launch --help
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nrxrdct.slurm_reconstruction.build_sinogram" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.slurm_reconstruction.build_sinogram" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">build_sinogram</span>
 
 
-<a href="#nrxrdct.slurm_reconstruction.build_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.slurm_reconstruction.build_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build_sinogram</span><span class="p">(</span><span class="n">integrated_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">sinogram_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_lines</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </code></pre></div>
 
@@ -325,7 +371,7 @@ individual 2θ slices efficiently:</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/slurm_reconstruction/launch_recon.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/slurm_reconstruction/launch_recon.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-65"> 65</a></span>
 <span class="normal"><a href="#__codelineno-0-66"> 66</a></span>
 <span class="normal"><a href="#__codelineno-0-67"> 67</a></span>
@@ -449,7 +495,7 @@ individual 2θ slices efficiently:</p>
 <a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">        Path: Path to the written sinogram file.</span>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.reconstruction</span><span class="w"> </span><span class="kn">import</span> <span class="n">assemble_sinogram</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct.reconstruction</span><span class="w"> </span><span class="kn">import</span> <span class="n">assemble_sinogram</span>
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">sinogram_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">sinogram_file</span><span class="p">)</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="n">integrated_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">integrated_file</span><span class="p">)</span>
@@ -512,7 +558,8 @@ individual 2θ slices efficiently:</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../slurm_integration/" class="btn btn-neutral float-left" title="slurm_integration"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../volume/" class="btn btn-neutral float-left" title="volume"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue/" class="btn btn-neutral float-right" title="laue">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -539,8 +586,10 @@ individual 2θ slices efficiently:</p>
         </span>
     
     
-      <span><a href="../slurm_integration/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../volume/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
+    
+      <span><a href="../laue/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -548,6 +597,7 @@ individual 2θ slices efficiently:</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

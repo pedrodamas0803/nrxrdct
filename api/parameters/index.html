@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="../../css/theme_extra.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
         <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
     
       <script>
         // Current page data
@@ -58,6 +59,26 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../../user-guide/gpu/">GPU Support</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
@@ -66,51 +87,67 @@
               </ul>
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">parameters</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >xrdct</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#nrxrdct.parameters">parameters</a>
+                <li class="toctree-l2"><a class="reference internal" href="../io/">io</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">parameters</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.xrdct.parameters">parameters</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.parameters.Scan">Scan</a>
-        <ul>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.parameters.Scan.__init__">__init__</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.parameters.Scan.get_scan_from_parameters">get_scan_from_parameters</a>
-    </li>
-    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.parameters.Scan.save_parameter_file">save_parameter_file</a>
-    </li>
-        </ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.xrdct.parameters.Scan">Scan</a>
     </li>
         </ul>
     </li>
     </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../preprocessing/">preprocessing</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../integration/">integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../reconstruction/">reconstruction</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refinement/">refinement</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../refine_dict/">refine_dict</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">fluorescence</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../nmf/">nmf</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../plotting/">plotting</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../visualization/">visualization</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../io/">io</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../roi/">roi</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_integration/">slurm_integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm_reconstruction/">slurm_reconstruction</a>
+                  <li class="toctree-l1"><a class="reference internal" href="../laue/">laue</a>
                   </li>
               </ul>
       </div>
@@ -128,6 +165,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">xrdct</li>
       <li class="breadcrumb-item active">parameters</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/parameters.md">Edit on nrxrdct</a>
@@ -145,11 +183,11 @@
 
 
 
-<h2 id="nrxrdct.parameters" class="doc doc-heading">
-            <span class="doc doc-object-name doc-module-name">nrxrdct.parameters</span>
+<h2 id="nrxrdct.xrdct.parameters" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.xrdct.parameters</span>
 
 
-<a href="#nrxrdct.parameters" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nrxrdct.xrdct.parameters" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -181,11 +219,11 @@ helpers to persist and restore those parameters via HDF5.</p>
 
 
 
-<h3 id="nrxrdct.parameters.Scan" class="doc doc-heading">
+<h3 id="nrxrdct.xrdct.parameters.Scan" class="doc doc-heading">
             <span class="doc doc-object-name doc-class-name">Scan</span>
 
 
-<a href="#nrxrdct.parameters.Scan" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nrxrdct.xrdct.parameters.Scan" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
@@ -204,7 +242,7 @@ Important units:
 
 
               <details class="quote">
-                <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
+                <summary>Source code in <code>src/nrxrdct/xrdct/parameters.py</code></summary>
                 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-15"> 15</a></span>
 <span class="normal"><a href="#__codelineno-0-16"> 16</a></span>
 <span class="normal"><a href="#__codelineno-0-17"> 17</a></span>
@@ -401,11 +439,11 @@ Important units:
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.parameters.Scan.__init__" class="doc doc-heading">
+<h4 id="nrxrdct.xrdct.parameters.Scan.__init__" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">__init__</span>
 
 
-<a href="#nrxrdct.parameters.Scan.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.xrdct.parameters.Scan.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__init__</span><span class="p">(</span><span class="n">acquisition_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">sample_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">scan_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;half-turn&#39;</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;rot&#39;</span><span class="p">,</span> <span class="n">outer_loop_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;translation&#39;</span><span class="p">,</span> <span class="n">beam_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0001</span><span class="p">,</span> <span class="n">beam_energy</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">44</span><span class="p">)</span>
 </code></pre></div>
 
@@ -511,7 +549,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/parameters.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-23">23</a></span>
 <span class="normal"><a href="#__codelineno-0-24">24</a></span>
 <span class="normal"><a href="#__codelineno-0-25">25</a></span>
@@ -592,7 +630,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.parameters.Scan.get_scan_from_parameters" class="doc doc-heading">
+<h4 id="nrxrdct.xrdct.parameters.Scan.get_scan_from_parameters" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">get_scan_from_parameters</span>
 
 
@@ -600,7 +638,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
   </span>
 
-<a href="#nrxrdct.parameters.Scan.get_scan_from_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.xrdct.parameters.Scan.get_scan_from_parameters" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_scan_from_parameters</span><span class="p">(</span><span class="n">parameter_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">Scan</span>
 </code></pre></div>
 
@@ -647,7 +685,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
       <td class="field-body">
         <ul class="first simple">
             <li>
-<b><code>Scan</code></b>(                  <code><a class="autorefs autorefs-internal" title="Scan (nrxrdct.parameters.Scan)" href="#nrxrdct.parameters.Scan">Scan</a></code>
+<b><code>Scan</code></b>(                  <code><a class="autorefs autorefs-internal" title="Scan (nrxrdct.xrdct.parameters.Scan)" href="#nrxrdct.xrdct.parameters.Scan">Scan</a></code>
 )              –
               <div class="doc-md-description">
                 <p>A new :class:<code>Scan</code> instance populated from the stored parameters.</p>
@@ -660,7 +698,7 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/parameters.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
 <span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
 <span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
@@ -711,11 +749,11 @@ wavelength in ångströms is derived automatically as <code>12.398 / beam_energy
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nrxrdct.parameters.Scan.save_parameter_file" class="doc doc-heading">
+<h4 id="nrxrdct.xrdct.parameters.Scan.save_parameter_file" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">save_parameter_file</span>
 
 
-<a href="#nrxrdct.parameters.Scan.save_parameter_file" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nrxrdct.xrdct.parameters.Scan.save_parameter_file" class="headerlink" title="Permanent link">&para;</a></h4>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_parameter_file</span><span class="p">(</span><span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;xrdct_scan.h5&#39;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
@@ -753,7 +791,7 @@ are encoded automatically by h5py.</p>
 </table>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nrxrdct/parameters.py</code></summary>
+              <summary>Source code in <code>src/nrxrdct/xrdct/parameters.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-69">69</a></span>
 <span class="normal"><a href="#__codelineno-0-70">70</a></span>
 <span class="normal"><a href="#__codelineno-0-71">71</a></span>
@@ -806,7 +844,7 @@ are encoded automatically by h5py.</p>
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../../examples/slurm_pipeline/" class="btn btn-neutral float-left" title="SLURM Pipeline"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../io/" class="btn btn-neutral float-left" title="io"><span class="icon icon-circle-arrow-left"></span> Previous</a>
         <a href="../preprocessing/" class="btn btn-neutral float-right" title="preprocessing">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
@@ -834,7 +872,7 @@ are encoded automatically by h5py.</p>
         </span>
     
     
-      <span><a href="../../examples/slurm_pipeline/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../io/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
       <span><a href="../preprocessing/" style="color: #fcfcfc">Next &raquo;</a></span>
@@ -845,6 +883,7 @@ are encoded automatically by h5py.</p>
     <script>var base_url = "../..";</script>
     <script src="../../js/theme_extra.js"></script>
     <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script src="../../search/main.js"></script>
     <script>
         jQuery(function () {

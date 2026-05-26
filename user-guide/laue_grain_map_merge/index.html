@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Grain Map Merging and Symmetry Reduction - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Grain Map Merging and Symmetry Reduction";
+        var mkdocs_page_input_path = "user-guide/laue_grain_map_merge.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Grain Map Merging and Symmetry Reduction</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-why-multiple-grains-need-to-be-merged">1. Why multiple grains need to be merged</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-the-merging-workflow">2. The merging workflow</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#21-merge-select-the-best-grain-per-pixel">2.1 merge — select the best grain per pixel</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#22-apply_merge-register-the-result-as-a-new-grain-slot">2.2 apply_merge — register the result as a new grain slot</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#23-write_merge_links-on-disk-persistence">2.3 write_merge_links — on-disk persistence</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-symmetry-equivalent-orientations">3. Symmetry-equivalent orientations</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#31-the-problem">3.1 The problem</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#32-the-solution-reduce_to_fundamental_zone">3.2 The solution: reduce_to_fundamental_zone</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-recommended-workflow">4. Recommended workflow</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-plotting-merged-results">5. Plotting merged results</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#ipf-maps">IPF maps</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#overview-map">Overview map</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#frame-inspection">Frame inspection</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/laue/">laue</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Grain Map Merging and Symmetry Reduction</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_grain_map_merge.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="multi-grain-merging-and-symmetry-reduction-in-micro-laue-maps">Multi-grain merging and symmetry reduction in micro-Laue maps<a class="headerlink" href="#multi-grain-merging-and-symmetry-reduction-in-micro-laue-maps" title="Permanent link">&para;</a></h1>
+<p>This page describes two closely related post-processing steps for
+<code>GrainMap</code> objects:</p>
+<ol>
+<li><strong>Grain merging</strong> — combining independent per-grain fits into a single
+   spatially consistent orientation map.</li>
+<li><strong>Symmetry reduction</strong> — resolving isolated pixels whose orientations are
+   physically correct but use a different symmetry-equivalent representation
+   from their neighbours.</li>
+</ol>
+<p>Both steps are usually needed when mapping a sample that contains more than
+one crystallographic orientation (subgrains, twin variants, oriented thin
+films, …).</p>
+<hr />
+<h2 id="1-why-multiple-grains-need-to-be-merged">1. Why multiple grains need to be merged<a class="headerlink" href="#1-why-multiple-grains-need-to-be-merged" title="Permanent link">&para;</a></h2>
+<p>A <code>GrainMap</code> stores the result of fitting every map pixel against a fixed
+set of <em>reference</em> orientations <code>U_ref[0], U_ref[1], …</code>.  Each reference
+is defined once (pre-indexed manually or via <code>index_orientation</code>) and the
+fitting routine then refines it pixel by pixel independently.</p>
+<p>This means that at every map position there are <strong>N independent fits</strong>, one
+per reference grain.  In a real sample a given pixel belongs to at most one
+grain, so the map contains a lot of redundant (and often poor) fits.  The
+merging step selects the best fit at each position, collapsing N maps into one.</p>
+<hr />
+<h2 id="2-the-merging-workflow">2. The merging workflow<a class="headerlink" href="#2-the-merging-workflow" title="Permanent link">&para;</a></h2>
+<h3 id="21-merge-select-the-best-grain-per-pixel">2.1 <code>merge</code> — select the best grain per pixel<a class="headerlink" href="#21-merge-select-the-best-grain-per-pixel" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">metric</span><span class="o">=</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span>       <span class="c1"># primary ranking criterion</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">min_match_rate</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>       <span class="c1"># discard fits below this threshold</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">min_n_matched</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>           <span class="c1"># require at least 3 matched spots</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">max_rms_px</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>            <span class="c1"># discard fits with large residuals</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>best_grain</code> is an <code>(ny, nx)</code> integer array.  <code>best_grain[iy, ix]</code> is the
+index (0-based) of the grain slot that won the comparison at position
+<code>(iy, ix)</code>.  Positions where <strong>all</strong> grains failed the quality filters
+receive <code>best_grain = -1</code>.</p>
+<p><code>metrics</code> is a dictionary of <code>(ny, nx)</code> arrays containing the quality
+values <em>of the winning grain</em>:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"match_rate"</code></td>
+<td>Fraction of observed spots matched by the winner</td>
+</tr>
+<tr>
+<td><code>"rms_px"</code></td>
+<td>RMS pixel residual of the matched pairs</td>
+</tr>
+<tr>
+<td><code>"mean_px"</code></td>
+<td>Mean pixel residual</td>
+</tr>
+<tr>
+<td><code>"n_matched"</code></td>
+<td>Number of matched spots (integer)</td>
+</tr>
+<tr>
+<td><code>"cost"</code></td>
+<td>Optimizer cost at convergence</td>
+</tr>
+<tr>
+<td><code>"U"</code></td>
+<td>Orientation matrix of the winner, shape <code>(ny, nx, 3, 3)</code></td>
+</tr>
+<tr>
+<td><code>"source"</code></td>
+<td>The <code>source</code> argument (scalar string)</td>
+</tr>
+</tbody>
+</table>
+<p><code>merge</code> is <strong>read-only</strong>: it does not modify the <code>GrainMap</code> object.</p>
+<h4 id="quality-metrics">Quality metrics<a class="headerlink" href="#quality-metrics" title="Permanent link">&para;</a></h4>
+<p>The default ranking criterion is <code>"match_rate"</code> (= <code>n_matched / n_observed</code>).
+It is defined on [0, 1] regardless of how many peaks are in the pattern, so
+it is directly comparable across all map positions without any normalisation.</p>
+<p><code>"rms_px"</code> is useful as a secondary filter (via <code>max_rms_px</code>) once
+<code>min_match_rate</code> already ensures a minimum coverage: a low RMS among very
+few matches can be misleading.</p>
+<h4 id="quality-filters">Quality filters<a class="headerlink" href="#quality-filters" title="Permanent link">&para;</a></h4>
+<p>Three optional filters are applied before ranking:</p>
+<table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_match_rate</code></td>
+<td><code>0.0</code></td>
+<td>Exclude any grain fit below this match rate</td>
+</tr>
+<tr>
+<td><code>min_n_matched</code></td>
+<td><code>1</code></td>
+<td>Exclude fits with fewer matched spots</td>
+</tr>
+<tr>
+<td><code>max_rms_px</code></td>
+<td><code>∞</code></td>
+<td>Exclude fits with large pixel residuals</td>
+</tr>
+</tbody>
+</table>
+<p>A position where <em>every</em> grain fails at least one filter receives
+<code>best_grain = -1</code> and <code>NaN</code> metric values.  It will appear as a white
+(masked) pixel in all maps.</p>
+<p>Typical starting values: <code>min_match_rate=0.2</code>, <code>min_n_matched=3</code>.</p>
+<h3 id="22-apply_merge-register-the-result-as-a-new-grain-slot">2.2 <code>apply_merge</code> — register the result as a new grain slot<a class="headerlink" href="#22-apply_merge-register-the-result-as-a-new-grain-slot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">gi_merged</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Merged grain stored in slot </span><span class="si">{</span><span class="n">gi_merged</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><code>apply_merge</code> appends a new grain slot (grain index <code>n_grains - 1</code> after
+the call) that is filled from <code>best_grain</code> and <code>metrics</code>.  All existing
+analysis and plotting methods work on this slot as on any other:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+</code></pre></div>
+<p><code>apply_merge</code> is <strong>idempotent</strong>: calling it a second time with updated
+parameters overwrites the same grain slot in-place rather than creating a
+new one.  The slot index <code>gi_merged</code> is stored in <code>gmap._merged_grain</code>.</p>
+<p><code>inspect_frame</code> uses the merged grain by default when it exists:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># automatically uses gi_merged</span>
+</code></pre></div>
+<h3 id="23-write_merge_links-on-disk-persistence">2.3 <code>write_merge_links</code> — on-disk persistence<a class="headerlink" href="#23-write_merge_links-on-disk-persistence" title="Permanent link">&para;</a></h3>
+<p>After merging you can write symlinks so that the merged selection is visible
+on disk in the same format as the per-grain result files:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">write_merge_links</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">base_dir</span><span class="o">=</span><span class="s2">&quot;./processing&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">metrics</span><span class="o">=</span><span class="n">metrics</span><span class="p">,</span>           <span class="c1"># inherits the source directory automatically</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+</code></pre></div>
+<p>This creates a <code>merged/</code> subfolder inside <code>base_dir</code> and populates it with
+<code>frame_NNNNN_g{gi_merged:02d}.npz</code> symlinks, each pointing to the
+corresponding <code>ubs/</code> or <code>strain/</code> result file of the winning grain.</p>
+<p>To re-load the merged map from those links in a new session:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">gi_loaded</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">collect_merged</span><span class="p">(</span><span class="n">base_dir</span><span class="o">=</span><span class="s2">&quot;./processing&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><code>collect_merged</code> auto-detects whether the files contain orientation-only or
+strain results by checking for the <code>"strain_voigt"</code> key.</p>
+<hr />
+<h2 id="3-symmetry-equivalent-orientations">3. Symmetry-equivalent orientations<a class="headerlink" href="#3-symmetry-equivalent-orientations" title="Permanent link">&para;</a></h2>
+<h3 id="31-the-problem">3.1 The problem<a class="headerlink" href="#31-the-problem" title="Permanent link">&para;</a></h3>
+<p>In polychromatic (white-beam) Laue diffraction, the positions of spots on
+the detector depend on the orientation matrix <strong>U</strong> and the reciprocal lattice
+<strong>B</strong>, but are <strong>independent of the X-ray wavelength</strong>.  A direct consequence is
+that every proper rotation <strong>S</strong> in the crystal's point group leaves the spot
+pattern invariant:</p>
+<div class="arithmatex">\[
+\text{spots}(\mathbf{U}) \equiv \text{spots}(\mathbf{U}\,\mathbf{S})
+\quad \forall\, \mathbf{S} \in G
+\]</div>
+<p>This means the residual landscape has N\ :sub:<code>sym</code> equivalent global minima
+(N\ :sub:<code>sym</code> = 24 for cubic, 12 for hexagonal, 8 for tetragonal, 4 for
+orthorhombic).  A least-squares optimizer starting from slightly different
+initial conditions can converge to any of them.</p>
+<p>During a raster scan, pixels are refined independently.  Pixels near grain
+boundaries or in strained regions are more sensitive to the initial conditions
+than those at the core of a well-crystallised grain.  As a result, the
+optimized map may contain <strong>isolated pixels</strong> whose orientation <em>looks</em>
+different from their neighbours but is in fact physically equivalent — it just
+belongs to a different member of the symmetry family.</p>
+<p>The effect is most visible in:</p>
+<ul>
+<li><strong>IPF maps</strong>: an isolated pixel has a very different colour from its
+  surroundings even though the physical misorientation is zero.</li>
+<li><strong>Euler angle maps</strong>: a discontinuous jump of, e.g., 90° between neighbours
+  that should be perfectly continuous.</li>
+<li><strong>KAM (Kernel Average Misorientation)</strong>: artificially elevated values at
+  isolated pixels.</li>
+</ul>
+<h3 id="32-the-solution-reduce_to_fundamental_zone">3.2 The solution: <code>reduce_to_fundamental_zone</code><a class="headerlink" href="#32-the-solution-reduce_to_fundamental_zone" title="Permanent link">&para;</a></h3>
+<p><code>reduce_to_fundamental_zone</code> relabels every pixel to the symmetry-equivalent
+that is closest (minimum misorientation angle) to a common reference <strong>R</strong>:</p>
+<div class="arithmatex">\[
+s^*(\text{iy, ix}) = \underset{s}{\operatorname{argmax}}\;
+                       \operatorname{tr}\!\bigl(R^T\,\mathbf{U}^{(s)}\bigr),
+\quad
+\mathbf{U}^{(s)} = \mathbf{U} \cdot \mathbf{S}_s
+\]</div>
+<p>Maximising the matrix trace is equivalent to minimising the geodesic
+misorientation angle
+<span class="arithmatex">\(\omega = \arccos\!\left(\tfrac{\operatorname{tr}(R^T U^{(s)})-1}{2}\right)\)</span>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span>     <span class="c1"># point group</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>       <span class="c1"># None = quaternion mean of all valid pixels</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">changed</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2"> pixels relabelled&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>The method modifies <code>gmap.U[grain]</code> <strong>in place</strong>.  It returns a boolean mask
+of the pixels that were actually changed.</p>
+<h4 id="reference-orientation">Reference orientation<a class="headerlink" href="#reference-orientation" title="Permanent link">&para;</a></h4>
+<p>When <code>reference=None</code> (default) the target <strong>R</strong> is computed as the
+<strong>quaternion mean</strong> of all valid map pixels:</p>
+<ol>
+<li>Each U matrix is converted to a unit quaternion.</li>
+<li>Quaternions that point to the opposite hemisphere from the first are
+   flipped (<code>q ← −q</code>), avoiding cancellation artefacts in the average.</li>
+<li>The flipped quaternions are averaged and re-normalised.</li>
+<li>The mean quaternion is converted back to a rotation matrix.</li>
+</ol>
+<p>This works well when one grain dominates the map.  If the grain of interest
+occupies only a minority of pixels (e.g. in a merged map with two distinct
+grains), supply the centre of that grain explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Use the median orientation of grain 1 as reference</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">U_grain1</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">grain1_mask</span><span class="p">]</span>          <span class="c1"># shape (M, 3, 3)</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial.transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rotation</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">q</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">U_grain1</span><span class="p">)</span><span class="o">.</span><span class="n">as_quat</span><span class="p">()</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">q</span> <span class="o">@</span> <span class="n">q</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">R_ref</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_quat</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)))</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span><span class="n">grain</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="n">R_ref</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="strain-tensor-rotation">Strain tensor rotation<a class="headerlink" href="#strain-tensor-rotation" title="Permanent link">&para;</a></h4>
+<p>When strain data are present the strain tensor is rotated consistently with
+the symmetry operation:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}' = \mathbf{S}^T\,\boldsymbol{\varepsilon}\,\mathbf{S}
+\]</div>
+<p>This keeps the physical meaning of the strain components aligned with the
+(now corrected) crystal frame.  The Voigt representation is automatically
+updated in <code>gmap.strain_voigt[grain]</code>.</p>
+<blockquote>
+<p><strong>Note</strong>: this rotation makes the <em>representation</em> consistent but does not
+re-optimise the strain values.  If the corrected pixels are numerous, a
+re-refinement starting from the corrected <strong>U</strong> will give more accurate
+strain values.</p>
+</blockquote>
+<hr />
+<h2 id="4-recommended-workflow">4. Recommended workflow<a class="headerlink" href="#4-recommended-workflow" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>1.  Pre-index reference orientations
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>        index_orientation / interactive_orientation
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>2.  Run per-grain fits across the full map
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        fit_orientation / fit_strain_orientation
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>3.  For each grain: resolve symmetry equivalents
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        gmap.reduce_to_fundamental_zone(grain=gi, symmetry=&quot;cubic&quot;)
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>4.  Inspect individual grain maps
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        gmap.plot_ipf_map(gi, direction=[0, 0, 1])
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        gmap.plot_map(&quot;match_rate&quot;, grain=gi)
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>5.  Merge
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>        best_grain, metrics = gmap.merge(
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>            metric=&quot;match_rate&quot;,
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>            min_match_rate=0.25,
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>            min_n_matched=3,
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>        )
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>6.  Register merged slot
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>        gi_merged = gmap.apply_merge(best_grain, metrics)
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>7.  Optionally: re-run symmetry reduction on the merged slot
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>        gmap.reduce_to_fundamental_zone(grain=gi_merged, symmetry=&quot;cubic&quot;)
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>8.  Persist to disk
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>        gmap.write_merge_links(&quot;./processing&quot;, best_grain, metrics)
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>        gmap.save(&quot;grainmap.h5&quot;)
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>9.  Analyse
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        gmap.plot_overview(grain=gi_merged)
+<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>        gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1], stretch=&quot;local&quot;,
+<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>                          best_grain=best_grain)
+<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>        gmap.plot_map(&quot;match_rate&quot;, grain=gi_merged)
+</code></pre></div>
+<p>Step 3 (symmetry reduction) should be performed <em>before</em> merging.  The merge
+step compares quality metrics and selects the best grain; running symmetry
+reduction first ensures that the merged orientations are in a consistent
+representation.</p>
+<hr />
+<h2 id="5-plotting-merged-results">5. Plotting merged results<a class="headerlink" href="#5-plotting-merged-results" title="Permanent link">&para;</a></h2>
+<h3 id="ipf-maps">IPF maps<a class="headerlink" href="#ipf-maps" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Global colour stretch — spans entire map range</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Per-grain colour stretch — each grain region stretched independently</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># (requires best_grain to define the regions)</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>                  <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">)</span>
+</code></pre></div>
+<p><code>stretch="local"</code> is most useful when the map contains two (or more)
+distinct grains: with global stretching the inter-grain colour contrast
+dominates the gamut and the intra-grain spread is compressed.  Local
+stretching gives each grain region its own colour scale, revealing the
+internal orientation spread within each grain.</p>
+<h3 id="overview-map">Overview map<a class="headerlink" href="#overview-map" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_overview</span><span class="p">(</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">ipf_axes</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">quality_metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="s2">&quot;rms_px&quot;</span><span class="p">,</span> <span class="s2">&quot;kam&quot;</span><span class="p">],</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">show_strain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">strain_components</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;exx&quot;</span><span class="p">,</span> <span class="s2">&quot;eyy&quot;</span><span class="p">,</span> <span class="s2">&quot;ezz&quot;</span><span class="p">],</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">strain_frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="frame-inspection">Frame inspection<a class="headerlink" href="#frame-inspection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># defaults to gi_merged when it exists</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">,</span> <span class="n">map_grain</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>   <span class="c1"># force a specific grain</span>
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_stress/" class="btn btn-neutral float-left" title="Elastic Stress from Strain Maps"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../../examples/slurm_pipeline/" class="btn btn-neutral float-right" title="SLURM Pipeline">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_stress/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../../examples/slurm_pipeline/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -14,7 +14,7 @@ from typing import Any, Callable, Tuple
 import h5py
 import hdf5plugin  # noqa: F401 — registers hdf5plugin codecs with h5py
 import numpy as np
-from GSASII import GSASIIscriptable as G2sc
+from GSASII import GSASIIscriptable as G2sc # type: ignore
 from tqdm.auto import tqdm
 
 from .io import save_xy_file

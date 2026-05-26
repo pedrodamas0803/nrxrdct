@@ -19,6 +19,7 @@ plugins:
             show_root_heading: true
             show_signature_annotations: true
             separate_signature: true
+            ignore_errors: true
 
 markdown_extensions:
   - admonition

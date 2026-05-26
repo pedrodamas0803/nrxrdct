@@ -75,27 +75,27 @@ class OrientationFitResult:
     Result of a single-crystal orientation refinement (:func:`fit_orientation`).
 
     Attributes:
-    U          : (3, 3) ndarray  Refined orientation matrix (LT frame).
-    U0         : (3, 3) ndarray  Starting orientation passed to the fitter.
-    rotvec     : (3,) ndarray    Rotation vector δω (radians) such that
-                                 `U = Rotation.from_rotvec(rotvec) @ U0`.
-                                 Its magnitude is the total rotation angle.
-    cost       : float           ½ Σ residuals² as returned by `least_squares`.
-    rms_px     : float           RMS pixel distance of matched observed-simulated
-                                 pairs (`nan` if no matches).
-    mean_px    : float           Mean Euclidean pixel distance of matched pairs
-                                 (less sensitive to outliers than RMS;
-                                 `nan` if no matches).
-    n_matched  : int             Number of observed spots matched within
-                                 `max_match_px` at the solution.
-    n_obs      : int             Number of observed spots used in the fit.
-    n_sim      : int             Number of simulated spots on the detector at
-                                 the solution (before any `top_n_sim` cut).
-    match_rate : float           `n_matched / n_obs`.
-    success    : bool            `True` if the optimizer converged.
-    message    : str             Human-readable optimizer termination message.
-    optimizer  : OptimizeResult  Raw `scipy.optimize.OptimizeResult` (not shown
-                                 in repr); inspect for Jacobian, gradient, etc.
+        U ((3, 3) ndarray): Refined orientation matrix (LT frame).
+        U0 ((3, 3) ndarray): Starting orientation passed to the fitter.
+        rotvec ((3,) ndarray): Rotation vector δω (radians) such that
+            `U = Rotation.from_rotvec(rotvec) @ U0`.
+            Its magnitude is the total rotation angle.
+        cost (float): ½ Σ residuals² as returned by `least_squares`.
+        rms_px (float): RMS pixel distance of matched observed-simulated
+            pairs (`nan` if no matches).
+        mean_px (float): Mean Euclidean pixel distance of matched pairs
+            (less sensitive to outliers than RMS;
+            `nan` if no matches).
+        n_matched (int): Number of observed spots matched within
+            `max_match_px` at the solution.
+        n_obs (int): Number of observed spots used in the fit.
+        n_sim (int): Number of simulated spots on the detector at
+            the solution (before any `top_n_sim` cut).
+        match_rate (float): `n_matched / n_obs`.
+        success (bool): `True` if the optimizer converged.
+        message (str): Human-readable optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult` (not shown
+            in repr); inspect for Jacobian, gradient, etc.
 """
 
     U          : np.ndarray
@@ -132,20 +132,19 @@ class StackFitResult:
     relative orientation relationships.
 
     Attributes:
-    R_global  : (3, 3) ndarray        Global rotation matrix applied to every layer.
-    rotvec    : (3,) ndarray          Rotation vector (radians) for `R_global`.
-    U_layers  : list of (3, 3) arrays Refined U matrix for each layer, in
-                                      `stack.all_layers` order.
-    U0_layers : list of (3, 3) arrays Starting U matrix for each layer.
-    cost      : float                 ½ Σ residuals² at convergence.
-    rms_px    : float                 RMS pixel distance of matched spot pairs.
-    n_matched : int                   Matched spots within `max_match_px`.
-    n_obs     : int                   Observed spots used.
-    n_sim     : int                   Simulated spots on detector at solution.
-    match_rate: float                 `n_matched / n_obs`.
-    success   : bool                  Optimizer convergence flag.
-    message   : str                   Optimizer termination message.
-    optimizer : OptimizeResult        Raw `scipy.optimize.OptimizeResult`.
+        R_global ((3, 3) ndarray): Global rotation matrix applied to every layer.
+        rotvec ((3,) ndarray): Rotation vector (radians) for `R_global`.
+        U_layers (list of (3, 3) arrays Refined U matrix for each layer, in): `stack.all_layers` order.
+        U0_layers (list of (3, 3) arrays Starting U matrix for each layer.):
+        cost (float): ½ Σ residuals² at convergence.
+        rms_px (float): RMS pixel distance of matched spot pairs.
+        n_matched (int): Matched spots within `max_match_px`.
+        n_obs (int): Observed spots used.
+        n_sim (int): Simulated spots on detector at solution.
+        match_rate: float                 `n_matched / n_obs`.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult`.
 """
 
     R_global   : np.ndarray
@@ -179,22 +178,21 @@ class MixedFitResult:
     Result of a multi-phase orientation refinement (:func:`fit_orientation_mixed`).
 
     Attributes:
-    U_phases  : list of (3, 3) arrays Refined orientation matrix per phase,
-                                      in input order.
-    U0_phases : list of (3, 3) arrays Starting orientation matrix per phase.
-    rotvecs   : list of (3,) arrays   Rotation vector per phase.  In shared
-                                      mode every entry is identical; in per-phase
-                                      mode each entry is independent.
-    cost      : float                 ½ Σ residuals² at convergence.
-    rms_px    : float                 RMS pixel distance of matched spot pairs.
-    n_matched : int                   Matched spots within `max_match_px`.
-    n_obs     : int                   Observed spots used.
-    n_sim     : int                   Total simulated spots on detector at solution
-                                      (all phases combined).
-    match_rate: float                 `n_matched / n_obs`.
-    success   : bool                  Optimizer convergence flag.
-    message   : str                   Optimizer termination message.
-    optimizer : OptimizeResult        Raw `scipy.optimize.OptimizeResult`.
+        U_phases (list of (3, 3) arrays Refined orientation matrix per phase,): in input order.
+        U0_phases (list of (3, 3) arrays Starting orientation matrix per phase.):
+        rotvecs (list of (3,) arrays): Rotation vector per phase.  In shared
+            mode every entry is identical; in per-phase
+            mode each entry is independent.
+        cost (float): ½ Σ residuals² at convergence.
+        rms_px (float): RMS pixel distance of matched spot pairs.
+        n_matched (int): Matched spots within `max_match_px`.
+        n_obs (int): Observed spots used.
+        n_sim (int): Total simulated spots on detector at solution
+            (all phases combined).
+        match_rate: float                 `n_matched / n_obs`.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult`.
 """
 
     U_phases   : list[np.ndarray]
@@ -227,40 +225,40 @@ class StrainFitResult:
     (:func:`fit_strain_orientation`).
 
     Attributes:
-    U             : (3, 3) ndarray  Pure rotation part of the refined matrix.
-                                    `U = Rotation.from_rotvec(rotvec) @ U0`.
-    U0            : (3, 3) ndarray  Starting orientation passed to the fitter.
-    U_eff         : (3, 3) ndarray  Full deformation matrix used by the
-                                    simulator: `U @ (I + strain_tensor)`.
-                                    Pass this as `U` to
-                                    :func:`~nrxrdct.laue.simulate_laue` to
-                                    reproduce the fitted spot pattern.
-    rotvec        : (3,) ndarray    Rotation increment δω (radians).
-    strain_tensor : (3, 3) ndarray  Symmetric strain tensor in the crystal
-                                    frame.  Diagonal entries are axial strains
-                                    (Δa/a, Δb/b, Δc/c); off-diagonal entries
-                                    are the engineering shear strains / 2.
-    strain_voigt  : (6,) ndarray    Voigt representation
-                                    `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`
-                                    in the crystal frame.  Components not
-                                    listed in `fit_strain` are zero.
-    strain_tensor_lab : (3,3) ndarray  `strain_tensor` rotated to the
-                                    lab frame via `U @ ε @ Uᵀ`
-                                    (computed property).
-    strain_voigt_lab  : (6,) ndarray   Voigt form of `strain_tensor_lab`
-                                    (computed property).
-    fit_strain    : tuple[str, …]   Strain components that were free parameters.
-    cost          : float           ½ Σ residuals² at convergence.
-    rms_px        : float           RMS pixel distance of matched pairs.
-    mean_px       : float           Mean Euclidean pixel distance of matched pairs.
-    n_matched     : int             Matched spots within `max_match_px`.
-    n_obs         : int             Observed spots used.
-    n_sim         : int             Simulated spots on detector at solution.
-    match_rate    : float           `n_matched / n_obs`.
-    success       : bool            Optimizer convergence flag.
-    message       : str             Optimizer termination message.
-    optimizer     : OptimizeResult  Raw `scipy.optimize.OptimizeResult`
-                                    (not shown in repr).
+        U ((3, 3) ndarray): Pure rotation part of the refined matrix.
+            `U = Rotation.from_rotvec(rotvec) @ U0`.
+        U0 ((3, 3) ndarray): Starting orientation passed to the fitter.
+        U_eff ((3, 3) ndarray): Full deformation matrix used by the
+            simulator: `U @ (I + strain_tensor)`.
+            Pass this as `U` to
+            :func:`~nrxrdct.laue.simulate_laue` to
+            reproduce the fitted spot pattern.
+        rotvec ((3,) ndarray): Rotation increment δω (radians).
+        strain_tensor ((3, 3) ndarray): Symmetric strain tensor in the crystal
+            frame.  Diagonal entries are axial strains
+            (Δa/a, Δb/b, Δc/c); off-diagonal entries
+            are the engineering shear strains / 2.
+        strain_voigt ((6,) ndarray): Voigt representation
+            `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`
+            in the crystal frame.  Components not
+            listed in `fit_strain` are zero.
+        strain_tensor_lab ((3,3) ndarray): `strain_tensor` rotated to the
+            lab frame via `U @ ε @ Uᵀ`
+            (computed property).
+        strain_voigt_lab ((6,) ndarray): Voigt form of `strain_tensor_lab`
+            (computed property).
+        fit_strain (tuple[str, …]): Strain components that were free parameters.
+        cost (float): ½ Σ residuals² at convergence.
+        rms_px (float): RMS pixel distance of matched pairs.
+        mean_px (float): Mean Euclidean pixel distance of matched pairs.
+        n_matched (int): Matched spots within `max_match_px`.
+        n_obs (int): Observed spots used.
+        n_sim (int): Simulated spots on detector at solution.
+        match_rate (float): `n_matched / n_obs`.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult`
+            (not shown in repr).
 """
 
     U             : np.ndarray
@@ -297,7 +295,7 @@ class StrainFitResult:
         (x ∥ beam, z vertical).
 
         Returns:
-        (3, 3) ndarray
+            (3, 3) ndarray
 """
         return self.U @ self.strain_tensor @ self.U.T
 
@@ -308,7 +306,7 @@ class StrainFitResult:
         `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]` in the lab frame.
 
         Returns:
-        (6,) ndarray
+            (6,) ndarray
 """
         e = self.strain_tensor_lab
         return np.array([e[0, 0], e[1, 1], e[2, 2], e[0, 1], e[0, 2], e[1, 2]])
@@ -332,17 +330,17 @@ class IndexResult:
     Result of Laue autoindexing (:func:`index_orientation`).
 
     Attributes:
-    U            : (3,3) ndarray  Best candidate orientation matrix.
-    n_matched    : int            Observed spots matching within
-                                  `angle_tol_deg` at the returned orientation.
-    n_obs        : int            Number of observed spots used.
-    match_rate   : float          `n_matched / n_obs`.
-    hkl_pair     : tuple          `((h₁,k₁,l₁), (h₂,k₂,l₂))` seed
-                                  reflection pair that produced the best
-                                  candidate.
-    angle_deg    : float          Inter-spot angle of the seed pair (degrees).
-    n_candidates : int            Total candidate matrices evaluated.
-    success      : bool           `match_rate >= min_match_rate`.
+        U ((3,3) ndarray): Best candidate orientation matrix.
+        n_matched (int): Observed spots matching within
+            `angle_tol_deg` at the returned orientation.
+        n_obs (int): Number of observed spots used.
+        match_rate (float): `n_matched / n_obs`.
+        hkl_pair (tuple): `((h₁,k₁,l₁), (h₂,k₂,l₂))` seed
+            reflection pair that produced the best
+            candidate.
+        angle_deg (float): Inter-spot angle of the seed pair (degrees).
+        n_candidates (int): Total candidate matrices evaluated.
+        success (bool): `match_rate >= min_match_rate`.
 """
 
     U            : np.ndarray
@@ -359,9 +357,8 @@ class IndexResult:
         Save the orientation matrix to a `.npy` file.
 
         Args:
-        path : str
-            Output path.  If the filename has no extension, `.npy` is
-            appended automatically by :func:`numpy.save`.
+            path (str): Output path.  If the filename has no extension, `.npy` is
+                appended automatically by :func:`numpy.save`.
 
         Example:
         >>> idx = index_orientation(crystal, camera, obs_xy)
@@ -391,16 +388,14 @@ def _extract_sim_xy(spots: list) -> np.ndarray:
     Extract pixel positions from a simulate_laue spot list.
 
     Args:
-    spots : list of dicts
-        Output of any `simulate_laue*` function.  Each dict is expected
-        to contain a `'pix'` key with a `[xcam, ycam]` value; spots
-        that reach the detector have a non-None `'pix'`.
+        spots (list of dicts): Output of any `simulate_laue*` function.  Each dict is expected
+            to contain a `'pix'` key with a `[xcam, ycam]` value; spots
+            that reach the detector have a non-None `'pix'`.
 
     Returns:
-    xy : (N_sim, 2) ndarray
-        Pixel positions `[xcam, ycam]` for all on-detector spots.
-        Returns `(0, 2)` if the spot list is empty or no spot is on the
-        detector.
+        xy ((N_sim, 2) ndarray): Pixel positions `[xcam, ycam]` for all on-detector spots.
+            Returns `(0, 2)` if the spot list is empty or no spot is on the
+            detector.
 """
     xy = [s["pix"] for s in spots if s.get("pix") is not None]
     return np.array(xy, dtype=float) if xy else np.empty((0, 2), dtype=float)
@@ -420,18 +415,17 @@ def _match_spots(
     preventing a single large outlier from dominating the assignment.
 
     Args:
-    obs_xy      : (N_obs, 2) ndarray   Observed pixel positions [xcam, ycam].
-    sim_xy      : (N_sim, 2) ndarray   Simulated pixel positions [xcam, ycam].
-    max_match_px : float               Distance cap applied before solving the
-                                       assignment problem.
+        obs_xy ((N_obs, 2) ndarray): Observed pixel positions [xcam, ycam].
+        sim_xy ((N_sim, 2) ndarray): Simulated pixel positions [xcam, ycam].
+        max_match_px (float): Distance cap applied before solving the
+            assignment problem.
 
     Returns:
-    row_ind : (K,) int array   Indices into `obs_xy` for accepted pairs.
-    col_ind : (K,) int array   Corresponding indices into `sim_xy`.
-    dist_px : (K,) float array Euclidean pixel distance for each pair.
-                               Note: pairs where the true distance exceeds
-                               `max_match_px` are included — callers must
-                               filter on `dist_px` themselves.
+        row_ind ((K,) int array): Indices into `obs_xy` for accepted pairs.
+        col_ind ((K,) int array): Corresponding indices into `sim_xy`.
+        dist_px ((K,) float array Euclidean pixel distance for each pair.): Note: pairs where the true distance exceeds
+            `max_match_px` are included — callers must
+            filter on `dist_px` themselves.
 """
     if len(obs_xy) == 0 or len(sim_xy) == 0:
         empty = np.array([], dtype=int)
@@ -459,15 +453,14 @@ def _build_residuals(
     all spots are explained.
 
     Args:
-    obs_use     : (N_obs, 2)  Observed pixel positions [xcam, ycam].
-    sim_xy      : (N_sim, 2)  Simulated pixel positions, or empty array.
-    max_match_px : float      Penalty value assigned to unmatched spots.
+        obs_use ((N_obs, 2)): Observed pixel positions [xcam, ycam].
+        sim_xy ((N_sim, 2)): Simulated pixel positions, or empty array.
+        max_match_px (float): Penalty value assigned to unmatched spots.
 
     Returns:
-    residuals : (2 * N_obs,) ndarray
-        Interleaved [Δx₀, Δy₀, Δx₁, Δy₁, ...].  Length is always
-        `2 * N_obs` regardless of how many simulated spots exist,
-        making the vector directly usable with `least_squares`.
+        residuals ((2 * N_obs,) ndarray): Interleaved [Δx₀, Δy₀, Δx₁, Δy₁, ...].  Length is always
+            `2 * N_obs` regardless of how many simulated spots exist,
+            making the vector directly usable with `least_squares`.
 """
     N_obs = len(obs_use)
     residuals = np.full(2 * N_obs, max_match_px, dtype=float)
@@ -496,17 +489,17 @@ def _compute_match_stats(
     `|Δx| ≥ max_match_px − ε  AND  |Δy| ≥ max_match_px − ε`.
 
     Args:
-    residuals    : (2 * N_obs,) ndarray  Residual vector from :func:`_build_residuals`.
-    max_match_px : float                 Penalty threshold used when building residuals.
-    N_obs        : int                   Number of observed spots (= len(residuals) // 2).
+        residuals ((2 * N_obs,) ndarray): Residual vector from :func:`_build_residuals`.
+        max_match_px (float): Penalty threshold used when building residuals.
+        N_obs (int): Number of observed spots (= len(residuals) // 2).
 
     Returns:
-    n_matched : int    Number of spots with a matched simulated counterpart.
-    rms_px    : float  RMS Euclidean pixel distance of matched pairs only.
-                       Returns `nan` when no spots are matched.
-    mean_px   : float  Mean Euclidean pixel distance of matched pairs only.
-                       Less sensitive to outliers than RMS.
-                       Returns `nan` when no spots are matched.
+        n_matched (int): Number of spots with a matched simulated counterpart.
+        rms_px (float): RMS Euclidean pixel distance of matched pairs only.
+            Returns `nan` when no spots are matched.
+        mean_px (float): Mean Euclidean pixel distance of matched pairs only.
+            Less sensitive to outliers than RMS.
+            Returns `nan` when no spots are matched.
 """
     r = residuals.reshape(N_obs, 2)
     unmatched = np.all(np.abs(r) >= max_match_px - 1e-9, axis=1)
@@ -532,13 +525,11 @@ def _normalise_phases(phases: list) -> list[dict]:
     mutate `p["U"]` without special-casing.
 
     Args:
-    phases : list of dict or tuple
-        Input phase list in either accepted format.
+        phases (list of dict or tuple): Input phase list in either accepted format.
 
     Returns:
-    out : list of dict
-        New list of independent dicts (shallow-copies of input dicts;
-        tuples converted).  The originals are not mutated.
+        out (list of dict): New list of independent dicts (shallow-copies of input dicts;
+            tuples converted).  The originals are not mutated.
 """
     out = []
     for p in phases:
@@ -587,30 +578,28 @@ def remove_grain_spots(
         fit2 = laue.fit_orientation(crystal, cam, remaining[:, :2], U0_grain2)
 
     Args:
-    obs          : (N, K) array-like   Observed spots. The first two columns must
-                                       be pixel positions `[xcam, ycam]`; any
-                                       additional columns (intensities, widths, …)
-                                       are preserved unchanged in the output.
-    U            : (3, 3) array-like   Orientation matrix of the grain to remove.
-    crystal      : Crystal             xrayutilities crystal structure.
-    camera       : Camera              Detector geometry.
-    max_match_px : float               Maximum pixel distance for a match.
-                                       Should match the tolerance used in
-                                       `fit_orientation`.  Default `5.0`.
-    f2_thresh : float              Structure-factor threshold for the
-                                   removal simulation.  Use a very small value
-                                   (default `1e-6`) to generate essentially
-                                   all allowed reflections and avoid leaving
-                                   grain spots behind.
-    E_min_eV, E_max_eV : float    Energy range forwarded to
-                                   :func:`~nrxrdct.laue.simulate_laue`.
+        obs ((N, K) array-like): Observed spots. The first two columns must
+            be pixel positions `[xcam, ycam]`; any
+            additional columns (intensities, widths, …)
+            are preserved unchanged in the output.
+        U ((3, 3) array-like): Orientation matrix of the grain to remove.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry.
+        max_match_px (float): Maximum pixel distance for a match.
+            Should match the tolerance used in
+            `fit_orientation`.  Default `5.0`.
+        f2_thresh (float): Structure-factor threshold for the
+            removal simulation.  Use a very small value
+            (default `1e-6`) to generate essentially
+            all allowed reflections and avoid leaving
+            grain spots behind.
+        E_min_eV, E_max_eV (float): Energy range forwarded to
+            :func:`~nrxrdct.laue.simulate_laue`.
 
     Returns:
-    remaining : (M, K) ndarray
-        Observed spots **not** claimed by this grain  (M ≤ N), with all
-        original columns intact.
-    claimed   : (N,) bool ndarray
-        Boolean mask over *obs*: `True` where a spot was removed.
+        remaining ((M, K) ndarray): Observed spots **not** claimed by this grain  (M ≤ N), with all
+            original columns intact.
+        claimed ((N,) bool ndarray): Boolean mask over *obs*: `True` where a spot was removed.
 """
     from .simulation import simulate_laue as _sim
 
@@ -687,11 +676,11 @@ def _build_g_table(crystal, hkl_list: list):
     Build a pairwise angle lookup table for the given list of (h,k,l).
 
     Returns:
-    cos_sorted : (P,)    pairwise cosines sorted ascending
-    ii_sorted  : (P,)    first index into hkl_list for each pair
-    jj_sorted  : (P,)    second index
-    G_hats     : (M, 3)  unit reciprocal-lattice vectors, one per hkl
-    hkl_list   : list    input list (unchanged, for index→hkl lookup)
+        cos_sorted ((P,)): pairwise cosines sorted ascending
+        ii_sorted ((P,)): first index into hkl_list for each pair
+        jj_sorted ((P,)): second index
+        G_hats ((M, 3)): unit reciprocal-lattice vectors, one per hkl
+        hkl_list (list): input list (unchanged, for index→hkl lookup)
 """
     G_vecs = np.array([crystal.Q(h, k, l) for h, k, l in hkl_list])
     norms = np.linalg.norm(G_vecs, axis=1)
@@ -789,52 +778,38 @@ def index_orientation(
     starting point for :func:`fit_orientation`.
 
     Args:
-    crystal : Crystal
-        xrayutilities crystal structure.
-    camera : Camera
-        Detector geometry.
-    obs_xy : (N, 2)
-        Observed spot pixel positions `[xcam, ycam]`, sorted by descending
-        intensity.  The `n_obs_use` brightest are used.
-    f2_thresh : float
-        Minimum |F|² threshold for allowed reflections.
-    n_hkl_max : int
-        Keep only the `n_hkl_max` strongest reflections (by |F|²) for the
-        lookup table.  Limits table size and avoids O(M²) memory blow-up.
-        Default 200.
-    E_ref_eV : float or None
-        Reference photon energy (eV) used for |F|² ranking.  Defaults to the
-        midpoint of the default energy window.
-    angle_tol_deg : float
-        Angular tolerance (degrees) for both table look-up and final scoring.
-        Tight values (0.3–0.5°) give fewer false matches; looser values
-        (1–2°) help when the geometry calibration is coarse.
-    min_match_rate : float
-        Minimum fraction of matched spots required for `result.success`.
-    n_obs_use : int
-        Number of brightest observed spots to use.  Pairwise complexity is
-        O(n_obs_use²), so keep this ≤ 30 for fast execution.
-    max_pairs : int
-        Maximum number of observed pairs to evaluate.  Pairs are sorted so
-        that those with angles nearest 90° (most discriminating) are tried
-        first.
-    n_candidates_per_pair : int
-        Maximum number of table entries (hkl₁, hkl₂) to try per observed
-        pair.  When there are many table hits the candidates are sub-sampled
-        uniformly.
-    min_pair_angle_deg : float
-        Skip observed pairs whose inter-spot angle is below this threshold
-        (nearly-parallel beams constrain U poorly).
-    max_pair_angle_deg : float
-        Skip observed pairs above this threshold (nearly anti-parallel).
-    verbose : bool
-        Print progress to stdout.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry.
+        obs_xy ((N, 2)): Observed spot pixel positions `[xcam, ycam]`, sorted by descending
+            intensity.  The `n_obs_use` brightest are used.
+        f2_thresh (float): Minimum |F|² threshold for allowed reflections.
+        n_hkl_max (int): Keep only the `n_hkl_max` strongest reflections (by |F|²) for the
+            lookup table.  Limits table size and avoids O(M²) memory blow-up.
+            Default 200.
+        E_ref_eV (float or None): Reference photon energy (eV) used for |F|² ranking.  Defaults to the
+            midpoint of the default energy window.
+        angle_tol_deg (float): Angular tolerance (degrees) for both table look-up and final scoring.
+            Tight values (0.3–0.5°) give fewer false matches; looser values
+            (1–2°) help when the geometry calibration is coarse.
+        min_match_rate (float): Minimum fraction of matched spots required for `result.success`.
+        n_obs_use (int): Number of brightest observed spots to use.  Pairwise complexity is
+            O(n_obs_use²), so keep this ≤ 30 for fast execution.
+        max_pairs (int): Maximum number of observed pairs to evaluate.  Pairs are sorted so
+            that those with angles nearest 90° (most discriminating) are tried
+            first.
+        n_candidates_per_pair (int): Maximum number of table entries (hkl₁, hkl₂) to try per observed
+            pair.  When there are many table hits the candidates are sub-sampled
+            uniformly.
+        min_pair_angle_deg (float): Skip observed pairs whose inter-spot angle is below this threshold
+            (nearly-parallel beams constrain U poorly).
+        max_pair_angle_deg (float): Skip observed pairs above this threshold (nearly anti-parallel).
+        verbose (bool): Print progress to stdout.
 
     Returns:
-    IndexResult
-        `result.U` is the best candidate orientation matrix.
-        Pass it directly to :func:`fit_orientation` for pixel-space
-        refinement::
+        IndexResult
+            `result.U` is the best candidate orientation matrix.
+            Pass it directly to :func:`fit_orientation` for pixel-space
+            refinement::
 
             idx = index_orientation(crystal, camera, obs_xy, verbose=True)
             if idx.success:
@@ -1009,44 +984,43 @@ def laue_residuals(
     via :func:`functools.partial` (all arguments except `rotvec` frozen).
 
     Args:
-    rotvec       : (3,) ndarray   Rotation-vector increment δω (radians).
-                                  The orientation evaluated at each call is
-                                  `Rotation.from_rotvec(δω) @ U0`.
-                                  Initialise with `np.zeros(3)`.
-    crystal      : Crystal        xrayutilities crystal structure.
-    camera       : Camera         Detector geometry (pixel size, distance, …).
-    obs_xy       : (N_obs, 2)     Observed pixel positions `[xcam, ycam]`,
-                                  sorted by descending intensity.  Pass
-                                  `peaklist[:, :2]` directly from
-                                  :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
-    U0           : (3, 3)         Starting orientation matrix (LT frame,
-                                  x-axis // beam direction).
-    E_min_eV     : float          Low-energy cut-off of the white beam (eV).
-    E_max_eV     : float          High-energy cut-off (eV).
-    source       : str            Spectral model — `'bending_magnet'` or
-                                  `'undulator'`.
-    source_kwargs: dict or None   Extra keyword arguments forwarded to the
-                                  spectral function (e.g. `{'B': 0.4}` for
-                                  a bending magnet field).
-    f2_thresh    : float          Minimum squared structure factor |F|² to
-                                  include a reflection.
-    kb_params    : KB params      KB mirror reflectivity parameters
-                                  (see :data:`BM32_KB`).
-    max_match_px : float          Pixel radius inside which a simulated spot
-                                  is considered a match for an observed spot.
-                                  Unmatched observations contribute
-                                  `(max_match_px, max_match_px)` to the
-                                  residual vector.
-    top_n_obs    : int or None    Use only the N brightest observed spots.
-                                  `None` uses all.
-    top_n_sim    : int or None    Consider only the N brightest simulated spots
-                                  (after intensity-sorting by the simulator).
+        rotvec ((3,) ndarray): Rotation-vector increment δω (radians).
+            The orientation evaluated at each call is
+            `Rotation.from_rotvec(δω) @ U0`.
+            Initialise with `np.zeros(3)`.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry (pixel size, distance, …).
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`,
+            sorted by descending intensity.  Pass
+            `peaklist[:, :2]` directly from
+            :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+        U0 ((3, 3)): Starting orientation matrix (LT frame,
+            x-axis // beam direction).
+        E_min_eV (float): Low-energy cut-off of the white beam (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str            Spectral model): `'bending_magnet'` or
+            `'undulator'`.
+        source_kwargs: dict or None   Extra keyword arguments forwarded to the
+            spectral function (e.g. `{'B': 0.4}` for
+            a bending magnet field).
+        f2_thresh (float): Minimum squared structure factor |F|² to
+            include a reflection.
+        kb_params (KB params): KB mirror reflectivity parameters
+            (see :data:`BM32_KB`).
+        max_match_px (float): Pixel radius inside which a simulated spot
+            is considered a match for an observed spot.
+            Unmatched observations contribute
+            `(max_match_px, max_match_px)` to the
+            residual vector.
+        top_n_obs (int or None): Use only the N brightest observed spots.
+            `None` uses all.
+        top_n_sim (int or None): Consider only the N brightest simulated spots
+            (after intensity-sorting by the simulator).
 
     Returns:
-    residuals : (2 * N_obs_use,) ndarray
-        Interleaved `[Δx₀, Δy₀, Δx₁, Δy₁, …]`.  Length is fixed at
-        `2 * min(N_obs, top_n_obs)` so it is compatible with
-        `least_squares`.
+        residuals ((2 * N_obs_use,) ndarray): Interleaved `[Δx₀, Δy₀, Δx₁, Δy₁, …]`.  Length is fixed at
+            `2 * min(N_obs, top_n_obs)` so it is compatible with
+            `least_squares`.
 """
     delta_R = Rotation.from_rotvec(np.asarray(rotvec, dtype=float)).as_matrix()
     U = delta_R @ np.asarray(U0, dtype=float)
@@ -1104,32 +1078,31 @@ def laue_stack_residuals(
     responsible for saving and restoring `layer.U`.
 
     Args:
-    rotvec       : (3,) ndarray     Global rotation-vector increment δω (rad).
-                                    Initialise with `np.zeros(3)`.
-    stack        : LayeredCrystal   Layered structure; mutated in-place.
-    camera       : Camera           Detector geometry.
-    obs_xy       : (N_obs, 2)       Observed pixel positions `[xcam, ycam]`.
-    U0_layers    : list of (3, 3)   Base orientation for each layer, in
-                                    `stack.all_layers` order.  Typically
-                                    captured as
-                                    `[l.U.copy() for l in stack.all_layers]`
-                                    before the first call.
-    E_min_eV     : float            Low-energy cut-off (eV).
-    E_max_eV     : float            High-energy cut-off (eV).
-    source       : str              Spectral model (`'bending_magnet'` or
-                                    `'undulator'`).
-    source_kwargs: dict or None     Extra kwargs for the spectral function.
-    f2_thresh    : float            Minimum |F|² threshold.
-    kb_params    :                  KB mirror reflectivity parameters.
-    structure_model : str           How to combine layer contributions —
-                                    `'average'` (default) or `'incoherent'`.
-    max_match_px : float            Match radius in pixels.
-    top_n_obs    : int or None      Brightest N observed spots to use.
-    top_n_sim    : int or None      Brightest N simulated spots to consider.
+        rotvec ((3,) ndarray): Global rotation-vector increment δω (rad).
+            Initialise with `np.zeros(3)`.
+        stack (LayeredCrystal): Layered structure; mutated in-place.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        U0_layers (list of (3, 3)): Base orientation for each layer, in
+            `stack.all_layers` order.  Typically
+            captured as
+            `[l.U.copy() for l in stack.all_layers]`
+            before the first call.
+        E_min_eV (float): Low-energy cut-off (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str): Spectral model (`'bending_magnet'` or
+            `'undulator'`).
+        source_kwargs: dict or None     Extra kwargs for the spectral function.
+        f2_thresh (float): Minimum |F|² threshold.
+        kb_params (KB mirror reflectivity parameters.):
+        structure_model (str): How to combine layer contributions —
+            `'average'` (default) or `'incoherent'`.
+        max_match_px (float): Match radius in pixels.
+        top_n_obs (int or None): Brightest N observed spots to use.
+        top_n_sim (int or None): Brightest N simulated spots to consider.
 
     Returns:
-    residuals : (2 * N_obs_use,) ndarray
-        Fixed-length interleaved `[Δx, Δy]` residual vector.
+        residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]` residual vector.
 """
     delta_R = Rotation.from_rotvec(np.asarray(rotvec, dtype=float)).as_matrix()
     for layer, U0 in zip(stack.all_layers, U0_layers):
@@ -1181,37 +1154,35 @@ def laue_mixed_residuals(
     Pixel-space residual vector for a multi-phase Laue pattern.
 
     Args:
-    params       : (3,) or (3 * N_phases,) ndarray
-                   Rotation-vector increment(s).  In shared mode (`shared=True`)
-                   a single 3-element vector rotates every phase together.  In
-                   per-phase mode (`shared=False`) the vector has length
-                   `3 * N_phases`: elements `[3i : 3i+3]` rotate phase *i*.
-                   Initialise with `np.zeros(3)` or `np.zeros(3 * N_phases)`.
-    phases       : list of dicts   Phase descriptors; `p["U"]` is updated
-                                   in-place on every call.  Each dict must
-                                   contain `'crystal'`, `'U'`, and
-                                   `'volume_fraction'`.
-    camera       : Camera          Detector geometry.
-    obs_xy       : (N_obs, 2)      Observed pixel positions `[xcam, ycam]`.
-    U0_list      : list of (3, 3)  Base orientation per phase, in input order.
-    shared       : bool            `True` → one global rotation for all phases.
-                                   `False` → independent rotation per phase.
-    E_min_eV     : float           Low-energy cut-off (eV).
-    E_max_eV     : float           High-energy cut-off (eV).
-    source       : str             Spectral model (`'bending_magnet'` or
-                                   `'undulator'`).
-    source_kwargs: dict or None    Extra kwargs for the spectral function.
-    f2_thresh    : float or None   Minimum |F|² threshold.
-    kb_params    :                 KB mirror reflectivity parameters.
-    structure_model : str          Layer combination model (`'average'` or
-                                   `'incoherent'`).
-    max_match_px : float           Match radius in pixels.
-    top_n_obs    : int or None     Brightest N observed spots to use.
-    top_n_sim    : int or None     Brightest N simulated spots to consider.
+        params ((3,) or (3 * N_phases,) ndarray): Rotation-vector increment(s).  In shared mode (`shared=True`)
+            a single 3-element vector rotates every phase together.  In
+            per-phase mode (`shared=False`) the vector has length
+            `3 * N_phases`: elements `[3i : 3i+3]` rotate phase *i*.
+            Initialise with `np.zeros(3)` or `np.zeros(3 * N_phases)`.
+        phases (list of dicts): Phase descriptors; `p["U"]` is updated
+            in-place on every call.  Each dict must
+            contain `'crystal'`, `'U'`, and
+            `'volume_fraction'`.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        U0_list (list of (3, 3)): Base orientation per phase, in input order.
+        shared (bool): `True` → one global rotation for all phases.
+            `False` → independent rotation per phase.
+        E_min_eV (float): Low-energy cut-off (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str): Spectral model (`'bending_magnet'` or
+            `'undulator'`).
+        source_kwargs: dict or None    Extra kwargs for the spectral function.
+        f2_thresh (float or None): Minimum |F|² threshold.
+        kb_params (KB mirror reflectivity parameters.):
+        structure_model (str): Layer combination model (`'average'` or
+            `'incoherent'`).
+        max_match_px (float): Match radius in pixels.
+        top_n_obs (int or None): Brightest N observed spots to use.
+        top_n_sim (int or None): Brightest N simulated spots to consider.
 
     Returns:
-    residuals : (2 * N_obs_use,) ndarray
-        Fixed-length interleaved `[Δx, Δy]` residual vector.
+        residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]` residual vector.
 """
     params = np.asarray(params, dtype=float)
 
@@ -1279,29 +1250,27 @@ def laue_strain_residuals(
     component.
 
     Args:
-    params       : (3 + n_strain,) ndarray
-                   First 3 elements: rotation-vector increment δω (radians).
-                   Remaining `n_strain` elements: strain components scaled by
-                   `strain_scale` (i.e. divide by `strain_scale` to get
-                   physical strain).  Initialise with `np.zeros(3 + n_strain)`.
-    crystal      : Crystal        xrayutilities crystal structure.
-    camera       : Camera         Detector geometry.
-    obs_xy       : (N_obs, 2)     Observed pixel positions `[xcam, ycam]`.
-    U0           : (3, 3)         Starting orientation matrix.
-    fit_strain   : tuple of str   Which strain components are free.  Any
-                                  subset of `('e_xx','e_yy','e_zz','e_xy',
-                                  'e_xz','e_yz')`.  Default: all six.
-    strain_scale : float          Internal scale factor for strain parameters.
-                                  Optimizer parameters = physical_strain /
-                                  strain_scale.  Default 1e-4 keeps parameters
-                                  near order-1 for typical strains of 10⁻⁴–10⁻³.
-    E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
-    max_match_px, top_n_obs, top_n_sim, geometry_only, allowed_hkl
-                   Forwarded to :func:`simulate_laue`; see :func:`laue_residuals`.
+        params ((3 + n_strain,) ndarray): First 3 elements: rotation-vector increment δω (radians).
+            Remaining `n_strain` elements: strain components scaled by
+            `strain_scale` (i.e. divide by `strain_scale` to get
+            physical strain).  Initialise with `np.zeros(3 + n_strain)`.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        U0 ((3, 3)): Starting orientation matrix.
+        fit_strain (tuple of str): Which strain components are free.  Any
+            subset of `('e_xx','e_yy','e_zz','e_xy',
+            'e_xz','e_yz')`.  Default: all six.
+        strain_scale (float): Internal scale factor for strain parameters.
+            Optimizer parameters = physical_strain /
+            strain_scale.  Default 1e-4 keeps parameters
+            near order-1 for typical strains of 10⁻⁴–10⁻³.
+        E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
+        max_match_px, top_n_obs, top_n_sim, geometry_only, allowed_hkl
+            Forwarded to :func:`simulate_laue`; see :func:`laue_residuals`.
 
     Returns:
-    residuals : (2 * N_obs_use,) ndarray
-        Fixed-length interleaved `[Δx, Δy]` residual vector.
+        residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]` residual vector.
 """
     params = np.asarray(params, dtype=float)
     rotvec = params[:3]
@@ -1367,64 +1336,61 @@ def fit_orientation(
     Wraps :func:`laue_residuals` + `scipy.optimize.least_squares`.
 
     Args:
-    crystal      : Crystal        xrayutilities crystal structure.
-    camera       : Camera         Detector geometry.
-    obs_xy       : (N_obs, 2)     Observed pixel positions `[xcam, ycam]`,
-                                  sorted by descending intensity.  Pass
-                                  `peaklist[:, :2]` directly from
-                                  :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
-    U0           : (3, 3)         Starting orientation matrix (LT frame,
-                                  x-axis // beam direction).
-    E_min_eV     : float          Low-energy cut-off of the white beam (eV).
-    E_max_eV     : float          High-energy cut-off (eV).
-    source       : str            Spectral model — `'bending_magnet'` or
-                                  `'undulator'`.
-    source_kwargs: dict or None   Extra kwargs forwarded to the spectral function.
-    f2_thresh    : float          Minimum squared structure factor |F|² to
-                                  include a reflection.
-    kb_params    :                KB mirror reflectivity parameters.
-    max_match_px : float or list of float
-                                  Pixel tolerance(s) for spot matching.  A
-                                  single float runs one fit.  A decreasing
-                                  list (e.g. `[50, 20, 5]`) runs staged
-                                  refinement: each stage warm-starts from the
-                                  previous solution, progressively tightening
-                                  the matching window to sharpen convergence.
-    top_n_obs    : int or None    Use only the brightest N observed spots.
-                                  Reduces cost per iteration; useful when the
-                                  spot list contains many weak peaks.
-    top_n_sim    : int or None    Consider only the brightest N simulated spots.
-    method       : str            `least_squares` algorithm: `'lm'` (fast,
-                                  unconstrained Levenberg–Marquardt) or `'trf'`
-                                  (trust-region reflective, more robust for large
-                                  initial misalignments).
-    ftol, xtol, gtol : float      Convergence tolerances forwarded to
-                                  `least_squares`.
-    max_nfev     : int            Maximum number of residual evaluations.
-    z_scan_step_deg : float or None
-                                  When not `None`, perform a coarse grid
-                                  search over in-plane rotations before the
-                                  local refinement.  The starting orientation
-                                  `U0` is rotated around `z_axis` in steps
-                                  of `z_scan_step_deg` degrees from 0° to
-                                  360°.  The candidate with the lowest residual
-                                  cost is used as the starting point for
-                                  `least_squares`.  Useful for non-cubic
-                                  crystals where Euler-angle initialisation may
-                                  land in the wrong basin.  Typical values:
-                                  10–30° for a fast scan, 2–5° for a fine one.
-    z_axis       : (3,) array or None
-                                  Unit vector (in the LaueTools lab frame) to
-                                  rotate around during the scan.  Defaults to
-                                  the lab Z axis `[0, 0, 1]` (vertical).
-                                  Pass the crystal c-axis direction (in the lab
-                                  frame) for a structure-aware scan.
-    verbose      : bool           Print a one-line summary after convergence.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`,
+            sorted by descending intensity.  Pass
+            `peaklist[:, :2]` directly from
+            :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+        U0 ((3, 3)): Starting orientation matrix (LT frame,
+            x-axis // beam direction).
+        E_min_eV (float): Low-energy cut-off of the white beam (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str            Spectral model): `'bending_magnet'` or
+            `'undulator'`.
+        source_kwargs: dict or None   Extra kwargs forwarded to the spectral function.
+        f2_thresh (float): Minimum squared structure factor |F|² to
+            include a reflection.
+        kb_params (KB mirror reflectivity parameters.):
+        max_match_px (float or list of float): Pixel tolerance(s) for spot matching.  A
+            single float runs one fit.  A decreasing
+            list (e.g. `[50, 20, 5]`) runs staged
+            refinement: each stage warm-starts from the
+            previous solution, progressively tightening
+            the matching window to sharpen convergence.
+        top_n_obs (int or None): Use only the brightest N observed spots.
+            Reduces cost per iteration; useful when the
+            spot list contains many weak peaks.
+        top_n_sim (int or None): Consider only the brightest N simulated spots.
+        method (str): `least_squares` algorithm: `'lm'` (fast,
+            unconstrained Levenberg–Marquardt) or `'trf'`
+            (trust-region reflective, more robust for large
+            initial misalignments).
+        ftol, xtol, gtol (float): Convergence tolerances forwarded to
+            `least_squares`.
+        max_nfev (int): Maximum number of residual evaluations.
+        z_scan_step_deg (float or None): When not `None`, perform a coarse grid
+            search over in-plane rotations before the
+            local refinement.  The starting orientation
+            `U0` is rotated around `z_axis` in steps
+            of `z_scan_step_deg` degrees from 0° to
+            360°.  The candidate with the lowest residual
+            cost is used as the starting point for
+            `least_squares`.  Useful for non-cubic
+            crystals where Euler-angle initialisation may
+            land in the wrong basin.  Typical values:
+            10–30° for a fast scan, 2–5° for a fine one.
+        z_axis ((3,) array or None): Unit vector (in the LaueTools lab frame) to
+            rotate around during the scan.  Defaults to
+            the lab Z axis `[0, 0, 1]` (vertical).
+            Pass the crystal c-axis direction (in the lab
+            frame) for a structure-aware scan.
+        verbose (bool): Print a one-line summary after convergence.
 
     Returns:
-    OrientationFitResult
-        Call `str(result)` for a one-line summary.  Apply the refined
-        orientation with::
+        OrientationFitResult
+            Call `str(result)` for a one-line summary.  Apply the refined
+            orientation with::
 
             spots = simulate_laue(crystal, result.U, camera, ...)
 """
@@ -1574,39 +1540,39 @@ def fit_orientation_stack(
     or failure.
 
     Args:
-    stack          : LayeredCrystal   Layered structure to fit.  Layer U
-                                      matrices are used as starting orientations
-                                      and optionally updated after convergence.
-    camera         : Camera           Detector geometry.
-    obs_xy         : (N_obs, 2)       Observed pixel positions `[xcam, ycam]`.
-    E_min_eV       : float            Low-energy cut-off (eV).
-    E_max_eV       : float            High-energy cut-off (eV).
-    source         : str              Spectral model (`'bending_magnet'` or
-                                      `'undulator'`).
-    source_kwargs  : dict or None     Extra kwargs for the spectral function.
-    f2_thresh      : float            Minimum |F|² threshold.
-    kb_params      :                  KB mirror reflectivity parameters.
-    structure_model: str              Layer combination model — `'average'`
-                                      (default) or `'incoherent'`.
-    max_match_px   : float            Pixel match radius.
-    top_n_obs      : int or None      Brightest N observed spots to use.
-    top_n_sim      : int or None      Brightest N simulated spots to consider.
-    method         : str              `least_squares` algorithm (`'lm'` or
-                                      `'trf'`).
-    ftol, xtol, gtol : float          Convergence tolerances.
-    max_nfev       : int              Maximum residual evaluations.
-    update_stack   : bool             If `True` (default), write the refined
-                                      U matrices back into `stack.all_layers`
-                                      after convergence.  Set `False` to leave
-                                      the stack unchanged and inspect the result
-                                      before committing.
-    verbose        : bool             Print a one-line summary after convergence.
+        stack (LayeredCrystal): Layered structure to fit.  Layer U
+            matrices are used as starting orientations
+            and optionally updated after convergence.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        E_min_eV (float): Low-energy cut-off (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str): Spectral model (`'bending_magnet'` or
+            `'undulator'`).
+        source_kwargs (dict or None): Extra kwargs for the spectral function.
+        f2_thresh (float): Minimum |F|² threshold.
+        kb_params (KB mirror reflectivity parameters.):
+        structure_model: str              Layer combination model — `'average'`
+            (default) or `'incoherent'`.
+        max_match_px (float): Pixel match radius.
+        top_n_obs (int or None): Brightest N observed spots to use.
+        top_n_sim (int or None): Brightest N simulated spots to consider.
+        method (str): `least_squares` algorithm (`'lm'` or
+            `'trf'`).
+        ftol, xtol, gtol (float): Convergence tolerances.
+        max_nfev (int): Maximum residual evaluations.
+        update_stack (bool): If `True` (default), write the refined
+            U matrices back into `stack.all_layers`
+            after convergence.  Set `False` to leave
+            the stack unchanged and inspect the result
+            before committing.
+        verbose (bool): Print a one-line summary after convergence.
 
     Returns:
-    StackFitResult
-        `result.R_global` is the 3×3 rotation applied to all layers.
-        `result.U_layers` lists the refined U for each layer in
-        `stack.all_layers` order.
+        StackFitResult
+            `result.R_global` is the 3×3 rotation applied to all layers.
+            `result.U_layers` lists the refined U for each layer in
+            `stack.all_layers` order.
 """
     obs_use = np.asarray(obs_xy, dtype=float)
     if top_n_obs is not None:
@@ -1742,43 +1708,42 @@ def fit_orientation_mixed(
       when the initial guess for each phase was set separately.
 
     Args:
-    phases         : list of dicts or tuples
-                     Phase descriptors in the same format as
-                     :func:`~nrxrdct.laue.simulation.simulate_mixed_phases`.
-                     Each entry must provide `'crystal'`, `'U'`, and
-                     `'volume_fraction'`.
-    camera         : Camera           Detector geometry.
-    obs_xy         : (N_obs, 2)       Observed pixel positions `[xcam, ycam]`.
-    shared         : bool             `True` → single global rotation (3 DOF).
-                                      `False` → independent rotation per phase
-                                      (3 × N_phases DOF).
-    E_min_eV       : float            Low-energy cut-off (eV).
-    E_max_eV       : float            High-energy cut-off (eV).
-    source         : str              Spectral model (`'bending_magnet'` or
-                                      `'undulator'`).
-    source_kwargs  : dict or None     Extra kwargs for the spectral function.
-    f2_thresh      : float or None    Minimum |F|² threshold.
-    kb_params      :                  KB mirror reflectivity parameters.
-    structure_model: str              Layer combination model (`'average'` or
-                                      `'incoherent'`).
-    max_match_px   : float            Pixel match radius.
-    top_n_obs      : int or None      Brightest N observed spots to use.
-    top_n_sim      : int or None      Brightest N simulated spots to consider.
-    method         : str              `least_squares` algorithm (`'lm'` or
-                                      `'trf'`).
-    ftol, xtol, gtol : float          Convergence tolerances.
-    max_nfev       : int              Maximum residual evaluations.
-    update_phases  : bool             If `True` (default), write the refined
-                                      U matrices back into the original phase
-                                      dicts (dict input only; tuple input is
-                                      not mutated).
-    verbose        : bool             Print a one-line summary after convergence.
+        phases (list of dicts or tuples): Phase descriptors in the same format as
+            :func:`~nrxrdct.laue.simulation.simulate_mixed_phases`.
+            Each entry must provide `'crystal'`, `'U'`, and
+            `'volume_fraction'`.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        shared (bool): `True` → single global rotation (3 DOF).
+            `False` → independent rotation per phase
+            (3 × N_phases DOF).
+        E_min_eV (float): Low-energy cut-off (eV).
+        E_max_eV (float): High-energy cut-off (eV).
+        source (str): Spectral model (`'bending_magnet'` or
+            `'undulator'`).
+        source_kwargs (dict or None): Extra kwargs for the spectral function.
+        f2_thresh (float or None): Minimum |F|² threshold.
+        kb_params (KB mirror reflectivity parameters.):
+        structure_model: str              Layer combination model (`'average'` or
+            `'incoherent'`).
+        max_match_px (float): Pixel match radius.
+        top_n_obs (int or None): Brightest N observed spots to use.
+        top_n_sim (int or None): Brightest N simulated spots to consider.
+        method (str): `least_squares` algorithm (`'lm'` or
+            `'trf'`).
+        ftol, xtol, gtol (float): Convergence tolerances.
+        max_nfev (int): Maximum residual evaluations.
+        update_phases (bool): If `True` (default), write the refined
+            U matrices back into the original phase
+            dicts (dict input only; tuple input is
+            not mutated).
+        verbose (bool): Print a one-line summary after convergence.
 
     Returns:
-    MixedFitResult
-        `result.U_phases[i]` is the refined orientation of phase *i*.
-        `result.rotvecs[i]`  is the corresponding rotation vector (all
-        identical in shared mode).
+        MixedFitResult
+            `result.U_phases[i]` is the refined orientation of phase *i*.
+            `result.rotvecs[i]`  is the corresponding rotation vector (all
+            identical in shared mode).
 """
     phases_work = _normalise_phases(phases)
     N_phases    = len(phases_work)
@@ -1924,29 +1889,29 @@ def fit_strain_orientation(
     d-spacings are naturally encoded in `U_eff`.
 
     Args:
-    crystal      : Crystal        xrayutilities crystal structure.
-    camera       : Camera         Detector geometry.
-    obs_xy       : (N_obs, 2)     Observed pixel positions `[xcam, ycam]`,
-                                  sorted by descending intensity.
-    U0           : (3, 3)         Starting orientation matrix (LT frame).
-    fit_strain   : tuple of str   Strain components to refine.  Any subset of
-                                  `('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')`.
-                                  Default: all six.  Pass a subset to fix
-                                  symmetry constraints, e.g.
-                                  `('e_xx', 'e_yy', 'e_zz')` for diagonal
-                                  (biaxial) strain only.
-    strain_scale : float          Internal scale for strain parameters (see
-                                  :func:`laue_strain_residuals`).  Default 1e-4.
-    E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
-    max_match_px, top_n_obs, top_n_sim, method, ftol, xtol, gtol, max_nfev,
-    geometry_only
-                   Forwarded to `least_squares` / :func:`laue_strain_residuals`.
-    verbose      : bool           Print a one-line summary after convergence.
+        crystal (Crystal): xrayutilities crystal structure.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`,
+            sorted by descending intensity.
+        U0 ((3, 3)): Starting orientation matrix (LT frame).
+        fit_strain (tuple of str): Strain components to refine.  Any subset of
+            `('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')`.
+            Default: all six.  Pass a subset to fix
+            symmetry constraints, e.g.
+            `('e_xx', 'e_yy', 'e_zz')` for diagonal
+            (biaxial) strain only.
+        strain_scale (float): Internal scale for strain parameters (see
+            :func:`laue_strain_residuals`).  Default 1e-4.
+        E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
+        max_match_px, top_n_obs, top_n_sim, method, ftol, xtol, gtol, max_nfev,
+        geometry_only
+            Forwarded to `least_squares` / :func:`laue_strain_residuals`.
+        verbose (bool): Print a one-line summary after convergence.
 
     Returns:
-    StrainFitResult
-        Call `str(result)` for a compact summary.  The refined effective
-        matrix is `result.U_eff`; the pure rotation part is `result.U`.
+        StrainFitResult
+            Call `str(result)` for a compact summary.  The refined effective
+            matrix is `result.U_eff`; the pure rotation part is `result.U`.
 
     Note:
     *Scaling*: strain values for metals are typically 10⁻⁴–10⁻³.
@@ -2152,15 +2117,15 @@ def run_orientation_local(
     """Orientation fitting on local cores, mirroring the SLURM orient worker.
 
     Args:
-    crystal     : Crystal object.
-    camera      : Camera object.
-    ub_arrays   : List of (3,3) U matrices — one per grain reference.
-    seg_dir     : Directory with `frame_{idx:05d}.h5` peaklist files.
-    ubs_dir     : Output directory; receives `frame_{idx:05d}_g{gi:02d}.npz`.
-    frame_indices : Subset of frames to process; defaults to all found in seg_dir.
+        crystal (Crystal object.):
+        camera (Camera object.):
+        ub_arrays (List of (3,3) U matrices): one per grain reference.
+        seg_dir (Directory with `frame_{idx:05d}.h5` peaklist files.):
+        ubs_dir (Output directory; receives `frame_{idx:05d}_g{gi:02d}.npz`.):
+        frame_indices (Subset of frames to process; defaults to all found in seg_dir.):
 
     Returns:
-    n_saved : Total number of orientation files written.
+        n_saved (Total number of orientation files written.):
 """
     from .segmentation import convert_spotsfile2peaklist
     import glob
@@ -2361,16 +2326,16 @@ def run_strain_local(
     """Strain fitting on local cores, mirroring the SLURM strain worker.
 
     Args:
-    crystal     : Crystal object.
-    camera      : Camera object.
-    seg_dir     : Directory with `frame_{idx:05d}.h5` peaklist files.
-    ubs_dir     : Directory with orientation `frame_{idx:05d}_g{gi:02d}.npz` files.
-    strain_dir  : Output directory; receives `frame_{idx:05d}_g{gi:02d}.npz`.
-    n_grains    : Number of grains (grain indices 0 … n_grains-1).
-    frame_indices : Subset of frames to process; defaults to all found in seg_dir.
+        crystal (Crystal object.):
+        camera (Camera object.):
+        seg_dir (Directory with `frame_{idx:05d}.h5` peaklist files.):
+        ubs_dir (Directory with orientation `frame_{idx:05d}_g{gi:02d}.npz` files.):
+        strain_dir (Output directory; receives `frame_{idx:05d}_g{gi:02d}.npz`.):
+        n_grains (Number of grains (grain indices 0 … n_grains-1).):
+        frame_indices (Subset of frames to process; defaults to all found in seg_dir.):
 
     Returns:
-    n_saved : Total number of strain files written.
+        n_saved (Total number of strain files written.):
 """
     from .segmentation import convert_spotsfile2peaklist
     import glob
@@ -2603,18 +2568,18 @@ def run_orientation_mixed_local(
     spot list across all phases.
 
     Args:
-    crystals    : list of Crystal  One crystal per phase, in grain-index order.
-    camera      : Camera
-    ub_arrays   : list of (3,3)    Reference U matrix per phase (same order as crystals).
-    seg_dir     : str              Directory with ``frame_{idx:05d}.h5`` peaklist files.
-    mixed_dir   : str              Output directory; one ``frame_{idx:05d}.npz`` per frame
-                                   containing ``U_0``, ``U_1``, … and shared quality metrics.
-    shared      : bool             If True, one shared rotation for all phases.
-                                   If False (default), independent rotation per phase.
-    frame_indices : list or None   Subset of frames; defaults to all found in seg_dir.
+        crystals (list of Crystal): One crystal per phase, in grain-index order.
+        camera (Camera):
+        ub_arrays (list of (3,3)): Reference U matrix per phase (same order as crystals).
+        seg_dir (str): Directory with ``frame_{idx:05d}.h5`` peaklist files.
+        mixed_dir (str): Output directory; one ``frame_{idx:05d}.npz`` per frame
+            containing ``U_0``, ``U_1``, … and shared quality metrics.
+        shared (bool): If True, one shared rotation for all phases.
+            If False (default), independent rotation per phase.
+        frame_indices (list or None): Subset of frames; defaults to all found in seg_dir.
 
     Returns:
-    n_saved : int  Number of frames successfully fitted and written.
+        n_saved (int): Number of frames successfully fitted and written.
 """
     from .segmentation import convert_spotsfile2peaklist
     import glob
@@ -2833,16 +2798,16 @@ def run_strain_mixed_local(
     works unchanged.
 
     Args:
-    crystals   : list of Crystal  One crystal per phase, in grain-index order.
-    camera     : Camera
-    seg_dir    : str              Directory with ``frame_{idx:05d}.h5`` peaklist files.
-    mixed_dir  : str              Directory with mixed orientation ``frame_{idx:05d}.npz`` files.
-    strain_dir : str              Output directory for strain results.
-    n_grains   : int              Number of phases (grain indices 0 … n_grains-1).
-    frame_indices : list or None  Subset of frames; defaults to all found in mixed_dir.
+        crystals (list of Crystal): One crystal per phase, in grain-index order.
+        camera (Camera):
+        seg_dir (str): Directory with ``frame_{idx:05d}.h5`` peaklist files.
+        mixed_dir (str): Directory with mixed orientation ``frame_{idx:05d}.npz`` files.
+        strain_dir (str): Output directory for strain results.
+        n_grains (int): Number of phases (grain indices 0 … n_grains-1).
+        frame_indices (list or None): Subset of frames; defaults to all found in mixed_dir.
 
     Returns:
-    n_saved : int  Total number of per-phase strain files written.
+        n_saved (int): Total number of per-phase strain files written.
 """
     from .segmentation import convert_spotsfile2peaklist
     import glob

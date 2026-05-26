@@ -76,10 +76,10 @@ def _gnomonic(tth_deg, chi_deg):
     Zone axes appear as straight lines in this projection.
 
     Args:
-    tth_deg, chi_deg : array-like  —  2θ and χ in degrees.
+        tth_deg, chi_deg (array-like): 2θ and χ in degrees.
 
     Returns:
-    gX, gY : ndarray  —  gnomonic coordinates.
+        gX, gY (ndarray): gnomonic coordinates.
 """
     theta = np.asarray(tth_deg, float) / 2.0
     chi   = np.asarray(chi_deg, float)
@@ -146,13 +146,13 @@ class OrientationState:
     Live orientation state returned by :func:`interactive_orientation`.
 
     Attributes:
-    U        : (3, 3) ndarray  — current orientation (updates as sliders move).
-    U0       : (3, 3) ndarray  — current base orientation (updated by
-                                 "Set as U₀" button).
-    accepted : bool            — True after the "✓ Accept" button is clicked.
-    U_layers : list or None    — per-layer U matrices when a
-                                 :class:`~nrxrdct.laue.layers.LayeredCrystal`
-                                 was passed.
+        U ((3, 3) ndarray): current orientation (updates as sliders move).
+        U0 ((3, 3) ndarray): current base orientation (updated by
+            "Set as U₀" button).
+        accepted (bool): True after the "✓ Accept" button is clicked.
+        U_layers (list or None): per-layer U matrices when a
+            :class:`~nrxrdct.laue.layers.LayeredCrystal`
+            was passed.
 """
 
     def __init__(self, U0: np.ndarray, U0_layers: list | None = None):
@@ -209,29 +209,26 @@ def interactive_orientation(
     remote Jupyter-Slurm servers.
 
     Args:
-    crystal   : xrayutilities Crystal **or** LayeredCrystal
-    camera    : Camera
-    obs_xy    : (N, 2) ndarray  — observed pixel positions from segmentation.
-    U0        : (3, 3) ndarray or None  — starting orientation.
-    image     : (Nv, Nh) ndarray or None  — optional background image.
-    max_match_px : float  — pixel radius for match lines.
-    top_n_sim : int  — max simulated spots displayed.
-    rot_range_deg : float
-        Half-range of the [100] and [010] crystal-axis sliders (degrees).
-    c_rot_range_deg : float
-        Half-range of the [001] crystal-axis slider (degrees).  Defaults to
-        180° so the full azimuthal range is accessible in one drag.
-    space : `'angular'`, `'gnomonic'`, or `'detector'`
-        Coordinate frame for the main panel.  `'angular'` (default) plots
-        2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
-        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines,
-        which helps identify multiple grains.  `'detector'` plots raw pixel
-        positions.  Matching is always done in detector (pixel) space.
+        crystal (xrayutilities Crystal **or** LayeredCrystal):
+        camera (Camera):
+        obs_xy ((N, 2) ndarray): observed pixel positions from segmentation.
+        U0 ((3, 3) ndarray or None): starting orientation.
+        image ((Nv, Nh) ndarray or None): optional background image.
+        max_match_px (float): pixel radius for match lines.
+        top_n_sim (int): max simulated spots displayed.
+        rot_range_deg (float): Half-range of the [100] and [010] crystal-axis sliders (degrees).
+        c_rot_range_deg (float): Half-range of the [001] crystal-axis slider (degrees).  Defaults to
+            180° so the full azimuthal range is accessible in one drag.
+        space (`'angular'`, `'gnomonic'`, or `'detector'`): Coordinate frame for the main panel.  `'angular'` (default) plots
+            2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
+            projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines,
+            which helps identify multiple grains.  `'detector'` plots raw pixel
+            positions.  Matching is always done in detector (pixel) space.
 
     Returns:
-    OrientationState
-        `state.U`  — final orientation (pass to :func:`fit_orientation`).
-        `state.accepted` — True if "✓ Accept" was clicked.
+        OrientationState
+            `state.U`  — final orientation (pass to :func:`fit_orientation`).
+            `state.accepted` — True if "✓ Accept" was clicked.
 """
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display
@@ -950,11 +947,11 @@ class CalibrationState:
     Live calibration state returned by :func:`interactive_calibration`.
 
     Attributes:
-    camera   : Camera  — current camera (updates as sliders move).
-    camera0  : Camera  — current base camera (updated by "Set as reference").
-    U        : (3, 3) ndarray  — current orientation.
-    U0       : (3, 3) ndarray  — current base orientation.
-    accepted : bool  — True after the "✓ Accept" button is clicked.
+        camera (Camera): current camera (updates as sliders move).
+        camera0 (Camera): current base camera (updated by "Set as reference").
+        U ((3, 3) ndarray): current orientation.
+        U0 ((3, 3) ndarray): current base orientation.
+        accepted (bool): True after the "✓ Accept" button is clicked.
 """
 
     def __init__(self, camera0, U0: np.ndarray):
@@ -1020,42 +1017,29 @@ def interactive_calibration(
     and a ready-to-run :meth:`~Camera.fit_calibration` call.
 
     Args:
-    crystal : xrayutilities Crystal
-        Calibration standard crystal (not LayeredCrystal).
-    camera : Camera
-        Initial camera geometry.
-    obs_xy : (N, 2) ndarray
-        Observed spot pixel positions from segmentation.
-    U0 : (3, 3) ndarray
-        Initial crystal orientation matrix.
-    image : (Nv, Nh) ndarray or None
-        Optional background detector image (log-scaled for display).
-    max_match_px : float
-        Pixel radius for match lines and match-rate reporting.
-    top_n_sim : int
-        Maximum number of simulated spots rendered.
-    rot_range_deg : float
-        Half-range of the [100] / [010] orientation sliders (°).
-    c_rot_range_deg : float
-        Half-range of the [001] orientation slider (°).
-    dd_range : float
-        Half-range of the Δ dd slider (mm).
-    cen_range_px : float
-        Half-range of the Δ xcen / Δ ycen sliders (px).
-    angle_range_deg : float
-        Half-range of the Δ xbet / Δ xgam sliders (°).
-    space : `'angular'`, `'gnomonic'`, or `'detector'`
-        Coordinate frame for the main panel.  `'angular'` (default) plots
-        2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
-        projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines.
-        `'detector'` plots raw pixel positions.
-        Matching is always done in detector (pixel) space regardless of this flag.
+        crystal (xrayutilities Crystal): Calibration standard crystal (not LayeredCrystal).
+        camera (Camera): Initial camera geometry.
+        obs_xy ((N, 2) ndarray): Observed spot pixel positions from segmentation.
+        U0 ((3, 3) ndarray): Initial crystal orientation matrix.
+        image ((Nv, Nh) ndarray or None): Optional background detector image (log-scaled for display).
+        max_match_px (float): Pixel radius for match lines and match-rate reporting.
+        top_n_sim (int): Maximum number of simulated spots rendered.
+        rot_range_deg (float): Half-range of the [100] / [010] orientation sliders (°).
+        c_rot_range_deg (float): Half-range of the [001] orientation slider (°).
+        dd_range (float): Half-range of the Δ dd slider (mm).
+        cen_range_px (float): Half-range of the Δ xcen / Δ ycen sliders (px).
+        angle_range_deg (float): Half-range of the Δ xbet / Δ xgam sliders (°).
+        space (`'angular'`, `'gnomonic'`, or `'detector'`): Coordinate frame for the main panel.  `'angular'` (default) plots
+            2θ (x) vs χ (y) in degrees.  `'gnomonic'` plots the gnomonic
+            projection k_y/k_x vs k_z/k_x — zone axes appear as straight lines.
+            `'detector'` plots raw pixel positions.
+            Matching is always done in detector (pixel) space regardless of this flag.
 
     Returns:
-    CalibrationState
-        `state.camera`   — pass to :meth:`~Camera.fit_calibration`.
-        `state.U`        — pass to :meth:`~Camera.fit_calibration`.
-        `state.accepted` — True if "✓ Accept" was clicked.
+        CalibrationState
+            `state.camera`   — pass to :meth:`~Camera.fit_calibration`.
+            `state.U`        — pass to :meth:`~Camera.fit_calibration`.
+            `state.accepted` — True if "✓ Accept" was clicked.
 """
     import ipywidgets as ipw
     from IPython.display import display as _ipy_display

@@ -81,4 +81,14 @@ nav:
       - visualization: api/visualization.md
       - volume: api/volume.md
       - slurm_reconstruction: api/slurm_reconstruction.md
-    - laue: api/laue.md
+    - laue:
+      - camera: api/laue/camera.md
+      - crystal: api/laue/crystal.md
+      - simulation: api/laue/simulation.md
+      - layers: api/laue/layers.md
+      - segmentation: api/laue/segmentation.md
+      - fitting: api/laue/fitting.md
+      - map: api/laue/map.md
+      - beamline: api/laue/beamline.md
+      - interactive: api/laue/interactive.md
+      - plotting: api/laue/plotting.md

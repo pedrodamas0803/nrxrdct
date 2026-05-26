@@ -80,26 +80,20 @@ def segment_image(
     Segment image into a boolean mask.
 
     Args:
-    im_array : ndarray
-        2-D intensity image, or 3-D stack reduced by max(axis=0).
-    kernel_size : int
-        Side length of the square structuring element used for binary opening.
-    sigma : float
-        Gaussian smoothing applied to the binary mask before returning.
-        Set to 0 to skip. Note: smoothing is applied to the float representation
-        of the mask and then thresholded at 0.5 so the output remains boolean.
-    iterations : int
-        Number of binary-opening iterations. Each iteration with a 3×3 element
-        erodes features by ~1 pixel per side; spots smaller than roughly
-        `(2*iterations + 1)² ` pixels may be completely erased. Default 1
-        (single pass) to preserve small spots. Set to 0 to disable opening.
-    threshold : float or None
-        Intensity threshold. If None (default), the triangle auto-threshold
-        from `skimage.filters.threshold_triangle` is used.
+        im_array (ndarray): 2-D intensity image, or 3-D stack reduced by max(axis=0).
+        kernel_size (int): Side length of the square structuring element used for binary opening.
+        sigma (float): Gaussian smoothing applied to the binary mask before returning.
+            Set to 0 to skip. Note: smoothing is applied to the float representation
+            of the mask and then thresholded at 0.5 so the output remains boolean.
+        iterations (int): Number of binary-opening iterations. Each iteration with a 3×3 element
+            erodes features by ~1 pixel per side; spots smaller than roughly
+            `(2*iterations + 1)² ` pixels may be completely erased. Default 1
+            (single pass) to preserve small spots. Set to 0 to disable opening.
+        threshold (float or None): Intensity threshold. If None (default), the triangle auto-threshold
+            from `skimage.filters.threshold_triangle` is used.
 
     Returns:
-    mask : ndarray of bool
-        Boolean segmentation mask, same spatial shape as the input.
+        mask (ndarray of bool): Boolean segmentation mask, same spatial shape as the input.
 """
     if im_array.ndim != 2:
         im_array = im_array.max(axis=0)
@@ -517,34 +511,25 @@ def write_h5_spotsfile(
     stored in `spot_{ii}_{jj}` groups (jj = 1, 2, …).
 
     Args:
-    image_array : (Nv, Nh) ndarray
-        Full detector image from which ROIs are extracted.
-    regionprops : list
-        Region properties from :func:`measure_peaks`.
-    outpath : str
-        Output HDF5 file path.
-    d : int
-        Half-size of the ROI crop around each centroid (pixels).
-    overwrite : bool
-        If True, delete an existing file at *outpath* before writing.
-    max_components : int
-        Maximum number of Gaussian components tried per spot.
-    include_unfitted : bool
-        If True (default), spots whose best fit has r² < r_squared_min are
-        still written to the file in a `spot_{ii}_0` group (fallback
-        position from the weighted centroid, shape fields set to 0).
-        If False, those spots are silently skipped.  Ignored when
-        *fit_spots* is `False`.
-    r_squared_min : float
-        Minimum r² to consider a Gaussian fit acceptable (default 0.9).
-        Ignored when *fit_spots* is `False`.
-    fit_spots : bool
-        If `True` (default), attempt a 2-D Gaussian mixture fit for each
-        spot ROI.  If `False`, skip fitting entirely and write each spot
-        using the weighted centroid from *regionprops* directly; shape
-        fields are set to 0 and `r_squared` is stored as `-1` to
-        indicate that no fit was attempted.  This is much faster and
-        suitable when peak positions are all that is needed.
+        image_array ((Nv, Nh) ndarray): Full detector image from which ROIs are extracted.
+        regionprops (list): Region properties from :func:`measure_peaks`.
+        outpath (str): Output HDF5 file path.
+        d (int): Half-size of the ROI crop around each centroid (pixels).
+        overwrite (bool): If True, delete an existing file at *outpath* before writing.
+        max_components (int): Maximum number of Gaussian components tried per spot.
+        include_unfitted (bool): If True (default), spots whose best fit has r² < r_squared_min are
+            still written to the file in a `spot_{ii}_0` group (fallback
+            position from the weighted centroid, shape fields set to 0).
+            If False, those spots are silently skipped.  Ignored when
+            *fit_spots* is `False`.
+        r_squared_min (float): Minimum r² to consider a Gaussian fit acceptable (default 0.9).
+            Ignored when *fit_spots* is `False`.
+        fit_spots (bool): If `True` (default), attempt a 2-D Gaussian mixture fit for each
+            spot ROI.  If `False`, skip fitting entirely and write each spot
+            using the weighted centroid from *regionprops* directly; shape
+            fields are set to 0 and `r_squared` is stored as `-1` to
+            indicate that no fit was attempted.  This is much faster and
+            suitable when peak positions are all that is needed.
 """
     n_labels = len(regionprops)
     n_success = 0
@@ -766,21 +751,18 @@ def convert_spotsfile2peaklist(
              peak_inclination, Xdev, Ydev, peak_bkg.
 
     Args:
-    h5path : str
-        Path to the spots HDF5 file produced by the segmentation pipeline.
-    include_unfitted : bool
-        If `False` (default) only spots with r_squared >= r_squared_min are
-        returned.  If `True`, spots whose Gaussian fit did not meet the
-        threshold are also included: their pixel position is taken from the
-        weighted centroid (`yxcen`), intensity from the peak pixel value of
-        the stored sub-image, and all shape / background columns are set to 0.
-    r_squared_min : float
-        Minimum r² to consider a fit acceptable (default 0.9).  Spots stored
-        in the HDF5 file with r_squared below this value are treated as
-        unfitted regardless of how they were written.
+        h5path (str): Path to the spots HDF5 file produced by the segmentation pipeline.
+        include_unfitted (bool): If `False` (default) only spots with r_squared >= r_squared_min are
+            returned.  If `True`, spots whose Gaussian fit did not meet the
+            threshold are also included: their pixel position is taken from the
+            weighted centroid (`yxcen`), intensity from the peak pixel value of
+            the stored sub-image, and all shape / background columns are set to 0.
+        r_squared_min (float): Minimum r² to consider a fit acceptable (default 0.9).  Spots stored
+            in the HDF5 file with r_squared below this value are treated as
+            unfitted regardless of how they were written.
 
     Returns:
-    peaklist : (N, 9) ndarray  — empty (0, 9) if no spots are found.
+        peaklist ((N, 9) ndarray): empty (0, 9) if no spots are found.
 """
     peak_X = []
     peak_Y = []
@@ -890,22 +872,16 @@ def convert_spotsfiles_to_dat(
     *target_dir*, using a process pool for true parallelism.
 
     Args:
-    seg_dir : str
-        Directory containing `frame_?????.h5` spot files.
-    target_dir : str
-        Directory where `frame_?????.dat` files will be written.
-    include_unfitted : bool
-        Passed to :func:`convert_spotsfile2peaklist`.
-    r_squared_min : float
-        Passed to :func:`convert_spotsfile2peaklist`.
-    n_workers : int or None
-        Number of worker processes.  Defaults to `os.cpu_count()`.
-    overwrite : bool
-        If `False` (default), skip files that already exist in *target_dir*.
+        seg_dir (str): Directory containing `frame_?????.h5` spot files.
+        target_dir (str): Directory where `frame_?????.dat` files will be written.
+        include_unfitted (bool): Passed to :func:`convert_spotsfile2peaklist`.
+        r_squared_min (float): Passed to :func:`convert_spotsfile2peaklist`.
+        n_workers (int or None): Number of worker processes.  Defaults to `os.cpu_count()`.
+        overwrite (bool): If `False` (default), skip files that already exist in *target_dir*.
 
     Returns:
-    int
-        Number of files successfully converted.
+        int
+            Number of files successfully converted.
 """
     os.makedirs(target_dir, exist_ok=True)
 
@@ -993,24 +969,19 @@ def WTH_segmentation(
     or detector artefacts).
 
     Args:
-    image : (Nv, Nh) ndarray
-        Raw detector image (uint or float).
-    mask : (Nv, Nh) bool ndarray
-        Valid-pixel mask (`True` = active detector area).
-    disk_radius : int or list of int
-        Radius (or list of radii) of the disk structuring element in pixels.
-        When a list is given, the WTH response is computed at every radius and
-        the pixel-wise maximum is taken, analogous to multi-scale LoG.
-        Each radius should be larger than the largest spot but smaller than
-        the background correlation length.  Default `7`.
-    threshold_percentile : float
-        Percentile of the WTH response (within *mask*) used as the binary
-        threshold.  Raise to keep only the brightest spots; lower to be more
-        inclusive.  Default `99.9`.
+        image ((Nv, Nh) ndarray): Raw detector image (uint or float).
+        mask ((Nv, Nh) bool ndarray): Valid-pixel mask (`True` = active detector area).
+        disk_radius (int or list of int): Radius (or list of radii) of the disk structuring element in pixels.
+            When a list is given, the WTH response is computed at every radius and
+            the pixel-wise maximum is taken, analogous to multi-scale LoG.
+            Each radius should be larger than the largest spot but smaller than
+            the background correlation length.  Default `7`.
+        threshold_percentile (float): Percentile of the WTH response (within *mask*) used as the binary
+            threshold.  Raise to keep only the brightest spots; lower to be more
+            inclusive.  Default `99.9`.
 
     Returns:
-    mask_final : (Nv, Nh) bool ndarray
-        Binary segmentation mask (`True` = spot pixel).
+        mask_final ((Nv, Nh) bool ndarray): Binary segmentation mask (`True` = spot pixel).
 
     See Also:
     LoG_segmentation : Laplacian-of-Gaussian based segmentation.
@@ -1065,21 +1036,15 @@ def hybrid_segmentation(
     are combined with a logical OR.
 
     Args:
-    image : (Nv, Nh) ndarray
-        Raw detector image.
-    mask : (Nv, Nh) bool ndarray
-        Valid-pixel mask.
-    log_sigmas : float or list of float
-        Sigma(s) for the Laplacian-of-Gaussian filter.  Default `[2, 4, 8]`.
-    wth_disk_radius : int or list of int
-        Disk radius/radii for the white top-hat transform.  Default `[5, 7]`.
-    threshold_percentile : float
-        Detection threshold percentile applied independently to each family.
-        Default `99.9`.
+        image ((Nv, Nh) ndarray): Raw detector image.
+        mask ((Nv, Nh) bool ndarray): Valid-pixel mask.
+        log_sigmas (float or list of float): Sigma(s) for the Laplacian-of-Gaussian filter.  Default `[2, 4, 8]`.
+        wth_disk_radius (int or list of int): Disk radius/radii for the white top-hat transform.  Default `[5, 7]`.
+        threshold_percentile (float): Detection threshold percentile applied independently to each family.
+            Default `99.9`.
 
     Returns:
-    mask_final : (Nv, Nh) bool ndarray
-        Union of the LoG and WTH binary masks.
+        mask_final ((Nv, Nh) bool ndarray): Union of the LoG and WTH binary masks.
 """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -1131,27 +1096,21 @@ def clean_segmentation(
     Post-process a binary segmentation mask.
 
     Args:
-    segmented_image : (Ny, Nx) bool ndarray
-        Raw binary mask from the segmentation step.
-    detector_mask : (Ny, Nx) bool ndarray
-        Valid-pixel mask (True = active pixel).
-    intensity_image : (Ny, Nx) ndarray
-        Intensity image forwarded to `skimage.measure.regionprops`.
-    min_size, max_size : int
-        Minimum / maximum connected-component area in pixels.
-    gap_exclude : int
-        Dilation radius (pixels) around detector gaps used to exclude spots
-        that genuinely overlap a module edge or large dead region.
-    gap_closing : int
-        Closing radius (pixels) applied to *detector_mask* **before** the
-        gap-exclusion dilation.  Binary closing fills isolated bad pixels
-        (single dead pixels, small clusters) that are surrounded by valid
-        pixels, so that spots near those bad pixels are not incorrectly
-        excluded.  Set to `0` to disable.  Default `3`.
+        segmented_image ((Ny, Nx) bool ndarray): Raw binary mask from the segmentation step.
+        detector_mask ((Ny, Nx) bool ndarray): Valid-pixel mask (True = active pixel).
+        intensity_image ((Ny, Nx) ndarray): Intensity image forwarded to `skimage.measure.regionprops`.
+        min_size, max_size (int): Minimum / maximum connected-component area in pixels.
+        gap_exclude (int): Dilation radius (pixels) around detector gaps used to exclude spots
+            that genuinely overlap a module edge or large dead region.
+        gap_closing (int): Closing radius (pixels) applied to *detector_mask* **before** the
+            gap-exclusion dilation.  Binary closing fills isolated bad pixels
+            (single dead pixels, small clusters) that are surrounded by valid
+            pixels, so that spots near those bad pixels are not incorrectly
+            excluded.  Set to `0` to disable.  Default `3`.
 
     Returns:
-    final_mask : (Ny, Nx) bool ndarray
-    valid_props : list of RegionProperties
+        final_mask ((Ny, Nx) bool ndarray):
+        valid_props (list of RegionProperties):
 """
     seg = ndi.binary_fill_holes(segmented_image)
     seg = sk.morphology.remove_small_objects(seg, max_size=min_size - 1)
@@ -1321,38 +1280,24 @@ def run_segmentation_local(
     a `ProcessPoolExecutor` instead of submitting cluster jobs.
 
     Args:
-    image_stack : (N, Ny, Nx) ndarray
-        Stack of raw detector frames, already loaded into memory.
-    seg_dir : str
-        Output directory.  One `frame_{idx:05d}.h5` file is written per frame.
-    detector_mask : (Ny, Nx) bool ndarray or None
-        Valid-pixel mask (True = active pixel).  None → all pixels active.
-    method : {'LoG', 'WTH', 'HYBRID'}
-        Segmentation method passed to the corresponding function.
-    method_kwargs : dict or None
-        Extra keyword arguments forwarded to the segmentation function.
-    min_size, max_size : int
-        Minimum / maximum spot area in pixels after cleaning.
-    gap_exclude : int
-        Dilation radius (pixels) around detector gaps excluded during cleaning.
-    gap_closing : int
-        Closing radius (pixels) applied to the valid-pixel mask before the
-        gap-exclusion dilation.  Fills isolated dead pixels so spots near bad
-        pixels are not incorrectly excluded.  Default `3`.
-    bg_sigma : float
-        Sigma (pixels) for the Gaussian background estimate.
-    max_components : int
-        Maximum number of Gaussian components fitted per spot.
-    n_workers : int or None
-        Number of worker processes.  None → `os.cpu_count()`.
-    overwrite : bool
-        If False (default), skip frames whose output file already exists.
-    frame_indices : sequence of int or None
-        Subset of frame indices to process.  None → all frames.
+        image_stack ((N, Ny, Nx) ndarray): Stack of raw detector frames, already loaded into memory.
+        seg_dir (str): Output directory.  One `frame_{idx:05d}.h5` file is written per frame.
+        detector_mask ((Ny, Nx) bool ndarray or None): Valid-pixel mask (True = active pixel).  None → all pixels active.
+        method ({'LoG', 'WTH', 'HYBRID'}): Segmentation method passed to the corresponding function.
+        method_kwargs (dict or None): Extra keyword arguments forwarded to the segmentation function.
+        min_size, max_size (int): Minimum / maximum spot area in pixels after cleaning.
+        gap_exclude (int): Dilation radius (pixels) around detector gaps excluded during cleaning.
+        gap_closing (int): Closing radius (pixels) applied to the valid-pixel mask before the
+            gap-exclusion dilation.  Fills isolated dead pixels so spots near bad
+            pixels are not incorrectly excluded.  Default `3`.
+        bg_sigma (float): Sigma (pixels) for the Gaussian background estimate.
+        max_components (int): Maximum number of Gaussian components fitted per spot.
+        n_workers (int or None): Number of worker processes.  None → `os.cpu_count()`.
+        overwrite (bool): If False (default), skip frames whose output file already exists.
+        frame_indices (sequence of int or None): Subset of frame indices to process.  None → all frames.
 
     Returns:
-    out_paths : list of str
-        Paths of successfully written HDF5 files, sorted by frame index.
+        out_paths (list of str): Paths of successfully written HDF5 files, sorted by frame index.
 """
     import time
 

@@ -54,24 +54,24 @@ class CalibrationResult:
         Plot the calibration result: observed vs simulated spot positions.
 
         Args:
-        crystal      : Crystal  — calibration standard used during fitting.
-        peaklist     : (N, ≥2) array  — peak list from
-                       :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
-                       Columns 0 and 1 are used as (xcam, ycam) pixel positions.
-        image        : (Nv, Nh) array or None  — optional detector image
-                       (`'detector'` space only; ignored for `'angular'`).
-        max_match_px : float  — pixel-space match radius for spot pairing.
-        space        : `'detector'` or `'angular'`  — coordinate frame for
-                       the main panel.  `'angular'` plots 2θ (x) vs χ (y) in
-                       degrees.  Matching is always done in detector (pixel)
-                       space; the histogram shows pixel distances in detector
-                       mode and Euclidean (2θ, χ) distances in angular mode.
-        f2_thresh    : float  — minimum |F|² to include a reflection (0 = all).
-        top_n_sim    : int or None  — restrict to the N brightest simulated spots.
-        figsize      : (w, h)  — figure size in inches.
+            crystal (Crystal): calibration standard used during fitting.
+            peaklist ((N, ≥2) array): peak list from
+                :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+                Columns 0 and 1 are used as (xcam, ycam) pixel positions.
+            image ((Nv, Nh) array or None): optional detector image
+                (`'detector'` space only; ignored for `'angular'`).
+            max_match_px (float): pixel-space match radius for spot pairing.
+            space (`'detector'` or `'angular'`): coordinate frame for
+                the main panel.  `'angular'` plots 2θ (x) vs χ (y) in
+                degrees.  Matching is always done in detector (pixel)
+                space; the histogram shows pixel distances in detector
+                mode and Euclidean (2θ, χ) distances in angular mode.
+            f2_thresh (float): minimum |F|² to include a reflection (0 = all).
+            top_n_sim (int or None): restrict to the N brightest simulated spots.
+            figsize ((w, h)): figure size in inches.
 
         Returns:
-        fig, (ax_det, ax_info, ax_hist)
+            fig, (ax_det, ax_info, ax_hist)
 """
         import matplotlib.colors as mcolors
         import matplotlib.gridspec as gridspec
@@ -400,11 +400,10 @@ class Camera:
         Implements LaueTools calc_xycam() for Z>0 geometry.
 
         Args:
-        uflab_arr : (N, 3) array of unit scattered vectors in LT frame (x // beam)
+            uflab_arr ((N, 3) array of unit scattered vectors in LT frame (x // beam)):
 
         Returns:
-        xcam, ycam : (N,) arrays of pixel coordinates (float, sub-pixel precision)
-                     Returns NaN for beams that miss the detector or go backward.
+            xcam, ycam ((N,) arrays of pixel coordinates (float, sub-pixel precision)): Returns NaN for beams that miss the detector or go backward.
 """
         # Convert LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
         uf_lt = np.atleast_2d(np.array(uflab_arr, dtype=float))
@@ -443,10 +442,10 @@ class Camera:
         Implements LaueTools calc_uflab() for Z>0 geometry.
 
         Args:
-        xcam_arr, ycam_arr : array-like of pixel coordinates
+            xcam_arr, ycam_arr (array-like of pixel coordinates):
 
         Returns:
-        uflab : (N, 3) unit scattered vectors in LT frame  (x // ki)
+            uflab ((N, 3) unit scattered vectors in LT frame): (x // ki)
 """
         xcam1 = (np.asarray(xcam_arr, float) - self.xcen) * self.pixel_mm
         ycam1 = (np.asarray(ycam_arr, float) - self.ycen) * self.pixel_mm
@@ -502,15 +501,13 @@ class Camera:
         Vectorised :meth:`project` for N directions at once.
 
         Args:
-        kf_hat_arr : ndarray, shape (N, 3)
-            Unit vectors in the LT frame (x // beam).  Need not be
-            pre-normalised — they are normalised internally.
+            kf_hat_arr (ndarray, shape (N, 3)): Unit vectors in the LT frame (x // beam).  Need not be
+                pre-normalised — they are normalised internally.
 
         Returns:
-        pix : ndarray, shape (N, 2)
-            Pixel coordinates (xcam, ycam).  Rows for rays that miss the
-            detector contain NaN.
-        on_det : ndarray, shape (N,), dtype bool
+            pix (ndarray, shape (N, 2)): Pixel coordinates (xcam, ycam).  Rows for rays that miss the
+                detector contain NaN.
+            on_det (ndarray, shape (N,), dtype bool):
 """
         kf_lt = kf_hat_arr / np.linalg.norm(kf_hat_arr, axis=1, keepdims=True)
         kf = np.column_stack([-kf_lt[:, 1], kf_lt[:, 0], kf_lt[:, 2]])
@@ -617,11 +614,11 @@ class Camera:
         Build a Camera from a LaueTools calibration.
 
         Args:
-        calib : list or array  [dd, xcen, ycen, xbet, xgam]
+            calib (list or array): [dd, xcen, ycen, xbet, xgam]
                 (= CCDCalibParameters in LaueTools)
-        pixelsize : float, mm  (= xpixelsize in LaueTools dict)
-        framedim  : (Nh, Nv)   (= framedim in LaueTools dict)
-        kf_direction : str     (= kf_direction in LaueTools dict)
+            pixelsize (float, mm): (= xpixelsize in LaueTools dict)
+            framedim ((Nh, Nv)): (= framedim in LaueTools dict)
+            kf_direction (str): (= kf_direction in LaueTools dict)
 """
         dd, xcen, ycen, xbet, xgam = calib[:5]
         px = pixelsize if pixelsize is not None else PIXEL_SIZE_MM
@@ -672,20 +669,16 @@ class Camera:
             image for display.
 
         Args:
-        image : numpy.ndarray, shape (Nv, Nh)
-            Linear intensity image from :meth:`render` (`log_scale=False`).
-            All values must be ≥ 0.
-        peak_counts : float
-            Expected photon count at the brightest pixel.  Controls the
-            overall exposure level and therefore the noise level:
-            SNR ∝ √peak_counts.
-        rng : numpy.random.Generator or int or None
-            Random-number source.  Pass an integer seed for reproducibility,
-            or `None` (default) to use a fresh default RNG.
+            image (numpy.ndarray, shape (Nv, Nh)): Linear intensity image from :meth:`render` (`log_scale=False`).
+                All values must be ≥ 0.
+            peak_counts (float): Expected photon count at the brightest pixel.  Controls the
+                overall exposure level and therefore the noise level:
+                SNR ∝ √peak_counts.
+            rng (numpy.random.Generator or int or None): Random-number source.  Pass an integer seed for reproducibility,
+                or `None` (default) to use a fresh default RNG.
 
         Returns:
-        noisy : numpy.ndarray, shape (Nv, Nh), dtype float32
-            Poisson-sampled photon-count image.
+            noisy (numpy.ndarray, shape (Nv, Nh), dtype float32): Poisson-sampled photon-count image.
 
         Example:
         >>> img_linear = camera.render(spots, log_scale=False)
@@ -718,13 +711,11 @@ class Camera:
         returned in raw intensity units with no scaling applied.
 
         Args:
-        spots : list of dicts
-            Spot list from any `simulate_laue*` function.
-            Required keys: `'pix'` (xcam, ycam), `'I_raw'`.
-            The key `'tth'` (degrees) is required when *sigma_pix* is a
-            callable or a broadening result dict.
-        sigma_pix : float | callable | dict
-            Controls the Gaussian σ (pixels) for each spot:
+            spots (list of dicts): Spot list from any `simulate_laue*` function.
+                Required keys: `'pix'` (xcam, ycam), `'I_raw'`.
+                The key `'tth'` (degrees) is required when *sigma_pix* is a
+                callable or a broadening result dict.
+            sigma_pix (float | callable | dict): Controls the Gaussian σ (pixels) for each spot:
 
             * **float** *(default)*  — fixed width for every spot.
             * **callable** `f(tth_deg) → float`  — per-spot width as a
@@ -734,11 +725,9 @@ class Camera:
               :func:`~nrxrdct.laue.estimate_instrument_broadening`; the
               `'model'` key is extracted automatically.
 
-        log_scale : bool
-            Apply `log1p` compression before returning (default `False`).
-        normalize : bool
-            Divide by the image maximum after all other processing
-            (default `False`).
+            log_scale (bool): Apply `log1p` compression before returning (default `False`).
+            normalize (bool): Divide by the image maximum after all other processing
+                (default `False`).
 """
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
@@ -817,14 +806,10 @@ class Camera:
         Read a LaueTools-compatible `.det` calibration file.
 
         Args:
-        path : path-like
-            Path to the `.det` file.
-        pixelsize : float or None
-            Override the pixel size (mm) read from the file.
-        framedim : (Nh, Nv) or None
-            Override the frame dimensions read from the file.
-        kf_direction : str or None
-            Override the kf_direction read from the file.
+            path (path-like): Path to the `.det` file.
+            pixelsize (float or None): Override the pixel size (mm) read from the file.
+            framedim ((Nh, Nv) or None): Override the frame dimensions read from the file.
+            kf_direction (str or None): Override the kf_direction read from the file.
 """
         from pathlib import Path
 
@@ -882,60 +867,42 @@ class Camera:
         enforces them natively); otherwise Nelder-Mead is used.
 
         Args:
-        crystal : Crystal
-            Crystal structure of the calibration standard.
-        U : (3, 3) array
-            Initial orientation matrix.  Updated in the result if `fit_U=True`.
-        obs_xy : (N, 2) array
-            Observed spot pixel positions `[[xcam, ycam], ...]`.
-        fit_params : sequence of str
-            Camera parameters to optimise.  Any subset of
-            `{"dd", "xcen", "ycen", "xbet", "xgam"}`.
-        fit_U : bool
-            If `True`, also refine the orientation matrix via three small-angle
-            Euler rotations around lab x, y, z (degrees).
-        E_min, E_max : float
-            Energy range (eV) for the Laue simulation.
-        source : str
-            Source model passed to `simulate_laue`.
-        source_kwargs : dict or None
-            Extra kwargs for the spectrum function.
-        f2_thresh : float
-            Structure-factor threshold for HKL precomputation.
-        max_match_px : float or list of float
-            Cap distance (pixels) used in the cost function and for
-            reporting the final match rate.  Pass a list to run staged
-            refinement: the optimizer restarts from the previous result
-            at each successively tighter cap, e.g. `[30, 10, 3]`.
-        top_n_sim : int or None
-            Restrict cost evaluation to the brightest *N* simulated spots.
-        bounds : dict or None
-            Explicit parameter bounds as `{param_name: (lo, hi)}`.  Values
-            are absolute (not relative).  Keys are the same as `fit_params`
-            plus `"U_rx"`, `"U_ry"`, `"U_rz"` for orientation angles.
-            Takes priority over the convenience range parameters below.
-        dd_range : float or None
-            Maximum allowed deviation of `dd` from its starting value (mm).
-            E.g. `dd_range=5.0` → bounds `(dd0 - 5, dd0 + 5)`.
-        cen_range_px : float or None
-            Maximum allowed deviation of `xcen` / `ycen` from their
-            starting values (pixels).
-        angle_range_deg : float or None
-            Maximum allowed deviation of `xbet` / `xgam` from their
-            starting values (degrees).
-        U_range_deg : float or None
-            Maximum allowed rotation of the orientation angles `U_rx`,
-            `U_ry`, `U_rz` from zero (degrees).  Only relevant when
-            `fit_U=True`.
-        method : str or None
-            Scipy optimisation method.  Defaults to `"L-BFGS-B"` when any
-            bounds are active, `"Nelder-Mead"` otherwise.
-        options : dict or None
-            Options forwarded to `scipy.optimize.minimize`, overriding
-            defaults.
+            crystal (Crystal): Crystal structure of the calibration standard.
+            U ((3, 3) array): Initial orientation matrix.  Updated in the result if `fit_U=True`.
+            obs_xy ((N, 2) array): Observed spot pixel positions `[[xcam, ycam], ...]`.
+            fit_params (sequence of str): Camera parameters to optimise.  Any subset of
+                `{"dd", "xcen", "ycen", "xbet", "xgam"}`.
+            fit_U (bool): If `True`, also refine the orientation matrix via three small-angle
+                Euler rotations around lab x, y, z (degrees).
+            E_min, E_max (float): Energy range (eV) for the Laue simulation.
+            source (str): Source model passed to `simulate_laue`.
+            source_kwargs (dict or None): Extra kwargs for the spectrum function.
+            f2_thresh (float): Structure-factor threshold for HKL precomputation.
+            max_match_px (float or list of float): Cap distance (pixels) used in the cost function and for
+                reporting the final match rate.  Pass a list to run staged
+                refinement: the optimizer restarts from the previous result
+                at each successively tighter cap, e.g. `[30, 10, 3]`.
+            top_n_sim (int or None): Restrict cost evaluation to the brightest *N* simulated spots.
+            bounds (dict or None): Explicit parameter bounds as `{param_name: (lo, hi)}`.  Values
+                are absolute (not relative).  Keys are the same as `fit_params`
+                plus `"U_rx"`, `"U_ry"`, `"U_rz"` for orientation angles.
+                Takes priority over the convenience range parameters below.
+            dd_range (float or None): Maximum allowed deviation of `dd` from its starting value (mm).
+                E.g. `dd_range=5.0` → bounds `(dd0 - 5, dd0 + 5)`.
+            cen_range_px (float or None): Maximum allowed deviation of `xcen` / `ycen` from their
+                starting values (pixels).
+            angle_range_deg (float or None): Maximum allowed deviation of `xbet` / `xgam` from their
+                starting values (degrees).
+            U_range_deg (float or None): Maximum allowed rotation of the orientation angles `U_rx`,
+                `U_ry`, `U_rz` from zero (degrees).  Only relevant when
+                `fit_U=True`.
+            method (str or None): Scipy optimisation method.  Defaults to `"L-BFGS-B"` when any
+                bounds are active, `"Nelder-Mead"` otherwise.
+            options (dict or None): Options forwarded to `scipy.optimize.minimize`, overriding
+                defaults.
 
         Returns:
-        CalibrationResult
+            CalibrationResult
 """
         from scipy.optimize import minimize
         from scipy.spatial import cKDTree
@@ -1188,67 +1155,44 @@ class Camera:
             between small geometry shifts and orientation corrections.
 
         Args:
-        crystal : Crystal
-            Calibration standard.
-        U : (3, 3) array
-            Initial orientation matrix.
-        obs_xy : (N, 2) array
-            Observed spot pixel positions.
+            crystal (Crystal): Calibration standard.
+            U ((3, 3) array): Initial orientation matrix.
+            obs_xy ((N, 2) array): Observed spot pixel positions.
 
-        phaseA_params : sequence of str
-            Camera parameters to optimise in Phase A.
-            Default: all five geometry parameters.
-        phaseA_fit_U : bool
-            Allow a small orientation correction in Phase A.  Default False.
-        phaseA_dd_range : float
-            Phase A bound on `dd` (mm, ± from starting value).
-        phaseA_cen_range_px : float
-            Phase A bound on `xcen` / `ycen` (pixels).
-        phaseA_angle_range_deg : float
-            Phase A bound on `xbet` / `xgam` (degrees).
-        phaseA_U_range_deg : float
-            Phase A bound on orientation angles (degrees), only used when
-            `phaseA_fit_U=True`.
-        phaseA_options : dict or None
-            Extra options for the Phase A optimizer.
+            phaseA_params (sequence of str): Camera parameters to optimise in Phase A.
+                Default: all five geometry parameters.
+            phaseA_fit_U (bool): Allow a small orientation correction in Phase A.  Default False.
+            phaseA_dd_range (float): Phase A bound on `dd` (mm, ± from starting value).
+            phaseA_cen_range_px (float): Phase A bound on `xcen` / `ycen` (pixels).
+            phaseA_angle_range_deg (float): Phase A bound on `xbet` / `xgam` (degrees).
+            phaseA_U_range_deg (float): Phase A bound on orientation angles (degrees), only used when
+                `phaseA_fit_U=True`.
+            phaseA_options (dict or None): Extra options for the Phase A optimizer.
 
-        phaseB_params : sequence of str
-            Camera parameters to optimise in Phase B.  Default: none
-            (geometry frozen).
-        phaseB_fit_U : bool
-            Refine U in Phase B.  Default True.
-        phaseB_U_range_deg : float
-            Phase B bound on orientation angles (degrees).
-        phaseB_options : dict or None
-            Extra options for the Phase B optimizer.
+            phaseB_params (sequence of str): Camera parameters to optimise in Phase B.  Default: none
+                (geometry frozen).
+            phaseB_fit_U (bool): Refine U in Phase B.  Default True.
+            phaseB_U_range_deg (float): Phase B bound on orientation angles (degrees).
+            phaseB_options (dict or None): Extra options for the Phase B optimizer.
 
-        phaseC_params : sequence of str
-            Camera parameters to optimise in Phase C.  Default: all five.
-        phaseC_fit_U : bool
-            Refine U in Phase C.  Default True.
-        phaseC_dd_range : float
-            Phase C bound on `dd` (mm).
-        phaseC_cen_range_px : float
-            Phase C bound on `xcen` / `ycen` (pixels).
-        phaseC_angle_range_deg : float
-            Phase C bound on `xbet` / `xgam` (degrees).
-        phaseC_U_range_deg : float
-            Phase C bound on orientation angles (degrees).
-        phaseC_options : dict or None
-            Extra options for the Phase C optimizer.
+            phaseC_params (sequence of str): Camera parameters to optimise in Phase C.  Default: all five.
+            phaseC_fit_U (bool): Refine U in Phase C.  Default True.
+            phaseC_dd_range (float): Phase C bound on `dd` (mm).
+            phaseC_cen_range_px (float): Phase C bound on `xcen` / `ycen` (pixels).
+            phaseC_angle_range_deg (float): Phase C bound on `xbet` / `xgam` (degrees).
+            phaseC_U_range_deg (float): Phase C bound on orientation angles (degrees).
+            phaseC_options (dict or None): Extra options for the Phase C optimizer.
 
-        E_min, E_max : float
-            Energy range (eV) shared by all phases.  The allowed-HKL
-            sphere cutoff is derived automatically from `E_max`.
-        source, source_kwargs, f2_thresh, max_match_px, top_n_sim
-            Forwarded unchanged to each :meth:`fit_calibration` call.
-        verbose : bool
-            Print a one-line summary after each phase.
+            E_min, E_max (float): Energy range (eV) shared by all phases.  The allowed-HKL
+                sphere cutoff is derived automatically from `E_max`.
+            source, source_kwargs, f2_thresh, max_match_px, top_n_sim
+                Forwarded unchanged to each :meth:`fit_calibration` call.
+            verbose (bool): Print a one-line summary after each phase.
 
         Returns:
-        CalibrationResult
-            Result of Phase C (the final global refinement).  Intermediate
-            results are available via `verbose=True` output.
+            CalibrationResult
+                Result of Phase C (the final global refinement).  Intermediate
+                results are available via `verbose=True` output.
 """
         _shared = dict(
             E_min=E_min, E_max=E_max,

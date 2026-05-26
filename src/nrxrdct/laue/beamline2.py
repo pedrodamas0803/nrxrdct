@@ -265,13 +265,13 @@ def plot_beam(beam, label="beam", position_m=None, n_bins=200,
     is added only when n_rays <= scatter_max, coloured by energy.
 
     Args:
-    beam        : S4Beam
-    label       : str
-    position_m  : float  longitudinal position for title
-    n_bins      : int    histogram bins per axis (default 200 -> 200x200 image)
-    figsize     : tuple
-    scatter_max : int    max rays for scatter overlay (default 5000)
-                         set to 0 to always use histogram only
+        beam (S4Beam):
+        label (str):
+        position_m (float): longitudinal position for title
+        n_bins (int): histogram bins per axis (default 200 -> 200x200 image)
+        figsize (tuple):
+        scatter_max (int): max rays for scatter overlay (default 5000)
+            set to 0 to always use histogram only
 """
     g = _good(beam)
     if len(g) == 0:
@@ -420,8 +420,8 @@ def beam_at_distance(beam, distance_m):
     Returns a new beam at the new plane — the input beam is not modified.
 
     Args:
-    beam       : S4Beam
-    distance_m : float  [m]  positive = forward, negative = backward
+        beam (S4Beam):
+        distance_m (float): [m]  positive = forward, negative = backward
 
     Example:
     # Beam at KB1 entrance (from SL2)
@@ -453,16 +453,16 @@ def element_slit(beam, H, V, p,
     current beam origin), then rays outside the aperture are flagged lost.
 
     Args:
-    beam  : S4Beam  incoming beam (any upstream position)
-    H     : float   slit horizontal half-opening [m]
-    V     : float   slit vertical   half-opening [m]
-    p     : float   distance to propagate before clipping [m]
+        beam (S4Beam): incoming beam (any upstream position)
+        H (float): slit horizontal half-opening [m]
+        V (float): slit vertical   half-opening [m]
+        p (float): distance to propagate before clipping [m]
             Set p=0 if the beam is already at the slit plane.
-    label : str     name for printout and plots (auto-generated if None)
-    plot  : bool    show cross-section before/after
+        label (str): name for printout and plots (auto-generated if None)
+        plot (bool): show cross-section before/after
 
     Returns:
-    S4Beam  with rays outside aperture flagged lost
+        S4Beam  with rays outside aperture flagged lost
 
     Example:
     # SL2 from M2 exit:
@@ -631,12 +631,12 @@ def source_bm32_build_pool(nrays=500_000, ncores=None, force=False):
     It is reused across multiple simulation conditions without regeneration.
 
     Args:
-    nrays  : int   pool size (default 500_000; use 5_000_000+ for production)
-    ncores : int   parallel workers (default = all CPUs)
-    force  : bool  if True, regenerate even if pool already exists
+        nrays (int): pool size (default 500_000; use 5_000_000+ for production)
+        ncores (int): parallel workers (default = all CPUs)
+        force (bool): if True, regenerate even if pool already exists
 
     Returns:
-    norm_factor : float   ph/s per ray
+        norm_factor (float): ph/s per ray
 
     Example:
     # Build pool once at start of session (or once per notebook):
@@ -715,16 +715,16 @@ def source_bm32_from_pool(nrays=None, n_chunks=None, rays_per_chunk=None,
     - A list of chunks:      n_chunks=K, rays_per_chunk=M
 
     Args:
-    nrays          : int   total rays to draw (returns single S4Beam + norm)
-    n_chunks       : int   number of chunks (returns list of S4Beam + norm)
-    rays_per_chunk : int   rays per chunk (used with n_chunks)
-    seed           : int   random seed (None = random)
+        nrays (int): total rays to draw (returns single S4Beam + norm)
+        n_chunks (int): number of chunks (returns list of S4Beam + norm)
+        rays_per_chunk (int): rays per chunk (used with n_chunks)
+        seed (int): random seed (None = random)
 
     Returns:
-    If nrays is given:
-        (S4Beam, norm_factor)
-    If n_chunks is given:
-        (list of S4Beam, norm_factor)
+        If nrays is given:
+            (S4Beam, norm_factor)
+        If n_chunks is given:
+            (list of S4Beam, norm_factor)
 
     Example:
     # Single beam
@@ -810,8 +810,8 @@ def save_pool(path):
     expensive shadow4 generation step entirely.
 
     Args:
-    path : str   output path, e.g. "bm32_pool_100M.npz"
-                 The .npz extension is added automatically if absent.
+        path (str): output path, e.g. "bm32_pool_100M.npz"
+            The .npz extension is added automatically if absent.
 
     Example:
     # First session:
@@ -871,7 +871,7 @@ def load_pool(path):
     a different source configuration).
 
     Args:
-    path : str   path to a .npz file written by save_pool()
+        path (str): path to a .npz file written by save_pool()
 
     Example:
     # Instead of source_bm32_build_pool():
@@ -935,12 +935,12 @@ def source_bm32_parallel(nrays=2_000_000, ncores=None):
     which is the main bottleneck for large ray counts.
 
     Args:
-    nrays  : int   total number of rays (split evenly across cores)
-    ncores : int   number of parallel workers (default = all CPUs)
+        nrays (int): total number of rays (split evenly across cores)
+        ncores (int): number of parallel workers (default = all CPUs)
 
     Returns:
-    beam        : S4Beam  merged beam from all workers
-    norm_factor : float   ph/s per surviving ray
+        beam (S4Beam): merged beam from all workers
+        norm_factor (float): ph/s per surviving ray
 
     Example:
     beam, norm = bm.source_bm32_parallel(nrays=2_000_000, ncores=8)
@@ -1007,10 +1007,10 @@ def merge_beams(beams):
     Only surviving rays (flag > 0) from each chunk are kept.
 
     Args:
-    beams : list of S4Beam
+        beams (list of S4Beam):
 
     Returns:
-    S4Beam  with all surviving rays concatenated
+        S4Beam  with all surviving rays concatenated
 
     Example:
     beams_m2 = bm.pmap(bm.element_m2, beams_m1)
@@ -1044,17 +1044,17 @@ def recommend_chunks(total_gb=302, ncores=40,
     number of cores, and the expected survival rate through the slit chain.
 
     Args:
-    total_gb           : float  total cluster RAM [GB]
-    ncores             : int    CPU cores available
-    survival_pct       : float  percentage of source rays surviving to the
-                                last slit. Defaults to 0.009% (0.009),
-                                measured for 100 um SL2 slits at BM32.
-                                Measure your own with a quick 1M-ray test.
-    target_after_slits : int    desired number of surviving rays after slits
+        total_gb (float): total cluster RAM [GB]
+        ncores (int): CPU cores available
+        survival_pct (float): percentage of source rays surviving to the
+            last slit. Defaults to 0.009% (0.009),
+            measured for 100 um SL2 slits at BM32.
+            Measure your own with a quick 1M-ray test.
+        target_after_slits (int): desired number of surviving rays after slits
 
     Returns:
-    dict with nrays, ncores, nchunks, rays_per_core,
-         gb_per_core_peak, expected_after_slits
+        dict with nrays, ncores, nchunks, rays_per_core,
+            gb_per_core_peak, expected_after_slits
 
     Example:
     cfg = bm.recommend_chunks(total_gb=302, ncores=40,
@@ -1119,15 +1119,15 @@ def source_bm32_chunks(nrays=10_000_000, ncores=None, nchunks=None):
         beam_final  = bm.merge_beams([b for b, _ in beams_m2])
 
     Args:
-    nrays   : int   total number of rays (split across chunks)
-    ncores  : int   number of parallel workers (default = all CPUs)
-    nchunks : int   number of chunks (default = ncores).
-                    You can set nchunks > ncores to get more chunks than cores,
-                    which allows finer-grained progress reporting.
+        nrays (int): total number of rays (split across chunks)
+        ncores (int): number of parallel workers (default = all CPUs)
+        nchunks (int): number of chunks (default = ncores).
+            You can set nchunks > ncores to get more chunks than cores,
+            which allows finer-grained progress reporting.
 
     Returns:
-    beams       : list of S4Beam  (length = nchunks)
-    norm_factor : float   ph/s per ray (same for all chunks)
+        beams (list of S4Beam): (length = nchunks)
+        norm_factor (float): ph/s per ray (same for all chunks)
 """
     import multiprocessing as mp
     import time
@@ -1197,17 +1197,17 @@ def pmap(fn, beams, *args, ncores=None, verbose=True, **kwargs):
     plot=False is set automatically on each chunk.
 
     Args:
-    fn     : callable   module-level element function (e.g. bm.element_m1)
-    beams  : list of S4Beam
-    *args  : positional args forwarded to fn after the beam
-    ncores : int        workers (default = min(len(beams), cpu_count))
-    verbose: bool       print survival summary
-    **kwargs            keyword args forwarded to fn
+        fn (callable): module-level element function (e.g. bm.element_m1)
+        beams (list of S4Beam):
+        *args (positional args forwarded to fn after the beam):
+        ncores (int): workers (default = min(len(beams), cpu_count))
+        verbose: bool       print survival summary
+        **kwargs            keyword args forwarded to fn
 
     Returns:
-    list — one result per input beam.
-      element_slit / beam_at_distance -> list of S4Beam
-      element_m1/m2/kb1/kb2           -> list of (S4Beam, footprint)
+        list — one result per input beam.
+            element_slit / beam_at_distance -> list of S4Beam
+            element_m1/m2/kb1/kb2           -> list of (S4Beam, footprint)
 
     Example:
     g = bm._geo()
@@ -1467,12 +1467,12 @@ def element_kb_sample(beam):
     a nested KB pair with independent p/q for each mirror.
 
     Args:
-    beam : S4Beam  — KB source beam at SL2 plane (from set_kb_source_from_beam)
+        beam (S4Beam): KB source beam at SL2 plane (from set_kb_source_from_beam)
 
     Returns:
-    beam_sample : S4Beam  — combined beam at sample (col1=H focused, col3=V focused)
-    fp_kb1      : S4Beam  — KB1 footprint
-    fp_kb2      : S4Beam  — KB2 footprint
+        beam_sample (S4Beam): combined beam at sample (col1=H focused, col3=V focused)
+        fp_kb1 (S4Beam): KB1 footprint
+        fp_kb2 (S4Beam): KB2 footprint
 
     Example:
     beam_kb = bm.set_kb_source_from_beam(beam_sl3, nrays=500_000)
@@ -1541,14 +1541,14 @@ def set_spectrum_from_beam(beam, n_bins=300, plot=True,
     so element_kb_source() uses it automatically.
 
     Args:
-    beam    : S4Beam  -- any beam (e.g. after M2 or after SL2)
-    n_bins  : int
-    plot    : bool
-    label   : str
-    save_fig: str
+        beam (S4Beam): -- any beam (e.g. after M2 or after SL2)
+        n_bins (int):
+        plot (bool):
+        label (str):
+        save_fig: str
 
     Returns:
-    energy_eV, flux
+        energy_eV, flux
 """
     m = _self()
     from shadow4.beam.s4_beam import A2EV
@@ -1691,17 +1691,17 @@ def set_kb_source_from_beam(beam, nrays=500_000, seed=1234,
     the real simulated beam. Also updates SPECTRUM_ENERGY_EV/FLUX.
 
     Args:
-    beam          : S4Beam  -- beam after M2, SL2, SL3 or any upstream element
-    nrays         : int     -- number of resampled rays
-    seed          : int
-    apply_sl2_clip: bool    -- clip to SL2 angular acceptance before resampling
-                               (set False if beam already passed through SL2)
-    plot          : bool
-    label         : str
-    save_fig      : str
+        beam (S4Beam): -- beam after M2, SL2, SL3 or any upstream element
+        nrays (int): -- number of resampled rays
+        seed (int):
+        apply_sl2_clip: bool    -- clip to SL2 angular acceptance before resampling
+            (set False if beam already passed through SL2)
+        plot (bool):
+        label (str):
+        save_fig (str):
 
     Returns:
-    S4Beam  ready for element_kb1()
+        S4Beam  ready for element_kb1()
 """
     m = _self(); g = _geo()
     from shadow4.beam.s4_beam import A2EV, S4Beam
@@ -1822,27 +1822,27 @@ def load_from_h5(h5file, scan="1.1"):
         {scan}/instrument/positioners/{motor_name}  -> scalar value
 
     Args:
-    h5file : str   path to the .h5 file
-    scan   : str   scan entry name, e.g. "1.1", "2.1", "3.1"
-                   (default "1.1")
+        h5file (str): path to the .h5 file
+        scan (str): scan entry name, e.g. "1.1", "2.1", "3.1"
+            (default "1.1")
 
     Returns:
-    dict   all motor values read from the file (raw, in original units)
+        dict   all motor values read from the file (raw, in original units)
 
-    **Motor mapping**
-    Slits (gap in mm, converted via bm.mm()):
-        vg1, hg1  -> SL1_V, SL1_H   (x20 multiplier — full gap = 20 * vg1/hg1)
-        vg2, hg2  -> SL2_V, SL2_H
-        vg3, hg3  -> SL3_V, SL3_H
+        **Motor mapping**
+        Slits (gap in mm, converted via bm.mm()):
+            vg1, hg1  -> SL1_V, SL1_H   (x20 multiplier — full gap = 20 * vg1/hg1)
+            vg2, hg2  -> SL2_V, SL2_H
+            vg3, hg3  -> SL3_V, SL3_H
 
-    Mirror angles (in mrad, converted via bm.mrad()):
-        ma1  -> G_M1
-        ma2  -> G_M2
-        ry1  -> G_KB1
-        rz2  -> G_KB2
+        Mirror angles (in mrad, converted via bm.mrad()):
+            ma1  -> G_M1
+            ma2  -> G_M2
+            ry1  -> G_KB1
+            rz2  -> G_KB2
 
-    Mirror height offset:
-        mh1, mh2  -> DZ_M1_M2 = mm(mh2 - mh1)
+        Mirror height offset:
+            mh1, mh2  -> DZ_M1_M2 = mm(mh2 - mh1)
 
     Example:
     import beamline2 as bm
@@ -1958,16 +1958,16 @@ def save_results(path, norm_factor,
     self-describing.  Any beam can be omitted (pass None).
 
     Args:
-    path        : str   output path, e.g. "results/run_001.npz"
-                        The .npz extension is added automatically if absent.
-    norm_factor : float ph/s per ray (from source_bm32 / source_bm32_chunks)
-    beam_*      : S4Beam or None
-    footprint_* : S4Beam or None
-    label       : str   short run label, e.g. "G_KB1=2.2mrad SL2=0.2mm"
-    notes       : str   free-text notes stored in the archive
+        path (str): output path, e.g. "results/run_001.npz"
+            The .npz extension is added automatically if absent.
+        norm_factor (float ph/s per ray (from source_bm32 / source_bm32_chunks)):
+        beam_* (S4Beam or None):
+        footprint_* (S4Beam or None):
+        label (str): short run label, e.g. "G_KB1=2.2mrad SL2=0.2mm"
+        notes (str): free-text notes stored in the archive
 
     Returns:
-    str  — actual path written
+        str  — actual path written
 
     Example:
     bm.save_results(
@@ -2109,15 +2109,15 @@ def load_results(path):
     called after load_results() use the same geometry as when the file was saved.
 
     Args:
-    path : str   path to a .npz file written by save_results()
+        path (str): path to a .npz file written by save_results()
 
     Returns:
-    dict with keys:
-        summary, label, notes, norm_factor, geometry (dict), focus_fwhm_nm,
-        beam_source, beam_sl1, beam_m1, beam_m2, beam_sl2, beam_sl3,
-        beam_kb, beam_kb1, beam_kb2,
-        footprint_m1, footprint_m2, footprint_kb1, footprint_kb2
-        (missing beams are not present in the dict)
+        dict with keys:
+            summary, label, notes, norm_factor, geometry (dict), focus_fwhm_nm,
+            beam_source, beam_sl1, beam_m1, beam_m2, beam_sl2, beam_sl3,
+            beam_kb, beam_kb1, beam_kb2,
+            footprint_m1, footprint_m2, footprint_kb1, footprint_kb2
+            (missing beams are not present in the dict)
 
     Example:
     r = bm.load_results("results/nominal.npz")
@@ -2192,14 +2192,14 @@ def run_full_kb_chain(nrays_bm=2_000_000, nrays_kb=500_000,
     Change them and re-run to evaluate their effect on flux and footprints.
 
     Args:
-    nrays_bm  : int   BM source rays for Stage 1 (recommend >= 1M)
-    nrays_kb  : int   KB source rays for Stage 2 (recommend >= 200k)
-    plot_each : bool  plot beam after every element
-    plot_final: bool  plot spectrum + footprints at sample
+        nrays_bm (int): BM source rays for Stage 1 (recommend >= 1M)
+        nrays_kb (int): KB source rays for Stage 2 (recommend >= 200k)
+        plot_each (bool): plot beam after every element
+        plot_final: bool  plot spectrum + footprints at sample
 
     Returns:
-    dict: beam_m1, beam_m2, beam_sl2, beam_sl3, beam_kb_source,
-          beam_kb1, footprint_kb1, beam_kb2, footprint_kb2, norm_factor
+        dict: beam_m1, beam_m2, beam_sl2, beam_sl3, beam_kb_source,
+            beam_kb1, footprint_kb1, beam_kb2, footprint_kb2, norm_factor
 """
     m = _self(); g = _geo()
     print("=" * 60)
@@ -2295,21 +2295,21 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
     On the tilted surface the effective V divergence becomes alpha_V / cos(theta).
 
     Args:
-    beam       : S4Beam   beam at the sample plane (output of element_kb2)
-    tilt_deg   : float    sample tilt angle [degrees] around X axis (default 40)
-    norm_factor: float    ph/s per ray (from source_bm32)
-    figsize    : tuple
-    label      : str
+        beam (S4Beam): beam at the sample plane (output of element_kb2)
+        tilt_deg (float): sample tilt angle [degrees] around X axis (default 40)
+        norm_factor: float    ph/s per ray (from source_bm32)
+        figsize (tuple):
+        label (str):
 
     Returns:
-    dict with keys:
-        fwhm_H_nm, fwhm_V_nm,
-        footprint_H_nm, footprint_V_nm,   (on tilted surface)
-        div_H_urad, div_V_urad,            (convergence half-angles at focus)
-        div_H_sample_urad, div_V_sample_urad,  (on tilted surface)
-        incidence_deg,                     (beam-to-surface angle)
-        tilt_deg
-    fig
+        dict with keys:
+            fwhm_H_nm, fwhm_V_nm,
+            footprint_H_nm, footprint_V_nm,   (on tilted surface)
+            div_H_urad, div_V_urad,            (convergence half-angles at focus)
+            div_H_sample_urad, div_V_sample_urad,  (on tilted surface)
+            incidence_deg,                     (beam-to-surface angle)
+            tilt_deg
+        fig
 
     Example:
     beam_kb2, _ = bm.element_kb2(beam_kb1)
@@ -2568,16 +2568,14 @@ def plot_beam_path(results=None, n_samples=80, figsize=(18, 7), save_fig=""):
     analytically from the BM source emittance and the optical geometry.
 
     Args:
-    results : dict (optional)
-        Output of run_full_kb_chain().  If provided, the actual beam
-        sizes from the simulation are overlaid on the analytic envelope.
-    n_samples : int
-        Number of longitudinal positions for the envelope.
-    figsize : tuple
-    save_fig : str   filename to save ('' = don't save)
+        results (dict (optional)): Output of run_full_kb_chain().  If provided, the actual beam
+            sizes from the simulation are overlaid on the analytic envelope.
+        n_samples (int): Number of longitudinal positions for the envelope.
+        figsize (tuple):
+        save_fig (str): filename to save ('' = don't save)
 
     Returns:
-    matplotlib Figure
+        matplotlib Figure
 """
     m = _self(); g = _geo()
 

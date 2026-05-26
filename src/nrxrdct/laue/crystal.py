@@ -48,42 +48,33 @@ def crystal_from_cif(cif_source, name=None, dataset=None, use_p1=False, verbose=
     Build an `xu.materials.Crystal` from a CIF file or CIF string.
 
     Args:
-    cif_source : str
-        Either a path to a `.cif` file OR the raw CIF text as a string.
-        xrayutilities automatically detects which one is provided.
+        cif_source (str): Either a path to a `.cif` file OR the raw CIF text as a string.
+            xrayutilities automatically detects which one is provided.
 
-    name : str, optional
-        Name to give the Crystal object.
-        If None the function tries (in order):
-          1. The dataset name embedded in the CIF  (`data_<name>` block)
-          2. The base filename without extension    (when a file path is given)
-          3. `'crystal'`                         (fallback)
+        name (str, optional): Name to give the Crystal object.
+            If None the function tries (in order):
+            1. The dataset name embedded in the CIF  (`data_<name>` block)
+            2. The base filename without extension    (when a file path is given)
+            3. `'crystal'`                         (fallback)
 
-    dataset : str, optional
-        Name of the data block to use when the CIF contains multiple datasets.
-        If None the first dataset that contains atomic positions is used.
+        dataset (str, optional): Name of the data block to use when the CIF contains multiple datasets.
+            If None the first dataset that contains atomic positions is used.
 
-    use_p1 : bool, optional
-        Force P1 symmetry (space group 1), expanding all atoms explicitly.
-        Useful when the CIF's symmetry operations are incomplete or non-standard.
-        Default: False.
+        use_p1 (bool, optional): Force P1 symmetry (space group 1), expanding all atoms explicitly.
+            Useful when the CIF's symmetry operations are incomplete or non-standard.
+            Default: False.
 
-    verbose : bool, optional
-        Print a summary of the parsed structure. Default: True.
+        verbose (bool, optional): Print a summary of the parsed structure. Default: True.
 
     Returns:
-    crystal : xu.materials.Crystal
-        Ready-to-use Crystal object with the correct SGLattice (space group,
-        lattice parameters, Wyckoff positions, occupancies, B-factors).
+        crystal (xu.materials.Crystal): Ready-to-use Crystal object with the correct SGLattice (space group,
+            lattice parameters, Wyckoff positions, occupancies, B-factors).
 
     Raises:
-    FileNotFoundError
-        If `cif_source` looks like a file path but the file does not exist.
-    ValueError
-        If the CIF contains no datasets with atomic positions, or if a
-        requested `dataset` name is not found in the file.
-    RuntimeError
-        If xrayutilities cannot identify the space group from the CIF data.
+        FileNotFoundError: If `cif_source` looks like a file path but the file does not exist.
+        ValueError: If the CIF contains no datasets with atomic positions, or if a
+            requested `dataset` name is not found in the file.
+        RuntimeError: If xrayutilities cannot identify the space group from the CIF data.
 
     Note:
     xrayutilities uses the Cromer-Mann parameterisation for atomic scattering
@@ -246,15 +237,12 @@ def crystals_from_cifs(cif_sources, names=None, verbose=True):
     Load multiple Crystal objects from a list of CIF files or strings.
 
     Args:
-    cif_sources : list of str
-        List of file paths or CIF text strings.
-    names : list of str, optional
-        Names for each crystal. If None, names are inferred from the CIFs.
-    verbose : bool, optional
-        Print summaries. Default True.
+        cif_sources (list of str): List of file paths or CIF text strings.
+        names (list of str, optional): Names for each crystal. If None, names are inferred from the CIFs.
+        verbose (bool, optional): Print summaries. Default True.
 
     Returns:
-    crystals : list of xu.materials.Crystal
+        crystals (list of xu.materials.Crystal):
 
     Example:
     >>> bcc, b2 = crystals_from_cifs(['bcc.cif', 'b2.cif'])

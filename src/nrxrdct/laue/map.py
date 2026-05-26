@@ -60,12 +60,11 @@ def parse_scan_title(title: str) -> dict:
         → `ny = 1`,  `nx = n`
 
     Returns:
-    dict with keys: `cmd`, `ny`, `nx`, `n_frames`,
-    and optionally `motor1`, `motor2`, `start1/2`, `stop1/2`, `n1/2`.
+        dict with keys: `cmd`, `ny`, `nx`, `n_frames`,
+        and optionally `motor1`, `motor2`, `start1/2`, `stop1/2`, `n1/2`.
 
     Raises:
-    ValueError
-        If the command is not recognised.
+        ValueError: If the command is not recognised.
 """
     tokens = title.strip().split()
     cmd = tokens[0].lower().lstrip("#").strip()
@@ -123,41 +122,32 @@ class GrainMap:
     Multi-grain orientation-fit results on a 2-D micro-Laue raster scan.
 
     Args:
-    ny, nx : int
-        Number of map rows (slow motor) and columns (fast motor).
-    h5_path : str
-        Path to the master HDF5 scan file.  Used to read motor positions.
-        May be `None` if you don't need motor coordinates.
-    processing_dir : str or None
-        Directory scanned for `UB[0-9]*.npy` grain reference matrices.
-        Defaults to the directory containing *h5_path*, or CWD if both are
-        absent.
-    entry : str
-        HDF5 entry key, e.g. `"1.1"`.
-    motor_x : str or None
-        Name of the horizontal (column) motor in the HDF5 file, e.g.
-        `"xech"`.  When given, `motors["x"]` is populated as an alias
-        so you can always use `gmap.motors["x"]` regardless of the
-        beamline-specific motor name.
-    motor_y : str or None
-        Name of the vertical (row) motor, e.g. `"yech"`.  Populates
-        `motors["y"]` as an alias.
+        ny, nx (int): Number of map rows (slow motor) and columns (fast motor).
+        h5_path (str): Path to the master HDF5 scan file.  Used to read motor positions.
+            May be `None` if you don't need motor coordinates.
+        processing_dir (str or None): Directory scanned for `UB[0-9]*.npy` grain reference matrices.
+            Defaults to the directory containing *h5_path*, or CWD if both are
+            absent.
+        entry (str): HDF5 entry key, e.g. `"1.1"`.
+        motor_x (str or None): Name of the horizontal (column) motor in the HDF5 file, e.g.
+            `"xech"`.  When given, `motors["x"]` is populated as an alias
+            so you can always use `gmap.motors["x"]` regardless of the
+            beamline-specific motor name.
+        motor_y (str or None): Name of the vertical (row) motor, e.g. `"yech"`.  Populates
+            `motors["y"]` as an alias.
 
     Attributes:
-    ny, nx : int
-    n_grains : int          Number of UB files found.
-    U_ref : (n_grains, 3, 3) ndarray
-        Reference orientation matrices loaded from `UB*.npy`.
-    U : (n_grains, ny, nx, 3, 3) ndarray
-        Fitted orientation matrices.  `NaN` where not yet fitted.
-    rms_px : (n_grains, ny, nx) ndarray
-    mean_px : (n_grains, ny, nx) ndarray
-    n_matched : (n_grains, ny, nx) int ndarray   (-1 = not fitted)
-    match_rate : (n_grains, ny, nx) ndarray
-    cost : (n_grains, ny, nx) ndarray
-    motors : dict[str, (ny, nx) ndarray]
-        Motor positions reshaped to the map grid (if h5_path is given and
-        motors are found).
+        ny, nx (int):
+        n_grains (int): Number of UB files found.
+        U_ref ((n_grains, 3, 3) ndarray): Reference orientation matrices loaded from `UB*.npy`.
+        U ((n_grains, ny, nx, 3, 3) ndarray): Fitted orientation matrices.  `NaN` where not yet fitted.
+        rms_px ((n_grains, ny, nx) ndarray):
+        mean_px ((n_grains, ny, nx) ndarray):
+        n_matched ((n_grains, ny, nx) int ndarray): (-1 = not fitted)
+        match_rate ((n_grains, ny, nx) ndarray):
+        cost ((n_grains, ny, nx) ndarray):
+        motors (dict[str, (ny, nx) ndarray]): Motor positions reshaped to the map grid (if h5_path is given and
+            motors are found).
 """
 
     # ── Construction ──────────────────────────────────────────────────────────
@@ -258,16 +248,14 @@ class GrainMap:
         position.
 
         Args:
-        *indices : int
-            One or more grain slot indices to remove.  Duplicates are ignored.
-            Pass a single iterable with `*` unpacking if you have a list::
+            *indices (int): One or more grain slot indices to remove.  Duplicates are ignored.
+                Pass a single iterable with `*` unpacking if you have a list::
 
                 gmap.drop_grain(0, 2)        # drop grains 0 and 2
                 gmap.drop_grain(*[0, 2])     # same, from a list
 
         Raises:
-        ValueError
-            If any index is out of range or if the call would drop all grains.
+            ValueError: If any index is out of range or if the call would drop all grains.
 """
         drop_set = set(indices)
         out_of_range = [i for i in drop_set if not (0 <= i < self.n_grains)]
@@ -429,8 +417,7 @@ class GrainMap:
         appears white in IPF / scalar maps.
 
         Args:
-        metric : str
-            Quality metric used to rank grains at each position.  One of:
+            metric (str): Quality metric used to rank grains at each position.  One of:
 
             * `"match_rate"`  — fraction of observed spots matched
               (higher is better).  Defined as `n_matched / n_observed`.
@@ -444,32 +431,26 @@ class GrainMap:
             * `"cost"`        — optimizer cost function value ½Σr²
               at convergence (lower is better).
 
-        min_match_rate : float
-            Minimum acceptable match rate for a grain to be considered at
-            any position.  Grain fits below this threshold are excluded
-            before scoring.  Default `0.0` (no filtering).  A value of
-            `0.2`–`0.3` is a reasonable starting point.
-        min_n_matched : int
-            Minimum number of matched spots required.  Positions with
-            fewer matches than this (including unfitted positions where
-            `n_matched = -1`) are excluded.  Default `1`.
-        max_rms_px : float
-            Maximum RMS pixel residual allowed.  Fits with larger residuals
-            are excluded.  Default `inf` (no filtering).
-        source : str
-            Carried forward into the returned `metrics` dict so that
-            :meth:`write_merge_links` can inherit the correct result
-            directory without the user having to repeat it.  One of
-            `"auto"` (default, prefers `strain/` over `ubs/`),
-            `"ubs"`, or `"strain"`.
+            min_match_rate (float): Minimum acceptable match rate for a grain to be considered at
+                any position.  Grain fits below this threshold are excluded
+                before scoring.  Default `0.0` (no filtering).  A value of
+                `0.2`–`0.3` is a reasonable starting point.
+            min_n_matched (int): Minimum number of matched spots required.  Positions with
+                fewer matches than this (including unfitted positions where
+                `n_matched = -1`) are excluded.  Default `1`.
+            max_rms_px (float): Maximum RMS pixel residual allowed.  Fits with larger residuals
+                are excluded.  Default `inf` (no filtering).
+            source (str): Carried forward into the returned `metrics` dict so that
+                :meth:`write_merge_links` can inherit the correct result
+                directory without the user having to repeat it.  One of
+                `"auto"` (default, prefers `strain/` over `ubs/`),
+                `"ubs"`, or `"strain"`.
 
         Returns:
-        best_grain : (ny, nx) int ndarray
-            Index (0-based) of the winning grain slot at each map
-            position.  `-1` where no grain passed the quality filters.
-        metrics : dict
-            Quality metrics for the winning grain at each position.
-            All arrays have shape `(ny, nx)`:
+            best_grain ((ny, nx) int ndarray): Index (0-based) of the winning grain slot at each map
+                position.  `-1` where no grain passed the quality filters.
+            metrics (dict): Quality metrics for the winning grain at each position.
+                All arrays have shape `(ny, nx)`:
 
             * `"match_rate"` — match rate of the winner.
             * `"rms_px"`     — RMS residual of the winner (pixels).
@@ -484,11 +465,10 @@ class GrainMap:
             Values are `NaN` / `-1` at positions where
             `best_grain == -1`.
 
-        **See also**
-        :meth:`apply_merge` : register the selection as a new grain slot.
-        :meth:`write_merge_links` : persist the selection as disk symlinks.
-        :meth:`reduce_to_fundamental_zone` : resolve symmetry-equivalent
-            orientation jumps before merging.
+            **See also**
+            :meth:`apply_merge` (register the selection as a new grain slot.):
+            :meth:`write_merge_links` (persist the selection as disk symlinks.):
+            :meth:`reduce_to_fundamental_zone` (resolve symmetry-equivalent): orientation jumps before merging.
 """
         _higher_better = {"match_rate", "n_matched"}
         _lower_better  = {"rms_px", "mean_px", "cost"}
@@ -577,15 +557,13 @@ class GrainMap:
         different thresholds never adds extra slots.
 
         Args:
-        best_grain : (ny, nx) int ndarray
-            First return value of :meth:`merge`.
-        metrics : dict
-            Second return value of :meth:`merge`.
+            best_grain ((ny, nx) int ndarray): First return value of :meth:`merge`.
+            metrics (dict): Second return value of :meth:`merge`.
 
         Returns:
-        int
-            Index of the merged grain slot.  Pass it directly to any method
-            that accepts a `grain` argument::
+            int
+                Index of the merged grain slot.  Pass it directly to any method
+                that accepts a `grain` argument::
 
                 best_grain, m = gmap.merge(min_match_rate=0.3)
                 gi = gmap.apply_merge(best_grain, m)
@@ -795,28 +773,22 @@ class GrainMap:
             limit of a purely rotational symmetry operation.
 
         Args:
-        grain : int
-            Grain slot to correct.  Default `0`.
-        symmetry : str
-            Crystal point-group symmetry.  One of `'cubic'`,
-            `'hexagonal'`, `'tetragonal'`, `'orthorhombic'`.
-            Default `'cubic'`.
-        reference : (3, 3) ndarray or None
-            Target orientation matrix **R**.  Every pixel will be mapped to
-            the symmetry-equivalent closest to this matrix.
-            `None` (default) uses the quaternion mean of all valid pixels.
+            grain (int): Grain slot to correct.  Default `0`.
+            symmetry (str): Crystal point-group symmetry.  One of `'cubic'`,
+                `'hexagonal'`, `'tetragonal'`, `'orthorhombic'`.
+                Default `'cubic'`.
+            reference ((3, 3) ndarray or None): Target orientation matrix **R**.  Every pixel will be mapped to
+                the symmetry-equivalent closest to this matrix.
+                `None` (default) uses the quaternion mean of all valid pixels.
 
         Returns:
-        changed : (ny, nx) bool ndarray
-            `True` at positions where a different symmetry equivalent was
-            selected (i.e. where the operator index `s* ≠ 0`).
+            changed ((ny, nx) bool ndarray): `True` at positions where a different symmetry equivalent was
+                selected (i.e. where the operator index `s* ≠ 0`).
 
-        **See also**
-        :meth:`merge` : combine fits from multiple reference grains into one
-            best-grain map.
-        :meth:`apply_merge` : register the merged selection as a new grain slot.
-        :meth:`_symmetry_ops` : returns the rotation matrices for a given
-            crystal point-group symmetry.
+            **See also**
+            :meth:`merge` (combine fits from multiple reference grains into one): best-grain map.
+            :meth:`apply_merge` (register the merged selection as a new grain slot.):
+            :meth:`_symmetry_ops` (returns the rotation matrices for a given): crystal point-group symmetry.
 
         Note:
         `reduce_to_fundamental_zone` modifies `self.U[grain]` and
@@ -905,7 +877,7 @@ class GrainMap:
         Euler angles for every map point.
 
         Returns:
-        angles : (ny, nx, 3) ndarray, degrees.  `NaN` where no fit exists.
+            angles ((ny, nx, 3) ndarray, degrees.): `NaN` where no fit exists.
 """
         angles = np.full((self.ny, self.nx, 3), np.nan)
         for iy in range(self.ny):
@@ -926,9 +898,8 @@ class GrainMap:
         Misorientation angle (degrees) relative to a reference.
 
         Args:
-        reference : (3, 3) ndarray or None
-            Reference orientation.  Defaults to `U_ref[grain]` if available,
-            otherwise the mean of all fitted points.
+            reference ((3, 3) ndarray or None): Reference orientation.  Defaults to `U_ref[grain]` if available,
+                otherwise the mean of all fitted points.
 """
         if reference is None:
             if self.n_grains > grain:
@@ -968,21 +939,17 @@ class GrainMap:
         not inflate the KAM inside grains.
 
         Args:
-        grain : int
-            Grain index (0-based).  Default `0`.
-        kernel : int
-            Half-size of the square neighbourhood in pixels.  `1` uses all
-            8 immediate neighbours (3×3 kernel excluding the centre); `2`
-            uses a 5×5 neighbourhood, and so on.  Default `1`.
-        max_misor_deg : float or None
-            Neighbour pairs with misorientation above this value are ignored.
-            Set to `None` to include all neighbours regardless of angle.
-            Default `5.0`°.
+            grain (int): Grain index (0-based).  Default `0`.
+            kernel (int): Half-size of the square neighbourhood in pixels.  `1` uses all
+                8 immediate neighbours (3×3 kernel excluding the centre); `2`
+                uses a 5×5 neighbourhood, and so on.  Default `1`.
+            max_misor_deg (float or None): Neighbour pairs with misorientation above this value are ignored.
+                Set to `None` to include all neighbours regardless of angle.
+                Default `5.0`°.
 
         Returns:
-        kam : (ny, nx) ndarray
-            KAM values in degrees.  `NaN` at unfitted points or points
-            with no valid neighbours.
+            kam ((ny, nx) ndarray): KAM values in degrees.  `NaN` at unfitted points or points
+                with no valid neighbours.
 """
         U     = self.U[grain]                                    # (ny, nx, 3, 3)
         valid = ~np.any(np.isnan(U), axis=(-2, -1))             # (ny, nx) bool
@@ -1042,15 +1009,12 @@ class GrainMap:
         Plot a scalar map for a given grain.
 
         Args:
-        quantity : str
-            One of `'match_rate'`, `'rms_px'`, `'cost'`,
-            `'n_matched'`, `'misorientation'`,
-            `'euler_phi1'`, `'euler_Phi'`, `'euler_phi2'`.
-        grain : int
-            Grain index (0-based).
-        motor_x, motor_y : str or None
-            Motor names to use as axis tick labels (from `self.motors`).
-            If `None`, integer pixel indices are shown.
+            quantity (str): One of `'match_rate'`, `'rms_px'`, `'cost'`,
+                `'n_matched'`, `'misorientation'`,
+                `'euler_phi1'`, `'euler_Phi'`, `'euler_phi2'`.
+            grain (int): Grain index (0-based).
+            motor_x, motor_y (str or None): Motor names to use as axis tick labels (from `self.motors`).
+                If `None`, integer pixel indices are shown.
 """
         # ── build data array ──────────────────────────────────────────────────
         if isinstance(quantity, np.ndarray):
@@ -1166,21 +1130,14 @@ class GrainMap:
         an existing axes.
 
         Args:
-        grains : list[int] or None
-            Grain indices to plot.  `None` plots all grains.
-        ax : Axes or None
-            If provided, only the first (or only) grain is plotted here.
-        cmap : str or None
-            Colormap.  Defaults to `'plasma_r'`.
-        vmin, vmax : float or None
-            Color scale limits.  If `share_scale` is `True` and both are
-            `None`, the limits are computed jointly from all shown grains.
-        motor_x, motor_y : str or None
-            Motor names for axis labels.
-        motor_units : dict or None
-            Units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        share_scale : bool
-            If `True` (default), all subplots share the same `vmin`/`vmax`.
+            grains (list[int] or None): Grain indices to plot.  `None` plots all grains.
+            ax (Axes or None): If provided, only the first (or only) grain is plotted here.
+            cmap (str or None): Colormap.  Defaults to `'plasma_r'`.
+            vmin, vmax (float or None): Color scale limits.  If `share_scale` is `True` and both are
+                `None`, the limits are computed jointly from all shown grains.
+            motor_x, motor_y (str or None): Motor names for axis labels.
+            motor_units (dict or None): Units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            share_scale (bool): If `True` (default), all subplots share the same `vmin`/`vmax`.
 """
         grains = list(range(self.n_grains)) if grains is None else list(grains)
         cmap   = cmap or "plasma_r"
@@ -1288,36 +1245,25 @@ class GrainMap:
         *max_misor_deg* (grain boundaries).
 
         Args:
-        grain : int
-            Grain index (0-based).  Default `0`.
-        kernel : int
-            Half-size of the square neighbourhood in pixels.  `1` → 8
-            immediate neighbours; `2` → 24 neighbours in a 5×5 window.
-            Default `1`.
-        max_misor_deg : float or None
-            Neighbour pairs with misorientation above this threshold are
-            excluded from the average.  `None` includes all neighbours.
-            Default `5.0`°.
-        ax : Axes or None
-            Existing axes to draw on.  If `None` a new figure is created.
-        cmap : str or None
-            Colormap.  Defaults to `'inferno'`.
-        vmin, vmax : float or None
-            Color scale limits.  `None` uses the data range.
-        motor_x, motor_y : str or None
-            Motor names for axis labels (from `self.motors`).
-        motor_units : dict or None
-            Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        title : str or None
-            Axes title.  Auto-generated if `None`.
-        figsize : tuple or None
-            Figure size.  Defaults to `(6, 5)`.
-        colorbar : bool
-            Whether to add a colorbar.  Default `True`.
+            grain (int): Grain index (0-based).  Default `0`.
+            kernel (int): Half-size of the square neighbourhood in pixels.  `1` → 8
+                immediate neighbours; `2` → 24 neighbours in a 5×5 window.
+                Default `1`.
+            max_misor_deg (float or None): Neighbour pairs with misorientation above this threshold are
+                excluded from the average.  `None` includes all neighbours.
+                Default `5.0`°.
+            ax (Axes or None): Existing axes to draw on.  If `None` a new figure is created.
+            cmap (str or None): Colormap.  Defaults to `'inferno'`.
+            vmin, vmax (float or None): Color scale limits.  `None` uses the data range.
+            motor_x, motor_y (str or None): Motor names for axis labels (from `self.motors`).
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            title (str or None): Axes title.  Auto-generated if `None`.
+            figsize (tuple or None): Figure size.  Defaults to `(6, 5)`.
+            colorbar (bool): Whether to add a colorbar.  Default `True`.
 
         Returns:
-        fig : Figure
-        ax  : Axes
+            fig (Figure):
+            ax (Axes):
 """
         data = self.kam_map(grain, kernel=kernel, max_misor_deg=max_misor_deg)
         cmap = cmap or "inferno"
@@ -1430,13 +1376,10 @@ class GrainMap:
         Plot a single strain-tensor component for a given grain.
 
         Args:
-        component : str
-            One of `'e_xx'`, `'e_yy'`, `'e_zz'`,
-            `'e_xy'`, `'e_xz'`, `'e_yz'`.
-        grain : int
-            Grain index (0-based).
-        frame : str
-            Reference frame for the strain tensor:
+            component (str): One of `'e_xx'`, `'e_yy'`, `'e_zz'`,
+                `'e_xy'`, `'e_xz'`, `'e_yz'`.
+            grain (int): Grain index (0-based).
+            frame (str): Reference frame for the strain tensor:
 
             `'crystal'`
                 As fitted — components in the crystal coordinate system.
@@ -1446,13 +1389,10 @@ class GrainMap:
                 Lab frame further rotated by *sample_tilt_deg* about
                 *sample_tilt_axis* (default −40° about Y).
 
-        sample_tilt_deg : float
-            Tilt angle (degrees) from lab to sample frame.  Default `-40`.
-        sample_tilt_axis : str
-            Lab axis of the tilt rotation (`'x'`, `'y'`, or `'z'`).
-            Default `'y'`.
-        motor_x, motor_y : str or None
-            Motor names to use as axis tick labels.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `-40`.
+            sample_tilt_axis (str): Lab axis of the tilt rotation (`'x'`, `'y'`, or `'z'`).
+                Default `'y'`.
+            motor_x, motor_y (str or None): Motor names to use as axis tick labels.
 """
         if component not in self._STRAIN_INDICES:
             raise ValueError(
@@ -1594,16 +1534,12 @@ class GrainMap:
         stored in `self.strain_tensor[grain]`.
 
         Args:
-        crystal : Crystal or LayeredCrystal
-            Source of elastic constants.  The stiffness matrix is extracted
-            automatically (see :meth:`_extract_cij`).
-        grain : int
-            Grain index (0-based).
-        cij : (6, 6) array or None
-            Override the stiffness matrix (GPa, standard Voigt ordering
-            `[xx, yy, zz, yz, xz, xy]`).  `None` reads from *crystal*.
-        frame : str
-            Reference frame of the returned stress tensor.
+            crystal (Crystal or LayeredCrystal): Source of elastic constants.  The stiffness matrix is extracted
+                automatically (see :meth:`_extract_cij`).
+            grain (int): Grain index (0-based).
+            cij ((6, 6) array or None): Override the stiffness matrix (GPa, standard Voigt ordering
+                `[xx, yy, zz, yz, xz, xy]`).  `None` reads from *crystal*.
+            frame (str): Reference frame of the returned stress tensor.
 
             `'crystal'`
                 Components referred to the crystal axes (as fitted).
@@ -1614,9 +1550,8 @@ class GrainMap:
                 *sample_tilt_axis*.
 
         Returns:
-        stress : (ny, nx, 6) ndarray, GPa
-            Stress in code Voigt ordering `[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]`.
-            `NaN` where strain data are absent.
+            stress ((ny, nx, 6) ndarray, GPa): Stress in code Voigt ordering `[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]`.
+                `NaN` where strain data are absent.
 """
         C = self._extract_cij(crystal, cij)          # (6,6) GPa, std Voigt
         eps_code = self.strain_tensor[grain]          # (ny, nx, 3, 3)
@@ -1689,28 +1624,20 @@ class GrainMap:
         Plot a single stress-tensor component for a given grain.
 
         Args:
-        component : str
-            One of `'s_xx'`, `'s_yy'`, `'s_zz'`,
-            `'s_xy'`, `'s_xz'`, `'s_yz'`.
-        grain : int
-            Grain index (0-based).
-        crystal : Crystal or LayeredCrystal or None
-            Source of elastic constants.  Required unless *cij* is given.
-        cij : (6, 6) array or None
-            Override stiffness matrix (GPa, standard Voigt ordering).
-        frame : str
-            `'crystal'`, `'lab'`, or `'sample'`.  Default
-            `'crystal'`.
-        sample_tilt_deg : float
-            Tilt angle (°) for sample-frame rotation.  Default `-40`.
-        sample_tilt_axis : str
-            Lab axis of the tilt rotation.  Default `'y'`.
-        scale : float
-            Multiply stress values before plotting.  Default `1e3`
-            converts GPa → MPa.
-        motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
-        title, figsize, colorbar
-            Same as :meth:`plot_strain_component`.
+            component (str): One of `'s_xx'`, `'s_yy'`, `'s_zz'`,
+                `'s_xy'`, `'s_xz'`, `'s_yz'`.
+            grain (int): Grain index (0-based).
+            crystal (Crystal or LayeredCrystal or None): Source of elastic constants.  Required unless *cij* is given.
+            cij ((6, 6) array or None): Override stiffness matrix (GPa, standard Voigt ordering).
+            frame (str): `'crystal'`, `'lab'`, or `'sample'`.  Default
+                `'crystal'`.
+            sample_tilt_deg (float): Tilt angle (°) for sample-frame rotation.  Default `-40`.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
+            scale (float): Multiply stress values before plotting.  Default `1e3`
+                converts GPa → MPa.
+            motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
+            title, figsize, colorbar
+                Same as :meth:`plot_strain_component`.
 """
         if component not in self._STRESS_INDICES:
             raise ValueError(
@@ -1796,15 +1723,12 @@ class GrainMap:
         A vertical dashed line marks the mean of each distribution.
 
         Args:
-        components : list of str or None
-            Strain components to plot.  Valid values: `'e_xx'`, `'e_yy'`,
-            `'e_zz'`, `'e_xy'`, `'e_xz'`, `'e_yz'`.  `None` plots
-            all six.  Default `None`.
-        grains : list of int or None
-            Grain indices to include.  `None` uses all grains.
-            Default `None`.
-        frame : str
-            Reference frame for the strain tensor:
+            components (list of str or None): Strain components to plot.  Valid values: `'e_xx'`, `'e_yy'`,
+                `'e_zz'`, `'e_xy'`, `'e_xz'`, `'e_yz'`.  `None` plots
+                all six.  Default `None`.
+            grains (list of int or None): Grain indices to include.  `None` uses all grains.
+                Default `None`.
+            frame (str): Reference frame for the strain tensor:
 
             `'crystal'`
                 Components in the crystal coordinate system (as fitted).
@@ -1814,30 +1738,22 @@ class GrainMap:
                 Lab frame further rotated by *sample_tilt_deg* about
                 *sample_tilt_axis*.
 
-        sample_tilt_deg : float
-            Tilt angle (degrees) from lab to sample frame.  Default `-40`.
-        sample_tilt_axis : str
-            Lab axis of the tilt rotation.  Default `'y'`.
-        bins : int
-            Number of histogram bins.  Default `40`.
-        density : bool
-            If `True`, normalise each histogram to unit area.
-            Default `False`.
-        scale : float
-            Multiplicative factor applied to all strain values before
-            plotting.  The default `1e3` converts dimensionless strain to
-            millistrain (×10⁻³), giving axis values near 1 for typical
-            elastic strains.
-        alpha : float
-            Bar transparency (0–1).  Default `0.7`.
-        figsize : tuple or None
-            Figure size.  Auto-sized if `None`.
-        title : str or None
-            Overall figure suptitle.  Auto-generated if `None`.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `-40`.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
+            bins (int): Number of histogram bins.  Default `40`.
+            density (bool): If `True`, normalise each histogram to unit area.
+                Default `False`.
+            scale (float): Multiplicative factor applied to all strain values before
+                plotting.  The default `1e3` converts dimensionless strain to
+                millistrain (×10⁻³), giving axis values near 1 for typical
+                elastic strains.
+            alpha (float): Bar transparency (0–1).  Default `0.7`.
+            figsize (tuple or None): Figure size.  Auto-sized if `None`.
+            title (str or None): Overall figure suptitle.  Auto-generated if `None`.
 
         Returns:
-        fig : Figure
-        axes : ndarray of Axes  (shape matches the subplot grid)
+            fig (Figure):
+            axes (ndarray of Axes): (shape matches the subplot grid)
 """
         _all_components = list(self._STRAIN_INDICES.keys())
         components = list(components) if components is not None else _all_components
@@ -1922,12 +1838,11 @@ class GrainMap:
         Colour convention: [001] → blue, [011] → green, [111] → red.
 
         Args:
-        c : (…, 3) array
-            Crystal-frame directions.  Need not be unit vectors; NaN rows
-            produce NaN RGB output.
+            c ((…, 3) array): Crystal-frame directions.  Need not be unit vectors; NaN rows
+                produce NaN RGB output.
 
         Returns:
-        rgb : same leading shape + (3,), float in [0, 1].
+            rgb (same leading shape + (3,), float in [0, 1].):
 """
         c       = np.asarray(c, dtype=float)
         leading = c.shape[:-1]
@@ -1997,10 +1912,9 @@ class GrainMap:
         """Add the cubic IPF color-key as a small inset in *parent_ax*.
 
         Args:
-        c_mean : (3,) array or None
-            Mean crystal direction (already in the fundamental zone, i.e.
-            sorted absolute values).  If given, a marker is drawn at the
-            corresponding position in the triangle.
+            c_mean ((3,) array or None): Mean crystal direction (already in the fundamental zone, i.e.
+                sorted absolute values).  If given, a marker is drawn at the
+                corresponding position in the triangle.
 """
         try:
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -2068,10 +1982,8 @@ class GrainMap:
         colours so you can read off absolute orientations.
 
         Args:
-        t_vals, p_vals : (N,) flat arrays
-            (t, p) coordinates in [0,1]² of all valid map pixels.
-        rgb_stretched : (N, 3) float array
-            Stretched RGB for each valid pixel.
+            t_vals, p_vals ((N,) flat arrays): (t, p) coordinates in [0,1]² of all valid map pixels.
+            rgb_stretched ((N, 3) float array): Stretched RGB for each valid pixel.
 """
         try:
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -2176,48 +2088,34 @@ class GrainMap:
           *show_strain* is `True` **and** the grain has non-NaN strain data.
 
         Args:
-        grain : int
-            Grain index (0-based).  Use the index returned by
-            :meth:`apply_merge` to plot the merged result.
-        ipf_axes : list of str or None
-            Reference axes for the IPF maps.  Each entry is `'x'`,
-            `'y'`, or `'z'`.  Default `['x', 'y', 'z']`.
-        quality_metrics : list of str or None
-            Scalar maps for row 2.  Valid values: any key accepted by
-            :meth:`plot_map` (`'match_rate'`, `'rms_px'`, `'mean_px'`,
-            `'cost'`, `'n_matched'`, `'misorientation'`) plus
-            `'kam'`.  Default `['match_rate', 'rms_px', 'kam']`.
-        show_strain : bool
-            Include the strain row.  Silently skipped if no strain data are
-            present for *grain*.  Default `True`.
-        strain_components : list of str or None
-            Strain components to show.  Default: all six
-            `['e_xx', 'e_yy', 'e_zz', 'e_xy', 'e_xz', 'e_yz']`.
-        strain_frame : str
-            `'crystal'`, `'lab'`, or `'sample'`.  Default
-            `'crystal'`.
-        sample_tilt_deg : float
-            Tilt angle (°) for sample-frame strain rotation.  Default
-            `-40`.
-        sample_tilt_axis : str
-            Lab axis of the tilt rotation.  Default `'y'`.
-        symmetry : str
-            Crystal symmetry for IPF colouring.  Default `'cubic'`.
-        frame : str
-            Frame passed to :meth:`plot_ipf_map`.  Default `'lab'`.
-        motor_x, motor_y : str or None
-            Motor names for axis labels (from `self.motors`).
-        motor_units : dict or None
-            Units per motor, e.g. `{'xech': 'mm', 'yech': 'mm'}`.
-        figsize_per_panel : tuple
-            `(width, height)` in inches for each individual panel.
-            Default `(4.0, 3.5)`.
-        title : str or None
-            Overall figure title.  Auto-generated if `None`.
+            grain (int): Grain index (0-based).  Use the index returned by
+                :meth:`apply_merge` to plot the merged result.
+            ipf_axes (list of str or None): Reference axes for the IPF maps.  Each entry is `'x'`,
+                `'y'`, or `'z'`.  Default `['x', 'y', 'z']`.
+            quality_metrics (list of str or None): Scalar maps for row 2.  Valid values: any key accepted by
+                :meth:`plot_map` (`'match_rate'`, `'rms_px'`, `'mean_px'`,
+                `'cost'`, `'n_matched'`, `'misorientation'`) plus
+                `'kam'`.  Default `['match_rate', 'rms_px', 'kam']`.
+            show_strain (bool): Include the strain row.  Silently skipped if no strain data are
+                present for *grain*.  Default `True`.
+            strain_components (list of str or None): Strain components to show.  Default: all six
+                `['e_xx', 'e_yy', 'e_zz', 'e_xy', 'e_xz', 'e_yz']`.
+            strain_frame (str): `'crystal'`, `'lab'`, or `'sample'`.  Default
+                `'crystal'`.
+            sample_tilt_deg (float): Tilt angle (°) for sample-frame strain rotation.  Default
+                `-40`.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
+            symmetry (str): Crystal symmetry for IPF colouring.  Default `'cubic'`.
+            frame (str): Frame passed to :meth:`plot_ipf_map`.  Default `'lab'`.
+            motor_x, motor_y (str or None): Motor names for axis labels (from `self.motors`).
+            motor_units (dict or None): Units per motor, e.g. `{'xech': 'mm', 'yech': 'mm'}`.
+            figsize_per_panel (tuple): `(width, height)` in inches for each individual panel.
+                Default `(4.0, 3.5)`.
+            title (str or None): Overall figure title.  Auto-generated if `None`.
 
         Returns:
-        fig : Figure
-        axes : (n_rows, n_cols) ndarray of Axes
+            fig (Figure):
+            axes ((n_rows, n_cols) ndarray of Axes):
 """
         ipf_axes       = list(ipf_axes or ["x", "y", "z"])
         quality_metrics = list(quality_metrics or ["match_rate", "rms_px", "kam"])
@@ -2360,32 +2258,22 @@ class GrainMap:
         parallel to a chosen reference axis.
 
         Args:
-        axis : str or (3,) array-like
-            Reference direction in the chosen *frame*.
-            Shortcuts: `'x'`, `'y'`, `'z'`; or a custom 3-vector.
-        grain : int
-            Grain index (0-based).
-        frame : str
-            `'lab'`    — *axis* is in the lab frame.
-            `'sample'` — *axis* is in the sample frame, converted to lab
-            via the inverse of the sample tilt (see *sample_tilt_deg*).
-        sample_tilt_deg : float
-            Rotation angle (°) about *sample_tilt_axis* that maps lab → sample.
-            Default `-40`.
-        sample_tilt_axis : str
-            Lab axis of the tilt rotation.  Default `'y'`.
-        symmetry : str
-            Crystal symmetry for IPF reduction.  Currently only `'cubic'`.
-        motor_x, motor_y : str or None
-            Motor names to use as axis tick labels.
-        motor_units : dict or None
-            Optional units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-            Appended to the axis label in parentheses.
-        show_colorkey : bool
-            Overlay a small colour-key triangle in the lower-right corner.
-            Automatically disabled when *stretch* is `True`.
-        stretch : bool or str
-            Contrast enhancement mode.  Options:
+            axis (str or (3,) array-like): Reference direction in the chosen *frame*.
+                Shortcuts: `'x'`, `'y'`, `'z'`; or a custom 3-vector.
+            grain (int): Grain index (0-based).
+            frame (str): `'lab'`    — *axis* is in the lab frame.
+                `'sample'` — *axis* is in the sample frame, converted to lab
+                via the inverse of the sample tilt (see *sample_tilt_deg*).
+            sample_tilt_deg (float): Rotation angle (°) about *sample_tilt_axis* that maps lab → sample.
+                Default `-40`.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
+            symmetry (str): Crystal symmetry for IPF reduction.  Currently only `'cubic'`.
+            motor_x, motor_y (str or None): Motor names to use as axis tick labels.
+            motor_units (dict or None): Optional units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+                Appended to the axis label in parentheses.
+            show_colorkey (bool): Overlay a small colour-key triangle in the lower-right corner.
+                Automatically disabled when *stretch* is `True`.
+            stretch (bool or str): Contrast enhancement mode.  Options:
 
             `False` (default)
                 No stretching — standard IPF colour mapping.
@@ -2405,9 +2293,8 @@ class GrainMap:
             When stretching is active and *show_colorkey* is `True` the
             standard colour-key is replaced by two insets (see
             :meth:`_ipf_colorkey_inset_stretched`).
-        best_grain : (ny, nx) int ndarray or None
-            Grain-label array required for `stretch="local"`.  Positions
-            with value `-1` are treated as invalid (white).
+            best_grain ((ny, nx) int ndarray or None): Grain-label array required for `stretch="local"`.  Positions
+                with value `-1` are treated as invalid (white).
 """
         _shortcuts = {
             "x": np.array([1.0, 0.0, 0.0]),
@@ -2567,20 +2454,14 @@ class GrainMap:
         :meth:`plot_ipf_map` (cubic: [001] → blue, [011] → green, [111] → red).
 
         Args:
-        grain : int
-            Grain index (0-based).
-        frame : str
-            `'lab'`    — directions expressed in the lab frame.
-            `'sample'` — directions expressed in the sample frame (rotated
-            from lab by *sample_tilt_deg* about *sample_tilt_axis*).
-        sample_tilt_deg : float
-            Lab-to-sample rotation angle (°).  Default `-40`.
-        sample_tilt_axis : str
-            Axis of the lab-to-sample rotation.  Default `'y'`.
-        symmetry : str
-            IPF colour symmetry.  Currently only `'cubic'`.
-        s, alpha : float
-            Scatter marker size and transparency.
+            grain (int): Grain index (0-based).
+            frame (str): `'lab'`    — directions expressed in the lab frame.
+                `'sample'` — directions expressed in the sample frame (rotated
+                from lab by *sample_tilt_deg* about *sample_tilt_axis*).
+            sample_tilt_deg (float): Lab-to-sample rotation angle (°).  Default `-40`.
+            sample_tilt_axis (str): Axis of the lab-to-sample rotation.  Default `'y'`.
+            symmetry (str): IPF colour symmetry.  Currently only `'cubic'`.
+            s, alpha (float): Scatter marker size and transparency.
 """
         U = self.U[grain]   # (ny, nx, 3, 3)
 
@@ -2675,56 +2556,40 @@ class GrainMap:
           zoom level is preserved across clicks.
 
         Args:
-        crystal : Crystal or LayeredCrystal
-            Crystal structure used for spot simulation.
-        camera : Camera
-            Detector geometry.
-        base_dir : str
-            Processing directory that contains the `seg/` sub-folder
-            with segmentation HDF5 spot files.
-        h5_dataset : str or None
-            HDF5 dataset path inside `self.h5_path` for the image stack
-            (e.g. `'1.1/measurement/det'`).  Mutually exclusive with
-            *tiff_dir*; supply exactly one (or neither to skip image loading).
-        tiff_dir : str or None
-            Path to a folder of `img_<number>.tif` files.  Files are
-            sorted by their embedded number and mapped to 0-based frame
-            indices.  Mutually exclusive with *h5_dataset*.
-        grains : list of int or None
-            Grain indices to simulate.  `None` uses all grains.
-        map_quantity : str
-            Scalar quantity shown on the left panel.  One of
-            `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
-            Default `'match_rate'`.
-        map_grain : int or None
-            Grain index used to build the left-panel map.  `None` (default)
-            uses the merged grain slot when :meth:`apply_merge` has been
-            called, otherwise falls back to grain `0`.
-        motor_x, motor_y : str or None
-            Motor names for axis labels and click-to-pixel conversion.
-        motor_units : dict or None
-            Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        E_min_eV, E_max_eV : float
-            Energy range for spot simulation.  Defaults `5000` / `27000` eV.
-            The allowed-HKL sphere cutoff is derived automatically from
-            `E_max_eV`.
-        max_match_px : float
-            Match radius in pixels for drawing connection lines.
-            Default `10`.
-        top_n_sim : int or None
-            Limit the number of simulated spots shown.  `None` keeps all.
-        r_squared_min : float
-            Minimum Gaussian-fit R² for loading observed spots.  Default
-            `0.0` (show everything from the spots file).
-        include_unfitted : bool
-            Include spots stored as raw centroids (fit failed).  Default
-            `True`.
-        figsize : tuple
-            Figure size.  Default `(14, 7)`.
+            crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
+            camera (Camera): Detector geometry.
+            base_dir (str): Processing directory that contains the `seg/` sub-folder
+                with segmentation HDF5 spot files.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the image stack
+                (e.g. `'1.1/measurement/det'`).  Mutually exclusive with
+                *tiff_dir*; supply exactly one (or neither to skip image loading).
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files.  Files are
+                sorted by their embedded number and mapped to 0-based frame
+                indices.  Mutually exclusive with *h5_dataset*.
+            grains (list of int or None): Grain indices to simulate.  `None` uses all grains.
+            map_quantity (str): Scalar quantity shown on the left panel.  One of
+                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
+                Default `'match_rate'`.
+            map_grain (int or None): Grain index used to build the left-panel map.  `None` (default)
+                uses the merged grain slot when :meth:`apply_merge` has been
+                called, otherwise falls back to grain `0`.
+            motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            E_min_eV, E_max_eV (float): Energy range for spot simulation.  Defaults `5000` / `27000` eV.
+                The allowed-HKL sphere cutoff is derived automatically from
+                `E_max_eV`.
+            max_match_px (float): Match radius in pixels for drawing connection lines.
+                Default `10`.
+            top_n_sim (int or None): Limit the number of simulated spots shown.  `None` keeps all.
+            r_squared_min (float): Minimum Gaussian-fit R² for loading observed spots.  Default
+                `0.0` (show everything from the spots file).
+            include_unfitted (bool): Include spots stored as raw centroids (fit failed).  Default
+                `True`.
+            figsize (tuple): Figure size.  Default `(14, 7)`.
 
         Returns:
-        fig : Figure
-        axes : (ax_map, ax_det)
+            fig (Figure):
+            axes ((ax_map, ax_det)):
 """
         from .simulation import simulate_laue
         from .fitting import _match_spots
@@ -3040,51 +2905,33 @@ class GrainMap:
            `UB<n>.npy` file in the current directory.
 
         Args:
-        crystal : Crystal
-            xrayutilities crystal structure used for indexing and simulation.
-        camera : Camera
-            Detector geometry.
-        base_dir : str
-            Processing directory containing the `seg/` sub-folder with
-            segmentation HDF5 spot files.
-        h5_dataset : str or None
-            HDF5 dataset path inside `self.h5_path` for the image stack.
-            Mutually exclusive with *tiff_dir*.
-        tiff_dir : str or None
-            Path to a folder of `img_<number>.tif` files.  Mutually
-            exclusive with *h5_dataset*.
-        map_quantity : str
-            Scalar quantity shown on the left panel.  One of
-            `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
-        map_grain : int or None
-            Grain index used to build the left-panel map.  `None` uses
-            the merged grain slot when available, otherwise grain `0`.
-        motor_x, motor_y : str or None
-            Motor names for axis labels and click-to-pixel conversion.
-        motor_units : dict or None
-            Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        E_min_eV, E_max_eV : float
-            Energy range for spot simulation.  The allowed-HKL sphere
-            cutoff is derived automatically from `E_max_eV`.
-        angle_tol_deg : float
-            Angular tolerance for table lookup and final scoring.  Default `0.5`.
-        min_match_rate : float
-            Minimum match rate for `IndexResult.success`.  Default `0.25`.
-        n_obs_use : int
-            Number of brightest observed spots passed to the indexer.
-            Default `20`.
-        max_match_px : float
-            Pixel radius for drawing match lines.  Default `30`.
-        fit_max_match_px : float or list of float
-            Match-radius schedule passed to :func:`fit_orientation`.  A list
-            enables staged refinement (each stage tightens the window).
-            Default `[30, 10, 3]`.
-        r_squared_min : float
-            Minimum Gaussian-fit R² when loading the spot file.  Default `0`.
-        include_unfitted : bool
-            Include raw centroids (fit failed) from the spot file.
-        figsize : tuple
-            Figure size.  Default `(14, 7)`.
+            crystal (Crystal): xrayutilities crystal structure used for indexing and simulation.
+            camera (Camera): Detector geometry.
+            base_dir (str): Processing directory containing the `seg/` sub-folder with
+                segmentation HDF5 spot files.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the image stack.
+                Mutually exclusive with *tiff_dir*.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files.  Mutually
+                exclusive with *h5_dataset*.
+            map_quantity (str): Scalar quantity shown on the left panel.  One of
+                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
+            map_grain (int or None): Grain index used to build the left-panel map.  `None` uses
+                the merged grain slot when available, otherwise grain `0`.
+            motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            E_min_eV, E_max_eV (float): Energy range for spot simulation.  The allowed-HKL sphere
+                cutoff is derived automatically from `E_max_eV`.
+            angle_tol_deg (float): Angular tolerance for table lookup and final scoring.  Default `0.5`.
+            min_match_rate (float): Minimum match rate for `IndexResult.success`.  Default `0.25`.
+            n_obs_use (int): Number of brightest observed spots passed to the indexer.
+                Default `20`.
+            max_match_px (float): Pixel radius for drawing match lines.  Default `30`.
+            fit_max_match_px (float or list of float): Match-radius schedule passed to :func:`fit_orientation`.  A list
+                enables staged refinement (each stage tightens the window).
+                Default `[30, 10, 3]`.
+            r_squared_min (float): Minimum Gaussian-fit R² when loading the spot file.  Default `0`.
+            include_unfitted (bool): Include raw centroids (fit failed) from the spot file.
+            figsize (tuple): Figure size.  Default `(14, 7)`.
 """
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
@@ -3679,54 +3526,35 @@ class GrainMap:
         Right-click on the detector panel cancels a pending sim-spot selection.
 
         Args:
-        crystal : Crystal
-            xrayutilities crystal structure.
-        camera : Camera
-            Detector geometry.
-        base_dir : str
-            Processing directory containing the `seg/` sub-folder.
-        h5_dataset : str or None
-            HDF5 dataset path for the image stack.  Mutually exclusive with
-            *tiff_dir*.
-        tiff_dir : str or None
-            Path to `img_<n>.tif` files.  Mutually exclusive with
-            *h5_dataset*.
-        map_quantity : str
-            Scalar shown on the left panel.  One of `'match_rate'`,
-            `'rms_px'`, `'mean_px'`, `'cost'`.
-        map_grain : int or None
-            Grain slot for the left-panel map.  `None` uses the merged slot
-            or grain 0.
-        motor_x, motor_y : str or None
-            Motor names for axis labels and click conversion.
-        motor_units : dict or None
-            Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        E_min_eV, E_max_eV : float
-            Energy range for spot simulation.  The allowed-HKL sphere
-            cutoff is derived automatically from `E_max_eV`.
-        fit_max_match_px : float or list of float
-            Match-radius schedule for *Refine all*.  Default `[30, 10, 3]`.
-        r_squared_min : float
-            Minimum Gaussian R² when loading the spot file.  Default `0`.
-        include_unfitted : bool
-            Include centroid-only spots from the spot file.  Default `True`.
-        click_radius_px : float
-            Maximum pixel distance for a click to select a sim or obs spot.
-            Default `25`.
-        angle_tol_deg : float
-            Angular tolerance for the auto-indexer.  Default `0.5`.
-        min_match_rate : float
-            Minimum match rate for the auto-indexer to report success.
-            Default `0.25`.
-        n_obs_use : int
-            Number of brightest observed spots passed to the auto-indexer.
-            Default `20`.
-        remove_match_px : float
-            Pixel radius used to identify matched spots when *Remove spots* is
-            clicked.  Spots within this distance of any simulated spot from the
-            stored grain are removed.  Default `5`.
-        figsize : tuple
-            Figure size.  Default `(14, 7)`.
+            crystal (Crystal): xrayutilities crystal structure.
+            camera (Camera): Detector geometry.
+            base_dir (str): Processing directory containing the `seg/` sub-folder.
+            h5_dataset (str or None): HDF5 dataset path for the image stack.  Mutually exclusive with
+                *tiff_dir*.
+            tiff_dir (str or None): Path to `img_<n>.tif` files.  Mutually exclusive with
+                *h5_dataset*.
+            map_quantity (str): Scalar shown on the left panel.  One of `'match_rate'`,
+                `'rms_px'`, `'mean_px'`, `'cost'`.
+            map_grain (int or None): Grain slot for the left-panel map.  `None` uses the merged slot
+                or grain 0.
+            motor_x, motor_y (str or None): Motor names for axis labels and click conversion.
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            E_min_eV, E_max_eV (float): Energy range for spot simulation.  The allowed-HKL sphere
+                cutoff is derived automatically from `E_max_eV`.
+            fit_max_match_px (float or list of float): Match-radius schedule for *Refine all*.  Default `[30, 10, 3]`.
+            r_squared_min (float): Minimum Gaussian R² when loading the spot file.  Default `0`.
+            include_unfitted (bool): Include centroid-only spots from the spot file.  Default `True`.
+            click_radius_px (float): Maximum pixel distance for a click to select a sim or obs spot.
+                Default `25`.
+            angle_tol_deg (float): Angular tolerance for the auto-indexer.  Default `0.5`.
+            min_match_rate (float): Minimum match rate for the auto-indexer to report success.
+                Default `0.25`.
+            n_obs_use (int): Number of brightest observed spots passed to the auto-indexer.
+                Default `20`.
+            remove_match_px (float): Pixel radius used to identify matched spots when *Remove spots* is
+                clicked.  Spots within this distance of any simulated spot from the
+                stored grain are removed.  Default `5`.
+            figsize (tuple): Figure size.  Default `(14, 7)`.
 """
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
@@ -4578,20 +4406,15 @@ class GrainMap:
           vary strongly across the detector.
 
         Args:
-        base_dir : str
-            Processing directory.  Segmentation files are written to
-            `<base_dir>/seg/`.
-        detector_mask : (Nv, Nh) bool ndarray or None
-            Valid-pixel mask (`True` = active pixel).  `None` treats all
-            pixels as valid.
-        h5_dataset : str or None
-            HDF5 dataset path inside `self.h5_path` for the raw image stack.
-            Mutually exclusive with *tiff_dir*; one of the two must be given.
-        tiff_dir : str or None
-            Path to a folder of `img_<number>.tif` files sorted by frame
-            index.  Mutually exclusive with *h5_dataset*.
-        map_quantity : str
-            Scalar quantity shown on the left overview panel.  Options:
+            base_dir (str): Processing directory.  Segmentation files are written to
+                `<base_dir>/seg/`.
+            detector_mask ((Nv, Nh) bool ndarray or None): Valid-pixel mask (`True` = active pixel).  `None` treats all
+                pixels as valid.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the raw image stack.
+                Mutually exclusive with *tiff_dir*; one of the two must be given.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files sorted by frame
+                index.  Mutually exclusive with *h5_dataset*.
+            map_quantity (str): Scalar quantity shown on the left overview panel.  Options:
 
             `"match_rate"`
                 Fraction of simulated reflections matched after indexing
@@ -4608,21 +4431,17 @@ class GrainMap:
                 NaN (background colour).  The map refreshes live each time a
                 frame is saved, making it easy to track segmentation coverage
                 before running indexing.
-        map_grain : int or None
-            Grain slot index used to build the left-panel map for quantities
-            that are per-grain (`match_rate`, `rms_px`, `mean_px`,
-            `cost`).  Ignored for `n_obs`.  Defaults to the merged-grain
-            slot if one exists, otherwise grain 0.
-        motor_x, motor_y : str or None
-            Motor names looked up in `self.motors`.  When both are supplied
-            the map axes use physical motor coordinates and click-to-pixel
-            conversion is done by nearest-neighbour search; otherwise pixel
-            indices are used.
-        motor_units : dict or None
-            Physical units for axis labels, e.g. `{'pz': 'mm', 'py': 'mm'}`.
-        figsize : tuple
-            Matplotlib figure size `(width, height)` in inches.
-            Default `(14, 7)`.
+            map_grain (int or None): Grain slot index used to build the left-panel map for quantities
+                that are per-grain (`match_rate`, `rms_px`, `mean_px`,
+                `cost`).  Ignored for `n_obs`.  Defaults to the merged-grain
+                slot if one exists, otherwise grain 0.
+            motor_x, motor_y (str or None): Motor names looked up in `self.motors`.  When both are supplied
+                the map axes use physical motor coordinates and click-to-pixel
+                conversion is done by nearest-neighbour search; otherwise pixel
+                indices are used.
+            motor_units (dict or None): Physical units for axis labels, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            figsize (tuple): Matplotlib figure size `(width, height)` in inches.
+                Default `(14, 7)`.
 """
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
@@ -5190,13 +5009,11 @@ class GrainMap:
         counted directly from the HDF5 keys (slower but backwards-compatible).
 
         Args:
-        seg_dir : str
-            Directory containing `frame_NNNNN.h5` segmentation files.
+            seg_dir (str): Directory containing `frame_NNNNN.h5` segmentation files.
 
         Returns:
-        n_obs : (ny, nx) int ndarray
-            Per-pixel spot count.  Pixels with no seg file are set to `-1`.
-            The same array is stored on `self.n_obs` for subsequent use.
+            n_obs ((ny, nx) int ndarray): Per-pixel spot count.  Pixels with no seg file are set to `-1`.
+                The same array is stored on `self.n_obs` for subsequent use.
 """
         import re as _re
         n_obs = np.full((self.ny, self.nx), -1, dtype=int)
@@ -5312,18 +5129,14 @@ class GrainMap:
             One dataset per motor name, each (ny, nx).
 
         Args:
-        path : str
-            Output HDF5 file path.  Overwritten if it already exists.
-        grain : int or None
-            Grain slot to export.  `None` (default) uses the merged slot
-            set by :meth:`apply_merge`; falls back to grain 0 if no merge
-            has been performed.
-        euler_convention : str
-            Euler-angle convention passed to
-            `scipy.spatial.transform.Rotation.as_euler`.  Default
-            `"ZXZ"` (Bunge convention commonly used in EBSD).
-        compress : bool
-            Apply gzip compression to numeric datasets.  Default `True`.
+            path (str): Output HDF5 file path.  Overwritten if it already exists.
+            grain (int or None): Grain slot to export.  `None` (default) uses the merged slot
+                set by :meth:`apply_merge`; falls back to grain 0 if no merge
+                has been performed.
+            euler_convention (str): Euler-angle convention passed to
+                `scipy.spatial.transform.Rotation.as_euler`.  Default
+                `"ZXZ"` (Bunge convention commonly used in EBSD).
+            compress (bool): Apply gzip compression to numeric datasets.  Default `True`.
 """
         if grain is None:
             grain = self._merged_grain if self._merged_grain is not None else 0
@@ -5564,11 +5377,9 @@ class GrainMap:
         Cancel SLURM jobs by ID.
 
         Args:
-        job_ids : list[str | int]
-            Job IDs returned by :meth:`submit_segmentation`,
-            :meth:`submit_orientation`, or :meth:`submit_strain`.
-        dry_run : bool
-            If `True`, print the `scancel` command without executing it.
+            job_ids (list[str | int]): Job IDs returned by :meth:`submit_segmentation`,
+                :meth:`submit_orientation`, or :meth:`submit_strain`.
+            dry_run (bool): If `True`, print the `scancel` command without executing it.
 """
         if not job_ids:
             print("cancel_jobs: no job IDs provided.")
@@ -5648,40 +5459,29 @@ class GrainMap:
         5. Write results to `seg_dir/frame_{idx:05d}.h5`.
 
         Args:
-        base_dir : str
-            Root processing directory.  The sub-directories `seg/`,
-            `ubs/`, `strain/`, `slurm_logs/`, and `job_meta/` are
-            created automatically if they do not exist.
-        h5_dataset : str or None
-            HDF5 dataset path inside `self.h5_path` that holds the image
-            stack, e.g. `'1.1/measurement/det'`.  Mutually exclusive with
-            *tiff_dir*; exactly one must be supplied.
-        tiff_dir : str or None
-            Path to a directory containing one TIFF file per frame, named
-            `img_<number>.tif` (e.g. `img_1500.tif`).  Files are sorted
-            by their embedded number and mapped to 0-based frame indices in
-            that order.  Motor positions are still read from `self.h5_path`
-            as usual.  Mutually exclusive with *h5_dataset*.
-        n_jobs : int
-            Number of SLURM array jobs.  Frames are split as evenly as
-            possible across jobs.  Default `10`.
-        partition : str
-            SLURM partition name.  Default `'all'`.
-        time : str
-            Wall-clock time limit per job in `HH:MM:SS` format.
-            Default `'01:00:00'`.
-        mem : str
-            Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
-        cpus_per_task : int
-            CPU cores requested per job.  Default `1`.
-        python_bin : str
-            Python executable used in the `--wrap` command.  Default
-            `'python'`.
-        mask_path : str or None
-            Path to a `.npy` boolean array marking valid detector pixels
-            (`True` = active).  `None` treats the whole frame as valid.
-        method : str
-            Spot-detection algorithm:
+            base_dir (str): Root processing directory.  The sub-directories `seg/`,
+                `ubs/`, `strain/`, `slurm_logs/`, and `job_meta/` are
+                created automatically if they do not exist.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` that holds the image
+                stack, e.g. `'1.1/measurement/det'`.  Mutually exclusive with
+                *tiff_dir*; exactly one must be supplied.
+            tiff_dir (str or None): Path to a directory containing one TIFF file per frame, named
+                `img_<number>.tif` (e.g. `img_1500.tif`).  Files are sorted
+                by their embedded number and mapped to 0-based frame indices in
+                that order.  Motor positions are still read from `self.h5_path`
+                as usual.  Mutually exclusive with *h5_dataset*.
+            n_jobs (int): Number of SLURM array jobs.  Frames are split as evenly as
+                possible across jobs.  Default `10`.
+            partition (str): SLURM partition name.  Default `'all'`.
+            time (str): Wall-clock time limit per job in `HH:MM:SS` format.
+                Default `'01:00:00'`.
+            mem (str): Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
+            cpus_per_task (int): CPU cores requested per job.  Default `1`.
+            python_bin (str): Python executable used in the `--wrap` command.  Default
+                `'python'`.
+            mask_path (str or None): Path to a `.npy` boolean array marking valid detector pixels
+                (`True` = active).  `None` treats the whole frame as valid.
+            method (str): Spot-detection algorithm:
 
             `'LoG'`
                 Laplacian-of-Gaussian blob detector.  Good for round,
@@ -5694,66 +5494,55 @@ class GrainMap:
                 when the pattern contains both large and small spots.
 
             Default `'LoG'`.
-        method_kwargs : dict or None
-            Extra keyword arguments forwarded to the segmentation function.
-            Useful keys by method:
+            method_kwargs (dict or None): Extra keyword arguments forwarded to the segmentation function.
+                Useful keys by method:
 
             * `'LoG'`: `sigmas`, `threshold_percentile`
             * `'WTH'`: `disk_radius`, `threshold_percentile`
             * `'HYBRID'`: `log_sigmas`, `wth_disk_radius`,
               `threshold_percentile`
-        min_size : int
-            Minimum connected-component area in pixels; smaller blobs are
-            discarded.  Default `3`.
-        max_size : int
-            Maximum connected-component area in pixels; larger blobs are
-            discarded.  Default `500`.
-        gap_exclude : int
-            Width in pixels of the border region to clear before labelling
-            (removes spots cut off by the detector edge).  Default `3`.
-        gap_closing : int
-            Radius (pixels) of the disk used for binary closing of the
-            detector mask **before** the gap-exclusion dilation.  Closing
-            fills isolated dead pixels so that spots near a single bad pixel
-            are not incorrectly excluded by the gap zone.  Set to `0` to
-            disable closing (mask is used as-is).  Default `3`.
-        bg_sigma : float
-            Gaussian sigma (pixels) for FFT-based background estimation.
-            A large value (≥ several spot spacings) captures the slowly
-            varying beam profile.  The subtracted frame is used only for
-            segmentation; Gaussian fits are performed on the original
-            intensities.  Default `251`.
-        max_components : int
-            Maximum number of Gaussian components tried per spot during
-            fitting.  `1` fits a single 2-D Gaussian; higher values
-            attempt mixture models for overlapping spots.  Default `1`.
-        d : int
-            Half-size in pixels of the square ROI cropped around each spot
-            centroid for Gaussian fitting.  The crop window is
-            `(2d) × (2d)` pixels.  Increase for large or diffuse spots;
-            decrease to speed up fitting for small, sharp spots.
-            Default `10`.
-        r_squared_min : float
-            Minimum R² of the Gaussian fit for a spot to be accepted.
-            Spots below this threshold are either skipped or stored without
-            fit parameters (see *include_unfitted*).  This value is stored
-            in `seg_meta.json` and used as the default for
-            :meth:`submit_orientation` and :meth:`submit_strain` unless
-            explicitly overridden there.  Default `0.9`.
-        include_unfitted : bool
-            If `True`, spots whose best Gaussian fit has R² < *r_squared_min*
-            are still written to the HDF5 file using the raw weighted
-            centroid as position (shape parameters set to zero).  If
-            `False`, those spots are silently discarded.  Stored in
-            `seg_meta.json` and inherited by downstream workers.
-            Default `False`.
-        extra_sbatch : dict or None
-            Additional `sbatch` options passed as `--key=value` flags,
-            e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
+            min_size (int): Minimum connected-component area in pixels; smaller blobs are
+                discarded.  Default `3`.
+            max_size (int): Maximum connected-component area in pixels; larger blobs are
+                discarded.  Default `500`.
+            gap_exclude (int): Width in pixels of the border region to clear before labelling
+                (removes spots cut off by the detector edge).  Default `3`.
+            gap_closing (int): Radius (pixels) of the disk used for binary closing of the
+                detector mask **before** the gap-exclusion dilation.  Closing
+                fills isolated dead pixels so that spots near a single bad pixel
+                are not incorrectly excluded by the gap zone.  Set to `0` to
+                disable closing (mask is used as-is).  Default `3`.
+            bg_sigma (float): Gaussian sigma (pixels) for FFT-based background estimation.
+                A large value (≥ several spot spacings) captures the slowly
+                varying beam profile.  The subtracted frame is used only for
+                segmentation; Gaussian fits are performed on the original
+                intensities.  Default `251`.
+            max_components (int): Maximum number of Gaussian components tried per spot during
+                fitting.  `1` fits a single 2-D Gaussian; higher values
+                attempt mixture models for overlapping spots.  Default `1`.
+            d (int): Half-size in pixels of the square ROI cropped around each spot
+                centroid for Gaussian fitting.  The crop window is
+                `(2d) × (2d)` pixels.  Increase for large or diffuse spots;
+                decrease to speed up fitting for small, sharp spots.
+                Default `10`.
+            r_squared_min (float): Minimum R² of the Gaussian fit for a spot to be accepted.
+                Spots below this threshold are either skipped or stored without
+                fit parameters (see *include_unfitted*).  This value is stored
+                in `seg_meta.json` and used as the default for
+                :meth:`submit_orientation` and :meth:`submit_strain` unless
+                explicitly overridden there.  Default `0.9`.
+            include_unfitted (bool): If `True`, spots whose best Gaussian fit has R² < *r_squared_min*
+                are still written to the HDF5 file using the raw weighted
+                centroid as position (shape parameters set to zero).  If
+                `False`, those spots are silently discarded.  Stored in
+                `seg_meta.json` and inherited by downstream workers.
+                Default `False`.
+            extra_sbatch (dict or None): Additional `sbatch` options passed as `--key=value` flags,
+                e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
 
         Returns:
-        list of str
-            SLURM job IDs, one per submitted job.
+            list of str
+                SLURM job IDs, one per submitted job.
 """
         if h5_dataset is None and tiff_dir is None:
             raise ValueError(
@@ -5858,103 +5647,76 @@ class GrainMap:
         :meth:`collect_orientation`.
 
         Args:
-        base_dir : str
-            Root processing directory — the same path used for
-            :meth:`submit_segmentation`.  Sub-directories `seg/`,
-            `ubs/`, `slurm_logs/`, and `job_meta/` are created if
-            absent.
-        crystal : Crystal or LayeredCrystal
-            Crystal structure object (xrayutilities `Crystal` or the
-            project's :class:`~nrxrdct.laue.layers.LayeredCrystal`).
-            Serialised with `dill` into `job_meta/crystal.pkl` and
-            deserialised inside each worker process.
-        camera : Camera
-            Detector geometry used for spot simulation.
-        n_jobs : int
-            Number of SLURM array jobs.  Frames are split as evenly as
-            possible.  Default `10`.
-        partition : str
-            SLURM partition name.  Default `'all'`.
-        time : str
-            Wall-clock time limit per job in `HH:MM:SS` format.
-            Default `'02:00:00'`.
-        mem : str
-            Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
-        cpus_per_task : int
-            CPU cores requested per SLURM job.  Each job spawns a
-            `ProcessPoolExecutor` that uses all allocated cores.
-            Default `1`.
-        python_bin : str
-            Python executable used in the `--wrap` command.
-            Default `'python'`.
-        max_match_px : float or list of float
-            Matching radius (pixels) for the spot-to-simulation assignment.
-            Pass a list for staged matching: e.g. `[30, 10, 3]` starts
-            with a loose radius to bootstrap the fit and tightens it in
-            successive rounds.  A single float is wrapped in a list.
-            Default `30.0`.
-        min_matched : int
-            Minimum number of matched spots required to save a result.
-            Frames with fewer spots than this value are skipped entirely.
-            Default `5`.
-        min_match_rate : float
-            Minimum match rate `n_matched / min(n_obs, n_sim)` required to
-            accept a fit.  Default `0.2`.
-        max_rms_px : float or None
-            Maximum allowed RMS residual in pixels.  `None` disables this
-            filter.  Default `None`.
-        r_squared_min : float or None
-            Minimum R² of the Gaussian fit for a spot to be loaded from the
-            HDF5 spots file.  `None` inherits the value written by
-            :meth:`submit_segmentation` in `seg_meta.json`; falls back to
-            `0.9` if that file is absent.
-        include_unfitted : bool or None
-            Whether to include spots whose Gaussian fit did not reach
-            *r_squared_min* (stored as raw centroid positions).  `None`
-            inherits from `seg_meta.json`; falls back to `False`.
-        E_max_eV : float or None
-            High-energy cut-off (eV) for the Laue simulation.  The allowed-HKL
-            sphere is derived automatically from this value.  `None` uses the
-            fitting default (27 000 eV).
-        f2_thresh : float or None
-            Minimum squared structure factor |F|² for a reflection to be
-            included.  `None` uses the default (`1e-4`).
-        top_n_sim : int or None
-            Keep only the *top_n_sim* strongest simulated spots per frame.
-            `None` keeps all.
-        top_n_obs : int or None
-            Keep only the *top_n_obs* brightest observed spots per frame.
-            `None` keeps all.
-        method : str
-            `scipy.optimize` method passed to
-            :func:`~nrxrdct.laue.fitting.fit_orientation`.  `'lm'`
-            (Levenberg–Marquardt) is fastest for unconstrained problems.
-            Default `'lm'`.
-        ftol : float
-            Relative tolerance on the cost function for convergence.
-            Default `1e-6`.
-        xtol : float
-            Relative tolerance on the parameter vector for convergence.
-            Default `1e-6`.
-        gtol : float
-            Tolerance on the gradient norm for convergence.  Default `1e-6`.
-        max_nfev : int or None
-            Maximum number of function evaluations per fit.  `None` uses
-            the scipy default (`100 * n_params`).
-        source : str or None
-            X-ray source spectrum model forwarded to
-            :func:`~nrxrdct.laue.simulation.simulate_laue`.  Common values:
-            `'bending_magnet'`, `'wiggler'`.  `None` uses the
-            simulation default.
-        source_kwargs : dict or None
-            Extra keyword arguments for the source spectrum model.
-        extra_sbatch : dict or None
-            Additional `sbatch` options passed as `--key=value` flags,
-            e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
+            base_dir (str): Root processing directory — the same path used for
+                :meth:`submit_segmentation`.  Sub-directories `seg/`,
+                `ubs/`, `slurm_logs/`, and `job_meta/` are created if
+                absent.
+            crystal (Crystal or LayeredCrystal): Crystal structure object (xrayutilities `Crystal` or the
+                project's :class:`~nrxrdct.laue.layers.LayeredCrystal`).
+                Serialised with `dill` into `job_meta/crystal.pkl` and
+                deserialised inside each worker process.
+            camera (Camera): Detector geometry used for spot simulation.
+            n_jobs (int): Number of SLURM array jobs.  Frames are split as evenly as
+                possible.  Default `10`.
+            partition (str): SLURM partition name.  Default `'all'`.
+            time (str): Wall-clock time limit per job in `HH:MM:SS` format.
+                Default `'02:00:00'`.
+            mem (str): Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
+            cpus_per_task (int): CPU cores requested per SLURM job.  Each job spawns a
+                `ProcessPoolExecutor` that uses all allocated cores.
+                Default `1`.
+            python_bin (str): Python executable used in the `--wrap` command.
+                Default `'python'`.
+            max_match_px (float or list of float): Matching radius (pixels) for the spot-to-simulation assignment.
+                Pass a list for staged matching: e.g. `[30, 10, 3]` starts
+                with a loose radius to bootstrap the fit and tightens it in
+                successive rounds.  A single float is wrapped in a list.
+                Default `30.0`.
+            min_matched (int): Minimum number of matched spots required to save a result.
+                Frames with fewer spots than this value are skipped entirely.
+                Default `5`.
+            min_match_rate (float): Minimum match rate `n_matched / min(n_obs, n_sim)` required to
+                accept a fit.  Default `0.2`.
+            max_rms_px (float or None): Maximum allowed RMS residual in pixels.  `None` disables this
+                filter.  Default `None`.
+            r_squared_min (float or None): Minimum R² of the Gaussian fit for a spot to be loaded from the
+                HDF5 spots file.  `None` inherits the value written by
+                :meth:`submit_segmentation` in `seg_meta.json`; falls back to
+                `0.9` if that file is absent.
+            include_unfitted (bool or None): Whether to include spots whose Gaussian fit did not reach
+                *r_squared_min* (stored as raw centroid positions).  `None`
+                inherits from `seg_meta.json`; falls back to `False`.
+            E_max_eV (float or None): High-energy cut-off (eV) for the Laue simulation.  The allowed-HKL
+                sphere is derived automatically from this value.  `None` uses the
+                fitting default (27 000 eV).
+            f2_thresh (float or None): Minimum squared structure factor |F|² for a reflection to be
+                included.  `None` uses the default (`1e-4`).
+            top_n_sim (int or None): Keep only the *top_n_sim* strongest simulated spots per frame.
+                `None` keeps all.
+            top_n_obs (int or None): Keep only the *top_n_obs* brightest observed spots per frame.
+                `None` keeps all.
+            method (str): `scipy.optimize` method passed to
+                :func:`~nrxrdct.laue.fitting.fit_orientation`.  `'lm'`
+                (Levenberg–Marquardt) is fastest for unconstrained problems.
+                Default `'lm'`.
+            ftol (float): Relative tolerance on the cost function for convergence.
+                Default `1e-6`.
+            xtol (float): Relative tolerance on the parameter vector for convergence.
+                Default `1e-6`.
+            gtol (float): Tolerance on the gradient norm for convergence.  Default `1e-6`.
+            max_nfev (int or None): Maximum number of function evaluations per fit.  `None` uses
+                the scipy default (`100 * n_params`).
+            source (str or None): X-ray source spectrum model forwarded to
+                :func:`~nrxrdct.laue.simulation.simulate_laue`.  Common values:
+                `'bending_magnet'`, `'wiggler'`.  `None` uses the
+                simulation default.
+            source_kwargs (dict or None): Extra keyword arguments for the source spectrum model.
+            extra_sbatch (dict or None): Additional `sbatch` options passed as `--key=value` flags,
+                e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
 
         Returns:
-        list of str
-            SLURM job IDs, one per submitted job.
+            list of str
+                SLURM job IDs, one per submitted job.
 """
         dirs = self.setup_processing_dirs(base_dir)
 
@@ -6057,15 +5819,12 @@ class GrainMap:
         containing the refined U matrix for every phase.
 
         Args:
-        crystals : list of Crystal
-            One crystal per phase, in grain-index order.  Must match
-            ``len(self.ub_files)`` and ``self.n_grains``.
-        camera : Camera
-            Detector geometry.
-        shared : bool
-            If ``True``, all phases share a single rotation vector (3 free
-            parameters).  If ``False`` (default), each phase has an
-            independent rotation (3 × N_phases parameters).
+            crystals (list of Crystal): One crystal per phase, in grain-index order.  Must match
+                ``len(self.ub_files)`` and ``self.n_grains``.
+            camera (Camera): Detector geometry.
+            shared (bool): If ``True``, all phases share a single rotation vector (3 free
+                parameters).  If ``False`` (default), each phase has an
+                independent rotation (3 × N_phases parameters).
 """
         if len(crystals) != len(self.ub_files):
             raise ValueError(
@@ -6240,89 +5999,63 @@ class GrainMap:
         Results are collected into the map arrays by :meth:`collect_strain`.
 
         Args:
-        base_dir : str
-            Root processing directory — the same path used for
-            :meth:`submit_segmentation` and :meth:`submit_orientation`.
-        crystal : Crystal or LayeredCrystal
-            Crystal structure object.  Reuses `job_meta/crystal.pkl` if it
-            already exists from the orientation step; otherwise writes it.
-        camera : Camera
-            Detector geometry.
-        n_jobs : int
-            Number of SLURM array jobs.  Default `10`.
-        partition : str
-            SLURM partition name.  Default `'all'`.
-        time : str
-            Wall-clock time limit per job in `HH:MM:SS` format.
-            Default `'02:00:00'`.
-        mem : str
-            Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
-        cpus_per_task : int
-            CPU cores requested per SLURM job.  Default `1`.
-        python_bin : str
-            Python executable used in the `--wrap` command.
-            Default `'python'`.
-        max_match_px : float or list of float
-            Matching radius (pixels) for the spot-to-simulation assignment.
-            Strain fitting starts from a good orientation, so a tighter
-            default (`10.0`) is appropriate compared to the orientation
-            step.  Pass a list for staged refinement, e.g. `[10, 3]`.
-            Default `10.0`.
-        fit_strain : list of str or None
-            Strain-tensor components to include in the fit.  Valid component
-            names are `'e_xx'`, `'e_yy'`, `'e_zz'`, `'e_xy'`,
-            `'e_xz'`, `'e_yz'`.  Components not listed are fixed at
-            zero.  `None` fits all six components.
-            Default `None` (all six).
-        r_squared_min : float or None
-            Minimum R² of the Gaussian fit for a spot to be loaded.  `None`
-            inherits from `seg_meta.json`; falls back to `0.9`.
-        include_unfitted : bool or None
-            Whether to include spots stored as raw centroids (Gaussian fit
-            failed).  `None` inherits from `seg_meta.json`; falls back
-            to `False`.
-        E_max_eV : float or None
-            High-energy cut-off (eV).  The allowed-HKL sphere is derived
-            automatically from this value.  `None` uses the fitting
-            default (27 000 eV).
-        f2_thresh : float or None
-            Minimum |F|² for reflection inclusion.  `None` uses the default
-            (`1e-4`).
-        top_n_sim : int or None
-            Keep only the *top_n_sim* strongest simulated spots.  `None`
-            keeps all.
-        top_n_obs : int or None
-            Keep only the *top_n_obs* brightest observed spots.  `None`
-            keeps all.
-        method : str
-            `scipy.optimize` method for :func:`fit_strain_orientation`.
-            Default `'lm'`.
-        ftol : float
-            Relative tolerance on the cost function.  Default `1e-6`.
-        xtol : float
-            Relative tolerance on the parameter vector.  Default `1e-6`.
-        gtol : float
-            Gradient-norm tolerance.  Default `1e-6`.
-        max_nfev : int or None
-            Maximum function evaluations per fit.  `None` uses the scipy
-            default.
-        strain_scale : float or None
-            Multiplicative scale applied to strain parameters inside the
-            optimizer to improve conditioning (strain components are ~10⁻³
-            while rotation angles are ~10⁻² rad).  `None` uses the
-            :func:`fit_strain_orientation` default.
-        source : str or None
-            X-ray source spectrum model.  `None` uses the simulation
-            default.
-        source_kwargs : dict or None
-            Extra keyword arguments for the source spectrum model.
-        extra_sbatch : dict or None
-            Additional `sbatch` options, e.g.
-            `{'account': 'myproject'}`.
+            base_dir (str): Root processing directory — the same path used for
+                :meth:`submit_segmentation` and :meth:`submit_orientation`.
+            crystal (Crystal or LayeredCrystal): Crystal structure object.  Reuses `job_meta/crystal.pkl` if it
+                already exists from the orientation step; otherwise writes it.
+            camera (Camera): Detector geometry.
+            n_jobs (int): Number of SLURM array jobs.  Default `10`.
+            partition (str): SLURM partition name.  Default `'all'`.
+            time (str): Wall-clock time limit per job in `HH:MM:SS` format.
+                Default `'02:00:00'`.
+            mem (str): Memory per job, e.g. `'4G'`, `'16G'`.  Default `'4G'`.
+            cpus_per_task (int): CPU cores requested per SLURM job.  Default `1`.
+            python_bin (str): Python executable used in the `--wrap` command.
+                Default `'python'`.
+            max_match_px (float or list of float): Matching radius (pixels) for the spot-to-simulation assignment.
+                Strain fitting starts from a good orientation, so a tighter
+                default (`10.0`) is appropriate compared to the orientation
+                step.  Pass a list for staged refinement, e.g. `[10, 3]`.
+                Default `10.0`.
+            fit_strain (list of str or None): Strain-tensor components to include in the fit.  Valid component
+                names are `'e_xx'`, `'e_yy'`, `'e_zz'`, `'e_xy'`,
+                `'e_xz'`, `'e_yz'`.  Components not listed are fixed at
+                zero.  `None` fits all six components.
+                Default `None` (all six).
+            r_squared_min (float or None): Minimum R² of the Gaussian fit for a spot to be loaded.  `None`
+                inherits from `seg_meta.json`; falls back to `0.9`.
+            include_unfitted (bool or None): Whether to include spots stored as raw centroids (Gaussian fit
+                failed).  `None` inherits from `seg_meta.json`; falls back
+                to `False`.
+            E_max_eV (float or None): High-energy cut-off (eV).  The allowed-HKL sphere is derived
+                automatically from this value.  `None` uses the fitting
+                default (27 000 eV).
+            f2_thresh (float or None): Minimum |F|² for reflection inclusion.  `None` uses the default
+                (`1e-4`).
+            top_n_sim (int or None): Keep only the *top_n_sim* strongest simulated spots.  `None`
+                keeps all.
+            top_n_obs (int or None): Keep only the *top_n_obs* brightest observed spots.  `None`
+                keeps all.
+            method (str): `scipy.optimize` method for :func:`fit_strain_orientation`.
+                Default `'lm'`.
+            ftol (float): Relative tolerance on the cost function.  Default `1e-6`.
+            xtol (float): Relative tolerance on the parameter vector.  Default `1e-6`.
+            gtol (float): Gradient-norm tolerance.  Default `1e-6`.
+            max_nfev (int or None): Maximum function evaluations per fit.  `None` uses the scipy
+                default.
+            strain_scale (float or None): Multiplicative scale applied to strain parameters inside the
+                optimizer to improve conditioning (strain components are ~10⁻³
+                while rotation angles are ~10⁻² rad).  `None` uses the
+                :func:`fit_strain_orientation` default.
+            source (str or None): X-ray source spectrum model.  `None` uses the simulation
+                default.
+            source_kwargs (dict or None): Extra keyword arguments for the source spectrum model.
+            extra_sbatch (dict or None): Additional `sbatch` options, e.g.
+                `{'account': 'myproject'}`.
 
         Returns:
-        list of str
-            SLURM job IDs, one per submitted job.
+            list of str
+                SLURM job IDs, one per submitted job.
 """
         dirs = self.setup_processing_dirs(base_dir)
 
@@ -6427,9 +6160,8 @@ class GrainMap:
         :meth:`submit_strain` — so :meth:`collect_strain` works unchanged.
 
         Args:
-        crystals : list of Crystal
-            One crystal per phase, in grain-index order.  Must match
-            ``self.n_grains``.
+            crystals (list of Crystal): One crystal per phase, in grain-index order.  Must match
+                ``self.n_grains``.
 """
         if len(crystals) != self.n_grains:
             raise ValueError(
@@ -6587,35 +6319,27 @@ class GrainMap:
         merged grain slot into a freshly-loaded :class:`GrainMap`.
 
         Args:
-        base_dir : str
-            Root of the processing directory tree (same root passed to
-            `submit_orientation` / `collect_orientation`).
-        best_grain : (ny, nx) int ndarray
-            First return value of :meth:`merge`.  Positions with value `-1`
-            (no valid fit) are skipped.
-        metrics : dict or None
-            Second return value of :meth:`merge`.  When provided, *source* is
-            inherited from `metrics["source"]` unless explicitly overridden.
-        grain_index : int or None
-            Grain slot index embedded in the symlink filename.  `None` uses
-            `self.n_grains - 1` (i.e., the slot created by the most recent
-            :meth:`apply_merge` call).
-        source : str or None
-            Which result directory to link from.  One of:
+            base_dir (str): Root of the processing directory tree (same root passed to
+                `submit_orientation` / `collect_orientation`).
+            best_grain ((ny, nx) int ndarray): First return value of :meth:`merge`.  Positions with value `-1`
+                (no valid fit) are skipped.
+            metrics (dict or None): Second return value of :meth:`merge`.  When provided, *source* is
+                inherited from `metrics["source"]` unless explicitly overridden.
+            grain_index (int or None): Grain slot index embedded in the symlink filename.  `None` uses
+                `self.n_grains - 1` (i.e., the slot created by the most recent
+                :meth:`apply_merge` call).
+            source (str or None): Which result directory to link from.  One of:
 
             * `"ubs"`    — orientation `.npz` files in `base_dir/ubs/`.
             * `"strain"` — strain `.npz` files in `base_dir/strain/`.
             * `"auto"`   — prefers `strain/` when it contains matching
               files, otherwise falls back to `ubs/`.
-        overwrite : bool
-            If `True`, existing entries in `merged/` are removed before
-            writing.  Default `False`.
+            overwrite (bool): If `True`, existing entries in `merged/` are removed before
+                writing.  Default `False`.
 
         Returns:
-        merged_dir : str
-            Absolute path of the created `merged/` directory.
-        n_links : int
-            Number of symlinks written.
+            merged_dir (str): Absolute path of the created `merged/` directory.
+            n_links (int): Number of symlinks written.
 """
         gi_merged = self.n_grains - 1 if grain_index is None else int(grain_index)
         if source is None:
@@ -6684,18 +6408,15 @@ class GrainMap:
         loaded automatically when present.
 
         Args:
-        base_dir : str
-            Same root directory passed to :meth:`write_merge_links`.
-        grain_index : int or None
-            Grain slot to populate.  `None` uses `self.n_grains - 1`.
-        source : {"ubs", "strain"}
-            Which merged subfolder to read from.  `"ubs"` loads orientation-
-            only results; `"strain"` loads results that include strain tensors.
-            Must match the `source` used when calling :meth:`write_merge_links`.
+            base_dir (str): Same root directory passed to :meth:`write_merge_links`.
+            grain_index (int or None): Grain slot to populate.  `None` uses `self.n_grains - 1`.
+            source ({"ubs", "strain"}): Which merged subfolder to read from.  `"ubs"` loads orientation-
+                only results; `"strain"` loads results that include strain tensors.
+                Must match the `source` used when calling :meth:`write_merge_links`.
 
         Returns:
-        int
-            Number of results loaded.
+            int
+                Number of results loaded.
 """
         if source not in ("ubs", "strain"):
             raise ValueError(f"source must be 'ubs' or 'strain', got {source!r}")

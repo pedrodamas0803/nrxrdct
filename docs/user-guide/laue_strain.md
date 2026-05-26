@@ -302,3 +302,199 @@ e_zz_custom = eps_custom[..., 2, 2]   # (ny, nx)
   A typical `max_match_px` sequence for strain is `[10, 3]` — looser initial
   matching to survive small orientation errors, tightening to sharpen the strain
   estimate.
+
+---
+
+## Comparison with LaueTools strain refinement
+
+`nrxrdct` adopts the LaueTools lab-frame convention and can read LaueTools
+calibration files and `matstarlab` orientation matrices (see
+[`decompose_matstarlab`][nrxrdct.laue.simulation.decompose_matstarlab]).
+However, the two implementations differ in parameterisation, decomposition
+strategy, and residual construction.
+
+### Parameterisation
+
+**LaueTools** refines the full $3 \times 3$ UB matrix (nine elements) in a
+single nonlinear optimisation.  After convergence the matrix is decomposed into
+a pure rotation and a stretch via the **right polar decomposition**:
+
+$$
+\mathbf{F} = \mathbf{U}\,\mathbf{P}
+$$
+
+where $\mathbf{U}$ is orthogonal ($\mathbf{U}^\top\mathbf{U} = \mathbf{I}$,
+$\det\mathbf{U} = +1$) and $\mathbf{P}$ is symmetric positive-definite (the
+right-stretch tensor).  The strain tensor is then extracted as:
+
+$$
+\boldsymbol{\varepsilon}_\text{LT} = \mathbf{P} - \mathbf{I}
+$$
+
+This decomposition is **exact** — no small-strain approximation is made.
+
+**`nrxrdct`** parameterises the problem explicitly from the outset.  The
+optimisation vector is
+
+$$
+\mathbf{x} = [\,\delta\omega_x,\;\delta\omega_y,\;\delta\omega_z,\;
+               s\,\varepsilon_{xx},\;\ldots,\;s\,\varepsilon_{yz}\,]
+$$
+
+and the effective orientation is assembled as:
+
+$$
+\mathbf{U}_\text{eff}
+= \mathbf{R}(\delta\boldsymbol{\omega})\;\mathbf{U}_0\;(\mathbf{I} + \boldsymbol{\varepsilon})
+$$
+
+This uses the **small-strain approximation** — the deformation gradient is
+linearised as $\mathbf{F} \approx \mathbf{I} + \boldsymbol{\varepsilon}$ and
+the full effective matrix is $\mathbf{U}_0(\mathbf{I}+\boldsymbol{\varepsilon})$.
+For elastic strains typical of metals ($|\boldsymbol{\varepsilon}| \lesssim 10^{-3}$)
+the error relative to the exact polar-decomposition approach is of order
+$|\boldsymbol{\varepsilon}|^2 \sim 10^{-6}$, which is negligible.
+
+The key practical difference is that `nrxrdct` exposes individual strain
+components directly as optimisation parameters, making it straightforward to
+**fix symmetry constraints** (e.g. biaxial strain: set
+`fit_strain=("e_xx","e_yy","e_xy","e_xz","e_yz")`) without post-processing.
+
+### Rotation–strain coupling and the bake-in step
+
+LaueTools refines a single UB matrix and separates rotation from strain only
+after convergence, so the two are decoupled implicitly through the polar
+decomposition.
+
+`nrxrdct` uses **staged refinement** with an explicit rotation bake-in between
+stages.  After stage $i$ (pixel tolerance $r_i$), the accumulated rotation is
+absorbed into the reference orientation:
+
+$$
+\mathbf{U}_0^{(i+1)}
+= \mathbf{R}\!\left(\delta\boldsymbol{\omega}^{(i)}\right)\,\mathbf{U}_0^{(i)}
+$$
+
+and the strain parameters are **reset to zero** for stage $i+1$ (tighter
+tolerance $r_{i+1} < r_i$).  This means that at the final stage the strain
+$\boldsymbol{\varepsilon}$ is always measured relative to the cumulatively
+rotated but **unstrained** reference structure, and cannot accumulate
+compounding linearisation errors across stages.
+
+### Residual construction
+
+Both methods minimise **pixel-space** residuals between simulated and observed
+spot positions.  The differences are in how unmatched spots are handled:
+
+| | LaueTools | `nrxrdct` |
+|---|---|---|
+| Matching criterion | Angular tolerance (degrees) | Pixel-radius threshold `max_match_px` |
+| Unmatched spot penalty | Spot excluded from residuals | Residual set to exactly $\pm r_\text{max}$ (Hungarian penalty) |
+| Hydrostatic sensitivity | Not enforced | Not enforced |
+
+Both approaches are **insensitive to hydrostatic strain** for the physical
+reason described above: a uniform dilation leaves all spot positions invariant.
+Neither software enforces the deviatoric constraint $\operatorname{tr}(\boldsymbol{\varepsilon}) = 0$;
+instead, the hydrostatic component floats freely and is absorbed partly into
+the fitted rotation increment and partly into the unconstrained trace of the
+strain tensor.
+
+### Reading LaueTools results into `nrxrdct`
+
+Because `nrxrdct` uses the LaueTools lab frame and $2\pi$-scaled reciprocal
+vectors internally, the interoperability functions handle the two frame and
+scaling differences automatically:
+
+```python
+from nrxrdct.laue.simulation import decompose_matstarlab
+
+# matstarlab: LaueTools grain matrix (LT2/OR frame, no 2π)
+U, F, eps, eps_voigt = decompose_matstarlab(matstarlab, crystal)
+
+# U  — pure rotation (use in simulate_laue for rotation-only simulation)
+# F  — full deformation gradient (use in simulate_laue to include strain)
+# eps — small-strain tensor in the crystal frame,  ε = P − I  (exact)
+# eps_voigt — [ε_xx, ε_yy, ε_zz, ε_yz, ε_xz, ε_xy]
+```
+
+`decompose_matstarlab` uses the exact polar decomposition (same as LaueTools),
+so `eps` here is directly comparable to the strain output of LaueTools'
+`fitorient` module.
+
+### Comparing LaueTools and `nrxrdct` strain maps on a `GrainMap`
+
+#### Voigt ordering mismatch — always compare via the 3×3 tensor
+
+The Voigt component order differs between the two outputs:
+
+| Source | Voigt order |
+|---|---|
+| `StrainFitResult.strain_voigt` / `gmap.strain_voigt` | $[\varepsilon_{xx}, \varepsilon_{yy}, \varepsilon_{zz}, \varepsilon_{xy}, \varepsilon_{xz}, \varepsilon_{yz}]$ |
+| `decompose_matstarlab` `eps_voigt` | $[\varepsilon_{xx}, \varepsilon_{yy}, \varepsilon_{zz}, \varepsilon_{yz}, \varepsilon_{xz}, \varepsilon_{xy}]$ |
+
+Never compare the Voigt vectors element-by-element. Always work through the 3×3
+`strain_tensor`.
+
+#### The deviatoric field
+
+Because white-beam Laue is insensitive to hydrostatic strain, the only quantity
+that is robustly comparable between the two methods is the **deviatoric strain**:
+
+$$
+\boldsymbol{\varepsilon}_\text{dev}
+= \boldsymbol{\varepsilon} - \frac{\operatorname{tr}(\boldsymbol{\varepsilon})}{3}\,\mathbf{I}
+$$
+
+`GrainMap` stores this automatically in `strain_tensor_deviatoric`
+(shape `(n_grains, ny, nx, 3, 3)`, crystal frame), derived from `strain_tensor`
+whenever strain results are stored or loaded.
+
+#### Practical comparison workflow
+
+```python
+import numpy as np
+from nrxrdct.laue.simulation import decompose_matstarlab
+from nrxrdct.laue import fit_strain_orientation
+
+# 1. Convert a LaueTools matstarlab to strain
+U_lt, F_lt, eps_lt, _ = decompose_matstarlab(matstarlab, crystal)
+eps_dev_lt = eps_lt - np.trace(eps_lt) / 3.0 * np.eye(3)
+
+# 2. Run nrxrdct fitter from the same starting orientation
+result = fit_strain_orientation(crystal, camera, obs_xy, U0=U_lt)
+
+# 3. Compare deviatoric tensors (should agree within fit uncertainty)
+diff = result.strain_tensor - np.trace(result.strain_tensor) / 3.0 * np.eye(3) - eps_dev_lt
+print("Max |Δε_dev|:", np.abs(diff).max())
+
+# 4. On a full GrainMap, access the stored deviatoric field
+#    gmap.strain_tensor_deviatoric has shape (n_grains, ny, nx, 3, 3)
+eps_dev_map = gmap.strain_tensor_deviatoric[grain_idx]   # (ny, nx, 3, 3)
+e_dev_zz    = eps_dev_map[..., 2, 2]                     # (ny, nx)  zz component
+```
+
+#### What to expect
+
+| Quantity | Should agree? | Reason |
+|---|---|---|
+| `strain_tensor_deviatoric` | Yes, within fit uncertainty | Both methods are sensitive to the same 5 deviatoric DOFs |
+| Shear components $\varepsilon_{xy}$, $\varepsilon_{xz}$, $\varepsilon_{yz}$ | Yes | Purely deviatoric |
+| Individual normal strains $\varepsilon_{xx}$, $\varepsilon_{yy}$, $\varepsilon_{zz}$ | Only their *differences* | Each mixes deviatoric + hydrostatic |
+| $\operatorname{tr}(\boldsymbol{\varepsilon})$ | No | Unobservable from Laue; absorbs noise differently in each method |
+
+Residual disagreement in the deviatoric part after accounting for the above
+typically points to one of: different matched spot sets, different convergence
+basins due to differing tolerance strategies, or a misaligned starting
+orientation.
+
+### Summary
+
+| Aspect | LaueTools | `nrxrdct` |
+|---|---|---|
+| Optimisation variables | Full $3\times3$ UB (9 DOF) | $\delta\boldsymbol{\omega}$ (3) + selected $\varepsilon$ components (up to 6) |
+| Strain extraction | Post-hoc polar decomposition — exact | Small-strain model $(\mathbf{I}+\boldsymbol{\varepsilon})$ — valid for $\|\boldsymbol{\varepsilon}\| \lesssim 10^{-3}$ |
+| Symmetry constraints | Via lattice-parameter constraints | Via `fit_strain` subset selection |
+| Matching tolerance | Angular (degrees) | Pixel radius (`max_match_px`) |
+| Unmatched spots | Excluded | Penalised at $r_\text{max}$ |
+| Staged refinement | Angular threshold coarsening | Pixel threshold coarsening + rotation bake-in |
+| Hydrostatic constraint | Not enforced | Not enforced |

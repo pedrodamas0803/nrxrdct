@@ -147,6 +147,9 @@ class GrainMap:
         n_matched ((n_grains, ny, nx) int ndarray): (-1 = not fitted)
         match_rate ((n_grains, ny, nx) ndarray):
         cost ((n_grains, ny, nx) ndarray):
+        strain_tensor_deviatoric ((n_grains, ny, nx, 3, 3) ndarray): Deviatoric part of the strain tensor
+            in the crystal frame: ``ε_dev = ε − (Tr(ε)/3) I``.  Derived automatically from
+            ``strain_tensor`` whenever strain results are stored.  `NaN` where not yet fitted.
         motors (dict[str, (ny, nx) ndarray]): Motor positions reshaped to the map grid (if h5_path is given and
             motors are found).
 """
@@ -226,9 +229,11 @@ class GrainMap:
                 np.full((extra, *shape2d), np.nan)], axis=0)
             self.cost          = np.concatenate([self.cost,
                 np.full((extra, *shape2d), np.nan)], axis=0)
-            self.strain_voigt  = np.concatenate([self.strain_voigt,
+            self.strain_voigt             = np.concatenate([self.strain_voigt,
                 np.full((extra, *shape2d, 6), np.nan)], axis=0)
-            self.strain_tensor = np.concatenate([self.strain_tensor,
+            self.strain_tensor            = np.concatenate([self.strain_tensor,
+                np.full((extra, *shape2d, 3, 3), np.nan)], axis=0)
+            self.strain_tensor_deviatoric = np.concatenate([self.strain_tensor_deviatoric,
                 np.full((extra, *shape2d, 3, 3), np.nan)], axis=0)
             for _ in range(extra):
                 self._results.append(
@@ -277,9 +282,10 @@ class GrainMap:
         self.n_matched     = self.n_matched[idx]
         self.match_rate    = self.match_rate[idx]
         self.cost          = self.cost[idx]
-        self.strain_voigt  = self.strain_voigt[idx]
-        self.strain_tensor = self.strain_tensor[idx]
-        self.U_ref         = self.U_ref[idx]
+        self.strain_voigt             = self.strain_voigt[idx]
+        self.strain_tensor            = self.strain_tensor[idx]
+        self.strain_tensor_deviatoric = self.strain_tensor_deviatoric[idx]
+        self.U_ref                    = self.U_ref[idx]
         self.ub_files      = [self.ub_files[i] for i in keep]
         self._results      = [self._results[i] for i in keep]
         self.n_grains      = len(keep)
@@ -306,8 +312,9 @@ class GrainMap:
         self.n_matched     = np.full((ng, *shape2d), -1, dtype=int)
         self.match_rate    = np.full((ng, *shape2d), np.nan)
         self.cost          = np.full((ng, *shape2d), np.nan)
-        self.strain_voigt  = np.full((ng, *shape2d, 6), np.nan)
-        self.strain_tensor = np.full((ng, *shape2d, 3, 3), np.nan)
+        self.strain_voigt             = np.full((ng, *shape2d, 6), np.nan)
+        self.strain_tensor            = np.full((ng, *shape2d, 3, 3), np.nan)
+        self.strain_tensor_deviatoric = np.full((ng, *shape2d, 3, 3), np.nan)
         self._results: list[list[list]] = [
             [[None] * self.nx for _ in range(self.ny)]
             for _ in range(ng)
@@ -368,7 +375,9 @@ class GrainMap:
             self.cost[grain, iy, ix]       = result.cost
             if hasattr(result, "strain_voigt"):
                 self.strain_voigt[grain, iy, ix]  = result.strain_voigt
-                self.strain_tensor[grain, iy, ix] = result.strain_tensor
+                eps = result.strain_tensor
+                self.strain_tensor[grain, iy, ix] = eps
+                self.strain_tensor_deviatoric[grain, iy, ix] = eps - np.trace(eps) / 3.0 * np.eye(3)
 
     def get_result(self, iy: int, ix: int, grain: int):
         """Return the stored fit result (or `None`) at `(iy, ix, grain)`."""
@@ -1353,6 +1362,155 @@ class GrainMap:
                 f"Unknown frame {frame!r}. Choose 'crystal', 'lab', or 'sample'."
             )
         return data
+
+    _STRAIN_DEV_LABELS = {
+        "e_xx": "ε'_xx", "e_yy": "ε'_yy", "e_zz": "ε'_zz",
+        "e_xy": "ε'_xy", "e_xz": "ε'_xz", "e_yz": "ε'_yz",
+    }
+
+    def _deviatoric_component_map(
+        self,
+        component: str,
+        grain: int,
+        frame: str,
+        sample_tilt_deg: float,
+        sample_tilt_axis: str,
+    ) -> np.ndarray:
+        """Return (ny, nx) array of the requested deviatoric strain component."""
+        i, j = self._STRAIN_INDICES[component]
+        eps_dev = self.strain_tensor_deviatoric[grain]   # (ny, nx, 3, 3)
+        U       = self.U[grain]                          # (ny, nx, 3, 3)
+
+        if frame == "crystal":
+            data = eps_dev[..., i, j]
+        elif frame == "lab":
+            eps_t = np.einsum("...ik,...kl,...jl->...ij", U, eps_dev, U)
+            data  = eps_t[..., i, j]
+        elif frame == "sample":
+            R_s        = Rotation.from_euler(
+                sample_tilt_axis, sample_tilt_deg, degrees=True
+            ).as_matrix()
+            eps_lab    = np.einsum("...ik,...kl,...jl->...ij", U, eps_dev, U)
+            eps_sample = np.einsum("ik,...kl,jl->...ij", R_s, eps_lab, R_s)
+            data = eps_sample[..., i, j]
+        else:
+            raise ValueError(
+                f"Unknown frame {frame!r}. Choose 'crystal', 'lab', or 'sample'."
+            )
+        return data
+
+    def plot_deviatoric(
+        self,
+        component: str = "e_xx",
+        grain: int = 0,
+        *,
+        frame: str = "crystal",
+        sample_tilt_deg: float = -40.0,
+        sample_tilt_axis: str = "y",
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot a single deviatoric strain component for a given grain.
+
+        The deviatoric strain is the traceless part of the full strain tensor:
+
+        .. math::
+
+            \\boldsymbol{\\varepsilon}' =
+            \\boldsymbol{\\varepsilon} - \\frac{\\operatorname{tr}(\\boldsymbol{\\varepsilon})}{3}\\,\\mathbf{I}
+
+        Because white-beam Laue is insensitive to hydrostatic strain, the
+        deviatoric components are the physically meaningful quantity for
+        inter-method comparisons.
+
+        Args:
+            component (str): One of ``'e_xx'``, ``'e_yy'``, ``'e_zz'``,
+                ``'e_xy'``, ``'e_xz'``, ``'e_yz'``.
+            grain (int): Grain index (0-based).
+            frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            ax (Axes or None): Existing axes to draw into.  A new figure is created when ``None``.
+            cmap (str or None): Colormap name.  Defaults to ``'RdBu_r'``.
+            vmin, vmax (float or None): Colour scale limits.
+            motor_x, motor_y (str or None): Motor names for physical-coordinate axis labels.
+            motor_units (dict or None): Units per motor name, e.g. ``{'pz': 'mm'}``.
+            title (str or None): Axes title.  Auto-generated when ``None``.
+            figsize (tuple): Figure size in inches.  Default ``(6, 5)``.
+            colorbar (bool): Whether to add a colorbar.  Default ``True``.
+
+        Returns:
+            tuple: ``(fig, ax)``
+        """
+        if component not in self._STRAIN_INDICES:
+            raise ValueError(
+                f"Unknown component {component!r}. "
+                f"Choose from: {sorted(self._STRAIN_INDICES)}"
+            )
+
+        data  = self._deviatoric_component_map(
+            component, grain, frame, sample_tilt_deg, sample_tilt_axis
+        )
+        label = self._STRAIN_DEV_LABELS[component]
+        cmap  = cmap or "RdBu_r"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data,
+            origin="upper",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+            aspect="auto",
+        )
+
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(label, fontsize=9)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }[frame]
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"Grain {grain + 1}  —  {label} (deviatoric)  [{_frame_label}]",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
 
     def plot_strain_component(
         self,
@@ -5083,8 +5241,9 @@ class GrainMap:
                 grp.create_dataset("n_matched",     data=self.n_matched[gi],     compression="gzip")
                 grp.create_dataset("match_rate",    data=self.match_rate[gi],    compression="gzip")
                 grp.create_dataset("cost",          data=self.cost[gi],          compression="gzip")
-                grp.create_dataset("strain_voigt",  data=self.strain_voigt[gi],  compression="gzip")
-                grp.create_dataset("strain_tensor", data=self.strain_tensor[gi], compression="gzip")
+                grp.create_dataset("strain_voigt",             data=self.strain_voigt[gi],             compression="gzip")
+                grp.create_dataset("strain_tensor",            data=self.strain_tensor[gi],            compression="gzip")
+                grp.create_dataset("strain_tensor_deviatoric", data=self.strain_tensor_deviatoric[gi], compression="gzip")
 
         print(f"GrainMap saved → {os.path.abspath(path)}")
 
@@ -5261,8 +5420,9 @@ class GrainMap:
             obj.n_matched     = np.full((n_grains, *shape2d), -1, dtype=int)
             obj.match_rate    = np.full((n_grains, *shape2d), np.nan)
             obj.cost          = np.full((n_grains, *shape2d), np.nan)
-            obj.strain_voigt  = np.full((n_grains, *shape2d, 6), np.nan)
-            obj.strain_tensor = np.full((n_grains, *shape2d, 3, 3), np.nan)
+            obj.strain_voigt             = np.full((n_grains, *shape2d, 6), np.nan)
+            obj.strain_tensor            = np.full((n_grains, *shape2d, 3, 3), np.nan)
+            obj.strain_tensor_deviatoric = np.full((n_grains, *shape2d, 3, 3), np.nan)
 
             for gi in range(n_grains):
                 grp = f[f"grain_{gi:02d}"]
@@ -5276,6 +5436,12 @@ class GrainMap:
                     obj.strain_voigt[gi]  = grp["strain_voigt"][()]
                 if "strain_tensor" in grp:
                     obj.strain_tensor[gi] = grp["strain_tensor"][()]
+                if "strain_tensor_deviatoric" in grp:
+                    obj.strain_tensor_deviatoric[gi] = grp["strain_tensor_deviatoric"][()]
+                elif "strain_tensor" in grp:
+                    eps = obj.strain_tensor[gi]
+                    tr  = np.trace(eps, axis1=-2, axis2=-1)[..., np.newaxis, np.newaxis]
+                    obj.strain_tensor_deviatoric[gi] = eps - tr / 3.0 * np.eye(3)
 
             obj.motors = {}
             if "motors" in f:
@@ -6321,7 +6487,9 @@ class GrainMap:
                 self.match_rate[gi, iy, ix]    = float(d["match_rate"])
                 self.cost[gi, iy, ix]          = float(d["cost"])
                 self.strain_voigt[gi, iy, ix]  = d["strain_voigt"]
-                self.strain_tensor[gi, iy, ix] = d["strain_tensor"]
+                eps = d["strain_tensor"]
+                self.strain_tensor[gi, iy, ix] = eps
+                self.strain_tensor_deviatoric[gi, iy, ix] = eps - np.trace(eps) / 3.0 * np.eye(3)
                 return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)

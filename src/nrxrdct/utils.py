@@ -15,6 +15,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 import scipy.ndimage as ndi
+import xraylib
 
 from nrxrdct.azimuthal.integration import _get_integrator, azimuthal_integration_1d
 

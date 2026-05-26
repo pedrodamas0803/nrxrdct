@@ -27,6 +27,7 @@ Typical workflow::
 
 from __future__ import annotations
 
+import concurrent.futures
 import glob
 import json
 import os
@@ -5899,7 +5900,7 @@ class GrainMap:
         print(f"Mixed orientation: {len(job_ids)} jobs → {mixed_dir}")
         return job_ids
 
-    def collect_orientation_mixed(self, base_dir: str) -> int:
+    def collect_orientation_mixed(self, base_dir: str, n_workers: int | None = None) -> int:
         """
         Load mixed-phase orientation results into the map arrays.
 
@@ -5908,23 +5909,29 @@ class GrainMap:
         Fills ``self.U[gi]``, ``self.rms_px[gi]``, ``self.n_matched[gi]``,
         ``self.match_rate[gi]``, and ``self.cost[gi]`` for every grain index
         *gi* from 0 to N_phases-1.  Quality metrics are shared across all
-        phases (joint fit).
+        phases (joint fit).  Files are loaded in parallel using a thread pool.
 
-        Returns the number of frames loaded.
-"""
+        Args:
+            base_dir (str): Root processing directory.
+            n_workers (int or None): Number of threads.  Defaults to
+                ``os.cpu_count()``.
+
+        Returns:
+            int: Number of frames loaded.
+        """
         mixed_dir = os.path.join(base_dir, "mixed")
         files = sorted(glob.glob(os.path.join(mixed_dir, "frame_?????.npz")))
-        n_loaded = 0
-        for fpath in files:
+
+        def _load(fpath):
             m = re.search(r"frame_(\d{5})\.npz$", os.path.basename(fpath))
             if not m:
-                continue
+                return False
             frame_idx = int(m.group(1))
             iy, ix    = self.map_index(frame_idx)
             if iy >= self.ny or ix >= self.nx:
-                continue
+                return False
             try:
-                d = np.load(fpath)
+                d          = np.load(fpath)
                 rms_px     = float(d["rms_px"])
                 mean_px    = float(d["mean_px"]) if "mean_px" in d else np.nan
                 n_matched  = int(d["n_matched"])
@@ -5939,11 +5946,15 @@ class GrainMap:
                     self.mean_px[gi, iy, ix]    = mean_px
                     self.n_matched[gi, iy, ix]  = n_matched
                     self.match_rate[gi, iy, ix] = match_rate
-                    self.cost[gi, iy, ix]        = cost
-                n_loaded += 1
+                    self.cost[gi, iy, ix]       = cost
+                return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
-        print(f"collect_orientation_mixed: {n_loaded} frames loaded from {mixed_dir}")
+                return False
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
+        print(f"collect_orientation_mixed: {n_loaded} frames loaded from {mixed_dir}", flush=True)
         return n_loaded
 
     def submit_strain(
@@ -6231,24 +6242,32 @@ class GrainMap:
         print(f"Mixed strain: {len(job_ids)} jobs → {dirs['strain']}")
         return job_ids
 
-    def collect_orientation(self, base_dir: str) -> int:
+    def collect_orientation(self, base_dir: str, n_workers: int | None = None) -> int:
         """
         Load orientation npz files produced by SLURM workers into the map arrays.
 
-        Returns the number of results loaded.
-"""
+        Files are loaded in parallel using a thread pool.
+
+        Args:
+            base_dir (str): Root processing directory.
+            n_workers (int or None): Number of threads.  Defaults to
+                ``os.cpu_count()``.
+
+        Returns:
+            int: Number of results loaded.
+        """
         ubs_dir = os.path.join(base_dir, "ubs")
-        files = glob.glob(os.path.join(ubs_dir, "frame_*_g*.npz"))
-        n_loaded = 0
-        for fpath in files:
+        files   = glob.glob(os.path.join(ubs_dir, "frame_*_g*.npz"))
+
+        def _load(fpath: str) -> bool:
             m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
             if not m:
-                continue
+                return False
             frame_idx = int(m.group(1))
             gi        = int(m.group(2))
             iy, ix    = self.map_index(frame_idx)
             if gi >= self.n_grains or iy >= self.ny or ix >= self.nx:
-                continue
+                return False
             try:
                 d = np.load(fpath)
                 self.U[gi, iy, ix]          = d["U"]
@@ -6257,30 +6276,42 @@ class GrainMap:
                 self.n_matched[gi, iy, ix]  = int(d["n_matched"])
                 self.match_rate[gi, iy, ix] = float(d["match_rate"])
                 self.cost[gi, iy, ix]       = float(d["cost"])
-                n_loaded += 1
+                return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
-        print(f"collect_orientation: {n_loaded} results loaded from {ubs_dir}")
+                return False
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
+        print(f"collect_orientation: {n_loaded} results loaded from {ubs_dir}", flush=True)
         return n_loaded
 
-    def collect_strain(self, base_dir: str) -> int:
+    def collect_strain(self, base_dir: str, n_workers: int | None = None) -> int:
         """
         Load strain npz files produced by SLURM workers into the map arrays.
 
-        Returns the number of results loaded.
-"""
+        Files are loaded in parallel using a thread pool.
+
+        Args:
+            base_dir (str): Root processing directory.
+            n_workers (int or None): Number of threads.  Defaults to
+                ``os.cpu_count()``.
+
+        Returns:
+            int: Number of results loaded.
+        """
         strain_dir = os.path.join(base_dir, "strain")
-        files = glob.glob(os.path.join(strain_dir, "frame_*_g*.npz"))
-        n_loaded = 0
-        for fpath in files:
+        files      = glob.glob(os.path.join(strain_dir, "frame_*_g*.npz"))
+
+        def _load(fpath: str) -> bool:
             m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
             if not m:
-                continue
+                return False
             frame_idx = int(m.group(1))
             gi        = int(m.group(2))
             iy, ix    = self.map_index(frame_idx)
             if gi >= self.n_grains or iy >= self.ny or ix >= self.nx:
-                continue
+                return False
             try:
                 d = np.load(fpath)
                 self.U[gi, iy, ix]             = d["U"]
@@ -6291,10 +6322,14 @@ class GrainMap:
                 self.cost[gi, iy, ix]          = float(d["cost"])
                 self.strain_voigt[gi, iy, ix]  = d["strain_voigt"]
                 self.strain_tensor[gi, iy, ix] = d["strain_tensor"]
-                n_loaded += 1
+                return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
-        print(f"collect_strain: {n_loaded} results loaded from {strain_dir}")
+                return False
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
+        print(f"collect_strain: {n_loaded} results loaded from {strain_dir}", flush=True)
         return n_loaded
 
     def write_merge_links(
@@ -6398,6 +6433,7 @@ class GrainMap:
         grain_index: int | None = None,
         *,
         source: str = "ubs",
+        n_workers: int | None = None,
     ) -> int:
         """
         Load results from `base_dir/merged/{source}/` into a grain slot.
@@ -6413,10 +6449,11 @@ class GrainMap:
             source ({"ubs", "strain"}): Which merged subfolder to read from.  `"ubs"` loads orientation-
                 only results; `"strain"` loads results that include strain tensors.
                 Must match the `source` used when calling :meth:`write_merge_links`.
+            n_workers (int or None): Number of threads.  Defaults to
+                ``os.cpu_count()``.
 
         Returns:
-            int
-                Number of results loaded.
+            int: Number of results loaded.
 """
         if source not in ("ubs", "strain"):
             raise ValueError(f"source must be 'ubs' or 'strain', got {source!r}")
@@ -6428,16 +6465,16 @@ class GrainMap:
             )
 
         gi_target = self.n_grains - 1 if grain_index is None else int(grain_index)
-        files = glob.glob(os.path.join(merged_dir, "frame_*_g*.npz"))
-        n_loaded = 0
-        for fpath in files:
+        files     = glob.glob(os.path.join(merged_dir, "frame_*_g*.npz"))
+
+        def _load(fpath: str) -> bool:
             m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
             if not m:
-                continue
+                return False
             frame_idx = int(m.group(1))
             iy, ix    = self.map_index(frame_idx)
             if iy >= self.ny or ix >= self.nx:
-                continue
+                return False
             try:
                 d = np.load(fpath, allow_pickle=False)
                 self.U[gi_target, iy, ix]          = d["U"]
@@ -6449,10 +6486,13 @@ class GrainMap:
                 if "strain_voigt" in d:
                     self.strain_voigt[gi_target, iy, ix]  = d["strain_voigt"]
                     self.strain_tensor[gi_target, iy, ix] = d["strain_tensor"]
-                n_loaded += 1
+                return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)
+                return False
 
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
         print(f"collect_merged [{source}]: {n_loaded} results loaded from {merged_dir}", flush=True)
         return n_loaded
 

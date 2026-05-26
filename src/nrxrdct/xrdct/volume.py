@@ -576,7 +576,7 @@ class ReconstructedVolume:
             model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,
                 ``"voigt"``, or ``"pseudo_voigt"`` (default).
             bg_method (str): Background algorithm forwarded to
-                :func:`~nrxrdct.utils.calculate_xrd_baseline`.
+                :func:`~nrxrdct.powder.calculate_xrd_baseline`.
                 Options: ``"snip"`` (default), ``"iasls"``, ``"aspls"``,
                 ``"arpls"``, ``"mor"``.
             bg_kwargs (dict or None): Extra keyword arguments for the
@@ -1284,7 +1284,7 @@ class ReconstructedVolume:
             model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,
                 ``"voigt"``, or ``"pseudo_voigt"`` (default).
             bg_method (str): Background algorithm passed to
-                :func:`~nrxrdct.utils.calculate_xrd_baseline`
+                :func:`~nrxrdct.powder.calculate_xrd_baseline`
                 (default ``"snip"``).
             fit_mask (np.ndarray or None): Boolean array of shape ``(nx, ny)``.
                 Only pixels that are truthy in *both* ``self.mask`` (if set)

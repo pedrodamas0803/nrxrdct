@@ -61,6 +61,7 @@ nav:
     - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:
     - utils: api/utils.md
+    - powder: api/powder.md
     - azimuthal:
       - integration: api/integration.md
       - slurm_integration: api/slurm_integration.md

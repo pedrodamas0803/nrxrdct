@@ -1,7 +1,7 @@
 """
 Single-peak fitting utilities for 1-D XRD diffraction patterns.
 
-The background is estimated first with :func:`~nrxrdct.utils.calculate_xrd_baseline`
+The background is estimated first with :func:`~nrxrdct.powder.calculate_xrd_baseline`
 (powered by `pybaselines`), then a Gaussian, Lorentzian, Voigt, or pseudo-Voigt
 profile is fitted to the background-subtracted data using
 :func:`scipy.optimize.curve_fit`.
@@ -26,7 +26,7 @@ from scipy.optimize import curve_fit
 from scipy.special import voigt_profile as _scipy_voigt
 
 from ..xrdct.io import read_xy_file
-from ..utils import calculate_xrd_baseline
+from ..powder.simulation import calculate_xrd_baseline
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ def fit_peak(
     """
     Fit a single diffraction peak within a 2θ window.
 
-    The background is estimated with :func:`~nrxrdct.utils.calculate_xrd_baseline`
+    The background is estimated with :func:`~nrxrdct.powder.calculate_xrd_baseline`
     on the windowed data before fitting, so no prior background subtraction is
     required.
 
@@ -124,7 +124,7 @@ def fit_peak(
         model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,
             ``"voigt"``, or ``"pseudo_voigt"`` (default).
         bg_method (str): Background algorithm forwarded to
-            :func:`~nrxrdct.utils.calculate_xrd_baseline`.  Supported values:
+            :func:`~nrxrdct.powder.calculate_xrd_baseline`.  Supported values:
             ``"snip"`` (default, fast), ``"iasls"``, ``"aspls"``,
             ``"arpls"``, ``"mor"``.
         bg_kwargs (dict or None): Extra keyword arguments for the background

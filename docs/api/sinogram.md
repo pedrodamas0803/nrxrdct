@@ -1,0 +1,3 @@
+# sinogram
+
+::: nrxrdct.xrdct.sinogram

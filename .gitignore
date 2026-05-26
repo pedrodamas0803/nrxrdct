@@ -14,3 +14,6 @@ wheels/
 *.h5
 *.hdf5
 .vscode
+*.png
+*.txt
+*.DS_Store

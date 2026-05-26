@@ -1,3 +1,3 @@
 # refinement
 
-::: nrxrdct.refinement
+::: nrxrdct.rietveld.refinement

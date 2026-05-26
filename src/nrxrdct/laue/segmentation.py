@@ -1,0 +1,1428 @@
+import concurrent.futures
+import glob
+import os
+
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy.fft as sp_fft
+import scipy.ndimage as ndi
+import skimage as sk
+from matplotlib.patches import Rectangle
+from scipy.optimize import curve_fit
+from scipy.spatial.distance import cdist
+
+# from LaueTools.IOLaueTools import writefile_Peaklist
+
+
+def load_images(dirpath: str) -> np.ndarray:
+    """
+    Load all .tif images in a directory into a 3D array: (Nimages, ny, nx).
+    Uses ProcessPoolExecutor to parallelize skimage.io.imread.
+"""
+    im_files = glob.glob(f"{dirpath}/*.tif")
+    im_files.sort()
+
+    images = [None] * len(im_files)
+
+    with concurrent.futures.ProcessPoolExecutor() as pool:
+        for ii, image in enumerate(pool.map(sk.io.imread, im_files)):
+            images[ii] = image
+
+    return np.array(images)
+
+
+def filter_and_rescale_images(
+    im_array: np.ndarray, filter_type: str = "max", cutoff_freq: float = 0.005
+):
+    """
+    Reduce a stack of images (N, ny, nx) to a 2D image by applying a reduction
+    along axis 0 (min/max/mean/std/median), then apply a Butterworth filter and
+    rescale to float32 in a [0,1]-like range (min-subtracted).
+"""
+    if im_array.ndim == 3:
+        print(f"3D image will be reduced with the {filter_type} filter along axis 0.")
+
+        if filter_type not in ("min", "max", "mean", "std", "median"):
+            print("Filter not implemented. Quiting...")
+            return 1
+
+        if filter_type == "max":
+            filt_im = im_array.max(axis=0)
+        elif filter_type == "min":
+            filt_im = im_array.min(axis=0)
+        elif filter_type == "mean":
+            filt_im = im_array.mean(axis=0)
+        elif filter_type == "std":
+            filt_im = im_array.std(axis=0)
+        elif filter_type == "median":
+            filt_im = np.median(im_array, axis=0)
+    else:
+        filt_im = im_array
+
+    # sk.filters.butterworth exists in skimage >=0.19-ish; keep as-is
+    filt_im = sk.filters.butterworth(filt_im, cutoff_frequency_ratio=cutoff_freq)
+
+    # subtract minimum and cast to float32
+    filt_im = sk.util.img_as_float32(filt_im - filt_im.min())
+    return filt_im
+
+
+def segment_image(
+    im_array: np.ndarray,
+    kernel_size: int = 3,
+    sigma: float = 0.1,
+    iterations: int = 1,
+    threshold: float = None,
+):
+    """
+    Segment image into a boolean mask.
+
+    Args:
+    im_array : ndarray
+        2-D intensity image, or 3-D stack reduced by max(axis=0).
+    kernel_size : int
+        Side length of the square structuring element used for binary opening.
+    sigma : float
+        Gaussian smoothing applied to the binary mask before returning.
+        Set to 0 to skip. Note: smoothing is applied to the float representation
+        of the mask and then thresholded at 0.5 so the output remains boolean.
+    iterations : int
+        Number of binary-opening iterations. Each iteration with a 3×3 element
+        erodes features by ~1 pixel per side; spots smaller than roughly
+        `(2*iterations + 1)² ` pixels may be completely erased. Default 1
+        (single pass) to preserve small spots. Set to 0 to disable opening.
+    threshold : float or None
+        Intensity threshold. If None (default), the triangle auto-threshold
+        from `skimage.filters.threshold_triangle` is used.
+
+    Returns:
+    mask : ndarray of bool
+        Boolean segmentation mask, same spatial shape as the input.
+"""
+    if im_array.ndim != 2:
+        im_array = im_array.max(axis=0)
+
+    if threshold is None:
+        thrs = sk.filters.threshold_triangle(im_array)
+    else:
+        thrs = threshold
+
+    mask = im_array >= thrs
+
+    if iterations > 0:
+        mask = ndi.binary_opening(
+            mask,
+            structure=np.ones((kernel_size, kernel_size)),
+            iterations=iterations,
+        )
+    if sigma > 0:
+        # gaussian_filter returns float; threshold back to bool so callers
+        # that check dtype (e.g. label_segmented_image) receive the right type
+        mask = ndi.gaussian_filter(mask.astype(np.float32), sigma=sigma) > 0.5
+    return mask
+
+
+def label_segmented_image(im_array: np.ndarray, intensity_image=None):
+    """
+    Label segmented boolean image, clear borders, return:
+    (label_image, n_labels, label_img_rgb)
+"""
+    if im_array.dtype != bool:
+        print("I need a boolean array. Quiting...")
+        return 1
+
+    im_array = sk.segmentation.clear_border(im_array)
+
+    label_image, n_labels = sk.measure.label(im_array, return_num=True, connectivity=2)
+
+    label_img_rgb = sk.color.label2rgb(label_image, image=intensity_image, bg_label=0)
+
+    return label_image, n_labels, label_img_rgb
+
+
+def plot_labeled_image(label_img_rgb, regionprops, cmap="turbo"):
+    """
+    Show labeled image and plot bounding boxes of regionprops.
+"""
+    f, ax = plt.subplots(figsize=(9, 9))
+    ax.imshow(label_img_rgb, cmap=cmap)
+
+    for region in regionprops:
+        minr, minc, maxr, maxc = region.bbox
+
+        rect = Rectangle(
+            (minc - 1, minr - 1),
+            (maxc - minc),
+            (maxr - minr),
+            fill=False,
+            edgecolor="red",
+            linewidth=0.5,
+        )
+        ax.add_patch(rect)
+
+    f.tight_layout()
+    return
+
+
+def measure_peaks(labeled_image, intensity_image):
+    """
+    Wrapper for skimage.measure.regionprops.
+"""
+    return sk.measure.regionprops(labeled_image, intensity_image=intensity_image)
+
+
+def gaussian_2d_rotated(coords, A, x0, y0, sigma_x, sigma_y, theta, C):
+    """
+    Rotated 2D Gaussian + offset, returns raveled model.
+    coords = (x, y) as 2 arrays (meshgrid flattened later).
+"""
+    x, y = coords
+
+    x0 = float(x0)
+    y0 = float(y0)
+
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    a = (cos_t**2) / (2 * sigma_x**2) + (sin_t**2) / (2 * sigma_y**2)
+    b = (-np.sin(2 * theta)) / (4 * sigma_x**2) + (np.sin(2 * theta)) / (4 * sigma_y**2)
+    c = (sin_t**2) / (2 * sigma_x**2) + (cos_t**2) / (2 * sigma_y**2)
+
+    g = (
+        A
+        * np.exp(-(a * (x - x0) ** 2 + 2 * b * (x - x0) * (y - y0) + c * (y - y0) ** 2))
+        + C
+    )
+
+    return g.ravel()
+
+
+def fit_gaussian_2d_rotated(image):
+    """
+    Fit a single rotated 2D gaussian to an image using curve_fit.
+    Returns (popt, pcov, fit_img, x, y)
+"""
+    image = np.asarray(image)
+    ny, nx = image.shape
+
+    x = np.arange(nx)
+    y = np.arange(ny)
+    x, y = np.meshgrid(x, y)
+
+    A0 = image.max() - np.abs(image.min())
+    C0 = np.abs(image.min())
+
+    total = image.sum()
+    x0 = (x * image).sum() / total
+    y0 = (y * image).sum() / total
+
+    sigma_x0 = nx / 4
+    sigma_y0 = ny / 4
+    theta0 = 0.0
+
+    p0 = (A0, x0, y0, sigma_x0, sigma_y0, theta0, C0)
+
+    coords = np.vstack((x.ravel(), y.ravel()))
+    data = image.ravel()
+
+    lower = [0, 0, 0, 1e-6, 1e-6, -np.pi / 2, -np.inf]
+    upper = [np.inf, nx, ny, nx, ny, np.pi / 2, np.inf]
+    bounds = (lower, upper)
+
+    popt, pcov = curve_fit(
+        gaussian_2d_rotated, coords, data, p0=p0, bounds=bounds, maxfev=10000
+    )
+
+    fit_img = gaussian_2d_rotated(coords, *popt).reshape(ny, nx)
+
+    return popt, pcov, fit_img, x, y
+
+
+def gaussian_mixture_2d(coords, *params):
+    """
+    Sum of n rotated Gaussians + constant background C (last param).
+    params layout:
+      [A1, x01, y01, sx1, sy1, th1,  A2, x02, y02, sx2, sy2, th2, ..., C]
+"""
+    x, y = coords
+    n = (len(params) - 1) // 6
+    C = params[-1]
+
+    model = np.zeros_like(x, dtype=float)
+
+    for i in range(n):
+        A, x0, y0, sx, sy, th = params[6 * i : 6 * i + 6]
+
+        cos_t = np.cos(th)
+        sin_t = np.sin(th)
+
+        a = (cos_t**2) / (2 * sx**2) + (sin_t**2) / (2 * sy**2)
+        b = (-np.sin(2 * th)) / (4 * sx**2) + (np.sin(2 * th)) / (4 * sy**2)
+        c = (sin_t**2) / (2 * sx**2) + (cos_t**2) / (2 * sy**2)
+
+        model += A * np.exp(
+            -(a * (x - x0) ** 2 + 2 * b * (x - x0) * (y - y0) + c * (y - y0) ** 2)
+        )
+
+    return (model + C).ravel()
+
+
+def fit_gaussian_mixture_2d(image, n_components: int, init_params):
+    """
+    Fit mixture of n_components rotated Gaussians + constant background.
+    init_params should be a list of length 6*n_components + 1 (including C).
+    Returns (popt, pcov, fitted, X, Y)
+"""
+    image = np.asarray(image)
+    ny, nx = image.shape
+
+    x = np.arange(nx)
+    y = np.arange(ny)
+    X, Y = np.meshgrid(x, y)
+
+    coords = np.vstack((X.ravel(), Y.ravel()))
+    data = image.ravel()
+
+    lower = []
+    upper = []
+    for _ in range(n_components):
+        lower += [0, 0, 0, 1e-6, 1e-6, -np.pi / 2]
+        upper += [np.inf, nx, ny, nx, ny, np.pi / 2]
+
+    lower += [-np.inf]
+    upper += [np.inf]
+    bounds = (lower, upper)
+
+    popt, pcov = curve_fit(
+        gaussian_mixture_2d, coords, data, p0=init_params, bounds=bounds, maxfev=20000
+    )
+
+    fitted = gaussian_mixture_2d(coords, *popt).reshape(ny, nx)
+    return popt, pcov, fitted, X, Y
+
+
+def auto_init_gaussian_mixture_global(
+    image,
+    n_components=None,
+    smooth_sigma=2,
+    threshold_rel=0.2,
+    min_distance=6,
+):
+    """
+    Heuristic init for gaussian mixture:
+    - smooth image
+    - find local maxima via maximum_filter
+    - keep peaks above threshold_rel * max
+    - compute centers (y,x) sorted by peak value, optionally keep top n_components
+    - build weights based on distance to centers with Gaussian kernel (smooth_sigma)
+    - for each component: weighted mean + covariance -> (A, xm, ym, sx, sy, theta)
+    - background C0 = median(img)
+    - clamp params within bounds
+"""
+    img = np.asarray(image, float)
+    ny, nx = img.shape
+
+    smoothed = ndi.gaussian_filter(img, smooth_sigma)
+    neighborhood = ndi.maximum_filter(smoothed, size=min_distance)
+    peaks = smoothed == neighborhood
+    peaks &= smoothed > (threshold_rel * smoothed.max())
+
+    labeled, num = ndi.label(peaks)
+    slices = ndi.find_objects(labeled)
+
+    peak_info = []
+    for slc in slices:
+        # argmax within slice then convert to global coords
+        y, x = np.unravel_index(np.argmax(smoothed[slc]), smoothed[slc].shape)
+        y += slc[0].start
+        x += slc[1].start
+        peak_info.append((smoothed[y, x], x, y))
+
+    peak_info.sort(reverse=True)
+
+    if n_components:
+        peak_info = peak_info[:n_components]
+
+    centers = np.array([(x, y) for _, x, y in peak_info])
+    n = len(centers)
+
+    Y, X = np.mgrid[0:ny, 0:nx]
+    coords = np.column_stack([X.ravel(), Y.ravel()])
+    pixels = img.ravel()
+
+    dists = cdist(coords, centers)
+    weights = np.exp(-(dists**2) / (2 * (smooth_sigma**2)))
+    weights *= pixels[:, None]
+    weights /= weights.sum(axis=1, keepdims=True) + 1e-12
+
+    init_params = []
+
+    for i in range(n):
+        w = weights[:, i]
+        total = w.sum() + 1e-12
+
+        xm = (coords[:, 0] * w).sum() / total
+        ym = (coords[:, 1] * w).sum() / total
+
+        dx = coords[:, 0] - xm
+        dy = coords[:, 1] - ym
+
+        Ixx = (w * dx * dx).sum() / total
+        Iyy = (w * dy * dy).sum() / total
+        Ixy = (w * dx * dy).sum() / total
+
+        cov = np.array([[Ixx, Ixy], [Ixy, Iyy]])
+        eigvals, eigvecs = np.linalg.eigh(cov)
+
+        sigma_x = np.sqrt(eigvals[1])
+        sigma_y = np.sqrt(eigvals[0])
+
+        theta = np.arctan2(eigvecs[1, 1], eigvecs[0, 1])
+
+        # amplitude guess: pixel at center - median(img)
+        A = img[int(centers[i, 1]), int(centers[i, 0])] - np.median(img)
+
+        init_params += [A, xm, ym, sigma_x, sigma_y, theta]
+
+    C0 = np.median(img)
+    init_params.append(C0)
+
+    # clamp to bounds used later
+    lower = [0, 0, 0, 1e-6, 1e-6, -np.pi / 2] * n + [-np.inf]
+    upper = [np.inf, nx, ny, nx, ny, np.pi / 2] * n + [np.inf]
+
+    for ii in range(len(lower)):
+        if init_params[ii] < lower[ii]:
+            init_params[ii] = lower[ii]
+        if init_params[ii] > upper[ii]:
+            init_params[ii] = upper[ii]
+
+    return init_params
+
+
+def r_squared_image(data, model, mask=None):
+    """
+    R^2 = 1 - SS_res / SS_tot, computed on flattened arrays,
+    optionally using boolean mask.
+"""
+    data = np.asarray(data, float)
+    model = np.asarray(model, float)
+
+    if mask is not None:
+        data = data[mask]
+        model = model[mask]
+    else:
+        data = data.ravel()
+        model = model.ravel()
+
+    ss_res = np.sum((data - model) ** 2)
+    ss_tot = np.sum((data - np.mean(data)) ** 2)
+    return 1 - ss_res / ss_tot
+
+
+def reduced_chi_squared(data, model, n_params: int = 2, noise_std=None, mask=None):
+    """
+    Reduced chi^2 with optional per-pixel noise_std.
+    If noise_std is None, estimate using MAD of residuals.
+"""
+    data = np.asarray(data, float)
+    model = np.asarray(model, float)
+
+    if mask is not None:
+        data = data[mask]
+        model = model[mask]
+        N = mask.sum()
+    else:
+        data = data.ravel()
+        model = model.ravel()
+        N = data.size
+
+    residuals = data - model
+
+    if noise_std is None:
+        mad = np.median(np.abs(residuals - np.median(residuals)))
+        noise_std = 1.4826 * mad + 1e-12
+
+    # if noise_std is an array, flatten or mask it
+    if np.ndim(noise_std) > 0:
+        if mask is not None:
+            noise_std = noise_std[mask]
+        else:
+            noise_std = np.ravel(noise_std)
+
+    chi2 = np.sum((residuals / noise_std) ** 2)
+    dof = max(N - n_params, 1)
+    return chi2 / dof
+
+
+def fwhm_from_sigma(s):
+    return 2 * np.sqrt(2 * np.log(2)) * s
+
+
+def reduced_chi_squared_poisson(
+    data,
+    model,
+    n_params: int = 2,
+    gain: float = 1.0,
+    read_noise: float = 0.0,
+    eps: float = 1e-12,
+    mask=None,
+):
+    """
+    Reduced chi^2 assuming Poisson + read noise.
+    Converts ADU->e- using gain.
+    variance = model_e + read_noise^2, clipped by eps.
+"""
+    data = np.asarray(data, float)
+    model = np.asarray(model, float)
+
+    if mask is not None:
+        data = data[mask]
+        model = model[mask]
+        N = mask.sum()
+    else:
+        data = data.ravel()
+        model = model.ravel()
+        N = data.size
+
+    model_e = model * gain
+    data_e = data * gain
+
+    variance = model_e + (read_noise**2)
+    variance = np.maximum(variance, eps)
+
+    chi2 = np.sum((data_e - model_e) ** 2 / variance)
+    dof = max(N - n_params, 1)
+    return chi2 / dof
+
+
+def write_h5_spotsfile(
+    image_array: np.ndarray,
+    regionprops,
+    outpath: str = "segmented_spotsfile.h5",
+    d: int = 10,
+    overwrite: bool = False,
+    max_components: int = 2,
+    include_unfitted: bool = True,
+    r_squared_min: float = 0.9,
+    fit_spots: bool = True,
+):
+    """
+    Writes per-spot images and fitted parameters into an HDF5 file.
+
+    Tries to fit a Gaussian mixture on a cropped ROI of size 2d around the
+    region weighted centroid.  Spots whose fit reaches r² ≥ r_squared_min are
+    stored in `spot_{ii}_{jj}` groups (jj = 1, 2, …).
+
+    Args:
+    image_array : (Nv, Nh) ndarray
+        Full detector image from which ROIs are extracted.
+    regionprops : list
+        Region properties from :func:`measure_peaks`.
+    outpath : str
+        Output HDF5 file path.
+    d : int
+        Half-size of the ROI crop around each centroid (pixels).
+    overwrite : bool
+        If True, delete an existing file at *outpath* before writing.
+    max_components : int
+        Maximum number of Gaussian components tried per spot.
+    include_unfitted : bool
+        If True (default), spots whose best fit has r² < r_squared_min are
+        still written to the file in a `spot_{ii}_0` group (fallback
+        position from the weighted centroid, shape fields set to 0).
+        If False, those spots are silently skipped.  Ignored when
+        *fit_spots* is `False`.
+    r_squared_min : float
+        Minimum r² to consider a Gaussian fit acceptable (default 0.9).
+        Ignored when *fit_spots* is `False`.
+    fit_spots : bool
+        If `True` (default), attempt a 2-D Gaussian mixture fit for each
+        spot ROI.  If `False`, skip fitting entirely and write each spot
+        using the weighted centroid from *regionprops* directly; shape
+        fields are set to 0 and `r_squared` is stored as `-1` to
+        indicate that no fit was attempted.  This is much faster and
+        suitable when peak positions are all that is needed.
+"""
+    n_labels = len(regionprops)
+    n_success = 0
+
+    if os.path.exists(outpath):
+        if not overwrite:
+            raise FileExistsError(
+                f"Output file already exists: {outpath!r}. "
+                "Pass overwrite=True to replace it."
+            )
+        os.remove(outpath)
+
+    with h5py.File(outpath, "a") as hout:
+        for ii, region in enumerate(regionprops):
+            ycen, xcen = region.centroid_weighted
+
+            ymin, ymax, xmin, xmax = get_spot_limits(image_array, ycen, xcen, d)
+
+            image = image_array[
+                ymin:ymax,
+                xmin:xmax,
+            ]
+
+            # ── no-fit bypass ─────────────────────────────────────────────────
+            if not fit_spots:
+                Ipix = int(region.image_intensity.max())
+                hout[f"spot_{ii:04d}_0/r_squared"]       = -1
+                hout[f"spot_{ii:04d}_0/image"]            = image
+                hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
+                hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"]          = Ipix
+                n_success += 1
+                continue
+
+            init_params_1 = None
+            try:
+                # Single-component initial guess — used as position fallback
+                # when the Gaussian fit does not meet r_squared_min.
+                init_params_1 = auto_init_gaussian_mixture_global(
+                    image, n_components=1, smooth_sigma=0.2
+                )
+
+                for n_comp in range(1, max_components + 1):
+                    try:
+                        init_params = auto_init_gaussian_mixture_global(
+                            image, n_components=n_comp, smooth_sigma=0.2
+                        )
+                        popt, pcov, fitted, X, Y = fit_gaussian_mixture_2d(
+                            image, n_components=n_comp, init_params=init_params
+                        )
+                        r2 = r_squared_image(image, fitted)
+                    except ValueError:
+                        n_comp -= 1
+                        init_params = auto_init_gaussian_mixture_global(
+                            image, n_components=n_comp, smooth_sigma=0.2
+                        )
+                        popt, pcov, fitted, X, Y = fit_gaussian_mixture_2d(
+                            image, n_components=n_comp, init_params=init_params
+                        )
+                        r2 = r_squared_image(image, fitted)
+                        break
+                    if r2 > r_squared_min:
+                        break
+
+                C = popt[-1]
+
+                if r2 < r_squared_min:
+                    if not include_unfitted:
+                        continue
+                    # Fit did not reach r_squared_min — write the initial-guess
+                    # parameters (position from local maximum, shape from
+                    # weighted covariance) rather than a poor converged fit.
+                    A, xm, ym, sigma_x, sigma_y, theta = init_params_1[0:6]
+                    C0 = init_params_1[-1]
+                    hout[f"spot_{ii:04d}_0/r_squared"]       = r2
+                    hout[f"spot_{ii:04d}_0/image"]            = image
+                    hout[f"spot_{ii:04d}_0/yxcen"]            = region.centroid_weighted
+                    hout[f"spot_{ii:04d}_0/bbox"]             = region.bbox
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C0, 2)
+                    hout[f"spot_{ii:04d}_0/Ipixmax"]          = int(region.image_intensity.max())
+                    continue
+                n_success += 1
+
+                for jj in range(1, n_comp + 1):
+                    A, xm, ym, sigma_x, sigma_y, theta = popt[
+                        6 * (jj - 1) : 6 * (jj - 1) + 6
+                    ]
+                    hout[f"spot_{ii:04d}_{jj}/r_squared"] = r2
+                    hout[f"spot_{ii:04d}_{jj}/image"] = image
+                    hout[f"spot_{ii:04d}_{jj}/yxcen"] = region.centroid_weighted
+                    hout[f"spot_{ii:04d}_{jj}/bbox"] = region.bbox
+
+                    hout[f"spot_{ii:04d}_{jj}/peak_X"] = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_{jj}/peak_Y"] = round(ym + (int(ycen) - d), 2)
+
+                    hout[f"spot_{ii:04d}_{jj}/peak_Itot"] = round(A, 2)
+                    hout[f"spot_{ii:04d}_{jj}/peak_Isub"] = round(A - C, 2)
+
+                    hout[f"spot_{ii:04d}_{jj}/peak_fwaxmaj"] = round(
+                        fwhm_from_sigma(max(sigma_x, sigma_y)), 2
+                    )
+                    hout[f"spot_{ii:04d}_{jj}/peak_fwaxmin"] = round(
+                        fwhm_from_sigma(min(sigma_x, sigma_y)), 2
+                    )
+
+                    hout[f"spot_{ii:04d}_{jj}/peak_inclination"] = round(
+                        np.rad2deg(theta), 2
+                    )
+
+                    hout[f"spot_{ii:04d}_{jj}/Xdev"] = round(
+                        ((xcen - (xcen - d)) - xm), 2
+                    )
+                    hout[f"spot_{ii:04d}_{jj}/Ydev"] = round(
+                        ((ycen - (ycen - d)) - ym), 2
+                    )
+
+                    hout[f"spot_{ii:04d}_{jj}/peak_bkg"] = round(C, 2)
+                    hout[f"spot_{ii:04d}_{jj}/Ipixmax"] = int(
+                        region.image_intensity.max()
+                    )
+
+            except RuntimeError as exc:
+                if not include_unfitted:
+                    continue
+                r2 = 0
+                print(f"Runtime error at spot {ii}: {exc}")
+                Ipix = int(region.image_intensity.max())
+                hout[f"spot_{ii:04d}_0/r_squared"] = r2
+                hout[f"spot_{ii:04d}_0/image"]     = image
+                hout[f"spot_{ii:04d}_0/yxcen"]     = region.centroid_weighted
+                hout[f"spot_{ii:04d}_0/bbox"]       = region.bbox
+                if init_params_1 is not None:
+                    A, xm, ym, sigma_x, sigma_y, theta = init_params_1[0:6]
+                    C0 = init_params_1[-1]
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(xm + (int(xcen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(ym + (int(ycen) - d), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sigma_x, sigma_y)), 2)
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = round(np.rad2deg(theta), 2)
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = round(d - xm, 2)
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = round(d - ym, 2)
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = round(C0, 2)
+                else:
+                    # init_params_1 itself failed — last resort: centroid only
+                    hout[f"spot_{ii:04d}_0/peak_X"]           = round(float(xcen), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Y"]           = round(float(ycen), 2)
+                    hout[f"spot_{ii:04d}_0/peak_Itot"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_Isub"]        = 65535
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmaj"]     = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_fwaxmin"]     = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_inclination"] = 0.0
+                    hout[f"spot_{ii:04d}_0/Xdev"]             = 0.0
+                    hout[f"spot_{ii:04d}_0/Ydev"]             = 0.0
+                    hout[f"spot_{ii:04d}_0/peak_bkg"]         = 0.0
+                hout[f"spot_{ii:04d}_0/Ipixmax"] = Ipix
+                continue
+
+        hout.attrs["n_spots"] = n_labels
+        hout.attrs["n_success"] = n_success
+
+    if fit_spots:
+        print(
+            f"I successfully segmented {n_success} out of {n_labels} spots. "
+            f"Rate of success: {n_success / n_labels:.3f}"
+        )
+    else:
+        print(f"Saved {n_labels} spots (centroid only, no Gaussian fit).")
+
+
+def get_spot_limits(image_array, ycen, xcen, d):
+    ymin, ymax = int(ycen - d), int(ycen + d)
+    xmin, xmax = int(xcen - d), int(xcen + d)
+
+    if ymin < 0:
+        ymin = 0
+
+    if ymax > image_array.shape[0]:
+        ymax = image_array.shape[0]
+    if xmin < 0:
+        xmin = 0
+
+    if xmax > image_array.shape[0]:
+        xmax = image_array.shape[0]
+
+    return ymin, ymax, xmin, xmax
+
+
+def convert_spotsfile2peaklist(
+    h5path: str,
+    include_unfitted: bool = False,
+    r_squared_min: float = 0.9,
+):
+    """
+    Read the spots HDF5 file and return an (N, 9) array of peak quantities,
+    sorted by descending peak intensity.
+
+    Columns: peak_X, peak_Y, peak_I (Isub), peak_fwaxmaj, peak_fwaxmin,
+             peak_inclination, Xdev, Ydev, peak_bkg.
+
+    Args:
+    h5path : str
+        Path to the spots HDF5 file produced by the segmentation pipeline.
+    include_unfitted : bool
+        If `False` (default) only spots with r_squared >= r_squared_min are
+        returned.  If `True`, spots whose Gaussian fit did not meet the
+        threshold are also included: their pixel position is taken from the
+        weighted centroid (`yxcen`), intensity from the peak pixel value of
+        the stored sub-image, and all shape / background columns are set to 0.
+    r_squared_min : float
+        Minimum r² to consider a fit acceptable (default 0.9).  Spots stored
+        in the HDF5 file with r_squared below this value are treated as
+        unfitted regardless of how they were written.
+
+    Returns:
+    peaklist : (N, 9) ndarray  — empty (0, 9) if no spots are found.
+"""
+    peak_X = []
+    peak_Y = []
+    peak_I = []
+    peak_fwaxmaj = []
+    peak_fwaxmin = []
+    peak_inclination = []
+    Xdev = []
+    Ydev = []
+    peak_bkg = []
+    Ipixmax = []
+
+    with h5py.File(h5path, "r") as hin:
+        for key in hin.keys():
+            r2 = hin[f"{key}/r_squared"][()]
+
+            if r2 < r_squared_min:
+                if not include_unfitted:
+                    continue
+                # Fall back to weighted centroid; shape fields are unknown
+                yxcen = hin[f"{key}/yxcen"][()]
+                img   = hin[f"{key}/image"][()]
+                imax  = float(img.max()) if img.size > 0 else 0.0
+                peak_X.append(float(yxcen[1]))   # col → X
+                peak_Y.append(float(yxcen[0]))   # row → Y
+                peak_I.append(imax)
+                peak_fwaxmaj.append(0.0)
+                peak_fwaxmin.append(0.0)
+                peak_inclination.append(0.0)
+                Xdev.append(0.0)
+                Ydev.append(0.0)
+                peak_bkg.append(0.0)
+                Ipixmax.append(imax)
+                continue
+
+            peak_X.append(hin[f"{key}/peak_X"][()])
+            peak_Y.append(hin[f"{key}/peak_Y"][()])
+            peak_I.append(hin[f"{key}/peak_Isub"][()])
+            peak_fwaxmaj.append(hin[f"{key}/peak_fwaxmaj"][()])
+            peak_fwaxmin.append(hin[f"{key}/peak_fwaxmin"][()])
+            peak_inclination.append(hin[f"{key}/peak_inclination"][()])
+            Xdev.append(hin[f"{key}/Xdev"][()])
+            Ydev.append(hin[f"{key}/Ydev"][()])
+            peak_bkg.append(hin[f"{key}/peak_bkg"][()])
+            Ipixmax.append(hin[f"{key}/Ipixmax"][()])
+
+    if not peak_X:
+        return np.empty((0, 9), dtype=np.float64)
+
+    peaklist = np.stack(
+        [peak_X, peak_Y, peak_I, peak_fwaxmaj, peak_fwaxmin,
+         peak_inclination, Xdev, Ydev, peak_bkg],
+        axis=1,
+    )
+
+    order = np.argsort(Ipixmax)
+    return peaklist[order][::-1]
+
+
+def write_peaklist_dat(peaklist, outname):
+    if not outname.endswith(".dat"):
+        outname = f"{outname}.dat"
+    df = pd.DataFrame(
+        data=peaklist,
+        columns=[
+            "peak_X",
+            "peak_Y",
+            "peak_I",
+            "peak_fwaxmaj",
+            "peak_fwaxmin",
+            "peak_inclination",
+            "Xdev",
+            "Ydev",
+            "peak_bkg",
+        ],
+    )
+
+    df.to_csv(outname, sep=" ", index=False)
+
+def _convert_one_h5_to_dat(args: tuple) -> bool:
+    """Module-level worker so it is picklable by ProcessPoolExecutor."""
+    h5path, out_path, include_unfitted, r_squared_min = args
+    try:
+        pl = convert_spotsfile2peaklist(
+            h5path,
+            include_unfitted=include_unfitted,
+            r_squared_min=r_squared_min,
+        )
+        write_peaklist_dat(pl, out_path)
+        return True
+    except Exception as exc:
+        print(f"  ✗  {os.path.basename(h5path)}: {exc}", flush=True)
+        return False
+
+
+def convert_spotsfiles_to_dat(
+    seg_dir: str,
+    target_dir: str,
+    *,
+    include_unfitted: bool = False,
+    r_squared_min: float = 0.9,
+    n_workers: int | None = None,
+    overwrite: bool = False,
+) -> int:
+    """
+    Convert all `frame_?????.h5` spot files in *seg_dir* to DAT files in
+    *target_dir*, using a process pool for true parallelism.
+
+    Args:
+    seg_dir : str
+        Directory containing `frame_?????.h5` spot files.
+    target_dir : str
+        Directory where `frame_?????.dat` files will be written.
+    include_unfitted : bool
+        Passed to :func:`convert_spotsfile2peaklist`.
+    r_squared_min : float
+        Passed to :func:`convert_spotsfile2peaklist`.
+    n_workers : int or None
+        Number of worker processes.  Defaults to `os.cpu_count()`.
+    overwrite : bool
+        If `False` (default), skip files that already exist in *target_dir*.
+
+    Returns:
+    int
+        Number of files successfully converted.
+"""
+    os.makedirs(target_dir, exist_ok=True)
+
+    h5_files = sorted(glob.glob(os.path.join(seg_dir, "frame_*.h5")))
+    if not h5_files:
+        print(f"No frame_*.h5 files found in {seg_dir!r}")
+        return 0
+
+    tasks = []
+    for h5path in h5_files:
+        stem = os.path.splitext(os.path.basename(h5path))[0]
+        out_path = os.path.join(target_dir, stem + ".dat")
+        if os.path.exists(out_path) and not overwrite:
+            continue
+        tasks.append((h5path, out_path, include_unfitted, r_squared_min))
+
+    n_already = len(h5_files) - len(tasks)
+    if not tasks:
+        print(f"All {len(h5_files)} files already converted.")
+        return len(h5_files)
+
+    _n_workers = n_workers or os.cpu_count() or 1
+    n_ok = n_already
+    with concurrent.futures.ProcessPoolExecutor(max_workers=_n_workers) as pool:
+        futs = {pool.submit(_convert_one_h5_to_dat, t): t for t in tasks}
+        for fut in concurrent.futures.as_completed(futs):
+            if fut.result():
+                n_ok += 1
+
+    print(f"Converted {n_ok}/{len(h5_files)} spot files → {target_dir!r}")
+    return n_ok
+
+
+def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
+    """Fast nearest-neighbor gap filling."""
+    _, indices = ndi.distance_transform_edt(
+        ~valid_mask,
+        return_indices=True
+    )
+    return image[tuple(indices)]
+
+def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9):
+    from concurrent.futures import ThreadPoolExecutor
+
+    image = fill_gaps_nearest(image, mask)
+
+    img = np.log1p(image)
+
+    vmin, vmax = np.min(img[mask]), np.max(img[mask])
+
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+
+    _sigmas = [sigmas] if np.isscalar(sigmas) else list(sigmas)
+
+    def _log_response(s):
+        return -ndi.gaussian_laplace(img, sigma=s)
+
+    with ThreadPoolExecutor() as pool:
+        responses = list(pool.map(_log_response, _sigmas))
+
+    enhanced = np.max(responses, axis = 0)
+    enhanced[~mask] = 0
+
+    global_thresh = np.percentile(enhanced, threshold_percentile)
+
+    mask_final = (enhanced>=global_thresh) & mask
+
+    return mask_final
+
+def WTH_segmentation(
+    image: np.ndarray,
+    mask: np.ndarray,
+    disk_radius=7,
+    threshold_percentile: float = 99.9,
+) -> np.ndarray:
+    """
+    Segment diffraction spots using a white top-hat transform.
+
+    The white top-hat `WTH(I) = I - opening(I)` suppresses slowly varying
+    background while preserving bright compact features (spots) smaller than
+    the structuring element.  It is complementary to
+    :func:`LoG_segmentation`: LoG excels at ring/blob detection; WTH is more
+    robust when spots sit on a strong, uneven background (e.g. fluorescence
+    or detector artefacts).
+
+    Args:
+    image : (Nv, Nh) ndarray
+        Raw detector image (uint or float).
+    mask : (Nv, Nh) bool ndarray
+        Valid-pixel mask (`True` = active detector area).
+    disk_radius : int or list of int
+        Radius (or list of radii) of the disk structuring element in pixels.
+        When a list is given, the WTH response is computed at every radius and
+        the pixel-wise maximum is taken, analogous to multi-scale LoG.
+        Each radius should be larger than the largest spot but smaller than
+        the background correlation length.  Default `7`.
+    threshold_percentile : float
+        Percentile of the WTH response (within *mask*) used as the binary
+        threshold.  Raise to keep only the brightest spots; lower to be more
+        inclusive.  Default `99.9`.
+
+    Returns:
+    mask_final : (Nv, Nh) bool ndarray
+        Binary segmentation mask (`True` = spot pixel).
+
+    See Also:
+    LoG_segmentation : Laplacian-of-Gaussian based segmentation.
+    clean_segmentation : Post-processing (size filter, border removal, etc.).
+"""
+    image = fill_gaps_nearest(image, mask)
+
+    img = np.log1p(image.astype(float))
+
+    vmin, vmax = img[mask].min(), img[mask].max()
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    radii = [disk_radius] if np.isscalar(disk_radius) else list(disk_radius)
+
+    def _wth_response(r):
+        # grey_opening with a scalar size uses a square footprint processed
+        # row- and column-wise via the van Herk–Gil–Werman O(N) algorithm,
+        # which is independent of r — far faster than a disk for large radii.
+        opened = ndi.grey_opening(img, size=2 * r + 1)
+        return img - opened
+
+    with ThreadPoolExecutor() as pool:
+        responses = list(pool.map(_wth_response, radii))
+
+    enhanced = np.max(responses, axis=0)
+    enhanced[~mask] = 0.0
+
+    threshold = np.percentile(enhanced[mask], threshold_percentile)
+    mask_final = (enhanced >= threshold) & mask
+
+    return mask_final
+
+
+def hybrid_segmentation(
+    image: np.ndarray,
+    mask: np.ndarray,
+    log_sigmas=None,
+    wth_disk_radius=None,
+    threshold_percentile: float = 99.9,
+) -> np.ndarray:
+    """
+    Segment diffraction spots by combining LoG (large/round spots) and WTH
+    (small/sharp spots) responses.
+
+    All scales from both methods are submitted to a single
+    `ThreadPoolExecutor` so every allocated CPU is used without
+    thread-pool nesting or oversubscription.  The two families are
+    thresholded independently at *threshold_percentile* and the results
+    are combined with a logical OR.
+
+    Args:
+    image : (Nv, Nh) ndarray
+        Raw detector image.
+    mask : (Nv, Nh) bool ndarray
+        Valid-pixel mask.
+    log_sigmas : float or list of float
+        Sigma(s) for the Laplacian-of-Gaussian filter.  Default `[2, 4, 8]`.
+    wth_disk_radius : int or list of int
+        Disk radius/radii for the white top-hat transform.  Default `[5, 7]`.
+    threshold_percentile : float
+        Detection threshold percentile applied independently to each family.
+        Default `99.9`.
+
+    Returns:
+    mask_final : (Nv, Nh) bool ndarray
+        Union of the LoG and WTH binary masks.
+"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if log_sigmas is None:
+        log_sigmas = [2, 4, 8]
+    if wth_disk_radius is None:
+        wth_disk_radius = [5, 7]
+
+    image = fill_gaps_nearest(image, mask)
+    img = np.log1p(image.astype(float))
+    vmin, vmax = img[mask].min(), img[mask].max()
+    if vmax > vmin:
+        img = sk.exposure.rescale_intensity(img, in_range=(vmin, vmax))
+
+    _log_sigmas = [log_sigmas] if np.isscalar(log_sigmas) else list(log_sigmas)
+    _radii      = [wth_disk_radius] if np.isscalar(wth_disk_radius) else list(wth_disk_radius)
+
+    def _log(s):
+        return -ndi.gaussian_laplace(img, sigma=s)
+
+    def _wth(r):
+        return sk.morphology.white_tophat(img, sk.morphology.disk(r))
+
+    with ThreadPoolExecutor() as pool:
+        log_futures = [pool.submit(_log, s) for s in _log_sigmas]
+        wth_futures = [pool.submit(_wth, r) for r in _radii]
+        log_responses = [f.result() for f in log_futures]
+        wth_responses = [f.result() for f in wth_futures]
+
+    def _threshold(responses):
+        enhanced = np.max(responses, axis=0)
+        enhanced[~mask] = 0.0
+        thresh = np.percentile(enhanced[mask], threshold_percentile)
+        return (enhanced >= thresh) & mask
+
+    return _threshold(log_responses) | _threshold(wth_responses)
+
+
+def clean_segmentation(
+    segmented_image,
+    detector_mask,
+    intensity_image,
+    min_size: int = 3,
+    max_size: int = 500,
+    gap_exclude: int = 3,
+    gap_closing: int = 3,
+):
+    """
+    Post-process a binary segmentation mask.
+
+    Args:
+    segmented_image : (Ny, Nx) bool ndarray
+        Raw binary mask from the segmentation step.
+    detector_mask : (Ny, Nx) bool ndarray
+        Valid-pixel mask (True = active pixel).
+    intensity_image : (Ny, Nx) ndarray
+        Intensity image forwarded to `skimage.measure.regionprops`.
+    min_size, max_size : int
+        Minimum / maximum connected-component area in pixels.
+    gap_exclude : int
+        Dilation radius (pixels) around detector gaps used to exclude spots
+        that genuinely overlap a module edge or large dead region.
+    gap_closing : int
+        Closing radius (pixels) applied to *detector_mask* **before** the
+        gap-exclusion dilation.  Binary closing fills isolated bad pixels
+        (single dead pixels, small clusters) that are surrounded by valid
+        pixels, so that spots near those bad pixels are not incorrectly
+        excluded.  Set to `0` to disable.  Default `3`.
+
+    Returns:
+    final_mask : (Ny, Nx) bool ndarray
+    valid_props : list of RegionProperties
+"""
+    seg = ndi.binary_fill_holes(segmented_image)
+    seg = sk.morphology.remove_small_objects(seg, max_size=min_size - 1)
+    seg = sk.morphology.closing(seg, sk.morphology.disk(1))
+    seg = sk.segmentation.clear_border(seg)
+
+    labels = sk.measure.label(seg, connectivity=2)
+
+    # Close the valid-pixel mask to fill isolated bad pixels before dilating
+    # the gap zone.  This prevents spots near single dead pixels or small
+    # pixel clusters from being discarded, while real module edges (wider
+    # than gap_closing) remain as exclusion boundaries.
+    if gap_closing > 0:
+        closed_mask = ndi.binary_closing(detector_mask, sk.morphology.disk(gap_closing))
+    else:
+        closed_mask = detector_mask
+    gap_zone = ndi.binary_dilation(~closed_mask, sk.morphology.disk(gap_exclude))
+
+    final_mask  = np.zeros_like(detector_mask)
+    props       = sk.measure.regionprops(labels, intensity_image=intensity_image)
+    valid_props = []
+    for p in props:
+        if not (min_size <= p.area <= max_size):
+            continue
+        coords = p.coords
+        if np.any(gap_zone[coords[:, 0], coords[:, 1]]):
+            continue
+        final_mask[labels == p.label] = True
+        valid_props.append(p)
+
+    return final_mask, valid_props
+
+def gaussian_background(image, valid_mask, sigma=251):
+    """Estimate a smooth background via FFT-based Gaussian filtering.
+
+    Uses FFT convolution (O(N log N)) so large sigma values are fast.
+    `workers=-1` lets scipy use all available CPU cores for the FFT.
+"""
+    def _fft_gauss(arr):
+        f = sp_fft.fft2(arr, workers=-1)
+        ndi.fourier_gaussian(f, sigma=sigma, output=f)
+        return sp_fft.ifft2(f, workers=-1).real.astype(np.float32)
+
+    img = image.astype(np.float32).copy()
+    img[~valid_mask] = 0.0
+
+    smooth = _fft_gauss(img)
+    norm   = _fft_gauss(valid_mask.astype(np.float32))
+    norm[norm < 1e-6] = 1.0
+
+    return smooth / norm
+
+
+
+def process_one_image(
+    image_index,
+    scan_h5_path,
+    segment_folder,
+    datfile_folder,
+    corfile_folder,
+    image_format="h5",
+    entry="1.1/measurement/eiger4m",
+):
+
+    if image_type == "h5":
+        with h5py.File(scan_h5_path, "r") as hin:
+            frame = hin[entry][image_index].astype(np.float32)
+
+    mask = LoG_segmentation(frame)
+    label_img, n_labels, lab_rgb = label_segmented_image(mask, filt_im)
+    regionprops = measure_peaks(label_img, filt_im)
+    filt_im = filter_and_rescale_images(frame, cutoff_freq=0.001)
+
+    h5segmentpath = os.path.join(segment_folder, f"frame_{image_index:05}.h5")
+
+    write_h5_spotsfile(filt_im, regionprops, outpath=h5segmentpath)
+    peaklist = convert_spotsfile2peaklist(h5segmentpath)
+
+    datfilepath = os.path.join(datfile_folder, f"frame_{image_index:05}.dat")
+    write_peaklist_dat(peaklist, datfilepath)
+
+
+# ── Local parallel segmentation ───────────────────────────────────────────────
+
+def _seg_process_frame(
+    frame_idx: int,
+    frame: np.ndarray,
+    seg_dir: str,
+    detector_mask,
+    method: str,
+    method_kwargs: dict,
+    min_size: int,
+    max_size: int,
+    gap_exclude: int,
+    gap_closing: int,
+    bg_sigma: float,
+    max_components: int,
+    overwrite: bool,
+) -> tuple:
+    """Process one frame; returns (frame_idx, success, out_path_or_error_msg)."""
+    out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+    if os.path.exists(out_path) and not overwrite:
+        return frame_idx, True, out_path
+
+    try:
+        valid = (
+            detector_mask
+            if detector_mask is not None
+            else np.ones(frame.shape, dtype=bool)
+        )
+
+        bg    = gaussian_background(frame, valid, sigma=bg_sigma)
+        frame = frame - bg
+        frame -= frame[valid].min()
+        frame[~valid] = 0.0
+
+        if method.upper() == "WTH":
+            seg_mask = WTH_segmentation(frame, valid, **method_kwargs)
+        elif method.upper() == "HYBRID":
+            seg_mask = hybrid_segmentation(frame, valid, **method_kwargs)
+        else:
+            seg_mask = LoG_segmentation(frame, valid, **method_kwargs)
+
+        final_mask, _ = clean_segmentation(
+            seg_mask, valid, frame,
+            min_size=min_size, max_size=max_size,
+            gap_exclude=gap_exclude, gap_closing=gap_closing,
+        )
+
+        filt_im      = filter_and_rescale_images(frame, cutoff_freq=0.001)
+        label_img, _, _ = label_segmented_image(final_mask, filt_im)
+        regionprops  = measure_peaks(label_img, filt_im)
+
+        tmp = out_path + ".tmp"
+        write_h5_spotsfile(
+            filt_im, regionprops, outpath=tmp,
+            overwrite=True, max_components=max_components,
+        )
+        os.rename(tmp, out_path)
+        return frame_idx, True, out_path
+
+    except Exception as exc:
+        return frame_idx, False, str(exc)
+
+
+def run_segmentation_local(
+    image_stack: np.ndarray,
+    seg_dir: str,
+    detector_mask: np.ndarray | None = None,
+    method: str = "LoG",
+    method_kwargs: dict | None = None,
+    min_size: int = 3,
+    max_size: int = 500,
+    gap_exclude: int = 3,
+    gap_closing: int = 3,
+    bg_sigma: float = 251.0,
+    max_components: int = 1,
+    n_workers: int | None = None,
+    overwrite: bool = False,
+    frame_indices=None,
+) -> list:
+    """
+    Run the Laue segmentation pipeline locally using multiple CPU cores.
+
+    Mirrors the SLURM worker pipeline (background subtraction → segmentation
+    → cleaning → Gaussian fitting → HDF5 output) but runs in-process using
+    a `ProcessPoolExecutor` instead of submitting cluster jobs.
+
+    Args:
+    image_stack : (N, Ny, Nx) ndarray
+        Stack of raw detector frames, already loaded into memory.
+    seg_dir : str
+        Output directory.  One `frame_{idx:05d}.h5` file is written per frame.
+    detector_mask : (Ny, Nx) bool ndarray or None
+        Valid-pixel mask (True = active pixel).  None → all pixels active.
+    method : {'LoG', 'WTH', 'HYBRID'}
+        Segmentation method passed to the corresponding function.
+    method_kwargs : dict or None
+        Extra keyword arguments forwarded to the segmentation function.
+    min_size, max_size : int
+        Minimum / maximum spot area in pixels after cleaning.
+    gap_exclude : int
+        Dilation radius (pixels) around detector gaps excluded during cleaning.
+    gap_closing : int
+        Closing radius (pixels) applied to the valid-pixel mask before the
+        gap-exclusion dilation.  Fills isolated dead pixels so spots near bad
+        pixels are not incorrectly excluded.  Default `3`.
+    bg_sigma : float
+        Sigma (pixels) for the Gaussian background estimate.
+    max_components : int
+        Maximum number of Gaussian components fitted per spot.
+    n_workers : int or None
+        Number of worker processes.  None → `os.cpu_count()`.
+    overwrite : bool
+        If False (default), skip frames whose output file already exists.
+    frame_indices : sequence of int or None
+        Subset of frame indices to process.  None → all frames.
+
+    Returns:
+    out_paths : list of str
+        Paths of successfully written HDF5 files, sorted by frame index.
+"""
+    import time
+
+    os.makedirs(seg_dir, exist_ok=True)
+
+    if frame_indices is None:
+        frame_indices = range(image_stack.shape[0])
+    frame_indices = list(frame_indices)
+    method_kwargs = method_kwargs or {}
+
+    print(
+        f"run_segmentation_local — {len(frame_indices)} frames  "
+        f"method={method}  workers={n_workers or os.cpu_count()}",
+        flush=True,
+    )
+
+    t0        = time.time()
+    n_ok      = 0
+    n_fail    = 0
+    out_paths = []
+    n_total   = len(frame_indices)
+    tick      = max(1, n_total // 20)   # print every ~5 %
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(
+                _seg_process_frame,
+                fi,
+                image_stack[fi].astype(np.float32),
+                seg_dir,
+                detector_mask,
+                method,
+                method_kwargs,
+                min_size,
+                max_size,
+                gap_exclude,
+                gap_closing,
+                bg_sigma,
+                max_components,
+                overwrite,
+            ): fi
+            for fi in frame_indices
+        }
+
+        done = 0
+        for fut in concurrent.futures.as_completed(futures):
+            done += 1
+            fi, ok, result = fut.result()
+            if ok:
+                n_ok += 1
+                out_paths.append(result)
+            else:
+                n_fail += 1
+                print(f"  ✗  frame {fi}: {result}", flush=True)
+
+            if done % tick == 0 or done == n_total:
+                elapsed = time.time() - t0
+                rate    = done / elapsed
+                eta     = (n_total - done) / rate if rate > 0 else float("inf")
+                print(
+                    f"  {done}/{n_total}  "
+                    f"({n_ok} ok, {n_fail} failed)  "
+                    f"{elapsed:.0f}s elapsed  ETA {eta:.0f}s",
+                    flush=True,
+                )
+
+    out_paths.sort()
+    print(
+        f"\nDone — {n_ok}/{n_total} OK, {n_fail} failed  "
+        f"({time.time() - t0:.1f}s total)",
+        flush=True,
+    )
+    return out_paths

@@ -1,3 +1,3 @@
 # visualization
 
-::: nrxrdct.visualization
+::: nrxrdct.xrdct.visualization

@@ -1,3 +1,3 @@
 # refine_dict
 
-::: nrxrdct.refine_dict
+::: nrxrdct.rietveld.refine_dict

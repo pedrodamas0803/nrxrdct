@@ -1,3 +1,0 @@
-# plotting
-
-::: nrxrdct.plotting

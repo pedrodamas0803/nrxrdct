@@ -6,29 +6,6 @@ edit_uri: edit/main/docs/
 
 theme:
   name: readthedocs
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - search.highlight
-    - search.share
-    - content.code.copy
-    - content.code.annotate
 
 plugins:
   - search
@@ -51,11 +28,17 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.tabbed:
-      alternate_style: true
   - tables
   - toc:
       permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - css/custom.css
 
 nav:
   - Home: index.md
@@ -65,21 +48,37 @@ nav:
     - Typical Workflow: user-guide/workflow.md
     - SLURM / HPC Integration: user-guide/slurm.md
     - GPU Support: user-guide/gpu.md
+    - Laue Diffraction:
+      - Diffraction and Laue Theory: user-guide/laue_theory.md
+      - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
+      - Layered Structures: user-guide/laue_layered_structures.md
+      - Darwin Model (Thick Layers): user-guide/laue_darwin.md
+      - Orientation Plotting: user-guide/laue_orientation_plotting.md
+      - Strain Analysis: user-guide/laue_strain.md
+      - Elastic Stress from Strain Maps: user-guide/laue_stress.md
+      - Grain Map Merging and Symmetry Reduction: user-guide/laue_grain_map_merge.md
   - Examples:
     - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:
-    - parameters: api/parameters.md
-    - preprocessing: api/preprocessing.md
-    - integration: api/integration.md
-    - reconstruction: api/reconstruction.md
-    - refinement: api/refinement.md
-    - refine_dict: api/refine_dict.md
-    - fluorescence: api/fluorescence.md
-    - nmf: api/nmf.md
     - utils: api/utils.md
-    - plotting: api/plotting.md
-    - visualization: api/visualization.md
-    - io: api/io.md
-    - roi: api/roi.md
-    - slurm_integration: api/slurm_integration.md
-    - slurm_reconstruction: api/slurm_reconstruction.md
+    - azimuthal:
+      - integration: api/integration.md
+      - slurm_integration: api/slurm_integration.md
+    - fitting:
+      - peakfit: api/peakfit.md
+      - nmf: api/nmf.md
+    - fluo:
+      - fluorescence: api/fluorescence.md
+    - rietveld:
+      - refinement: api/refinement.md
+      - refine_dict: api/refine_dict.md
+    - xrdct:
+      - io: api/io.md
+      - parameters: api/parameters.md
+      - preprocessing: api/preprocessing.md
+      - sinogram: api/sinogram.md
+      - reconstruction: api/reconstruction.md
+      - visualization: api/visualization.md
+      - volume: api/volume.md
+      - slurm_reconstruction: api/slurm_reconstruction.md
+    - laue: api/laue.md

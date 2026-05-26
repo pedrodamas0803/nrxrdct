@@ -1,3 +1,3 @@
 # io
 
-::: nrxrdct.io
+::: nrxrdct.xrdct.io

@@ -1,3 +1,3 @@
 # preprocessing
 
-::: nrxrdct.preprocessing
+::: nrxrdct.xrdct.preprocessing

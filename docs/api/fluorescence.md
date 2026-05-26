@@ -1,3 +1,3 @@
 # fluorescence
 
-::: nrxrdct.fluorescence
+::: nrxrdct.fluo.fluorescence

@@ -93,8 +93,6 @@ def _process_frame(
     if _g_allowed_list is not None:
         allowed = {id(c): a for c, a in zip(crystals, _g_allowed_list)}
 
-    stages = max_match_px if isinstance(max_match_px, (list, tuple)) else [max_match_px]
-
     phases = [
         {"crystal": c, "U": np.asarray(U, dtype=float).copy(),
          "volume_fraction": 1.0 / len(crystals)}
@@ -102,17 +100,15 @@ def _process_frame(
     ]
 
     try:
-        result = None
-        for px in stages:
-            result = fit_orientation_mixed(
-                phases, camera, obs_xy,
-                shared=shared,
-                max_match_px=float(px),
-                geometry_only=False,
-                allowed_hkl=allowed,
-                update_phases=True,
-                **fit_kwargs,
-            )
+        result = fit_orientation_mixed(
+            phases, camera, obs_xy,
+            shared=shared,
+            max_match_px=max_match_px,
+            geometry_only=False,
+            allowed_hkl=allowed,
+            update_phases=False,
+            **fit_kwargs,
+        )
     except Exception as exc:
         print(f"  ✗  frame {frame_idx}: mixed fit: {exc}", flush=True)
         return False

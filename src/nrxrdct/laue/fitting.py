@@ -1751,6 +1751,7 @@ def fit_orientation_mixed(
     max_nfev: int = 500,
     update_phases: bool = True,
     geometry_only: bool = True,
+    allowed_hkl: dict | None = None,
     verbose: bool = False,
 ) -> MixedFitResult:
     """
@@ -1819,6 +1820,12 @@ def fit_orientation_mixed(
             U matrices back into the original phase
             dicts (dict input only; tuple input is
             not mutated).
+        allowed_hkl (dict or None): Pre-computed allowed-reflection sets keyed by
+            ``id(crystal)``, as returned by
+            :func:`~nrxrdct.laue.simulation.precompute_allowed_hkl`.
+            When supplied, ``geometry_only`` is ignored and no
+            recomputation is performed.  Pass this from the
+            SLURM worker to avoid redundant per-frame recomputation.
         verbose (bool): Print a one-line summary after convergence.
 
     Returns:
@@ -1847,9 +1854,11 @@ def fit_orientation_mixed(
 
     # Precompute per-crystal allowed hkl sets once; keyed by id(crystal) so
     # simulate_mixed_phases can look up the right set for each phase.
-    if geometry_only:
+    if allowed_hkl is not None:
+        _allowed: dict | None = allowed_hkl
+    elif geometry_only:
         _f2 = f2_thresh if f2_thresh is not None else F2_THRESHOLD
-        _allowed: dict | None = {
+        _allowed = {
             id(p["crystal"]): precompute_allowed_hkl(p["crystal"], E_max_eV=E_max_eV, f2_thresh=_f2)
             for p in phases_work
         }

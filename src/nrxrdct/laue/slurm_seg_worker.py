@@ -59,6 +59,7 @@ def _process_frame(
     bg_sigma: float,
     max_components: int,
     d: int,
+    fit_spots: bool = True,
 ) -> bool:
     out_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
     if os.path.exists(out_path):
@@ -93,7 +94,7 @@ def _process_frame(
 
         tmp = out_path + ".tmp"
         write_h5_spotsfile(frame_sub, regionprops, outpath=tmp, overwrite=True,
-                           d=d, max_components=max_components)
+                           d=d, max_components=max_components, fit_spots=fit_spots)
         os.rename(tmp, out_path)
         return True
 
@@ -192,6 +193,7 @@ def main() -> None:
             bg_sigma       = meta.get("bg_sigma", 251),
             max_components = meta.get("max_components", 1),
             d              = meta.get("d", 10),
+            fit_spots      = meta.get("fit_spots", True),
         )
         n_ok   += ok
         n_fail += not ok

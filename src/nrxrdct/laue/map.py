@@ -5844,6 +5844,7 @@ class GrainMap:
         d: int = 10,
         r_squared_min: float = 0.9,
         include_unfitted: bool = False,
+        fit_spots: bool = True,
         extra_sbatch: dict | None = None,
     ) -> list:
         """
@@ -5856,9 +5857,11 @@ class GrainMap:
            from the raw frame — **used only for spot detection**.
         2. Detect spots with the chosen segmentation method.
         3. Clean the binary mask (size filter, border removal).
-        4. Measure regionprops and fit a 2-D Gaussian to the **original**
-           (unmodified) frame intensities inside a `(2d)×(2d)` ROI around
-           each centroid.
+        4. Measure regionprops and, when `fit_spots=True`, fit a 2-D Gaussian
+           to the **original** (unmodified) frame intensities inside a
+           `(2d)×(2d)` ROI around each centroid.  When `fit_spots=False`
+           this step is skipped and the weighted centroid from regionprops
+           is used directly as the spot position.
         5. Write results to `seg_dir/frame_{idx:05d}.h5`.
 
         Args:
@@ -5939,7 +5942,13 @@ class GrainMap:
                 centroid as position (shape parameters set to zero).  If
                 `False`, those spots are silently discarded.  Stored in
                 `seg_meta.json` and inherited by downstream workers.
-                Default `False`.
+                Ignored when *fit_spots* is `False`.  Default `False`.
+            fit_spots (bool): If `True` (default), attempt a 2-D Gaussian mixture fit for each
+                detected spot.  If `False`, skip fitting entirely and write
+                each spot using the weighted centroid from regionprops; shape
+                fields are set to 0 and ``r_squared`` is stored as ``-1``.
+                Skipping fitting is significantly faster and sufficient when
+                only peak positions are needed.  Default `True`.
             extra_sbatch (dict or None): Additional `sbatch` options passed as `--key=value` flags,
                 e.g. `{'account': 'myproject', 'constraint': 'gpu'}`.
 
@@ -5979,6 +5988,7 @@ class GrainMap:
             "d":              d,
             "r_squared_min":  r_squared_min,
             "include_unfitted": include_unfitted,
+            "fit_spots":      fit_spots,
         }
         meta_path = os.path.join(dirs["job_meta"], "seg_meta.json")
         with open(meta_path, "w") as fh:

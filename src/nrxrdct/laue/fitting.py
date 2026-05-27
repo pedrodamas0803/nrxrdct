@@ -37,6 +37,26 @@ that steers the optimizer away from orientations that leave spots orphaned.
 All residual functions return a vector of length `2 * N_obs_use`,
 regardless of how many simulated spots exist.  The fixed length makes
 them directly compatible with `scipy.optimize.least_squares`.
+
+**Staged refinement**
+All three fitting functions accept ``max_match_px`` as either a single float
+or a decreasing sequence (e.g. ``[50, 15, 3]``).  When a sequence is given,
+each entry defines one stage.  At the end of stage *k* the optimizer
+solution is composed into the warm-start orientation(s) before stage *k+1*
+begins with a tighter match window:
+
+- *Single crystal*: ``U0 ← R(δω_k) @ U0``
+- *Stack*: ``U0_i ← R(δω_k) @ U0_i`` for every layer *i* (same global rotation)
+- *Mixed, shared*: same global rotation applied to every phase
+- *Mixed, per-phase*: each phase gets its own correction ``U0_i ← R(δω_k,i) @ U0_i``
+
+Because δω is re-zeroed at the start of each stage, Levenberg–Marquardt
+always begins from a well-conditioned, near-identity Jacobian.  A coarse
+first stage (large ``max_match_px``) captures the correct basin even when
+the initial misalignment is large; subsequent stages tighten the matching
+tolerance to sharpen convergence.  The ``rotvec``/``R_global`` fields in
+every result type represent the *total* rotation accumulated across all
+stages, not just the last correction.
 """
 
 from __future__ import annotations
@@ -1317,8 +1337,8 @@ def fit_orientation(
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float | list[float] = (15.0, 3.0),
-    top_n_obs: int | None = 50,
-    top_n_sim: int | None = 100,
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
     method: str = "lm",
     ftol: float = 1e-6,
     xtol: float = 1e-6,
@@ -1518,9 +1538,9 @@ def fit_orientation_stack(
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     structure_model: str = "average",
-    max_match_px: float = 30.0,
-    top_n_obs: int | None = None,
-    top_n_sim: int | None = None,
+    max_match_px: float | list[float] = 30.0,
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
     method: str = "lm",
     ftol: float = 1e-6,
     xtol: float = 1e-6,
@@ -1539,6 +1559,22 @@ def fit_orientation_stack(
     the stack is restored to a clean state regardless of optimizer success
     or failure.
 
+    **Staged refinement**
+    When ``max_match_px`` is a decreasing list (e.g. ``[50, 15, 3]``) the
+    fit runs in multiple stages.  After each non-final stage the global
+    rotation found so far is composed into every layer's warm-start
+    orientation:
+
+    .. code-block:: text
+
+        U0_i ← R(δω_stage) @ U0_i   for all layers i
+
+    The next stage then solves from δω = 0 with a tighter matching window,
+    so Levenberg–Marquardt always operates near the identity.  The
+    ``R_global`` and ``rotvec`` in the returned :class:`StackFitResult`
+    represent the total rotation accumulated across all stages, computed as
+    ``R_global = U_final @ U0_original.T`` for the first layer.
+
     Args:
         stack (LayeredCrystal): Layered structure to fit.  Layer U
             matrices are used as starting orientations
@@ -1554,7 +1590,11 @@ def fit_orientation_stack(
         kb_params (KB mirror reflectivity parameters.):
         structure_model: str              Layer combination model — `'average'`
             (default) or `'incoherent'`.
-        max_match_px (float): Pixel match radius.
+        max_match_px (float or list of float): Pixel match radius.  A single float
+            runs one fit.  A decreasing list (e.g.
+            ``[50, 15, 3]``) runs staged refinement: each
+            stage warm-starts from the previous solution,
+            progressively tightening the matching window.
         top_n_obs (int or None): Brightest N observed spots to use.
         top_n_sim (int or None): Brightest N simulated spots to consider.
         method (str): `least_squares` algorithm (`'lm'` or
@@ -1570,7 +1610,7 @@ def fit_orientation_stack(
 
     Returns:
         StackFitResult
-            `result.R_global` is the 3×3 rotation applied to all layers.
+            `result.R_global` is the total 3×3 rotation applied to all layers.
             `result.U_layers` lists the refined U for each layer in
             `stack.all_layers` order.
 """
@@ -1607,36 +1647,54 @@ def fit_orientation_stack(
     else:
         _allowed = None
 
-    fun = partial(
-        laue_stack_residuals,
-        stack=stack, camera=camera, obs_xy=obs_use,
-        U0_layers=U0_layers,
-        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-        source=source, source_kwargs=source_kwargs,
-        f2_thresh=f2_thresh, kb_params=kb_params,
-        structure_model=structure_model,
-        max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=False, allowed_hkl=_allowed,
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
     )
 
+    U0_stage = [U0.copy() for U0 in U0_layers]
+    opt = None
+
     try:
-        opt = least_squares(
-            fun, x0=np.zeros(3),
-            method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
-        )
+        for _si, _px in enumerate(_stages):
+            fun = partial(
+                laue_stack_residuals,
+                stack=stack, camera=camera, obs_xy=obs_use,
+                U0_layers=U0_stage,
+                E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                source=source, source_kwargs=source_kwargs,
+                f2_thresh=f2_thresh, kb_params=kb_params,
+                structure_model=structure_model,
+                max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+                geometry_only=False, allowed_hkl=_allowed,
+            )
+            opt = least_squares(
+                fun, x0=np.zeros(3),
+                method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+            )
+            if verbose and len(_stages) > 1:
+                _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
+                print(
+                    f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                    f"  matched={_nm}  rms={_rms:.2f} px"
+                )
+            if _si < len(_stages) - 1:
+                R_step = Rotation.from_rotvec(opt.x).as_matrix()
+                U0_stage = [R_step @ U0 for U0 in U0_stage]
     finally:
         # Always restore original U matrices so the stack is in a known state.
         for layer, U0 in zip(stack.all_layers, U0_layers):
             layer.U = U0.copy()
 
-    R_global = Rotation.from_rotvec(opt.x).as_matrix()
-    U_layers_final = [R_global @ U0 for U0 in U0_layers]
+    R_last = Rotation.from_rotvec(opt.x).as_matrix()
+    U_layers_final = [R_last @ U0 for U0 in U0_stage]
+    R_global = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
 
     if update_stack:
         for layer, U_new in zip(stack.all_layers, U_layers_final):
             layer.U = U_new.copy()
 
-    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     # Final simulation for n_sim.
     for layer, U_new in zip(stack.all_layers, U_layers_final):
@@ -1655,8 +1713,9 @@ def fit_orientation_stack(
         for layer, U0 in zip(stack.all_layers, U0_layers):
             layer.U = U0.copy()
 
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
     result = StackFitResult(
-        R_global=R_global, rotvec=opt.x.copy(),
+        R_global=R_global, rotvec=rotvec_total,
         U_layers=U_layers_final, U0_layers=U0_layers,
         cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
@@ -1682,9 +1741,9 @@ def fit_orientation_mixed(
     f2_thresh: float | None = None,
     kb_params=BM32_KB,
     structure_model: str = "average",
-    max_match_px: float = 30.0,
-    top_n_obs: int | None = None,
-    top_n_sim: int | None = None,
+    max_match_px: float | list[float] = 30.0,
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
     method: str = "lm",
     ftol: float = 1e-6,
     xtol: float = 1e-6,
@@ -1707,6 +1766,25 @@ def fit_orientation_mixed(
       parameters).  Use this when phases may have drifted independently or
       when the initial guess for each phase was set separately.
 
+    **Staged refinement**
+    When ``max_match_px`` is a decreasing list (e.g. ``[50, 15, 3]``) the
+    fit runs in multiple stages.  Between stages the current solution is
+    composed into the warm-start orientations so the next stage always
+    starts from δω = 0:
+
+    - *Shared mode*: one global rotation is applied to all phases::
+
+          U0_i ← R(δω_stage) @ U0_i   for all phases i
+
+    - *Per-phase mode*: each phase receives its own independent correction::
+
+          U0_i ← R(δω_stage,i) @ U0_i   for phase i
+
+    The ``rotvecs`` list in the returned :class:`MixedFitResult` always
+    contains the total rotation vectors accumulated across all stages,
+    computed as ``Rotation.from_matrix(U_final_i @ U0_original_i.T).as_rotvec()``
+    for each phase.
+
     Args:
         phases (list of dicts or tuples): Phase descriptors in the same format as
             :func:`~nrxrdct.laue.simulation.simulate_mixed_phases`.
@@ -1724,9 +1802,13 @@ def fit_orientation_mixed(
         source_kwargs (dict or None): Extra kwargs for the spectral function.
         f2_thresh (float or None): Minimum |F|² threshold.
         kb_params (KB mirror reflectivity parameters.):
-        structure_model: str              Layer combination model (`'average'` or
+        structure_model (str): Layer combination model (`'average'` or
             `'incoherent'`).
-        max_match_px (float): Pixel match radius.
+        max_match_px (float or list of float): Pixel match radius.  A single float
+            runs one fit.  A decreasing list (e.g.
+            ``[50, 15, 3]``) runs staged refinement: each
+            stage warm-starts from the previous solution,
+            progressively tightening the matching window.
         top_n_obs (int or None): Brightest N observed spots to use.
         top_n_sim (int or None): Brightest N simulated spots to consider.
         method (str): `least_squares` algorithm (`'lm'` or
@@ -1774,23 +1856,46 @@ def fit_orientation_mixed(
     else:
         _allowed = None
 
-    fun = partial(
-        laue_mixed_residuals,
-        phases=phases_work, camera=camera, obs_xy=obs_use,
-        U0_list=U0_list, shared=shared,
-        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-        source=source, source_kwargs=source_kwargs,
-        f2_thresh=f2_thresh, kb_params=kb_params,
-        structure_model=structure_model,
-        max_match_px=max_match_px, top_n_obs=None, top_n_sim=top_n_sim,
-        geometry_only=False, allowed_hkl=_allowed,
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
     )
 
+    U0_stage = [U0.copy() for U0 in U0_list]
+    opt = None
+
     try:
-        opt = least_squares(
-            fun, x0=np.zeros(n_params),
-            method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
-        )
+        for _si, _px in enumerate(_stages):
+            fun = partial(
+                laue_mixed_residuals,
+                phases=phases_work, camera=camera, obs_xy=obs_use,
+                U0_list=U0_stage, shared=shared,
+                E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                source=source, source_kwargs=source_kwargs,
+                f2_thresh=f2_thresh, kb_params=kb_params,
+                structure_model=structure_model,
+                max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+                geometry_only=False, allowed_hkl=_allowed,
+            )
+            opt = least_squares(
+                fun, x0=np.zeros(n_params),
+                method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+            )
+            if verbose and len(_stages) > 1:
+                _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
+                print(
+                    f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                    f"  matched={_nm}  rms={_rms:.2f} px"
+                )
+            if _si < len(_stages) - 1:
+                if shared:
+                    R_step = Rotation.from_rotvec(opt.x).as_matrix()
+                    U0_stage = [R_step @ U0 for U0 in U0_stage]
+                else:
+                    U0_stage = [
+                        Rotation.from_rotvec(opt.x[3 * i : 3 * i + 3]).as_matrix() @ U0
+                        for i, U0 in enumerate(U0_stage)
+                    ]
     finally:
         # Restore original U matrices in the working copy.
         for p, U0 in zip(phases_work, U0_list):
@@ -1799,16 +1904,20 @@ def fit_orientation_mixed(
     # Unpack refined orientations.
     params = opt.x
     if shared:
-        R = Rotation.from_rotvec(params).as_matrix()
-        U_phases_final = [R @ U0 for U0 in U0_list]
-        rotvecs = [params.copy()] * N_phases
+        R_last = Rotation.from_rotvec(params).as_matrix()
+        U_phases_final = [R_last @ U0 for U0 in U0_stage]
+        rotvecs = [
+            Rotation.from_matrix(U_new @ U0_orig.T).as_rotvec()
+            for U_new, U0_orig in zip(U_phases_final, U0_list)
+        ]
     else:
         U_phases_final = []
-        rotvecs        = []
-        for i, U0 in enumerate(U0_list):
+        rotvecs = []
+        for i, (U0_s, U0_orig) in enumerate(zip(U0_stage, U0_list)):
             rv = params[3 * i : 3 * i + 3]
-            U_phases_final.append(Rotation.from_rotvec(rv).as_matrix() @ U0)
-            rotvecs.append(rv.copy())
+            U_new = Rotation.from_rotvec(rv).as_matrix() @ U0_s
+            U_phases_final.append(U_new)
+            rotvecs.append(Rotation.from_matrix(U_new @ U0_orig.T).as_rotvec())
 
     if update_phases:
         for p_orig, p_work, U_new in zip(
@@ -1820,7 +1929,7 @@ def fit_orientation_mixed(
             if isinstance(p_orig, dict):
                 p_orig["U"] = U_new.copy()
 
-    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, max_match_px, N_obs)
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
 
     # Final simulation for n_sim.
     for p, U_new in zip(phases_work, U_phases_final):
@@ -1864,8 +1973,8 @@ def fit_strain_orientation(
     f2_thresh: float = F2_THRESHOLD,
     kb_params=BM32_KB,
     max_match_px: float | list[float] = (15.0, 3.0),
-    top_n_obs: int | None = 50,
-    top_n_sim: int | None = 100,
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
     method: str = "lm",
     ftol: float = 1e-8,
     xtol: float = 1e-8,

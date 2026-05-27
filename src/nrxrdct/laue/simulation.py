@@ -204,9 +204,6 @@ def euler_to_U(phi1, Phi, phi2, sample_tilt_deg=0.0):
         Positive = front edge of sample tilted downward so the surface faces
         the incoming beam (standard reflection geometry).
 
-        - BM32 / ID01 Z>0 geometry, 40° grazing incidence → `sample_tilt_deg=40`
-        - LaueTools refined UB matrix (already in lab frame) → `sample_tilt_deg=0`
-
     Returns:
     U : ndarray, shape (3, 3)
         Orientation matrix such that `G_lab = U @ G_crystal`.

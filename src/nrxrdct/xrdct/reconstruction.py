@@ -10,15 +10,28 @@ re-exported here for backwards compatibility.
 
 import os
 
-import astra  # type: ignore
 import numpy as np
 
 from .io import save_sinogram  # noqa: F401 — re-exported for backwards compat
-from ..rietveld.refinement import BaseRefinement  # noqa: F401 — re-exported for backwards compat
-from .volume import ReconstructedVolume  # noqa: F401 — re-exported for backwards compat
 
-HAS_GPU = True if "nvidia" in astra.get_gpu_info().lower() else False
+try:
+    import astra  # type: ignore
+    HAS_GPU = "nvidia" in astra.get_gpu_info().lower()
+    _ASTRA_AVAILABLE = True
+except ImportError:
+    astra = None  # type: ignore[assignment]
+    HAS_GPU = False
+    _ASTRA_AVAILABLE = False
+
 NTHREADS = os.cpu_count() - 2
+
+
+def _require_astra() -> None:
+    if not _ASTRA_AVAILABLE:
+        raise ImportError(
+            "astra-toolbox is required for tomographic reconstruction. "
+            "Install it separately — see https://www.astra-toolbox.com/."
+        )
 
 
 def reconstruct_astra_gpu_3d(
@@ -44,6 +57,7 @@ def reconstruct_astra_gpu_3d(
     Returns:
         np.ndarray: Reconstructed volume of shape (num_detectors_y, N, N).
     """
+    _require_astra()
     # data is expected as (num_detectors_x, num_angles, num_detectors_y)
     # ASTRA 3D expects projections as (num_detectors_y, num_angles, num_detectors_x)
     if data.ndim != 3:
@@ -111,6 +125,7 @@ def reconstruct_astra_gpu(
         np.ndarray: Reconstructed 2-D slice of shape ``(N, N)`` where ``N`` equals
             the number of detectors.
     """
+    _require_astra()
     N = data.shape[0]
     data = data.T
     # Ensure correct sinogram shape:
@@ -165,6 +180,7 @@ def reconstruct_astra_cpu(
     Returns:
         np.ndarray: Reconstructed 2-D slice of shape ``(num_detectors, num_detectors)``.
     """
+    _require_astra()
     N = data.shape[0]
     data = data.T
     # Ensure correct sinogram shape:
@@ -232,6 +248,7 @@ def forward_project_gpu(
     Returns:
         np.ndarray: Sinogram of shape ``(num_angles, N)``.
     """
+    _require_astra()
     # Create geometries
     N = volume.shape[1]
     proj_geom = astra.create_proj_geom("parallel", det_spacing, N, angles_rad)
@@ -284,6 +301,7 @@ def reconstruct_slice(
     Returns:
         np.ndarray: Reconstructed 2-D slice.
     """
+    _require_astra()
     N = data.shape[0]
     if angles_rad.shape[0] < 10:
         angles_rad = np.linspace(0, np.pi, N)

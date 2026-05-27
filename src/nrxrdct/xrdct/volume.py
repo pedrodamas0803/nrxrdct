@@ -14,8 +14,22 @@ from typing import Any, Callable, Tuple
 import h5py
 import hdf5plugin  # noqa: F401 — registers hdf5plugin codecs with h5py
 import numpy as np
-from GSASII import GSASIIscriptable as G2sc # type: ignore
 from tqdm.auto import tqdm
+
+try:
+    from GSASII import GSASIIscriptable as G2sc  # type: ignore
+    _GSASII_AVAILABLE = True
+except ImportError:
+    G2sc = None  # type: ignore[assignment]
+    _GSASII_AVAILABLE = False
+
+
+def _require_gsasii() -> None:
+    if not _GSASII_AVAILABLE:
+        raise ImportError(
+            "GSAS-II is required for Rietveld refinement. "
+            "Install it separately — see https://gsas-ii.readthedocs.io/."
+        )
 
 from .io import save_xy_file
 
@@ -1720,6 +1734,7 @@ def _get_cell_params_ii_jj(args: tuple) -> Tuple[float, float, float]:
 
 def _load_data_from_gpx(filename: Path) -> Tuple[Any, list, list]:
     """Open a GSAS-II project file and return ``(project, histograms, phases)``."""
+    _require_gsasii()
     g = G2sc.G2Project(filename)
     hists = g.histograms()
     phases = g.phases()

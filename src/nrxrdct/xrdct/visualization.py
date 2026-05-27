@@ -17,13 +17,14 @@ Usage in a notebook cell
     visualize_slices_with_profile_jupyter(volume)
 """
 
+from __future__ import annotations
+
 import asyncio
 from typing import Any, Dict, List, Optional, Union
 
 import ipywidgets as widgets
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import napari  # type: ignore
 import numpy as np
 import pandas as pd
 from IPython.display import display
@@ -86,6 +87,8 @@ def visualize_volume(
         ... )
         >>> napari.run()
     """
+    import napari  # type: ignore
+
     if volume.ndim != 3:
         raise ValueError(
             f"Expected a 3-D array, got shape {volume.shape}. "
@@ -184,6 +187,8 @@ def visualize_slices(
         ... )
         >>> napari.run()
     """
+    import napari  # type: ignore
+
     if volume.ndim != 3:
         raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
 
@@ -419,6 +424,8 @@ def visualize_slices_with_profile(
         >>> viewer = visualize_slices_with_profile(vol, colormap="turbo")
         >>> napari.run()
     """
+    import napari  # type: ignore
+
     if volume.ndim != 3:
         raise ValueError(f"Expected a 3-D array, got shape {volume.shape}.")
 

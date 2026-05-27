@@ -8,6 +8,8 @@ extinction), and :class:`InstrumentCalibration`, a specialised subclass for
 calibrant-based instrument parameter calibration with dedicated plotting.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 from datetime import datetime
@@ -15,8 +17,22 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from GSASII import GSASIIscriptable as G2sc
 from matplotlib import gridspec
+
+try:
+    from GSASII import GSASIIscriptable as G2sc  # type: ignore
+    _GSASII_AVAILABLE = True
+except ImportError:
+    G2sc = None  # type: ignore[assignment]
+    _GSASII_AVAILABLE = False
+
+
+def _require_gsasii() -> None:
+    if not _GSASII_AVAILABLE:
+        raise ImportError(
+            "GSAS-II is required for Rietveld refinement. "
+            "Install it separately — see https://gsas-ii.readthedocs.io/."
+        )
 
 from ..xrdct.io import read_xy_file, write_starting_instrument_pars
 from ..xrdct.parameters import Scan
@@ -115,6 +131,7 @@ class BaseRefinement(Scan):
         Returns:
             tuple: ``(gpx, hist)`` — the :class:`G2Project` and the first histogram.
         """
+        _require_gsasii()
         self.gpx = G2sc.G2Project(gpxfile=str(gpx_file))
         self.hist = self.gpx.histograms()[0]
         self.phases = self.gpx.phases()
@@ -248,6 +265,7 @@ class BaseRefinement(Scan):
         Returns:
             tuple: ``(gpx, hist)`` — the :class:`G2Project` and the added histogram object.
         """
+        _require_gsasii()
         self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
         self.hist = self.gpx.add_powder_histogram(

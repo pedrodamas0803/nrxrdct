@@ -2434,7 +2434,7 @@ class GrainMap:
                 _plt.close(fig_orix)
                 _buf.seek(0)
                 img_arr = _plt.imread(_buf)
-                ax_key.imshow(img_arr)
+                ax_key.imshow(img_arr, aspect="auto")
                 ax_key.set_facecolor("white")
             except Exception as _e:
                 import traceback as _tb
@@ -2546,7 +2546,7 @@ class GrainMap:
                 fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=200)
                 _plt.close(fig_orix)
                 _buf.seek(0)
-                ax_full.imshow(_plt.imread(_buf))
+                ax_full.imshow(_plt.imread(_buf), aspect="auto")
             except Exception as _e:
                 import traceback as _tb
                 print("IPF stretched key (left panel) error:", _e)
@@ -2558,18 +2558,29 @@ class GrainMap:
             ax_zoom.set_facecolor("0.15")
             if c_dirs is not None and len(c_dirs) and rgb_stretched is not None:
                 try:
-                    norms = np.linalg.norm(c_dirs, axis=1, keepdims=True)
-                    d     = c_dirs / np.maximum(norms, 1e-12)
-                    z     = d[:, 2]
-                    denom = np.sqrt(np.maximum((1.0 + z) / 2.0, 1e-9))
-                    u_lam = d[:, 0] / denom
-                    v_lam = d[:, 1] / denom
-                    normals = np.asarray(sym.fundamental_sector.data)
-                    in_fz   = np.all(d @ normals.T >= -1e-6, axis=1)
-                    print(f"c_dirs shape: {c_dirs.shape}, in_fz sum: {in_fz.sum()}")
-                    if in_fz.any():
-                        u_p, v_p = u_lam[in_fz], v_lam[in_fz]
-                        ax_zoom.scatter(u_p, v_p, c=rgb_stretched[in_fz],
+                    norms  = np.linalg.norm(c_dirs, axis=1, keepdims=True)
+                    d      = c_dirs / np.maximum(norms, 1e-12)
+
+                    # Reduce each direction to the fundamental zone by applying
+                    # all symmetry operations and keeping the one that satisfies
+                    # all FZ half-space constraints (normals · d >= 0).
+                    R_mats  = np.asarray(sym.to_matrix())          # (Nsym, 3, 3)
+                    d_all   = np.einsum('ijk,lk->ilj', R_mats, d)  # (Nsym, N, 3)
+                    normals = np.asarray(sym.fundamental_sector.data)  # (K, 3)
+                    dots    = np.einsum('ijk,lk->ijl', d_all, normals) # (Nsym, N, K)
+                    in_fz   = np.all(dots >= -1e-6, axis=-1)           # (Nsym, N)
+                    any_ok  = np.any(in_fz, axis=0)                    # (N,)
+                    first   = np.argmax(in_fz, axis=0)                 # (N,)
+                    d_fz    = d_all[first, np.arange(len(d))]          # (N, 3)
+
+                    if any_ok.any():
+                        d_p   = d_fz[any_ok]
+                        rgb_p = rgb_stretched[any_ok]
+                        z_p   = d_p[:, 2]
+                        denom = np.sqrt(np.maximum((1.0 + z_p) / 2.0, 1e-9))
+                        u_p   = d_p[:, 0] / denom
+                        v_p   = d_p[:, 1] / denom
+                        ax_zoom.scatter(u_p, v_p, c=rgb_p,
                                         s=1.5, linewidths=0, rasterized=True)
                         pad_u = max((u_p.max() - u_p.min()) * 0.15, 1e-4)
                         pad_v = max((v_p.max() - v_p.min()) * 0.15, 1e-4)
@@ -2580,8 +2591,6 @@ class GrainMap:
                     import traceback as _tb
                     print("IPF stretched key (right panel) error:", _e)
                     _tb.print_exc()
-            else:
-                print(f"c_dirs is None: {c_dirs is None}, rgb_stretched is None: {rgb_stretched is None}")
 
         ax_zoom.set_xticks([]); ax_zoom.set_yticks([])
         ax_zoom.set_title("stretched", fontsize=5, pad=2)

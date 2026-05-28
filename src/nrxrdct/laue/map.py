@@ -2380,7 +2380,7 @@ class GrainMap:
             return
 
         divider = make_axes_locatable(parent_ax)
-        ax_key  = divider.append_axes("right", size="35%", pad=0.12)
+        ax_key  = divider.append_axes("right", size="50%", pad=0.15)
         ax_key.set_facecolor("0.97")
 
         if sym is _osym.Oh:
@@ -2427,8 +2427,10 @@ class GrainMap:
 
                 key      = IPFColorKeyTSL(sym)
                 fig_orix = key.plot(return_figure=True)
+                for _a in fig_orix.axes:
+                    _a.set_title("")
                 _buf = _io.BytesIO()
-                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=150)
+                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=200)
                 _plt.close(fig_orix)
                 _buf.seek(0)
                 img_arr = _plt.imread(_buf)
@@ -2538,13 +2540,17 @@ class GrainMap:
                 from orix.plot import IPFColorKeyTSL
                 key      = IPFColorKeyTSL(sym)
                 fig_orix = key.plot(return_figure=True)
+                for _a in fig_orix.axes:
+                    _a.set_title("")
                 _buf = _io.BytesIO()
-                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=150)
+                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=200)
                 _plt.close(fig_orix)
                 _buf.seek(0)
                 ax_full.imshow(_plt.imread(_buf))
-            except Exception:
-                pass
+            except Exception as _e:
+                import traceback as _tb
+                print("IPF stretched key (left panel) error:", _e)
+                _tb.print_exc()
             ax_full.set_xticks([]); ax_full.set_yticks([])
             for sp in ax_full.spines.values():
                 sp.set_visible(False)
@@ -2560,6 +2566,7 @@ class GrainMap:
                     v_lam = d[:, 1] / denom
                     normals = np.asarray(sym.fundamental_sector.data)
                     in_fz   = np.all(d @ normals.T >= -1e-6, axis=1)
+                    print(f"c_dirs shape: {c_dirs.shape}, in_fz sum: {in_fz.sum()}")
                     if in_fz.any():
                         u_p, v_p = u_lam[in_fz], v_lam[in_fz]
                         ax_zoom.scatter(u_p, v_p, c=rgb_stretched[in_fz],
@@ -2569,8 +2576,12 @@ class GrainMap:
                         ax_zoom.set_xlim(u_p.min() - pad_u, u_p.max() + pad_u)
                         ax_zoom.set_ylim(v_p.min() - pad_v, v_p.max() + pad_v)
                         ax_zoom.set_aspect("equal")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    import traceback as _tb
+                    print("IPF stretched key (right panel) error:", _e)
+                    _tb.print_exc()
+            else:
+                print(f"c_dirs is None: {c_dirs is None}, rgb_stretched is None: {rgb_stretched is None}")
 
         ax_zoom.set_xticks([]); ax_zoom.set_yticks([])
         ax_zoom.set_title("stretched", fontsize=5, pad=2)

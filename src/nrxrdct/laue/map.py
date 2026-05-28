@@ -2422,7 +2422,6 @@ class GrainMap:
             # ── non-cubic: Lambert equal-area, fundamental zone only ───────────
             try:
                 from orix.plot import IPFColorKeyTSL
-                from orix.vector import Vector3d
 
                 _r2max = 2.0          # full upper hemisphere in Lambert coords
                 _rlim  = np.sqrt(_r2max) * 1.06
@@ -2438,14 +2437,13 @@ class GrainMap:
                 xyz = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
                 pts = xyz[in_disk]   # (M, 3) unit vectors, upper hemisphere
 
-                # Restrict to fundamental sector
+                # Restrict to fundamental sector.
+                # FundamentalSector inherits from Vector3d; its .data rows are
+                # the boundary-plane normals.  A point is inside iff its dot
+                # product with every normal is non-negative.
                 sector = sym.fundamental_sector
-                try:
-                    in_fs = np.asarray(sector.contains(Vector3d(pts)), dtype=bool)
-                except Exception:
-                    # Fallback: half-space check using sector boundary poles
-                    poles = np.asarray(sector._poles)
-                    in_fs = np.all(pts @ poles.T >= -1e-6, axis=1)
+                normals = np.asarray(sector.data)          # (K, 3)
+                in_fs   = np.all(pts @ normals.T >= -1e-6, axis=1)
 
                 key = IPFColorKeyTSL(sym)
 

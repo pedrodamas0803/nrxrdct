@@ -4591,7 +4591,7 @@ class GrainMap:
             manual_obs = np.array([p["obs_xy"] for p in pairs])
             manual_hkl = {tuple(p["hkl"]) for p in pairs}
 
-            def _run():
+            def _run()->None:
                 return _fit_ori(
                     crystal, camera, manual_obs, U0,
                     E_min_eV=E_min_eV, E_max_eV=E_max_eV,
@@ -4625,7 +4625,7 @@ class GrainMap:
             if len(obs_xy) < 3 or U0 is None:
                 return
 
-            def _run():
+            def _run()->None:
                 return _fit_ori(
                     crystal, camera, obs_xy, U0,
                     E_min_eV=E_min_eV, E_max_eV=E_max_eV,
@@ -4710,7 +4710,7 @@ class GrainMap:
             if len(obs_xy) < 3:
                 return
 
-            def _run():
+            def _run()->None:
                 return _index(
                     crystal, camera, obs_xy,
                     angle_tol_deg=angle_tol_deg,
@@ -4959,7 +4959,7 @@ class GrainMap:
             raw = self.load_n_obs_map(seg_dir)
             return np.where(raw >= 0, raw.astype(float), np.nan)
 
-        def _grain_map(arr):
+        def _grain_map(arr)->np.ndarray:
             if self.n_grains == 0:
                 return np.full((self.ny, self.nx), np.nan)
             return arr[map_grain]
@@ -6384,7 +6384,7 @@ class GrainMap:
         mixed_dir = os.path.join(base_dir, "mixed")
         files = sorted(glob.glob(os.path.join(mixed_dir, "frame_?????.npz")))
 
-        def _load(fpath):
+        def _load(fpath)->int:
             m = re.search(r"frame_(\d{5})\.npz$", os.path.basename(fpath))
             if not m:
                 return False

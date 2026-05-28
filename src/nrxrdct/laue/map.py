@@ -2419,33 +2419,76 @@ class GrainMap:
             ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
 
         else:
-            # ── non-cubic: Lambert equal-area hemisphere coloured by orix ─────
+            # ── non-cubic: Lambert equal-area, fundamental zone only ───────────
             try:
                 from orix.plot import IPFColorKeyTSL
+                from orix.vector import Vector3d
 
-                N = 250
-                u = np.linspace(-1.0, 1.0, N)
-                Ug, Vg  = np.meshgrid(u, u)
-                r2      = Ug**2 + Vg**2
-                in_disk = r2 <= 1.0
-                fac     = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
-                xyz     = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
-                pts     = xyz[in_disk]
+                _r2max = 2.0          # full upper hemisphere in Lambert coords
+                _rlim  = np.sqrt(_r2max) * 1.06
 
-                key     = IPFColorKeyTSL(sym)
-                O       = GrainMap._dirs_to_orix_rotations(pts)
-                rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
+                N  = 350
+                u  = np.linspace(-np.sqrt(_r2max), np.sqrt(_r2max), N)
+                Ug, Vg = np.meshgrid(u, u)
+                r2     = Ug**2 + Vg**2
+                in_disk = r2 <= _r2max
 
-                img          = np.ones((N, N, 3), dtype=np.float32)
-                img[in_disk] = rgb_pts.astype(np.float32)
+                # Lambert equal-area inverse: (u,v) → unit sphere
+                fac = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
+                xyz = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
+                pts = xyz[in_disk]   # (M, 3) unit vectors, upper hemisphere
 
-                ax_key.imshow(img, origin="lower", extent=[-1, 1, -1, 1],
+                # Restrict to fundamental sector
+                sector = sym.fundamental_sector
+                try:
+                    in_fs = np.asarray(sector.contains(Vector3d(pts)), dtype=bool)
+                except Exception:
+                    # Fallback: half-space check using sector boundary poles
+                    poles = np.asarray(sector._poles)
+                    in_fs = np.all(pts @ poles.T >= -1e-6, axis=1)
+
+                key = IPFColorKeyTSL(sym)
+
+                img = np.ones((N, N, 3), dtype=np.float32)
+                if in_fs.any():
+                    O       = GrainMap._dirs_to_orix_rotations(pts[in_fs])
+                    rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
+                    flat_idx           = np.where(in_disk.ravel())[0][in_fs]
+                    rows, cols         = np.unravel_index(flat_idx, (N, N))
+                    img[rows, cols]    = rgb_pts.astype(np.float32)
+
+                ext = [-np.sqrt(_r2max), np.sqrt(_r2max),
+                       -np.sqrt(_r2max), np.sqrt(_r2max)]
+                ax_key.imshow(img, origin="lower", extent=ext,
                               aspect="equal", interpolation="nearest")
 
-                theta_c = np.linspace(0, 2 * np.pi, 200)
-                ax_key.plot(np.cos(theta_c), np.sin(theta_c),
+                # Hemisphere circle outline
+                theta_c = np.linspace(0, 2 * np.pi, 300)
+                rc = np.sqrt(_r2max)
+                ax_key.plot(rc * np.cos(theta_c), rc * np.sin(theta_c),
                             "k-", linewidth=0.6, zorder=5)
-                ax_key.set_xlim(-1.08, 1.08); ax_key.set_ylim(-1.08, 1.08)
+
+                # Label fundamental-zone vertices
+                try:
+                    verts = np.asarray(sector.vertices.data)
+                    for v in verts:
+                        vn = v / (np.linalg.norm(v) + 1e-12)
+                        z  = float(np.clip(vn[2], -1.0, 1.0))
+                        denom = np.sqrt(max((1.0 + z) / 2.0, 1e-9))
+                        u_v = vn[0] / denom
+                        v_v = vn[1] / denom
+                        # format label as [hkl]-style rounded direction
+                        h, k, l = vn
+                        lbl = f"[{h:.0f}{k:.0f}{l:.0f}]"
+                        ax_key.text(u_v, v_v, lbl, ha="center", va="center",
+                                    fontsize=5, zorder=7,
+                                    bbox=dict(boxstyle="round,pad=0.1",
+                                              fc="white", ec="none", alpha=0.7))
+                except Exception:
+                    pass
+
+                ax_key.set_xlim(-_rlim, _rlim)
+                ax_key.set_ylim(-_rlim, _rlim)
 
             except Exception:
                 pass   # leave panel empty if orix rendering fails

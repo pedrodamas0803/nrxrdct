@@ -2490,8 +2490,10 @@ class GrainMap:
                 ax_key.set_xlim(-_rlim, _rlim)
                 ax_key.set_ylim(-_rlim, _rlim)
 
-            except Exception:
-                pass   # leave panel empty if orix rendering fails
+            except Exception as _e:
+                import traceback as _tb
+                print("IPF colorkey error:", _e)
+                _tb.print_exc()
 
         ax_key.set_xticks([]); ax_key.set_yticks([])
         for sp in ax_key.spines.values():

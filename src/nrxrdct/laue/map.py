@@ -2251,6 +2251,43 @@ class GrainMap:
         return _MAP[symmetry]
 
     @staticmethod
+    def _dirs_to_orix_rotations(dirs: np.ndarray):
+        """Return orix ``Rotation`` objects whose inverse maps [001] to each direction.
+
+        Given (N, 3) unit directions ``d``, constructs rotation matrices O
+        satisfying ``Oᵀ @ [001] = d``, then wraps them as orix ``Rotation``
+        objects.  This lets ``IPFColorKeyTSL.orientation2color`` treat each
+        direction as the crystal direction parallel to [001].
+"""
+        from scipy.spatial.transform import Rotation as _Rscipy
+        from orix.quaternion import Rotation as _Rorix
+
+        pole  = np.array([0., 0., 1.])
+        norm  = np.linalg.norm(dirs, axis=-1, keepdims=True)
+        d     = dirs / np.maximum(norm, 1e-12)
+
+        cross     = np.cross(pole, d)                             # (N, 3)
+        sin_a     = np.linalg.norm(cross, axis=-1)                # (N,)
+        cos_a     = d[:, 2]                                       # dot with [001]
+        non_degen = sin_a > 1e-10
+
+        axis  = np.where(
+            non_degen[:, None],
+            cross / np.maximum(sin_a[:, None], 1e-12),
+            np.array([[1., 0., 0.]]),
+        )
+        angle  = np.arctan2(sin_a, cos_a)
+        R_mats = _Rscipy.from_rotvec(axis * angle[:, None]).as_matrix()   # (N, 3, 3)
+
+        # Antiparallel: d ≈ −[001] → 180° rotation around x
+        antipar = (~non_degen) & (cos_a < 0)
+        if antipar.any():
+            R_mats[antipar] = _Rscipy.from_euler("x", [np.pi]).as_matrix()[0]
+
+        # O = Rᵀ  →  Oᵀ @ [001] = R @ [001] = d
+        return _Rorix.from_matrix(R_mats.transpose(0, 2, 1))
+
+    @staticmethod
     def _ipf_colors(c: np.ndarray, sym) -> np.ndarray:
         """
         Vectorised IPF RGB using orix's TSL colour key.
@@ -2268,7 +2305,6 @@ class GrainMap:
             rgb (same leading shape + (3,), float in [0, 1].):
 """
         from orix.plot import IPFColorKeyTSL
-        from orix.vector import Vector3d
 
         c       = np.asarray(c, dtype=float)
         leading = c.shape[:-1]
@@ -2280,7 +2316,8 @@ class GrainMap:
 
         if ok.any():
             key     = IPFColorKeyTSL(sym)
-            rgb[ok] = key.direction2color(Vector3d(flat[ok]))
+            O       = GrainMap._dirs_to_orix_rotations(flat[ok])
+            rgb[ok] = key.orientation2color(O)
 
         return rgb.reshape(*leading, 3)
 
@@ -2385,7 +2422,6 @@ class GrainMap:
             # ── non-cubic: Lambert equal-area hemisphere coloured by orix ─────
             try:
                 from orix.plot import IPFColorKeyTSL
-                from orix.vector import Vector3d
 
                 N = 250
                 u = np.linspace(-1.0, 1.0, N)
@@ -2397,7 +2433,8 @@ class GrainMap:
                 pts     = xyz[in_disk]
 
                 key     = IPFColorKeyTSL(sym)
-                rgb_pts = np.clip(key.direction2color(Vector3d(pts)), 0.0, 1.0)
+                O       = GrainMap._dirs_to_orix_rotations(pts)
+                rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
 
                 img          = np.ones((N, N, 3), dtype=np.float32)
                 img[in_disk] = rgb_pts.astype(np.float32)

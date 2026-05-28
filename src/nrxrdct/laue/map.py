@@ -2446,24 +2446,29 @@ class GrainMap:
     @staticmethod
     def _ipf_colorkey_inset_stretched(
         parent_ax,
-        t_vals: np.ndarray,
-        p_vals: np.ndarray,
-        rgb_stretched: np.ndarray,
+        sym,
+        t_vals: "np.ndarray | None" = None,
+        p_vals: "np.ndarray | None" = None,
+        rgb_stretched: "np.ndarray | None" = None,
+        c_dirs: "np.ndarray | None" = None,
     ) -> None:
         """
-        Colour-key side panels for stretched IPF maps (cubic only).
+        Colour-key side panels for stretched IPF maps.
 
         Appends two panels to the right of *parent_ax*:
 
-        * **Left panel** — full [001]–[011]–[111] triangle with the data
-          bounding box highlighted (dashed rectangle).
+        * **Left panel** — reference key: cubic [001]–[011]–[111] triangle
+          (with data bounding box) or the orix FZ key for other symmetries.
         * **Right panel** — zoomed scatter of the data region coloured with
           the stretched colours, so you can read off absolute orientations.
 
         Args:
-            t_vals, p_vals ((N,) flat arrays): (t, p) coordinates in [0,1]² of all valid map pixels.
+            sym: orix symmetry object (from :meth:`_orix_symmetry`).
+            t_vals, p_vals ((N,) arrays): Cubic (t, p) coordinates in [0,1]². Required for cubic.
             rgb_stretched ((N, 3) float array): Stretched RGB for each valid pixel.
+            c_dirs ((N, 3) float array): Raw crystal directions for valid pixels. Required for non-cubic.
 """
+        from orix.quaternion import symmetry as _osym
         try:
             from mpl_toolkits.axes_grid1 import make_axes_locatable
         except ImportError:
@@ -2473,58 +2478,99 @@ class GrainMap:
         ax_full = divider.append_axes("right", size="22%", pad=0.12)
         ax_zoom = divider.append_axes("right", size="22%", pad=0.04)
 
-        # ── left panel: full triangle + data bounding box ─────────────────────
-        ax_full.set_facecolor("0.97")
+        if sym is _osym.Oh:
+            # ── cubic: full triangle + data bounding box ──────────────────────
+            ax_full.set_facecolor("0.97")
 
-        rgba = GrainMap._cubic_ipf_colorkey(200)
-        ax_full.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
-                       aspect="auto", interpolation="bilinear", alpha=0.35)
+            rgba = GrainMap._cubic_ipf_colorkey(200)
+            ax_full.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
+                           aspect="auto", interpolation="bilinear", alpha=0.35)
 
-        s_b = np.linspace(0.0, 1.0, 120)
-        t_b = np.arctan(s_b) / (np.pi / 4.0)
-        p_b = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
-        p_b[0] = 0.0
-        verts = np.column_stack([
-            np.concatenate([[0, 1, 1], t_b[::-1]]),
-            np.concatenate([[0, 0, 1], p_b[::-1]]),
-        ])
-        from matplotlib.patches import Polygon as _Poly, Rectangle as _Rect
-        ax_full.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.6))
+            s_b = np.linspace(0.0, 1.0, 120)
+            t_b = np.arctan(s_b) / (np.pi / 4.0)
+            p_b = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
+            p_b[0] = 0.0
+            verts = np.column_stack([
+                np.concatenate([[0, 1, 1], t_b[::-1]]),
+                np.concatenate([[0, 0, 1], p_b[::-1]]),
+            ])
+            from matplotlib.patches import Polygon as _Poly, Rectangle as _Rect
+            ax_full.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.6))
 
-        if len(t_vals):
-            t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
-            p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
-            pad = 0.02
-            ax_full.add_patch(_Rect(
-                (t_lo - pad, p_lo - pad),
-                (t_hi - t_lo) + 2 * pad,
-                (p_hi - p_lo) + 2 * pad,
-                fill=False, edgecolor="black", linewidth=1.0, linestyle="--",
-            ))
+            if t_vals is not None and len(t_vals):
+                t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
+                p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
+                pad = 0.02
+                ax_full.add_patch(_Rect(
+                    (t_lo - pad, p_lo - pad),
+                    (t_hi - t_lo) + 2 * pad,
+                    (p_hi - p_lo) + 2 * pad,
+                    fill=False, edgecolor="black", linewidth=1.0, linestyle="--",
+                ))
 
-        kw = dict(fontsize=5, color="k")
-        ax_full.text(0.02, 0.02, "001", ha="left",  va="bottom", **kw)
-        ax_full.text(0.98, 0.02, "011", ha="right", va="bottom", **kw)
-        ax_full.text(0.98, 0.98, "111", ha="right", va="top",    **kw)
-        ax_full.set_xlim(0, 1); ax_full.set_ylim(0, 1)
-        ax_full.set_xticks([]); ax_full.set_yticks([])
-        for sp in ax_full.spines.values():
-            sp.set_visible(False)
+            kw = dict(fontsize=5, color="k")
+            ax_full.text(0.02, 0.02, "001", ha="left",  va="bottom", **kw)
+            ax_full.text(0.98, 0.02, "011", ha="right", va="bottom", **kw)
+            ax_full.text(0.98, 0.98, "111", ha="right", va="top",    **kw)
+            ax_full.set_xlim(0, 1); ax_full.set_ylim(0, 1)
+            ax_full.set_xticks([]); ax_full.set_yticks([])
+            for sp in ax_full.spines.values():
+                sp.set_visible(False)
 
-        # ── right panel: zoomed scatter with stretched RGB ────────────────────
-        ax_zoom.set_facecolor("0.15")
+            # ── right: zoomed scatter ──────────────────────────────────────────
+            ax_zoom.set_facecolor("0.15")
+            if t_vals is not None and len(t_vals):
+                t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
+                p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
+                ax_zoom.scatter(t_vals, p_vals, c=rgb_stretched, s=1.5,
+                                linewidths=0, rasterized=True)
+                pad_t = max((t_hi - t_lo) * 0.15, 1e-4)
+                pad_p = max((p_hi - p_lo) * 0.15, 1e-4)
+                ax_zoom.set_xlim(t_lo - pad_t, t_hi + pad_t)
+                ax_zoom.set_ylim(p_lo - pad_p, p_hi + pad_p)
 
-        if len(t_vals):
-            t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
-            p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
+        else:
+            # ── non-cubic: orix FZ key (left) + Lambert scatter (right) ───────
+            ax_full.set_facecolor("white")
+            try:
+                import io as _io
+                import matplotlib.pyplot as _plt
+                from orix.plot import IPFColorKeyTSL
+                key      = IPFColorKeyTSL(sym)
+                fig_orix = key.plot(return_figure=True)
+                _buf = _io.BytesIO()
+                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=150)
+                _plt.close(fig_orix)
+                _buf.seek(0)
+                ax_full.imshow(_plt.imread(_buf))
+            except Exception:
+                pass
+            ax_full.set_xticks([]); ax_full.set_yticks([])
+            for sp in ax_full.spines.values():
+                sp.set_visible(False)
 
-            ax_zoom.scatter(t_vals, p_vals, c=rgb_stretched, s=1.5,
-                            linewidths=0, rasterized=True)
-
-            pad_t = max((t_hi - t_lo) * 0.15, 1e-4)
-            pad_p = max((p_hi - p_lo) * 0.15, 1e-4)
-            ax_zoom.set_xlim(t_lo - pad_t, t_hi + pad_t)
-            ax_zoom.set_ylim(p_lo - pad_p, p_hi + pad_p)
+            ax_zoom.set_facecolor("0.15")
+            if c_dirs is not None and len(c_dirs) and rgb_stretched is not None:
+                try:
+                    norms = np.linalg.norm(c_dirs, axis=1, keepdims=True)
+                    d     = c_dirs / np.maximum(norms, 1e-12)
+                    z     = d[:, 2]
+                    denom = np.sqrt(np.maximum((1.0 + z) / 2.0, 1e-9))
+                    u_lam = d[:, 0] / denom
+                    v_lam = d[:, 1] / denom
+                    normals = np.asarray(sym.fundamental_sector.data)
+                    in_fz   = np.all(d @ normals.T >= -1e-6, axis=1)
+                    if in_fz.any():
+                        u_p, v_p = u_lam[in_fz], v_lam[in_fz]
+                        ax_zoom.scatter(u_p, v_p, c=rgb_stretched[in_fz],
+                                        s=1.5, linewidths=0, rasterized=True)
+                        pad_u = max((u_p.max() - u_p.min()) * 0.15, 1e-4)
+                        pad_v = max((v_p.max() - v_p.min()) * 0.15, 1e-4)
+                        ax_zoom.set_xlim(u_p.min() - pad_u, u_p.max() + pad_u)
+                        ax_zoom.set_ylim(v_p.min() - pad_v, v_p.max() + pad_v)
+                        ax_zoom.set_aspect("equal")
+                except Exception:
+                    pass
 
         ax_zoom.set_xticks([]); ax_zoom.set_yticks([])
         ax_zoom.set_title("stretched", fontsize=5, pad=2)
@@ -2894,13 +2940,20 @@ class GrainMap:
         )
 
         if show_colorkey:
-            if stretch and symmetry == "cubic":
-                self._ipf_colorkey_inset_stretched(
-                    ax,
-                    t_vals=t_flat[valid],
-                    p_vals=p_flat[valid],
-                    rgb_stretched=img[valid],
-                )
+            if stretch:
+                if symmetry == "cubic":
+                    self._ipf_colorkey_inset_stretched(
+                        ax, sym,
+                        t_vals=t_flat[valid],
+                        p_vals=p_flat[valid],
+                        rgb_stretched=img[valid],
+                    )
+                else:
+                    self._ipf_colorkey_inset_stretched(
+                        ax, sym,
+                        c_dirs=c[valid],
+                        rgb_stretched=img[valid],
+                    )
             else:
                 self._ipf_colorkey_inset(ax, sym, c_mean=c_mean)
 

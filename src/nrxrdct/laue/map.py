@@ -2380,7 +2380,7 @@ class GrainMap:
             return
 
         divider = make_axes_locatable(parent_ax)
-        ax_key  = divider.append_axes("right", size="22%", pad=0.12)
+        ax_key  = divider.append_axes("right", size="35%", pad=0.12)
         ax_key.set_facecolor("0.97")
 
         if sym is _osym.Oh:
@@ -2419,75 +2419,21 @@ class GrainMap:
             ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
 
         else:
-            # ── non-cubic: Lambert equal-area, fundamental zone only ───────────
+            # ── non-cubic: delegate entirely to orix's own renderer ────────────
             try:
+                import io as _io
+                import matplotlib.pyplot as _plt
                 from orix.plot import IPFColorKeyTSL
 
-                _r2max = 2.0          # full upper hemisphere in Lambert coords
-                _rlim  = np.sqrt(_r2max) * 1.06
-
-                N  = 350
-                u  = np.linspace(-np.sqrt(_r2max), np.sqrt(_r2max), N)
-                Ug, Vg = np.meshgrid(u, u)
-                r2     = Ug**2 + Vg**2
-                in_disk = r2 <= _r2max
-
-                # Lambert equal-area inverse: (u,v) → unit sphere
-                fac = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
-                xyz = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
-                pts = xyz[in_disk]   # (M, 3) unit vectors, upper hemisphere
-
-                # Restrict to fundamental sector.
-                # FundamentalSector inherits from Vector3d; its .data rows are
-                # the boundary-plane normals.  A point is inside iff its dot
-                # product with every normal is non-negative.
-                sector = sym.fundamental_sector
-                normals = np.asarray(sector.data)          # (K, 3)
-                in_fs   = np.all(pts @ normals.T >= -1e-6, axis=1)
-
-                key = IPFColorKeyTSL(sym)
-
-                img = np.ones((N, N, 3), dtype=np.float32)
-                if in_fs.any():
-                    O       = GrainMap._dirs_to_orix_rotations(pts[in_fs])
-                    rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
-                    flat_idx           = np.where(in_disk.ravel())[0][in_fs]
-                    rows, cols         = np.unravel_index(flat_idx, (N, N))
-                    img[rows, cols]    = rgb_pts.astype(np.float32)
-
-                ext = [-np.sqrt(_r2max), np.sqrt(_r2max),
-                       -np.sqrt(_r2max), np.sqrt(_r2max)]
-                ax_key.imshow(img, origin="lower", extent=ext,
-                              aspect="equal", interpolation="nearest")
-
-                # Hemisphere circle outline
-                theta_c = np.linspace(0, 2 * np.pi, 300)
-                rc = np.sqrt(_r2max)
-                ax_key.plot(rc * np.cos(theta_c), rc * np.sin(theta_c),
-                            "k-", linewidth=0.6, zorder=5)
-
-                # Label fundamental-zone vertices
-                try:
-                    verts = np.asarray(sector.vertices.data)
-                    for v in verts:
-                        vn = v / (np.linalg.norm(v) + 1e-12)
-                        z  = float(np.clip(vn[2], -1.0, 1.0))
-                        denom = np.sqrt(max((1.0 + z) / 2.0, 1e-9))
-                        u_v = vn[0] / denom
-                        v_v = vn[1] / denom
-                        # format label as [hkl]-style rounded direction
-                        h, k, l = vn
-                        lbl = f"[{h:.0f}{k:.0f}{l:.0f}]"
-                        ax_key.text(u_v, v_v, lbl, ha="center", va="center",
-                                    fontsize=5, zorder=7,
-                                    bbox=dict(boxstyle="round,pad=0.1",
-                                              fc="white", ec="none", alpha=0.7))
-                except Exception:
-                    pass
-
-                ax_key.set_xlim(-_rlim, _rlim)
-                ax_key.set_ylim(-_rlim, _rlim)
-
+                key      = IPFColorKeyTSL(sym)
+                fig_orix = key.plot(return_figure=True)
+                _buf = _io.BytesIO()
+                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=150)
+                _plt.close(fig_orix)
+                _buf.seek(0)
+                img_arr = _plt.imread(_buf)
+                ax_key.imshow(img_arr)
+                ax_key.set_facecolor("white")
             except Exception as _e:
                 import traceback as _tb
                 print("IPF colorkey error:", _e)

@@ -1,3 +1,96 @@
+"""
+nrxrdct.laue.segmentation
+--------------------------
+Detection and characterisation of diffraction spots in micro-Laue detector
+images.
+
+Overview
+--------
+Each detector frame goes through a fixed pipeline before orientation fitting:
+
+1. **Background subtraction** (:func:`gaussian_background`) — a large-sigma
+   Gaussian (FFT-based, O(N log N)) estimates and removes the slowly varying
+   background so that spot detection operates on a flat baseline.
+
+2. **Segmentation** — converts the background-subtracted image into a binary
+   mask where ``True`` marks candidate spot pixels.  Three algorithms are
+   available (see below).
+
+3. **Cleaning** (:func:`clean_segmentation`) — removes objects that are too
+   small (noise) or too large (artefacts), and discards spots that touch
+   detector module gaps.
+
+4. **Spot fitting** (:func:`write_h5_spotsfile`) — crops a small ROI around
+   each connected component, fits a mixture of rotated 2-D Gaussians, and
+   writes the fitted peak positions and shape parameters to an HDF5 file.
+   Pass ``fit_spots=False`` to skip fitting and store only the weighted
+   centroids (much faster, sufficient for orientation indexing).
+
+Segmentation methods
+--------------------
+All three methods share the same interface:
+``method(image, mask, **kwargs) → binary_mask``.  They all begin with
+log-scaling (``log1p``) and intensity normalisation so that the response is
+approximately independent of the absolute intensity level.
+
+LoG — Laplacian-of-Gaussian (:func:`LoG_segmentation`)
+    Best for **round or ring-shaped spots** of a predictable size.  Applies a
+    band-pass filter tuned by *sigmas*: small sigma → sensitive to small
+    spots; large sigma → picks up extended features.  A multi-scale list of
+    sigmas yields a pixel-wise maximum so spots of different sizes are all
+    detected.  Works poorly on spots that sit on a strong, rapidly varying
+    background.
+
+WTH — White Top-Hat (:func:`WTH_segmentation`)
+    Best for **compact bright features on an uneven background** (e.g.
+    fluorescence halo, detector artefacts).  The top-hat transform
+    ``WTH = image − opening(image)`` cancels any background structure larger
+    than the structuring element (disk of radius *disk_radius*) while
+    preserving smaller bright spots.  Multi-scale via a list of radii.
+
+HYBRID — LoG + WTH union (:func:`hybrid_segmentation`)
+    Runs LoG *and* WTH concurrently (all scales in a single thread pool),
+    thresholds each family independently, then ORs the two masks.  Useful
+    when the frame contains both round spots (better by LoG) and sharp
+    streaks or asymmetric peaks (better by WTH).
+
+Choosing a method
+-----------------
+* Start with **LoG** and a scalar *sigmas* matched to the typical spot FWHM
+  (roughly ``FWHM / 2.35``).
+* If many spots are missed due to uneven background, switch to **WTH** and
+  set *disk_radius* slightly larger than the largest expected spot.
+* Use **HYBRID** when the frame contains a mix of morphologies or when either
+  method alone leaves significant false negatives.
+* Tune *threshold_percentile* last: raise it to reduce false positives (only
+  the very brightest pixels survive), lower it to recover dim spots at the
+  cost of more background noise.
+
+HDF5 spot file format
+---------------------
+Each frame is written to ``seg_dir/frame_{idx:05d}.h5``.  Inside, spots are
+stored in groups named ``spot_{ii:04d}_{jj}`` where *ii* is the region label
+and *jj* is the Gaussian component index (0 = unfitted fallback, 1+ = fitted
+components).  Fields per group:
+
+``peak_X``, ``peak_Y``
+    Sub-pixel centroid in detector pixel coordinates (column, row).
+``peak_Itot``, ``peak_Isub``, ``peak_bkg``
+    Total amplitude, background-subtracted amplitude, and constant background
+    of the fitted Gaussian.
+``peak_fwaxmaj``, ``peak_fwaxmin``, ``peak_inclination``
+    Full-width at half-maximum along the major/minor axis (pixels) and tilt
+    angle of the major axis (degrees).
+``Xdev``, ``Ydev``
+    Offset between the fitted centre and the ROI centre (pixels).
+``r_squared``
+    Coefficient of determination of the Gaussian fit.  ``-1`` when
+    ``fit_spots=False``; ``0`` when fitting failed at runtime.
+``image``
+    Raw ROI sub-image (cropped around the centroid).
+``yxcen``, ``bbox``
+    Weighted centroid and bounding box from :func:`measure_peaks`.
+"""
 import concurrent.futures
 import glob
 import os
@@ -452,6 +545,7 @@ def reduced_chi_squared(data, model, n_params: int = 2, noise_std=None, mask=Non
 
 
 def fwhm_from_sigma(s):
+    """Convert Gaussian sigma to FWHM: ``FWHM = 2√(2 ln 2) · σ ≈ 2.355 σ``."""
     return 2 * np.sqrt(2 * np.log(2)) * s
 
 
@@ -721,6 +815,8 @@ def write_h5_spotsfile(
 
 
 def get_spot_limits(image_array, ycen, xcen, d):
+    """Return (ymin, ymax, xmin, xmax) for a ``2d × 2d`` ROI centred at (ycen, xcen),
+    clipped to the image boundaries."""
     ymin, ymax = int(ycen - d), int(ycen + d)
     xmin, xmax = int(xcen - d), int(xcen + d)
 
@@ -823,6 +919,13 @@ def convert_spotsfile2peaklist(
 
 
 def write_peaklist_dat(peaklist, outname):
+    """Write an (N, 9) peaklist array to a space-separated DAT file.
+
+    The column order matches :func:`convert_spotsfile2peaklist`:
+    ``peak_X  peak_Y  peak_I  peak_fwaxmaj  peak_fwaxmin
+      peak_inclination  Xdev  Ydev  peak_bkg``.
+    A ``.dat`` extension is appended automatically if absent.
+"""
     if not outname.endswith(".dat"):
         outname = f"{outname}.dat"
     df = pd.DataFrame(
@@ -923,7 +1026,52 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     )
     return image[tuple(indices)]
 
-def LoG_segmentation(image: np.ndarray, mask: np.ndarray, sigmas=0.01, threshold_percentile = 99.9):
+def LoG_segmentation(
+    image: np.ndarray,
+    mask: np.ndarray,
+    sigmas=0.01,
+    threshold_percentile: float = 99.9,
+) -> np.ndarray:
+    """
+    Segment diffraction spots using a Laplacian-of-Gaussian (LoG) filter.
+
+    The LoG acts as a band-pass filter that responds strongly to blobs whose
+    spatial extent matches the filter scale.  The negative LoG response
+    (``−∇²G * I``) has a local maximum at the centre of each bright blob,
+    making it well suited for detecting round or weakly elongated Laue spots.
+
+    The image is log-scaled (``log1p``) and intensity-normalised before
+    filtering so the response is approximately gain-independent.  When multiple
+    *sigmas* are given, the pixel-wise maximum across all scales is taken,
+    enabling simultaneous detection of spots with different sizes.
+
+    Args:
+        image ((Nv, Nh) ndarray): Raw detector image (uint or float).
+        mask ((Nv, Nh) bool ndarray): Valid-pixel mask (``True`` = active detector pixel).
+            Detector gaps and dead pixels should be ``False``.  Invalid pixels
+            are filled with a nearest-neighbour interpolation before filtering
+            to avoid edge artefacts.
+        sigmas (float or list of float): Gaussian sigma(s) in pixels for the LoG filter.  A single
+            value targets spots whose radius is roughly ``2 * sigma`` pixels.
+            Pass a list to detect spots over a range of sizes simultaneously
+            (multi-scale LoG).  Default ``0.01`` (very small, effectively a
+            plain Laplacian on the log-scaled image).
+        threshold_percentile (float): Percentile of the LoG response (within *mask*) used as the binary
+            detection threshold.  Only pixels above this level are labelled as
+            spot pixels.  Raise towards 100 to detect only the strongest
+            responses; lower to recover dimmer spots at the cost of more false
+            positives.  Default ``99.9``.
+
+    Returns:
+        mask_final ((Nv, Nh) bool ndarray): Binary segmentation mask (``True`` = spot pixel).
+            Pass to :func:`clean_segmentation` for size filtering and gap
+            exclusion before :func:`label_segmented_image`.
+
+    See Also:
+        WTH_segmentation : White top-hat segmentation (better for uneven backgrounds).
+        hybrid_segmentation : LoG + WTH combined.
+        clean_segmentation : Post-processing (size filter, border removal, gap exclusion).
+"""
     from concurrent.futures import ThreadPoolExecutor
 
     image = fill_gaps_nearest(image, mask)

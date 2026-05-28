@@ -2226,43 +2226,62 @@ class GrainMap:
     # ── IPF map ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _cubic_ipf_colors(c: np.ndarray) -> np.ndarray:
-        """
-        Vectorised IPF RGB for cubic (m-3m) symmetry.
-
-        Colour convention: [001] → blue, [011] → green, [111] → red.
+    @staticmethod
+    def _orix_symmetry(symmetry: str):
+        """Map a symmetry name to an orix point-group object.
 
         Args:
-            c ((…, 3) array): Crystal-frame directions.  Need not be unit vectors; NaN rows
-                produce NaN RGB output.
+            symmetry (str): One of ``'cubic'``, ``'hexagonal'``,
+                ``'tetragonal'``, ``'orthorhombic'``.
+
+        Returns:
+            orix symmetry object (e.g. ``orix.quaternion.symmetry.Oh``).
+"""
+        from orix.quaternion import symmetry as _osym
+        _MAP = {
+            "cubic":        _osym.Oh,
+            "hexagonal":    _osym.D6h,
+            "tetragonal":   _osym.D4h,
+            "orthorhombic": _osym.D2h,
+        }
+        if symmetry not in _MAP:
+            raise ValueError(
+                f"symmetry must be one of {list(_MAP)}, got {symmetry!r}."
+            )
+        return _MAP[symmetry]
+
+    @staticmethod
+    def _ipf_colors(c: np.ndarray, sym) -> np.ndarray:
+        """
+        Vectorised IPF RGB using orix's TSL colour key.
+
+        Colour convention (TSL/EDAX): [001] → blue, [101] → green,
+        [111] → red.  Consistent across cubic, hexagonal, tetragonal and
+        orthorhombic symmetries.
+
+        Args:
+            c ((…, 3) array): Crystal-frame directions.  Need not be unit
+                vectors; NaN rows produce NaN RGB output.
+            sym: orix symmetry object (from :meth:`_orix_symmetry`).
 
         Returns:
             rgb (same leading shape + (3,), float in [0, 1].):
 """
+        from orix.plot import IPFColorKeyTSL
+        from orix.vector import Vector3d
+
         c       = np.asarray(c, dtype=float)
         leading = c.shape[:-1]
-        flat    = c.reshape(-1, 3).copy()
+        flat    = c.reshape(-1, 3)
 
         rgb  = np.full((len(flat), 3), np.nan)
         norm = np.linalg.norm(flat, axis=1)
         ok   = (norm > 0) & ~np.any(np.isnan(flat), axis=1)
 
-        d = flat[ok] / norm[ok, None]
-        d = np.sort(np.abs(d), axis=1)      # h1 ≤ h2 ≤ h3
+        if ok.any():
+            key     = IPFColorKeyTSL(sym)
+            rgb[ok] = key.direction2color(Vector3d(flat[ok]))
 
-        theta = np.arctan2(d[:, 1], d[:, 2])
-        phi   = np.arctan2(d[:, 0], np.sqrt(d[:, 1]**2 + d[:, 2]**2))
-
-        t = np.clip(theta / (np.pi / 4.0),          0.0, 1.0)
-        p = np.clip(phi   / np.arctan(1.0 / np.sqrt(2.0)), 0.0, 1.0)
-
-        r_c = p
-        g_c = t * (1.0 - p)
-        b_c = (1.0 - t) * (1.0 - p)
-        mx  = np.maximum(np.maximum(r_c, g_c), b_c)
-        mx  = np.maximum(mx, 1e-10)
-
-        rgb[ok] = np.stack([r_c / mx, g_c / mx, b_c / mx], axis=1)
         return rgb.reshape(*leading, 3)
 
     @staticmethod
@@ -2303,61 +2322,97 @@ class GrainMap:
         return rgba
 
     @staticmethod
-    def _ipf_colorkey_inset(parent_ax, c_mean: "np.ndarray | None" = None) -> None:
-        """Add the cubic IPF color-key as a small inset in *parent_ax*.
+    def _ipf_colorkey_inset(parent_ax, sym, c_mean: "np.ndarray | None" = None) -> None:
+        """Append an IPF colour-key panel to the right of *parent_ax*.
+
+        For cubic symmetry the familiar [001]–[011]–[111] triangle is drawn.
+        For other symmetries the upper hemisphere is rendered in Lambert
+        equal-area projection, coloured by orix's TSL key.
 
         Args:
-            c_mean ((3,) array or None): Mean crystal direction (already in the fundamental zone, i.e.
-                sorted absolute values).  If given, a marker is drawn at the
-                corresponding position in the triangle.
+            parent_ax: Host axes.
+            sym: orix symmetry object (from :meth:`_orix_symmetry`).
+            c_mean ((3,) array or None): Mean crystal direction already reduced to
+                the cubic fundamental zone (sorted absolute values).  Used only
+                for cubic; ignored for other symmetries.
 """
+        from orix.quaternion import symmetry as _osym
         try:
-            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
         except ImportError:
             return
 
-        ax_key = inset_axes(parent_ax, width="28%", height="28%",
-                            loc="lower right", borderpad=0.5)
-        ax_key.set_facecolor("none")
+        divider = make_axes_locatable(parent_ax)
+        ax_key  = divider.append_axes("right", size="22%", pad=0.12)
+        ax_key.set_facecolor("0.97")
 
-        rgba = GrainMap._cubic_ipf_colorkey(200)
-        ax_key.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
-                      aspect="auto", interpolation="bilinear")
+        if sym is _osym.Oh:
+            # ── cubic: hardcoded [001]-[011]-[111] triangle ───────────────────
+            rgba = GrainMap._cubic_ipf_colorkey(200)
+            ax_key.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
+                          aspect="auto", interpolation="bilinear")
 
-        # Corner labels
-        kw = dict(fontsize=6, fontweight="bold", color="k")
-        ax_key.text(0.03, 0.03, "001", ha="left",  va="bottom", **kw)
-        ax_key.text(0.97, 0.03, "011", ha="right", va="bottom", **kw)
-        ax_key.text(0.97, 0.97, "111", ha="right", va="top",    **kw)
+            kw = dict(fontsize=6, fontweight="bold", color="k")
+            ax_key.text(0.03, 0.03, "001", ha="left",  va="bottom", **kw)
+            ax_key.text(0.97, 0.03, "011", ha="right", va="bottom", **kw)
+            ax_key.text(0.97, 0.97, "111", ha="right", va="top",    **kw)
 
-        # Triangle outline following the exact [001]–[111] boundary
-        s_b  = np.linspace(0.0, 1.0, 120)
-        t_b  = np.arctan(s_b) / (np.pi / 4.0)
-        p_b  = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
-        p_b[0] = 0.0
-        verts = np.column_stack([
-            np.concatenate([[0, 1, 1], t_b[::-1]]),
-            np.concatenate([[0, 0, 1], p_b[::-1]]),
-        ])
-        from matplotlib.patches import Polygon as _Poly
-        ax_key.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.8))
+            s_b  = np.linspace(0.0, 1.0, 120)
+            t_b  = np.arctan(s_b) / (np.pi / 4.0)
+            p_b  = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
+            p_b[0] = 0.0
+            verts = np.column_stack([
+                np.concatenate([[0, 1, 1], t_b[::-1]]),
+                np.concatenate([[0, 0, 1], p_b[::-1]]),
+            ])
+            from matplotlib.patches import Polygon as _Poly
+            ax_key.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.8))
 
-        # Average orientation marker
-        if c_mean is not None:
-            n = np.linalg.norm(c_mean)
-            if n > 1e-12:
-                d     = c_mean / n                        # already sorted abs
-                theta = np.arctan2(d[1], d[2])
-                phi   = np.arctan2(d[0], np.sqrt(d[1] ** 2 + d[2] ** 2))
-                t_avg = float(np.clip(theta / (np.pi / 4.0),             0.0, 1.0))
-                p_avg = float(np.clip(phi   / np.arctan(1.0 / np.sqrt(2.0)), 0.0, 1.0))
-                ax_key.scatter(
-                    [t_avg], [p_avg],
-                    s=55, marker="*", zorder=6,
-                    c="white", edgecolors="black", linewidths=0.7,
-                )
+            if c_mean is not None:
+                n_cm = np.linalg.norm(c_mean)
+                if n_cm > 1e-12:
+                    d     = c_mean / n_cm
+                    theta = np.arctan2(d[1], d[2])
+                    phi   = np.arctan2(d[0], np.sqrt(d[1] ** 2 + d[2] ** 2))
+                    t_avg = float(np.clip(theta / (np.pi / 4.0),                  0.0, 1.0))
+                    p_avg = float(np.clip(phi   / np.arctan(1.0 / np.sqrt(2.0)), 0.0, 1.0))
+                    ax_key.scatter([t_avg], [p_avg], s=55, marker="*", zorder=6,
+                                   c="white", edgecolors="black", linewidths=0.7)
 
-        ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
+            ax_key.set_xlim(0, 1); ax_key.set_ylim(0, 1)
+
+        else:
+            # ── non-cubic: Lambert equal-area hemisphere coloured by orix ─────
+            try:
+                from orix.plot import IPFColorKeyTSL
+                from orix.vector import Vector3d
+
+                N = 250
+                u = np.linspace(-1.0, 1.0, N)
+                Ug, Vg  = np.meshgrid(u, u)
+                r2      = Ug**2 + Vg**2
+                in_disk = r2 <= 1.0
+                fac     = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
+                xyz     = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
+                pts     = xyz[in_disk]
+
+                key     = IPFColorKeyTSL(sym)
+                rgb_pts = np.clip(key.direction2color(Vector3d(pts)), 0.0, 1.0)
+
+                img          = np.ones((N, N, 3), dtype=np.float32)
+                img[in_disk] = rgb_pts.astype(np.float32)
+
+                ax_key.imshow(img, origin="lower", extent=[-1, 1, -1, 1],
+                              aspect="equal", interpolation="nearest")
+
+                theta_c = np.linspace(0, 2 * np.pi, 200)
+                ax_key.plot(np.cos(theta_c), np.sin(theta_c),
+                            "k-", linewidth=0.6, zorder=5)
+                ax_key.set_xlim(-1.08, 1.08); ax_key.set_ylim(-1.08, 1.08)
+
+            except Exception:
+                pass   # leave panel empty if orix rendering fails
+
         ax_key.set_xticks([]); ax_key.set_yticks([])
         for sp in ax_key.spines.values():
             sp.set_visible(False)
@@ -2370,31 +2425,35 @@ class GrainMap:
         rgb_stretched: np.ndarray,
     ) -> None:
         """
-        Colour-key inset for stretched IPF maps.
+        Colour-key side panels for stretched IPF maps (cubic only).
 
-        Shows the full standard triangle with the data extent highlighted,
-        then a zoomed inset of the data region coloured with the *stretched*
-        colours so you can read off absolute orientations.
+        Appends two panels to the right of *parent_ax*:
+
+        * **Left panel** — full [001]–[011]–[111] triangle with the data
+          bounding box highlighted (dashed rectangle).
+        * **Right panel** — zoomed scatter of the data region coloured with
+          the stretched colours, so you can read off absolute orientations.
 
         Args:
             t_vals, p_vals ((N,) flat arrays): (t, p) coordinates in [0,1]² of all valid map pixels.
             rgb_stretched ((N, 3) float array): Stretched RGB for each valid pixel.
 """
         try:
-            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
         except ImportError:
             return
 
-        # ── outer inset: full triangle + data bounding box ────────────────────
-        ax_full = inset_axes(parent_ax, width="28%", height="28%",
-                             loc="lower right", borderpad=0.5)
-        ax_full.set_facecolor("none")
+        divider = make_axes_locatable(parent_ax)
+        ax_full = divider.append_axes("right", size="22%", pad=0.12)
+        ax_zoom = divider.append_axes("right", size="22%", pad=0.04)
+
+        # ── left panel: full triangle + data bounding box ─────────────────────
+        ax_full.set_facecolor("0.97")
 
         rgba = GrainMap._cubic_ipf_colorkey(200)
         ax_full.imshow(rgba, origin="lower", extent=[0, 1, 0, 1],
                        aspect="auto", interpolation="bilinear", alpha=0.35)
 
-        # Triangle outline
         s_b = np.linspace(0.0, 1.0, 120)
         t_b = np.arctan(s_b) / (np.pi / 4.0)
         p_b = np.arctan(s_b / np.sqrt(s_b**2 + 1.0)) / np.arctan(1.0 / np.sqrt(2.0))
@@ -2406,7 +2465,6 @@ class GrainMap:
         from matplotlib.patches import Polygon as _Poly, Rectangle as _Rect
         ax_full.add_patch(_Poly(verts, fill=False, edgecolor="k", linewidth=0.6))
 
-        # Bounding box of data in (t, p) space
         if len(t_vals):
             t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
             p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
@@ -2427,24 +2485,21 @@ class GrainMap:
         for sp in ax_full.spines.values():
             sp.set_visible(False)
 
-        # ── inner inset: zoomed scatter coloured with stretched RGB ───────────
-        if len(t_vals) == 0:
-            return
-        t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
-        p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
-
-        ax_zoom = inset_axes(parent_ax, width="28%", height="28%",
-                             loc="upper right", borderpad=0.5)
+        # ── right panel: zoomed scatter with stretched RGB ────────────────────
         ax_zoom.set_facecolor("0.15")
 
-        # scatter each valid pixel as a tiny point
-        ax_zoom.scatter(t_vals, p_vals, c=rgb_stretched, s=1.5,
-                        linewidths=0, rasterized=True)
+        if len(t_vals):
+            t_lo, t_hi = float(t_vals.min()), float(t_vals.max())
+            p_lo, p_hi = float(p_vals.min()), float(p_vals.max())
 
-        pad_t = max((t_hi - t_lo) * 0.15, 1e-4)
-        pad_p = max((p_hi - p_lo) * 0.15, 1e-4)
-        ax_zoom.set_xlim(t_lo - pad_t, t_hi + pad_t)
-        ax_zoom.set_ylim(p_lo - pad_p, p_hi + pad_p)
+            ax_zoom.scatter(t_vals, p_vals, c=rgb_stretched, s=1.5,
+                            linewidths=0, rasterized=True)
+
+            pad_t = max((t_hi - t_lo) * 0.15, 1e-4)
+            pad_p = max((p_hi - p_lo) * 0.15, 1e-4)
+            ax_zoom.set_xlim(t_lo - pad_t, t_hi + pad_t)
+            ax_zoom.set_ylim(p_lo - pad_p, p_hi + pad_p)
+
         ax_zoom.set_xticks([]); ax_zoom.set_yticks([])
         ax_zoom.set_title("stretched", fontsize=5, pad=2)
         for sp in ax_zoom.spines.values():
@@ -2662,7 +2717,8 @@ class GrainMap:
             sample_tilt_deg (float): Rotation angle (°) about *sample_tilt_axis* that maps lab → sample.
                 Default `-40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
-            symmetry (str): Crystal symmetry for IPF reduction.  Currently only `'cubic'`.
+            symmetry (str): Crystal symmetry for IPF reduction.  One of ``'cubic'``,
+                ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.
             motor_x, motor_y (str or None): Motor names to use as axis tick labels.
             motor_units (dict or None): Optional units for motor axes, e.g. `{'pz': 'mm', 'py': 'mm'}`.
                 Appended to the axis label in parentheses.
@@ -2710,22 +2766,21 @@ class GrainMap:
             ).as_matrix()
             ref = R_s.T @ ref   # sample frame → lab frame
 
-        if symmetry != "cubic":
-            raise ValueError(
-                f"Unsupported symmetry {symmetry!r}. Only 'cubic' is implemented."
-            )
+        sym = GrainMap._orix_symmetry(symmetry)
 
         # Crystal direction parallel to ref: c = U^T @ ref  (vectorised)
         U   = self.U[grain]                             # (ny, nx, 3, 3)
         c   = np.einsum("...ji,j->...i", U, ref)        # (ny, nx, 3)
-        rgb = self._cubic_ipf_colors(c)                 # (ny, nx, 3)
+        rgb = self._ipf_colors(c, sym)                  # (ny, nx, 3)
 
-        # (t, p) coordinates for every valid pixel — needed for the stretched
-        # colour key and for the standard mean-orientation marker.
         valid = ~np.any(np.isnan(c), axis=-1)
-        t_flat = np.full(valid.shape, np.nan)
-        p_flat = np.full(valid.shape, np.nan)
-        if valid.any():
+
+        # (t, p) coordinates — cubic-specific; needed for the stretched colour
+        # key and for the mean-orientation marker in the standard key.
+        t_flat = p_flat = c_mean = None
+        if symmetry == "cubic" and valid.any():
+            t_flat = np.full(valid.shape, np.nan)
+            p_flat = np.full(valid.shape, np.nan)
             c_v    = c[valid]
             norms  = np.linalg.norm(c_v, axis=1, keepdims=True)
             c_unit = c_v / np.maximum(norms, 1e-12)
@@ -2735,8 +2790,6 @@ class GrainMap:
                              np.sqrt(c_sym[:, 1]**2 + c_sym[:, 2]**2))
                              / np.arctan(1.0 / np.sqrt(2.0)))
             c_mean = c_sym.mean(axis=0)
-        else:
-            c_mean = None
 
         # Normalise stretch argument
         if stretch is True:
@@ -2815,7 +2868,7 @@ class GrainMap:
         )
 
         if show_colorkey:
-            if stretch:
+            if stretch and symmetry == "cubic":
                 self._ipf_colorkey_inset_stretched(
                     ax,
                     t_vals=t_flat[valid],
@@ -2823,7 +2876,7 @@ class GrainMap:
                     rgb_stretched=img[valid],
                 )
             else:
-                self._ipf_colorkey_inset(ax, c_mean=c_mean)
+                self._ipf_colorkey_inset(ax, sym, c_mean=c_mean)
 
         fig.tight_layout()
         return fig, ax
@@ -2845,8 +2898,8 @@ class GrainMap:
 
         Each of the three panels shows where the crystal a-, b- or c-axis
         points relative to the lab/sample coordinate system, for every fitted
-        map pixel.  Points are coloured with the same IPF scheme as
-        :meth:`plot_ipf_map` (cubic: [001] → blue, [011] → green, [111] → red).
+        map pixel.  Points are coloured with the orix TSL IPF scheme
+        ([001] → blue, [011] → green, [111] → red).
 
         Args:
             grain (int): Grain index (0-based).
@@ -2855,10 +2908,12 @@ class GrainMap:
                 from lab by *sample_tilt_deg* about *sample_tilt_axis*).
             sample_tilt_deg (float): Lab-to-sample rotation angle (°).  Default `-40`.
             sample_tilt_axis (str): Axis of the lab-to-sample rotation.  Default `'y'`.
-            symmetry (str): IPF colour symmetry.  Currently only `'cubic'`.
+            symmetry (str): IPF colour symmetry.  One of ``'cubic'``,
+                ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.
             s, alpha (float): Scatter marker size and transparency.
 """
-        U = self.U[grain]   # (ny, nx, 3, 3)
+        sym    = GrainMap._orix_symmetry(symmetry)
+        U      = self.U[grain]   # (ny, nx, 3, 3)
 
         if frame == "sample":
             R_s    = Rotation.from_euler(
@@ -2883,13 +2938,8 @@ class GrainMap:
             ax = axes_arr[ai]
 
             # i-th column of U_plot = i-th crystal axis in the chosen frame
-            d = U_plot[valid, :, ai]           # (N, 3)
-
-            if symmetry == "cubic":
-                colors = np.clip(self._cubic_ipf_colors(d), 0.0, 1.0)
-            else:
-                nrm    = np.linalg.norm(d, axis=1, keepdims=True)
-                colors = np.abs(d) / np.maximum(nrm, 1e-10)
+            d      = U_plot[valid, :, ai]           # (N, 3)
+            colors = np.clip(self._ipf_colors(d, sym), 0.0, 1.0)
 
             ax.scatter(d[:, 0], d[:, 1], s=s, c=colors, alpha=alpha,
                        linewidths=0)

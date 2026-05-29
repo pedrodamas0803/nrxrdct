@@ -997,6 +997,12 @@ class GrainMap:
                         )
         return angles
 
+    @staticmethod
+    def _mean_rotation(U_stack: np.ndarray) -> np.ndarray:
+        """Nearest rotation to the arithmetic mean of a stack of rotation matrices."""
+        S, _, Vt = np.linalg.svd(U_stack.sum(axis=0))
+        return S @ Vt
+
     def misorientation_map(
         self,
         grain: "int | str",
@@ -1008,12 +1014,11 @@ class GrainMap:
         Args:
             grain (int or 'merged'): Grain index or ``'merged'`` to use the per-pixel
                 flag map set by :meth:`apply_merge`.
-            reference ((3, 3) ndarray or None): Reference orientation.  For a single grain,
-                defaults to ``U_ref[grain]``.  For ``'merged'``, each pixel is referenced
-                against ``U_ref`` of its own grain (``reference`` is ignored).
+            reference ((3, 3) ndarray or None): Override reference orientation.
+                If ``None``, the mean orientation of each grain's fitted pixels is used
+                (single-grain: one mean; ``'merged'``: per-grain mean).
 """
         def _angle_from_matrix(dR):
-            # Vectorised: dR shape (..., 3, 3) → angle in degrees (...)
             tr = dR[..., 0, 0] + dR[..., 1, 1] + dR[..., 2, 2]
             return np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))
 
@@ -1022,31 +1027,33 @@ class GrainMap:
                 raise ValueError("No merge result — call apply_merge first.")
             U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
             bgm   = self.best_grain_map           # (ny, nx), -1 for unfitted
+            fitted_mask = ~np.any(np.isnan(U_map), axis=(-2, -1))
             misor = np.full((self.ny, self.nx), np.nan)
-            valid = bgm >= 0
+            valid = (bgm >= 0) & fitted_mask
             if not np.any(valid):
                 return misor
-            U_v   = U_map[valid]                  # (n_valid, 3, 3)
-            ref_v = self.U_ref[bgm[valid]]        # (n_valid, 3, 3) — per-grain reference
-            dR    = U_v @ ref_v.swapaxes(-2, -1)
+            # Per-grain mean reference (or caller-supplied single reference)
+            if reference is not None:
+                ref_per_grain = np.tile(reference, (self.n_grains, 1, 1))
+            else:
+                ref_per_grain = np.full((self.n_grains, 3, 3), np.nan)
+                for gi in range(self.n_grains):
+                    g_mask = valid & (bgm == gi)
+                    if np.any(g_mask):
+                        ref_per_grain[gi] = self._mean_rotation(U_map[g_mask])
+            ref_v = ref_per_grain[bgm[valid]]     # (n_valid, 3, 3)
+            dR    = U_map[valid] @ ref_v.swapaxes(-2, -1)
             misor[valid] = _angle_from_matrix(dR)
             return misor
-
-        if reference is None:
-            if isinstance(grain, int) and 0 <= grain < self.n_grains:
-                reference = self.U_ref[grain]
-            else:
-                fitted = self.U[grain][~np.any(
-                    np.isnan(self.U[grain]), axis=(-2, -1)
-                )]
-                if len(fitted) == 0:
-                    return np.full((self.ny, self.nx), np.nan)
-                reference = fitted[0]
 
         U_g   = self.U[grain]                     # (ny, nx, 3, 3)
         valid = ~np.any(np.isnan(U_g), axis=(-2, -1))
         misor = np.full((self.ny, self.nx), np.nan)
-        dR    = U_g[valid] @ reference.T
+        if not np.any(valid):
+            return misor
+        if reference is None:
+            reference = self._mean_rotation(U_g[valid])
+        dR = U_g[valid] @ reference.T
         misor[valid] = _angle_from_matrix(dR)
         return misor
 

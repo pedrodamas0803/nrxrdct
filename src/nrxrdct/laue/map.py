@@ -1008,27 +1008,28 @@ class GrainMap:
         Args:
             grain (int or 'merged'): Grain index or ``'merged'`` to use the per-pixel
                 flag map set by :meth:`apply_merge`.
-            reference ((3, 3) ndarray or None): Reference orientation.  Defaults to `U_ref[grain]` if available,
-                otherwise the first fitted point.
+            reference ((3, 3) ndarray or None): Reference orientation.  For a single grain,
+                defaults to ``U_ref[grain]``.  For ``'merged'``, each pixel is referenced
+                against ``U_ref`` of its own grain (``reference`` is ignored).
 """
+        def _angle_from_matrix(dR):
+            # Vectorised: dR shape (..., 3, 3) → angle in degrees (...)
+            tr = dR[..., 0, 0] + dR[..., 1, 1] + dR[..., 2, 2]
+            return np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))
+
         if grain == 'merged':
             if self.best_grain_map is None:
                 raise ValueError("No merge result — call apply_merge first.")
             U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
-            if reference is None:
-                fitted = U_map[~np.any(np.isnan(U_map), axis=(-2, -1))]
-                if len(fitted) == 0:
-                    return np.full((self.ny, self.nx), np.nan)
-                reference = fitted[0]
+            bgm   = self.best_grain_map           # (ny, nx), -1 for unfitted
             misor = np.full((self.ny, self.nx), np.nan)
-            for iy in range(self.ny):
-                for ix in range(self.nx):
-                    U = U_map[iy, ix]
-                    if not np.any(np.isnan(U)):
-                        dR = U @ reference.T
-                        misor[iy, ix] = np.degrees(
-                            Rotation.from_matrix(dR).magnitude()
-                        )
+            valid = bgm >= 0
+            if not np.any(valid):
+                return misor
+            U_v   = U_map[valid]                  # (n_valid, 3, 3)
+            ref_v = self.U_ref[bgm[valid]]        # (n_valid, 3, 3) — per-grain reference
+            dR    = U_v @ ref_v.swapaxes(-2, -1)
+            misor[valid] = _angle_from_matrix(dR)
             return misor
 
         if reference is None:
@@ -1042,15 +1043,11 @@ class GrainMap:
                     return np.full((self.ny, self.nx), np.nan)
                 reference = fitted[0]
 
+        U_g   = self.U[grain]                     # (ny, nx, 3, 3)
+        valid = ~np.any(np.isnan(U_g), axis=(-2, -1))
         misor = np.full((self.ny, self.nx), np.nan)
-        for iy in range(self.ny):
-            for ix in range(self.nx):
-                U = self.U[grain, iy, ix]
-                if not np.any(np.isnan(U)):
-                    dR = U @ reference.T
-                    misor[iy, ix] = np.degrees(
-                        Rotation.from_matrix(dR).magnitude()
-                    )
+        dR    = U_g[valid] @ reference.T
+        misor[valid] = _angle_from_matrix(dR)
         return misor
 
     def kam_map(
@@ -3153,9 +3150,10 @@ class GrainMap:
           (default: X, Y, Z).
         * **Row 2 — Quality**: scalar quality maps listed in
           *quality_metrics* (default: `match_rate`, `rms_px`, `kam`).
-        * **Row 3 — Strain** *(optional)*: one panel per component in
-          *strain_components* (default: all six).  Only shown when
-          *show_strain* is `True` **and** the grain has non-NaN strain data.
+        * **Row 3 — Deviatoric strain** *(optional)*: one panel per component in
+          *strain_components* (default: all six), plotted via
+          :meth:`plot_deviatoric`.  Only shown when *show_strain* is `True`
+          **and** the grain has non-NaN strain data.
 
         Args:
             grain (int): Grain index (0-based).  Use the index returned by
@@ -3253,7 +3251,7 @@ class GrainMap:
                     ax.set_title(f"{self._grain_label(grain)}  —  KAM", fontsize=9)
 
                 elif spec in self._STRAIN_INDICES:
-                    self.plot_strain_component(
+                    self.plot_deviatoric(
                         spec, grain=grain,
                         frame=strain_frame,
                         sample_tilt_deg=sample_tilt_deg,

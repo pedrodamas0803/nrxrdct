@@ -1145,7 +1145,7 @@ class GrainMap:
     def plot_map(
         self,
         quantity: str = "match_rate",
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
@@ -1460,7 +1460,7 @@ class GrainMap:
 
     def plot_kam(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         kernel: int = 1,
         max_misor_deg: float | None = 5.0,
         *,
@@ -1639,7 +1639,7 @@ class GrainMap:
     def plot_deviatoric(
         self,
         component: str = "e_xx",
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
@@ -1752,7 +1752,7 @@ class GrainMap:
     def plot_strain_component(
         self,
         component: str = "e_xx",
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
@@ -1855,7 +1855,7 @@ class GrainMap:
 
     def plot_deviatoric_panel(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
@@ -2182,7 +2182,7 @@ class GrainMap:
 
     def plot_von_mises_stress(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         crystal=None,
         *,
         cij: "np.ndarray | None" = None,
@@ -2388,7 +2388,7 @@ class GrainMap:
     def plot_stress_component(
         self,
         component: str = "s_xx",
-        grain: int = 0,
+        grain: "int | str" = 0,
         crystal = None,
         *,
         cij: "np.ndarray | None" = None,
@@ -3214,7 +3214,7 @@ class GrainMap:
 
     def plot_overview(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         ipf_axes: "list[str] | None" = None,
         quality_metrics: "list[str] | None" = None,
@@ -3282,10 +3282,15 @@ class GrainMap:
         )
 
         # decide whether to show strain row
+        def _strain_voigt_for_grain(g):
+            if g == 'merged':
+                return self._select_merged(self.strain_voigt)
+            return self.strain_voigt[g]
+
         has_strain = (
             show_strain
-            and self.n_grains > grain
-            and np.any(np.isfinite(self.strain_voigt[grain]))
+            and (grain == 'merged' or self.n_grains > grain)
+            and np.any(np.isfinite(_strain_voigt_for_grain(grain)))
         )
 
         # ── build row specs ───────────────────────────────────────────────────
@@ -3400,7 +3405,7 @@ class GrainMap:
     def plot_ipf_map(
         self,
         axis="z",
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         frame: str = "lab",
         sample_tilt_deg: float = 40.0,
@@ -3603,7 +3608,7 @@ class GrainMap:
 
     def plot_ipf_scatter(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         frame: str = "lab",
         sample_tilt_deg: float = 40.0,
@@ -6339,146 +6344,66 @@ class GrainMap:
     def save_merged_result(
         self,
         path: str,
-        grain: "int | None" = None,
         euler_convention: str = "ZXZ",
         compress: bool = True,
     ) -> None:
         """
-        Export the final merged-grain result to a self-contained HDF5 file.
+        Save the full multi-grain result, merge flags, and Euler angles to HDF5.
 
-        Unlike :meth:`save` (which preserves the full multi-grain object for
-        later reloading), this method writes a *flat*, human-readable file
-        meant for downstream analysis tools (visualisation, strain maps, data
-        exchange).  Every dataset is a plain array — no GrainMap class is
-        needed to read it back.
+        Writes the same format as :meth:`save` (``grain_XX`` groups indexable
+        by grain ID, ``best_grain_map`` in ``/meta``) and additionally stores
+        per-grain Euler angles so the file is self-contained for downstream
+        analysis.  The file can be reloaded with :meth:`load` and all
+        ``grain=<id>`` and ``grain='merged'`` queries work as normal.
 
-        **Layout**
-        `/meta`
-            Scalar metadata (`ny`, `nx`, `grain_index`,
-            `h5_path`, `processing_dir`).
+        **Layout** (extends :meth:`save`)::
 
-        `/orientation/`
-            `U`          — (ny, nx, 3, 3)  orientation matrices.
-            `euler_ZXZ`  — (ny, nx, 3)     Euler angles in degrees
-                             (or the chosen `euler_convention`).
-            `U_ref`      — (3, 3)          reference orientation for
-                             this grain (NaN if unavailable).
-
-        `/fit_quality/`
-            `match_rate`, `rms_px`, `mean_px`,
-            `n_matched`, `cost` — all (ny, nx).
-
-        `/strain/`
-            `voigt`   — (ny, nx, 6)    deviatoric strain in Voigt notation
-                          `[e_xx, e_yy, e_zz, e_xy, e_xz, e_yz]`.
-            `tensor`  — (ny, nx, 3, 3) full strain tensor.
-            Only written when at least one pixel has a fitted strain value.
-
-        `/motors/`
-            One dataset per motor name, each (ny, nx).
+            /meta/
+                ny, nx, n_grains, h5_path, processing_dir
+                best_grain_map  — (ny, nx) int, -1 where no grain won
+                euler_convention — string attribute
+            /grain_00/
+                U, rms_px, mean_px, n_matched, match_rate, cost
+                strain_voigt, strain_tensor, strain_tensor_deviatoric
+                euler_<convention>  — (ny, nx, 3) Euler angles in degrees
+            /grain_01/ ...
+            /motors/ ...
 
         Args:
             path (str): Output HDF5 file path.  Overwritten if it already exists.
-            grain (int or None): Grain slot to export.  `None` (default) uses the merged slot
-                set by :meth:`apply_merge`; falls back to grain 0 if no merge
-                has been performed.
-            euler_convention (str): Euler-angle convention passed to
-                `scipy.spatial.transform.Rotation.as_euler`.  Default
-                `"ZXZ"` (Bunge convention commonly used in EBSD).
-            compress (bool): Apply gzip compression to numeric datasets.  Default `True`.
+            euler_convention (str): Convention for
+                ``scipy.spatial.transform.Rotation.as_euler``.
+                Default ``"ZXZ"`` (Bunge/EBSD convention).
+            compress (bool): Apply gzip compression.  Default ``True``.
 """
-        if grain is None:
-            grain = 'merged' if self.best_grain_map is not None else 0
-        if grain == 'merged':
-            if self.best_grain_map is None:
-                raise ValueError("No merge result — call apply_merge first.")
-            U_gi         = self._select_merged(self.U)
-            match_rate_g = self._select_merged(self.match_rate)
-            rms_px_g     = self._select_merged(self.rms_px)
-            mean_px_g    = self._select_merged(self.mean_px)
-            n_matched_g  = self._select_merged(self.n_matched)
-            cost_g       = self._select_merged(self.cost)
-            sv           = self._select_merged(self.strain_voigt)
-            st           = self._select_merged(self.strain_tensor)
-            U_ref_gi     = np.full((3, 3), np.nan)
-            grain_label  = 'merged'
-        else:
-            if not (0 <= grain < self.n_grains):
-                raise ValueError(
-                    f"grain={grain} out of range (0 – {self.n_grains - 1})"
-                )
-            U_gi         = self.U[grain]
-            match_rate_g = self.match_rate[grain]
-            rms_px_g     = self.rms_px[grain]
-            mean_px_g    = self.mean_px[grain]
-            n_matched_g  = self.n_matched[grain]
-            cost_g       = self.cost[grain]
-            sv           = self.strain_voigt[grain]
-            st           = self.strain_tensor[grain]
-            U_ref_gi     = (
-                self.U_ref[grain]
-                if self.n_grains and self.U_ref.shape[0] > grain
-                else np.full((3, 3), np.nan)
-            )
-            grain_label  = grain
+        self.save(path)
 
         kw = dict(compression="gzip") if compress else {}
+        n_fitted_total = 0
 
-        # ── pre-compute Euler angles (vectorised, NaN-safe) ───────────────────
-        valid  = ~np.any(np.isnan(U_gi), axis=(-2, -1))
-        euler  = np.full((self.ny, self.nx, 3), np.nan)
-        if valid.any():
-            euler[valid] = Rotation.from_matrix(
-                U_gi[valid]
-            ).as_euler(euler_convention, degrees=True)
+        with h5py.File(path, "a") as f:
+            f["meta"].attrs["euler_convention"] = euler_convention
 
-        # ── strain presence check ─────────────────────────────────────────────
-        has_strain = np.any(np.isfinite(sv))
+            for gi in range(self.n_grains):
+                U_gi  = self.U[gi]                              # (ny, nx, 3, 3)
+                valid = ~np.any(np.isnan(U_gi), axis=(-2, -1)) # (ny, nx)
+                euler = np.full((self.ny, self.nx, 3), np.nan)
+                if valid.any():
+                    euler[valid] = Rotation.from_matrix(
+                        U_gi[valid]
+                    ).as_euler(euler_convention, degrees=True)
+                f[f"grain_{gi:02d}"].create_dataset(
+                    f"euler_{euler_convention}", data=euler, **kw
+                )
+                n_fitted_total += int(valid.sum())
 
-        with h5py.File(path, "w") as f:
-            # ── metadata ─────────────────────────────────────────────────────
-            meta = f.create_group("meta")
-            meta.attrs["ny"]             = self.ny
-            meta.attrs["nx"]             = self.nx
-            meta.attrs["grain_index"]    = str(grain_label)
-            meta.attrs["euler_convention"] = euler_convention
-            meta.attrs["h5_path"]        = self.h5_path or ""
-            meta.attrs["processing_dir"] = self.processing_dir or ""
-
-            # ── orientation ───────────────────────────────────────────────────
-            ori = f.create_group("orientation")
-            ori.create_dataset("U",      data=U_gi,     **kw)
-            ori.create_dataset(
-                f"euler_{euler_convention}", data=euler, **kw
-            )
-            ori.create_dataset("U_ref",  data=U_ref_gi)
-
-            # ── fit quality ───────────────────────────────────────────────────
-            fq = f.create_group("fit_quality")
-            fq.create_dataset("match_rate", data=match_rate_g, **kw)
-            fq.create_dataset("rms_px",     data=rms_px_g,     **kw)
-            fq.create_dataset("mean_px",    data=mean_px_g,    **kw)
-            fq.create_dataset("n_matched",  data=n_matched_g,  **kw)
-            fq.create_dataset("cost",       data=cost_g,       **kw)
-
-            # ── strain (only if present) ──────────────────────────────────────
-            if has_strain:
-                sg = f.create_group("strain")
-                sg.create_dataset("voigt",  data=sv, **kw)
-                sg.create_dataset("tensor", data=st, **kw)
-
-            # ── motor positions ───────────────────────────────────────────────
-            if self.motors:
-                mg = f.create_group("motors")
-                for name, arr in self.motors.items():
-                    mg.create_dataset(name, data=arr, **kw)
-
-        n_fitted = int(valid.sum())
+        has_strain = np.any(np.isfinite(self.strain_tensor))
+        has_merge  = self.best_grain_map is not None
         print(
             f"Merged result saved → {os.path.abspath(path)}\n"
-            f"  grain slot : {grain_label}\n"
-            f"  fitted px  : {n_fitted} / {self.ny * self.nx} "
-            f"({100 * n_fitted / (self.ny * self.nx):.1f} %)\n"
+            f"  grains     : {self.n_grains}\n"
+            f"  best_grain : {'yes' if has_merge else 'no (call apply_merge first)'}\n"
+            f"  fitted px  : {n_fitted_total} / {self.n_grains * self.ny * self.nx}\n"
             f"  strain     : {'yes' if has_strain else 'no'}\n"
             f"  motors     : {list(self.motors) if self.motors else 'none'}"
         )

@@ -1368,6 +1368,89 @@ class GrainMap:
         fig.tight_layout()
         return fig, axes_arr
 
+    def plot_misorientation(
+        self,
+        grain: "int | str" = 0,
+        reference: np.ndarray | None = None,
+        ax=None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: dict | None = None,
+        title: str | None = None,
+        figsize: tuple | None = None,
+        colorbar: bool = True,
+    ):
+        """
+        Plot the misorientation angle map.
+
+        Each pixel shows the misorientation angle (°) relative to a reference
+        orientation.  For ``grain='merged'`` each pixel is referenced against
+        ``U_ref`` of its own grain, so multiple grains can be compared on a
+        common colour scale.  For a single grain the reference defaults to
+        ``U_ref[grain]``.
+
+        Args:
+            grain (int or 'merged'): Grain index or ``'merged'``.  Default `0`.
+            reference ((3, 3) ndarray or None): Override the reference orientation.
+                Ignored for ``grain='merged'``.
+            ax (Axes or None): Existing axes to draw on.  If `None` a new figure is created.
+            cmap (str or None): Colormap.  Defaults to ``'RdYlGn_r'``.
+            vmin, vmax (float or None): Color scale limits.  `None` uses the data range.
+            motor_x, motor_y (str or None): Motor names for axis labels (from `self.motors`).
+            motor_units (dict or None): Units per motor, e.g. ``{'pz': 'mm', 'py': 'mm'}``.
+            title (str or None): Axes title.  Auto-generated if `None`.
+            figsize (tuple or None): Figure size.  Defaults to ``(6, 5)``.
+            colorbar (bool): Whether to add a colorbar.  Default `True`.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+        """
+        data = self.misorientation_map(grain, reference=reference)
+        cmap = cmap or "RdYlGn_r"
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize or (6, 5))
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data,
+            origin="upper", extent=extent,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            interpolation="nearest", aspect="auto",
+        )
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label("Misorientation (°)", fontsize=9)
+
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"{self._grain_label(grain)}  —  misorientation (°)",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
+
     def plot_kam(
         self,
         grain: int = 0,

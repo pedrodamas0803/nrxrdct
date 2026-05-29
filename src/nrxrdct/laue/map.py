@@ -2362,19 +2362,20 @@ class GrainMap:
     def _ipf_colorkey_inset(parent_ax, sym, c_mean: "np.ndarray | None" = None) -> None:
         """Append an IPF colour-key panel to the right of *parent_ax*.
 
-        All symmetries are rendered identically: Lambert equal-area projection
-        of the upper hemisphere, filtered to the symmetry fundamental zone, and
-        coloured by orix's ``IPFColorKeyTSL``.  The image and the map colours
-        are therefore produced by the same algorithm, so the optional mean
-        direction marker is guaranteed to land on the correct colour.
+        **Cubic** — Lambert equal-area rendering via orix's ``IPFColorKeyTSL``,
+        so the key colours are identical to the map.  A star marker shows the
+        mean crystal direction.
+
+        **Non-cubic** — orix's own ``IPFColorKeyTSL.plot()`` renderer, which
+        draws the correct FZ wedge with crystal-direction labels.
 
         Args:
             parent_ax: Host axes.
             sym: orix symmetry object (from :meth:`_orix_symmetry`).
-            c_mean ((3,) array or None): Representative crystal direction
-                (e.g. mean of FZ-reduced directions).  Plotted as a star
-                marker at its Lambert-projected FZ position.
+            c_mean ((3,) array or None): Representative crystal direction.
+                Plotted as a star marker at its Lambert-FZ position (cubic only).
 """
+        from orix.quaternion import symmetry as _osym
         try:
             from mpl_toolkits.axes_grid1 import make_axes_locatable
         except ImportError:
@@ -2384,66 +2385,80 @@ class GrainMap:
         ax_key  = divider.append_axes("right", size="50%", pad=0.15)
         ax_key.set_facecolor("white")
 
-        try:
-            from orix.plot import IPFColorKeyTSL
+        if sym is _osym.Oh:
+            # ── cubic: Lambert equal-area, coloured by orix ───────────────────
+            try:
+                from orix.plot import IPFColorKeyTSL
 
-            _r2max  = 2.0
-            _rl     = np.sqrt(_r2max)
-            N       = 400
-            u_lin   = np.linspace(-_rl, _rl, N)
-            Ug, Vg  = np.meshgrid(u_lin, u_lin)
-            r2      = Ug**2 + Vg**2
-            in_disk = r2 <= _r2max
-            fac     = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
-            xyz     = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
-            pts     = xyz[in_disk]                              # (M, 3)
+                _r2max  = 2.0
+                _rl     = np.sqrt(_r2max)
+                N       = 400
+                u_lin   = np.linspace(-_rl, _rl, N)
+                Ug, Vg  = np.meshgrid(u_lin, u_lin)
+                r2      = Ug**2 + Vg**2
+                in_disk = r2 <= _r2max
+                fac     = np.sqrt(np.maximum(1.0 - r2 / 4.0, 0.0))
+                xyz     = np.stack([Ug * fac, Vg * fac, 1.0 - r2 / 2.0], axis=-1)
+                pts     = xyz[in_disk]
+                normals = np.asarray(sym.fundamental_sector.data)
+                in_fz   = np.all(pts @ normals.T >= -1e-6, axis=1)
+                key     = IPFColorKeyTSL(sym)
+                img     = np.ones((N, N, 3), dtype=np.float32)
+                if in_fz.any():
+                    O       = GrainMap._dirs_to_orix_rotations(pts[in_fz])
+                    rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
+                    flat_idx        = np.where(in_disk.ravel())[0][in_fz]
+                    rows, cols      = np.unravel_index(flat_idx, (N, N))
+                    img[rows, cols] = rgb_pts.astype(np.float32)
+                ax_key.imshow(img, origin="lower",
+                              extent=[-_rl, _rl, -_rl, _rl],
+                              aspect="auto", interpolation="bilinear")
+                u_fz = Ug[in_disk][in_fz]
+                v_fz = Vg[in_disk][in_fz]
+                span = max(u_fz.max() - u_fz.min(), v_fz.max() - v_fz.min())
+                pad  = span * 0.12
+                ax_key.set_xlim(u_fz.min() - pad, u_fz.max() + pad)
+                ax_key.set_ylim(v_fz.min() - pad, v_fz.max() + pad)
 
-            normals = np.asarray(sym.fundamental_sector.data)  # (K, 3)
-            in_fz   = np.all(pts @ normals.T >= -1e-6, axis=1) # (M,)
+                if c_mean is not None:
+                    n_cm = np.linalg.norm(c_mean)
+                    if n_cm > 1e-12:
+                        d_mean  = c_mean / n_cm
+                        R_mats  = np.asarray(sym.to_matrix())
+                        d_all   = R_mats @ d_mean
+                        in_fz_m = np.all(d_all @ normals.T >= -1e-6, axis=1)
+                        if in_fz_m.any():
+                            d_fz  = d_all[np.argmax(in_fz_m)]
+                            z_m   = float(np.clip(d_fz[2], -1.0, 1.0))
+                            denom = np.sqrt(max((1.0 + z_m) / 2.0, 1e-9))
+                            ax_key.scatter([d_fz[0] / denom], [d_fz[1] / denom],
+                                           s=55, marker="*", zorder=6,
+                                           c="white", edgecolors="black",
+                                           linewidths=0.7)
+            except Exception as _e:
+                import traceback as _tb
+                print("IPF colorkey error:", _e)
+                _tb.print_exc()
 
-            key    = IPFColorKeyTSL(sym)
-            img    = np.ones((N, N, 3), dtype=np.float32)
-            if in_fz.any():
-                O       = GrainMap._dirs_to_orix_rotations(pts[in_fz])
-                rgb_pts = np.clip(key.orientation2color(O), 0.0, 1.0)
-                flat_idx        = np.where(in_disk.ravel())[0][in_fz]
-                rows, cols      = np.unravel_index(flat_idx, (N, N))
-                img[rows, cols] = rgb_pts.astype(np.float32)
-
-            ax_key.imshow(img, origin="lower",
-                          extent=[-_rl, _rl, -_rl, _rl],
-                          aspect="auto", interpolation="bilinear")
-
-            # Zoom axes to just the FZ region with a small margin
-            u_fz = Ug[in_disk][in_fz]
-            v_fz = Vg[in_disk][in_fz]
-            span  = max(u_fz.max() - u_fz.min(), v_fz.max() - v_fz.min())
-            pad   = span * 0.12
-            ax_key.set_xlim(u_fz.min() - pad, u_fz.max() + pad)
-            ax_key.set_ylim(v_fz.min() - pad, v_fz.max() + pad)
-
-            # Mean-direction marker: reduce c_mean to FZ via all symmetry ops
-            if c_mean is not None:
-                n_cm = np.linalg.norm(c_mean)
-                if n_cm > 1e-12:
-                    d_mean  = c_mean / n_cm
-                    R_mats  = np.asarray(sym.to_matrix())          # (Nsym, 3, 3)
-                    d_all   = R_mats @ d_mean                      # (Nsym, 3)
-                    in_fz_m = np.all(d_all @ normals.T >= -1e-6, axis=1)
-                    if in_fz_m.any():
-                        d_fz  = d_all[np.argmax(in_fz_m)]
-                        z_m   = float(np.clip(d_fz[2], -1.0, 1.0))
-                        denom = np.sqrt(max((1.0 + z_m) / 2.0, 1e-9))
-                        u_m   = d_fz[0] / denom
-                        v_m   = d_fz[1] / denom
-                        ax_key.scatter([u_m], [v_m], s=55, marker="*",
-                                       zorder=6, c="white",
-                                       edgecolors="black", linewidths=0.7)
-
-        except Exception as _e:
-            import traceback as _tb
-            print("IPF colorkey error:", _e)
-            _tb.print_exc()
+        else:
+            # ── non-cubic: orix renderer preserves crystal-direction labels ────
+            try:
+                import io as _io
+                import matplotlib.pyplot as _plt
+                from orix.plot import IPFColorKeyTSL
+                key      = IPFColorKeyTSL(sym)
+                fig_orix = key.plot(return_figure=True)
+                for _a in fig_orix.axes:
+                    _a.set_title("")
+                _buf = _io.BytesIO()
+                fig_orix.savefig(_buf, format="png", bbox_inches="tight", dpi=200)
+                _plt.close(fig_orix)
+                _buf.seek(0)
+                ax_key.imshow(_plt.imread(_buf), aspect="auto")
+            except Exception as _e:
+                import traceback as _tb
+                print("IPF colorkey error:", _e)
+                _tb.print_exc()
 
         ax_key.set_xticks([]); ax_key.set_yticks([])
         for sp in ax_key.spines.values():

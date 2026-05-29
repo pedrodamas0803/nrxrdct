@@ -290,13 +290,16 @@ class GrainMap:
         self._results      = [self._results[i] for i in keep]
         self.n_grains      = len(keep)
 
-        # remap _merged_grain: clear if dropped, shift if it survived
-        mg = self._merged_grain
-        if mg is not None:
-            if mg in drop_set:
-                self._merged_grain = None
-            else:
-                self._merged_grain = keep.index(mg)
+        # remap best_grain_map: -1 for pixels whose grain was dropped, remapped index for survivors
+        if self.best_grain_map is not None:
+            old_n = len(keep) + len(drop_set)
+            remap = np.full(old_n, -1, dtype=int)
+            for new_idx, old_idx in enumerate(keep):
+                remap[old_idx] = new_idx
+            bgm = self.best_grain_map.copy()
+            pos = bgm >= 0
+            bgm[pos] = remap[bgm[pos]]
+            self.best_grain_map = bgm
 
         dropped_str = ", ".join(str(i) for i in sorted(drop_set))
         print(f"Dropped grain(s) {dropped_str} — {self.n_grains} grain(s) remaining.")
@@ -319,7 +322,7 @@ class GrainMap:
             [[None] * self.nx for _ in range(self.ny)]
             for _ in range(ng)
         ]
-        self._merged_grain: int | None = None
+        self.best_grain_map: np.ndarray | None = None
 
     # ── Motor positions ───────────────────────────────────────────────────────
 
@@ -557,70 +560,147 @@ class GrainMap:
             "source":     source,
         }
 
-    def apply_merge(self, best_grain: np.ndarray, metrics: dict) -> int:
+    def apply_merge(self, best_grain: np.ndarray, metrics: dict) -> str:
         """
-        Write a merge result into a dedicated merged grain slot.
+        Register a per-pixel merge result as a flag map.
 
-        The first call appends a new slot so that a map with *n* fitted
-        grains ends up with *n + 1* grains total.  Every subsequent call
-        **replaces** that same slot in-place, so repeated merging with
-        different thresholds never adds extra slots.
+        Stores *best_grain* as :attr:`best_grain_map` so that every analysis
+        and plotting method can dispatch per-pixel to the correct grain slot
+        when called with ``grain='merged'``.  No new grain slot is created and
+        :attr:`n_grains` is unchanged.
 
         Args:
             best_grain ((ny, nx) int ndarray): First return value of :meth:`merge`.
-            metrics (dict): Second return value of :meth:`merge`.
+            metrics (dict): Second return value of :meth:`merge` (retained for API compatibility; not stored).
 
         Returns:
-            int
-                Index of the merged grain slot.  Pass it directly to any method
-                that accepts a `grain` argument::
+            str
+                The string ``'merged'``.  Pass it directly to any method that
+                accepts a ``grain`` argument::
 
-                best_grain, m = gmap.merge(min_match_rate=0.3)
-                gi = gmap.apply_merge(best_grain, m)
+                    best_grain, m = gmap.merge(min_match_rate=0.3)
+                    gmap.apply_merge(best_grain, m)
 
-                gmap.kam_map(gi)
-                gmap.plot_ipf_map(gi)
-                gmap.plot_map("match_rate", grain=gi)
+                    gmap.kam_map('merged')
+                    gmap.plot_ipf_map('merged')
+                    gmap.plot_map("match_rate", grain='merged')
 """
-        shape2d = (self.ny, self.nx)
-        valid = (best_grain >= 0)[..., None, None]  # (ny, nx, 1, 1)
+        self.best_grain_map = np.array(best_grain, dtype=int)
+        return 'merged'
 
-        U_new = np.where(valid, metrics["U"], np.nan)            # (ny, nx, 3, 3)
+    # ── Per-pixel merged selection ────────────────────────────────────────────
 
-        def _f(key: str) -> np.ndarray:
-            return np.asarray(metrics[key], dtype=float)         # (ny, nx)
+    def _select_merged(self, arr: np.ndarray) -> np.ndarray:
+        """
+        Per-pixel selection from a per-grain array using :attr:`best_grain_map`.
 
-        n_new = np.asarray(metrics["n_matched"], dtype=int)
+        Args:
+            arr ((n_grains, ny, nx, ...) ndarray): Any per-grain array.
 
-        if self._merged_grain is None:
-            # ── first merge: append a new slot ───────────────────────────────
-            self.U             = np.concatenate([self.U,          U_new[None]],                    axis=0)
-            self.rms_px        = np.concatenate([self.rms_px,     _f("rms_px")[None]],             axis=0)
-            self.mean_px       = np.concatenate([self.mean_px,    _f("mean_px")[None]],            axis=0)
-            self.n_matched     = np.concatenate([self.n_matched,  n_new[None]],                    axis=0)
-            self.match_rate    = np.concatenate([self.match_rate, _f("match_rate")[None]],         axis=0)
-            self.cost          = np.concatenate([self.cost,       _f("cost")[None]],               axis=0)
-            self.strain_voigt  = np.concatenate([self.strain_voigt,
-                                                 np.full((1, *shape2d, 6),    np.nan)],            axis=0)
-            self.strain_tensor = np.concatenate([self.strain_tensor,
-                                                 np.full((1, *shape2d, 3, 3), np.nan)],           axis=0)
-            self._results.append([[None] * self.nx for _ in range(self.ny)])
-            self.n_grains += 1
-            self._merged_grain = self.n_grains - 1
-        else:
-            # ── subsequent merge: replace the existing slot in-place ──────────
-            gi = self._merged_grain
-            self.U[gi]          = U_new
-            self.rms_px[gi]     = _f("rms_px")
-            self.mean_px[gi]    = _f("mean_px")
-            self.n_matched[gi]  = n_new
-            self.match_rate[gi] = _f("match_rate")
-            self.cost[gi]       = _f("cost")
-            self.strain_voigt[gi]  = np.nan
-            self.strain_tensor[gi] = np.nan
-            self._results[gi] = [[None] * self.nx for _ in range(self.ny)]
+        Returns:
+            (ny, nx, ...) ndarray with the winning grain's value at each pixel.
+            Pixels where ``best_grain_map == -1`` are filled with ``NaN``
+            (float arrays) or ``-1`` (integer arrays).
+"""
+        iy = np.arange(self.ny)[:, None]
+        ix = np.arange(self.nx)[None, :]
+        g  = np.clip(self.best_grain_map, 0, self.n_grains - 1)
+        result = arr[g, iy, ix].copy()
+        invalid = self.best_grain_map < 0
+        if invalid.any():
+            if np.issubdtype(result.dtype, np.floating):
+                result[invalid] = np.nan
+            elif np.issubdtype(result.dtype, np.integer):
+                result[invalid] = -1
+        return result
 
-        return self._merged_grain
+    def clean_isolated_pixels(
+        self,
+        grain: "int | None" = None,
+        *,
+        kernel: int = 1,
+        min_same_neighbors: int = 1,
+        n_iterations: int = 1,
+    ) -> int:
+        """
+        Reassign isolated pixels in :attr:`best_grain_map` to the most common
+        neighbour grain.
+
+        A pixel is treated as isolated when fewer than *min_same_neighbors* of
+        its kernel neighbours share the same grain label.  It is then
+        relabelled to the modal grain among its valid (≥ 0) neighbours.
+
+        Args:
+            grain (int or None): Only clean pixels currently labelled with this
+                grain index.  ``None`` (default) processes every grain.
+            kernel (int): Half-size of the square neighbourhood.  ``1`` checks
+                the 8 immediate neighbours; ``2`` the 24 neighbours in a 5×5
+                window.  Default ``1``.
+            min_same_neighbors (int): Minimum number of same-grain neighbours
+                required to keep a pixel's label.  Pixels with fewer than this
+                are relabelled.  Default ``1`` — a pixel is isolated only when
+                *none* of its neighbours share its label.
+            n_iterations (int): Number of cleaning passes.  Each pass can
+                dissolve larger spurious clusters.  Stops early if a pass
+                produces no changes.  Default ``1``.
+
+        Returns:
+            int: Total number of pixels relabelled across all iterations.
+
+        Raises:
+            ValueError: If :attr:`best_grain_map` is ``None`` (no merge result).
+"""
+        if self.best_grain_map is None:
+            raise ValueError("No merge result — call apply_merge first.")
+
+        offsets = [
+            (dy, dx)
+            for dy in range(-kernel, kernel + 1)
+            for dx in range(-kernel, kernel + 1)
+            if (dy, dx) != (0, 0)
+        ]
+
+        total_changed = 0
+        for _ in range(n_iterations):
+            bgm = self.best_grain_map
+            new_bgm = bgm.copy()
+            n_changed = 0
+
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    g = int(bgm[iy, ix])
+                    if g < 0:
+                        continue
+                    if grain is not None and g != grain:
+                        continue
+
+                    # Collect valid (≥ 0) neighbour labels
+                    nbr: list[int] = []
+                    same = 0
+                    for dy, dx in offsets:
+                        jy, jx = iy + dy, ix + dx
+                        if 0 <= jy < self.ny and 0 <= jx < self.nx:
+                            ng = int(bgm[jy, jx])
+                            if ng >= 0:
+                                nbr.append(ng)
+                                if ng == g:
+                                    same += 1
+
+                    if same < min_same_neighbors:
+                        other = [nl for nl in nbr if nl != g]
+                        if other:
+                            counts: dict[int, int] = {}
+                            for nl in other:
+                                counts[nl] = counts.get(nl, 0) + 1
+                            new_bgm[iy, ix] = max(counts, key=lambda k: counts[k])
+                            n_changed += 1
+
+            self.best_grain_map = new_bgm
+            total_changed += n_changed
+            if n_changed == 0:
+                break
+
+        return total_changed
 
     # ── Symmetry reduction ────────────────────────────────────────────────────
 
@@ -880,39 +960,79 @@ class GrainMap:
 
     def euler_map(
         self,
-        grain: int,
+        grain: "int | str",
         convention: str = "ZXZ",
     ) -> np.ndarray:
         """
         Euler angles for every map point.
 
+        Args:
+            grain (int or 'merged'): Grain index or ``'merged'`` to use the per-pixel
+                flag map set by :meth:`apply_merge`.
+
         Returns:
             angles ((ny, nx, 3) ndarray, degrees.): `NaN` where no fit exists.
 """
         angles = np.full((self.ny, self.nx, 3), np.nan)
-        for iy in range(self.ny):
-            for ix in range(self.nx):
-                U = self.U[grain, iy, ix]
-                if not np.any(np.isnan(U)):
-                    angles[iy, ix] = Rotation.from_matrix(U).as_euler(
-                        convention, degrees=True
-                    )
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    g = int(self.best_grain_map[iy, ix])
+                    if g < 0:
+                        continue
+                    U = self.U[g, iy, ix]
+                    if not np.any(np.isnan(U)):
+                        angles[iy, ix] = Rotation.from_matrix(U).as_euler(
+                            convention, degrees=True
+                        )
+        else:
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    U = self.U[grain, iy, ix]
+                    if not np.any(np.isnan(U)):
+                        angles[iy, ix] = Rotation.from_matrix(U).as_euler(
+                            convention, degrees=True
+                        )
         return angles
 
     def misorientation_map(
         self,
-        grain: int,
+        grain: "int | str",
         reference: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Misorientation angle (degrees) relative to a reference.
 
         Args:
+            grain (int or 'merged'): Grain index or ``'merged'`` to use the per-pixel
+                flag map set by :meth:`apply_merge`.
             reference ((3, 3) ndarray or None): Reference orientation.  Defaults to `U_ref[grain]` if available,
-                otherwise the mean of all fitted points.
+                otherwise the first fitted point.
 """
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
+            if reference is None:
+                fitted = U_map[~np.any(np.isnan(U_map), axis=(-2, -1))]
+                if len(fitted) == 0:
+                    return np.full((self.ny, self.nx), np.nan)
+                reference = fitted[0]
+            misor = np.full((self.ny, self.nx), np.nan)
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    U = U_map[iy, ix]
+                    if not np.any(np.isnan(U)):
+                        dR = U @ reference.T
+                        misor[iy, ix] = np.degrees(
+                            Rotation.from_matrix(dR).magnitude()
+                        )
+            return misor
+
         if reference is None:
-            if self.n_grains > grain:
+            if isinstance(grain, int) and 0 <= grain < self.n_grains:
                 reference = self.U_ref[grain]
             else:
                 fitted = self.U[grain][~np.any(
@@ -935,7 +1055,7 @@ class GrainMap:
 
     def kam_map(
         self,
-        grain: int = 0,
+        grain: "int | str" = 0,
         kernel: int = 1,
         max_misor_deg: float | None = 5.0,
     ) -> np.ndarray:
@@ -948,8 +1068,17 @@ class GrainMap:
         exceeds *max_misor_deg* are excluded so that grain-boundary pixels do
         not inflate the KAM inside grains.
 
+        When ``grain='merged'``, neighbour pairs that span a grain boundary
+        (i.e. the two pixels belong to different source grains according to
+        :attr:`best_grain_map`) are always skipped, regardless of
+        *max_misor_deg*.  This prevents spurious large misorientations between
+        adjacent pixels whose orientation matrices are in different crystal
+        reference frames.
+
         Args:
-            grain (int): Grain index (0-based).  Default `0`.
+            grain (int or 'merged'): Grain index (0-based) or ``'merged'`` to
+                use the per-pixel flag map set by :meth:`apply_merge`.
+                Default `0`.
             kernel (int): Half-size of the square neighbourhood in pixels.  `1` uses all
                 8 immediate neighbours (3×3 kernel excluding the centre); `2`
                 uses a 5×5 neighbourhood, and so on.  Default `1`.
@@ -961,7 +1090,13 @@ class GrainMap:
             kam ((ny, nx) ndarray): KAM values in degrees.  `NaN` at unfitted points or points
                 with no valid neighbours.
 """
-        U     = self.U[grain]                                    # (ny, nx, 3, 3)
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            U = self._select_merged(self.U)                      # (ny, nx, 3, 3)
+        else:
+            U = self.U[grain]                                    # (ny, nx, 3, 3)
+
         valid = ~np.any(np.isnan(U), axis=(-2, -1))             # (ny, nx) bool
 
         offsets = [
@@ -980,14 +1115,18 @@ class GrainMap:
                 angles = []
                 for dy, dx in offsets:
                     jy, jx = iy + dy, ix + dx
-                    if (0 <= jy < self.ny and 0 <= jx < self.nx
+                    if not (0 <= jy < self.ny and 0 <= jx < self.nx
                             and valid[jy, jx]):
-                        dR    = U0 @ U[jy, jx].T
-                        angle = np.degrees(
-                            Rotation.from_matrix(dR).magnitude()
-                        )
-                        if max_misor_deg is None or angle <= max_misor_deg:
-                            angles.append(angle)
+                        continue
+                    if (grain == 'merged'
+                            and self.best_grain_map[iy, ix] != self.best_grain_map[jy, jx]):
+                        continue
+                    dR    = U0 @ U[jy, jx].T
+                    angle = np.degrees(
+                        Rotation.from_matrix(dR).magnitude()
+                    )
+                    if max_misor_deg is None or angle <= max_misor_deg:
+                        angles.append(angle)
                 if angles:
                     kam[iy, ix] = float(np.mean(angles))
         return kam
@@ -1027,28 +1166,31 @@ class GrainMap:
                 If `None`, integer pixel indices are shown.
 """
         # ── build data array ──────────────────────────────────────────────────
+        def _sel(arr):
+            return self._select_merged(arr) if grain == 'merged' else arr[grain]
+
         if isinstance(quantity, np.ndarray):
             data  = quantity
             label = title or ""
             cmap  = cmap or "viridis"
         elif quantity == "match_rate":
-            data = self.match_rate[grain]
+            data = _sel(self.match_rate)
             label = "Match rate"
             cmap  = cmap or "viridis"
         elif quantity == "rms_px":
-            data = self.rms_px[grain]
+            data = _sel(self.rms_px)
             label = "RMS (px)"
             cmap  = cmap or "plasma_r"
         elif quantity == "mean_px":
-            data = self.mean_px[grain]
+            data = _sel(self.mean_px)
             label = "Mean dev (px)"
             cmap  = cmap or "plasma_r"
         elif quantity == "cost":
-            data = self.cost[grain]
+            data = _sel(self.cost)
             label = "Cost"
             cmap  = cmap or "plasma_r"
         elif quantity == "n_matched":
-            raw = self.n_matched[grain].astype(float)
+            raw = _sel(self.n_matched).astype(float)
             raw[raw < 0] = np.nan
             data = raw
             label = "N matched"
@@ -1333,15 +1475,19 @@ class GrainMap:
     def _strain_component_map(
         self,
         component: str,
-        grain: int,
+        grain: "int | str",
         frame: str,
         sample_tilt_deg: float,
         sample_tilt_axis: str,
     ) -> np.ndarray:
         """Return (ny, nx) array of the requested strain component."""
         i, j = self._STRAIN_INDICES[component]
-        eps = self.strain_tensor[grain]   # (ny, nx, 3, 3)
-        U   = self.U[grain]               # (ny, nx, 3, 3)
+        if grain == 'merged':
+            eps = self._select_merged(self.strain_tensor)   # (ny, nx, 3, 3)
+            U   = self._select_merged(self.U)               # (ny, nx, 3, 3)
+        else:
+            eps = self.strain_tensor[grain]   # (ny, nx, 3, 3)
+            U   = self.U[grain]               # (ny, nx, 3, 3)
 
         if frame == "crystal":
             data = eps[..., i, j]
@@ -1371,15 +1517,19 @@ class GrainMap:
     def _deviatoric_component_map(
         self,
         component: str,
-        grain: int,
+        grain: "int | str",
         frame: str,
         sample_tilt_deg: float,
         sample_tilt_axis: str,
     ) -> np.ndarray:
         """Return (ny, nx) array of the requested deviatoric strain component."""
         i, j = self._STRAIN_INDICES[component]
-        eps_dev = self.strain_tensor_deviatoric[grain]   # (ny, nx, 3, 3)
-        U       = self.U[grain]                          # (ny, nx, 3, 3)
+        if grain == 'merged':
+            eps_dev = self._select_merged(self.strain_tensor_deviatoric)   # (ny, nx, 3, 3)
+            U       = self._select_merged(self.U)                          # (ny, nx, 3, 3)
+        else:
+            eps_dev = self.strain_tensor_deviatoric[grain]   # (ny, nx, 3, 3)
+            U       = self.U[grain]                          # (ny, nx, 3, 3)
 
         if frame == "crystal":
             data = eps_dev[..., i, j]
@@ -1808,7 +1958,7 @@ class GrainMap:
     def stress_voigt(
         self,
         crystal,
-        grain: int = 0,
+        grain: "int | str" = 0,
         *,
         cij: "np.ndarray | None" = None,
         frame: str = "crystal",
@@ -1843,7 +1993,10 @@ class GrainMap:
                 `NaN` where strain data are absent.
 """
         C = self._extract_cij(crystal, cij)          # (6,6) GPa, std Voigt
-        eps_code = self.strain_tensor[grain]          # (ny, nx, 3, 3)
+        if grain == 'merged':
+            eps_code = self._select_merged(self.strain_tensor)   # (ny, nx, 3, 3)
+        else:
+            eps_code = self.strain_tensor[grain]                 # (ny, nx, 3, 3)
 
         # Build (ny, nx, 6) engineering Voigt in standard ordering
         # Standard: [xx, yy, zz, yz, xz, xy]
@@ -1862,7 +2015,7 @@ class GrainMap:
         sig_code = sig_std[..., self._VOIGT_REORDER]
 
         if frame in ("lab", "sample"):
-            U = self.U[grain]                             # (ny, nx, 3, 3)
+            U = self._select_merged(self.U) if grain == 'merged' else self.U[grain]
             R = U
             if frame == "sample":
                 R_s = Rotation.from_euler(
@@ -2978,7 +3131,7 @@ class GrainMap:
         sym = GrainMap._orix_symmetry(symmetry)
 
         # Crystal direction parallel to ref: c = U^T @ ref  (vectorised)
-        U   = self.U[grain]                             # (ny, nx, 3, 3)
+        U   = self._select_merged(self.U) if grain == 'merged' else self.U[grain]
         c   = np.einsum("...ji,j->...i", U, ref)        # (ny, nx, 3)
         rgb = self._ipf_colors(c, sym)                  # (ny, nx, 3)
 
@@ -3129,7 +3282,7 @@ class GrainMap:
             s, alpha (float): Scatter marker size and transparency.
 """
         sym    = GrainMap._orix_symmetry(symmetry)
-        U      = self.U[grain]   # (ny, nx, 3, 3)
+        U      = self._select_merged(self.U) if grain == 'merged' else self.U[grain]
 
         if frame == "sample":
             R_s    = Rotation.from_euler(
@@ -3259,7 +3412,7 @@ class GrainMap:
         seg_dir    = os.path.join(base_dir, "seg")
         grains_use = list(grains) if grains is not None else list(range(self.n_grains))
         if map_grain is None:
-            map_grain = self._merged_grain if self._merged_grain is not None else 0
+            map_grain = 0
 
         # ── motor / extent helpers ────────────────────────────────────────────
         mu = motor_units or {}
@@ -3607,7 +3760,7 @@ class GrainMap:
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:
-            map_grain = self._merged_grain if self._merged_grain is not None else 0
+            map_grain = 0
 
         mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
@@ -4229,7 +4382,7 @@ class GrainMap:
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:
-            map_grain = self._merged_grain if self._merged_grain is not None else 0
+            map_grain = 0
 
         mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
@@ -5116,7 +5269,7 @@ class GrainMap:
         os.makedirs(seg_dir, exist_ok=True)
 
         if map_grain is None:
-            map_grain = self._merged_grain if self._merged_grain is not None else 0
+            map_grain = 0
 
         mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
@@ -5723,7 +5876,8 @@ class GrainMap:
             meta.attrs["h5_path"]       = self.h5_path or ""
             meta.attrs["entry"]         = self.entry
             meta.attrs["processing_dir"] = self.processing_dir
-            meta.attrs["merged_grain"]  = self._merged_grain if self._merged_grain is not None else -1
+            if self.best_grain_map is not None:
+                meta.create_dataset("best_grain_map", data=self.best_grain_map, compression="gzip")
             meta.create_dataset(
                 "ub_files",
                 data=np.array([os.path.basename(p) for p in self.ub_files],
@@ -5801,17 +5955,44 @@ class GrainMap:
             compress (bool): Apply gzip compression to numeric datasets.  Default `True`.
 """
         if grain is None:
-            grain = self._merged_grain if self._merged_grain is not None else 0
-        if not (0 <= grain < self.n_grains):
-            raise ValueError(
-                f"grain={grain} out of range (0 – {self.n_grains - 1})"
+            grain = 'merged' if self.best_grain_map is not None else 0
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            U_gi         = self._select_merged(self.U)
+            match_rate_g = self._select_merged(self.match_rate)
+            rms_px_g     = self._select_merged(self.rms_px)
+            mean_px_g    = self._select_merged(self.mean_px)
+            n_matched_g  = self._select_merged(self.n_matched)
+            cost_g       = self._select_merged(self.cost)
+            sv           = self._select_merged(self.strain_voigt)
+            st           = self._select_merged(self.strain_tensor)
+            U_ref_gi     = np.full((3, 3), np.nan)
+            grain_label  = 'merged'
+        else:
+            if not (0 <= grain < self.n_grains):
+                raise ValueError(
+                    f"grain={grain} out of range (0 – {self.n_grains - 1})"
+                )
+            U_gi         = self.U[grain]
+            match_rate_g = self.match_rate[grain]
+            rms_px_g     = self.rms_px[grain]
+            mean_px_g    = self.mean_px[grain]
+            n_matched_g  = self.n_matched[grain]
+            cost_g       = self.cost[grain]
+            sv           = self.strain_voigt[grain]
+            st           = self.strain_tensor[grain]
+            U_ref_gi     = (
+                self.U_ref[grain]
+                if self.n_grains and self.U_ref.shape[0] > grain
+                else np.full((3, 3), np.nan)
             )
+            grain_label  = grain
 
         kw = dict(compression="gzip") if compress else {}
 
         # ── pre-compute Euler angles (vectorised, NaN-safe) ───────────────────
-        U_gi   = self.U[grain]                          # (ny, nx, 3, 3)
-        valid  = ~np.any(np.isnan(U_gi), axis=(-2, -1)) # (ny, nx)
+        valid  = ~np.any(np.isnan(U_gi), axis=(-2, -1))
         euler  = np.full((self.ny, self.nx, 3), np.nan)
         if valid.any():
             euler[valid] = Rotation.from_matrix(
@@ -5819,22 +6000,14 @@ class GrainMap:
             ).as_euler(euler_convention, degrees=True)
 
         # ── strain presence check ─────────────────────────────────────────────
-        sv = self.strain_voigt[grain]
         has_strain = np.any(np.isfinite(sv))
-
-        # ── U_ref for this grain ──────────────────────────────────────────────
-        U_ref_gi = (
-            self.U_ref[grain]
-            if self.n_grains and self.U_ref.shape[0] > grain
-            else np.full((3, 3), np.nan)
-        )
 
         with h5py.File(path, "w") as f:
             # ── metadata ─────────────────────────────────────────────────────
             meta = f.create_group("meta")
             meta.attrs["ny"]             = self.ny
             meta.attrs["nx"]             = self.nx
-            meta.attrs["grain_index"]    = grain
+            meta.attrs["grain_index"]    = str(grain_label)
             meta.attrs["euler_convention"] = euler_convention
             meta.attrs["h5_path"]        = self.h5_path or ""
             meta.attrs["processing_dir"] = self.processing_dir or ""
@@ -5849,17 +6022,17 @@ class GrainMap:
 
             # ── fit quality ───────────────────────────────────────────────────
             fq = f.create_group("fit_quality")
-            fq.create_dataset("match_rate", data=self.match_rate[grain], **kw)
-            fq.create_dataset("rms_px",     data=self.rms_px[grain],     **kw)
-            fq.create_dataset("mean_px",    data=self.mean_px[grain],    **kw)
-            fq.create_dataset("n_matched",  data=self.n_matched[grain],  **kw)
-            fq.create_dataset("cost",       data=self.cost[grain],       **kw)
+            fq.create_dataset("match_rate", data=match_rate_g, **kw)
+            fq.create_dataset("rms_px",     data=rms_px_g,     **kw)
+            fq.create_dataset("mean_px",    data=mean_px_g,    **kw)
+            fq.create_dataset("n_matched",  data=n_matched_g,  **kw)
+            fq.create_dataset("cost",       data=cost_g,       **kw)
 
             # ── strain (only if present) ──────────────────────────────────────
             if has_strain:
                 sg = f.create_group("strain")
-                sg.create_dataset("voigt",  data=sv,                         **kw)
-                sg.create_dataset("tensor", data=self.strain_tensor[grain],  **kw)
+                sg.create_dataset("voigt",  data=sv, **kw)
+                sg.create_dataset("tensor", data=st, **kw)
 
             # ── motor positions ───────────────────────────────────────────────
             if self.motors:
@@ -5870,7 +6043,7 @@ class GrainMap:
         n_fitted = int(valid.sum())
         print(
             f"Merged result saved → {os.path.abspath(path)}\n"
-            f"  grain slot : {grain}\n"
+            f"  grain slot : {grain_label}\n"
             f"  fitted px  : {n_fitted} / {self.ny * self.nx} "
             f"({100 * n_fitted / (self.ny * self.nx):.1f} %)\n"
             f"  strain     : {'yes' if has_strain else 'no'}\n"
@@ -5954,8 +6127,10 @@ class GrainMap:
                 [[None] * nx for _ in range(ny)]
                 for _ in range(n_grains)
             ]
-            mg = int(meta.attrs.get("merged_grain", -1))
-            obj._merged_grain = mg if mg >= 0 else None
+            if "best_grain_map" in meta:
+                obj.best_grain_map = meta["best_grain_map"][()]
+            else:
+                obj.best_grain_map = None
 
         return obj
 

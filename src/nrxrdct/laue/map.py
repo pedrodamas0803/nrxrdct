@@ -7236,7 +7236,14 @@ class GrainMap:
             merged_dir (str): Absolute path of the created `merged/` directory.
             n_links (int): Number of symlinks written.
 """
-        gi_merged = self.n_grains - 1 if grain_index is None else int(grain_index)
+        if grain_index is None:
+            raise ValueError(
+                "grain_index is required since apply_merge no longer creates a dedicated "
+                "merged grain slot.  Pass the index of an existing grain slot to embed in "
+                "the symlink names (e.g. grain_index=0), then use the matching value when "
+                "calling collect_merged()."
+            )
+        gi_merged = int(grain_index)
         if source is None:
             source = (metrics or {}).get("source", "auto")
 
@@ -7324,7 +7331,12 @@ class GrainMap:
                 f"Call write_merge_links(source={source!r}) first."
             )
 
-        gi_target = self.n_grains - 1 if grain_index is None else int(grain_index)
+        if grain_index is None:
+            raise ValueError(
+                "grain_index is required since apply_merge no longer creates a dedicated "
+                "merged grain slot.  Pass the same grain_index used in write_merge_links()."
+            )
+        gi_target = int(grain_index)
         files     = glob.glob(os.path.join(merged_dir, "frame_*_g*.npz"))
 
         def _load(fpath: str) -> bool:

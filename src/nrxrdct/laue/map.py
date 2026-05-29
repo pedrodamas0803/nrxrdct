@@ -6499,7 +6499,10 @@ class GrainMap:
             h5_path      = meta.attrs.get("h5_path") or None
             entry        = meta.attrs.get("entry", "1.1")
             processing_dir = meta.attrs.get("processing_dir", "")
-            n_grains     = int(meta.attrs["n_grains"])
+            if "n_grains" in meta.attrs:
+                n_grains = int(meta.attrs["n_grains"])
+            else:
+                n_grains = sum(1 for k in f if k.startswith("grain_"))
 
             obj = cls.__new__(cls)
             obj.ny             = ny

@@ -4380,8 +4380,9 @@ class GrainMap:
         from .simulation import simulate_laue as _sim_laue
         from .segmentation import convert_spotsfile2peaklist
         from .fitting import (
-            index_orientation as _index,
-            fit_orientation   as _fit_ori,
+            index_orientation      as _index,
+            fit_orientation        as _fit_ori,
+            fit_strain_orientation as _fit_strain,
             _match_spots,
         )
 
@@ -4493,18 +4494,19 @@ class GrainMap:
         )
 
         _state: dict = {
-            "frame_idx":      None,
-            "iy":             None,
-            "ix":             None,
-            "obs_xy":         np.empty((0, 2)),
-            "sim_spots":      [],    # list of spot dicts (hkl, pix, …)
-            "U0":             None,  # current working orientation matrix
-            "pairs":          [],    # list of {"hkl", "obs_xy", "sim_xy"}
-            "pending_hkl":    None,  # sim hkl awaiting obs assignment
-            "pending_sim_xy": None,
-            "fit_result":     None,
-            "stored_result":  None,  # last result written via Store (for Remove)
-            "drawn":          False,
+            "frame_idx":        None,
+            "iy":               None,
+            "ix":               None,
+            "obs_xy":           np.empty((0, 2)),
+            "sim_spots":        [],    # list of spot dicts (hkl, pix, …)
+            "U0":               None,  # current working orientation matrix
+            "pairs":            [],    # list of {"hkl", "obs_xy", "sim_xy"}
+            "pending_hkl":      None,  # sim hkl awaiting obs assignment
+            "pending_sim_xy":   None,
+            "fit_result":       None,  # OrientationFitResult (most recent orient fit)
+            "strain_fit_result": None, # StrainFitResult (most recent strain fit)
+            "stored_result":    None,  # last result written via Store (for Remove)
+            "drawn":            False,
         }
 
         # ── simulation helper ─────────────────────────────────────────────────
@@ -4695,15 +4697,38 @@ class GrainMap:
             else:
                 obs_xy = np.empty((0, 2))
 
-            existing_U = self.U[map_grain, iy, ix]
-            has_map_U  = not np.any(np.isnan(existing_U))
+            # Prefer the merged grain's U when best_grain_map is available
+            u_source = "no U"
+            if self.best_grain_map is not None:
+                g_src = int(self.best_grain_map[iy, ix])
+                if g_src >= 0:
+                    existing_U = self.U[g_src, iy, ix]
+                    w_grain.value = g_src
+                    u_source = f"U from merged (grain {g_src + 1})"
+                    has_strain = not np.any(
+                        np.isnan(self.strain_tensor[g_src, iy, ix])
+                    )
+                    if has_strain:
+                        u_source += " + strain"
+                else:
+                    existing_U = self.U[map_grain, iy, ix]
+                    u_source = "U from map"
+            else:
+                existing_U = self.U[map_grain, iy, ix]
+                u_source = "U from map"
+
+            has_map_U = not np.any(np.isnan(existing_U))
             U0 = existing_U if has_map_U else _state["U0"]
+            if not has_map_U and U0 is not None:
+                u_source = "U from file"
+            elif not has_map_U:
+                u_source = "no U"
 
             _state.update(
                 frame_idx=frame_idx, iy=iy, ix=ix,
                 obs_xy=obs_xy, U0=U0,
                 pairs=[], pending_hkl=None, pending_sim_xy=None,
-                fit_result=None, stored_result=None, drawn=False,
+                fit_result=None, strain_fit_result=None, stored_result=None, drawn=False,
             )
 
             if U0 is not None:
@@ -4714,13 +4739,10 @@ class GrainMap:
             n_sim = len(_state["sim_spots"])
             _info.value = (
                 f"<span style='color:#aaa'>Frame {frame_idx} — "
-                f"{len(obs_xy)} obs, {n_sim} sim"
-                + (" — U from map" if has_map_U else
-                   " — U from file" if U0 is not None else
-                   " — <b style='color:#ffaa33'>no U loaded</b>")
-                + "</span>"
+                f"{len(obs_xy)} obs, {n_sim} sim — {u_source}</span>"
             )
             btn_index.disabled  = len(obs_xy) < 3
+            btn_strain.disabled = True
             btn_store.disabled  = True
             btn_save.disabled   = True
             btn_remove.disabled = True
@@ -4862,6 +4884,8 @@ class GrainMap:
         _bkw = dict(layout=ipw.Layout(width="130px", height="32px"))
         btn_fit_pairs = ipw.Button(description="⚡ Fit pairs",   button_style="warning", **_bkw)
         btn_refine    = ipw.Button(description="🔬 Refine all",  button_style="info",    **_bkw)
+        btn_strain    = ipw.Button(description="🔩 Fit strain",  button_style="warning",
+                                   layout=ipw.Layout(width="130px", height="32px"))
         btn_clear     = ipw.Button(description="🗑 Clear pairs", button_style="danger",
                                    layout=ipw.Layout(width="120px", height="32px"))
         btn_store     = ipw.Button(description="⬆ Store",        button_style="success", **_bkw)
@@ -4872,6 +4896,7 @@ class GrainMap:
         )
         btn_fit_pairs.disabled = True
         btn_refine.disabled    = True
+        btn_strain.disabled    = True
         btn_store.disabled     = True
         btn_save.disabled      = True
 
@@ -4987,6 +5012,7 @@ class GrainMap:
                     "<span style='color:#aaa'> — click 🔬 Refine all for full refinement</span>"
                 )
                 btn_refine.disabled = len(_state["obs_xy"]) < 3
+                btn_strain.disabled = len(_state["obs_xy"]) < 3
                 btn_store.disabled  = False
                 btn_save.disabled   = False
                 _draw_det()
@@ -5016,15 +5042,46 @@ class GrainMap:
                 _run_simulation(item.U)
                 col = "#44aaff" if item.success else "#ffaa33"
                 _info.value = f"<b style='color:{col}'>{item}</b>"
-                btn_store.disabled = False
-                btn_save.disabled  = False
+                btn_strain.disabled = len(_state["obs_xy"]) < 3
+                btn_store.disabled  = False
+                btn_save.disabled   = False
                 _draw_det()
 
             _async_fit(_run, _on_done, btn, "Refining…", "🔬 Refine all")
 
-        def _cb_store(_) -> None:
+        def _cb_strain(btn) -> None:
             fit_result = _state["fit_result"]
-            if fit_result is None:
+            obs_xy     = _state["obs_xy"]
+            if fit_result is None or len(obs_xy) < 3:
+                return
+
+            U0 = fit_result.U
+
+            def _run() -> None:
+                return _fit_strain(
+                    crystal, camera, obs_xy, U0,
+                    E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                    max_match_px=fit_max_match_px,
+                    verbose=True,
+                )
+
+            def _on_done(item) -> None:
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Strain fit error: {item}</b>"
+                    return
+                _state["strain_fit_result"] = item
+                col = "#ffcc44" if item.success else "#ffaa33"
+                _info.value = f"<b style='color:{col}'>{item}</b>"
+                btn_store.disabled = False
+                btn_save.disabled  = False
+                _draw_det()
+
+            _async_fit(_run, _on_done, btn, "Fitting…", "🔩 Fit strain")
+
+        def _cb_store(_) -> None:
+            # Prefer strain result if available, else orientation result
+            result = _state["strain_fit_result"] or _state["fit_result"]
+            if result is None:
                 return
             iy = _state["iy"]
             ix = _state["ix"]
@@ -5035,24 +5092,29 @@ class GrainMap:
                     f"(0 – {self.n_grains - 1})</b>"
                 )
                 return
-            self.set_result(iy, ix, gi, fit_result)
-            _state["stored_result"] = fit_result
+            self.set_result(iy, ix, gi, result)
+            _state["stored_result"] = result
+            kind = "strain+orient" if _state["strain_fit_result"] is not None else "orient"
             btn_remove.disabled = False
+            # Refresh the map image so the stored pixel is visible immediately
+            im_map.set_data(map_data)
+            im_map.autoscale()
+            fig.canvas.draw_idle()
             if self.save_path:
                 self.save(self.save_path)
                 save_note = f" — saved to {os.path.basename(self.save_path)}"
             else:
                 save_note = " — <b style='color:#ffaa33'>no save_path set, results in memory only</b>"
             _info.value = (
-                f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
-                f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
+                f"<b style='color:#44dd66'>Stored {kind} → grain {gi + 1} "
+                f"(iy={iy}, ix={ix})</b>&emsp;{result}"
                 f"<span style='color:#aaa'>{save_note}"
                 " — click ✂ Remove spots to isolate next grain</span>"
             )
             print(
-                f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
-                f"rms={fit_result.rms_px:.2f} px  "
-                f"match={fit_result.match_rate:.0%}"
+                f"  ⬆ Stored {kind} result at (iy={iy}, ix={ix}) grain={gi}  "
+                f"rms={result.rms_px:.2f} px  "
+                f"match={result.match_rate:.0%}"
                 + (f"  → saved to {self.h5_path}" if self.h5_path else "  (in memory only)")
             )
 
@@ -5141,14 +5203,15 @@ class GrainMap:
             _state.update(
                 obs_xy=remaining, U0=None,
                 sim_spots=[], pairs=[], pending_hkl=None, pending_sim_xy=None,
-                fit_result=None, stored_result=None, drawn=False,
+                fit_result=None, strain_fit_result=None, stored_result=None, drawn=False,
             )
-            btn_remove.disabled   = True
-            btn_store.disabled    = True
-            btn_save.disabled     = True
-            btn_refine.disabled   = True
+            btn_remove.disabled    = True
+            btn_store.disabled     = True
+            btn_save.disabled      = True
+            btn_refine.disabled    = True
+            btn_strain.disabled    = True
             btn_fit_pairs.disabled = True
-            btn_index.disabled    = len(remaining) < 3
+            btn_index.disabled     = len(remaining) < 3
             _refresh_pair_list()
             _draw_det()
             _info.value = (
@@ -5160,6 +5223,7 @@ class GrainMap:
         btn_index.on_click(_cb_index)
         btn_fit_pairs.on_click(_cb_fit_pairs)
         btn_refine.on_click(_cb_refine)
+        btn_strain.on_click(_cb_strain)
         btn_clear.on_click(_cb_clear)
         btn_store.on_click(_cb_store)
         btn_save.on_click(_cb_save)
@@ -5176,7 +5240,7 @@ class GrainMap:
                                   margin="4px 0 2px 0"),
             ),
             ipw.HBox(
-                [btn_fit_pairs, btn_refine, btn_clear,
+                [btn_fit_pairs, btn_refine, btn_strain, btn_clear,
                  ipw.HTML(
                      "<span style='color:#aaa;align-self:center'>grain:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),

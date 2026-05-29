@@ -1555,7 +1555,7 @@ class GrainMap:
         grain: int = 0,
         *,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
@@ -1587,7 +1587,7 @@ class GrainMap:
                 ``'e_xy'``, ``'e_xz'``, ``'e_yz'``.
             grain (int): Grain index (0-based).
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
-            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
             ax (Axes or None): Existing axes to draw into.  A new figure is created when ``None``.
             cmap (str or None): Colormap name.  Defaults to ``'RdBu_r'``.
@@ -1668,7 +1668,7 @@ class GrainMap:
         grain: int = 0,
         *,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
@@ -1698,7 +1698,7 @@ class GrainMap:
                 Lab frame further rotated by *sample_tilt_deg* about
                 *sample_tilt_axis* (default −40° about Y).
 
-            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `-40`.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation (`'x'`, `'y'`, or `'z'`).
                 Default `'y'`.
             motor_x, motor_y (str or None): Motor names to use as axis tick labels.
@@ -1771,7 +1771,7 @@ class GrainMap:
         grain: int = 0,
         *,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         cmap: str | None = None,
         vmin: float | None = None,
@@ -1799,7 +1799,7 @@ class GrainMap:
         Args:
             grain (int): Grain index (0-based).
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
-            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
             cmap (str or None): Colormap.  Defaults to ``'RdBu_r'``.
             vmin, vmax (float or None): Shared colour-scale limits.  When both are
@@ -1962,7 +1962,7 @@ class GrainMap:
         *,
         cij: "np.ndarray | None" = None,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
     ) -> np.ndarray:
         """
@@ -2048,7 +2048,7 @@ class GrainMap:
         *,
         cij: "np.ndarray | None" = None,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
@@ -2073,7 +2073,7 @@ class GrainMap:
             cij ((6, 6) array or None): Override stiffness matrix (GPa, standard Voigt ordering).
             frame (str): `'crystal'`, `'lab'`, or `'sample'`.  Default
                 `'crystal'`.
-            sample_tilt_deg (float): Tilt angle (°) for sample-frame rotation.  Default `-40`.
+            sample_tilt_deg (float): Tilt angle (°) for sample-frame rotation.  Default `40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
             scale (float): Multiply stress values before plotting.  Default `1e3`
                 converts GPa → MPa.
@@ -2148,7 +2148,7 @@ class GrainMap:
         grains: "list[int] | None" = None,
         *,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         bins: int = 40,
         density: bool = False,
@@ -2180,7 +2180,7 @@ class GrainMap:
                 Lab frame further rotated by *sample_tilt_deg* about
                 *sample_tilt_axis*.
 
-            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `-40`.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
             bins (int): Number of histogram bins.  Default `40`.
             density (bool): If `True`, normalise each histogram to unit area.
@@ -2276,7 +2276,7 @@ class GrainMap:
         grains: "list[int] | None" = None,
         *,
         frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         bins: int = 40,
         density: bool = False,
@@ -2299,7 +2299,7 @@ class GrainMap:
             grains (list of int or None): Grain indices to include.  ``None`` uses all grains.
                 Default ``None``.
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
-            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``-40``.
+            sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
             bins (int): Number of histogram bins.  Default ``40``.
             density (bool): Normalise each histogram to unit area.  Default ``False``.
@@ -2876,7 +2876,7 @@ class GrainMap:
         show_strain: bool = True,
         strain_components: "list[str] | None" = None,
         strain_frame: str = "crystal",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         symmetry: str = "cubic",
         frame: str = "lab",
@@ -3052,7 +3052,7 @@ class GrainMap:
         grain: int = 0,
         *,
         frame: str = "lab",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         symmetry: str = "cubic",
         ax: "plt.Axes | None" = None,
@@ -3077,7 +3077,7 @@ class GrainMap:
                 `'sample'` — *axis* is in the sample frame, converted to lab
                 via the inverse of the sample tilt (see *sample_tilt_deg*).
             sample_tilt_deg (float): Rotation angle (°) about *sample_tilt_axis* that maps lab → sample.
-                Default `-40`.
+                Default `40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
             symmetry (str): Crystal symmetry for IPF reduction.  One of ``'cubic'``,
                 ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.
@@ -3255,7 +3255,7 @@ class GrainMap:
         grain: int = 0,
         *,
         frame: str = "lab",
-        sample_tilt_deg: float = -40.0,
+        sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         symmetry: str = "cubic",
         figsize: tuple = (15, 5),
@@ -3275,7 +3275,7 @@ class GrainMap:
             frame (str): `'lab'`    — directions expressed in the lab frame.
                 `'sample'` — directions expressed in the sample frame (rotated
                 from lab by *sample_tilt_deg* about *sample_tilt_axis*).
-            sample_tilt_deg (float): Lab-to-sample rotation angle (°).  Default `-40`.
+            sample_tilt_deg (float): Lab-to-sample rotation angle (°).  Default `40`.
             sample_tilt_axis (str): Axis of the lab-to-sample rotation.  Default `'y'`.
             symmetry (str): IPF colour symmetry.  One of ``'cubic'``,
                 ``'hexagonal'``, ``'tetragonal'``, ``'orthorhombic'``.

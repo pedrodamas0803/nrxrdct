@@ -6518,11 +6518,14 @@ class GrainMap:
             else:
                 obj.U_ref = np.empty((0, 3, 3), dtype=float)
 
-            raw_files = [s.decode() if isinstance(s, bytes) else s
-                         for s in meta["ub_files"][()]]
-            obj.ub_files = [
-                os.path.join(processing_dir, fn) for fn in raw_files
-            ]
+            if "ub_files" in meta:
+                raw_files = [s.decode() if isinstance(s, bytes) else s
+                             for s in meta["ub_files"][()]]
+                obj.ub_files = [
+                    os.path.join(processing_dir, fn) for fn in raw_files
+                ]
+            else:
+                obj.ub_files = []
 
             shape2d = (ny, nx)
             obj.U             = np.full((n_grains, *shape2d, 3, 3), np.nan)

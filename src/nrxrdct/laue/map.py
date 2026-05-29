@@ -1252,7 +1252,7 @@ class GrainMap:
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
-            title or f"Grain {grain + 1}  —  {label}",
+            title or f"{self._grain_label(grain)}  —  {label}",
             fontsize=10,
         )
         fig.tight_layout()
@@ -1454,7 +1454,7 @@ class GrainMap:
         ax.set_ylabel(ylabel, fontsize=9)
         _t = (
             title or
-            f"Grain {grain + 1}  —  KAM  "
+            f"{self._grain_label(grain)}  —  KAM  "
             f"(kernel={kernel}, max={max_misor_deg}°)"
         )
         ax.set_title(_t, fontsize=10)
@@ -1656,7 +1656,7 @@ class GrainMap:
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
-            title or f"Grain {grain + 1}  —  {label} (deviatoric)  [{_frame_label}]",
+            title or f"{self._grain_label(grain)}  —  {label} (deviatoric)  [{_frame_label}]",
             fontsize=10,
         )
         fig.tight_layout()
@@ -1760,7 +1760,7 @@ class GrainMap:
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
-            title or f"Grain {grain + 1}  —  {label}  [{_frame_label}]",
+            title or f"{self._grain_label(grain)}  —  {label}  [{_frame_label}]",
             fontsize=10,
         )
         fig.tight_layout()
@@ -1891,7 +1891,7 @@ class GrainMap:
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }.get(frame, frame)
         fig.suptitle(
-            title or f"Grain {grain + 1}  —  deviatoric strain  [{_frame_label}]",
+            title or f"{self._grain_label(grain)}  —  deviatoric strain  [{_frame_label}]",
             fontsize=11,
         )
         return fig, axes
@@ -2136,7 +2136,7 @@ class GrainMap:
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
-            title or f"Grain {grain + 1}  —  {self._STRESS_LABELS[component]}  [{_frame_label}]",
+            title or f"{self._grain_label(grain)}  —{self._STRESS_LABELS[component]}  [{_frame_label}]",
             fontsize=10,
         )
         fig.tight_layout()
@@ -2239,7 +2239,7 @@ class GrainMap:
                     continue
 
                 color  = prop_cycle[gi % len(prop_cycle)]
-                glabel = f"Grain {grain + 1}" if self.n_grains > 1 else None
+                glabel = self._grain_label(grain) if self.n_grains > 1 else None
                 ax.hist(vals, bins=bins, density=density,
                         color=color, alpha=alpha, label=glabel)
                 ax.axvline(float(np.mean(vals)), color=color,
@@ -2351,7 +2351,7 @@ class GrainMap:
                     continue
 
                 color  = prop_cycle[gi % len(prop_cycle)]
-                glabel = f"Grain {grain + 1}" if self.n_grains > 1 else None
+                glabel = self._grain_label(grain) if self.n_grains > 1 else None
                 ax.hist(vals, bins=bins, density=density,
                         color=color, alpha=alpha, label=glabel)
                 ax.axvline(float(np.mean(vals)), color=color,
@@ -2992,7 +2992,7 @@ class GrainMap:
                     cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
                     cb.set_label("KAM (°)", fontsize=8)
                     self._apply_motor_labels(ax, motor_x, motor_y, motor_units)
-                    ax.set_title(f"Grain {grain + 1}  —  KAM", fontsize=9)
+                    ax.set_title(f"{self._grain_label(grain)}  —  KAM", fontsize=9)
 
                 elif spec in self._STRAIN_INDICES:
                     self.plot_strain_component(
@@ -3008,7 +3008,7 @@ class GrainMap:
                     self.plot_map(spec, grain=grain, ax=ax, **_km)
 
         fig.suptitle(
-            title or f"Grain {grain + 1}  —  overview",
+            title or f"{self._grain_label(grain)}  —  overview",
             fontsize=11, y=1.01,
         )
         fig.tight_layout()
@@ -3026,6 +3026,11 @@ class GrainMap:
         if mx is not None and my is not None:
             return [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
         return [0, self.nx, self.ny, 0]
+
+    @staticmethod
+    def _grain_label(grain: "int | str") -> str:
+        """Human-readable grain label, handling the ``'merged'`` sentinel."""
+        return "Merged" if grain == 'merged' else f"Grain {grain + 1}"
 
     def _apply_motor_labels(
         self,
@@ -3225,7 +3230,7 @@ class GrainMap:
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(
-            title or f"Grain {grain + 1}  —  IPF ∥ {axis_label}  [{_frame_str} frame]",
+            title or f"{self._grain_label(grain)}  —  IPF ∥ {axis_label}  [{_frame_str} frame]",
             fontsize=10,
         )
 
@@ -3326,7 +3331,7 @@ class GrainMap:
             ax.set_xlabel("X", fontsize=9)
             ax.set_ylabel("Y", fontsize=9)
             ax.set_title(
-                f"Grain {grain + 1}  —  crystal {aname}-axis  [{_frame_str}]",
+                f"{self._grain_label(grain)}  —  crystal {aname}-axis  [{_frame_str}]",
                 fontsize=10,
             )
 

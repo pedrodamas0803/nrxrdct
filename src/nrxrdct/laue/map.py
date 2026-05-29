@@ -6486,12 +6486,20 @@ class GrainMap:
     @classmethod
     def load(cls, path: str) -> "GrainMap":
         """
-        Restore a GrainMap from a file previously written by :meth:`save`.
+        Restore a GrainMap from an HDF5 file.
 
-        UB reference matrices and motor positions are re-read from the file;
-        the `_results` list (which holds full Python objects) is not
-        persisted and will be all-`None` after loading.
+        Accepts files written by either :meth:`save` (multi-grain format with
+        ``grain_XX`` groups) or :meth:`save_merged_result` (flat single-grain
+        format with ``/orientation``, ``/fit_quality``, ``/strain`` groups).
+        The format is detected automatically.
+
+        The ``_results`` list (full Python fit-result objects) is not
+        persisted and will be all-``None`` after loading.
 """
+        with h5py.File(path, "r") as f:
+            if "orientation" in f:
+                return cls._load_merged_format(path)
+
         with h5py.File(path, "r") as f:
             meta = f["meta"]
             ny           = int(meta.attrs["ny"])
@@ -6570,6 +6578,74 @@ class GrainMap:
                 obj.best_grain_map = meta["best_grain_map"][()]
             else:
                 obj.best_grain_map = None
+
+        return obj
+
+    @classmethod
+    def _load_merged_format(cls, path: str) -> "GrainMap":
+        """Load a file written by :meth:`save_merged_result` as a single-grain GrainMap."""
+        with h5py.File(path, "r") as f:
+            meta           = f["meta"]
+            ny             = int(meta.attrs["ny"])
+            nx             = int(meta.attrs["nx"])
+            h5_path        = meta.attrs.get("h5_path") or None
+            processing_dir = meta.attrs.get("processing_dir", "")
+
+            obj = cls.__new__(cls)
+            obj.ny             = ny
+            obj.nx             = nx
+            obj.h5_path        = h5_path if h5_path else None
+            obj.save_path      = path
+            obj.entry          = meta.attrs.get("entry", "1.1")
+            obj.processing_dir = processing_dir
+            obj.motor_x        = None
+            obj.motor_y        = None
+            obj.n_grains       = 1
+            obj.ub_files       = []
+
+            shape2d = (ny, nx)
+            obj.U             = np.full((1, *shape2d, 3, 3), np.nan)
+            obj.rms_px        = np.full((1, *shape2d), np.nan)
+            obj.mean_px       = np.full((1, *shape2d), np.nan)
+            obj.n_matched     = np.full((1, *shape2d), -1, dtype=int)
+            obj.match_rate    = np.full((1, *shape2d), np.nan)
+            obj.cost          = np.full((1, *shape2d), np.nan)
+            obj.strain_voigt             = np.full((1, *shape2d, 6), np.nan)
+            obj.strain_tensor            = np.full((1, *shape2d, 3, 3), np.nan)
+            obj.strain_tensor_deviatoric = np.full((1, *shape2d, 3, 3), np.nan)
+
+            ori = f["orientation"]
+            obj.U[0] = ori["U"][()]
+            if "U_ref" in ori:
+                obj.U_ref = np.array(ori["U_ref"])[np.newaxis]   # (1, 3, 3)
+            else:
+                obj.U_ref = np.full((1, 3, 3), np.nan)
+
+            fq = f["fit_quality"]
+            obj.rms_px[0]    = fq["rms_px"][()]
+            obj.mean_px[0]   = fq["mean_px"][()] if "mean_px" in fq else np.full(shape2d, np.nan)
+            obj.n_matched[0] = fq["n_matched"][()]
+            obj.match_rate[0] = fq["match_rate"][()]
+            obj.cost[0]      = fq["cost"][()]
+
+            if "strain" in f:
+                sg = f["strain"]
+                if "voigt" in sg:
+                    obj.strain_voigt[0] = sg["voigt"][()]
+                if "tensor" in sg:
+                    eps = sg["tensor"][()]
+                    obj.strain_tensor[0] = eps
+                    tr  = np.trace(eps, axis1=-2, axis2=-1)[..., np.newaxis, np.newaxis]
+                    obj.strain_tensor_deviatoric[0] = eps - tr / 3.0 * np.eye(3)
+
+            obj.motors = {}
+            if "motors" in f:
+                for name in f["motors"].keys():
+                    obj.motors[name] = f[f"motors/{name}"][()]
+
+            obj._results      = [[[None] * nx for _ in range(ny)]]
+            obj._merged_grain = None
+            obj.best_grain_map = None
 
         return obj
 

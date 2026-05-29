@@ -1966,11 +1966,21 @@ class GrainMap:
         sample_tilt_axis: str = "y",
     ) -> np.ndarray:
         """
-        Compute the Cauchy stress tensor in Voigt notation for every map point.
+        Compute the deviatoric stress tensor in Voigt notation for every map point.
 
-        Uses Hooke's law  **σ = C : ε**  where *C* is the 6×6 stiffness
-        matrix extracted from *crystal* and *ε* is the fitted strain tensor
-        stored in `self.strain_tensor[grain]`.
+        Uses Hooke's law  **σ_dev = C : ε_dev**  where *C* is the 6×6 stiffness
+        matrix extracted from *crystal* and *ε_dev* is the deviatoric strain tensor
+        stored in `self.strain_tensor_deviatoric[grain]`.
+
+        .. note::
+            Laue diffraction (polychromatic) cannot determine the hydrostatic
+            (volumetric) strain because spot positions are insensitive to a
+            uniform scaling of all d-spacings.  Consequently only the deviatoric
+            stress **σ_dev = C : ε_dev** is accessible.  Individual normal
+            components (σ_xx, σ_yy, σ_zz) are deviatoric normal stresses; the
+            mean pressure *P = (σ_xx+σ_yy+σ_zz)/3* is zero by construction and
+            does not represent the true hydrostatic pressure.  Shear components
+            (σ_xy, σ_xz, σ_yz) and the von Mises stress are fully reliable.
 
         Args:
             crystal (Crystal or LayeredCrystal): Source of elastic constants.  The stiffness matrix is extracted
@@ -1989,14 +1999,14 @@ class GrainMap:
                 *sample_tilt_axis*.
 
         Returns:
-            stress ((ny, nx, 6) ndarray, GPa): Stress in code Voigt ordering `[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]`.
-                `NaN` where strain data are absent.
+            stress ((ny, nx, 6) ndarray, GPa): Deviatoric stress in code Voigt ordering
+                `[s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]`.  `NaN` where strain data are absent.
 """
         C = self._extract_cij(crystal, cij)          # (6,6) GPa, std Voigt
         if grain == 'merged':
-            eps_code = self._select_merged(self.strain_tensor)   # (ny, nx, 3, 3)
+            eps_code = self._select_merged(self.strain_tensor_deviatoric)   # (ny, nx, 3, 3)
         else:
-            eps_code = self.strain_tensor[grain]                 # (ny, nx, 3, 3)
+            eps_code = self.strain_tensor_deviatoric[grain]                 # (ny, nx, 3, 3)
 
         # Build (ny, nx, 6) engineering Voigt in standard ordering
         # Standard: [xx, yy, zz, yz, xz, xy]
@@ -2039,6 +2049,139 @@ class GrainMap:
                 sig_code[..., self._STRESS_ALL.index(comp)] = sig_rot[..., i, j]
 
         return sig_code
+
+    def von_mises_stress(
+        self,
+        crystal,
+        grain: "int | str" = 0,
+        *,
+        cij: "np.ndarray | None" = None,
+        frame: str = "crystal",
+        sample_tilt_deg: float = 40.0,
+        sample_tilt_axis: str = "y",
+    ) -> np.ndarray:
+        """
+        Compute the von Mises stress for every map point.
+
+        .. math::
+
+            \\sigma_\\mathrm{VM} = \\sqrt{\\tfrac{3}{2}\\, s_{ij} s_{ij}}
+
+        where **s = σ_dev** is the deviatoric stress tensor returned by
+        :meth:`stress_voigt`.  The von Mises stress is unambiguously
+        interpretable from Laue data because it depends only on the deviatoric
+        part of the stress — the unknown hydrostatic pressure drops out exactly.
+
+        Args:
+            crystal, grain, cij, frame, sample_tilt_deg, sample_tilt_axis:
+                Same as :meth:`stress_voigt`.
+
+        Returns:
+            sigma_vm ((ny, nx) ndarray, GPa): Von Mises stress.  `NaN` where
+                strain data are absent.
+        """
+        sig = self.stress_voigt(
+            crystal, grain, cij=cij, frame=frame,
+            sample_tilt_deg=sample_tilt_deg, sample_tilt_axis=sample_tilt_axis,
+        )
+        # sig is (ny, nx, 6) in code ordering [xx, yy, zz, xy, xz, yz]
+        s_xx = sig[..., 0]; s_yy = sig[..., 1]; s_zz = sig[..., 2]
+        s_xy = sig[..., 3]; s_xz = sig[..., 4]; s_yz = sig[..., 5]
+        # σ_VM = sqrt(3/2 * s:s)  with factor 2 for off-diagonal pairs
+        return np.sqrt(
+            1.5 * (s_xx**2 + s_yy**2 + s_zz**2)
+            + 3.0 * (s_xy**2 + s_xz**2 + s_yz**2)
+        )
+
+    def plot_von_mises_stress(
+        self,
+        grain: int = 0,
+        crystal=None,
+        *,
+        cij: "np.ndarray | None" = None,
+        frame: str = "crystal",
+        sample_tilt_deg: float = 40.0,
+        sample_tilt_axis: str = "y",
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+        scale: float = 1e3,
+    ) -> tuple:
+        """
+        Plot the von Mises stress map for a given grain.
+
+        Args:
+            grain (int): Grain index (0-based).
+            crystal (Crystal or LayeredCrystal or None): Source of elastic constants.  Required unless *cij* is given.
+            cij ((6, 6) array or None): Override stiffness matrix (GPa).
+            frame (str): `'crystal'`, `'lab'`, or `'sample'`.
+            scale (float): Multiply values before plotting.  Default `1e3` converts GPa → MPa.
+            motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
+            title, figsize, colorbar: Same as :meth:`plot_strain_component`.
+
+        Returns:
+            (fig, ax)
+        """
+        if crystal is None and cij is None:
+            raise ValueError("Provide crystal or cij.")
+
+        data = self.von_mises_stress(
+            crystal, grain, cij=cij, frame=frame,
+            sample_tilt_deg=sample_tilt_deg, sample_tilt_axis=sample_tilt_axis,
+        ) * scale
+        unit = "MPa" if abs(scale - 1e3) < 1 else "GPa" if scale == 1.0 else f"×{scale} GPa"
+        label = f"σ_VM ({unit})"
+        cmap = cmap or "viridis"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data, origin="upper", extent=extent,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            interpolation="nearest", aspect="auto",
+        )
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(label, fontsize=9)
+
+        _frame_label = {
+            "crystal": "crystal frame",
+            "lab":     "lab frame",
+            "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
+        }[frame]
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"{self._grain_label(grain)}  — σ_VM  [{_frame_label}]",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
 
     def plot_stress_component(
         self,

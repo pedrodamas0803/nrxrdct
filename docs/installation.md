@@ -104,6 +104,106 @@ After refreshing the JupyterLab page the kernel **nrxrdct** will appear in the k
 !!! tip
     Run these commands with the virtual environment that contains `nrxrdct` already activated, so the registered kernel points to the correct Python interpreter.
 
+## Optional dependencies
+
+### Laue extras (`orix`)
+
+The `nrxrdct.laue` subpackage uses [orix](https://orix.readthedocs.io/) for IPF colour-key rendering and orientation symmetry reduction.  It is declared as an optional extra so it is not installed by default.
+
+**With `uv`:**
+
+```bash
+uv sync --extra laue
+```
+
+**With `pip`:**
+
+```bash
+pip install "nrxrdct[laue]"
+# or, inside an already-activated environment:
+pip install "orix>=0.11"
+```
+
+---
+
+### GSAS-II
+
+GSAS-II is not on PyPI and must be installed separately.  The recommended method is **conda**:
+
+```bash
+conda install -c conda-forge gsas2pkg
+```
+
+This installs GSAS-II and registers `GSASIIscriptable` on the Python path automatically.
+
+If you are using a `uv`-managed environment alongside a conda base, you can instead point Python at the GSAS-II source tree by adding it to `PYTHONPATH`:
+
+```bash
+# Clone the GSAS-II source (one-time setup)
+git clone https://github.com/AdvancedPhotonSource/GSAS-II.git ~/gsas2
+
+# Add to PYTHONPATH in your shell profile (or prepend it per-session)
+export PYTHONPATH="$HOME/gsas2:$PYTHONPATH"
+```
+
+Verify the installation:
+
+```python
+import GSASIIscriptable as G2sc
+print(G2sc.__file__)
+```
+
+!!! note
+    GSAS-II requires a compiled binary (`constrDict.so` / `.pyd`) for some refinement operations.  The conda package builds this automatically; the git-clone approach may require running `python setup.py build_ext --inplace` inside the GSAS-II directory.
+
+---
+
+### ASTRA Toolbox
+
+ASTRA provides GPU-accelerated (CUDA) and CPU tomographic reconstruction algorithms.
+
+**With conda (recommended — includes CUDA support):**
+
+```bash
+conda install -c astra-toolbox astra-toolbox
+```
+
+**With pip (CPU-only build):**
+
+```bash
+pip install astra-toolbox
+```
+
+Verify GPU access:
+
+```python
+import astra
+print(astra.get_gpu_info())
+```
+
+GPU algorithms (`SART_CUDA`, `SIRT3D_CUDA`, `CGLS3D_CUDA`) require an NVIDIA GPU with CUDA drivers installed.  `nrxrdct` falls back to CPU automatically when no GPU is found.
+
+---
+
+### Other optional packages
+
+These are all available on PyPI and can be installed with `uv add` or `pip install`:
+
+| Package | Install command | Used by |
+|---|---|---|
+| `fabio` | `pip install fabio` | Reading `.edf` / `.cbf` mask files in `azimuthal.integration` |
+| `hdf5plugin` | `pip install hdf5plugin` | Reading Bitshuffle/LZ4-compressed HDF5 datasets in `xrdct` |
+| `napari` | `pip install "napari[all]"` | Interactive 3-D volume viewer in `xrdct.visualization` |
+| `ipywidgets` | `pip install ipywidgets` | Interactive Jupyter widgets in `laue.interactive` |
+
+With `uv`:
+
+```bash
+uv add fabio hdf5plugin "napari[all]" ipywidgets
+```
+
+---
+
 ## Building the documentation locally
 
 Install the docs extras and serve:

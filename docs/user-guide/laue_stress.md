@@ -11,7 +11,7 @@ transformations.
 
 ---
 
-## 1. Hooke's law
+## 1. Hooke's law and the Laue limitation
 
 In the linear-elastic regime the Cauchy stress tensor
 $\boldsymbol{\sigma}$ and the strain tensor $\boldsymbol{\varepsilon}$ are
@@ -21,12 +21,47 @@ $$
 \sigma_{ij} = C_{ijkl}\,\varepsilon_{kl}
 $$
 
-where $C_{ijkl}$ is the **fourth-rank elastic stiffness tensor** (24 independent
-components for the most general triclinic crystal; far fewer for higher
-symmetries).
+where $C_{ijkl}$ is the **fourth-rank elastic stiffness tensor**.
 
-In **Voigt notation** the rank-4 tensor is reduced to a symmetric $6\times6$
-matrix $\mathbf{C}$ and the law becomes a simple matrix–vector product:
+### What Laue diffraction can and cannot access
+
+White-beam (polychromatic) Laue diffraction measures the **directions** of
+diffracted beams, not their wavelengths.  Spot positions are determined by the
+crystal orientation and the *shape* of the unit cell — how the lattice vectors
+tilt and shear relative to one another.  A uniform scaling of all d-spacings
+(i.e. a purely hydrostatic strain) leaves every spot angle unchanged and is
+therefore **invisible** to Laue.
+
+The full strain tensor decomposes as:
+
+$$
+\boldsymbol{\varepsilon} = \boldsymbol{\varepsilon}_\text{dev}
+  + \underbrace{\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{hydrostatic — unobservable}}
+$$
+
+Only the **deviatoric** part $\boldsymbol{\varepsilon}_\text{dev}$ (traceless,
+five independent components) is reliably determined.  Consequently, the stress
+computed here is the **deviatoric stress**:
+
+$$
+\boxed{\boldsymbol{\sigma}_\text{dev} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{dev}}
+$$
+
+The code uses `strain_tensor_deviatoric` (whose trace is exactly zero by
+construction) as input, so no hydrostatic contribution can enter through
+numerical drift in the fitted diagonal strains.
+
+### Reliability by component
+
+| Quantity | Reliable? | Reason |
+|---|---|---|
+| Shear stresses $\sigma_{xy}$, $\sigma_{xz}$, $\sigma_{yz}$ | **Yes** | Shear has no hydrostatic part |
+| Normal-stress *differences* e.g. $\sigma_{xx}-\sigma_{zz}$ | **Yes** | Differences cancel the unknown pressure |
+| Von Mises stress $\sigma_\text{VM}$ | **Yes** | Built from deviatoric stress only |
+| Individual normal stresses $\sigma_{xx}$, $\sigma_{yy}$, $\sigma_{zz}$ | Relative only | Each carries the same unknown offset $P$ |
+| Mean stress $\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})$ | **No** | This *is* the unknown hydrostatic pressure |
+
+In **Voigt notation** the law becomes a matrix–vector product:
 
 $$
 \boldsymbol{\sigma}_V = \mathbf{C}\,\boldsymbol{\varepsilon}_V^{(\text{eng})}
@@ -122,7 +157,7 @@ sig = gmap.stress_voigt(None, grain=0, cij=C_Fe)
 
 ---
 
-## 4. `stress_voigt` — full stress map
+## 4. `stress_voigt` — deviatoric stress map
 
 ```python
 sig = gmap.stress_voigt(
@@ -138,6 +173,12 @@ sig = gmap.stress_voigt(
 
 `NaN` is returned at pixels where no strain data exist.
 
+The returned tensor is the **deviatoric stress** $\mathbf{C}:\boldsymbol{\varepsilon}_\text{dev}$.
+Its trace is zero by construction; individual normal components
+($\sigma_{xx}$, $\sigma_{yy}$, $\sigma_{zz}$) are reliable only as
+*relative* values — they share an unknown hydrostatic offset equal to the
+true (inaccessible) pressure.
+
 ### Reference frames
 
 | `frame` | Meaning |
@@ -152,7 +193,76 @@ for the equivalent derivation for the strain tensor.
 
 ---
 
-## 5. `plot_stress_component` — single-component map
+## 5. Von Mises stress — the recommended scalar summary
+
+### Formulation
+
+The **von Mises stress** (also called the equivalent tensile stress) is
+defined as:
+
+$$
+\sigma_\text{VM}
+  = \sqrt{\tfrac{3}{2}\,s_{ij}\,s_{ij}}
+  = \sqrt{\tfrac{3}{2}(s_{xx}^2 + s_{yy}^2 + s_{zz}^2)
+          + 3\,(s_{xy}^2 + s_{xz}^2 + s_{yz}^2)}
+$$
+
+where $\mathbf{s} = \boldsymbol{\sigma} - \tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})\,\mathbf{I}$
+is the **deviatoric** part of the stress tensor.
+
+### Why it is unambiguous for Laue data
+
+The von Mises stress depends *only* on the deviatoric part of $\boldsymbol{\sigma}$.
+The hydrostatic pressure $P$ drops out exactly:
+
+$$
+\sigma_\text{VM}(\boldsymbol{\sigma})
+  = \sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev} + P\,\mathbf{I})
+  = \sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev})
+$$
+
+Because `stress_voigt` already returns the deviatoric stress
+($\operatorname{tr}(\boldsymbol{\sigma})=0$ by construction), $\sigma_\text{VM}$
+computed from it carries no ambiguity from the missing hydrostatic component.
+It is the **most interpretable scalar** derived from Laue stress data.
+
+### Physical meaning
+
+$\sigma_\text{VM}$ governs the onset of plastic yielding in the von Mises
+(J₂) criterion: the material yields when $\sigma_\text{VM} \geq \sigma_Y$,
+the uniaxial yield stress.  It also provides a single-number measure of
+"how stressed" a grain is, independent of the choice of reference frame
+(it is a tensor invariant).
+
+### API
+
+```python
+# (ny, nx) array, GPa by default
+sigma_vm = gmap.von_mises_stress(crystal, grain=gi_merged, frame="crystal")
+
+# Convert to MPa and inspect
+print(f"max σ_VM = {sigma_vm.nanmax() * 1e3:.1f} MPa")
+
+# Plot directly
+fig, ax = gmap.plot_von_mises_stress(
+    grain=gi_merged,
+    crystal=fe,
+    frame="crystal",
+    scale=1e3,           # GPa → MPa
+    cmap="viridis",      # sequential map — σ_VM ≥ 0
+    vmin=0, vmax=300,    # MPa
+    motor_x="pz", motor_y="py",
+    motor_units={"pz": "mm", "py": "mm"},
+)
+```
+
+The plot uses `"viridis"` by default (sequential, appropriate because
+$\sigma_\text{VM} \geq 0$), in contrast to the diverging `"RdBu_r"` used for
+signed stress components.
+
+---
+
+## 6. `plot_stress_component` — single-component map
 
 ```python
 fig, ax = gmap.plot_stress_component(
@@ -170,62 +280,60 @@ fig, ax = gmap.plot_stress_component(
 
 Available component strings:
 
-| String | Symbol | Meaning |
+| String | Symbol | Reliable? |
 |---|---|---|
-| `"s_xx"` | $\sigma_{xx}$ | Normal stress along crystal $x$ |
-| `"s_yy"` | $\sigma_{yy}$ | Normal stress along crystal $y$ |
-| `"s_zz"` | $\sigma_{zz}$ | Normal stress along crystal $z$ |
-| `"s_xy"` | $\sigma_{xy}$ | In-plane shear $xy$ |
-| `"s_xz"` | $\sigma_{xz}$ | Shear $xz$ |
-| `"s_yz"` | $\sigma_{yz}$ | Shear $yz$ |
+| `"s_xx"` | $\sigma_{xx}$ | Relative only |
+| `"s_yy"` | $\sigma_{yy}$ | Relative only |
+| `"s_zz"` | $\sigma_{zz}$ | Relative only |
+| `"s_xy"` | $\sigma_{xy}$ | **Yes** |
+| `"s_xz"` | $\sigma_{xz}$ | **Yes** |
+| `"s_yz"` | $\sigma_{yz}$ | **Yes** |
 
 The default colour scale is `"RdBu_r"` with units of MPa (`scale=1e3`).
 Use `scale=1.0` for GPa.
 
 ---
 
-## 6. Extracting components manually
+## 7. Extracting components manually
 
 ```python
 sig = gmap.stress_voigt(fe, grain=0, frame="crystal")  # (ny, nx, 6)
 
 # Code ordering: [s_xx=0, s_yy=1, s_zz=2, s_xy=3, s_xz=4, s_yz=5]
-s_xx = sig[..., 0] * 1e3   # MPa
+s_xx = sig[..., 0] * 1e3   # MPa  (deviatoric normal stress — relative)
 s_zz = sig[..., 2] * 1e3
-s_xy = sig[..., 3] * 1e3
+s_xy = sig[..., 3] * 1e3   # MPa  (shear — absolute)
+
+# Reliable normal-stress *difference*
+biaxial = (sig[..., 0] - sig[..., 2]) * 1e3   # (σ_xx − σ_zz) in MPa
 ```
 
 ---
 
-## 7. Important caveats
+## 8. Important caveats
 
 ### Hydrostatic stress is unconstrained
 
 White-beam Laue diffraction cannot measure the **hydrostatic** part of the
 strain tensor (see [Strain Analysis — Hydrostatic blind spot](laue_strain.md#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot)).
-Because only the five deviatoric strain components are reliably determined,
-the stress tensor derived from them also reflects only the **deviatoric** stress:
+`stress_voigt` explicitly uses `strain_tensor_deviatoric` (trace exactly zero)
+as input, so the returned stress tensor is purely deviatoric: its trace is zero
+by construction and carries no information about the true hydrostatic pressure.
 
-$$
-\boldsymbol{\sigma} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{deviatoric}
-$$
-
-The **mean stress** (pressure) $p = -\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})$
-is not well-constrained.  Individual normal stresses ($\sigma_{xx}$, $\sigma_{yy}$,
-$\sigma_{zz}$) contain contributions from both the deviatoric and hydrostatic
-parts, so they carry larger absolute uncertainties than the shear components or
-the differences between normal components.
-
-In practice:
+Concretely:
 
 * **Shear stresses** $\sigma_{xy}$, $\sigma_{xz}$, $\sigma_{yz}$ are the most
   reliable outputs — they are directly proportional to the corresponding shear
   strain components, which *are* measurable.
+* **Von Mises stress** is the recommended scalar summary — it is a tensor
+  invariant, physically meaningful, and immune to the missing pressure.
 * **Differences** of normal stresses (e.g. $\sigma_{xx} - \sigma_{zz}$) are
   reliable — they probe the deviatoric part.
-* **Individual** normal stresses and the mean stress should be interpreted with
-  caution unless the hydrostatic component is constrained by an independent
-  measurement.
+* **Individual** normal stresses should be read as values relative to an
+  unknown offset $P$ (the true hydrostatic pressure), not as absolute
+  normal stresses.  Do not interpret them as the full Cauchy normal stress
+  unless the hydrostatic component is constrained by an independent measurement
+  (e.g. monochromatic XRD with a calibrated reference).
 
 ### Elastic constants must match the crystal frame
 
@@ -243,9 +351,10 @@ to the stress in any single crystallite.
 
 ---
 
-## 8. Complete example
+## 9. Complete example
 
 ```python
+import numpy as np
 import xrayutilities as xu
 from nrxrdct.laue import GrainMap
 
@@ -259,7 +368,25 @@ fe = xu.materials.Fe
 best_grain, metrics = gmap.merge(metric="match_rate", min_match_rate=0.3)
 gi = gmap.apply_merge(best_grain, metrics)
 
-# Plot all normal-stress components in the crystal frame (MPa)
+# ── Von Mises stress (most interpretable scalar) ───────────────────────
+fig, ax = gmap.plot_von_mises_stress(
+    grain=gi, crystal=fe,
+    frame="crystal", scale=1e3,
+    cmap="viridis", vmin=0, vmax=300,   # MPa
+    motor_x="pz", motor_y="py",
+    motor_units={"pz": "mm", "py": "mm"},
+)
+
+# ── Individual stress components ───────────────────────────────────────
+# Shear components are the most reliable
+for comp in ("s_xy", "s_xz", "s_yz"):
+    gmap.plot_stress_component(
+        comp, grain=gi, crystal=fe,
+        frame="crystal", scale=1e3,
+        vmin=-200, vmax=200,
+    )
+
+# Normal components — interpret as relative (deviatoric) values
 for comp in ("s_xx", "s_yy", "s_zz"):
     gmap.plot_stress_component(
         comp, grain=gi, crystal=fe,
@@ -267,15 +394,16 @@ for comp in ("s_xx", "s_yy", "s_zz"):
         vmin=-500, vmax=500,
     )
 
-# Plot shear stress in the sample frame
-gmap.plot_stress_component(
-    "s_xz", grain=gi, crystal=fe,
-    frame="sample", sample_tilt_deg=-40.0,
-    scale=1e3, cmap="RdBu_r",
-)
+# ── Manual access for custom analysis ─────────────────────────────────
+sig = gmap.stress_voigt(fe, grain=gi, frame="crystal")  # (ny, nx, 6), GPa
 
-# Access the full stress array for custom analysis
-sig_MPa = gmap.stress_voigt(fe, grain=gi, frame="crystal") * 1e3
-# Biaxial stress proxy: (σ_xx + σ_yy) / 2
-biaxial = (sig_MPa[..., 0] + sig_MPa[..., 1]) / 2
+# Reliable: normal-stress difference
+biaxial_MPa = (sig[..., 0] - sig[..., 2]) * 1e3   # σ_xx − σ_zz
+
+# Reliable: von Mises from the array directly
+s = sig  # already deviatoric (trace = 0)
+vm_MPa = np.sqrt(
+    1.5 * (s[...,0]**2 + s[...,1]**2 + s[...,2]**2)
+    + 3.0 * (s[...,3]**2 + s[...,4]**2 + s[...,5]**2)
+) * 1e3
 ```

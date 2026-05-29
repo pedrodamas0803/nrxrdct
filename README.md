@@ -567,10 +567,50 @@ grain_map = gmap.collect_strain_map(grain_index=0)
 |---|---|---|
 | `astra-toolbox` | `xrdct.reconstruction` | Tomographic reconstruction (GPU + CPU) |
 | `GSAS-II` | `xrdct.volume`, `rietveld` | Rietveld refinement scripting |
+| `orix` | `laue` | IPF colour keys and orientation symmetry |
 | `fabio` | `azimuthal.integration` | Reading mask files (`.edf`, `.cbf`) |
 | `hdf5plugin` | `xrdct` | Compressed HDF5 dataset support |
 | `napari` | `xrdct.visualization` | Interactive 3-D volume viewer |
 | `ipywidgets` | `laue.interactive` | Interactive orientation / calibration widgets |
+
+#### Installing optional packages
+
+**Laue extras (`orix`) — declared optional extra:**
+
+```bash
+uv sync --extra laue        # with uv
+pip install "nrxrdct[laue]" # with pip
+```
+
+**GSAS-II — via conda (recommended):**
+
+```bash
+conda install -c conda-forge gsas2pkg
+```
+
+Or clone from source and add to `PYTHONPATH`:
+
+```bash
+git clone https://github.com/AdvancedPhotonSource/GSAS-II.git ~/gsas2
+export PYTHONPATH="$HOME/gsas2:$PYTHONPATH"
+```
+
+**ASTRA Toolbox — via conda for CUDA support:**
+
+```bash
+conda install -c astra-toolbox astra-toolbox  # GPU (CUDA)
+pip install astra-toolbox                      # CPU-only
+```
+
+**Everything else:**
+
+```bash
+uv add fabio hdf5plugin "napari[all]" ipywidgets
+# or
+pip install fabio hdf5plugin "napari[all]" ipywidgets
+```
+
+See the [full installation guide](docs/installation.md) for verification steps and platform notes.
 
 ---
 

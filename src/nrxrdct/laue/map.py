@@ -3066,7 +3066,7 @@ class GrainMap:
         motor_units: "dict | None" = None,
         title: str | None = None,
         figsize: tuple = (6, 5),
-        show_colorkey: bool = True,
+        show_colorkey: bool = False,
         stretch: "bool | str" = False,
         best_grain: "np.ndarray | None" = None,
     ) -> tuple:

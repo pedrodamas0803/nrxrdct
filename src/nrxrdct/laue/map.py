@@ -1708,10 +1708,14 @@ class GrainMap:
             2, 3,
             figsize=figsize or (12, 7),
             squeeze=False,
+            sharex=True,
+            sharey=True,
+            constrained_layout=True,
         )
 
         im = None
-        for ax, comp in zip(axes.ravel(), _order):
+        for idx, (ax, comp) in enumerate(zip(axes.ravel(), _order)):
+            row, col = divmod(idx, 3)
             im = ax.imshow(
                 maps[comp],
                 origin="upper",
@@ -1723,11 +1727,13 @@ class GrainMap:
                 aspect="auto",
             )
             ax.set_title(self._STRAIN_DEV_LABELS[comp], fontsize=10)
-            ax.set_xlabel(xlabel, fontsize=8)
-            ax.set_ylabel(ylabel, fontsize=8)
+            if row == 1:
+                ax.set_xlabel(xlabel, fontsize=8)
+            if col == 0:
+                ax.set_ylabel(ylabel, fontsize=8)
 
         if colorbar and im is not None:
-            fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.02)
+            fig.colorbar(im, ax=axes, shrink=0.8, pad=0.02)
 
         _frame_label = {
             "crystal": "crystal frame",
@@ -1738,7 +1744,6 @@ class GrainMap:
             title or f"Grain {grain + 1}  —  deviatoric strain  [{_frame_label}]",
             fontsize=11,
         )
-        fig.tight_layout()
         return fig, axes
 
     # ── Stress analysis ───────────────────────────────────────────────────────

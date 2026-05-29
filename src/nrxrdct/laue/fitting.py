@@ -2065,11 +2065,15 @@ def fit_strain_orientation(
     )
 
     # ── staged refinement loop ────────────────────────────────────────────────
-    # Between stages only the rotation is baked into U0_stage; strain is reset
-    # to zero so that opt.x[3:] at the final stage is the total strain relative
-    # to the cumulatively-rotated (but unstrained) reference structure.
+    # Between stages the rotation is baked into U0_stage and the strain from
+    # the previous stage is carried forward as the starting guess for the next.
+    # Only the rotation component of x0 is reset (it is now encoded in U0_stage).
+    # Carrying strain prevents the tight final stage from collapsing into a
+    # degenerate minimum when the correct strain already shifts spots by more
+    # than the final match-radius.
     U0_stage = U0_arr.copy()
     opt = None
+    _x0 = np.zeros(3 + n_strain)
     for _si, _px in enumerate(_stages):
         _fun = partial(
             laue_strain_residuals,
@@ -2082,7 +2086,7 @@ def fit_strain_orientation(
             geometry_only=False, allowed_hkl=_allowed,
         )
         opt = least_squares(
-            _fun, x0=np.zeros(3 + n_strain),
+            _fun, x0=_x0,
             method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
         )
         if verbose and len(_stages) > 1:
@@ -2093,6 +2097,9 @@ def fit_strain_orientation(
             )
         if _si < len(_stages) - 1:
             U0_stage = Rotation.from_rotvec(opt.x[:3]).as_matrix() @ U0_stage
+            # Reset rotation (now baked into U0_stage); carry strain forward.
+            _x0 = np.zeros(3 + n_strain)
+            _x0[3:] = opt.x[3:]
 
     # Unpack solution.
     rotvec = opt.x[:3]

@@ -193,72 +193,171 @@ for the equivalent derivation for the strain tensor.
 
 ---
 
-## 5. Von Mises stress — the recommended scalar summary
+## 5. Scalar invariants — von Mises stress and equivalent strain
 
-### Formulation
+Scalar invariants are the most reliable and interpretable quantities from Laue
+data.  They do not depend on the choice of reference frame (they are
+second-invariant scalars), and they are completely insensitive to the unknown
+hydrostatic component.
 
-The **von Mises stress** (also called the equivalent tensile stress) is
-defined as:
+### 5.1 Von Mises stress
+
+#### Formulation
+
+The **von Mises stress** (equivalent tensile stress) is built from the second
+invariant $J_2$ of the deviatoric stress tensor
+$\mathbf{s} = \boldsymbol{\sigma}_\text{dev}$:
+
+$$
+J_2 = \tfrac{1}{2}\,s_{ij}\,s_{ij}
+\qquad\Longrightarrow\qquad
+\sigma_\text{VM} = \sqrt{3\,J_2} = \sqrt{\tfrac{3}{2}\,s_{ij}\,s_{ij}}
+$$
+
+Expanded in Cartesian components:
 
 $$
 \sigma_\text{VM}
-  = \sqrt{\tfrac{3}{2}\,s_{ij}\,s_{ij}}
   = \sqrt{\tfrac{3}{2}(s_{xx}^2 + s_{yy}^2 + s_{zz}^2)
           + 3\,(s_{xy}^2 + s_{xz}^2 + s_{yz}^2)}
 $$
 
-where $\mathbf{s} = \boldsymbol{\sigma} - \tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})\,\mathbf{I}$
-is the **deviatoric** part of the stress tensor.
-
-### Why it is unambiguous for Laue data
-
-The von Mises stress depends *only* on the deviatoric part of $\boldsymbol{\sigma}$.
-The hydrostatic pressure $P$ drops out exactly:
+An equivalent, often more intuitive form expresses $\sigma_\text{VM}$ through
+*differences* of principal stresses $\sigma_1,\sigma_2,\sigma_3$:
 
 $$
-\sigma_\text{VM}(\boldsymbol{\sigma})
-  = \sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev} + P\,\mathbf{I})
+\sigma_\text{VM}
+  = \sqrt{\tfrac{1}{2}\bigl[(\sigma_1-\sigma_2)^2
+                           +(\sigma_2-\sigma_3)^2
+                           +(\sigma_3-\sigma_1)^2\bigr]}
+$$
+
+The hydrostatic pressure $P$ shifts all three principal stresses by the same
+amount and therefore cancels in every difference — confirming that
+$\sigma_\text{VM}$ is immune to the missing hydrostatic component.
+
+#### Why it is unambiguous for Laue data
+
+`stress_voigt` returns the purely deviatoric stress
+($\operatorname{tr}(\boldsymbol{\sigma})=0$ by construction), so:
+
+$$
+\sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev} + P\,\mathbf{I})
   = \sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev})
 $$
 
-Because `stress_voigt` already returns the deviatoric stress
-($\operatorname{tr}(\boldsymbol{\sigma})=0$ by construction), $\sigma_\text{VM}$
-computed from it carries no ambiguity from the missing hydrostatic component.
-It is the **most interpretable scalar** derived from Laue stress data.
+for *any* value of the unknown $P$.
 
-### Physical meaning
+#### Physical meaning
 
-$\sigma_\text{VM}$ governs the onset of plastic yielding in the von Mises
-(J₂) criterion: the material yields when $\sigma_\text{VM} \geq \sigma_Y$,
-the uniaxial yield stress.  It also provides a single-number measure of
-"how stressed" a grain is, independent of the choice of reference frame
-(it is a tensor invariant).
+$\sigma_\text{VM}$ governs the onset of plastic yielding in the von Mises (J₂)
+criterion: yielding occurs when $\sigma_\text{VM} \geq \sigma_Y$ (uniaxial
+yield stress).  It provides a single-number measure of "how stressed" a grain
+is, independent of the reference frame.
 
-### API
+#### API
 
 ```python
-# (ny, nx) array, GPa by default
+# (ny, nx) array, GPa
 sigma_vm = gmap.von_mises_stress(crystal, grain=gi_merged, frame="crystal")
+print(f"max σ_VM = {np.nanmax(sigma_vm) * 1e3:.1f} MPa")
 
-# Convert to MPa and inspect
-print(f"max σ_VM = {sigma_vm.nanmax() * 1e3:.1f} MPa")
-
-# Plot directly
 fig, ax = gmap.plot_von_mises_stress(
     grain=gi_merged,
     crystal=fe,
     frame="crystal",
     scale=1e3,           # GPa → MPa
-    cmap="viridis",      # sequential map — σ_VM ≥ 0
-    vmin=0, vmax=300,    # MPa
+    cmap="viridis",      # sequential — σ_VM ≥ 0
+    vmin=0, vmax=300,
     motor_x="pz", motor_y="py",
     motor_units={"pz": "mm", "py": "mm"},
 )
 ```
 
-The plot uses `"viridis"` by default (sequential, appropriate because
-$\sigma_\text{VM} \geq 0$), in contrast to the diverging `"RdBu_r"` used for
-signed stress components.
+---
+
+### 5.2 Von Mises equivalent strain
+
+#### Formulation
+
+The **equivalent strain** $\varepsilon_\text{eq}$ (also called the effective
+strain) is the strain-space counterpart of $\sigma_\text{VM}$, built from the
+second invariant of the deviatoric strain tensor
+$\mathbf{e} = \boldsymbol{\varepsilon}_\text{dev}$:
+
+$$
+\varepsilon_\text{eq}
+  = \sqrt{\tfrac{2}{3}\,e_{ij}\,e_{ij}}
+  = \sqrt{\tfrac{2}{3}(e_{xx}^2 + e_{yy}^2 + e_{zz}^2)
+          + \tfrac{4}{3}(e_{xy}^2 + e_{xz}^2 + e_{yz}^2)}
+$$
+
+The prefactor $\tfrac{2}{3}$ (versus $\tfrac{3}{2}$ for the stress) is the
+conventional normalisation that makes the two quantities **work-conjugate**:
+
+$$
+\dot{w}_\text{plastic} = \boldsymbol{\sigma}_\text{dev} : \dot{\mathbf{e}}
+  = \sigma_\text{VM}\,\dot{\varepsilon}_\text{eq}
+$$
+
+and ensures that in uniaxial tension
+$\varepsilon_\text{eq} = \varepsilon_{xx}$ (the applied axial strain).
+
+An alternative form in terms of principal-strain differences
+$\varepsilon_1,\varepsilon_2,\varepsilon_3$:
+
+$$
+\varepsilon_\text{eq}
+  = \sqrt{\tfrac{2}{9}\bigl[(\varepsilon_1-\varepsilon_2)^2
+                            +(\varepsilon_2-\varepsilon_3)^2
+                            +(\varepsilon_3-\varepsilon_1)^2\bigr]
+          + \tfrac{2}{3}(\varepsilon_{12}^2+\varepsilon_{13}^2+\varepsilon_{23}^2)}
+$$
+
+Again, the hydrostatic component (mean strain $\varepsilon_m$) cancels in every
+principal-strain difference.
+
+#### Why it is unambiguous for Laue data
+
+$e_{ij}\,e_{ij}$ is a scalar double contraction — it is **frame-independent**
+and depends only on the deviatoric strain.  Because
+`strain_tensor_deviatoric` has exactly zero trace, the hydrostatic contribution
+is absent by construction.
+
+#### Comparison with σ_VM
+
+| | $\sigma_\text{VM}$ | $\varepsilon_\text{eq}$ |
+|---|---|---|
+| Input | `strain_tensor_deviatoric` + stiffness matrix | `strain_tensor_deviatoric` only |
+| Units | GPa (or MPa) | dimensionless (or millistrain) |
+| Requires elastic constants | Yes | No |
+| Frame-independent | Yes | Yes |
+| Hydrostatic-immune | Yes | Yes |
+| Yields criterion | $\sigma_\text{VM} \geq \sigma_Y$ | Accumulated plastic strain |
+
+$\varepsilon_\text{eq}$ is particularly useful when no stiffness matrix is
+available, or as a geometry-only map to identify highly distorted grains before
+computing stress.
+
+#### API
+
+```python
+# (ny, nx) array, dimensionless
+eps_eq = gmap.equivalent_strain(grain=gi_merged)
+print(f"max ε_eq = {np.nanmax(eps_eq) * 1e3:.2f} ×10⁻³")
+
+fig, ax = gmap.plot_equivalent_strain(
+    grain=gi_merged,
+    scale=1e3,           # dimensionless → millistrain
+    cmap="viridis",
+    vmin=0, vmax=2,      # millistrain
+    motor_x="pz", motor_y="py",
+    motor_units={"pz": "mm", "py": "mm"},
+)
+```
+
+Note that `plot_equivalent_strain` takes no `frame` argument — the scalar
+invariant is the same in every frame.
 
 ---
 
@@ -368,7 +467,16 @@ fe = xu.materials.Fe
 best_grain, metrics = gmap.merge(metric="match_rate", min_match_rate=0.3)
 gi = gmap.apply_merge(best_grain, metrics)
 
-# ── Von Mises stress (most interpretable scalar) ───────────────────────
+# ── Equivalent strain (no elastic constants needed) ────────────────────
+fig, ax = gmap.plot_equivalent_strain(
+    grain=gi,
+    scale=1e3,              # dimensionless → millistrain
+    cmap="viridis", vmin=0, vmax=2,
+    motor_x="pz", motor_y="py",
+    motor_units={"pz": "mm", "py": "mm"},
+)
+
+# ── Von Mises stress ────────────────────────────────────────────────────
 fig, ax = gmap.plot_von_mises_stress(
     grain=gi, crystal=fe,
     frame="crystal", scale=1e3,

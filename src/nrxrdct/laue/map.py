@@ -2183,6 +2183,121 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    def equivalent_strain(
+        self,
+        grain: "int | str" = 0,
+    ) -> np.ndarray:
+        """
+        Compute the von Mises equivalent strain for every map point.
+
+        .. math::
+
+            \\varepsilon_\\mathrm{eq}
+            = \\sqrt{\\tfrac{2}{3}\\, e_{ij}\\, e_{ij}}
+            = \\sqrt{\\tfrac{2}{3}(e_{xx}^2 + e_{yy}^2 + e_{zz}^2)
+                    + \\tfrac{4}{3}(e_{xy}^2 + e_{xz}^2 + e_{yz}^2)}
+
+        where **e = ε_dev** is the deviatoric strain tensor stored in
+        ``strain_tensor_deviatoric``.  The double contraction
+        :math:`e_{ij}\\,e_{ij}` is a scalar invariant — the result is identical
+        in any reference frame.
+
+        The prefactor :math:`\\tfrac{2}{3}` (vs :math:`\\tfrac{3}{2}` for the
+        stress) is chosen so that in uniaxial tension
+        :math:`\\varepsilon_\\mathrm{eq} = \\varepsilon_{xx}`, making the
+        equivalent strain work-conjugate to the von Mises stress.
+
+        Because ``strain_tensor_deviatoric`` has exactly zero trace, the
+        hydrostatic strain is absent and the result is unambiguous for Laue data.
+
+        Args:
+            grain (int or 'merged'): Grain slot index.
+
+        Returns:
+            eps_eq ((ny, nx) ndarray, dimensionless): Equivalent strain.
+                `NaN` where strain data are absent.
+        """
+        if grain == 'merged':
+            e = self._select_merged(self.strain_tensor_deviatoric)  # (ny, nx, 3, 3)
+        else:
+            e = self.strain_tensor_deviatoric[grain]                # (ny, nx, 3, 3)
+        return np.sqrt(
+            (2.0 / 3.0) * (e[..., 0, 0]**2 + e[..., 1, 1]**2 + e[..., 2, 2]**2)
+            + (4.0 / 3.0) * (e[..., 0, 1]**2 + e[..., 0, 2]**2 + e[..., 1, 2]**2)
+        )
+
+    def plot_equivalent_strain(
+        self,
+        grain: "int | str" = 0,
+        *,
+        ax: "plt.Axes | None" = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+        scale: float = 1e3,
+    ) -> tuple:
+        """
+        Plot the von Mises equivalent strain map for a given grain.
+
+        Args:
+            grain (int or 'merged'): Grain slot index.
+            scale (float): Multiply values before plotting.  Default `1e3`
+                converts dimensionless strain to millistrain (×10⁻³).
+            motor_x, motor_y, motor_units, ax, cmap, vmin, vmax,
+            title, figsize, colorbar: Same as :meth:`plot_strain_component`.
+
+        Returns:
+            (fig, ax)
+        """
+        data = self.equivalent_strain(grain) * scale
+        unit = "×10⁻³" if abs(scale - 1e3) < 1 else f"×{scale}"
+        label = f"ε_eq ({unit})"
+        cmap = cmap or "viridis"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data, origin="upper", extent=extent,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            interpolation="nearest", aspect="auto",
+        )
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(label, fontsize=9)
+
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(
+            title or f"{self._grain_label(grain)}  — ε_eq",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        return fig, ax
+
     def plot_stress_component(
         self,
         component: str = "s_xx",
@@ -4759,7 +4874,8 @@ class GrainMap:
             ax_det.set_xlabel("x (px)", fontsize=9)
             ax_det.set_ylabel("y (px)", fontsize=9)
             iy, ix = _state["iy"], _state["ix"]
-            suffix = f"  — {fit_result}" if fit_result is not None else ""
+            _display_result = _state["strain_fit_result"] or fit_result
+            suffix = f"  — {_display_result}" if _display_result is not None else ""
             ax_det.set_title(
                 f"Frame {frame_idx}  (iy={iy}, ix={ix}){suffix}",
                 fontsize=8,
@@ -5212,6 +5328,19 @@ class GrainMap:
                 if isinstance(item, Exception):
                     _info.value = f"<b style='color:#f44'>Strain fit error: {item}</b>"
                     return
+                # Always update simulation so the display reflects the fitted U.
+                _state["U0"] = item.U
+                _run_simulation(item.U)
+                if item.n_matched == 0:
+                    _info.value = (
+                        f"<b style='color:#f44'>Strain fit returned 0 matches — "
+                        f"the orientation may need further refinement before fitting strain.  "
+                        f"Orientation result is still available for Store.</b>"
+                    )
+                    # Do not overwrite strain_fit_result with a zero-match result;
+                    # Store will fall back to the orientation result.
+                    _draw_det()
+                    return
                 _state["strain_fit_result"] = item
                 col = "#ffcc44" if item.success else "#ffaa33"
                 _info.value = f"<b style='color:{col}'>{item}</b>"
@@ -5222,8 +5351,12 @@ class GrainMap:
             _async_fit(_run, _on_done, btn, "Fitting…", "🔩 Fit strain")
 
         def _cb_store(_) -> None:
-            # Prefer strain result if available, else orientation result
-            result = _state["strain_fit_result"] or _state["fit_result"]
+            # Prefer strain result when it has actual matches, else orientation result.
+            # A zero-match strain result is never stored — it would overwrite a good
+            # orientation result with broken data.
+            _sr = _state["strain_fit_result"]
+            _or = _state["fit_result"]
+            result = _sr if (_sr is not None and _sr.n_matched > 0) else _or
             if result is None:
                 return
             iy = _state["iy"]

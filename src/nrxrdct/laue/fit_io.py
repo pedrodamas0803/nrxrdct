@@ -6,11 +6,16 @@ the grain orientation as a UB matrix.  These functions parse that file and
 plot the result against an nrxrdct simulation.
 """
 
+import concurrent.futures
+import glob
 import os
 import re
 
 import h5py
 import numpy as np
+
+# Matches IMG_NUMBER*gNN.fit — captures frame index and grain index.
+_FIT_FNAME_RE = re.compile(r'(\d+)\D*g(\d+)\.fit$', re.IGNORECASE)
 
 
 def read_fit_file(path):
@@ -325,3 +330,262 @@ def plot_fit_frame(fit_path, *, image=None, bg_sigma=251.0,
     ax.legend(fontsize=8, loc='upper right')
     fig.tight_layout()
     return fig, ax
+
+
+# ── internal fast header reader ───────────────────────────────────────────────
+
+def _read_fit_meta(path):
+    """Read only header lines to extract mean_dev_px and n_indexed (fast)."""
+    meta = {}
+    next_key = None
+    with open(path) as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if not stripped.startswith('#'):
+                break  # reached data block — stop
+            content = stripped.lstrip('#').strip()
+            if next_key is not None:
+                if next_key == 'element':
+                    meta['element'] = content
+                elif next_key == 'grain_index':
+                    meta['grain_index'] = content
+                next_key = None
+                continue
+            cl = content.lower()
+            if cl == 'element':
+                next_key = 'element'
+            elif cl == 'grainindex':
+                next_key = 'grain_index'
+            elif ':' in content:
+                key, _, val = content.partition(':')
+                key_l = key.strip().lower()
+                val = val.strip()
+                if 'mean deviation' in key_l:
+                    m = re.search(r'[\d.]+', val)
+                    if m:
+                        meta['mean_dev_px'] = float(m.group())
+                elif 'number of indexed' in key_l or 'nb indexed' in key_l:
+                    m = re.search(r'\d+', val)
+                    if m:
+                        meta['n_indexed'] = int(m.group())
+    return meta
+
+
+# ── interactive map inspector ─────────────────────────────────────────────────
+
+def inspect_fit_map(fit_dir, ny, nx, *, grain=0,
+                    image_h5=None, image_dataset=None,
+                    bg_sigma=251.0, vmin_map=None, vmax_map=None,
+                    vmin_det=0.0, vmax_det=None,
+                    figsize=(14, 7), n_workers=None):
+    """
+    Interactive mean-deviation map from a folder of LaueTools ``.fit`` files.
+
+    Files are expected to follow the naming convention
+    ``{IMG_NUMBER}*g{NN}.fit`` (e.g. ``frame_02592_g00.fit``).
+    The frame index is mapped row-major to the ``(ny, nx)`` grid:
+    ``frame_index = iy * nx + ix``.
+
+    The left panel shows the mean pixel deviation map for *grain*.  Click any
+    pixel to load the corresponding ``.fit`` file and display segmented
+    (Xexp/Yexp, white circles) and refined (Xtheo/Ytheo, red diamonds) spot
+    positions on the right panel.  Zoom / pan on the right panel is preserved
+    across clicks.
+
+    All header metadata is loaded in parallel at startup; spot data is read
+    on demand when a pixel is clicked.
+
+    Args:
+        fit_dir (str): Folder containing the ``.fit`` files.
+        ny, nx (int): Map dimensions (rows, columns).
+        grain (int): Grain index shown in the left-panel map.  Default ``0``.
+        image_h5 (str or None): Path to the scan HDF5 file.  When given
+            together with *image_dataset*, the raw detector frame is loaded
+            and shown as a background on the right panel.
+        image_dataset (str or None): HDF5 dataset path, e.g.
+            ``'1.1/measurement/det'``.
+        bg_sigma (float): Gaussian sigma for :func:`prepare_image`.  Default
+            ``251``.
+        vmin_map, vmax_map (float or None): Colour scale for the left panel.
+            *vmax_map* defaults to the 95th percentile of finite values.
+        vmin_det, vmax_det (float or None): Colour scale for the detector image.
+            *vmax_det* defaults to the 99.5th percentile of the preprocessed
+            frame.
+        figsize (tuple): Figure size.  Default ``(14, 7)``.
+        n_workers (int or None): Thread-pool size for parallel metadata loading.
+            Defaults to ``min(32, cpu_count)``.
+
+    Returns:
+        fig (Figure):
+        axes ((ax_map, ax_det)):
+    """
+    import matplotlib.pyplot as plt
+
+    # ── discover and parse filenames ──────────────────────────────────────
+    paths = sorted(glob.glob(os.path.join(fit_dir, '*.fit')))
+    if not paths:
+        raise FileNotFoundError(f"No .fit files found in {fit_dir!r}")
+
+    file_map = {}   # {grain_idx: {frame_idx: path}}
+    for p in paths:
+        m = _FIT_FNAME_RE.search(os.path.basename(p))
+        if not m:
+            continue
+        fi = int(m.group(1))
+        gi = int(m.group(2))
+        file_map.setdefault(gi, {})[fi] = p
+
+    if not file_map:
+        raise ValueError(
+            f"Could not parse frame/grain indices from filenames in {fit_dir!r}\n"
+            f"Expected pattern: {{IMG_NUMBER}}*g{{NN}}.fit"
+        )
+
+    n_grains = max(file_map) + 1
+
+    # ── load metadata in parallel ─────────────────────────────────────────
+    mean_dev  = np.full((n_grains, ny, nx), np.nan)
+    n_indexed = np.full((n_grains, ny, nx), -1, dtype=int)
+
+    tasks = [(gi, fi, p) for gi, d in file_map.items() for fi, p in d.items()]
+    _workers = n_workers or min(32, os.cpu_count() or 1)
+
+    def _load(args):
+        gi, fi, p = args
+        return gi, fi, _read_fit_meta(p)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_workers) as pool:
+        for gi, fi, meta in pool.map(_load, tasks):
+            iy, ix = divmod(fi, nx)
+            if 0 <= iy < ny and 0 <= ix < nx:
+                if 'mean_dev_px' in meta:
+                    mean_dev[gi, iy, ix] = meta['mean_dev_px']
+                if 'n_indexed' in meta:
+                    n_indexed[gi, iy, ix] = meta['n_indexed']
+
+    print(f"Loaded metadata: {len(tasks)} files, {n_grains} grain(s)")
+
+    # ── figure ────────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(
+        1, 2, width_ratios=[1, 1.8], wspace=0.08,
+        left=0.07, right=0.97, bottom=0.09, top=0.91,
+    )
+    ax_map = fig.add_subplot(gs[0])
+    ax_det = fig.add_subplot(gs[1])
+
+    map_data = mean_dev[grain]
+    finite = map_data[np.isfinite(map_data)]
+    _vmin = vmin_map if vmin_map is not None else 0.0
+    _vmax = vmax_map if vmax_map is not None else (
+        float(np.percentile(finite, 95)) if finite.size else 1.0
+    )
+    im_map = ax_map.imshow(
+        map_data, origin='upper', cmap='plasma_r',
+        vmin=_vmin, vmax=_vmax, interpolation='nearest', aspect='auto',
+    )
+    fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                 shrink=0.8, label='Mean dev (px)')
+    ax_map.set_xlabel('ix')
+    ax_map.set_ylabel('iy')
+    ax_map.set_title(f'Mean pixel deviation  (grain {grain})', fontsize=9)
+    sel_dot, = ax_map.plot([], [], 'w+', ms=11, mew=2.0, zorder=10)
+
+    ax_det.set_facecolor('k')
+    ax_det.set_aspect('equal')
+    ax_det.set_xlabel('x (px)')
+    ax_det.set_ylabel('y (px)')
+    ax_det.set_title('← click map to load frame', fontsize=9, color='#888')
+
+    fig.suptitle(
+        f"LaueTools .fit inspector  —  grain {grain}  |  {fit_dir}",
+        fontsize=9, color='#555',
+    )
+
+    # ── click handler ─────────────────────────────────────────────────────
+    _first_click = [True]
+
+    def _on_click(event):
+        if event.inaxes is not ax_map:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+
+        ix = int(np.clip(round(event.xdata), 0, nx - 1))
+        iy = int(np.clip(round(event.ydata), 0, ny - 1))
+        fi = iy * nx + ix
+
+        sel_dot.set_data([ix], [iy])
+
+        saved_xlim = ax_det.get_xlim()
+        saved_ylim = ax_det.get_ylim()
+
+        fit_path = file_map.get(grain, {}).get(fi)
+
+        ax_det.cla()
+        ax_det.set_facecolor('k')
+        ax_det.set_aspect('equal')
+        ax_det.set_xlabel('x (px)')
+        ax_det.set_ylabel('y (px)')
+
+        if fit_path is None:
+            ax_det.set_title(
+                f'frame {fi}  ({iy}, {ix})  —  no .fit file', fontsize=9, color='#888'
+            )
+            fig.canvas.draw_idle()
+            return
+
+        obs_xy, theo_xy, _, meta = read_fit_file(fit_path)
+
+        # optional background image
+        if image_h5 is not None and image_dataset is not None:
+            try:
+                raw = read_raw(image_h5, image_dataset, fi)
+                disp = prepare_image(raw, bg_sigma=bg_sigma)
+                nv_im, nh_im = disp.shape
+                _vd = vmax_det if vmax_det is not None else float(np.percentile(disp, 99.5))
+                ax_det.imshow(
+                    disp, origin='upper', extent=[0, nh_im, nv_im, 0],
+                    cmap='gray', vmin=vmin_det, vmax=_vd, aspect='auto',
+                )
+            except Exception as exc:
+                print(f"  image load failed: {exc}")
+
+        if len(obs_xy):
+            ax_det.scatter(
+                obs_xy[:, 0], obs_xy[:, 1],
+                s=80, facecolors='none', edgecolors='white', linewidths=1.2,
+                label=f'Xexp/Yexp ({len(obs_xy)})', zorder=5,
+            )
+
+        if len(theo_xy):
+            ax_det.scatter(
+                theo_xy[:, 0], theo_xy[:, 1],
+                s=50, marker='D', facecolors='none', edgecolors='C3',
+                linewidths=1.0, label=f'Xtheo/Ytheo ({len(theo_xy)})', zorder=4,
+            )
+            for (xe, ye), (xt, yt) in zip(obs_xy, theo_xy):
+                ax_det.plot(
+                    [xe, xt], [ye, yt], '-', color='C3', alpha=0.6, lw=0.8, zorder=3
+                )
+
+        n  = meta.get('n_indexed', len(obs_xy))
+        dev = meta.get('mean_dev_px', np.nan)
+        ax_det.set_title(
+            f'frame {fi}  ({iy}, {ix})  |  {n} spots  |  mean dev {dev:.3f} px',
+            fontsize=9,
+        )
+        ax_det.legend(fontsize=8, loc='upper right')
+
+        if not _first_click[0]:
+            ax_det.set_xlim(saved_xlim)
+            ax_det.set_ylim(saved_ylim)
+        _first_click[0] = False
+
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect('button_press_event', _on_click)
+    plt.tight_layout()
+    return fig, (ax_map, ax_det)

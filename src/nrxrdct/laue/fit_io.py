@@ -375,7 +375,7 @@ def _read_fit_meta(path):
 
 # ── interactive map inspector ─────────────────────────────────────────────────
 
-def inspect_fit_map(fit_dir, ny, nx, *, grain=0, step_x=1.0, step_y=1.0,
+def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
                     image_h5=None, image_dataset=None,
                     bg_sigma=251.0, vmin_map=None, vmax_map=None,
                     vmin_det=0.0, vmax_det=None,
@@ -482,7 +482,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, step_x=1.0, step_y=1.0,
     _vmax = vmax_map if vmax_map is not None else (
         float(np.percentile(finite, 95)) if finite.size else 1.0
     )
-    extent_map = [0, nx * step_x, 0, ny * step_y]
+    extent_map = [0, size_x, 0, size_y]
     im_map = ax_map.imshow(
         map_data, origin='lower', cmap='plasma_r',
         vmin=_vmin, vmax=_vmax, interpolation='nearest', aspect='auto',
@@ -490,8 +490,8 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, step_x=1.0, step_y=1.0,
     )
     fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
                  shrink=0.8, label='Mean dev (px)')
-    ax_map.set_xlabel(f'x  (step {step_x})')
-    ax_map.set_ylabel(f'y  (step {step_y})')
+    ax_map.set_xlabel('x')
+    ax_map.set_ylabel('y')
     ax_map.set_title(f'Mean pixel deviation  (grain {grain})', fontsize=9)
     sel_dot, = ax_map.plot([], [], 'w+', ms=11, mew=2.0, zorder=10)
 
@@ -515,11 +515,11 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, step_x=1.0, step_y=1.0,
         if event.xdata is None or event.ydata is None:
             return
 
-        ix = int(np.clip(round(event.xdata / step_x), 0, nx - 1))
-        iy = int(np.clip(round(event.ydata / step_y), 0, ny - 1))
+        ix = int(np.clip(int(event.xdata * nx / size_x), 0, nx - 1))
+        iy = int(np.clip(int(event.ydata * ny / size_y), 0, ny - 1))
         fi = ix * ny + iy
 
-        sel_dot.set_data([ix * step_x], [iy * step_y])
+        sel_dot.set_data([(ix + 0.5) * size_x / nx], [(iy + 0.5) * size_y / ny])
 
         saved_xlim = ax_det.get_xlim()
         saved_ylim = ax_det.get_ylim()

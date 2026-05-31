@@ -375,7 +375,7 @@ def _read_fit_meta(path):
 
 # ── interactive map inspector ─────────────────────────────────────────────────
 
-def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
+def inspect_fit_map(fit_dir, ny, nx, *, grains=0, map_grain=None, size_x=1.0, size_y=1.0,
                     image_h5=None, image_dataset=None,
                     bg_sigma=251.0, vmin_map=None, vmax_map=None,
                     vmin_det=0.0, vmax_det=None,
@@ -422,6 +422,10 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
         axes ((ax_map, ax_det)):
     """
     import matplotlib.pyplot as plt
+
+    grains_list = [grains] if isinstance(grains, int) else list(grains)
+    _map_grain  = map_grain if map_grain is not None else grains_list[0]
+    _colors     = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     # ── discover and parse filenames ──────────────────────────────────────
     paths = sorted(glob.glob(os.path.join(fit_dir, '*.fit')))
@@ -476,7 +480,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
     ax_map = fig.add_subplot(gs[0])
     ax_det = fig.add_subplot(gs[1])
 
-    map_data = mean_dev[grain]
+    map_data = mean_dev[_map_grain]
     finite = map_data[np.isfinite(map_data)]
     _vmin = vmin_map if vmin_map is not None else 0.0
     _vmax = vmax_map if vmax_map is not None else (
@@ -485,14 +489,14 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
     extent_map = [0, size_x, 0, size_y]
     im_map = ax_map.imshow(
         map_data, origin='lower', cmap='plasma_r',
-        vmin=_vmin, vmax=_vmax, interpolation='nearest', aspect='auto',
+        vmin=_vmin, vmax=_vmax, interpolation='nearest', aspect='equal',
         extent=extent_map,
     )
     fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
                  shrink=0.8, label='Mean dev (px)')
     ax_map.set_xlabel('x')
     ax_map.set_ylabel('y')
-    ax_map.set_title(f'Mean pixel deviation  (grain {grain})', fontsize=9)
+    ax_map.set_title(f'Mean pixel deviation  (grain {_map_grain})', fontsize=9)
     sel_dot, = ax_map.plot([], [], 'w+', ms=11, mew=2.0, zorder=10)
 
     ax_det.set_facecolor('k')
@@ -502,7 +506,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
     ax_det.set_title('← click map to load frame', fontsize=9, color='#888')
 
     fig.suptitle(
-        f"LaueTools .fit inspector  —  grain {grain}  |  {fit_dir}",
+        f"LaueTools .fit inspector  —  grains {grains_list}  |  {fit_dir}",
         fontsize=9, color='#555',
     )
 
@@ -524,22 +528,11 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
         saved_xlim = ax_det.get_xlim()
         saved_ylim = ax_det.get_ylim()
 
-        fit_path = file_map.get(grain, {}).get(fi)
-
         ax_det.cla()
         ax_det.set_facecolor('k')
         ax_det.set_aspect('equal')
         ax_det.set_xlabel('x (px)')
         ax_det.set_ylabel('y (px)')
-
-        if fit_path is None:
-            ax_det.set_title(
-                f'frame {fi}  ({iy}, {ix})  —  no .fit file', fontsize=9, color='#888'
-            )
-            fig.canvas.draw_idle()
-            return
-
-        obs_xy, theo_xy, _, meta = read_fit_file(fit_path)
 
         # optional background image
         if image_h5 is not None and image_dataset is not None:
@@ -555,30 +548,34 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
             except Exception as exc:
                 print(f"  image load failed: {exc}")
 
-        if len(obs_xy):
-            ax_det.scatter(
-                obs_xy[:, 0], obs_xy[:, 1],
-                s=80, facecolors='none', edgecolors='white', linewidths=1.2,
-                label=f'Xexp/Yexp ({len(obs_xy)})', zorder=5,
-            )
+        title_parts = [f'frame {fi}  ({iy}, {ix})']
+        for gi in grains_list:
+            fit_path = file_map.get(gi, {}).get(fi)
+            if fit_path is None:
+                continue
+            color = _colors[gi % len(_colors)]
+            obs_xy, theo_xy, _, meta = read_fit_file(fit_path)
 
-        if len(theo_xy):
-            ax_det.scatter(
-                theo_xy[:, 0], theo_xy[:, 1],
-                s=50, marker='D', facecolors='none', edgecolors='C3',
-                linewidths=1.0, label=f'Xtheo/Ytheo ({len(theo_xy)})', zorder=4,
-            )
-            for (xe, ye), (xt, yt) in zip(obs_xy, theo_xy):
-                ax_det.plot(
-                    [xe, xt], [ye, yt], '-', color='C3', alpha=0.6, lw=0.8, zorder=3
+            if len(obs_xy):
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=80, facecolors='none', edgecolors=color, linewidths=1.2,
+                    label=f'g{gi} Xexp ({len(obs_xy)})', zorder=5,
                 )
+            if len(theo_xy):
+                ax_det.scatter(
+                    theo_xy[:, 0], theo_xy[:, 1],
+                    s=50, marker='D', facecolors='none', edgecolors=color,
+                    linewidths=1.0, label=f'g{gi} Xtheo ({len(theo_xy)})', zorder=4,
+                )
+                for (xe, ye), (xt, yt) in zip(obs_xy, theo_xy):
+                    ax_det.plot(
+                        [xe, xt], [ye, yt], '-', color=color, alpha=0.6, lw=0.8, zorder=3
+                    )
+            dev = meta.get('mean_dev_px', np.nan)
+            title_parts.append(f'g{gi}: {meta.get("n_indexed", len(obs_xy))} spots, {dev:.3f} px')
 
-        n  = meta.get('n_indexed', len(obs_xy))
-        dev = meta.get('mean_dev_px', np.nan)
-        ax_det.set_title(
-            f'frame {fi}  ({iy}, {ix})  |  {n} spots  |  mean dev {dev:.3f} px',
-            fontsize=9,
-        )
+        ax_det.set_title('  |  '.join(title_parts), fontsize=9)
         ax_det.legend(fontsize=8, loc='upper right')
 
         if not _first_click[0]:

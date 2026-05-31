@@ -458,7 +458,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0,
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=_workers) as pool:
         for gi, fi, meta in pool.map(_load, tasks):
-            iy, ix = divmod(fi, nx)
+            ix, iy = divmod(fi, ny)
             if 0 <= iy < ny and 0 <= ix < nx:
                 if 'mean_dev_px' in meta:
                     mean_dev[gi, iy, ix] = meta['mean_dev_px']
@@ -515,7 +515,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0,
 
         ix = int(np.clip(round(event.xdata), 0, nx - 1))
         iy = int(np.clip(round(event.ydata), 0, ny - 1))
-        fi = iy * nx + ix
+        fi = ix * ny + iy
 
         sel_dot.set_data([ix], [iy])
 

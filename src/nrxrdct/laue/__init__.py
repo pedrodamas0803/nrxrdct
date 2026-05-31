@@ -91,7 +91,7 @@ from .segmentation import (
     gaussian_background,
 )
 from .map import GrainMap, parse_scan_title
-from .fit_io import read_fit_file, plot_fit_frame
+from .fit_io import read_fit_file, read_raw, prepare_image, F_from_UBB0, plot_fit_frame
 from .simulation import (
     BM32_KB,
     beam_divergence_ellipses,
@@ -263,5 +263,8 @@ __all__ = [
     "gaussian_background",
     # LaueTools .fit file I/O
     "read_fit_file",
+    "read_raw",
+    "prepare_image",
+    "F_from_UBB0",
     "plot_fit_frame",
 ]

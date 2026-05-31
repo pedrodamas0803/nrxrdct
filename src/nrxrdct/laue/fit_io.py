@@ -1,56 +1,56 @@
 """
 LaueTools .fit file reader and comparison plotter.
 
-A LaueTools indexspotset .fit file contains matched spots (Xcam, Ycam pixel
-coordinates) and the grain orientation matrix (matstarlab) in the header.
-These two functions let you load that data and compare it with an nrxrdct
-simulation on a single detector image.
+The .fit file written by IndexingSpotsSet.py contains indexed spot data and
+the grain orientation as a UBB0 matrix.  These functions parse that file and
+plot the result against an nrxrdct simulation.
 """
 
 import os
 import re
 
+import h5py
 import numpy as np
 
 
 def read_fit_file(path):
     """
-    Parse a LaueTools indexspotset ``.fit`` file.
+    Parse a LaueTools IndexingSpotsSet ``.fit`` file.
 
-    Extracts the observed spot pixel positions and the orientation matrix
-    (matstarlab) from the header.
+    Expected column header (line starting ``##``)::
 
-    The expected column order in the data block is::
+        spot_index  Intensity  h  k  l  pixDev  energy(keV)  Xexp  Yexp  ...
 
-        spot_ind  H  K  L  Energy  2theta  chi  Xcam  Ycam  Intens  pixDev  [grain_ind]
+    Column positions are detected from the ``##`` header line; if absent the
+    function falls back to columns 7 and 8 (Xexp and Yexp).
 
-    Column positions are detected automatically from any ``# ... Xcam ...``
-    header line; if none is found the function falls back to the order above
-    (columns 7 and 8).
+    The UBB0 matrix is read from the ``#UBB0 matrix`` block in the footer.
+    It gives the reciprocal-lattice basis vectors as columns expressed in the
+    LaueTools LT frame (x ∥ beam, no 2π factor).
 
     Args:
         path (str): Path to the ``.fit`` file.
 
     Returns:
-        obs_xy ((N, 2) ndarray): Spot pixel positions ``[Xcam, Ycam]``.
-            Empty ``(0, 2)`` array if the file has no data rows.
-        matstarlab ((3, 3) ndarray or None): Orientation matrix in the
-            LaueTools LT2/OR frame (no 2π factor).  ``None`` if no matrix
-            block is found in the header.
-        meta (dict): Metadata extracted from the header.  Keys present when
-            found: ``'grain_index'`` (int), ``'n_indexed'`` (int),
-            ``'mean_dev_px'`` (float), ``'euler_deg'`` (array of 3 floats).
+        obs_xy ((N, 2) ndarray): Observed spot pixel positions ``[Xexp, Yexp]``.
+        UBB0 ((3, 3) ndarray or None): Orientation matrix in LT frame (no 2π).
+            Pass to :func:`F_from_UBB0` to get the deformation gradient ready
+            for :func:`~nrxrdct.laue.simulate_laue`.
+        meta (dict): Keys when found: ``'element'``, ``'grain_index'`` (str),
+            ``'n_indexed'`` (int), ``'mean_dev_px'`` (float),
+            ``'euler_deg'`` (3-element array).
     """
     lines = open(path).read().splitlines()
 
-    matstarlab = None
+    UBB0 = None
     meta = {}
-    col_x = None  # column index of Xcam
-    col_y = None  # column index of Ycam
+    col_x = None
+    col_y = None
     rows = []
 
-    mat_buf = []   # accumulate raw text of the 3×3 matrix
-    in_mat = False  # True while inside a matstarlab block
+    next_key = None   # for "key on one line, value on next" metadata
+    mat_buf = []      # accumulates numbers for the current matrix block
+    in_UBB0 = False   # True while inside the #UBB0 matrix block
 
     for line in lines:
         stripped = line.strip()
@@ -58,76 +58,94 @@ def read_fit_file(path):
             continue
 
         is_comment = stripped.startswith('#')
-        content = stripped[1:].strip() if is_comment else stripped
+        content = stripped.lstrip('#').strip()
+
+        # ── "key on previous line, value here" metadata ───────────────────
+        if next_key is not None:
+            if next_key == 'element':
+                meta['element'] = content
+            elif next_key == 'grain_index':
+                meta['grain_index'] = content
+            elif next_key == 'euler':
+                nums = re.findall(r'[-+]?\d+\.?\d*(?:[eE][+-]?\d+)?', content)
+                if len(nums) >= 3:
+                    meta['euler_deg'] = np.array(nums[:3], dtype=float)
+            next_key = None
+            continue
 
         if is_comment:
-            # ── matstarlab / UBmatrix block ──────────────────────────────
-            if re.search(r'matstarlab|UBmatrix', content, re.IGNORECASE):
-                in_mat = True
+            # ── matrix blocks ─────────────────────────────────────────────
+            if 'UBB0 matrix' in content:
+                in_UBB0 = True
+                mat_buf = []
+                continue
+            # UB and B0 blocks come before UBB0 — ignore them
+            if re.search(r'\bUB matrix\b|\bB0 matrix\b', content):
+                in_UBB0 = False
                 mat_buf = []
                 continue
 
-            if in_mat:
-                nums_here = re.findall(r'[-+]?\d+\.?\d*(?:[eE][+-]?\d+)?', content)
-                if nums_here:
-                    mat_buf.extend(nums_here)
+            if in_UBB0:
+                nums = re.findall(r'[-+]?\d+\.?\d*(?:[eE][+-]?\d+)?', content)
+                if nums:
+                    mat_buf.extend(nums)
                     if len(mat_buf) >= 9:
                         try:
-                            matstarlab = np.array(mat_buf[:9], dtype=float).reshape(3, 3)
+                            UBB0 = np.array(mat_buf[:9], dtype=float).reshape(3, 3)
                         except Exception:
                             pass
-                        in_mat = False
+                        in_UBB0 = False
                 elif mat_buf:
-                    in_mat = False
+                    in_UBB0 = False
                 continue
 
-            # ── other metadata ───────────────────────────────────────────
-            m = re.search(r'nb.*?indexed.*?(\d+)', content, re.IGNORECASE)
-            if m:
-                meta['n_indexed'] = int(m.group(1))
+            # ── one-line "key: value" metadata ────────────────────────────
+            if ':' in content:
+                key, _, val = content.partition(':')
+                key_l = key.strip().lower()
+                val = val.strip()
+                if 'number of indexed' in key_l or 'nb indexed' in key_l:
+                    m = re.search(r'\d+', val)
+                    if m:
+                        meta['n_indexed'] = int(m.group())
+                elif 'mean deviation' in key_l:
+                    m = re.search(r'[\d.]+', val)
+                    if m:
+                        meta['mean_dev_px'] = float(m.group())
+                continue
 
-            m = re.search(r'mean.*?([\d.]+)', content, re.IGNORECASE)
-            if m and 'mean_dev_px' not in meta:
-                meta['mean_dev_px'] = float(m.group(1))
+            # ── "key on this line, value on next" metadata ────────────────
+            cl = content.lower()
+            if cl == 'element':
+                next_key = 'element'
+                continue
+            if cl == 'grainindex':
+                next_key = 'grain_index'
+                continue
+            if cl.startswith('euler angles'):
+                next_key = 'euler'
+                continue
 
-            m = re.search(r'grain.*?(\d+)', content, re.IGNORECASE)
-            if m and 'grain_index' not in meta:
-                meta['grain_index'] = int(m.group(1))
-
-            m = re.search(
-                r'euler.*?([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)', content, re.IGNORECASE
-            )
-            if m:
-                meta['euler_deg'] = np.array(
-                    [float(m.group(1)), float(m.group(2)), float(m.group(3))]
-                )
-
-            # column-name line (e.g. "# spot_ind H K L ... Xcam Ycam ...")
-            if re.search(r'[Xx]cam', content):
+            # ── column header (##spot_index ... Xexp Yexp ...) ────────────
+            cl = content.lower()
+            if 'xexp' in cl or 'xcam' in cl:
                 parts = content.split()
                 pl = [p.lower() for p in parts]
-                if 'xcam' in pl:
-                    col_x = pl.index('xcam')
-                    col_y = pl.index('ycam')
+                for xname, yname in (('xexp', 'yexp'), ('xcam', 'ycam')):
+                    if xname in pl:
+                        col_x = pl.index(xname)
+                        col_y = pl.index(yname)
+                        break
             continue
 
-        # ── non-comment column-name line ─────────────────────────────────
-        if col_x is None and re.search(r'[Xx]cam', stripped):
-            parts = stripped.split()
-            pl = [p.lower() for p in parts]
-            if 'xcam' in pl:
-                col_x = pl.index('xcam')
-                col_y = pl.index('ycam')
-            continue
-
-        # ── data row ─────────────────────────────────────────────────────
+        # ── data row (non-comment line) ───────────────────────────────────
         parts = stripped.split()
         try:
             if col_x is not None:
                 xcam = float(parts[col_x])
                 ycam = float(parts[col_y])
             else:
-                # default: spot_ind H K L Energy 2theta chi Xcam Ycam ...
+                # fallback: spot_index Intensity h k l pixDev energy Xexp Yexp ...
                 xcam = float(parts[7])
                 ycam = float(parts[8])
             rows.append([xcam, ycam])
@@ -135,47 +153,128 @@ def read_fit_file(path):
             continue
 
     obs_xy = np.array(rows, dtype=float) if rows else np.empty((0, 2))
-    return obs_xy, matstarlab, meta
+    return obs_xy, UBB0, meta
 
 
-def plot_fit_frame(crystal, camera, fit_path, *, image=None,
+def read_raw(h5_path: str, dataset: str, index: int) -> np.ndarray:
+    """
+    Read a single detector frame from an HDF5 file.
+
+    A thin convenience wrapper for loading a raw image to pass as the
+    ``image`` argument to :func:`plot_fit_frame`.
+
+    Args:
+        h5_path (str): Path to the HDF5 file.
+        dataset (str): Dataset path inside the file, e.g. ``'1.1/measurement/det'``.
+        index (int): Frame index along the first axis.
+
+    Returns:
+        image ((Nv, Nh) ndarray): Frame as float64.
+    """
+    with h5py.File(h5_path, 'r') as f:
+        return f[dataset][index].astype(float)
+
+
+def prepare_image(image: np.ndarray, bg_sigma: float = 251.0) -> np.ndarray:
+    """
+    Fill detector gaps, subtract background, and clip to non-negative values.
+
+    Pipeline:
+
+    1. Build a valid-pixel mask (``image >= 0``; gap pixels on Eiger-type
+       detectors are typically stored as ``-1`` or ``-2``).
+    2. Fill gap pixels by nearest-neighbor propagation from valid pixels.
+    3. Estimate a smooth background via FFT Gaussian filtering of the
+       filled image (see :func:`~nrxrdct.laue.gaussian_background`).
+    4. Subtract the background.
+    5. Shift by ``−min`` so the lowest value is 0.
+
+    The result is ready to pass to ``ax.imshow`` without further scaling.
+
+    Args:
+        image ((Nv, Nh) ndarray): Raw detector frame (e.g. from
+            :func:`read_raw`).  May contain negative gap-pixel values.
+        bg_sigma (float): Gaussian sigma (pixels) for background estimation.
+            Larger values produce a smoother, more slowly varying background.
+            Default ``251``.
+
+    Returns:
+        out ((Nv, Nh) ndarray float32): Background-subtracted, gap-filled image
+            with minimum value 0.
+    """
+    from .segmentation import fill_gaps_nearest, gaussian_background
+
+    valid = image >= 0
+    filled = fill_gaps_nearest(image, valid)
+    bg = gaussian_background(filled, valid, sigma=bg_sigma)
+    out = (filled - bg).astype(np.float32)
+    out -= out.min()
+    return out
+
+
+def F_from_UBB0(UBB0, crystal):
+    """
+    Convert a UBB0 matrix (LT frame, no 2π) to a deformation gradient F.
+
+    UBB0 stores the reciprocal-lattice basis vectors as columns in the
+    LaueTools LT frame (x ∥ beam, no 2π factor) — see the ``#UBB0 matrix``
+    block in a ``.fit`` file.  This function rescales by 2π and removes the
+    reference lattice so the result is a pure rotation (for an unstrained
+    crystal) or F = U @ P (rotation times stretch) when strain is present.
+
+    The returned matrix can be passed directly to
+    :func:`~nrxrdct.laue.simulate_laue` as the ``U`` argument.
+
+    Args:
+        UBB0 ((3, 3) ndarray): From :func:`read_fit_file`.
+        crystal: xrayutilities ``Crystal`` matching the phase in the ``.fit``.
+
+    Returns:
+        F ((3, 3) ndarray): Deformation gradient in LT frame.
+    """
+    B0 = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+    return (np.asarray(UBB0) * 2.0 * np.pi) @ np.linalg.inv(B0)
+
+
+def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
                    E_min_eV=5000.0, E_max_eV=27000.0, max_match_px=10.0,
                    top_n_sim=None, figsize=(10, 8)):
     """
-    Plot a LaueTools ``.fit`` frame for comparison with an nrxrdct simulation.
+    Plot a LaueTools ``.fit`` frame for side-by-side comparison with nrxrdct.
 
-    Reads the ``.fit`` file with :func:`read_fit_file`, converts the
-    ``matstarlab`` orientation to an nrxrdct U matrix via
-    :func:`~nrxrdct.laue.U_from_matstarlab`, simulates spots with
-    :func:`~nrxrdct.laue.simulate_laue`, and draws both sets on the detector
-    image.
+    Reads the ``.fit`` file with :func:`read_fit_file`, builds the
+    deformation gradient F with :func:`F_from_UBB0`, simulates spots with
+    :func:`~nrxrdct.laue.simulate_laue`, and draws both sets on the detector.
 
-    * **White circles** — spots from the ``.fit`` file (LaueTools observed /
-      indexed).
-    * **Blue diamonds** — nrxrdct simulated spots from the converted U matrix.
+    When *image* is supplied it is preprocessed with :func:`prepare_image`
+    (gap fill → background subtraction → shift to zero) before display.
+
+    * **White circles** — indexed spots from the ``.fit`` file (LaueTools).
+    * **Blue diamonds** — nrxrdct simulated spots from the UBB0 orientation.
     * **Blue lines** — matched pairs within *max_match_px*.
 
     Args:
-        crystal: xrayutilities ``Crystal`` object matching the phase indexed
-            in the ``.fit`` file.
+        crystal: xrayutilities ``Crystal`` matching the phase in the ``.fit``.
         camera (Camera): Detector geometry.
         fit_path (str): Path to the ``.fit`` file.
-        image ((Nv, Nh) ndarray or None): Raw detector image.  When given it
-            is shown in log-scale grey in the background.
-        E_min_eV, E_max_eV (float): Energy range for the nrxrdct simulation.
-        max_match_px (float): Radius (px) for drawing matched-pair lines.
+        image ((Nv, Nh) ndarray or None): Raw detector frame (e.g. from
+            :func:`read_raw`).  Preprocessed automatically before display.
+        bg_sigma (float): Gaussian sigma passed to :func:`prepare_image` for
+            background estimation.  Default ``251``.
+        E_min_eV, E_max_eV (float): Energy range for the simulation.
+        max_match_px (float): Match radius (px) for drawing connection lines.
         top_n_sim (int or None): Cap on the number of simulated spots shown.
-        figsize (tuple): Figure size passed to ``plt.subplots``.
+        figsize (tuple): Figure size.
 
     Returns:
         fig (Figure):
         ax (Axes):
     """
     import matplotlib.pyplot as plt
-    from .simulation import simulate_laue, U_from_matstarlab
+    from .simulation import simulate_laue
     from .fitting import _match_spots
 
-    obs_xy, matstarlab, meta = read_fit_file(fit_path)
+    obs_xy, UBB0, meta = read_fit_file(fit_path)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_facecolor('k')
@@ -185,39 +284,41 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None,
     ax.set_xlabel('x (px)')
     ax.set_ylabel('y (px)')
 
-    title_parts = [os.path.basename(fit_path)]
+    parts = [os.path.basename(fit_path)]
+    if 'element' in meta:
+        parts.append(meta['element'])
     if 'grain_index' in meta:
-        title_parts.append(f"grain {meta['grain_index']}")
-    if meta.get('n_indexed') or len(obs_xy):
-        n = meta.get('n_indexed', len(obs_xy))
-        title_parts.append(f"{n} indexed spots")
+        parts.append(f"grain {meta['grain_index']}")
+    n = meta.get('n_indexed', len(obs_xy))
+    if n:
+        parts.append(f"{n} indexed spots")
     if 'mean_dev_px' in meta:
-        title_parts.append(f"mean dev {meta['mean_dev_px']:.2f} px")
-    ax.set_title('  |  '.join(title_parts), fontsize=9)
+        parts.append(f"mean dev {meta['mean_dev_px']:.3f} px")
+    ax.set_title('  |  '.join(parts), fontsize=9)
 
     # Background image
     if image is not None:
-        pos = image[image > 0]
-        vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
-        nv_im, nh_im = image.shape
+        disp = prepare_image(image, bg_sigma=bg_sigma)
+        vmax = float(np.percentile(disp, 99.5))
+        nv_im, nh_im = disp.shape
         ax.imshow(
-            np.log1p(image / vmax * 1000),
+            disp,
             origin='upper', extent=[0, nh_im, nv_im, 0],
-            cmap='gray', vmin=0, vmax=7, aspect='auto',
+            cmap='gray', vmin=0, vmax=vmax, aspect='auto',
         )
 
-    # LaueTools spots
+    # LaueTools observed/indexed spots
     if len(obs_xy):
         ax.scatter(
             obs_xy[:, 0], obs_xy[:, 1],
             s=80, facecolors='none', edgecolors='white', linewidths=1.2,
-            label=f'LaueTools .fit ({len(obs_xy)})', zorder=5,
+            label=f'LaueTools ({len(obs_xy)})', zorder=5,
         )
 
-    # nrxrdct simulation from matstarlab
-    if matstarlab is not None:
-        U = U_from_matstarlab(matstarlab, crystal)
-        spots = simulate_laue(crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV)
+    # nrxrdct simulation from UBB0
+    if UBB0 is not None:
+        F = F_from_UBB0(UBB0, crystal)
+        spots = simulate_laue(crystal, F, camera, E_min=E_min_eV, E_max=E_max_eV)
         on_det = [s for s in spots if s.get('pix') is not None]
         if top_n_sim is not None:
             on_det = on_det[:top_n_sim]
@@ -237,9 +338,9 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None,
                         [obs_xy[r, 1], sim_xy[c, 1]],
                         '-', color='C0', alpha=0.5, lw=0.8, zorder=3,
                     )
-    elif matstarlab is None:
+    else:
         ax.text(
-            0.5, 0.5, 'no matstarlab found in header',
+            0.5, 0.5, 'no UBB0 matrix found in file',
             transform=ax.transAxes, ha='center', va='center',
             color='white', fontsize=9,
         )

@@ -550,7 +550,7 @@ def inspect_fit_map(fit_dir, ny, nx, *, grain=0, size_x=1.0, size_y=1.0,
                 _vd = vmax_det if vmax_det is not None else float(np.percentile(disp, 99.5))
                 ax_det.imshow(
                     disp, origin='upper', extent=[0, nh_im, nv_im, 0],
-                    cmap='gray', vmin=vmin_det, vmax=_vd, aspect='auto',
+                    cmap='gray', vmin=vmin_det, vmax=_vd, aspect='equal',
                 )
             except Exception as exc:
                 print(f"  image load failed: {exc}")

@@ -69,6 +69,8 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
                 </li>
                 <li class="toctree-l2 current"><a class="reference internal current" href="#">Strain Analysis</a>
@@ -119,6 +121,22 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#practical-notes">Practical notes</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#comparison-with-lauetools-strain-refinement">Comparison with LaueTools strain refinement</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#parameterisation">Parameterisation</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#rotationstrain-coupling-and-the-bake-in-step">Rotation–strain coupling and the bake-in step</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#residual-construction">Residual construction</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#reading-lauetools-results-into-nrxrdct">Reading LaueTools results into nrxrdct</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#comparing-lauetools-and-nrxrdct-strain-maps-on-a-grainmap">Comparing LaueTools and nrxrdct strain maps on a GrainMap</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#summary">Summary</a>
+    </li>
+        </ul>
+    </li>
     </ul>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
@@ -136,6 +154,8 @@
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
                   <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
     <ul>
@@ -580,6 +600,253 @@ apply the rotation manually:</p>
   estimate.</p>
 </li>
 </ul>
+<hr />
+<h2 id="comparison-with-lauetools-strain-refinement">Comparison with LaueTools strain refinement<a class="headerlink" href="#comparison-with-lauetools-strain-refinement" title="Permanent link">&para;</a></h2>
+<p><code>nrxrdct</code> adopts the LaueTools lab-frame convention and can read LaueTools
+calibration files and <code>matstarlab</code> orientation matrices (see
+<a class="autorefs autorefs-internal" title="decompose_matstarlab" href="../../api/laue/simulation/#nrxrdct.laue.simulation.decompose_matstarlab"><code>decompose_matstarlab</code></a>).
+However, the two implementations differ in parameterisation, decomposition
+strategy, and residual construction.</p>
+<h3 id="parameterisation">Parameterisation<a class="headerlink" href="#parameterisation" title="Permanent link">&para;</a></h3>
+<p><strong>LaueTools</strong> refines the full <span class="arithmatex">\(3 \times 3\)</span> UB matrix (nine elements) in a
+single nonlinear optimisation.  After convergence the matrix is decomposed into
+a pure rotation and a stretch via the <strong>right polar decomposition</strong>:</p>
+<div class="arithmatex">\[
+\mathbf{F} = \mathbf{U}\,\mathbf{P}
+\]</div>
+<p>where <span class="arithmatex">\(\mathbf{U}\)</span> is orthogonal (<span class="arithmatex">\(\mathbf{U}^\top\mathbf{U} = \mathbf{I}\)</span>,
+<span class="arithmatex">\(\det\mathbf{U} = +1\)</span>) and <span class="arithmatex">\(\mathbf{P}\)</span> is symmetric positive-definite (the
+right-stretch tensor).  The strain tensor is then extracted as:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_\text{LT} = \mathbf{P} - \mathbf{I}
+\]</div>
+<p>This decomposition is <strong>exact</strong> — no small-strain approximation is made.</p>
+<p><strong><code>nrxrdct</code></strong> parameterises the problem explicitly from the outset.  The
+optimisation vector is</p>
+<div class="arithmatex">\[
+\mathbf{x} = [\,\delta\omega_x,\;\delta\omega_y,\;\delta\omega_z,\;
+               s\,\varepsilon_{xx},\;\ldots,\;s\,\varepsilon_{yz}\,]
+\]</div>
+<p>and the effective orientation is assembled as:</p>
+<div class="arithmatex">\[
+\mathbf{U}_\text{eff}
+= \mathbf{R}(\delta\boldsymbol{\omega})\;\mathbf{U}_0\;(\mathbf{I} + \boldsymbol{\varepsilon})
+\]</div>
+<p>This uses the <strong>small-strain approximation</strong> — the deformation gradient is
+linearised as <span class="arithmatex">\(\mathbf{F} \approx \mathbf{I} + \boldsymbol{\varepsilon}\)</span> and
+the full effective matrix is <span class="arithmatex">\(\mathbf{U}_0(\mathbf{I}+\boldsymbol{\varepsilon})\)</span>.
+For elastic strains typical of metals (<span class="arithmatex">\(|\boldsymbol{\varepsilon}| \lesssim 10^{-3}\)</span>)
+the error relative to the exact polar-decomposition approach is of order
+<span class="arithmatex">\(|\boldsymbol{\varepsilon}|^2 \sim 10^{-6}\)</span>, which is negligible.</p>
+<p>The key practical difference is that <code>nrxrdct</code> exposes individual strain
+components directly as optimisation parameters, making it straightforward to
+<strong>fix symmetry constraints</strong> (e.g. biaxial strain: set
+<code>fit_strain=("e_xx","e_yy","e_xy","e_xz","e_yz")</code>) without post-processing.</p>
+<h3 id="rotationstrain-coupling-and-the-bake-in-step">Rotation–strain coupling and the bake-in step<a class="headerlink" href="#rotationstrain-coupling-and-the-bake-in-step" title="Permanent link">&para;</a></h3>
+<p>LaueTools refines a single UB matrix and separates rotation from strain only
+after convergence, so the two are decoupled implicitly through the polar
+decomposition.</p>
+<p><code>nrxrdct</code> uses <strong>staged refinement</strong> with an explicit rotation bake-in between
+stages.  After stage <span class="arithmatex">\(i\)</span> (pixel tolerance <span class="arithmatex">\(r_i\)</span>), the accumulated rotation is
+absorbed into the reference orientation:</p>
+<div class="arithmatex">\[
+\mathbf{U}_0^{(i+1)}
+= \mathbf{R}\!\left(\delta\boldsymbol{\omega}^{(i)}\right)\,\mathbf{U}_0^{(i)}
+\]</div>
+<p>and the strain parameters are <strong>reset to zero</strong> for stage <span class="arithmatex">\(i+1\)</span> (tighter
+tolerance <span class="arithmatex">\(r_{i+1} &lt; r_i\)</span>).  This means that at the final stage the strain
+<span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span> is always measured relative to the cumulatively
+rotated but <strong>unstrained</strong> reference structure, and cannot accumulate
+compounding linearisation errors across stages.</p>
+<h3 id="residual-construction">Residual construction<a class="headerlink" href="#residual-construction" title="Permanent link">&para;</a></h3>
+<p>Both methods minimise <strong>pixel-space</strong> residuals between simulated and observed
+spot positions.  The differences are in how unmatched spots are handled:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>LaueTools</th>
+<th><code>nrxrdct</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Matching criterion</td>
+<td>Angular tolerance (degrees)</td>
+<td>Pixel-radius threshold <code>max_match_px</code></td>
+</tr>
+<tr>
+<td>Unmatched spot penalty</td>
+<td>Spot excluded from residuals</td>
+<td>Residual set to exactly <span class="arithmatex">\(\pm r_\text{max}\)</span> (Hungarian penalty)</td>
+</tr>
+<tr>
+<td>Hydrostatic sensitivity</td>
+<td>Not enforced</td>
+<td>Not enforced</td>
+</tr>
+</tbody>
+</table>
+<p>Both approaches are <strong>insensitive to hydrostatic strain</strong> for the physical
+reason described above: a uniform dilation leaves all spot positions invariant.
+Neither software enforces the deviatoric constraint <span class="arithmatex">\(\operatorname{tr}(\boldsymbol{\varepsilon}) = 0\)</span>;
+instead, the hydrostatic component floats freely and is absorbed partly into
+the fitted rotation increment and partly into the unconstrained trace of the
+strain tensor.</p>
+<h3 id="reading-lauetools-results-into-nrxrdct">Reading LaueTools results into <code>nrxrdct</code><a class="headerlink" href="#reading-lauetools-results-into-nrxrdct" title="Permanent link">&para;</a></h3>
+<p>Because <code>nrxrdct</code> uses the LaueTools lab frame and <span class="arithmatex">\(2\pi\)</span>-scaled reciprocal
+vectors internally, the interoperability functions handle the two frame and
+scaling differences automatically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># matstarlab: LaueTools grain matrix (LT2/OR frame, no 2π)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">U</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">eps_voigt</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># U  — pure rotation (use in simulate_laue for rotation-only simulation)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># F  — full deformation gradient (use in simulate_laue to include strain)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># eps — small-strain tensor in the crystal frame,  ε = P − I  (exact)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># eps_voigt — [ε_xx, ε_yy, ε_zz, ε_yz, ε_xz, ε_xy]</span>
+</code></pre></div>
+<p><code>decompose_matstarlab</code> uses the exact polar decomposition (same as LaueTools),
+so <code>eps</code> here is directly comparable to the strain output of LaueTools'
+<code>fitorient</code> module.</p>
+<h3 id="comparing-lauetools-and-nrxrdct-strain-maps-on-a-grainmap">Comparing LaueTools and <code>nrxrdct</code> strain maps on a <code>GrainMap</code><a class="headerlink" href="#comparing-lauetools-and-nrxrdct-strain-maps-on-a-grainmap" title="Permanent link">&para;</a></h3>
+<h4 id="voigt-ordering-mismatch-always-compare-via-the-33-tensor">Voigt ordering mismatch — always compare via the 3×3 tensor<a class="headerlink" href="#voigt-ordering-mismatch-always-compare-via-the-33-tensor" title="Permanent link">&para;</a></h4>
+<p>The Voigt component order differs between the two outputs:</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Voigt order</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>StrainFitResult.strain_voigt</code> / <code>gmap.strain_voigt</code></td>
+<td><span class="arithmatex">\([\varepsilon_{xx}, \varepsilon_{yy}, \varepsilon_{zz}, \varepsilon_{xy}, \varepsilon_{xz}, \varepsilon_{yz}]\)</span></td>
+</tr>
+<tr>
+<td><code>decompose_matstarlab</code> <code>eps_voigt</code></td>
+<td><span class="arithmatex">\([\varepsilon_{xx}, \varepsilon_{yy}, \varepsilon_{zz}, \varepsilon_{yz}, \varepsilon_{xz}, \varepsilon_{xy}]\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>Never compare the Voigt vectors element-by-element. Always work through the 3×3
+<code>strain_tensor</code>.</p>
+<h4 id="the-deviatoric-field">The deviatoric field<a class="headerlink" href="#the-deviatoric-field" title="Permanent link">&para;</a></h4>
+<p>Because white-beam Laue is insensitive to hydrostatic strain, the only quantity
+that is robustly comparable between the two methods is the <strong>deviatoric strain</strong>:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_\text{dev}
+= \boldsymbol{\varepsilon} - \frac{\operatorname{tr}(\boldsymbol{\varepsilon})}{3}\,\mathbf{I}
+\]</div>
+<p><code>GrainMap</code> stores this automatically in <code>strain_tensor_deviatoric</code>
+(shape <code>(n_grains, ny, nx, 3, 3)</code>, crystal frame), derived from <code>strain_tensor</code>
+whenever strain results are stored or loaded.</p>
+<h4 id="practical-comparison-workflow">Practical comparison workflow<a class="headerlink" href="#practical-comparison-workflow" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_strain_orientation</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># 1. Convert a LaueTools matstarlab to strain</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">U_lt</span><span class="p">,</span> <span class="n">F_lt</span><span class="p">,</span> <span class="n">eps_lt</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">eps_dev_lt</span> <span class="o">=</span> <span class="n">eps_lt</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">eps_lt</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># 2. Run nrxrdct fitter from the same starting orientation</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_strain_orientation</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span> <span class="n">U0</span><span class="o">=</span><span class="n">U_lt</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># 3. Compare deviatoric tensors (should agree within fit uncertainty)</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">diff</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">eps_dev_lt</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Max |Δε_dev|:&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># 4. On a full GrainMap, access the stored deviatoric field</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="c1">#    gmap.strain_tensor_deviatoric has shape (n_grains, ny, nx, 3, 3)</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">eps_dev_map</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">strain_tensor_deviatoric</span><span class="p">[</span><span class="n">grain_idx</span><span class="p">]</span>   <span class="c1"># (ny, nx, 3, 3)</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="n">e_dev_zz</span>    <span class="o">=</span> <span class="n">eps_dev_map</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>                     <span class="c1"># (ny, nx)  zz component</span>
+</code></pre></div>
+<h4 id="what-to-expect">What to expect<a class="headerlink" href="#what-to-expect" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Should agree?</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strain_tensor_deviatoric</code></td>
+<td>Yes, within fit uncertainty</td>
+<td>Both methods are sensitive to the same 5 deviatoric DOFs</td>
+</tr>
+<tr>
+<td>Shear components <span class="arithmatex">\(\varepsilon_{xy}\)</span>, <span class="arithmatex">\(\varepsilon_{xz}\)</span>, <span class="arithmatex">\(\varepsilon_{yz}\)</span></td>
+<td>Yes</td>
+<td>Purely deviatoric</td>
+</tr>
+<tr>
+<td>Individual normal strains <span class="arithmatex">\(\varepsilon_{xx}\)</span>, <span class="arithmatex">\(\varepsilon_{yy}\)</span>, <span class="arithmatex">\(\varepsilon_{zz}\)</span></td>
+<td>Only their <em>differences</em></td>
+<td>Each mixes deviatoric + hydrostatic</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\operatorname{tr}(\boldsymbol{\varepsilon})\)</span></td>
+<td>No</td>
+<td>Unobservable from Laue; absorbs noise differently in each method</td>
+</tr>
+</tbody>
+</table>
+<p>Residual disagreement in the deviatoric part after accounting for the above
+typically points to one of: different matched spot sets, different convergence
+basins due to differing tolerance strategies, or a misaligned starting
+orientation.</p>
+<h3 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>LaueTools</th>
+<th><code>nrxrdct</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Optimisation variables</td>
+<td>Full <span class="arithmatex">\(3\times3\)</span> UB (9 DOF)</td>
+<td><span class="arithmatex">\(\delta\boldsymbol{\omega}\)</span> (3) + selected <span class="arithmatex">\(\varepsilon\)</span> components (up to 6)</td>
+</tr>
+<tr>
+<td>Strain extraction</td>
+<td>Post-hoc polar decomposition — exact</td>
+<td>Small-strain model <span class="arithmatex">\((\mathbf{I}+\boldsymbol{\varepsilon})\)</span> — valid for <span class="arithmatex">\(\|\boldsymbol{\varepsilon}\| \lesssim 10^{-3}\)</span></td>
+</tr>
+<tr>
+<td>Symmetry constraints</td>
+<td>Via lattice-parameter constraints</td>
+<td>Via <code>fit_strain</code> subset selection</td>
+</tr>
+<tr>
+<td>Matching tolerance</td>
+<td>Angular (degrees)</td>
+<td>Pixel radius (<code>max_match_px</code>)</td>
+</tr>
+<tr>
+<td>Unmatched spots</td>
+<td>Excluded</td>
+<td>Penalised at <span class="arithmatex">\(r_\text{max}\)</span></td>
+</tr>
+<tr>
+<td>Staged refinement</td>
+<td>Angular threshold coarsening</td>
+<td>Pixel threshold coarsening + rotation bake-in</td>
+</tr>
+<tr>
+<td>Hydrostatic constraint</td>
+<td>Not enforced</td>
+<td>Not enforced</td>
+</tr>
+</tbody>
+</table>
               
             </div>
           </div><footer>

@@ -62,6 +62,18 @@
     </li>
         </ul>
     </li>
+    <li class="toctree-l2"><a class="reference internal" href="#optional-dependencies">Optional dependencies</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#laue-extras-orix">Laue extras (orix)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#gsas-ii">GSAS-II</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#astra-toolbox">ASTRA Toolbox</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#other-optional-packages">Other optional packages</a>
+    </li>
+        </ul>
+    </li>
     <li class="toctree-l2"><a class="reference internal" href="#building-the-documentation-locally">Building the documentation locally</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#dependencies">Dependencies</a>
@@ -95,6 +107,8 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_segmentation/">Spot Segmentation</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../user-guide/laue_strain/">Strain Analysis</a>
@@ -114,6 +128,8 @@
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
                   <li class="toctree-l1"><a class="reference internal" href="../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../api/powder/">powder</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
     <ul>
@@ -280,10 +296,94 @@
 <p class="admonition-title">Tip</p>
 <p>Run these commands with the virtual environment that contains <code>nrxrdct</code> already activated, so the registered kernel points to the correct Python interpreter.</p>
 </div>
+<h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h2>
+<h3 id="laue-extras-orix">Laue extras (<code>orix</code>)<a class="headerlink" href="#laue-extras-orix" title="Permanent link">&para;</a></h3>
+<p>The <code>nrxrdct.laue</code> subpackage uses <a href="https://orix.readthedocs.io/">orix</a> for IPF colour-key rendering and orientation symmetry reduction.  It is declared as an optional extra so it is not installed by default.</p>
+<p><strong>With <code>uv</code>:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>laue
+</code></pre></div>
+<p><strong>With <code>pip</code>:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nrxrdct[laue]&quot;</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># or, inside an already-activated environment:</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;orix&gt;=0.11&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="gsas-ii">GSAS-II<a class="headerlink" href="#gsas-ii" title="Permanent link">&para;</a></h3>
+<p>GSAS-II is not on PyPI and must be installed separately.  The recommended method is <strong>conda</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>gsas2pkg
+</code></pre></div>
+<p>This installs GSAS-II and registers <code>GSASIIscriptable</code> on the Python path automatically.</p>
+<p>If you are using a <code>uv</code>-managed environment alongside a conda base, you can instead point Python at the GSAS-II source tree by adding it to <code>PYTHONPATH</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Clone the GSAS-II source (one-time setup)</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/AdvancedPhotonSource/GSAS-II.git<span class="w"> </span>~/gsas2
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Add to PYTHONPATH in your shell profile (or prepend it per-session)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/gsas2:</span><span class="nv">$PYTHONPATH</span><span class="s2">&quot;</span>
+</code></pre></div>
+<p>Verify the installation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">GSASIIscriptable</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">G2sc</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">G2sc</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>GSAS-II requires a compiled binary (<code>constrDict.so</code> / <code>.pyd</code>) for some refinement operations.  The conda package builds this automatically; the git-clone approach may require running <code>python setup.py build_ext --inplace</code> inside the GSAS-II directory.</p>
+</div>
+<hr />
+<h3 id="astra-toolbox">ASTRA Toolbox<a class="headerlink" href="#astra-toolbox" title="Permanent link">&para;</a></h3>
+<p>ASTRA provides GPU-accelerated (CUDA) and CPU tomographic reconstruction algorithms.</p>
+<p><strong>With conda (recommended — includes CUDA support):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>astra-toolbox<span class="w"> </span>astra-toolbox
+</code></pre></div>
+<p><strong>With pip (CPU-only build):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span>astra-toolbox
+</code></pre></div>
+<p>Verify GPU access:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">astra</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">astra</span><span class="o">.</span><span class="n">get_gpu_info</span><span class="p">())</span>
+</code></pre></div>
+<p>GPU algorithms (<code>SART_CUDA</code>, <code>SIRT3D_CUDA</code>, <code>CGLS3D_CUDA</code>) require an NVIDIA GPU with CUDA drivers installed.  <code>nrxrdct</code> falls back to CPU automatically when no GPU is found.</p>
+<hr />
+<h3 id="other-optional-packages">Other optional packages<a class="headerlink" href="#other-optional-packages" title="Permanent link">&para;</a></h3>
+<p>These are all available on PyPI and can be installed with <code>uv add</code> or <code>pip install</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Install command</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fabio</code></td>
+<td><code>pip install fabio</code></td>
+<td>Reading <code>.edf</code> / <code>.cbf</code> mask files in <code>azimuthal.integration</code></td>
+</tr>
+<tr>
+<td><code>hdf5plugin</code></td>
+<td><code>pip install hdf5plugin</code></td>
+<td>Reading Bitshuffle/LZ4-compressed HDF5 datasets in <code>xrdct</code></td>
+</tr>
+<tr>
+<td><code>napari</code></td>
+<td><code>pip install "napari[all]"</code></td>
+<td>Interactive 3-D volume viewer in <code>xrdct.visualization</code></td>
+</tr>
+<tr>
+<td><code>ipywidgets</code></td>
+<td><code>pip install ipywidgets</code></td>
+<td>Interactive Jupyter widgets in <code>laue.interactive</code></td>
+</tr>
+</tbody>
+</table>
+<p>With <code>uv</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>uv<span class="w"> </span>add<span class="w"> </span>fabio<span class="w"> </span>hdf5plugin<span class="w"> </span><span class="s2">&quot;napari[all]&quot;</span><span class="w"> </span>ipywidgets
+</code></pre></div>
+<hr />
 <h2 id="building-the-documentation-locally">Building the documentation locally<a class="headerlink" href="#building-the-documentation-locally" title="Permanent link">&para;</a></h2>
 <p>Install the docs extras and serve:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>docs
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>docs
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
 </code></pre></div>
 <p>Then open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>.</p>
 <hr />

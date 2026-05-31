@@ -69,6 +69,8 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_segmentation/">Spot Segmentation</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
@@ -88,6 +90,8 @@
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul class="current">
                   <li class="toctree-l1"><a class="reference internal" href="../utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">powder</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
     <ul>
@@ -220,7 +224,7 @@
     <div class="doc doc-contents first">
 
         <p>Single-peak fitting utilities for 1-D XRD diffraction patterns.</p>
-<p>The background is estimated first with :func:<code>~nrxrdct.utils.calculate_xrd_baseline</code>
+<p>The background is estimated first with :func:<code>~nrxrdct.powder.calculate_xrd_baseline</code>
 (powered by <code>pybaselines</code>), then a Gaussian, Lorentzian, Voigt, or pseudo-Voigt
 profile is fitted to the background-subtracted data using
 :func:<code>scipy.optimize.curve_fit</code>.</p>
@@ -445,7 +449,7 @@ fit_peak_from_file(xy_file, center, window, model, bg_method, bg_kwargs)
     <div class="doc doc-contents ">
 
         <p>Fit a single diffraction peak within a 2θ window.</p>
-<p>The background is estimated with :func:<code>~nrxrdct.utils.calculate_xrd_baseline</code>
+<p>The background is estimated with :func:<code>~nrxrdct.powder.calculate_xrd_baseline</code>
 on the windowed data before fitting, so no prior background subtraction is
 required.</p>
 
@@ -511,7 +515,7 @@ required.</p>
               –
               <div class="doc-md-description">
                 <p>Background algorithm forwarded to
-:func:<code>~nrxrdct.utils.calculate_xrd_baseline</code>.  Supported values:
+:func:<code>~nrxrdct.powder.calculate_xrd_baseline</code>.  Supported values:
 <code>"snip"</code> (default, fast), <code>"iasls"</code>, <code>"aspls"</code>,
 <code>"arpls"</code>, <code>"mor"</code>.</p>
               </div>
@@ -882,7 +886,7 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">    Fit a single diffraction peak within a 2θ window.</span>
 <a id="__codelineno-0-114" name="__codelineno-0-114"></a>
-<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">    The background is estimated with :func:`~nrxrdct.utils.calculate_xrd_baseline`</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">    The background is estimated with :func:`~nrxrdct.powder.calculate_xrd_baseline`</span>
 <a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">    on the windowed data before fitting, so no prior background subtraction is</span>
 <a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">    required.</span>
 <a id="__codelineno-0-118" name="__codelineno-0-118"></a>
@@ -894,7 +898,7 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">        model (str): Peak profile – ``&quot;gaussian&quot;``, ``&quot;lorentzian&quot;``,</span>
 <a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">            ``&quot;voigt&quot;``, or ``&quot;pseudo_voigt&quot;`` (default).</span>
 <a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">        bg_method (str): Background algorithm forwarded to</span>
-<a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">            :func:`~nrxrdct.utils.calculate_xrd_baseline`.  Supported values:</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">            :func:`~nrxrdct.powder.calculate_xrd_baseline`.  Supported values:</span>
 <a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            ``&quot;snip&quot;`` (default, fast), ``&quot;iasls&quot;``, ``&quot;aspls&quot;``,</span>
 <a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">            ``&quot;arpls&quot;``, ``&quot;mor&quot;``.</span>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        bg_kwargs (dict or None): Extra keyword arguments for the background</span>

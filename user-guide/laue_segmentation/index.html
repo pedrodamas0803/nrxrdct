@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Spot Segmentation - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Spot Segmentation";
+        var mkdocs_page_input_path = "user-guide/laue_segmentation.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Spot Segmentation</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-overview">1. Overview</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-segmentation-methods">2. Segmentation methods</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#21-log-laplacian-of-gaussian">2.1 LoG — Laplacian-of-Gaussian</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#22-wth-white-top-hat">2.2 WTH — White Top-Hat</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#23-hybrid-log-wth-union">2.3 HYBRID — LoG + WTH union</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-cleaning-parameters">3. Cleaning parameters</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-background-subtraction">4. Background subtraction</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-spot-fitting-and-hdf5-output">5. Spot fitting and HDF5 output</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-using-grainmapsubmit_segmentation">6. Using GrainMap.submit_segmentation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-reading-results">7. Reading results</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-choosing-parameters">8. Choosing parameters</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#method-selection">Method selection</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#threshold-percentile">Threshold percentile</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#background-sigma">Background sigma</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#fitting-vs-centroid-only">Fitting vs centroid-only</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Spot Segmentation</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_segmentation.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="spot-segmentation">Spot Segmentation<a class="headerlink" href="#spot-segmentation" title="Permanent link">&para;</a></h1>
+<p>This page describes how <code>nrxrdct</code> converts raw Laue detector frames into
+detected spot lists, the three available segmentation algorithms, their
+key parameters, and how to choose among them.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: a calibrated <code>Camera</code> object and a stack of raw detector
+frames.  See <a href="../laue_theory/">Diffraction and Laue Theory</a> for the detector
+geometry setup.</p>
+</blockquote>
+<hr />
+<h2 id="1-overview">1. Overview<a class="headerlink" href="#1-overview" title="Permanent link">&para;</a></h2>
+<p>Each Laue detector frame is a 2-D image containing up to hundreds of
+diffraction spots on top of fluorescence background, parasitic scattering, and
+detector noise.  The segmentation step converts this image into a list of
+sub-pixel peak positions (plus shape parameters) that can be passed to the
+orientation indexer.</p>
+<p>The pipeline for a single frame is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Raw frame
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ▼  gaussian_background()   — FFT-based smooth background estimate
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    ▼  frame − background      — spot-only residual
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    ▼  segmentation method     — binary mask of candidate spot pixels
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    ▼  clean_segmentation()    — size filter, gap exclusion, border removal
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ▼  label_segmented_image() — connected-component labelling
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    ▼  write_h5_spotsfile()    — Gaussian fitting + HDF5 output
+</code></pre></div>
+<p>At the <code>GrainMap</code> level this pipeline is distributed across SLURM nodes
+(via <code>GrainMap.submit_segmentation</code>) or run locally on multiple CPU cores
+(via <code>run_segmentation_local</code>).</p>
+<hr />
+<h2 id="2-segmentation-methods">2. Segmentation methods<a class="headerlink" href="#2-segmentation-methods" title="Permanent link">&para;</a></h2>
+<p>All three methods share the same signature:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">mask</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">detector_mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># → (Nv, Nh) bool array</span>
+</code></pre></div>
+<p>They all begin with a <code>log1p</code> transform and intensity normalisation so their
+responses are approximately gain-independent.</p>
+<h3 id="21-log-laplacian-of-gaussian">2.1 LoG — Laplacian-of-Gaussian<a class="headerlink" href="#21-log-laplacian-of-gaussian" title="Permanent link">&para;</a></h3>
+<p><code>LoG_segmentation(image, mask, sigmas, threshold_percentile)</code></p>
+<p>The <strong>Laplacian-of-Gaussian</strong> acts as a band-pass blob detector.  It responds
+strongly to bright compact objects whose spatial scale matches the filter width:</p>
+<div class="arithmatex">\[
+\text{response} = -\nabla^2 G_\sigma * I
+\]</div>
+<p>A local maximum of the response marks the centre of a spot with radius
+<span class="arithmatex">\(r \approx \sqrt{2}\,\sigma\)</span>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sigmas</code></td>
+<td>float or list</td>
+<td>Gaussian σ in pixels. Match to the expected spot radius: σ ≈ FWHM / 2.35. Pass a list for multi-scale detection.</td>
+</tr>
+<tr>
+<td><code>threshold_percentile</code></td>
+<td>float</td>
+<td>Percentile of the LoG response (within the valid mask) used as the binary threshold. Default <code>99.9</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use</strong>: round or weakly elongated spots of approximately known size.
+Multi-scale LoG (list of sigmas) handles frames where spot size varies.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoG_segmentation</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">mask</span> <span class="o">=</span> <span class="n">LoG_segmentation</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">detector_mask</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">sigmas</span><span class="o">=</span><span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">],</span>      <span class="c1"># three scales in pixels</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">threshold_percentile</span><span class="o">=</span><span class="mf">99.8</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h3 id="22-wth-white-top-hat">2.2 WTH — White Top-Hat<a class="headerlink" href="#22-wth-white-top-hat" title="Permanent link">&para;</a></h3>
+<p><code>WTH_segmentation(image, mask, disk_radius, threshold_percentile)</code></p>
+<p>The <strong>white top-hat</strong> transform removes slowly varying background while
+keeping compact bright features:</p>
+<div class="arithmatex">\[
+\text{WTH}(I) = I - \text{opening}(I, \text{disk}_r)
+\]</div>
+<p>Any structure wider than <code>disk_radius</code> pixels is suppressed; structures
+smaller than the disk appear unmodified.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>disk_radius</code></td>
+<td>int or list</td>
+<td>Radius of the disk structuring element in pixels. Each radius should be slightly larger than the largest expected spot. Pass a list for multi-scale detection. Default <code>7</code>.</td>
+</tr>
+<tr>
+<td><code>threshold_percentile</code></td>
+<td>float</td>
+<td>Percentile of the WTH response used as the binary threshold. Default <code>99.9</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use</strong>: spots sitting on a strong, uneven background (e.g.
+fluorescence halos, detector module roll-off).  Also works well for elongated
+or asymmetric spots that LoG tends to under-detect.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">WTH_segmentation</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">mask</span> <span class="o">=</span> <span class="n">WTH_segmentation</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">detector_mask</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">disk_radius</span><span class="o">=</span><span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">9</span><span class="p">],</span>           <span class="c1"># two scales</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">threshold_percentile</span><span class="o">=</span><span class="mf">99.9</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h3 id="23-hybrid-log-wth-union">2.3 HYBRID — LoG + WTH union<a class="headerlink" href="#23-hybrid-log-wth-union" title="Permanent link">&para;</a></h3>
+<p><code>hybrid_segmentation(image, mask, log_sigmas, wth_disk_radius, threshold_percentile)</code></p>
+<p>Runs LoG and WTH concurrently (all scales in one <code>ThreadPoolExecutor</code>),
+thresholds each family independently at <code>threshold_percentile</code>, then
+combines the two binary masks with a logical OR.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>log_sigmas</code></td>
+<td>float or list</td>
+<td>Sigma(s) for the LoG family. Default <code>[2, 4, 8]</code>.</td>
+</tr>
+<tr>
+<td><code>wth_disk_radius</code></td>
+<td>int or list</td>
+<td>Disk radius/radii for the WTH family. Default <code>[5, 7]</code>.</td>
+</tr>
+<tr>
+<td><code>threshold_percentile</code></td>
+<td>float</td>
+<td>Applied independently to each family. Default <code>99.9</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use</strong>: frames that contain a mix of round and elongated/sharp
+spots, or when either method alone leaves significant false negatives.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">hybrid_segmentation</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">mask</span> <span class="o">=</span> <span class="n">hybrid_segmentation</span><span class="p">(</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">detector_mask</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">log_sigmas</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">wth_disk_radius</span><span class="o">=</span><span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">],</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">threshold_percentile</span><span class="o">=</span><span class="mf">99.85</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="3-cleaning-parameters">3. Cleaning parameters<a class="headerlink" href="#3-cleaning-parameters" title="Permanent link">&para;</a></h2>
+<p>After segmentation, <code>clean_segmentation</code> post-processes the binary mask:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_size</code></td>
+<td><code>3</code></td>
+<td>Minimum spot area in pixels. Objects smaller than this are discarded as noise.</td>
+</tr>
+<tr>
+<td><code>max_size</code></td>
+<td><code>500</code></td>
+<td>Maximum spot area in pixels. Objects larger than this (artefacts, beam-stop shadow) are discarded.</td>
+</tr>
+<tr>
+<td><code>gap_exclude</code></td>
+<td><code>3</code></td>
+<td>Dilation radius (pixels) around detector gaps. Spots that overlap this zone are removed to avoid bad centroid positions.</td>
+</tr>
+<tr>
+<td><code>gap_closing</code></td>
+<td><code>3</code></td>
+<td>Closing radius applied to the valid-pixel mask before the gap dilation. Fills isolated dead pixels so spots near single bad pixels are not incorrectly discarded. Set to <code>0</code> to disable.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-background-subtraction">4. Background subtraction<a class="headerlink" href="#4-background-subtraction" title="Permanent link">&para;</a></h2>
+<p><code>gaussian_background(image, valid_mask, sigma=251)</code></p>
+<p>Estimates and removes the slowly varying background (fluorescence, parasitic
+scattering) using an FFT-based large-sigma Gaussian:</p>
+<div class="arithmatex">\[
+\text{background}(x,y) = \frac{(G_\sigma * W \cdot I)(x,y)}{(G_\sigma * W)(x,y)}
+\]</div>
+<p>where <span class="arithmatex">\(W\)</span> is the valid-pixel mask.  The normalisation by the smoothed mask
+ensures correct handling of detector gaps without boundary artefacts.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sigma</code></td>
+<td><code>251</code></td>
+<td>Gaussian width in pixels. Should be large enough that the background varies slowly on this scale but the kernel does not wash out spot signals — typically 5–20 × the typical spot size.</td>
+</tr>
+</tbody>
+</table>
+<p>The FFT-based implementation (<code>scipy.fft</code>) makes large sigma values
+computationally cheap (runtime scales as <span class="arithmatex">\(O(N\log N)\)</span>, independent of sigma).</p>
+<hr />
+<h2 id="5-spot-fitting-and-hdf5-output">5. Spot fitting and HDF5 output<a class="headerlink" href="#5-spot-fitting-and-hdf5-output" title="Permanent link">&para;</a></h2>
+<p>After cleaning, each connected component is fitted with a mixture of rotated
+2-D Gaussians:</p>
+<div class="arithmatex">\[
+I(x,y) = \sum_{k=1}^{n} A_k \exp\!\left(-\frac{1}{2} (\mathbf{r} - \mathbf{r}_{0,k})^T \boldsymbol{\Sigma}_k^{-1} (\mathbf{r} - \mathbf{r}_{0,k})\right) + C
+\]</div>
+<p><code>write_h5_spotsfile</code> controls the fitting via two parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_components</code></td>
+<td><code>1</code></td>
+<td>Maximum number of Gaussian components to try. Fitting is attempted with 1, 2, … components; the first model that reaches <code>r_squared_min</code> is accepted.</td>
+</tr>
+<tr>
+<td><code>r_squared_min</code></td>
+<td><code>0.9</code></td>
+<td>Minimum R² for a fit to be considered successful. Spots that do not reach this threshold are either stored as unfitted (<code>include_unfitted=True</code>) or skipped (<code>False</code>).</td>
+</tr>
+<tr>
+<td><code>d</code></td>
+<td><code>10</code></td>
+<td>Half-size of the ROI cropped around each spot centroid (pixels).</td>
+</tr>
+<tr>
+<td><code>fit_spots</code></td>
+<td><code>True</code></td>
+<td>Set to <code>False</code> to skip Gaussian fitting entirely and store only the weighted centroid from <code>regionprops</code>. Much faster; sufficient for orientation indexing when shape is not needed.</td>
+</tr>
+<tr>
+<td><code>include_unfitted</code></td>
+<td><code>True</code></td>
+<td>Whether to write spots whose best fit did not reach <code>r_squared_min</code>. Their positions come from the heuristic initialisation, not a converged fit.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-using-grainmapsubmit_segmentation">6. Using <code>GrainMap.submit_segmentation</code><a class="headerlink" href="#6-using-grainmapsubmit_segmentation" title="Permanent link">&para;</a></h2>
+<p>The recommended way to run segmentation at scale is through the <code>GrainMap</code>
+SLURM pipeline:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrainMap</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">gmap</span> <span class="o">=</span> <span class="n">GrainMap</span><span class="p">(</span><span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span> <span class="n">map_shape</span><span class="o">=</span><span class="p">(</span><span class="n">ny</span><span class="p">,</span> <span class="n">nx</span><span class="p">))</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">gmap</span><span class="o">.</span><span class="n">submit_segmentation</span><span class="p">(</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">h5_path</span><span class="o">=</span><span class="s2">&quot;data/scan.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">h5_dataset</span><span class="o">=</span><span class="s2">&quot;entry/eiger/data&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">seg_dir</span><span class="o">=</span><span class="s2">&quot;seg/&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="c1"># ── detector ──────────────────────────────────────</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">mask_path</span><span class="o">=</span><span class="s2">&quot;mask.npy&quot;</span><span class="p">,</span>          <span class="c1"># bool array, True = valid pixel</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="c1"># ── background ────────────────────────────────────</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">bg_sigma</span><span class="o">=</span><span class="mi">251</span><span class="p">,</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="c1"># ── segmentation method ───────────────────────────</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;LoG&quot;</span><span class="p">,</span>                  <span class="c1"># &quot;LoG&quot; | &quot;WTH&quot; | &quot;HYBRID&quot;</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">method_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sigmas&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span> <span class="s2">&quot;threshold_percentile&quot;</span><span class="p">:</span> <span class="mf">99.9</span><span class="p">},</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="c1"># ── cleaning ──────────────────────────────────────</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">min_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="n">max_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>    <span class="n">gap_exclude</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="n">gap_closing</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>    <span class="c1"># ── spot fitting ──────────────────────────────────</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">fit_spots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                <span class="c1"># False = centroid only (faster)</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">max_components</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="n">d</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>    <span class="c1"># ── SLURM ─────────────────────────────────────────</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>    <span class="n">n_jobs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>    <span class="n">frames_per_job</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="n">slurm_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;mem&quot;</span><span class="p">:</span> <span class="s2">&quot;8G&quot;</span><span class="p">,</span> <span class="s2">&quot;time&quot;</span><span class="p">:</span> <span class="s2">&quot;01:00:00&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="p">)</span>
+</code></pre></div>
+<p>Each SLURM job processes a subset of frames and writes one
+<code>seg/frame_{idx:05d}.h5</code> file per frame.</p>
+<hr />
+<h2 id="7-reading-results">7. Reading results<a class="headerlink" href="#7-reading-results" title="Permanent link">&para;</a></h2>
+<p>Convert the per-frame HDF5 files to peak lists for orientation fitting:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">convert_spotsfile2peaklist</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Single frame — returns (N, 9) array sorted by peak intensity</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">pl</span> <span class="o">=</span> <span class="n">convert_spotsfile2peaklist</span><span class="p">(</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="s2">&quot;seg/frame_00100.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">r_squared_min</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>       <span class="c1"># only well-fitted spots</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">include_unfitted</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Columns: peak_X, peak_Y, peak_I, fwaxmaj, fwaxmin,</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1">#          inclination, Xdev, Ydev, peak_bkg</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">xy</span> <span class="o">=</span> <span class="n">pl</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span>   <span class="c1"># (N, 2) pixel coordinates for orientation fitting</span>
+</code></pre></div>
+<p><code>GrainMap</code> reads these files automatically during
+<code>submit_orientation</code> / <code>submit_orientation_mixed</code>.</p>
+<hr />
+<h2 id="8-choosing-parameters">8. Choosing parameters<a class="headerlink" href="#8-choosing-parameters" title="Permanent link">&para;</a></h2>
+<h3 id="method-selection">Method selection<a class="headerlink" href="#method-selection" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Start with LoG</strong> using a scalar <code>sigmas</code> roughly equal to the typical
+   spot half-width (pixels).  Inspect a representative frame.</li>
+<li>If many spots are missed due to uneven background, switch to <strong>WTH</strong>
+   with <code>disk_radius</code> set slightly larger than the largest spot.</li>
+<li>Use <strong>HYBRID</strong> when spots vary widely in morphology or when either method
+   alone misses a significant fraction.</li>
+</ol>
+<h3 id="threshold-percentile">Threshold percentile<a class="headerlink" href="#threshold-percentile" title="Permanent link">&para;</a></h3>
+<p><code>threshold_percentile=99.9</code> keeps the top 0.1% of response pixels — a good
+starting point for typical Laue maps.  If too many false positives appear
+(noise blobs passing <code>min_size</code>), raise towards <code>99.95–99.99</code>.  If faint
+spots are missed, lower to <code>99.5–99.8</code>.</p>
+<h3 id="background-sigma">Background sigma<a class="headerlink" href="#background-sigma" title="Permanent link">&para;</a></h3>
+<p>Set <code>bg_sigma</code> so that the Gaussian kernel is larger than the largest spot
+but small enough to follow the background envelope.  For a 2048×2048 detector
+with spots of 5–20 px, <code>bg_sigma=251</code> (≈ 250 pixels ≈ 12 % of the frame) is
+a reasonable default.  For smaller detectors or finer beam, scale accordingly.</p>
+<h3 id="fitting-vs-centroid-only">Fitting vs centroid-only<a class="headerlink" href="#fitting-vs-centroid-only" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Use case</th>
+<th>Recommended</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Orientation indexing only</td>
+<td><code>fit_spots=False</code> — 5–10× faster</td>
+</tr>
+<tr>
+<td>Strain analysis</td>
+<td><code>fit_spots=True</code>, <code>max_components=1</code></td>
+</tr>
+<tr>
+<td>Overlapping spots / multi-grain pixels</td>
+<td><code>fit_spots=True</code>, <code>max_components=2</code></td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_darwin/" class="btn btn-neutral float-left" title="Darwin Model (Thick Layers)"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_orientation_plotting/" class="btn btn-neutral float-right" title="Orientation Plotting">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_darwin/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_orientation_plotting/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -69,13 +69,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
                 </li>
                 <li class="toctree-l2 current"><a class="reference internal current" href="#">Elastic Stress from Strain Maps</a>
     <ul class="current">
-    <li class="toctree-l3"><a class="reference internal" href="#1-hookes-law">1. Hooke's law</a>
+    <li class="toctree-l3"><a class="reference internal" href="#1-hookes-law-and-the-laue-limitation">1. Hooke's law and the Laue limitation</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#what-laue-diffraction-can-and-cannot-access">What Laue diffraction can and cannot access</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#reliability-by-component">Reliability by component</a>
+    </li>
+        </ul>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#2-voigt-ordering-conventions">2. Voigt ordering conventions</a>
     </li>
@@ -87,17 +95,25 @@
     </li>
         </ul>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#4-stress_voigt-full-stress-map">4. stress_voigt — full stress map</a>
+    <li class="toctree-l3"><a class="reference internal" href="#4-stress_voigt-deviatoric-stress-map">4. stress_voigt — deviatoric stress map</a>
         <ul>
     <li class="toctree-l4"><a class="reference internal" href="#reference-frames">Reference frames</a>
     </li>
         </ul>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#5-plot_stress_component-single-component-map">5. plot_stress_component — single-component map</a>
+    <li class="toctree-l3"><a class="reference internal" href="#5-scalar-invariants-von-mises-stress-and-equivalent-strain">5. Scalar invariants — von Mises stress and equivalent strain</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#51-von-mises-stress">5.1 Von Mises stress</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#6-extracting-components-manually">6. Extracting components manually</a>
+    <li class="toctree-l4"><a class="reference internal" href="#52-von-mises-equivalent-strain">5.2 Von Mises equivalent strain</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#7-important-caveats">7. Important caveats</a>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-plot_stress_component-single-component-map">6. plot_stress_component — single-component map</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-extracting-components-manually">7. Extracting components manually</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-important-caveats">8. Important caveats</a>
         <ul>
     <li class="toctree-l4"><a class="reference internal" href="#hydrostatic-stress-is-unconstrained">Hydrostatic stress is unconstrained</a>
     </li>
@@ -107,7 +123,7 @@
     </li>
         </ul>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#8-complete-example">8. Complete example</a>
+    <li class="toctree-l3"><a class="reference internal" href="#9-complete-example">9. Complete example</a>
     </li>
     </ul>
                 </li>
@@ -124,6 +140,8 @@
               <p class="caption"><span class="caption-text">API Reference</span></p>
               <ul>
                   <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
     <ul>
@@ -237,18 +255,73 @@ transformations.</p>
 proceeding.  See <a href="../laue_strain/">Strain Analysis</a> for that workflow.</p>
 </blockquote>
 <hr />
-<h2 id="1-hookes-law">1. Hooke's law<a class="headerlink" href="#1-hookes-law" title="Permanent link">&para;</a></h2>
+<h2 id="1-hookes-law-and-the-laue-limitation">1. Hooke's law and the Laue limitation<a class="headerlink" href="#1-hookes-law-and-the-laue-limitation" title="Permanent link">&para;</a></h2>
 <p>In the linear-elastic regime the Cauchy stress tensor
 <span class="arithmatex">\(\boldsymbol{\sigma}\)</span> and the strain tensor <span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span> are
 related by the <strong>generalised Hooke's law</strong>:</p>
 <div class="arithmatex">\[
 \sigma_{ij} = C_{ijkl}\,\varepsilon_{kl}
 \]</div>
-<p>where <span class="arithmatex">\(C_{ijkl}\)</span> is the <strong>fourth-rank elastic stiffness tensor</strong> (24 independent
-components for the most general triclinic crystal; far fewer for higher
-symmetries).</p>
-<p>In <strong>Voigt notation</strong> the rank-4 tensor is reduced to a symmetric <span class="arithmatex">\(6\times6\)</span>
-matrix <span class="arithmatex">\(\mathbf{C}\)</span> and the law becomes a simple matrix–vector product:</p>
+<p>where <span class="arithmatex">\(C_{ijkl}\)</span> is the <strong>fourth-rank elastic stiffness tensor</strong>.</p>
+<h3 id="what-laue-diffraction-can-and-cannot-access">What Laue diffraction can and cannot access<a class="headerlink" href="#what-laue-diffraction-can-and-cannot-access" title="Permanent link">&para;</a></h3>
+<p>White-beam (polychromatic) Laue diffraction measures the <strong>directions</strong> of
+diffracted beams, not their wavelengths.  Spot positions are determined by the
+crystal orientation and the <em>shape</em> of the unit cell — how the lattice vectors
+tilt and shear relative to one another.  A uniform scaling of all d-spacings
+(i.e. a purely hydrostatic strain) leaves every spot angle unchanged and is
+therefore <strong>invisible</strong> to Laue.</p>
+<p>The full strain tensor decomposes as:</p>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon} = \boldsymbol{\varepsilon}_\text{dev}
+  + \underbrace{\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{hydrostatic — unobservable}}
+\]</div>
+<p>Only the <strong>deviatoric</strong> part <span class="arithmatex">\(\boldsymbol{\varepsilon}_\text{dev}\)</span> (traceless,
+five independent components) is reliably determined.  Consequently, the stress
+computed here is the <strong>deviatoric stress</strong>:</p>
+<div class="arithmatex">\[
+\boxed{\boldsymbol{\sigma}_\text{dev} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{dev}}
+\]</div>
+<p>The code uses <code>strain_tensor_deviatoric</code> (whose trace is exactly zero by
+construction) as input, so no hydrostatic contribution can enter through
+numerical drift in the fitted diagonal strains.</p>
+<h3 id="reliability-by-component">Reliability by component<a class="headerlink" href="#reliability-by-component" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Reliable?</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shear stresses <span class="arithmatex">\(\sigma_{xy}\)</span>, <span class="arithmatex">\(\sigma_{xz}\)</span>, <span class="arithmatex">\(\sigma_{yz}\)</span></td>
+<td><strong>Yes</strong></td>
+<td>Shear has no hydrostatic part</td>
+</tr>
+<tr>
+<td>Normal-stress <em>differences</em> e.g. <span class="arithmatex">\(\sigma_{xx}-\sigma_{zz}\)</span></td>
+<td><strong>Yes</strong></td>
+<td>Differences cancel the unknown pressure</td>
+</tr>
+<tr>
+<td>Von Mises stress <span class="arithmatex">\(\sigma_\text{VM}\)</span></td>
+<td><strong>Yes</strong></td>
+<td>Built from deviatoric stress only</td>
+</tr>
+<tr>
+<td>Individual normal stresses <span class="arithmatex">\(\sigma_{xx}\)</span>, <span class="arithmatex">\(\sigma_{yy}\)</span>, <span class="arithmatex">\(\sigma_{zz}\)</span></td>
+<td>Relative only</td>
+<td>Each carries the same unknown offset <span class="arithmatex">\(P\)</span></td>
+</tr>
+<tr>
+<td>Mean stress <span class="arithmatex">\(\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})\)</span></td>
+<td><strong>No</strong></td>
+<td>This <em>is</em> the unknown hydrostatic pressure</td>
+</tr>
+</tbody>
+</table>
+<p>In <strong>Voigt notation</strong> the law becomes a matrix–vector product:</p>
 <div class="arithmatex">\[
 \boldsymbol{\sigma}_V = \mathbf{C}\,\boldsymbol{\varepsilon}_V^{(\text{eng})}
 \]</div>
@@ -353,7 +426,7 @@ values, pass a <code>(6, 6)</code> array directly:</p>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cij</span><span class="o">=</span><span class="n">C_Fe</span><span class="p">)</span>
 </code></pre></div>
 <hr />
-<h2 id="4-stress_voigt-full-stress-map">4. <code>stress_voigt</code> — full stress map<a class="headerlink" href="#4-stress_voigt-full-stress-map" title="Permanent link">&para;</a></h2>
+<h2 id="4-stress_voigt-deviatoric-stress-map">4. <code>stress_voigt</code> — deviatoric stress map<a class="headerlink" href="#4-stress_voigt-deviatoric-stress-map" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">crystal</span><span class="p">,</span>           <span class="c1"># xrayutilities Crystal, or None if cij is given</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>   <span class="c1"># grain slot index</span>
@@ -365,6 +438,11 @@ values, pass a <code>(6, 6)</code> array directly:</p>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># sig shape: (ny, nx, 6)  —  GPa, code ordering [s_xx,s_yy,s_zz,s_xy,s_xz,s_yz]</span>
 </code></pre></div>
 <p><code>NaN</code> is returned at pixels where no strain data exist.</p>
+<p>The returned tensor is the <strong>deviatoric stress</strong> <span class="arithmatex">\(\mathbf{C}:\boldsymbol{\varepsilon}_\text{dev}\)</span>.
+Its trace is zero by construction; individual normal components
+(<span class="arithmatex">\(\sigma_{xx}\)</span>, <span class="arithmatex">\(\sigma_{yy}\)</span>, <span class="arithmatex">\(\sigma_{zz}\)</span>) are reliable only as
+<em>relative</em> values — they share an unknown hydrostatic offset equal to the
+true (inaccessible) pressure.</p>
 <h3 id="reference-frames">Reference frames<a class="headerlink" href="#reference-frames" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -392,18 +470,178 @@ values, pass a <code>(6, 6)</code> array directly:</p>
 rotation law.  See <a href="../laue_strain/#reference-frames">Strain Analysis — Reference frames</a>
 for the equivalent derivation for the strain tensor.</p>
 <hr />
-<h2 id="5-plot_stress_component-single-component-map">5. <code>plot_stress_component</code> — single-component map<a class="headerlink" href="#5-plot_stress_component-single-component-map" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">component</span><span class="o">=</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span>       <span class="c1"># one of s_xx, s_yy, s_zz, s_xy, s_xz, s_yz</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>              <span class="c1"># GPa → MPa (default)</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">,</span>          <span class="c1"># diverging map centred at zero</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">vmin</span><span class="o">=-</span><span class="mi">200</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>    <span class="c1"># MPa</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
+<h2 id="5-scalar-invariants-von-mises-stress-and-equivalent-strain">5. Scalar invariants — von Mises stress and equivalent strain<a class="headerlink" href="#5-scalar-invariants-von-mises-stress-and-equivalent-strain" title="Permanent link">&para;</a></h2>
+<p>Scalar invariants are the most reliable and interpretable quantities from Laue
+data.  They do not depend on the choice of reference frame (they are
+second-invariant scalars), and they are completely insensitive to the unknown
+hydrostatic component.</p>
+<h3 id="51-von-mises-stress">5.1 Von Mises stress<a class="headerlink" href="#51-von-mises-stress" title="Permanent link">&para;</a></h3>
+<h4 id="formulation">Formulation<a class="headerlink" href="#formulation" title="Permanent link">&para;</a></h4>
+<p>The <strong>von Mises stress</strong> (equivalent tensile stress) is built from the second
+invariant <span class="arithmatex">\(J_2\)</span> of the deviatoric stress tensor
+<span class="arithmatex">\(\mathbf{s} = \boldsymbol{\sigma}_\text{dev}\)</span>:</p>
+<div class="arithmatex">\[
+J_2 = \tfrac{1}{2}\,s_{ij}\,s_{ij}
+\qquad\Longrightarrow\qquad
+\sigma_\text{VM} = \sqrt{3\,J_2} = \sqrt{\tfrac{3}{2}\,s_{ij}\,s_{ij}}
+\]</div>
+<p>Expanded in Cartesian components:</p>
+<div class="arithmatex">\[
+\sigma_\text{VM}
+  = \sqrt{\tfrac{3}{2}(s_{xx}^2 + s_{yy}^2 + s_{zz}^2)
+          + 3\,(s_{xy}^2 + s_{xz}^2 + s_{yz}^2)}
+\]</div>
+<p>An equivalent, often more intuitive form expresses <span class="arithmatex">\(\sigma_\text{VM}\)</span> through
+<em>differences</em> of principal stresses <span class="arithmatex">\(\sigma_1,\sigma_2,\sigma_3\)</span>:</p>
+<div class="arithmatex">\[
+\sigma_\text{VM}
+  = \sqrt{\tfrac{1}{2}\bigl[(\sigma_1-\sigma_2)^2
+                           +(\sigma_2-\sigma_3)^2
+                           +(\sigma_3-\sigma_1)^2\bigr]}
+\]</div>
+<p>The hydrostatic pressure <span class="arithmatex">\(P\)</span> shifts all three principal stresses by the same
+amount and therefore cancels in every difference — confirming that
+<span class="arithmatex">\(\sigma_\text{VM}\)</span> is immune to the missing hydrostatic component.</p>
+<h4 id="why-it-is-unambiguous-for-laue-data">Why it is unambiguous for Laue data<a class="headerlink" href="#why-it-is-unambiguous-for-laue-data" title="Permanent link">&para;</a></h4>
+<p><code>stress_voigt</code> returns the purely deviatoric stress
+(<span class="arithmatex">\(\operatorname{tr}(\boldsymbol{\sigma})=0\)</span> by construction), so:</p>
+<div class="arithmatex">\[
+\sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev} + P\,\mathbf{I})
+  = \sigma_\text{VM}(\boldsymbol{\sigma}_\text{dev})
+\]</div>
+<p>for <em>any</em> value of the unknown <span class="arithmatex">\(P\)</span>.</p>
+<h4 id="physical-meaning">Physical meaning<a class="headerlink" href="#physical-meaning" title="Permanent link">&para;</a></h4>
+<p><span class="arithmatex">\(\sigma_\text{VM}\)</span> governs the onset of plastic yielding in the von Mises (J₂)
+criterion: yielding occurs when <span class="arithmatex">\(\sigma_\text{VM} \geq \sigma_Y\)</span> (uniaxial
+yield stress).  It provides a single-number measure of "how stressed" a grain
+is, independent of the reference frame.</p>
+<h4 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># (ny, nx) array, GPa</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">sigma_vm</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">von_mises_stress</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;max σ_VM = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">sigma_vm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MPa&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_von_mises_stress</span><span class="p">(</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>           <span class="c1"># GPa → MPa</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">,</span>      <span class="c1"># sequential — σ_VM ≥ 0</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h3 id="52-von-mises-equivalent-strain">5.2 Von Mises equivalent strain<a class="headerlink" href="#52-von-mises-equivalent-strain" title="Permanent link">&para;</a></h3>
+<h4 id="formulation_1">Formulation<a class="headerlink" href="#formulation_1" title="Permanent link">&para;</a></h4>
+<p>The <strong>equivalent strain</strong> <span class="arithmatex">\(\varepsilon_\text{eq}\)</span> (also called the effective
+strain) is the strain-space counterpart of <span class="arithmatex">\(\sigma_\text{VM}\)</span>, built from the
+second invariant of the deviatoric strain tensor
+<span class="arithmatex">\(\mathbf{e} = \boldsymbol{\varepsilon}_\text{dev}\)</span>:</p>
+<div class="arithmatex">\[
+\varepsilon_\text{eq}
+  = \sqrt{\tfrac{2}{3}\,e_{ij}\,e_{ij}}
+  = \sqrt{\tfrac{2}{3}(e_{xx}^2 + e_{yy}^2 + e_{zz}^2)
+          + \tfrac{4}{3}(e_{xy}^2 + e_{xz}^2 + e_{yz}^2)}
+\]</div>
+<p>The prefactor <span class="arithmatex">\(\tfrac{2}{3}\)</span> (versus <span class="arithmatex">\(\tfrac{3}{2}\)</span> for the stress) is the
+conventional normalisation that makes the two quantities <strong>work-conjugate</strong>:</p>
+<div class="arithmatex">\[
+\dot{w}_\text{plastic} = \boldsymbol{\sigma}_\text{dev} : \dot{\mathbf{e}}
+  = \sigma_\text{VM}\,\dot{\varepsilon}_\text{eq}
+\]</div>
+<p>and ensures that in uniaxial tension
+<span class="arithmatex">\(\varepsilon_\text{eq} = \varepsilon_{xx}\)</span> (the applied axial strain).</p>
+<p>An alternative form in terms of principal-strain differences
+<span class="arithmatex">\(\varepsilon_1,\varepsilon_2,\varepsilon_3\)</span>:</p>
+<div class="arithmatex">\[
+\varepsilon_\text{eq}
+  = \sqrt{\tfrac{2}{9}\bigl[(\varepsilon_1-\varepsilon_2)^2
+                            +(\varepsilon_2-\varepsilon_3)^2
+                            +(\varepsilon_3-\varepsilon_1)^2\bigr]
+          + \tfrac{2}{3}(\varepsilon_{12}^2+\varepsilon_{13}^2+\varepsilon_{23}^2)}
+\]</div>
+<p>Again, the hydrostatic component (mean strain <span class="arithmatex">\(\varepsilon_m\)</span>) cancels in every
+principal-strain difference.</p>
+<h4 id="why-it-is-unambiguous-for-laue-data_1">Why it is unambiguous for Laue data<a class="headerlink" href="#why-it-is-unambiguous-for-laue-data_1" title="Permanent link">&para;</a></h4>
+<p><span class="arithmatex">\(e_{ij}\,e_{ij}\)</span> is a scalar double contraction — it is <strong>frame-independent</strong>
+and depends only on the deviatoric strain.  Because
+<code>strain_tensor_deviatoric</code> has exactly zero trace, the hydrostatic contribution
+is absent by construction.</p>
+<h4 id="comparison-with-_vm">Comparison with σ_VM<a class="headerlink" href="#comparison-with-_vm" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><span class="arithmatex">\(\sigma_\text{VM}\)</span></th>
+<th><span class="arithmatex">\(\varepsilon_\text{eq}\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Input</td>
+<td><code>strain_tensor_deviatoric</code> + stiffness matrix</td>
+<td><code>strain_tensor_deviatoric</code> only</td>
+</tr>
+<tr>
+<td>Units</td>
+<td>GPa (or MPa)</td>
+<td>dimensionless (or millistrain)</td>
+</tr>
+<tr>
+<td>Requires elastic constants</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Frame-independent</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Hydrostatic-immune</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Yields criterion</td>
+<td><span class="arithmatex">\(\sigma_\text{VM} \geq \sigma_Y\)</span></td>
+<td>Accumulated plastic strain</td>
+</tr>
+</tbody>
+</table>
+<p><span class="arithmatex">\(\varepsilon_\text{eq}\)</span> is particularly useful when no stiffness matrix is
+available, or as a geometry-only map to identify highly distorted grains before
+computing stress.</p>
+<h4 id="api_1">API<a class="headerlink" href="#api_1" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># (ny, nx) array, dimensionless</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">eps_eq</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">equivalent_strain</span><span class="p">(</span><span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;max ε_eq = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">eps_eq</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ×10⁻³&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_equivalent_strain</span><span class="p">(</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>           <span class="c1"># dimensionless → millistrain</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>      <span class="c1"># millistrain</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="p">)</span>
+</code></pre></div>
+<p>Note that <code>plot_equivalent_strain</code> takes no <code>frame</code> argument — the scalar
+invariant is the same in every frame.</p>
+<hr />
+<h2 id="6-plot_stress_component-single-component-map">6. <code>plot_stress_component</code> — single-component map<a class="headerlink" href="#6-plot_stress_component-single-component-map" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">component</span><span class="o">=</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span>       <span class="c1"># one of s_xx, s_yy, s_zz, s_xy, s_xz, s_yz</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>              <span class="c1"># GPa → MPa (default)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">,</span>          <span class="c1"># diverging map centred at zero</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">vmin</span><span class="o">=-</span><span class="mi">200</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>    <span class="c1"># MPa</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="p">)</span>
 </code></pre></div>
 <p>Available component strings:</p>
 <table>
@@ -411,78 +649,78 @@ for the equivalent derivation for the strain tensor.</p>
 <tr>
 <th>String</th>
 <th>Symbol</th>
-<th>Meaning</th>
+<th>Reliable?</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>"s_xx"</code></td>
 <td><span class="arithmatex">\(\sigma_{xx}\)</span></td>
-<td>Normal stress along crystal <span class="arithmatex">\(x\)</span></td>
+<td>Relative only</td>
 </tr>
 <tr>
 <td><code>"s_yy"</code></td>
 <td><span class="arithmatex">\(\sigma_{yy}\)</span></td>
-<td>Normal stress along crystal <span class="arithmatex">\(y\)</span></td>
+<td>Relative only</td>
 </tr>
 <tr>
 <td><code>"s_zz"</code></td>
 <td><span class="arithmatex">\(\sigma_{zz}\)</span></td>
-<td>Normal stress along crystal <span class="arithmatex">\(z\)</span></td>
+<td>Relative only</td>
 </tr>
 <tr>
 <td><code>"s_xy"</code></td>
 <td><span class="arithmatex">\(\sigma_{xy}\)</span></td>
-<td>In-plane shear <span class="arithmatex">\(xy\)</span></td>
+<td><strong>Yes</strong></td>
 </tr>
 <tr>
 <td><code>"s_xz"</code></td>
 <td><span class="arithmatex">\(\sigma_{xz}\)</span></td>
-<td>Shear <span class="arithmatex">\(xz\)</span></td>
+<td><strong>Yes</strong></td>
 </tr>
 <tr>
 <td><code>"s_yz"</code></td>
 <td><span class="arithmatex">\(\sigma_{yz}\)</span></td>
-<td>Shear <span class="arithmatex">\(yz\)</span></td>
+<td><strong>Yes</strong></td>
 </tr>
 </tbody>
 </table>
 <p>The default colour scale is <code>"RdBu_r"</code> with units of MPa (<code>scale=1e3</code>).
 Use <code>scale=1.0</code> for GPa.</p>
 <hr />
-<h2 id="6-extracting-components-manually">6. Extracting components manually<a class="headerlink" href="#6-extracting-components-manually" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 6)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Code ordering: [s_xx=0, s_yy=1, s_zz=2, s_xy=3, s_xz=4, s_yz=5]</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">s_xx</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># MPa</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">s_zz</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">s_xy</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>
+<h2 id="7-extracting-components-manually">7. Extracting components manually<a class="headerlink" href="#7-extracting-components-manually" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 6)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Code ordering: [s_xx=0, s_yy=1, s_zz=2, s_xy=3, s_xz=4, s_yz=5]</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">s_xx</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># MPa  (deviatoric normal stress — relative)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">s_zz</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">s_xy</span> <span class="o">=</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># MPa  (shear — absolute)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Reliable normal-stress *difference*</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="n">biaxial</span> <span class="o">=</span> <span class="p">(</span><span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># (σ_xx − σ_zz) in MPa</span>
 </code></pre></div>
 <hr />
-<h2 id="7-important-caveats">7. Important caveats<a class="headerlink" href="#7-important-caveats" title="Permanent link">&para;</a></h2>
+<h2 id="8-important-caveats">8. Important caveats<a class="headerlink" href="#8-important-caveats" title="Permanent link">&para;</a></h2>
 <h3 id="hydrostatic-stress-is-unconstrained">Hydrostatic stress is unconstrained<a class="headerlink" href="#hydrostatic-stress-is-unconstrained" title="Permanent link">&para;</a></h3>
 <p>White-beam Laue diffraction cannot measure the <strong>hydrostatic</strong> part of the
 strain tensor (see <a href="../laue_strain/#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Strain Analysis — Hydrostatic blind spot</a>).
-Because only the five deviatoric strain components are reliably determined,
-the stress tensor derived from them also reflects only the <strong>deviatoric</strong> stress:</p>
-<div class="arithmatex">\[
-\boldsymbol{\sigma} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{deviatoric}
-\]</div>
-<p>The <strong>mean stress</strong> (pressure) <span class="arithmatex">\(p = -\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\sigma})\)</span>
-is not well-constrained.  Individual normal stresses (<span class="arithmatex">\(\sigma_{xx}\)</span>, <span class="arithmatex">\(\sigma_{yy}\)</span>,
-<span class="arithmatex">\(\sigma_{zz}\)</span>) contain contributions from both the deviatoric and hydrostatic
-parts, so they carry larger absolute uncertainties than the shear components or
-the differences between normal components.</p>
-<p>In practice:</p>
+<code>stress_voigt</code> explicitly uses <code>strain_tensor_deviatoric</code> (trace exactly zero)
+as input, so the returned stress tensor is purely deviatoric: its trace is zero
+by construction and carries no information about the true hydrostatic pressure.</p>
+<p>Concretely:</p>
 <ul>
 <li><strong>Shear stresses</strong> <span class="arithmatex">\(\sigma_{xy}\)</span>, <span class="arithmatex">\(\sigma_{xz}\)</span>, <span class="arithmatex">\(\sigma_{yz}\)</span> are the most
   reliable outputs — they are directly proportional to the corresponding shear
   strain components, which <em>are</em> measurable.</li>
+<li><strong>Von Mises stress</strong> is the recommended scalar summary — it is a tensor
+  invariant, physically meaningful, and immune to the missing pressure.</li>
 <li><strong>Differences</strong> of normal stresses (e.g. <span class="arithmatex">\(\sigma_{xx} - \sigma_{zz}\)</span>) are
   reliable — they probe the deviatoric part.</li>
-<li><strong>Individual</strong> normal stresses and the mean stress should be interpreted with
-  caution unless the hydrostatic component is constrained by an independent
-  measurement.</li>
+<li><strong>Individual</strong> normal stresses should be read as values relative to an
+  unknown offset <span class="arithmatex">\(P\)</span> (the true hydrostatic pressure), not as absolute
+  normal stresses.  Do not interpret them as the full Cauchy normal stress
+  unless the hydrostatic component is constrained by an independent measurement
+  (e.g. monochromatic XRD with a calibrated reference).</li>
 </ul>
 <h3 id="elastic-constants-must-match-the-crystal-frame">Elastic constants must match the crystal frame<a class="headerlink" href="#elastic-constants-must-match-the-crystal-frame" title="Permanent link">&para;</a></h3>
 <p>The stiffness matrix <span class="arithmatex">\(\mathbf{C}\)</span> must be expressed in the same coordinate
@@ -495,39 +733,68 @@ within each fitted pixel.  For polycrystalline pixels (overlapping grains,
 sub-grain boundaries) the result is an effective average that may not correspond
 to the stress in any single crystallite.</p>
 <hr />
-<h2 id="8-complete-example">8. Complete example<a class="headerlink" href="#8-complete-example" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrainMap</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Load a pre-fitted map</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">gmap</span> <span class="o">=</span> <span class="n">GrainMap</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;grainmap.h5&quot;</span><span class="p">)</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Crystal object with elastic constants</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">fe</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Fe</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Merge grains</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">metric</span><span class="o">=</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">min_match_rate</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">gi</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Plot all normal-stress components in the crystal frame (MPa)</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;s_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;s_zz&quot;</span><span class="p">):</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        <span class="n">comp</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        <span class="n">vmin</span><span class="o">=-</span><span class="mi">500</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="p">)</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1"># Plot shear stress in the sample frame</span>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="s2">&quot;s_xz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
-<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span> <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span>
-<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">,</span>
-<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="p">)</span>
-<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="c1"># Access the full stress array for custom analysis</span>
-<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">sig_MPa</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1e3</span>
-<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="c1"># Biaxial stress proxy: (σ_xx + σ_yy) / 2</span>
-<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="n">biaxial</span> <span class="o">=</span> <span class="p">(</span><span class="n">sig_MPa</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sig_MPa</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+<h2 id="9-complete-example">9. Complete example<a class="headerlink" href="#9-complete-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xrayutilities</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xu</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrainMap</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Load a pre-fitted map</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">gmap</span> <span class="o">=</span> <span class="n">GrainMap</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;grainmap.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Crystal object with elastic constants</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">fe</span> <span class="o">=</span> <span class="n">xu</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">Fe</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># Merge grains</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">metric</span><span class="o">=</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">min_match_rate</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="n">gi</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># ── Equivalent strain (no elastic constants needed) ────────────────────</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_equivalent_strain</span><span class="p">(</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>              <span class="c1"># dimensionless → millistrain</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="p">)</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="c1"># ── Von Mises stress ────────────────────────────────────────────────────</span>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_von_mises_stress</span><span class="p">(</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>   <span class="c1"># MPa</span>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="p">)</span>
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>
+<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a><span class="c1"># ── Individual stress components ───────────────────────────────────────</span>
+<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="c1"># Shear components are the most reliable</span>
+<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;s_xy&quot;</span><span class="p">,</span> <span class="s2">&quot;s_xz&quot;</span><span class="p">,</span> <span class="s2">&quot;s_yz&quot;</span><span class="p">):</span>
+<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>    <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>        <span class="n">comp</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>        <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>
+<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>        <span class="n">vmin</span><span class="o">=-</span><span class="mi">200</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>    <span class="p">)</span>
+<a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>
+<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a><span class="c1"># Normal components — interpret as relative (deviatoric) values</span>
+<a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;s_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;s_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;s_zz&quot;</span><span class="p">):</span>
+<a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>    <span class="n">gmap</span><span class="o">.</span><span class="n">plot_stress_component</span><span class="p">(</span>
+<a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a>        <span class="n">comp</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">crystal</span><span class="o">=</span><span class="n">fe</span><span class="p">,</span>
+<a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a>        <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1e3</span><span class="p">,</span>
+<a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a>        <span class="n">vmin</span><span class="o">=-</span><span class="mi">500</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+<a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a>    <span class="p">)</span>
+<a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a>
+<a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a><span class="c1"># ── Manual access for custom analysis ─────────────────────────────────</span>
+<a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a><span class="n">sig</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">stress_voigt</span><span class="p">(</span><span class="n">fe</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 6), GPa</span>
+<a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a>
+<a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a><span class="c1"># Reliable: normal-stress difference</span>
+<a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a><span class="n">biaxial_MPa</span> <span class="o">=</span> <span class="p">(</span><span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">sig</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="o">*</span> <span class="mf">1e3</span>   <span class="c1"># σ_xx − σ_zz</span>
+<a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a>
+<a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a><span class="c1"># Reliable: von Mises from the array directly</span>
+<a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a><span class="n">s</span> <span class="o">=</span> <span class="n">sig</span>  <span class="c1"># already deviatoric (trace = 0)</span>
+<a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a><span class="n">vm_MPa</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span>
+<a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a>    <span class="mf">1.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a>    <span class="o">+</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">4</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">s</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a><span class="p">)</span> <span class="o">*</span> <span class="mf">1e3</span>
 </code></pre></div>
               
             </div>

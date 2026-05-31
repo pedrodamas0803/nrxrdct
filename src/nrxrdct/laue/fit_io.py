@@ -2,7 +2,7 @@
 LaueTools .fit file reader and comparison plotter.
 
 The .fit file written by IndexingSpotsSet.py contains indexed spot data and
-the grain orientation as a UBB0 matrix.  These functions parse that file and
+the grain orientation as a UB matrix.  These functions parse that file and
 plot the result against an nrxrdct simulation.
 """
 
@@ -24,25 +24,24 @@ def read_fit_file(path):
     Column positions are detected from the ``##`` header line; if absent the
     function falls back to columns 7 and 8 (Xexp and Yexp).
 
-    The UBB0 matrix is read from the ``#UBB0 matrix`` block in the footer.
-    It gives the reciprocal-lattice basis vectors as columns expressed in the
-    LaueTools LT frame (x ∥ beam, no 2π factor).
+    The UB matrix is read from the ``#UB matrix`` block in the footer and
+    returned as-is — it is the rotation matrix ready for
+    :func:`~nrxrdct.laue.simulate_laue`.
 
     Args:
         path (str): Path to the ``.fit`` file.
 
     Returns:
         obs_xy ((N, 2) ndarray): Observed spot pixel positions ``[Xexp, Yexp]``.
-        UBB0 ((3, 3) ndarray or None): Orientation matrix in LT frame (no 2π).
-            Pass to :func:`F_from_UBB0` to get the deformation gradient ready
-            for :func:`~nrxrdct.laue.simulate_laue`.
+        UB ((3, 3) ndarray or None): Orientation matrix, passed directly to
+            :func:`~nrxrdct.laue.simulate_laue` as the ``U`` argument.
         meta (dict): Keys when found: ``'element'``, ``'grain_index'`` (str),
             ``'n_indexed'`` (int), ``'mean_dev_px'`` (float),
             ``'euler_deg'`` (3-element array).
     """
     lines = open(path).read().splitlines()
 
-    UBB0 = None
+    UB = None
     meta = {}
     col_x = None
     col_y = None
@@ -50,7 +49,7 @@ def read_fit_file(path):
 
     next_key = None   # for "key on one line, value on next" metadata
     mat_buf = []      # accumulates numbers for the current matrix block
-    in_UBB0 = False   # True while inside the #UBB0 matrix block
+    in_UB = False     # True while inside the #UB matrix block
 
     for line in lines:
         stripped = line.strip()
@@ -75,28 +74,29 @@ def read_fit_file(path):
 
         if is_comment:
             # ── matrix blocks ─────────────────────────────────────────────
-            if 'UBB0 matrix' in content:
-                in_UBB0 = True
+            # Match "UB matrix" but not "UBB0 matrix" or "B0 matrix"
+            if re.search(r'\bUB matrix\b', content) and 'UBB0' not in content:
+                in_UB = True
                 mat_buf = []
                 continue
-            # UB and B0 blocks come before UBB0 — ignore them
-            if re.search(r'\bUB matrix\b|\bB0 matrix\b', content):
-                in_UBB0 = False
+            # B0 and UBB0 blocks — skip
+            if re.search(r'\bB0 matrix\b|\bUBB0 matrix\b', content):
+                in_UB = False
                 mat_buf = []
                 continue
 
-            if in_UBB0:
+            if in_UB:
                 nums = re.findall(r'[-+]?\d+\.?\d*(?:[eE][+-]?\d+)?', content)
                 if nums:
                     mat_buf.extend(nums)
                     if len(mat_buf) >= 9:
                         try:
-                            UBB0 = np.array(mat_buf[:9], dtype=float).reshape(3, 3)
+                            UB = np.array(mat_buf[:9], dtype=float).reshape(3, 3)
                         except Exception:
                             pass
-                        in_UBB0 = False
+                        in_UB = False
                 elif mat_buf:
-                    in_UBB0 = False
+                    in_UB = False
                 continue
 
             # ── one-line "key: value" metadata ────────────────────────────
@@ -153,7 +153,7 @@ def read_fit_file(path):
             continue
 
     obs_xy = np.array(rows, dtype=float) if rows else np.empty((0, 2))
-    return obs_xy, UBB0, meta
+    return obs_xy, UB, meta
 
 
 def read_raw(h5_path: str, dataset: str, index: int) -> np.ndarray:
@@ -237,6 +237,7 @@ def F_from_UBB0(UBB0, crystal):
 
 
 def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
+                   vmin=0.0, vmax=None,
                    E_min_eV=5000.0, E_max_eV=27000.0, max_match_px=10.0,
                    top_n_sim=None, figsize=(10, 8)):
     """
@@ -261,6 +262,9 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
             :func:`read_raw`).  Preprocessed automatically before display.
         bg_sigma (float): Gaussian sigma passed to :func:`prepare_image` for
             background estimation.  Default ``251``.
+        vmin, vmax (float or None): Colour scale limits for the image.
+            ``vmin`` defaults to ``0``; ``vmax`` defaults to the 99.5th
+            percentile of the preprocessed image.
         E_min_eV, E_max_eV (float): Energy range for the simulation.
         max_match_px (float): Match radius (px) for drawing connection lines.
         top_n_sim (int or None): Cap on the number of simulated spots shown.
@@ -274,7 +278,7 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
     from .simulation import simulate_laue
     from .fitting import _match_spots
 
-    obs_xy, UBB0, meta = read_fit_file(fit_path)
+    obs_xy, UB, meta = read_fit_file(fit_path)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_facecolor('k')
@@ -299,12 +303,12 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
     # Background image
     if image is not None:
         disp = prepare_image(image, bg_sigma=bg_sigma)
-        vmax = float(np.percentile(disp, 99.5))
         nv_im, nh_im = disp.shape
+        _vmax = vmax if vmax is not None else float(np.percentile(disp, 99.5))
         ax.imshow(
             disp,
             origin='upper', extent=[0, nh_im, nv_im, 0],
-            cmap='gray', vmin=0, vmax=vmax, aspect='auto',
+            cmap='gray', vmin=vmin, vmax=_vmax, aspect='auto',
         )
 
     # LaueTools observed/indexed spots
@@ -315,10 +319,9 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
             label=f'LaueTools ({len(obs_xy)})', zorder=5,
         )
 
-    # nrxrdct simulation from UBB0
-    if UBB0 is not None:
-        F = F_from_UBB0(UBB0, crystal)
-        spots = simulate_laue(crystal, F, camera, E_min=E_min_eV, E_max=E_max_eV)
+    # nrxrdct simulation from UB
+    if UB is not None:
+        spots = simulate_laue(crystal, UB, camera, E_min=E_min_eV, E_max=E_max_eV)
         on_det = [s for s in spots if s.get('pix') is not None]
         if top_n_sim is not None:
             on_det = on_det[:top_n_sim]
@@ -340,7 +343,7 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
                     )
     else:
         ax.text(
-            0.5, 0.5, 'no UBB0 matrix found in file',
+            0.5, 0.5, 'no UB matrix found in file',
             transform=ax.transAxes, ha='center', va='center',
             color='white', fontsize=9,
         )

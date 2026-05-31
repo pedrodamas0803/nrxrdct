@@ -19,22 +19,22 @@ def read_fit_file(path):
 
     Expected column header (line starting ``##``)::
 
-        spot_index  Intensity  h  k  l  pixDev  energy(keV)  Xexp  Yexp  ...
+        spot_index  Intensity  h  k  l  pixDev  energy(keV)  Xexp  Yexp
+        2theta_exp  chi_exp  Xtheo  Ytheo  ...
 
-    Column positions are detected from the ``##`` header line; if absent the
-    function falls back to columns 7 and 8 (Xexp and Yexp).
+    Column positions are detected from the ``##`` header line; absent columns
+    fall back to the order above (Xexp=7, Yexp=8, Xtheo=11, Ytheo=12).
 
-    The UB matrix is read from the ``#UB matrix`` block in the footer and
-    returned as-is — it is the rotation matrix ready for
-    :func:`~nrxrdct.laue.simulate_laue`.
+    The UB matrix is read from the ``#UB matrix`` block in the footer.
 
     Args:
         path (str): Path to the ``.fit`` file.
 
     Returns:
-        obs_xy ((N, 2) ndarray): Observed spot pixel positions ``[Xexp, Yexp]``.
-        UB ((3, 3) ndarray or None): Orientation matrix, passed directly to
-            :func:`~nrxrdct.laue.simulate_laue` as the ``U`` argument.
+        obs_xy ((N, 2) ndarray): Segmented spot positions ``[Xexp, Yexp]``.
+        theo_xy ((N, 2) ndarray): Refined theoretical positions ``[Xtheo, Ytheo]``.
+        UB ((3, 3) ndarray or None): Orientation matrix from the ``#UB matrix``
+            block, ready for :func:`~nrxrdct.laue.simulate_laue`.
         meta (dict): Keys when found: ``'element'``, ``'grain_index'`` (str),
             ``'n_indexed'`` (int), ``'mean_dev_px'`` (float),
             ``'euler_deg'`` (3-element array).
@@ -43,13 +43,13 @@ def read_fit_file(path):
 
     UB = None
     meta = {}
-    col_x = None
-    col_y = None
-    rows = []
+    col_x = col_y = col_xt = col_yt = None
+    obs_rows = []
+    theo_rows = []
 
-    next_key = None   # for "key on one line, value on next" metadata
-    mat_buf = []      # accumulates numbers for the current matrix block
-    in_UB = False     # True while inside the #UB matrix block
+    next_key = None
+    mat_buf = []
+    in_UB = False
 
     for line in lines:
         stripped = line.strip()
@@ -73,13 +73,11 @@ def read_fit_file(path):
             continue
 
         if is_comment:
-            # ── matrix blocks ─────────────────────────────────────────────
-            # Match "UB matrix" but not "UBB0 matrix" or "B0 matrix"
+            # ── UB matrix block ───────────────────────────────────────────
             if re.search(r'\bUB matrix\b', content) and 'UBB0' not in content:
                 in_UB = True
                 mat_buf = []
                 continue
-            # B0 and UBB0 blocks — skip
             if re.search(r'\bB0 matrix\b|\bUBB0 matrix\b', content):
                 in_UB = False
                 mat_buf = []
@@ -126,7 +124,7 @@ def read_fit_file(path):
                 next_key = 'euler'
                 continue
 
-            # ── column header (##spot_index ... Xexp Yexp ...) ────────────
+            # ── column header (##spot_index ... Xexp Yexp ... Xtheo Ytheo)
             cl = content.lower()
             if 'xexp' in cl or 'xcam' in cl:
                 parts = content.split()
@@ -136,24 +134,28 @@ def read_fit_file(path):
                         col_x = pl.index(xname)
                         col_y = pl.index(yname)
                         break
+                for xtname, ytname in (('xtheo', 'ytheo'),):
+                    if xtname in pl:
+                        col_xt = pl.index(xtname)
+                        col_yt = pl.index(ytname)
+                        break
             continue
 
-        # ── data row (non-comment line) ───────────────────────────────────
+        # ── data row ─────────────────────────────────────────────────────
         parts = stripped.split()
         try:
-            if col_x is not None:
-                xcam = float(parts[col_x])
-                ycam = float(parts[col_y])
-            else:
-                # fallback: spot_index Intensity h k l pixDev energy Xexp Yexp ...
-                xcam = float(parts[7])
-                ycam = float(parts[8])
-            rows.append([xcam, ycam])
+            xe = float(parts[col_x])  if col_x  is not None else float(parts[7])
+            ye = float(parts[col_y])  if col_y  is not None else float(parts[8])
+            xt = float(parts[col_xt]) if col_xt is not None else float(parts[11])
+            yt = float(parts[col_yt]) if col_yt is not None else float(parts[12])
+            obs_rows.append([xe, ye])
+            theo_rows.append([xt, yt])
         except (IndexError, ValueError):
             continue
 
-    obs_xy = np.array(rows, dtype=float) if rows else np.empty((0, 2))
-    return obs_xy, UB, meta
+    obs_xy  = np.array(obs_rows,  dtype=float) if obs_rows  else np.empty((0, 2))
+    theo_xy = np.array(theo_rows, dtype=float) if theo_rows else np.empty((0, 2))
+    return obs_xy, theo_xy, UB, meta
 
 
 def read_raw(h5_path: str, dataset: str, index: int) -> np.ndarray:
@@ -236,38 +238,31 @@ def F_from_UBB0(UBB0, crystal):
     return (np.asarray(UBB0) * 2.0 * np.pi) @ np.linalg.inv(B0)
 
 
-def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
-                   vmin=0.0, vmax=None,
-                   E_min_eV=5000.0, E_max_eV=27000.0, max_match_px=10.0,
-                   top_n_sim=None, figsize=(10, 8)):
+def plot_fit_frame(fit_path, *, image=None, bg_sigma=251.0,
+                   vmin=0.0, vmax=None, figsize=(10, 8)):
     """
-    Plot a LaueTools ``.fit`` frame for side-by-side comparison with nrxrdct.
+    Plot a LaueTools ``.fit`` frame: segmented vs refined spot positions.
 
-    Reads the ``.fit`` file with :func:`read_fit_file`, builds the
-    deformation gradient F with :func:`F_from_UBB0`, simulates spots with
-    :func:`~nrxrdct.laue.simulate_laue`, and draws both sets on the detector.
+    Reads ``Xexp``/``Yexp`` (segmented) and ``Xtheo``/``Ytheo`` (refined) from
+    the ``.fit`` file and draws both sets on the detector image, connected
+    spot-by-spot (pairs are already matched in the file).
+
+    * **White circles** — segmented positions (Xexp, Yexp).
+    * **Red diamonds** — LaueTools refined positions (Xtheo, Ytheo).
+    * **Red lines** — displacement vectors between each pair.
 
     When *image* is supplied it is preprocessed with :func:`prepare_image`
     (gap fill → background subtraction → shift to zero) before display.
 
-    * **White circles** — indexed spots from the ``.fit`` file (LaueTools).
-    * **Blue diamonds** — nrxrdct simulated spots from the UBB0 orientation.
-    * **Blue lines** — matched pairs within *max_match_px*.
-
     Args:
-        crystal: xrayutilities ``Crystal`` matching the phase in the ``.fit``.
-        camera (Camera): Detector geometry.
         fit_path (str): Path to the ``.fit`` file.
         image ((Nv, Nh) ndarray or None): Raw detector frame (e.g. from
             :func:`read_raw`).  Preprocessed automatically before display.
-        bg_sigma (float): Gaussian sigma passed to :func:`prepare_image` for
-            background estimation.  Default ``251``.
-        vmin, vmax (float or None): Colour scale limits for the image.
-            ``vmin`` defaults to ``0``; ``vmax`` defaults to the 99.5th
-            percentile of the preprocessed image.
-        E_min_eV, E_max_eV (float): Energy range for the simulation.
-        max_match_px (float): Match radius (px) for drawing connection lines.
-        top_n_sim (int or None): Cap on the number of simulated spots shown.
+        bg_sigma (float): Gaussian sigma for background estimation.  Default
+            ``251``.
+        vmin, vmax (float or None): Colour scale limits.  ``vmin`` defaults to
+            ``0``; ``vmax`` defaults to the 99.5th percentile of the
+            preprocessed image.
         figsize (tuple): Figure size.
 
     Returns:
@@ -275,15 +270,11 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
         ax (Axes):
     """
     import matplotlib.pyplot as plt
-    from .simulation import simulate_laue
-    from .fitting import _match_spots
 
-    obs_xy, UB, meta = read_fit_file(fit_path)
+    obs_xy, theo_xy, _, meta = read_fit_file(fit_path)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_facecolor('k')
-    ax.set_xlim(0, camera.Nh)
-    ax.set_ylim(camera.Nv, 0)
     ax.set_aspect('equal')
     ax.set_xlabel('x (px)')
     ax.set_ylabel('y (px)')
@@ -295,7 +286,7 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
         parts.append(f"grain {meta['grain_index']}")
     n = meta.get('n_indexed', len(obs_xy))
     if n:
-        parts.append(f"{n} indexed spots")
+        parts.append(f"{n} spots")
     if 'mean_dev_px' in meta:
         parts.append(f"mean dev {meta['mean_dev_px']:.3f} px")
     ax.set_title('  |  '.join(parts), fontsize=9)
@@ -310,43 +301,26 @@ def plot_fit_frame(crystal, camera, fit_path, *, image=None, bg_sigma=251.0,
             origin='upper', extent=[0, nh_im, nv_im, 0],
             cmap='gray', vmin=vmin, vmax=_vmax, aspect='auto',
         )
+        ax.set_xlim(0, nh_im)
+        ax.set_ylim(nv_im, 0)
 
-    # LaueTools observed/indexed spots
+    # Segmented positions
     if len(obs_xy):
         ax.scatter(
             obs_xy[:, 0], obs_xy[:, 1],
             s=80, facecolors='none', edgecolors='white', linewidths=1.2,
-            label=f'LaueTools ({len(obs_xy)})', zorder=5,
+            label=f'Xexp/Yexp ({len(obs_xy)})', zorder=5,
         )
 
-    # nrxrdct simulation from UB
-    if UB is not None:
-        spots = simulate_laue(crystal, UB, camera, E_min=E_min_eV, E_max=E_max_eV)
-        on_det = [s for s in spots if s.get('pix') is not None]
-        if top_n_sim is not None:
-            on_det = on_det[:top_n_sim]
-        if on_det:
-            sim_xy = np.array([s['pix'] for s in on_det])
-            ax.scatter(
-                sim_xy[:, 0], sim_xy[:, 1],
-                s=50, marker='D', facecolors='none', edgecolors='C0',
-                linewidths=1.0, label=f'nrxrdct sim ({len(sim_xy)})', zorder=4,
-            )
-            if len(obs_xy):
-                row_ind, col_ind, dist_px = _match_spots(obs_xy, sim_xy, max_match_px)
-                ok = dist_px < max_match_px
-                for r, c in zip(row_ind[ok], col_ind[ok]):
-                    ax.plot(
-                        [obs_xy[r, 0], sim_xy[c, 0]],
-                        [obs_xy[r, 1], sim_xy[c, 1]],
-                        '-', color='C0', alpha=0.5, lw=0.8, zorder=3,
-                    )
-    else:
-        ax.text(
-            0.5, 0.5, 'no UB matrix found in file',
-            transform=ax.transAxes, ha='center', va='center',
-            color='white', fontsize=9,
+    # Refined positions + displacement lines
+    if len(theo_xy):
+        ax.scatter(
+            theo_xy[:, 0], theo_xy[:, 1],
+            s=50, marker='D', facecolors='none', edgecolors='C3', linewidths=1.0,
+            label=f'Xtheo/Ytheo ({len(theo_xy)})', zorder=4,
         )
+        for (xe, ye), (xt, yt) in zip(obs_xy, theo_xy):
+            ax.plot([xe, xt], [ye, yt], '-', color='C3', alpha=0.6, lw=0.8, zorder=3)
 
     ax.legend(fontsize=8, loc='upper right')
     fig.tight_layout()

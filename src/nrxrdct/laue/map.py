@@ -7805,6 +7805,108 @@ class GrainMap:
 
     # ── Dunder ────────────────────────────────────────────────────────────────
 
+    def get_orientations(
+        self,
+        grain: "int | str" = "merged",
+        symmetry: str = "cubic",
+    ) -> "tuple[Orientation, np.ndarray, np.ndarray]":
+        """
+        Return orix ``Orientation`` objects for all fitted map pixels.
+
+        Args:
+            grain (int or 'merged'): Grain index or ``'merged'`` to use the
+                per-pixel selection set by :meth:`apply_merge`.
+            symmetry (str): Crystal symmetry passed to :meth:`_orix_symmetry`.
+                One of ``'cubic'``, ``'hexagonal'``, ``'tetragonal'``,
+                ``'orthorhombic'``.
+
+        Returns:
+            ori (Orientation): orix ``Orientation`` array of length *N* (valid
+                pixels only), reduced to the fundamental zone.
+            iy (ndarray): Row indices of the *N* valid pixels.
+            ix (ndarray): Column indices of the *N* valid pixels.
+
+        Example::
+
+            ori, iy, ix = gmap.get_orientations('merged', symmetry='cubic')
+            labels, label_map = gmap.cluster_orientations('merged', symmetry='cubic')
+"""
+        from orix.quaternion import Orientation as _Ori
+
+        sym = self._orix_symmetry(symmetry)
+
+        if grain == "merged":
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            bgm   = self.best_grain_map
+            valid = bgm >= 0
+            iy_v, ix_v = np.where(valid)
+            g_v        = bgm[iy_v, ix_v]
+        else:
+            valid = ~np.any(np.isnan(self.U[grain]), axis=(-2, -1))
+            iy_v, ix_v = np.where(valid)
+            g_v        = np.full(len(iy_v), grain, dtype=int)
+
+        U_flat = self.U[g_v, iy_v, ix_v]   # (N, 3, 3)
+        ori    = _Ori.from_matrix(U_flat, symmetry=sym).reduce()
+        return ori, iy_v, ix_v
+
+    def cluster_orientations(
+        self,
+        grain: "int | str" = "merged",
+        symmetry: str = "cubic",
+        eps_deg: float = 15.0,
+        min_samples: int = 20,
+    ) -> "tuple[np.ndarray, np.ndarray]":
+        """
+        Cluster map orientations with symmetry-aware DBSCAN.
+
+        Builds the full pairwise misorientation distance matrix (angular, in
+        radians) between all valid pixels, then runs scikit-learn DBSCAN with
+        ``metric='precomputed'``.
+
+        Args:
+            grain (int or 'merged'): Grain index or ``'merged'``.
+            symmetry (str): Crystal symmetry — see :meth:`get_orientations`.
+            eps_deg (float): DBSCAN neighbourhood radius in degrees.
+            min_samples (int): Minimum pixels to form a core point.
+
+        Returns:
+            labels (ndarray): Integer cluster label per valid pixel (-1 = noise).
+            label_map ((ny, nx) ndarray): Same labels painted back onto the
+                scan grid; -1 where no valid orientation exists.
+
+        Example::
+
+            labels, label_map = gmap.cluster_orientations(
+                'merged', symmetry='cubic', eps_deg=12, min_samples=15
+            )
+            for lbl in sorted(set(labels)):
+                mask = labels == lbl
+                tag  = f"Cluster {lbl}" if lbl >= 0 else "Noise"
+                D_sub = D[np.ix_(mask, mask)]  # max spread per cluster
+                print(f"{tag}: {mask.sum()} pixels")
+"""
+        from sklearn.cluster import DBSCAN
+
+        sym = self._orix_symmetry(symmetry)
+        ori, iy_v, ix_v = self.get_orientations(grain=grain, symmetry=symmetry)
+
+        mori = (~ori).outer(ori)
+        mori.symmetry = sym
+        mori = mori.reduce()
+        D = mori.angle.astype(np.float32)
+
+        labels = DBSCAN(
+            eps=np.deg2rad(eps_deg),
+            min_samples=min_samples,
+            metric="precomputed",
+        ).fit(D).labels_
+
+        label_map = np.full((self.ny, self.nx), -1, dtype=int)
+        label_map[iy_v, ix_v] = labels
+        return labels, label_map
+
     def __repr__(self) -> str:
         fitted = int(np.sum(self.n_matched >= 0)) if self.n_grains else 0
         return (

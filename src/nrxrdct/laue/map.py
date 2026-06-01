@@ -7907,6 +7907,68 @@ class GrainMap:
         label_map[iy_v, ix_v] = labels
         return labels, label_map
 
+    def cluster_misorientation_map(
+        self,
+        label_map: np.ndarray,
+        grain: "int | str" = "merged",
+    ) -> np.ndarray:
+        """
+        Misorientation angle (degrees) of each pixel relative to its cluster's
+        mean orientation.
+
+        Designed to work with the ``label_map`` returned by
+        :meth:`cluster_orientations`.  Pixels labelled ``-1`` (noise or
+        unfitted) are left as ``NaN``.
+
+        Args:
+            label_map ((ny, nx) ndarray): Integer cluster labels as returned by
+                :meth:`cluster_orientations`.  ``-1`` = noise / unfitted.
+            grain (int or 'merged'): Grain index or ``'merged'``; must match
+                the value passed to :meth:`cluster_orientations`.
+
+        Returns:
+            misor ((ny, nx) ndarray): Misorientation angle in degrees relative
+                to each cluster's mean orientation.  ``NaN`` where
+                ``label_map == -1``.
+
+        Example::
+
+            labels, label_map = gmap.cluster_orientations(
+                'merged', symmetry='cubic', eps_deg=12, min_samples=15
+            )
+            misor = gmap.cluster_misorientation_map(label_map, grain='merged')
+"""
+        def _angle_from_matrix(dR):
+            tr = dR[..., 0, 0] + dR[..., 1, 1] + dR[..., 2, 2]
+            return np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))
+
+        if grain == "merged":
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            bgm   = self.best_grain_map
+            valid = bgm >= 0
+            iy_v, ix_v = np.where(valid)
+            g_v        = bgm[iy_v, ix_v]
+        else:
+            valid = ~np.any(np.isnan(self.U[grain]), axis=(-2, -1))
+            iy_v, ix_v = np.where(valid)
+            g_v        = np.full(len(iy_v), grain, dtype=int)
+
+        U_flat   = self.U[g_v, iy_v, ix_v]   # (N, 3, 3)
+        labels_v = label_map[iy_v, ix_v]      # (N,) label per valid pixel
+
+        misor = np.full((self.ny, self.nx), np.nan)
+        for lbl in np.unique(labels_v):
+            if lbl < 0:
+                continue
+            mask      = labels_v == lbl
+            U_cluster = U_flat[mask]                     # (M, 3, 3)
+            ref       = self._mean_rotation(U_cluster)   # (3, 3) cluster mean
+            dR        = U_cluster @ ref.T                # (M, 3, 3)
+            misor[iy_v[mask], ix_v[mask]] = _angle_from_matrix(dR)
+
+        return misor
+
     def __repr__(self) -> str:
         fitted = int(np.sum(self.n_matched >= 0)) if self.n_grains else 0
         return (

@@ -44,10 +44,11 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - User Guide:
-    - Quickstart: user-guide/quickstart.md
-    - Typical Workflow: user-guide/workflow.md
-    - SLURM / HPC Integration: user-guide/slurm.md
-    - GPU Support: user-guide/gpu.md
+    - XRD-CT:
+      - Quickstart: user-guide/quickstart.md
+      - Typical Workflow: user-guide/workflow.md
+      - SLURM / HPC Integration: user-guide/slurm.md
+      - GPU Support: user-guide/gpu.md
     - Laue Diffraction:
       - Diffraction and Laue Theory: user-guide/laue_theory.md
       - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md

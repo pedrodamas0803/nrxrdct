@@ -1,96 +1,105 @@
 # SLURM / HPC Integration
 
-For large datasets, `nrxrdct` provides a SLURM pipeline that splits integration work across cluster nodes. All functionality is exposed through a Python API and the `nrxrdct-slurm` CLI.
+This page describes how to distribute the `nrxrdct` integration pipeline across
+an HPC cluster using SLURM.  It covers job submission, progress monitoring,
+output verification and repair, and large-scale tomographic reconstruction.
+All functionality is exposed through a Python API and the `nrxrdct-slurm` CLI.
 
-## Submitting jobs
+> **Prerequisite**: a completed instrument calibration — see
+> [Typical Workflow](workflow.md).  For local single-machine processing see
+> [Quickstart](quickstart.md).
 
-=== "Python API"
+---
 
-    ```python
-    from pathlib import Path
-    from nrxrdct.slurm_integration import launch
+## 1. Submitting jobs
 
-    slurm_ids = launch(
-        master_file  = Path("/data/raw/sample_master.h5"),
-        output_file  = Path("/data/processed/integrated.h5"),
-        poni_file    = Path("/data/calib/detector.poni"),
-        mask_file    = Path("/data/calib/mask.edf"),
-        n_jobs       = 8,          # number of SLURM jobs
-        n_points     = 1000,       # radial bins
-        n_workers    = 16,         # integration threads per job
-        batch_size   = 32,         # frames streamed per batch (RAM control)
-        method       = "filter",   # "standard" | "filter" | "sigma_clip"
-        percentile   = (10, 90),   # used with method="filter"
-        partition    = "nice",
-        time         = "04:00:00",
-        mem          = "64G",
-        cpus         = 16,
-        conda_env    = "nrxrdct",
-    )
+**Python API**
 
-    print("Submitted job IDs:", slurm_ids)
-    ```
+```python
+from pathlib import Path
+from nrxrdct.slurm_integration import launch
 
-=== "CLI"
+slurm_ids = launch(
+    master_file  = Path("/data/raw/sample_master.h5"),
+    output_file  = Path("/data/processed/integrated.h5"),
+    poni_file    = Path("/data/calib/detector.poni"),
+    mask_file    = Path("/data/calib/mask.edf"),
+    n_jobs       = 8,          # number of SLURM jobs
+    n_points     = 1000,       # radial bins
+    n_workers    = 16,         # integration threads per job
+    batch_size   = 32,         # frames streamed per batch (RAM control)
+    method       = "filter",   # "standard" | "filter" | "sigma_clip"
+    percentile   = (10, 90),   # used with method="filter"
+    partition    = "nice",
+    time         = "04:00:00",
+    mem          = "64G",
+    cpus         = 16,
+    conda_env    = "nrxrdct",
+)
 
-    ```bash
-    nrxrdct-slurm launch \
-        --master-file  /data/raw/sample_master.h5 \
-        --output-file  /data/processed/integrated.h5 \
-        --poni-file    /data/calib/detector.poni \
-        --mask-file    /data/calib/mask.edf \
-        --n-jobs       8 \
-        --n-points     1000 \
-        --n-workers    16 \
-        --method       filter \
-        --percentile   10,90 \
-        --partition    nice \
-        --time         04:00:00 \
-        --mem          64G \
-        --cpus         16 \
-        --conda-env    nrxrdct
-    ```
+print("Submitted job IDs:", slurm_ids)
+```
+
+**CLI**
+
+```bash
+nrxrdct-slurm launch \
+    --master-file  /data/raw/sample_master.h5 \
+    --output-file  /data/processed/integrated.h5 \
+    --poni-file    /data/calib/detector.poni \
+    --mask-file    /data/calib/mask.edf \
+    --n-jobs       8 \
+    --n-points     1000 \
+    --n-workers    16 \
+    --method       filter \
+    --percentile   10,90 \
+    --partition    nice \
+    --time         04:00:00 \
+    --mem          64G \
+    --cpus         16 \
+    --conda-env    nrxrdct
+```
 
 Sbatch scripts and logs are written to `<output_file_dir>/slurm_logs/`.
 
 ---
 
-## Monitoring progress
+## 2. Monitoring progress
 
-=== "Python API"
+**Python API**
 
-    ```python
-    from nrxrdct.slurm_integration import monitor
+```python
+from nrxrdct.slurm_integration import monitor
 
-    # Single snapshot (non-blocking)
-    result = monitor(
-        slurm_ids   = slurm_ids,
-        output_file = Path("/data/processed/integrated.h5"),
-    )
+# Single snapshot (non-blocking)
+result = monitor(
+    slurm_ids   = slurm_ids,
+    output_file = Path("/data/processed/integrated.h5"),
+)
 
-    # Block until all jobs finish, polling every 60 s
-    result = monitor(
-        slurm_ids   = slurm_ids,
-        output_file = Path("/data/processed/integrated.h5"),
-        watch       = True,
-        interval    = 60,
-    )
-    ```
+# Block until all jobs finish, polling every 60 s
+result = monitor(
+    slurm_ids   = slurm_ids,
+    output_file = Path("/data/processed/integrated.h5"),
+    watch       = True,
+    interval    = 60,
+)
+```
 
-=== "CLI"
+**CLI**
 
-    ```bash
-    # Single snapshot
-    nrxrdct-slurm monitor \
-        --slurm-ids   12345,12346,12347 \
-        --output-file /data/processed/integrated.h5
+```bash
+# Single snapshot
+nrxrdct-slurm monitor \
+    --slurm-ids   12345,12346,12347 \
+    --output-file /data/processed/integrated.h5
 
-    # Blocking watch
-    nrxrdct-slurm monitor \
-        --slurm-ids   12345,12346,12347 \
-        --output-file /data/processed/integrated.h5 \
-        --watch --interval 60
-    ```
+# Blocking watch
+nrxrdct-slurm monitor \
+    --slurm-ids   12345,12346,12347 \
+    --output-file /data/processed/integrated.h5 \
+    --watch --interval 60
+```
 
 The monitor prints a status table:
 
@@ -112,62 +121,66 @@ The monitor prints a status table:
 
 ---
 
-## Checking and repairing output
+## 3. Checking and repairing output
 
 After all jobs finish, verify that every scan was written correctly.
+`check` inspects dataset sizes and HDF5 integrity; `repair` deletes corrupted
+entries and automatically resubmits only the affected scan positions.
 
-=== "Python API"
+**Python API**
 
-    ```python
-    from nrxrdct.slurm_integration import check, repair
+```python
+from nrxrdct.slurm_integration import check, repair
 
-    # Check only — report missing and corrupted scans
-    result = check(output_file=Path("/data/processed/integrated.h5"))
-    # result["missing"]   → list of scan indices not written
-    # result["corrupted"] → list of scan indices with truncated/corrupt datasets
+# Check only — report missing and corrupted scans
+result = check(output_file=Path("/data/processed/integrated.h5"))
+# result["missing"]   → list of scan indices not written
+# result["corrupted"] → list of scan indices with truncated/corrupt datasets
 
-    # Automatic repair — delete corrupted entries and resubmit SLURM jobs
-    repair_ids = repair(
-        output_file = Path("/data/processed/integrated.h5"),
-        master_file = Path("/data/raw/sample_master.h5"),
-        poni_file   = Path("/data/calib/detector.poni"),
-        mask_file   = Path("/data/calib/mask.edf"),
-        n_jobs      = 2,
-        watch       = True,
-        partition   = "nice",
-        conda_env   = "nrxrdct",
-    )
-    ```
+# Automatic repair — delete corrupted entries and resubmit SLURM jobs
+repair_ids = repair(
+    output_file = Path("/data/processed/integrated.h5"),
+    master_file = Path("/data/raw/sample_master.h5"),
+    poni_file   = Path("/data/calib/detector.poni"),
+    mask_file   = Path("/data/calib/mask.edf"),
+    n_jobs      = 2,
+    watch       = True,
+    partition   = "nice",
+    conda_env   = "nrxrdct",
+)
+```
 
-=== "CLI"
+**CLI**
 
-    ```bash
-    # Check only
-    nrxrdct-slurm check --output-file /data/processed/integrated.h5
+```bash
+# Check only
+nrxrdct-slurm check --output-file /data/processed/integrated.h5
 
-    # Check with manual resubmit hints
-    nrxrdct-slurm check \
-        --output-file /data/processed/integrated.h5 \
-        --resubmit
+# Check with manual resubmit hints
+nrxrdct-slurm check \
+    --output-file /data/processed/integrated.h5 \
+    --resubmit
 
-    # Automatic repair
-    nrxrdct-slurm check \
-        --output-file  /data/processed/integrated.h5 \
-        --repair \
-        --master-file  /data/raw/sample_master.h5 \
-        --poni-file    /data/calib/detector.poni \
-        --mask-file    /data/calib/mask.edf \
-        --n-jobs       2 \
-        --partition    nice \
-        --conda-env    nrxrdct \
-        --watch
-    ```
+# Automatic repair
+nrxrdct-slurm check \
+    --output-file  /data/processed/integrated.h5 \
+    --repair \
+    --master-file  /data/raw/sample_master.h5 \
+    --poni-file    /data/calib/detector.poni \
+    --mask-file    /data/calib/mask.edf \
+    --n-jobs       2 \
+    --partition    nice \
+    --conda-env    nrxrdct \
+    --watch
+```
 
 ---
 
-## Rebuilding a corrupted HDF5
+## 4. Rebuilding a corrupted HDF5
 
-If the output HDF5 is deeply corrupted (damaged B-tree), use `rebuild` to salvage all readable scans into a fresh file:
+If the output HDF5 is deeply corrupted (damaged B-tree), use `rebuild` to
+salvage all readable scans into a fresh file.  The original file is renamed
+to `<name>.bak.h5` and the rebuilt file takes its place.
 
 ```python
 from nrxrdct.slurm_integration import rebuild
@@ -187,6 +200,8 @@ rebuild(
 
 ---
 
-## SLURM reconstruction
+## 5. SLURM reconstruction
 
-Large-scale tomographic reconstruction is also supported via `nrxrdct-slurm-recon`. See the [API reference](../api/slurm_reconstruction.md) for details.
+Large-scale tomographic reconstruction is also supported via
+`nrxrdct-slurm-recon`.  See the [API reference](../api/slurm_reconstruction.md)
+for the full parameter list.

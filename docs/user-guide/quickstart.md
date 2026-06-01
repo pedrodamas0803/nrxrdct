@@ -1,8 +1,21 @@
 # Quickstart
 
-This page walks through the minimal steps to get from raw detector images to reconstructed XRD-CT maps.
+This page walks through the minimal steps to get from raw detector images to
+reconstructed XRD-CT maps using `nrxrdct`.  It covers the five mandatory
+pipeline stages: scan description, frame integration, sinogram assembly and
+reconstruction, per-voxel Rietveld refinement, and parameter map extraction.
+
+> **Prerequisites**: an installed `nrxrdct` environment — see
+> [Installation](../installation.md).  For a full pipeline including instrument
+> calibration see [Typical Workflow](workflow.md).
+
+---
 
 ## 1. Describe your scan
+
+Create a `Scan` object that holds the acquisition file path and beam metadata.
+All downstream pipeline functions accept a `Scan` instance (or its fields
+directly) so that calibration parameters are not repeated.
 
 ```python
 from pathlib import Path
@@ -16,7 +29,14 @@ scan = Scan(
 )
 ```
 
+---
+
 ## 2. Integrate frames
+
+Azimuthally integrate every detector frame in parallel using the pyFAI geometry
+stored in the `.poni` calibration file.  The optional `remove_spots` flag
+applies a sigma-clipping filter to remove Bragg spots before integration
+(recommended for single-crystal or coarse-grained samples).
 
 ```python
 import numpy as np
@@ -35,7 +55,16 @@ integrate_powder_parallel(
 )
 ```
 
+The result is an HDF5 file containing one 1-D powder pattern per scan position
+and rotation angle.
+
+---
+
 ## 3. Assemble sinogram and reconstruct
+
+Stack the integrated patterns into a sinogram and reconstruct each
+two-theta channel with filtered back-projection (or an iterative algorithm
+when a GPU is available).
 
 ```python
 from nrxrdct.reconstruction import assemble_sinogram, reconstruct_slice
@@ -50,7 +79,15 @@ volume = np.stack([
 ])
 ```
 
+See [GPU Support](gpu.md) for algorithm selection when a CUDA device is present.
+
+---
+
 ## 4. Per-voxel Rietveld refinement
+
+Wrap the reconstructed volume in a `ReconstructedVolume` object, export
+per-voxel `.xy` patterns, then run a user-supplied GSAS-II refinement
+function in parallel across all spatial voxels.
 
 ```python
 from nrxrdct.reconstruction import ReconstructedVolume
@@ -60,7 +97,11 @@ rv.write_xy_files_parallel()
 rv.refine_models_parallel(my_refinement_function)  # user-supplied
 ```
 
+---
+
 ## 5. Extract parameter maps
+
+Query the fitted results to obtain 2-D maps of any refined parameter.
 
 ```python
 rwp_map = rv.get_Rwp_map()
@@ -69,4 +110,5 @@ a_map, b_map, c_map = rv.get_cell_map()
 
 ---
 
-See [Typical Workflow](workflow.md) for the full pipeline including instrument calibration.
+See [Typical Workflow](workflow.md) for the full pipeline including instrument
+calibration and an annotated package-structure overview.

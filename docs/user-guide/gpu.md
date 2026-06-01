@@ -1,8 +1,18 @@
 # GPU Support
 
-`nrxrdct` detects NVIDIA GPUs automatically at import time via `astra.get_gpu_info()`.
+This page describes how `nrxrdct` uses NVIDIA GPU acceleration for
+tomographic reconstruction, which algorithm is selected in each mode,
+and how to verify GPU availability.
 
-When a GPU is available, `reconstruct_slice` and `reconstruct_astra_gpu_3d` use CUDA-accelerated algorithms:
+---
+
+## 1. Automatic device detection
+
+`nrxrdct` detects NVIDIA GPUs automatically at import time via
+`astra.get_gpu_info()`.  When a GPU is available, `reconstruct_slice` and
+`reconstruct_astra_gpu_3d` switch to CUDA-accelerated algorithms; when no
+GPU is found the code falls back to CPU algorithms transparently — no code
+changes are required.
 
 | Algorithm | Mode |
 |---|---|
@@ -11,14 +21,16 @@ When a GPU is available, `reconstruct_slice` and `reconstruct_astra_gpu_3d` use 
 | `CGLS3D_CUDA` | GPU |
 | `FBP` | CPU fallback |
 
-When no GPU is found, the code falls back to CPU algorithms transparently — no code changes required.
+---
 
-## Requirements
+## 2. Requirements
 
 - NVIDIA GPU with CUDA support
 - [ASTRA Toolbox](https://astra-toolbox.com/) compiled with CUDA support
 
-## Checking GPU availability
+---
+
+## 3. Checking GPU availability
 
 ```python
 import astra

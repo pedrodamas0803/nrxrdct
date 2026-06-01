@@ -1,8 +1,21 @@
 # Typical Workflow
 
-## Instrument calibration
+This page describes the end-to-end XRD-CT data-reduction workflow as
+implemented in `nrxrdct`, from initial instrument calibration through to
+final parameter maps.  It covers the calibration procedure, the five-stage
+processing pipeline, and the repository package structure.
 
-Before processing experimental data, calibrate detector geometry using a known standard (e.g. LaB₆):
+> **Prerequisite**: see [Quickstart](quickstart.md) for the minimal five-step
+> pipeline without calibration.
+
+---
+
+## 1. Instrument calibration
+
+Before processing experimental data, calibrate the detector geometry using a
+known powder standard (e.g. LaB₆).  The `InstrumentCalibration` class wraps a
+GSAS-II project and exposes each refinement step individually so that the
+sequence can be adapted to the standard and beam conditions.
 
 ```python
 from pathlib import Path
@@ -27,37 +40,84 @@ cal.write_calibrated_instrument_pars()
 cal.plot_calibration_results()
 ```
 
-## Full pipeline
+The calibrated instrument parameters are written to an `instprm` file that is
+passed to all subsequent per-voxel refinements.
+
+---
+
+## 2. Full pipeline
+
+The five stages run sequentially on a single machine or can be distributed
+across an HPC cluster — see [SLURM / HPC Integration](slurm.md).
 
 ```
 Raw HDF5 frames
     │
-    ▼ preprocessing.py  — zinger removal
+    ▼  preprocessing.py  — zinger removal
     │
-    ▼ integration.py    — azimuthal integration (pyFAI)
+    ▼  integration.py    — azimuthal integration (pyFAI)
     │
-    ▼ reconstruction.py — sinogram assembly + ASTRA reconstruction
+    ▼  reconstruction.py — sinogram assembly + ASTRA reconstruction
     │
-    ▼ refinement.py     — per-voxel Rietveld (GSAS-II)
+    ▼  refinement.py     — per-voxel Rietveld (GSAS-II)
     │
-    ▼ Parameter maps    — Rwp, unit-cell, crystallite size, …
+    ▼  Parameter maps    — Rwp, unit-cell, crystallite size, …
 ```
 
-## Package structure
+Each stage writes its output to an HDF5 file that is consumed by the next
+stage, so any step can be re-run independently without repeating earlier
+computation.
+
+---
+
+## 3. Package structure
 
 ```text
 src/nrxrdct/
-├── __init__.py          # Package entry point
-├── parameters.py        # Scan metadata container (Scan class)
-├── preprocessing.py     # Zinger removal
-├── integration.py       # pyFAI azimuthal integration pipeline
-├── reconstruction.py    # ASTRA reconstruction + ReconstructedVolume
-├── refinement.py        # GSAS-II refinement wrappers
-├── refine_dict.py       # Pre-built GSAS-II refinement dictionary templates
-├── fluorescence.py      # XRF sinogram loading
-├── nmf.py               # NMF decomposition for hyperspectral volumes
-├── utils.py             # Baseline fitting, simulation, masking, padding
-├── plotting.py          # CAKE integration plotting
-├── visualization.py     # napari-based interactive viewers
-└── io.py                # HDF5 and .xy file I/O, GSAS-II instprm export
+├── __init__.py
+├── utils.py                         # Baseline fitting, simulation, masking, padding
+├── azimuthal/
+│   ├── integration.py               # pyFAI azimuthal integration pipeline
+│   └── slurm_integration/           # SLURM-distributed integration
+│       ├── cli.py
+│       ├── launch_jobs.py
+│       ├── integrate_worker.py
+│       ├── check_output.py
+│       ├── merge.py
+│       └── monitor.py
+├── fitting/
+│   ├── peakfit.py                   # 1-D peak fitting
+│   └── nmf.py                       # NMF decomposition for hyperspectral volumes
+├── fluo/
+│   └── fluorescence.py              # XRF sinogram loading
+├── powder/
+│   ├── simulation.py                # Powder diffraction simulation
+│   └── structures.py                # Crystal structure utilities
+├── rietveld/
+│   ├── refinement.py                # GSAS-II refinement wrappers
+│   └── refine_dict.py               # Pre-built GSAS-II refinement dictionary templates
+├── xrdct/
+│   ├── parameters.py                # Scan metadata container (Scan class)
+│   ├── preprocessing.py             # Zinger removal
+│   ├── sinogram.py                  # Sinogram assembly
+│   ├── reconstruction.py            # ASTRA reconstruction + ReconstructedVolume
+│   ├── volume.py                    # ReconstructedVolume I/O and map extraction
+│   ├── visualization.py             # napari-based interactive viewers
+│   ├── io.py                        # HDF5 and .xy file I/O, GSAS-II instprm export
+│   └── slurm_reconstruction/        # SLURM-distributed reconstruction
+│       ├── cli.py
+│       ├── launch_recon.py
+│       └── reconstruct_worker.py
+└── laue/                            # Polychromatic (Laue) diffraction subpackage
+    ├── camera.py
+    ├── crystal.py
+    ├── simulation.py
+    ├── layers.py
+    ├── segmentation.py
+    ├── fitting.py
+    ├── fit_io.py
+    ├── map.py
+    ├── beamline.py
+    ├── interactive.py
+    └── laue_plotting.py
 ```

@@ -7,51 +7,72 @@ in reflection geometry, with a full pixelated camera model.
 System  : equiatomic AlCoCrFeNi HEA  –  BCC (Im-3m) + B2 (Pm-3m)
 
 **Physics**
+
 Laue condition (Ewald construction):
-    lambda_hkl = -4*pi * (k_i_hat . G_hkl) / |G_hkl|^2
+
+$$
+\\lambda_{hkl} = -\\frac{4\\pi\\,(\\hat{k}_i \\cdot \\mathbf{G}_{hkl})}{|\\mathbf{G}_{hkl}|^2}
+$$
 
 Spot intensity:
-    I(hkl) = |F(G,E)|^2 * LP(2theta) * S(E)
 
-  F(G,E)    – structure factor via xrayutilities (Cromer-Mann f0 +
-               Henke f'(E), f''(E) anomalous corrections)
-  LP(2theta) – Lorentz-polarisation (unpolarised beam):
-               LP = (1 + cos^2(2theta)) / (2*sin^2(theta)*cos(theta))
-  S(E)      – synchrotron spectrum (bending magnet, wiggler, or undulator)
-               NO bremsstrahlung
+$$
+I(hkl) = |F(\\mathbf{G}, E)|^2 \\cdot LP(2\\theta) \\cdot S(E)
+$$
+
+where
+
+- $F(\\mathbf{G}, E)$ — structure factor via xrayutilities (Cromer–Mann $f^0$ + Henke $f'(E)$, $f''(E)$ anomalous corrections)
+- $LP(2\\theta)$ — Lorentz–polarisation factor (unpolarised beam):
+
+$$
+LP = \\frac{1 + \\cos^2 2\\theta}{2\\sin^2\\theta\\,\\cos\\theta}
+$$
+
+- $S(E)$ — synchrotron spectrum (bending magnet, wiggler, or undulator); no bremsstrahlung
 
 **Synchrotron spectra**
-  Bending magnet / wiggler (on-axis, Kim 1989):
-      S(E) ∝ (E/Ec)^2 * K_{2/3}^2(E / 2*Ec)
-      Peak at E ≈ 0.83*Ec.  Wiggler: flux x 2*N_poles.
 
-  Undulator (planar, odd harmonics):
-      S(E) = sum_n (1/n) * exp[-0.5*((E - n*E1)/sigma_n)^2]
+Bending magnet / wiggler (on-axis, Kim 1989):
+
+$$
+S(E) \\propto \\left(\\frac{E}{E_c}\\right)^2 K_{2/3}^2\\!\\left(\\frac{E}{2E_c}\\right)
+$$
+
+Peak at $E \\approx 0.83\\,E_c$.  Wiggler: flux $\\times 2N_\\text{poles}$.
+
+Undulator (planar, odd harmonics):
+
+$$
+S(E) = \\sum_n \\frac{1}{n}\\exp\\!\\left[-\\tfrac{1}{2}
+\\left(\\frac{E - nE_1}{\\sigma_n}\\right)^2\\right]
+$$
 
 **Camera model**
-  The detector is a flat pixelated area detector (e.g. Eiger, Pilatus,
-  MAR, Perkin-Elmer, ...) described by:
 
-    PIXEL_SIZE_MM      – pixel pitch (mm)
-    N_PIX_H, N_PIX_V   – number of pixels (horizontal, vertical)
-    DET_DIST_MM        – sample to detector-centre distance (mm)
-    TTH_CENTER_DEG     – 2theta angle at the detector centre (deg)
-                         Can be ANY angle, not restricted to 90°.
-    NU_DEG             – out-of-plane (elevation) angle of detector centre
-    CHI_DEG            – in-plane rotation of detector about its own normal
+The detector is a flat pixelated area detector (e.g. Eiger, Pilatus,
+MAR, Perkin-Elmer, …) described by:
 
-  For each diffracted beam direction kf_hat the code:
-    1. Intersects the ray with the detector plane (exact geometry).
-    2. Converts the hit position to (col, row) pixel coordinates.
-    3. Renders a synthetic image with Gaussian spot profiles whose
-       width is set by SPOT_SIGMA_PIX.
+- `PIXEL_SIZE_MM` — pixel pitch (mm)
+- `N_PIX_H`, `N_PIX_V` — number of pixels (horizontal, vertical)
+- `DET_DIST_MM` — sample-to-detector-centre distance (mm)
+- `TTH_CENTER_DEG` — $2\\theta$ angle at the detector centre (deg); can be any angle, not restricted to 90°
+- `NU_DEG` — out-of-plane (elevation) angle of detector centre
+- `CHI_DEG` — in-plane rotation of detector about its own normal
 
-  The direct-beam footprint on the detector is also computed (if it
-  would hit) so you can check the geometry is sensible.
+For each diffracted beam direction $\\hat{k}_f$ the code:
+
+1. Intersects the ray with the detector plane (exact geometry).
+2. Converts the hit position to (col, row) pixel coordinates.
+3. Renders a synthetic image with Gaussian spot profiles whose width is set by `SPOT_SIGMA_PIX`.
+
+The direct-beam footprint on the detector is also computed (if it
+would hit) so you can check the geometry is sensible.
 
 **Orientation**
-  Full orientation via Bunge ZXZ Euler angles (phi1, Phi, phi2).
-  A Bragg-energy reference table is printed at runtime.
+
+Full orientation via Bunge ZXZ Euler angles $(\phi_1, \\Phi, \\phi_2)$.
+A Bragg-energy reference table is printed at runtime.
 """
 
 import numpy as np

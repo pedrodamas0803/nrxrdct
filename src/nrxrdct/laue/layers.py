@@ -2,74 +2,89 @@
 layered_structure_factor.py
 ============================
 Model a stack of crystalline layers with known orientation relationships (OR)
-and compute the total kinematical structure factor  F(Q)  and intensity  |F(Q)|².
+and compute the total kinematical structure factor $F(\\mathbf{Q})$ and
+intensity $|F(\\mathbf{Q})|^2$.
 
 **Physics**
+
 In the kinematical (Born) approximation the total scattered amplitude is the
 coherent sum of contributions from every unit cell in the stack:
 
-    A(Q) = Σ_{layers l}  F_l(Q_cry_l) · Σ_{n=0}^{N_l-1} exp(i Q·R_{l,n})
+$$
+A(\\mathbf{Q}) = \\sum_l F_l(\\mathbf{Q}^\\text{cry}_l)
+\\cdot \\sum_{n=0}^{N_l-1} \\exp(i\\,\\mathbf{Q}\\cdot\\mathbf{R}_{l,n})
+$$
 
 where
-    Q          – scattering vector in the lab frame  (Å⁻¹)
-    Q_cry_l    – Q expressed in the crystal frame of layer l  =  U_l^T · Q
-    F_l(Q_cry) – unit-cell structure factor of layer l
-                 computed by xrayutilities with energy-dependent
-                 Cromer-Mann + Henke anomalous scattering factors
-    R_{l,n}    – position of the nth unit cell of layer l
-                 = z0_l · ẑ  +  n · c_l · ẑ  (1D stacking along ẑ)
-    z0_l       – cumulative thickness of all layers below layer l
 
-The geometric sum  Σ exp(i n φ)  is evaluated analytically:
-    (1 − exp(iNφ)) / (1 − exp(iφ))  if  φ mod 2π ≠ 0,  else  N
+- $\\mathbf{Q}$ — scattering vector in the lab frame (Å⁻¹)
+- $\\mathbf{Q}^\\text{cry}_l = U_l^T\\,\\mathbf{Q}$ — $\\mathbf{Q}$ expressed in the crystal frame of layer $l$
+- $F_l(\\mathbf{Q}^\\text{cry})$ — unit-cell structure factor of layer $l$, computed by xrayutilities with energy-dependent Cromer–Mann + Henke anomalous scattering factors
+- $\\mathbf{R}_{l,n} = z_{0,l}\\,\\hat{z} + n\\,c_l\\,\\hat{z}$ — position of the $n$-th unit cell of layer $l$ (1-D stacking along $\\hat{z}$)
+- $z_{0,l}$ — cumulative thickness of all layers below layer $l$
 
-For a superlattice with N_rep bilayer repetitions an additional geometric
-factor is applied over the full bilayer period Λ.
+The geometric sum $\\sum_n \\exp(in\\varphi)$ is evaluated analytically:
+
+$$
+\\frac{1 - \\exp(iN\\varphi)}{1 - \\exp(i\\varphi)}
+\\quad \\text{if } \\varphi \\bmod 2\\pi \\neq 0, \\qquad N \\text{ otherwise.}
+$$
+
+For a superlattice with $N_\\text{rep}$ bilayer repetitions an additional
+geometric factor is applied over the full bilayer period $\\Lambda$.
 
 **Orientation relationship**
-The orientation U of each layer maps crystal-frame vectors to the lab frame:
-    G_lab = U @ G_crystal
+
+The orientation $U$ of each layer maps crystal-frame vectors to the lab frame:
+
+$$
+\\mathbf{G}_\\text{lab} = U\\,\\mathbf{G}_\\text{crystal}
+$$
 
 The OR between two phases A and B is specified by two direction pairs
-(primary and secondary), defining a rotation R_OR such that:
-    U_B = R_OR @ U_A
+(primary and secondary), defining a rotation $R_\\text{OR}$ such that
+$U_B = R_\\text{OR}\\,U_A$.
 
 Common ORs implemented as helpers:
-    or_nishiyama_wassermann  (NW)  – FCC/BCC
-    or_kurdjumov_sachs       (KS)  – FCC/BCC
-    or_baker_nutting         (BN)  – BCC/rock-salt (e.g. Fe/MgO)
-    or_from_directions            – generic two-direction specification
+
+- `or_nishiyama_wassermann` (NW) — FCC/BCC
+- `or_kurdjumov_sachs` (KS) — FCC/BCC
+- `or_baker_nutting` (BN) — BCC/rock-salt (e.g. Fe/MgO)
+- `or_from_directions` — generic two-direction specification
 
 **Usage**
-    from layered_structure_factor import LayeredCrystal, or_kurdjumov_sachs
-    import xrayutilities as xu
-    import numpy as np
 
-    Fe = xu.materials.Fe
-    Cu = xu.materials.Cu
+```python
+from layered_structure_factor import LayeredCrystal, or_kurdjumov_sachs
+import xrayutilities as xu
+import numpy as np
 
-    # Orient Fe with [001] along the stacking direction (lab z)
-    U_Fe = orientation_along_z([0, 0, 1], Fe)
+Fe = xu.materials.Fe
+Cu = xu.materials.Cu
 
-    # Derive Cu orientation via Kurdjumov-Sachs OR
-    U_Cu = or_kurdjumov_sachs(Fe, Cu) @ U_Fe
+# Orient Fe with [001] along the stacking direction (lab z)
+U_Fe = orientation_along_z([0, 0, 1], Fe)
 
-    # Build the stack: 20 Fe unit cells / 20 Cu unit cells, 5 repetitions
-    stack = LayeredCrystal()
-    stack.add_layer(Fe, U_Fe, thickness=57.4, label='Fe')   # ~20 cells × 2.87 Å
-    stack.add_layer(Cu, U_Cu, thickness=72.6, label='Cu')   # ~20 cells × 3.63 Å
-    stack.set_repetitions(5)
+# Derive Cu orientation via Kurdjumov-Sachs OR
+U_Cu = or_kurdjumov_sachs(Fe, Cu) @ U_Fe
 
-    # Compute |F(Q)|² along a scan
-    qz = np.linspace(1.0, 6.0, 4000)
-    Q_scan = np.column_stack([np.zeros_like(qz),
-                              np.zeros_like(qz), qz])   # along lab z
-    intensity = stack.intensity(Q_scan, energy_eV=17000)
+# Build the stack: 20 Fe unit cells / 20 Cu unit cells, 5 repetitions
+stack = LayeredCrystal()
+stack.add_layer(Fe, U_Fe, thickness=57.4, label='Fe')   # ~20 cells × 2.87 Å
+stack.add_layer(Cu, U_Cu, thickness=72.6, label='Cu')   # ~20 cells × 3.63 Å
+stack.set_repetitions(5)
 
-    # Or single Q-point
-    Q = np.array([0., 0., 3.09])
-    F  = stack.structure_factor(Q, energy_eV=17000)
-    print(f'|F(Q)| = {abs(F):.4f} e.u.')
+# Compute |F(Q)|² along a scan
+qz = np.linspace(1.0, 6.0, 4000)
+Q_scan = np.column_stack([np.zeros_like(qz),
+                          np.zeros_like(qz), qz])   # along lab z
+intensity = stack.intensity(Q_scan, energy_eV=17000)
+
+# Or single Q-point
+Q = np.array([0., 0., 3.09])
+F  = stack.structure_factor(Q, energy_eV=17000)
+print(f'|F(Q)| = {abs(F):.4f} e.u.')
+```
 """
 
 import numpy as np

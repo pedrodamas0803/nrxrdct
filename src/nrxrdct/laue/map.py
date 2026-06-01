@@ -1062,6 +1062,7 @@ class GrainMap:
         grain: "int | str" = 0,
         kernel: int = 1,
         max_misor_deg: float | None = 5.0,
+        label_map: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Kernel Average Misorientation (KAM) map.
@@ -1079,6 +1080,12 @@ class GrainMap:
         adjacent pixels whose orientation matrices are in different crystal
         reference frames.
 
+        When *label_map* is provided (the ``label_map`` returned by
+        :meth:`cluster_orientations`), neighbour pairs that belong to different
+        clusters are also skipped.  This is a symmetry-aware alternative (or
+        complement) to *max_misor_deg* for excluding cross-boundary pairs:
+        pixels labelled ``-1`` (noise) are never included as neighbours.
+
         Args:
             grain (int or 'merged'): Grain index (0-based) or ``'merged'`` to
                 use the per-pixel flag map set by :meth:`apply_merge`.
@@ -1089,6 +1096,10 @@ class GrainMap:
             max_misor_deg (float or None): Neighbour pairs with misorientation above this value are ignored.
                 Set to `None` to include all neighbours regardless of angle.
                 Default `5.0`°.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When supplied, only neighbours
+                that share the same non-negative cluster label as the centre
+                pixel are included.  Default ``None``.
 
         Returns:
             kam ((ny, nx) ndarray): KAM values in degrees.  `NaN` at unfitted points or points
@@ -1115,6 +1126,8 @@ class GrainMap:
             for ix in range(self.nx):
                 if not valid[iy, ix]:
                     continue
+                if label_map is not None and label_map[iy, ix] < 0:
+                    continue
                 U0     = U[iy, ix]
                 angles = []
                 for dy, dx in offsets:
@@ -1124,6 +1137,9 @@ class GrainMap:
                         continue
                     if (grain == 'merged'
                             and self.best_grain_map[iy, ix] != self.best_grain_map[jy, jx]):
+                        continue
+                    if (label_map is not None
+                            and label_map[jy, jx] != label_map[iy, ix]):
                         continue
                     dR    = U0 @ U[jy, jx].T
                     angle = np.degrees(
@@ -1463,6 +1479,7 @@ class GrainMap:
         grain: "int | str" = 0,
         kernel: int = 1,
         max_misor_deg: float | None = 5.0,
+        label_map: np.ndarray | None = None,
         *,
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
@@ -1491,6 +1508,10 @@ class GrainMap:
             max_misor_deg (float or None): Neighbour pairs with misorientation above this threshold are
                 excluded from the average.  `None` includes all neighbours.
                 Default `5.0`°.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When supplied, cross-cluster
+                neighbour pairs are excluded before the *max_misor_deg* check.
+                Default ``None``.
             ax (Axes or None): Existing axes to draw on.  If `None` a new figure is created.
             cmap (str or None): Colormap.  Defaults to `'inferno'`.
             vmin, vmax (float or None): Color scale limits.  `None` uses the data range.
@@ -1504,7 +1525,8 @@ class GrainMap:
             fig (Figure):
             ax (Axes):
 """
-        data = self.kam_map(grain, kernel=kernel, max_misor_deg=max_misor_deg)
+        data = self.kam_map(grain, kernel=kernel, max_misor_deg=max_misor_deg,
+                            label_map=label_map)
         cmap = cmap or "inferno"
 
         mu = motor_units or {}

@@ -8058,6 +8058,124 @@ class GrainMap:
             field = np.where(np.isnan(data), 0.0, data)
             return [_smooth_contour(c) for c in _find_contours(field, level=level)]
 
+    def extract_grain_boundaries(
+        self,
+        label_map: np.ndarray,
+        grain: "int | str" = "merged",
+        smooth: float = 0.0,
+        n_out: int = 500,
+    ) -> "list[dict]":
+        """
+        Extract sub-pixel grain boundary contours from a cluster label map,
+        annotated with the two neighbouring cluster labels and the
+        misorientation angle between their mean orientations.
+
+        For each unique pair of adjacent cluster labels a contour is traced at
+        the halfway point between the two label regions (``find_contours`` at
+        ``level=0.5`` on a field that is 0 for label *a* and 1 for label *b*,
+        with NaN elsewhere so that only the shared boundary is traced).
+
+        Args:
+            label_map ((ny, nx) int ndarray): Cluster labels as returned by
+                :meth:`cluster_orientations`.  ``-1`` = noise / unfitted.
+            grain (int or 'merged'): Grain selector matching the call to
+                :meth:`cluster_orientations`.
+            smooth (float): Spline smoothing factor (``splprep`` *s*).  ``0``
+                keeps the raw sub-pixel contour.  Default ``0``.
+            n_out (int): Points per smoothed contour.  Default ``500``.
+
+        Returns:
+            boundaries (list of dict): One entry per unique adjacent label pair,
+            each dict containing:
+
+            * ``'label_a'`` (int) — first cluster label
+            * ``'label_b'`` (int) — second cluster label
+            * ``'misorientation_deg'`` (float) — angle between the mean
+              orientations of the two clusters, in degrees
+            * ``'contours'`` (list of (N, 2) ndarray) — boundary polylines in
+              ``(row, col)`` coordinates; pass ``c[:, 1], c[:, 0]`` to
+              ``ax.plot``
+
+        Example::
+
+            labels, label_map = gmap.cluster_orientations('merged', symmetry='cubic')
+            boundaries = gmap.extract_grain_boundaries(label_map, grain='merged', smooth=8.0)
+
+            fig, ax = plt.subplots()
+            ax.imshow(misor, origin='upper')
+            for b in boundaries:
+                color = 'red' if b['misorientation_deg'] > 10 else 'white'
+                for c in b['contours']:
+                    ax.plot(c[:, 1], c[:, 0], color=color, lw=0.8)
+"""
+        from skimage.measure import find_contours as _find_contours
+
+        def _smooth_contour(contour):
+            if smooth <= 0 or len(contour) < 4:
+                return contour
+            from scipy.interpolate import splprep, splev
+            closed = np.allclose(contour[0], contour[-1], atol=1.0)
+            xy = contour[:-1] if closed else contour
+            try:
+                tck, _ = splprep([xy[:, 0], xy[:, 1]], s=smooth, per=closed)
+            except Exception:
+                return contour
+            r_s, c_s = splev(np.linspace(0, 1, n_out), tck)
+            return np.column_stack([r_s, c_s])
+
+        def _angle_from_matrix(dR):
+            tr = dR[0, 0] + dR[1, 1] + dR[2, 2]
+            return float(np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0))))
+
+        # --- orientations for valid pixels ---
+        if grain == "merged":
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            bgm      = self.best_grain_map
+            valid    = bgm >= 0
+            iy_v, ix_v = np.where(valid)
+            g_v      = bgm[iy_v, ix_v]
+        else:
+            valid    = ~np.any(np.isnan(self.U[grain]), axis=(-2, -1))
+            iy_v, ix_v = np.where(valid)
+            g_v      = np.full(len(iy_v), grain, dtype=int)
+
+        U_flat   = self.U[g_v, iy_v, ix_v]   # (N, 3, 3)
+        labels_v = label_map[iy_v, ix_v]     # (N,)
+
+        # --- unique adjacent label pairs ---
+        def _pairs_along(axis):
+            A = np.take(label_map, range(label_map.shape[axis] - 1), axis=axis)
+            B = np.take(label_map, range(1, label_map.shape[axis]), axis=axis)
+            ok = (A >= 0) & (B >= 0) & (A != B)
+            return np.sort(np.column_stack([A[ok].ravel(), B[ok].ravel()]), axis=1)
+
+        all_pairs    = np.vstack([_pairs_along(0), _pairs_along(1)])
+        unique_pairs = np.unique(all_pairs, axis=0)
+
+        # --- build one boundary entry per pair ---
+        boundaries = []
+        for a, b in unique_pairs:
+            U_a   = U_flat[labels_v == a]
+            U_b   = U_flat[labels_v == b]
+            ref_a = self._mean_rotation(U_a)
+            ref_b = self._mean_rotation(U_b)
+            misor = _angle_from_matrix(ref_a @ ref_b.T)
+
+            field = np.full(label_map.shape, np.nan, dtype=np.float32)
+            field[label_map == a] = 0.0
+            field[label_map == b] = 1.0
+            contours = [_smooth_contour(c) for c in _find_contours(field, level=0.5)]
+
+            boundaries.append({
+                "label_a":            int(a),
+                "label_b":            int(b),
+                "misorientation_deg": misor,
+                "contours":           contours,
+            })
+
+        return boundaries
+
     def __repr__(self) -> str:
         fitted = int(np.sum(self.n_matched >= 0)) if self.n_grains else 0
         return (

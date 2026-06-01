@@ -38,6 +38,7 @@ import subprocess
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from scipy.spatial.transform import Rotation
 
 
@@ -1666,6 +1667,8 @@ class GrainMap:
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
         ax: "plt.Axes | None" = None,
         cmap: str | None = None,
         vmin: float | None = None,
@@ -1698,6 +1701,12 @@ class GrainMap:
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
             sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, pixels with
+                ``label == -1`` (noise) are masked out.  Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict the
+                plot to pixels that belong to this specific cluster label.
+                ``None`` shows all non-noise pixels.  Default ``None``.
             ax (Axes or None): Existing axes to draw into.  A new figure is created when ``None``.
             cmap (str or None): Colormap name.  Defaults to ``'RdBu_r'``.
             vmin, vmax (float or None): Colour scale limits.
@@ -1716,9 +1725,12 @@ class GrainMap:
                 f"Choose from: {sorted(self._STRAIN_INDICES)}"
             )
 
-        data  = self._deviatoric_component_map(
+        data = self._deviatoric_component_map(
             component, grain, frame, sample_tilt_deg, sample_tilt_axis
         )
+        if label_map is not None:
+            _mask = (label_map != label) if label is not None else (label_map < 0)
+            data  = np.where(_mask, np.nan, data)
         label = self._STRAIN_DEV_LABELS[component]
         cmap  = cmap or "RdBu_r"
 
@@ -1764,8 +1776,15 @@ class GrainMap:
         }[frame]
         ax.set_xlabel(xlabel, fontsize=9)
         ax.set_ylabel(ylabel, fontsize=9)
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
         ax.set_title(
-            title or f"{self._grain_label(grain)}  —  {label} (deviatoric)  [{_frame_label}]",
+            title or (
+                f"{self._grain_label(grain)}  —  {self._STRAIN_DEV_LABELS[component]}"
+                f" (deviatoric)  [{_frame_label}]{_lbl_suffix}"
+            ),
             fontsize=10,
         )
         fig.tight_layout()
@@ -1882,6 +1901,8 @@ class GrainMap:
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
         cmap: str | None = None,
         vmin: float | None = None,
         vmax: float | None = None,
@@ -1910,6 +1931,13 @@ class GrainMap:
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
             sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, noise pixels
+                (``label == -1``) are masked out across all six panels.
+                Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict all
+                panels to pixels that belong to this specific cluster label.
+                ``None`` shows all non-noise pixels.  Default ``None``.
             cmap (str or None): Colormap.  Defaults to ``'RdBu_r'``.
             vmin, vmax (float or None): Shared colour-scale limits.  When both are
                 ``None`` and ``symmetric_clim=True``, limits are set to
@@ -1944,13 +1972,16 @@ class GrainMap:
             xlabel = "column (ix)"
             ylabel = "row (iy)"
 
-        # ── collect data and determine shared colour limits ────────────────────
+        # ── collect data and apply cluster mask ───────────────────────────────
         maps = {
             comp: self._deviatoric_component_map(
                 comp, grain, frame, sample_tilt_deg, sample_tilt_axis
             )
             for comp in _order
         }
+        if label_map is not None:
+            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+            maps = {comp: np.where(_lbl_mask, np.nan, m) for comp, m in maps.items()}
 
         if vmin is None and vmax is None and symmetric_clim:
             finite = np.concatenate([m[np.isfinite(m)].ravel() for m in maps.values()])
@@ -1999,8 +2030,15 @@ class GrainMap:
             "lab":     "lab frame",
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }.get(frame, frame)
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
         fig.suptitle(
-            title or f"{self._grain_label(grain)}  —  deviatoric strain  [{_frame_label}]",
+            title or (
+                f"{self._grain_label(grain)}  —  deviatoric strain"
+                f"  [{_frame_label}]{_lbl_suffix}"
+            ),
             fontsize=11,
         )
         return fig, axes
@@ -3154,6 +3192,7 @@ class GrainMap:
         symmetry: str = "cubic",
         figsize: "tuple | None" = None,
         show_title: bool = False,
+        ax: "plt.Axes | None" = None,
     ):
         """Return a standalone IPF colour-key figure.
 
@@ -3168,8 +3207,12 @@ class GrainMap:
             symmetry (str): Crystal symmetry — ``'cubic'``, ``'hexagonal'``,
                 ``'tetragonal'``, or ``'orthorhombic'``.
             figsize (tuple or None): Figure size ``(width, height)`` in inches.
+                Ignored when *ax* is provided.
             show_title (bool): If ``True`` keep the symmetry-name title that
                 orix adds above non-cubic wedges.
+            ax (Axes or None): Existing axes to draw into.  If ``None`` a new
+                figure is created.  For non-cubic symmetries *ax* is ignored
+                because orix creates its own figure.
 
         Returns:
             (fig, ax): Matplotlib figure and axes.
@@ -3178,15 +3221,32 @@ class GrainMap:
 
             fig, ax = GrainMap.plot_ipf_colorkey("hexagonal")
             fig.savefig("ipf_key_hex.pdf", bbox_inches="tight")
+
+            # Add to an existing axes
+            fig, axes = plt.subplots(1, 2)
+            GrainMap.plot_ipf_colorkey("cubic", ax=axes[1])
         """
         import matplotlib.pyplot as plt
         sym = GrainMap._orix_symmetry(symmetry)
         from orix.quaternion import symmetry as _osym
         from orix.plot import IPFColorKeyTSL
 
+        def _lambert_uv(direction):
+            d = np.asarray(direction, float)
+            d /= np.linalg.norm(d)
+            z = d[2]
+            r2 = 2.0 * (1.0 - z)
+            if r2 < 1e-10:
+                return 0.0, 0.0
+            fac = float(np.sqrt(max(1.0 - r2 / 4.0, 0.0)))
+            return float(d[0] / fac), float(d[1] / fac)
+
         if sym is _osym.Oh:
             # ── cubic: Lambert FZ rendering matching _ipf_colorkey_inset ─────
-            fig, ax = plt.subplots(figsize=figsize or (3, 3))
+            if ax is None:
+                fig, ax = plt.subplots(figsize=figsize or (3, 3))
+            else:
+                fig = ax.get_figure()
 
             _r2max  = 2.0
             _rl     = np.sqrt(_r2max)
@@ -3214,12 +3274,24 @@ class GrainMap:
             u_fz = Ug[in_disk][in_fz]
             v_fz = Vg[in_disk][in_fz]
             span  = max(u_fz.max() - u_fz.min(), v_fz.max() - v_fz.min())
-            pad   = span * 0.12
+            pad   = span * 0.18
             ax.set_xlim(u_fz.min() - pad, u_fz.max() + pad)
             ax.set_ylim(v_fz.min() - pad, v_fz.max() + pad)
             ax.set_xticks([]); ax.set_yticks([])
             for sp in ax.spines.values():
                 sp.set_visible(False)
+
+            # crystal-direction labels at the three FZ corners
+            _corner_labels = [
+                ([0, 0, 1], "001", "center", "top"),
+                ([1, 0, 1], "101", "left",   "center"),
+                ([1, 1, 1], "111", "left",   "bottom"),
+            ]
+            for direction, text, ha, va in _corner_labels:
+                u, v = _lambert_uv(direction)
+                ax.text(u, v, text, ha=ha, va=va,
+                        fontsize=7, fontweight="bold",
+                        transform=ax.transData)
 
         else:
             # ── non-cubic: delegate to orix ───────────────────────────────────
@@ -7831,7 +7903,7 @@ class GrainMap:
         self,
         grain: "int | str" = "merged",
         symmetry: str = "cubic",
-    ) -> "tuple[Orientation, np.ndarray, np.ndarray]":
+    ) -> tuple:
         """
         Return orix ``Orientation`` objects for all fitted map pixels.
 

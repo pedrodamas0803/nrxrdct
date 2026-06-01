@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Azimuthal Integration - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Azimuthal Integration";
+        var mkdocs_page_input_path = "user-guide/azimuthal_integration.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Azimuthal Integration</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-overview">1. Overview</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-integration-methods">2. Integration methods</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#21-basic-integration-azimuthal_integration_1d">2.1 Basic integration — azimuthal_integration_1d</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#22-sigma-clipping-azimuthal_integration_1d_sigma_clip">2.2 Sigma-clipping — azimuthal_integration_1d_sigma_clip</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#23-percentile-filtering-azimuthal_integration_1d_filter">2.3 Percentile filtering — azimuthal_integration_1d_filter</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#24-choosing-a-method">2.4 Choosing a method</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-2-d-cake-integration">3. 2-D CAKE integration</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-parallel-batch-integration-integrate_powder_parallel">4. Parallel batch integration — integrate_powder_parallel</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-output-units">5. Output units</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+      <li class="breadcrumb-item active">Azimuthal Integration</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/azimuthal_integration.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="azimuthal-integration">Azimuthal Integration<a class="headerlink" href="#azimuthal-integration" title="Permanent link">&para;</a></h1>
+<p>This page describes how <code>nrxrdct</code> converts raw 2-D detector frames into
+1-D powder patterns using pyFAI, which three integration strategies are
+available, when to use each, and how to run bulk integration in parallel.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: a PONI calibration file produced by pyFAI-calib2 or an
+equivalent tool.  See <a href="../quickstart/">Quickstart</a> for the full pipeline
+context.</p>
+</blockquote>
+<hr />
+<h2 id="1-overview">1. Overview<a class="headerlink" href="#1-overview" title="Permanent link">&para;</a></h2>
+<p>Azimuthal integration collapses the 2-D intensity ring pattern on the
+detector into a 1-D pattern as a function of scattering angle 2θ (or
+momentum transfer <em>q</em>).  The three functions differ in how they handle
+diffraction spots from single-crystal grains or hot pixels embedded in
+the powder signal:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Raw 2-D frame
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ▼  (optional) dark/flat correction
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    ▼  integration method
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    ▼  1-D pattern  (radial, intensity, sigma)
+</code></pre></div>
+<p>All functions share the same output signature:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">radial</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="n">integrate_</span><span class="o">*</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</code></pre></div>
+<p>The <code>AzimuthalIntegrator</code> is cached per PONI file, so calling any
+function in a loop over thousands of frames does not reload the detector
+geometry.</p>
+<hr />
+<h2 id="2-integration-methods">2. Integration methods<a class="headerlink" href="#2-integration-methods" title="Permanent link">&para;</a></h2>
+<h3 id="21-basic-integration-azimuthal_integration_1d">2.1 Basic integration — <code>azimuthal_integration_1d</code><a class="headerlink" href="#21-basic-integration-azimuthal_integration_1d" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.azimuthal.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">azimuthal_integration_1d</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">radial</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="n">azimuthal_integration_1d</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">npt</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;2th_deg&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">dark</span><span class="o">=</span><span class="n">dark</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">flat</span><span class="o">=</span><span class="n">flat</span><span class="p">,</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">error_model</span><span class="o">=</span><span class="s2">&quot;poisson&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="p">)</span>
+</code></pre></div>
+<p>Internally calls pyFAI's <code>separate()</code> to isolate the powder background
+from single-crystal spots, then integrates the background component.
+Use this when the frame contains a strong powder ring and the
+crystalline spots are clearly separable.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>npt</code></td>
+<td><code>1000</code></td>
+<td>Number of radial bins</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td><code>"2th_deg"</code></td>
+<td><code>"2th_deg"</code>, <code>"q_A^-1"</code>, <code>"q_nm^-1"</code>, <code>"2th_rad"</code>, <code>"r_mm"</code></td>
+</tr>
+<tr>
+<td><code>mask</code></td>
+<td><code>None</code></td>
+<td>2-D array, <code>1</code> = masked, <code>0</code> = valid</td>
+</tr>
+<tr>
+<td><code>dark</code></td>
+<td><code>None</code></td>
+<td>Dark-current image</td>
+</tr>
+<tr>
+<td><code>flat</code></td>
+<td><code>None</code></td>
+<td>Flat-field image</td>
+</tr>
+<tr>
+<td><code>error_model</code></td>
+<td><code>None</code></td>
+<td><code>"poisson"</code> for photon-counting detectors</td>
+</tr>
+<tr>
+<td><code>radial_range</code></td>
+<td><code>None</code></td>
+<td><code>(min, max)</code> in chosen unit</td>
+</tr>
+<tr>
+<td><code>azimuth_range</code></td>
+<td><code>None</code></td>
+<td><code>(min, max)</code> in degrees</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="22-sigma-clipping-azimuthal_integration_1d_sigma_clip">2.2 Sigma-clipping — <code>azimuthal_integration_1d_sigma_clip</code><a class="headerlink" href="#22-sigma-clipping-azimuthal_integration_1d_sigma_clip" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.azimuthal.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">azimuthal_integration_1d_sigma_clip</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">radial</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="n">azimuthal_integration_1d_sigma_clip</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">npt</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">thres</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">max_iter</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">error_model</span><span class="o">=</span><span class="s2">&quot;hybrid&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">)</span>
+</code></pre></div>
+<p>Iteratively removes pixels whose intensity deviates more than <code>thres</code>
+standard deviations from the bin mean, then integrates the surviving
+pixels.  Best for frames where Bragg spots from secondary phases or
+single crystals contaminate the powder rings.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>thres</code></td>
+<td><code>3.0</code></td>
+<td>Sigma-clipping threshold (standard deviations)</td>
+</tr>
+<tr>
+<td><code>max_iter</code></td>
+<td><code>5</code></td>
+<td>Maximum clipping iterations</td>
+</tr>
+<tr>
+<td><code>error_model</code></td>
+<td><code>"hybrid"</code></td>
+<td><code>"hybrid"</code> (Poisson + readout) or <code>"poisson"</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use</strong>: polycrystalline samples with occasional strong
+single-crystal reflections; frames where <code>separate()</code> clips too
+aggressively and removes real powder signal.</p>
+<hr />
+<h3 id="23-percentile-filtering-azimuthal_integration_1d_filter">2.3 Percentile filtering — <code>azimuthal_integration_1d_filter</code><a class="headerlink" href="#23-percentile-filtering-azimuthal_integration_1d_filter" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.azimuthal.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">azimuthal_integration_1d_filter</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">radial</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="n">azimuthal_integration_1d_filter</span><span class="p">(</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">npt</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">percentile</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">99</span><span class="p">),</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>Within each radial bin, discards pixels outside the <code>(low, high)</code>
+percentile range before averaging.  Simpler than sigma-clipping — no
+iterative loop — and robust against outliers when the spot fraction
+per bin is below <code>(100 - high) %</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>percentile</code></td>
+<td><code>(0, 99)</code></td>
+<td><code>(low, high)</code> percentile cutoffs per bin</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use</strong>: fast batch processing where a fixed percentile cutoff
+is acceptable; frames with well-isolated hot pixels.</p>
+<hr />
+<h3 id="24-choosing-a-method">2.4 Choosing a method<a class="headerlink" href="#24-choosing-a-method" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Recommended</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pure powder, no single-crystal spots</td>
+<td><code>azimuthal_integration_1d</code></td>
+</tr>
+<tr>
+<td>Mixture with occasional strong Bragg spots</td>
+<td><code>azimuthal_integration_1d_sigma_clip</code></td>
+</tr>
+<tr>
+<td>Fast scan, simple outlier rejection</td>
+<td><code>azimuthal_integration_1d_filter</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-2-d-cake-integration">3. 2-D CAKE integration<a class="headerlink" href="#3-2-d-cake-integration" title="Permanent link">&para;</a></h2>
+<p><code>cake_integration</code> produces a 2-D (azimuth × radial) map that preserves
+texture information:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.azimuthal.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">cake_integration</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">cake</span><span class="p">,</span> <span class="n">radial</span><span class="p">,</span> <span class="n">azimuthal</span> <span class="o">=</span> <span class="n">cake_integration</span><span class="p">(</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">image</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">npt_rad</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">npt_azim</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;2th_deg&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="p">)</span>
+</code></pre></div>
+<p>The returned <code>cake</code> array has shape <code>(npt_azim, npt_rad)</code>.  Plot it
+with <code>plot_integrated_cake</code> from <code>nrxrdct.xrdct.visualization</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_integrated_cake</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plot_integrated_cake</span><span class="p">(</span><span class="n">cake</span><span class="p">,</span> <span class="n">radial</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="4-parallel-batch-integration-integrate_powder_parallel">4. Parallel batch integration — <code>integrate_powder_parallel</code><a class="headerlink" href="#4-parallel-batch-integration-integrate_powder_parallel" title="Permanent link">&para;</a></h2>
+<p>For large scans (thousands of frames) run all integrations in parallel
+using a <code>ProcessPoolExecutor</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.azimuthal.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">integrate_powder_parallel</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">integrate_powder_parallel</span><span class="p">(</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">&quot;data/scan.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">output_file</span><span class="o">=</span><span class="s2">&quot;integrated.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">&quot;mask.npy&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">rot</span><span class="o">=</span><span class="mi">90</span><span class="p">,</span>               <span class="c1"># detector rotation in degrees</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">n_points</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">n_workers</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>n_points</code></td>
+<td><code>1000</code></td>
+<td>Radial bins per pattern</td>
+</tr>
+<tr>
+<td><code>n_workers</code></td>
+<td><code>16</code></td>
+<td>Parallel worker processes</td>
+</tr>
+<tr>
+<td><code>rot</code></td>
+<td>—</td>
+<td>Detector rotation correction (degrees)</td>
+</tr>
+</tbody>
+</table>
+<p>Results are written to <code>output_file</code> as an HDF5 dataset consumable by
+<code>assemble_sinogram</code>.  For HPC / SLURM clusters see <a href="../slurm/">SLURM Integration</a>.</p>
+<hr />
+<h2 id="5-output-units">5. Output units<a class="headerlink" href="#5-output-units" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>unit</code> string</th>
+<th>Axis label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"2th_deg"</code></td>
+<td>2θ (degrees)</td>
+</tr>
+<tr>
+<td><code>"2th_rad"</code></td>
+<td>2θ (radians)</td>
+</tr>
+<tr>
+<td><code>"q_A^-1"</code></td>
+<td><em>q</em> (Å⁻¹)</td>
+</tr>
+<tr>
+<td><code>"q_nm^-1"</code></td>
+<td><em>q</em> (nm⁻¹)</td>
+</tr>
+<tr>
+<td><code>"r_mm"</code></td>
+<td>Radius on detector (mm)</td>
+</tr>
+</tbody>
+</table>
+<p>Convert between 2θ and <em>q</em> using <span class="arithmatex">\(q = \frac{4\pi\sin\theta}{\lambda}\)</span>.</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_grain_map_merge/" class="btn btn-neutral float-left" title="Grain Map Merging and Symmetry Reduction"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../fitting/" class="btn btn-neutral float-right" title="Peak Fitting and NMF">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_grain_map_merge/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../fitting/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

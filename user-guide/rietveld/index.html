@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Rietveld Refinement - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Rietveld Refinement";
+        var mkdocs_page_input_path = "user-guide/rietveld.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Rietveld Refinement</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-two-classes">1. Two classes</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-instrument-calibration">2. Instrument calibration</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-sample-refinement">3. Sample refinement</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#31-creating-a-model">3.1 Creating a model</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#32-typical-sequential-refinement-sequence">3.2 Typical sequential refinement sequence</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#33-inspecting-results">3.3 Inspecting results</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-key-methods-reference">4. Key methods reference</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#background">Background</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#peak-profile">Peak profile</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#unit-cell">Unit cell</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#microstructure">Microstructure</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#preferred-orientation">Preferred orientation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#absorption">Absorption</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-backup-and-restore">5. Backup and restore</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-multi-phase-workflow">6. Multi-phase workflow</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-per-voxel-refinement-in-xrd-ct">7. Per-voxel refinement in XRD-CT</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-refinement-dictionary-templates">8. Refinement dictionary templates</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+      <li class="breadcrumb-item active">Rietveld Refinement</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/rietveld.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="rietveld-refinement">Rietveld Refinement<a class="headerlink" href="#rietveld-refinement" title="Permanent link">&para;</a></h1>
+<p>This page describes how to use <code>nrxrdct.rietveld</code> to drive GSAS-II
+Rietveld refinements from Python: instrument calibration, sequential
+parameter refinement, multi-phase models, and per-voxel refinement as
+part of the XRD-CT pipeline.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: GSAS-II must be installed and importable as <code>GSASIIscriptable</code>.
+See <a href="../../installation/">Installation</a> for setup instructions.</p>
+</blockquote>
+<hr />
+<h2 id="1-two-classes">1. Two classes<a class="headerlink" href="#1-two-classes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BaseRefinement</code></td>
+<td>General Rietveld refinement for any powder pattern</td>
+</tr>
+<tr>
+<td><code>InstrumentCalibration</code></td>
+<td>Calibrant-specific subclass with dedicated calibration plotting</td>
+</tr>
+</tbody>
+</table>
+<p>Both inherit from <code>Scan</code> and accept the same base parameters.</p>
+<hr />
+<h2 id="2-instrument-calibration">2. Instrument calibration<a class="headerlink" href="#2-instrument-calibration" title="Permanent link">&para;</a></h2>
+<p>Calibrate the detector geometry and instrument profile using a known
+standard (e.g. LaB₆, CeO₂):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.rietveld.refinement</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstrumentCalibration</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">cal</span> <span class="o">=</span> <span class="n">InstrumentCalibration</span><span class="p">(</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">acquisition_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/calib.h5&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;LaB6&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">beam_energy</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>                          <span class="c1"># keV</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">xy_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;integrated_data.xy&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">param_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;calibrated_instrument.instprm&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">tth_lims</span><span class="o">=</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">25.0</span><span class="p">),</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Create new GSAS-II project and add phase</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">cal</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="n">gpx_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;calibration/LaB6.gpx&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">cal</span><span class="o">.</span><span class="n">add_phase</span><span class="p">(</span><span class="n">cif_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;LaB6.cif&quot;</span><span class="p">),</span> <span class="n">phase_name</span><span class="o">=</span><span class="s2">&quot;LaB6&quot;</span><span class="p">,</span> <span class="n">block_cell</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># Sequential refinement</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">cal</span><span class="o">.</span><span class="n">refine_background</span><span class="p">()</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">cal</span><span class="o">.</span><span class="n">refine_histogram_scale</span><span class="p">()</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">cal</span><span class="o">.</span><span class="n">refine_zero_shift</span><span class="p">()</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">cal</span><span class="o">.</span><span class="n">refine_gaussian_broadening</span><span class="p">([</span><span class="s2">&quot;W&quot;</span><span class="p">])</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="n">cal</span><span class="o">.</span><span class="n">refine_lorentzian_broadening</span><span class="p">([</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="n">cal</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">()</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="c1"># Write calibrated instrument parameters</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="n">cal</span><span class="o">.</span><span class="n">write_calibrated_instrument_pars</span><span class="p">()</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="n">cal</span><span class="o">.</span><span class="n">plot_calibration_results</span><span class="p">()</span>
+</code></pre></div>
+<p>The calibrated <code>.instprm</code> file is consumed by all subsequent per-voxel
+refinements.</p>
+<hr />
+<h2 id="3-sample-refinement">3. Sample refinement<a class="headerlink" href="#3-sample-refinement" title="Permanent link">&para;</a></h2>
+<h3 id="31-creating-a-model">3.1 Creating a model<a class="headerlink" href="#31-creating-a-model" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.rietveld.refinement</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseRefinement</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">ref</span> <span class="o">=</span> <span class="n">BaseRefinement</span><span class="p">(</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">acquisition_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/scan.h5&quot;</span><span class="p">),</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;steel&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">beam_energy</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">xy_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;integrated_data.xy&quot;</span><span class="p">),</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">param_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;calibrated_instrument.instprm&quot;</span><span class="p">),</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">tth_lims</span><span class="o">=</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">25.0</span><span class="p">),</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">ref</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="n">gpx_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;models/steel.gpx&quot;</span><span class="p">))</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">ref</span><span class="o">.</span><span class="n">add_phase</span><span class="p">(</span><span class="n">cif_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;Fe_bcc.cif&quot;</span><span class="p">),</span> <span class="n">phase_name</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">ref</span><span class="o">.</span><span class="n">add_phase</span><span class="p">(</span><span class="n">cif_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;Fe3C.cif&quot;</span><span class="p">),</span>   <span class="n">phase_name</span><span class="o">=</span><span class="s2">&quot;cementite&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="32-typical-sequential-refinement-sequence">3.2 Typical sequential refinement sequence<a class="headerlink" href="#32-typical-sequential-refinement-sequence" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_background</span><span class="p">()</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_histogram_scale</span><span class="p">()</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_zero_shift</span><span class="p">()</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_gaussian_broadening</span><span class="p">([</span><span class="s2">&quot;U&quot;</span><span class="p">,</span> <span class="s2">&quot;V&quot;</span><span class="p">,</span> <span class="s2">&quot;W&quot;</span><span class="p">])</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_lorentzian_broadening</span><span class="p">([</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_phase_content</span><span class="p">()</span>           <span class="c1"># scale factors → weight fractions</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_crystallite_size</span><span class="p">()</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_mustrain</span><span class="p">()</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">ref</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="33-inspecting-results">3.3 Inspecting results<a class="headerlink" href="#33-inspecting-results" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Rwp  = </span><span class="si">{</span><span class="n">ref</span><span class="o">.</span><span class="n">get_Rwp</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> %&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;χ²   = </span><span class="si">{</span><span class="n">ref</span><span class="o">.</span><span class="n">get_chi2</span><span class="p">()</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">ref</span><span class="o">.</span><span class="n">print_refinement_results</span><span class="p">()</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">ref</span><span class="o">.</span><span class="n">plot_results</span><span class="p">()</span>
+</code></pre></div>
+<hr />
+<h2 id="4-key-methods-reference">4. Key methods reference<a class="headerlink" href="#4-key-methods-reference" title="Permanent link">&para;</a></h2>
+<h3 id="background">Background<a class="headerlink" href="#background" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_background</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">background_type</span><span class="o">=</span><span class="s2">&quot;chebyschev-1&quot;</span><span class="p">,</span>  <span class="c1"># polynomial type</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">n_terms</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>                       <span class="c1"># number of terms</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">freeze</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>                    <span class="c1"># freeze after refining</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="peak-profile">Peak profile<a class="headerlink" href="#peak-profile" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Gaussian (U, V, W) — instrument and size broadening</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_gaussian_broadening</span><span class="p">([</span><span class="s2">&quot;U&quot;</span><span class="p">,</span> <span class="s2">&quot;V&quot;</span><span class="p">,</span> <span class="s2">&quot;W&quot;</span><span class="p">])</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Lorentzian (X, Y) — strain broadening</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_lorentzian_broadening</span><span class="p">([</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Or refine the full profile in one call</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_peak_profile</span><span class="p">(</span><span class="n">gaussian</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;W&quot;</span><span class="p">],</span> <span class="n">lorentzian</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="unit-cell">Unit cell<a class="headerlink" href="#unit-cell" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">(</span><span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">)</span>   <span class="c1"># refine cell for one phase</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">()</span>                   <span class="c1"># all phases</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">ref</span><span class="o">.</span><span class="n">freeze_cell</span><span class="p">(</span><span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">)</span>             <span class="c1"># lock cell parameters</span>
+</code></pre></div>
+<h3 id="microstructure">Microstructure<a class="headerlink" href="#microstructure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Crystallite size (Scherrer/Voigt)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_crystallite_size</span><span class="p">(</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;isotropic&quot;</span><span class="p">,</span>       <span class="c1"># &quot;isotropic&quot; | &quot;uniaxial&quot; | &quot;generalized&quot;</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Microstrain (Voigt peak broadening)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_mustrain</span><span class="p">(</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;isotropic&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="preferred-orientation">Preferred orientation<a class="headerlink" href="#preferred-orientation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_preferential_orientation</span><span class="p">(</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;March-Dollase&quot;</span><span class="p">,</span>   <span class="c1"># or &quot;SH&quot; for spherical harmonics</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="absorption">Absorption<a class="headerlink" href="#absorption" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">set_absorption</span><span class="p">(</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">mu_r</span><span class="o">=</span><span class="mf">0.45</span><span class="p">,</span>              <span class="c1"># µr for Debye–Scherrer geometry</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="5-backup-and-restore">5. Backup and restore<a class="headerlink" href="#5-backup-and-restore" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Save a timestamped backup before a risky step</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">ref</span><span class="o">.</span><span class="n">backup_model</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;before_cell&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># List backups</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">ref</span><span class="o">.</span><span class="n">list_backups</span><span class="p">())</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Restore by index or label</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">ref</span><span class="o">.</span><span class="n">restore_backup</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">ref</span><span class="o">.</span><span class="n">restore_backup</span><span class="p">(</span><span class="s2">&quot;before_cell&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="6-multi-phase-workflow">6. Multi-phase workflow<a class="headerlink" href="#6-multi-phase-workflow" title="Permanent link">&para;</a></h2>
+<p>For multiphase samples, pass the <code>phase</code> argument to target a specific
+phase; omit it to apply to all phases simultaneously:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">ref</span><span class="o">.</span><span class="n">add_phase</span><span class="p">(</span><span class="s2">&quot;austenite.cif&quot;</span><span class="p">,</span> <span class="n">phase_name</span><span class="o">=</span><span class="s2">&quot;austenite&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Independent cell refinement per phase</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">(</span><span class="n">phase</span><span class="o">=</span><span class="s2">&quot;ferrite&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">(</span><span class="n">phase</span><span class="o">=</span><span class="s2">&quot;austenite&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Phase content (weight fractions from scale factors)</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">ref</span><span class="o">.</span><span class="n">refine_phase_content</span><span class="p">()</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">ref</span><span class="o">.</span><span class="n">print_HAP_parameters</span><span class="p">()</span>
+</code></pre></div>
+<hr />
+<h2 id="7-per-voxel-refinement-in-xrd-ct">7. Per-voxel refinement in XRD-CT<a class="headerlink" href="#7-per-voxel-refinement-in-xrd-ct" title="Permanent link">&para;</a></h2>
+<p>In the XRD-CT pipeline, <code>BaseRefinement</code> is used indirectly through
+<code>ReconstructedVolume.refine_models</code>, which calls a user-supplied
+<code>refining_function</code> for each voxel <code>.xy</code> file:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct.volume</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReconstructedVolume</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">my_refinement</span><span class="p">(</span><span class="n">xy_file</span><span class="p">):</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">ref</span> <span class="o">=</span> <span class="n">BaseRefinement</span><span class="p">(</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>        <span class="n">acquisition_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">),</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>        <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>        <span class="n">xy_file</span><span class="o">=</span><span class="n">xy_file</span><span class="p">,</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>        <span class="n">param_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;calibrated_instrument.instprm&quot;</span><span class="p">),</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>        <span class="n">tth_lims</span><span class="o">=</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">25.0</span><span class="p">),</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>    <span class="p">)</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>    <span class="n">ref</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;models/template.gpx&quot;</span><span class="p">))</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    <span class="n">ref</span><span class="o">.</span><span class="n">refine_background</span><span class="p">()</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>    <span class="n">ref</span><span class="o">.</span><span class="n">free_and_refine_cell</span><span class="p">()</span>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>    <span class="n">ref</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="n">vol</span><span class="o">.</span><span class="n">refine_models</span><span class="p">(</span><span class="n">my_refinement</span><span class="p">)</span>
+</code></pre></div>
+<p>See <a href="../workflow/">Typical Workflow</a> for the full pipeline context.</p>
+<hr />
+<h2 id="8-refinement-dictionary-templates">8. Refinement dictionary templates<a class="headerlink" href="#8-refinement-dictionary-templates" title="Permanent link">&para;</a></h2>
+<p><code>nrxrdct.rietveld.refine_dict</code> provides pre-built GSAS-II parameter
+dictionaries for common cases:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.rietveld.refine_dict</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">SIZE_ISO_DICT</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">MUSTRAIN_UNI_DICT</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">SH_DICT</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="p">)</span>
+</code></pre></div>
+<p>These can be passed directly to <code>gpx.set_refinement</code> for lower-level
+control outside the <code>BaseRefinement</code> API.</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../fluorescence/" class="btn btn-neutral float-left" title="X-Ray Fluorescence"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../powder/" class="btn btn-neutral float-right" title="Powder Simulation">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../fluorescence/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../powder/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

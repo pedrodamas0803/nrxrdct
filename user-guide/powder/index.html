@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Powder Simulation - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Powder Simulation";
+        var mkdocs_page_input_path = "user-guide/powder.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Powder Simulation</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-background-estimation-calculate_xrd_baseline">1. Background estimation — calculate_xrd_baseline</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-powder-pattern-simulation-simulate_powder_xrd_monophase">2. Powder pattern simulation — simulate_powder_xrd_monophase</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-peak-position-lookup-get_powder_xrd_peaks">3. Peak position lookup — get_powder_xrd_peaks</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-multi-element-alloy-structures-nrxrdctpowderstructures">4. Multi-element alloy structures — nrxrdct.powder.structures</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#41-listing-supported-structures">4.1 Listing supported structures</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#42-looking-up-metallic-radii">4.2 Looking up metallic radii</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-combining-simulation-with-fitting">5. Combining simulation with fitting</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+      <li class="breadcrumb-item active">Powder Simulation</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/powder.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="powder-diffraction-simulation">Powder Diffraction Simulation<a class="headerlink" href="#powder-diffraction-simulation" title="Permanent link">&para;</a></h1>
+<p>This page describes <code>nrxrdct.powder</code>: simulating powder XRD patterns from
+CIF files, extracting peak tables, estimating backgrounds, and building
+multi-element alloy crystal structures via Vegard's law.</p>
+<hr />
+<h2 id="1-background-estimation-calculate_xrd_baseline">1. Background estimation — <code>calculate_xrd_baseline</code><a class="headerlink" href="#1-background-estimation-calculate_xrd_baseline" title="Permanent link">&para;</a></h2>
+<p>Before fitting or simulating peaks it is often necessary to estimate the
+diffuse background in a measured pattern.  Five algorithms are available,
+all backed by pybaselines:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">calculate_xrd_baseline</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">tth</span><span class="p">,</span> <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="s2">&quot;pattern.xy&quot;</span><span class="p">,</span> <span class="n">unpack</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">baseline</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">calculate_xrd_baseline</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">tth</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;snip&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">I_net</span> <span class="o">=</span> <span class="n">I</span> <span class="o">-</span> <span class="n">baseline</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th><code>method</code></th>
+<th>Speed</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"snip"</code></td>
+<td>Very fast</td>
+<td>Statistics-sensitive Non-linear Iterative Peak-clipping</td>
+</tr>
+<tr>
+<td><code>"iasls"</code></td>
+<td>Moderate</td>
+<td>Iterative asymmetric least squares — robust default</td>
+</tr>
+<tr>
+<td><code>"aspls"</code></td>
+<td>Moderate</td>
+<td>Adaptive smoothness penalized least squares</td>
+</tr>
+<tr>
+<td><code>"arpls"</code></td>
+<td>Moderate</td>
+<td>Asymmetrically reweighted penalized least squares</td>
+</tr>
+<tr>
+<td><code>"mor"</code></td>
+<td>Fast</td>
+<td>Morphological baseline — best for broad smooth backgrounds</td>
+</tr>
+</tbody>
+</table>
+<p>Default tuning arguments are set automatically for XRD data; override
+them via <code>**kwargs</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">baseline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">calculate_xrd_baseline</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">I</span><span class="p">,</span> <span class="n">tth</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;iasls&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">lam</span><span class="o">=</span><span class="mf">1e7</span><span class="p">,</span>    <span class="c1"># smoothness penalty (larger = smoother baseline)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">p</span><span class="o">=</span><span class="mf">5e-3</span><span class="p">,</span>     <span class="c1"># asymmetry parameter (smaller = hugs the baseline more)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="2-powder-pattern-simulation-simulate_powder_xrd_monophase">2. Powder pattern simulation — <code>simulate_powder_xrd_monophase</code><a class="headerlink" href="#2-powder-pattern-simulation-simulate_powder_xrd_monophase" title="Permanent link">&para;</a></h2>
+<p>Simulate a powder XRD pattern from one or more CIF files using
+xrayutilities:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">simulate_powder_xrd_monophase</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">tth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">,</span> <span class="mi">3000</span><span class="p">)</span>   <span class="c1"># 2θ axis in degrees</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">intensity</span> <span class="o">=</span> <span class="n">simulate_powder_xrd_monophase</span><span class="p">(</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">tth</span><span class="o">=</span><span class="n">tth</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">cif_files</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Fe_bcc.cif&quot;</span><span class="p">,</span> <span class="s2">&quot;Fe3C.cif&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">energy_keV</span><span class="o">=</span><span class="mf">44.0</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">crystallite_size</span><span class="o">=</span><span class="mf">200e-9</span><span class="p">,</span>   <span class="c1"># 200 nm — controls Gaussian peak width</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">do_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">do_save</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cif_files</code></td>
+<td>—</td>
+<td>CIF path or list of paths; each phase simulated independently</td>
+</tr>
+<tr>
+<td><code>energy_keV</code></td>
+<td><code>100.0</code></td>
+<td>X-ray energy in keV</td>
+</tr>
+<tr>
+<td><code>crystallite_size</code></td>
+<td><code>100e-9</code></td>
+<td>Gaussian crystallite size in metres (Scherrer broadening)</td>
+</tr>
+<tr>
+<td><code>do_plot</code></td>
+<td><code>True</code></td>
+<td>Produce a matplotlib figure per phase</td>
+</tr>
+<tr>
+<td><code>do_save</code></td>
+<td><code>True</code></td>
+<td>Save each pattern to <code>&lt;phase_name&gt;_simulated.xy</code></td>
+</tr>
+</tbody>
+</table>
+<p>When multiple CIF files are passed, the function loops over them and
+returns the pattern for the <strong>last</strong> phase.  Each pattern is saved and
+plotted independently.</p>
+<hr />
+<h2 id="3-peak-position-lookup-get_powder_xrd_peaks">3. Peak position lookup — <code>get_powder_xrd_peaks</code><a class="headerlink" href="#3-peak-position-lookup-get_powder_xrd_peaks" title="Permanent link">&para;</a></h2>
+<p>Extract all allowed reflection positions and Miller indices for one or
+more phases:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_powder_xrd_peaks</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">peaks</span> <span class="o">=</span> <span class="n">get_powder_xrd_peaks</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">cif_files</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Fe_bcc.cif&quot;</span><span class="p">,</span> <span class="s2">&quot;Fe3C.cif&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ferrite&quot;</span><span class="p">,</span> <span class="s2">&quot;cementite&quot;</span><span class="p">],</span>      <span class="c1"># optional custom labels</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">energy_keV</span><span class="o">=</span><span class="mf">44.0</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">tth_min</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">tth_max</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># peaks[&quot;ferrite&quot;] is a pd.DataFrame with columns: tth, d, hkl, F2, ...</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">peaks</span><span class="p">[</span><span class="s2">&quot;ferrite&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</code></pre></div>
+<p>This is useful for overlaying expected peak positions on a measured
+pattern, or for identifying unindexed reflections.</p>
+<hr />
+<h2 id="4-multi-element-alloy-structures-nrxrdctpowderstructures">4. Multi-element alloy structures — <code>nrxrdct.powder.structures</code><a class="headerlink" href="#4-multi-element-alloy-structures-nrxrdctpowderstructures" title="Permanent link">&para;</a></h2>
+<p><code>make_alloy_crystal</code> builds an xrayutilities <code>Crystal</code> for a random
+solid-solution alloy with a lattice parameter estimated from Vegard's law
+(weighted average of CN-12 metallic radii):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_alloy_crystal</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Equiatomic FeCrMnNi HEA</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">crystal</span> <span class="o">=</span> <span class="n">make_alloy_crystal</span><span class="p">(</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">composition</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span> <span class="s2">&quot;Cr&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span> <span class="s2">&quot;Mn&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span> <span class="s2">&quot;Ni&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">},</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;FCC&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>Supported structures:</p>
+<table>
+<thead>
+<tr>
+<th><code>structure</code></th>
+<th>Space group</th>
+<th>Elements on site</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"FCC"</code></td>
+<td>Fm−3m</td>
+<td>All elements on one 4a Wyckoff position</td>
+</tr>
+<tr>
+<td><code>"BCC"</code></td>
+<td>Im−3m</td>
+<td>All elements on one 2a Wyckoff position</td>
+</tr>
+<tr>
+<td><code>"HCP"</code></td>
+<td>P6₃/mmc</td>
+<td>All elements on 2c Wyckoff position</td>
+</tr>
+<tr>
+<td><code>"SC"</code></td>
+<td>Pm−3m</td>
+<td>Simple cubic, one atom per cell</td>
+</tr>
+</tbody>
+</table>
+<p>Override the Vegard-law lattice parameter with an explicit value:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">crystal</span> <span class="o">=</span> <span class="n">make_alloy_crystal</span><span class="p">(</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">composition</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">,</span> <span class="s2">&quot;Ni&quot;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">},</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;FCC&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">latparam</span><span class="o">=</span><span class="mf">3.595</span><span class="p">,</span>   <span class="c1"># Å — bypasses Vegard&#39;s law</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+</code></pre></div>
+<p>The returned <code>Crystal</code> object is compatible with all xrayutilities simulation
+functions and with <code>nrxrdct.laue.crystal</code> tools.</p>
+<h3 id="41-listing-supported-structures">4.1 Listing supported structures<a class="headerlink" href="#41-listing-supported-structures" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_structures</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">list_structures</span><span class="p">())</span>   <span class="c1"># [&#39;BCC&#39;, &#39;FCC&#39;, &#39;HCP&#39;, &#39;SC&#39;]</span>
+</code></pre></div>
+<h3 id="42-looking-up-metallic-radii">4.2 Looking up metallic radii<a class="headerlink" href="#42-looking-up-metallic-radii" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">elem_radius</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">elem_radius</span><span class="p">(</span><span class="s2">&quot;Fe&quot;</span><span class="p">))</span>   <span class="c1"># CN-12 metallic radius in Å</span>
+</code></pre></div>
+<hr />
+<h2 id="5-combining-simulation-with-fitting">5. Combining simulation with fitting<a class="headerlink" href="#5-combining-simulation-with-fitting" title="Permanent link">&para;</a></h2>
+<p>A common workflow is to simulate a pattern for phase identification and
+then overlay it on a measured pattern with the background removed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.powder.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">calculate_xrd_baseline</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">simulate_powder_xrd_monophase</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">get_powder_xrd_peaks</span><span class="p">,</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">)</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">tth_meas</span><span class="p">,</span> <span class="n">I_meas</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="s2">&quot;measured.xy&quot;</span><span class="p">,</span> <span class="n">unpack</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">tth_sim</span>  <span class="o">=</span> <span class="n">tth_meas</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Remove background</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="n">baseline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">calculate_xrd_baseline</span><span class="p">(</span><span class="n">I_meas</span><span class="p">,</span> <span class="n">tth_meas</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;snip&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="n">I_net</span> <span class="o">=</span> <span class="n">I_meas</span> <span class="o">-</span> <span class="n">baseline</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># Simulate</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="n">I_sim</span> <span class="o">=</span> <span class="n">simulate_powder_xrd_monophase</span><span class="p">(</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">tth_sim</span><span class="p">,</span> <span class="s2">&quot;Fe_bcc.cif&quot;</span><span class="p">,</span> <span class="n">energy_keV</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span> <span class="n">do_plot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">do_save</span><span class="o">=</span><span class="kc">False</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="p">)</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="n">I_sim</span> <span class="o">*=</span> <span class="n">I_net</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">/</span> <span class="n">I_sim</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>   <span class="c1"># scale to data</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="c1"># Peak positions</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="n">peaks</span> <span class="o">=</span> <span class="n">get_powder_xrd_peaks</span><span class="p">(</span><span class="s2">&quot;Fe_bcc.cif&quot;</span><span class="p">,</span> <span class="n">energy_keV</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>                              <span class="n">tth_min</span><span class="o">=</span><span class="n">tth_meas</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">tth_max</span><span class="o">=</span><span class="n">tth_meas</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">tth_meas</span><span class="p">,</span> <span class="n">I_net</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;measured&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">tth_sim</span><span class="p">,</span>  <span class="n">I_sim</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;simulated&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">peaks</span><span class="p">[</span><span class="s2">&quot;Fe_bcc&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;tth&quot;</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;gray&quot;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;2θ (°)&quot;</span><span class="p">)</span>
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../rietveld/" class="btn btn-neutral float-left" title="Rietveld Refinement"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../../examples/slurm_pipeline/" class="btn btn-neutral float-right" title="SLURM Pipeline">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../rietveld/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../../examples/slurm_pipeline/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

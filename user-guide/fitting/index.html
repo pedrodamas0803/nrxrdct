@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Peak Fitting and NMF - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Peak Fitting and NMF";
+        var mkdocs_page_input_path = "user-guide/fitting.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Peak Fitting and NMF</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-single-peak-fitting">1. Single-peak fitting</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#11-quick-start">1.1 Quick start</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#12-how-it-works">1.2 How it works</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#13-peak-profile-models">1.3 Peak profile models</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#14-result-dictionary-keys">1.4 Result dictionary keys</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#15-background-methods">1.5 Background methods</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#16-loading-from-file">1.6 Loading from file</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#17-windowing-utility">1.7 Windowing utility</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-nmf-decomposition-for-hyperspectral-volumes">2. NMF decomposition for hyperspectral volumes</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#21-quick-start">2.1 Quick start</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#22-key-attributes-after-fit_data">2.2 Key attributes after fit_data()</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#23-constructor-parameters">2.3 Constructor parameters</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#24-choosing-the-number-of-components">2.4 Choosing the number of components</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+      <li class="breadcrumb-item active">Peak Fitting and NMF</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/fitting.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="peak-fitting-and-nmf-decomposition">Peak Fitting and NMF Decomposition<a class="headerlink" href="#peak-fitting-and-nmf-decomposition" title="Permanent link">&para;</a></h1>
+<p>This page describes the two analysis tools in <code>nrxrdct.fitting</code>: single-peak
+profile fitting for 1-D powder patterns and non-negative matrix factorisation
+(NMF) for 3-D hyperspectral volumes.</p>
+<hr />
+<h2 id="1-single-peak-fitting">1. Single-peak fitting<a class="headerlink" href="#1-single-peak-fitting" title="Permanent link">&para;</a></h2>
+<h3 id="11-quick-start">1.1 Quick start<a class="headerlink" href="#11-quick-start" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.fitting.peakfit</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_peak</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">tth</span><span class="p">,</span> <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="s2">&quot;pattern.xy&quot;</span><span class="p">,</span> <span class="n">unpack</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_peak</span><span class="p">(</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">tth</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">center</span><span class="o">=</span><span class="mf">3.56</span><span class="p">,</span>   <span class="c1"># nominal peak position (°)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">window</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>    <span class="c1"># total window width (°)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">bg_method</span><span class="o">=</span><span class="s2">&quot;snip&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;centre = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;center&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> °&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FWHM   = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;fwhm&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> °&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;area   = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;area&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;R²     = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;r2&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="12-how-it-works">1.2 How it works<a class="headerlink" href="#12-how-it-works" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>1-D pattern
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    │
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ▼  extract_window()   — clip to ±window/2 around center
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    │
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    ▼  calculate_xrd_baseline()  — estimate and subtract background
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    │
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    ▼  curve_fit()        — fit chosen peak profile
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    │
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    ▼  result dict        — center, FWHM, area, R², …
+</code></pre></div>
+<p>Background is estimated and subtracted before fitting, so no prior
+background correction is required.</p>
+<h3 id="13-peak-profile-models">1.3 Peak profile models<a class="headerlink" href="#13-peak-profile-models" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>model</code></th>
+<th>Parameters</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"gaussian"</code></td>
+<td><code>amplitude</code>, <code>center</code>, <code>sigma</code></td>
+<td>Fastest; good for well-resolved peaks</td>
+</tr>
+<tr>
+<td><code>"lorentzian"</code></td>
+<td><code>amplitude</code>, <code>center</code>, <code>gamma</code></td>
+<td>Heavier tails; good for strain-broadened peaks</td>
+</tr>
+<tr>
+<td><code>"voigt"</code></td>
+<td><code>amplitude</code>, <code>center</code>, <code>sigma</code>, <code>gamma</code></td>
+<td>Convolution of Gaussian + Lorentzian</td>
+</tr>
+<tr>
+<td><code>"pseudo_voigt"</code></td>
+<td><code>amplitude</code>, <code>center</code>, <code>fwhm</code>, <code>eta</code></td>
+<td>Linear mix: η·Lorentzian + (1−η)·Gaussian (default)</td>
+</tr>
+</tbody>
+</table>
+<p><code>pseudo_voigt</code> is the default and recommended starting point — it is
+numerically cheaper than the true Voigt and fits most synchrotron peaks well.</p>
+<h3 id="14-result-dictionary-keys">1.4 Result dictionary keys<a class="headerlink" href="#14-result-dictionary-keys" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Present for</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"center"</code></td>
+<td>all</td>
+<td>Refined peak position (°)</td>
+</tr>
+<tr>
+<td><code>"amplitude"</code></td>
+<td>all</td>
+<td>Peak height above background</td>
+</tr>
+<tr>
+<td><code>"fwhm"</code></td>
+<td>all</td>
+<td>Full-width at half-maximum (°)</td>
+</tr>
+<tr>
+<td><code>"area"</code></td>
+<td>all</td>
+<td>Integrated area (intensity · °)</td>
+</tr>
+<tr>
+<td><code>"residual"</code></td>
+<td>all</td>
+<td>RMS residual</td>
+</tr>
+<tr>
+<td><code>"r2"</code></td>
+<td>all</td>
+<td>Coefficient of determination R²</td>
+</tr>
+<tr>
+<td><code>"success"</code></td>
+<td>all</td>
+<td><code>True</code> if optimiser converged</td>
+</tr>
+<tr>
+<td><code>"sigma"</code></td>
+<td>Gaussian, Voigt</td>
+<td>Gaussian standard deviation (°)</td>
+</tr>
+<tr>
+<td><code>"gamma"</code></td>
+<td>Lorentzian, Voigt</td>
+<td>Lorentzian half-width (°)</td>
+</tr>
+<tr>
+<td><code>"eta"</code></td>
+<td>pseudo-Voigt</td>
+<td>Lorentzian mixing fraction ∈ [0, 1]</td>
+</tr>
+</tbody>
+</table>
+<p>On convergence failure all numeric values are <code>nan</code> and <code>"success"</code> is
+<code>False</code>.</p>
+<h3 id="15-background-methods">1.5 Background methods<a class="headerlink" href="#15-background-methods" title="Permanent link">&para;</a></h3>
+<p><code>bg_method</code> is forwarded to <code>calculate_xrd_baseline</code> from
+<code>nrxrdct.powder.simulation</code>:</p>
+<table>
+<thead>
+<tr>
+<th><code>bg_method</code></th>
+<th>Speed</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"snip"</code></td>
+<td>Very fast</td>
+<td>Quick scans, sparse peaks (default)</td>
+</tr>
+<tr>
+<td><code>"iasls"</code></td>
+<td>Moderate</td>
+<td>Dense peaks, asymmetric background</td>
+</tr>
+<tr>
+<td><code>"aspls"</code></td>
+<td>Moderate</td>
+<td>Strongly asymmetric patterns</td>
+</tr>
+<tr>
+<td><code>"arpls"</code></td>
+<td>Moderate</td>
+<td>Similar to iasls, alternative tuning</td>
+</tr>
+<tr>
+<td><code>"mor"</code></td>
+<td>Fast</td>
+<td>Morphological baseline, very broad features</td>
+</tr>
+</tbody>
+</table>
+<p>Pass extra tuning arguments via <code>bg_kwargs</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_peak</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">tth</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="mf">5.1</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">bg_method</span><span class="o">=</span><span class="s2">&quot;iasls&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">bg_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;lam&quot;</span><span class="p">:</span> <span class="mf">1e7</span><span class="p">,</span> <span class="s2">&quot;p&quot;</span><span class="p">:</span> <span class="mf">5e-3</span><span class="p">},</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="16-loading-from-file">1.6 Loading from file<a class="headerlink" href="#16-loading-from-file" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.fitting.peakfit</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_peak_from_file</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_peak_from_file</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;pattern.xy&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">center</span><span class="o">=</span><span class="mf">3.56</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">window</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="17-windowing-utility">1.7 Windowing utility<a class="headerlink" href="#17-windowing-utility" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.fitting.peakfit</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_window</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">tth_w</span><span class="p">,</span> <span class="n">I_w</span> <span class="o">=</span> <span class="n">extract_window</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="mf">3.56</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="mf">0.4</span><span class="p">)</span>
+</code></pre></div>
+<p>Returns only the points within <code>[center − window/2, center + window/2]</code>.
+Useful for inspecting a region before fitting.</p>
+<hr />
+<h2 id="2-nmf-decomposition-for-hyperspectral-volumes">2. NMF decomposition for hyperspectral volumes<a class="headerlink" href="#2-nmf-decomposition-for-hyperspectral-volumes" title="Permanent link">&para;</a></h2>
+<p><code>HyperspectralNMF</code> decomposes a 3-D data cube
+<code>(nx, ny, n_channels)</code> into <em>K</em> spatial component maps and <em>K</em> spectral
+signatures using scikit-learn's non-negative matrix factorisation.</p>
+<h3 id="21-quick-start">2.1 Quick start<a class="headerlink" href="#21-quick-start" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.fitting.nmf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HyperspectralNMF</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># volume shape: (nx, ny, n_channels)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;xrdct_volume.npy&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">energy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">25.0</span><span class="p">,</span> <span class="n">volume</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>   <span class="c1"># keV axis</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">nmf</span> <span class="o">=</span> <span class="n">HyperspectralNMF</span><span class="p">(</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">volume</span><span class="p">,</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">n_components</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">spectral_axis</span><span class="o">=</span><span class="n">energy</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">unit_name</span><span class="o">=</span><span class="s2">&quot;energy (keV)&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">)</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">nmf</span><span class="o">.</span><span class="n">fit_data</span><span class="p">()</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">nmf</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="22-key-attributes-after-fit_data">2.2 Key attributes after <code>fit_data()</code><a class="headerlink" href="#22-key-attributes-after-fit_data" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>W_maps</code></td>
+<td><code>(nx, ny, K)</code></td>
+<td>Spatial intensity map per component</td>
+</tr>
+<tr>
+<td><code>H</code></td>
+<td><code>(K, n_channels)</code></td>
+<td>Spectral signature per component</td>
+</tr>
+<tr>
+<td><code>X_rec</code></td>
+<td><code>(n_pixels, n_channels)</code></td>
+<td>Reconstructed (denoised) data</td>
+</tr>
+<tr>
+<td><code>E_map</code></td>
+<td><code>(nx, ny)</code></td>
+<td>Per-pixel reconstruction RMSE</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>—</td>
+<td>Fitted <code>sklearn.decomposition.NMF</code> object</td>
+</tr>
+</tbody>
+</table>
+<h3 id="23-constructor-parameters">2.3 Constructor parameters<a class="headerlink" href="#23-constructor-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>n_components</code></td>
+<td>—</td>
+<td>Number of NMF components K</td>
+</tr>
+<tr>
+<td><code>spectral_axis</code></td>
+<td>—</td>
+<td>1-D energy/2θ axis for the spectral dimension</td>
+</tr>
+<tr>
+<td><code>unit_name</code></td>
+<td><code>"energy (keV)"</code></td>
+<td>Axis label for plots</td>
+</tr>
+<tr>
+<td><code>loss_function</code></td>
+<td><code>"frobenius"</code></td>
+<td><code>"frobenius"</code> or <code>"kullback-leibler"</code></td>
+</tr>
+<tr>
+<td><code>init</code></td>
+<td><code>"nndsvdar"</code></td>
+<td>Initialisation — see scikit-learn NMF docs</td>
+</tr>
+<tr>
+<td><code>max_iter</code></td>
+<td><code>1000</code></td>
+<td>Maximum NMF iterations</td>
+</tr>
+<tr>
+<td><code>alpha_W</code></td>
+<td><code>0.0</code></td>
+<td>L1/L2 regularisation on spatial maps</td>
+</tr>
+<tr>
+<td><code>alpha_H</code></td>
+<td><code>0.0</code></td>
+<td>L1/L2 regularisation on spectra</td>
+</tr>
+<tr>
+<td><code>clip_negative</code></td>
+<td><code>True</code></td>
+<td>Zero-clip volume before factorisation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="24-choosing-the-number-of-components">2.4 Choosing the number of components<a class="headerlink" href="#24-choosing-the-number-of-components" title="Permanent link">&para;</a></h3>
+<p>There is no automatic method; a practical approach is to run the
+decomposition for <em>K</em> = 2, 3, 4, … and inspect <code>nmf.E_map</code> — the
+reconstruction RMSE drops sharply when <em>K</em> is sufficient to describe the
+data, then levels off.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">rmse</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">):</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">HyperspectralNMF</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">n_components</span><span class="o">=</span><span class="n">k</span><span class="p">,</span> <span class="n">spectral_axis</span><span class="o">=</span><span class="n">energy</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">m</span><span class="o">.</span><span class="n">fit_data</span><span class="p">()</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">rmse</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">E_map</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">rmse</span><span class="p">,</span> <span class="s1">&#39;o-&#39;</span><span class="p">)</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Number of components K&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Mean RMSE&quot;</span><span class="p">)</span>
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../azimuthal_integration/" class="btn btn-neutral float-left" title="Azimuthal Integration"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../fluorescence/" class="btn btn-neutral float-right" title="X-Ray Fluorescence">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../azimuthal_integration/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../fluorescence/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

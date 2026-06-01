@@ -2555,6 +2555,8 @@ class GrainMap:
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
         bins: int = 40,
         density: bool = False,
         scale: float = 1e3,
@@ -2587,6 +2589,13 @@ class GrainMap:
 
             sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default `40`.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default `'y'`.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, noise pixels
+                (``label == -1``) are excluded from the histograms.
+                Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict the
+                histograms to pixels that belong to this specific cluster label.
+                ``None`` includes all non-noise pixels.  Default ``None``.
             bins (int): Number of histogram bins.  Default `40`.
             density (bool): If `True`, normalise each histogram to unit area.
                 Default `False`.
@@ -2614,6 +2623,10 @@ class GrainMap:
 
         grains = list(grains) if grains is not None else list(range(self.n_grains))
 
+        _lbl_mask = None
+        if label_map is not None:
+            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+
         # ── subplot grid ──────────────────────────────────────────────────────
         n    = len(components)
         ncols = min(n, 3)
@@ -2633,12 +2646,14 @@ class GrainMap:
         for idx, comp in enumerate(components):
             row, col = divmod(idx, ncols)
             ax       = axes[row, col]
-            label    = self._STRAIN_LABELS[comp] + scale_str
+            _xlabel  = self._STRAIN_LABELS[comp] + scale_str
 
             for gi, grain in enumerate(grains):
                 data = self._strain_component_map(
                     comp, grain, frame, sample_tilt_deg, sample_tilt_axis
                 )
+                if _lbl_mask is not None:
+                    data = np.where(_lbl_mask, np.nan, data)
                 vals = data[np.isfinite(data)].ravel() * scale
                 if vals.size == 0:
                     continue
@@ -2650,7 +2665,7 @@ class GrainMap:
                 ax.axvline(float(np.mean(vals)), color=color,
                            linestyle="--", linewidth=1.2, alpha=0.9)
 
-            ax.set_xlabel(label, fontsize=9)
+            ax.set_xlabel(_xlabel, fontsize=9)
             ax.set_ylabel("Density" if density else "Count", fontsize=9)
             ax.set_title(self._STRAIN_LABELS[comp], fontsize=10)
             ax.tick_params(labelsize=8)
@@ -2668,8 +2683,12 @@ class GrainMap:
             "lab":     "lab frame",
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }[frame]
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
         fig.suptitle(
-            title or f"Strain histogram  [{_frame_label}]",
+            title or f"Strain histogram  [{_frame_label}]{_lbl_suffix}",
             fontsize=11, y=1.01,
         )
         fig.tight_layout()
@@ -2683,6 +2702,8 @@ class GrainMap:
         frame: str = "crystal",
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
         bins: int = 40,
         density: bool = False,
         scale: float = 1e3,
@@ -2706,6 +2727,13 @@ class GrainMap:
             frame (str): Reference frame — ``'crystal'``, ``'lab'``, or ``'sample'``.
             sample_tilt_deg (float): Tilt angle (degrees) from lab to sample frame.  Default ``40``.
             sample_tilt_axis (str): Lab axis of the tilt rotation.  Default ``'y'``.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, noise pixels
+                (``label == -1``) are excluded from the histograms.
+                Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict the
+                histograms to pixels that belong to this specific cluster label.
+                ``None`` includes all non-noise pixels.  Default ``None``.
             bins (int): Number of histogram bins.  Default ``40``.
             density (bool): Normalise each histogram to unit area.  Default ``False``.
             scale (float): Multiplicative factor applied before plotting.  Default ``1e3``
@@ -2728,6 +2756,10 @@ class GrainMap:
 
         grains = list(grains) if grains is not None else list(range(self.n_grains))
 
+        _lbl_mask = None
+        if label_map is not None:
+            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+
         n     = len(components)
         ncols = min(n, 3)
         nrows = int(np.ceil(n / ncols))
@@ -2745,12 +2777,14 @@ class GrainMap:
         for idx, comp in enumerate(components):
             row, col = divmod(idx, ncols)
             ax       = axes[row, col]
-            label    = self._STRAIN_DEV_LABELS[comp] + scale_str
+            _xlabel  = self._STRAIN_DEV_LABELS[comp] + scale_str
 
             for gi, grain in enumerate(grains):
                 data = self._deviatoric_component_map(
                     comp, grain, frame, sample_tilt_deg, sample_tilt_axis
                 )
+                if _lbl_mask is not None:
+                    data = np.where(_lbl_mask, np.nan, data)
                 vals = data[np.isfinite(data)].ravel() * scale
                 if vals.size == 0:
                     continue
@@ -2762,7 +2796,7 @@ class GrainMap:
                 ax.axvline(float(np.mean(vals)), color=color,
                            linestyle="--", linewidth=1.2, alpha=0.9)
 
-            ax.set_xlabel(label, fontsize=9)
+            ax.set_xlabel(_xlabel, fontsize=9)
             ax.set_ylabel("Density" if density else "Count", fontsize=9)
             ax.set_title(self._STRAIN_DEV_LABELS[comp], fontsize=10)
             ax.tick_params(labelsize=8)
@@ -2779,8 +2813,12 @@ class GrainMap:
             "lab":     "lab frame",
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }.get(frame, frame)
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
         fig.suptitle(
-            title or f"Deviatoric strain histogram  [{_frame_label}]",
+            title or f"Deviatoric strain histogram  [{_frame_label}]{_lbl_suffix}",
             fontsize=11, y=1.01,
         )
         fig.tight_layout()

@@ -7969,6 +7969,95 @@ class GrainMap:
 
         return misor
 
+    def extract_contours(
+        self,
+        data: np.ndarray,
+        level: float | None = None,
+        smooth: float = 0.0,
+        n_out: int = 500,
+    ) -> "list[np.ndarray]":
+        """
+        Extract sub-pixel contours from a label map or a misorientation map.
+
+        For a **label map** (integer dtype): traces the boundary of each cluster
+        at the halfway point between adjacent labels (``find_contours`` at
+        ``level=0.5`` on per-label binary masks).  Each shared boundary is
+        returned twice (once per neighbouring label); duplicate lines overlap
+        harmlessly when plotting.
+
+        For a **scalar field** (float dtype, e.g. a misorientation map): traces
+        iso-value contours at ``level``.  ``NaN`` pixels are treated as zero so
+        they do not interrupt contouring.
+
+        Args:
+            data ((ny, nx) ndarray): Integer dtype → label map from
+                :meth:`cluster_orientations`; float dtype → scalar field from
+                :meth:`cluster_misorientation_map` or :meth:`misorientation_map`.
+            level (float or None): Iso-contour value for scalar fields (e.g.
+                misorientation threshold in degrees).  Required when *data* is
+                float dtype; ignored for integer label maps.
+            smooth (float): Spline smoothing factor passed to
+                ``scipy.interpolate.splprep`` as ``s``.  ``0`` keeps the raw
+                sub-pixel contour; larger values round off sharp corners.
+                Default ``0`` (no smoothing).
+            n_out (int): Number of points along each smoothed contour.
+                Ignored when *smooth* is ``0``.  Default ``500``.
+
+        Returns:
+            contours (list of (N, 2) ndarray): Each array holds ``(row, col)``
+                coordinates.  Pass ``c[:, 1], c[:, 0]`` to ``ax.plot`` for
+                correct (x, y) orientation.
+
+        Example::
+
+            labels, label_map = gmap.cluster_orientations('merged', symmetry='cubic')
+            misor = gmap.cluster_misorientation_map(label_map, grain='merged')
+
+            # grain boundaries from label map
+            gb = gmap.extract_contours(label_map, smooth=10.0)
+
+            # sub-boundaries at 2° from misorientation field
+            sb = gmap.extract_contours(misor, level=2.0, smooth=5.0)
+
+            fig, ax = plt.subplots()
+            ax.imshow(misor, origin='upper')
+            for c in sb:
+                ax.plot(c[:, 1], c[:, 0], 'w-', lw=0.5)
+            for c in gb:
+                ax.plot(c[:, 1], c[:, 0], 'k-', lw=1.0)
+"""
+        from skimage.measure import find_contours as _find_contours
+
+        def _smooth_contour(contour):
+            if smooth <= 0 or len(contour) < 4:
+                return contour
+            from scipy.interpolate import splprep, splev
+            closed = np.allclose(contour[0], contour[-1], atol=1.0)
+            xy = contour[:-1] if closed else contour
+            try:
+                tck, _ = splprep([xy[:, 0], xy[:, 1]], s=smooth, per=closed)
+            except Exception:
+                return contour
+            r_s, c_s = splev(np.linspace(0, 1, n_out), tck)
+            return np.column_stack([r_s, c_s])
+
+        if np.issubdtype(data.dtype, np.integer):
+            contours = []
+            for lbl in np.unique(data):
+                if lbl < 0:
+                    continue
+                mask = (data == lbl).astype(np.float32)
+                for c in _find_contours(mask, level=0.5):
+                    contours.append(_smooth_contour(c))
+            return contours
+        else:
+            if level is None:
+                raise ValueError(
+                    "level must be provided for a scalar (float) field."
+                )
+            field = np.where(np.isnan(data), 0.0, data)
+            return [_smooth_contour(c) for c in _find_contours(field, level=level)]
+
     def __repr__(self) -> str:
         fitted = int(np.sum(self.n_matched >= 0)) if self.n_grains else 0
         return (

@@ -59,6 +59,11 @@ nav:
       - Strain Analysis: user-guide/laue_strain.md
       - Elastic Stress from Strain Maps: user-guide/laue_stress.md
       - Grain Map Merging and Symmetry Reduction: user-guide/laue_grain_map_merge.md
+    - Azimuthal Integration: user-guide/azimuthal_integration.md
+    - Peak Fitting and NMF: user-guide/fitting.md
+    - X-Ray Fluorescence: user-guide/fluorescence.md
+    - Rietveld Refinement: user-guide/rietveld.md
+    - Powder Simulation: user-guide/powder.md
   - Examples:
     - SLURM Pipeline: examples/slurm_pipeline.md
   - API Reference:

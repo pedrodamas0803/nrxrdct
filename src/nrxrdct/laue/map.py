@@ -8198,6 +8198,131 @@ class GrainMap:
 
         return boundaries
 
+    def grain_statistics(
+        self,
+        label_map: np.ndarray,
+        grain: "int | str" = "merged",
+        kam: np.ndarray | None = None,
+    ) -> "pd.DataFrame":
+        """
+        Per-cluster statistics derived from a cluster label map.
+
+        For each cluster (label ≥ 0) computes orientation, misorientation
+        spread, fit quality, deviatoric strain, and optionally KAM.  Noise
+        pixels (label ``-1``) are ignored.
+
+        Args:
+            label_map ((ny, nx) int ndarray): Cluster labels from
+                :meth:`cluster_orientations`.
+            grain (int or 'merged'): Grain selector matching the call to
+                :meth:`cluster_orientations`.
+            kam ((ny, nx) ndarray or None): Pre-computed KAM map from
+                :meth:`kam_map`.  When supplied, per-cluster mean KAM is
+                included.  Default ``None``.
+
+        Returns:
+            stats (DataFrame): One row per cluster, indexed by ``label``,
+            with columns:
+
+            * ``n_pixels`` — pixel count
+            * ``phi1_deg``, ``Phi_deg``, ``phi2_deg`` — Bunge ZXZ Euler
+              angles of the cluster mean orientation (degrees)
+            * ``misor_mean_deg``, ``misor_max_deg``, ``misor_std_deg`` —
+              mean / max / std misorientation relative to the cluster mean
+            * ``match_rate_mean``, ``n_matched_mean`` — mean fit quality
+            * ``dev_e_xx``, ``dev_e_yy``, ``dev_e_zz``,
+              ``dev_e_xy``, ``dev_e_xz``, ``dev_e_yz`` — mean deviatoric
+              strain components
+            * ``dev_e_xx_std``, … — std of each deviatoric strain component
+            * ``dev_equiv_mean``, ``dev_equiv_std`` — mean / std of the
+              von Mises equivalent deviatoric strain
+              (``sqrt(2/3 · ε_dev:ε_dev)``)
+            * ``kam_mean_deg`` — mean KAM (only when *kam* is given)
+
+        Example::
+
+            labels, label_map = gmap.cluster_orientations('merged', symmetry='cubic')
+            kam = gmap.kam_map('merged', label_map=label_map)
+            df = gmap.grain_statistics(label_map, grain='merged', kam=kam)
+            df.sort_values('n_pixels', ascending=False)
+"""
+        import pandas as pd
+
+        def _angle_from_matrix(dR):
+            tr = dR[..., 0, 0] + dR[..., 1, 1] + dR[..., 2, 2]
+            return np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))
+
+        def _von_mises_equiv(dev):
+            return np.sqrt(2.0 / 3.0 * np.einsum("...ij,...ij->...", dev, dev))
+
+        # --- gather per-pixel arrays for valid pixels ---
+        if grain == "merged":
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            bgm      = self.best_grain_map
+            valid    = bgm >= 0
+            iy_v, ix_v = np.where(valid)
+            g_v      = bgm[iy_v, ix_v]
+        else:
+            valid    = ~np.any(np.isnan(self.U[grain]), axis=(-2, -1))
+            iy_v, ix_v = np.where(valid)
+            g_v      = np.full(len(iy_v), grain, dtype=int)
+
+        U_flat   = self.U[g_v, iy_v, ix_v]                              # (N, 3, 3)
+        mr_flat  = self.match_rate[g_v, iy_v, ix_v]                     # (N,)
+        nm_flat  = self.n_matched[g_v, iy_v, ix_v]                      # (N,)
+        dev_flat = self.strain_tensor_deviatoric[g_v, iy_v, ix_v]       # (N, 3, 3)
+        labels_v = label_map[iy_v, ix_v]                                # (N,)
+        kam_flat = kam[iy_v, ix_v] if kam is not None else None
+
+        _dev_keys = [
+            ("dev_e_xx", 0, 0), ("dev_e_yy", 1, 1), ("dev_e_zz", 2, 2),
+            ("dev_e_xy", 0, 1), ("dev_e_xz", 0, 2), ("dev_e_yz", 1, 2),
+        ]
+
+        rows = []
+        for lbl in np.unique(labels_v):
+            if lbl < 0:
+                continue
+            mask      = labels_v == lbl
+            U_cluster = U_flat[mask]
+            ref       = self._mean_rotation(U_cluster)
+
+            phi1, Phi, phi2 = Rotation.from_matrix(ref).as_euler("ZXZ", degrees=True)
+
+            misor_angles = _angle_from_matrix(U_cluster @ ref.T)
+
+            dev_cluster = dev_flat[mask]                                 # (M, 3, 3)
+            equiv       = _von_mises_equiv(dev_cluster)                  # (M,)
+
+            row = {
+                "n_pixels":        int(mask.sum()),
+                "phi1_deg":        float(phi1),
+                "Phi_deg":         float(Phi),
+                "phi2_deg":        float(phi2),
+                "misor_mean_deg":  float(misor_angles.mean()),
+                "misor_max_deg":   float(misor_angles.max()),
+                "misor_std_deg":   float(misor_angles.std()),
+                "match_rate_mean": float(np.nanmean(mr_flat[mask])),
+                "n_matched_mean":  float(np.nanmean(nm_flat[mask])),
+            }
+
+            for key, i, j in _dev_keys:
+                col = dev_cluster[:, i, j]
+                row[key]            = float(np.nanmean(col))
+                row[key + "_std"]   = float(np.nanstd(col))
+
+            row["dev_equiv_mean"] = float(np.nanmean(equiv))
+            row["dev_equiv_std"]  = float(np.nanstd(equiv))
+
+            if kam_flat is not None:
+                row["kam_mean_deg"] = float(np.nanmean(kam_flat[mask]))
+
+            row["label"] = int(lbl)
+            rows.append(row)
+
+        return pd.DataFrame(rows).set_index("label")
+
     def __repr__(self) -> str:
         fitted = int(np.sum(self.n_matched >= 0)) if self.n_grains else 0
         return (

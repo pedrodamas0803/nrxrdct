@@ -51,18 +51,24 @@
               </ul>
               <p class="caption"><span class="caption-text">User Guide</span></p>
               <ul class="current">
-                  <li class="toctree-l1"><a class="reference internal" href="../quickstart/">Quickstart</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
-                  </li>
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">GPU Support</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >XRD-CT</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">GPU Support</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-automatic-device-detection">1. Automatic device detection</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#checking-gpu-availability">Checking GPU availability</a>
+    <li class="toctree-l3"><a class="reference internal" href="#2-requirements">2. Requirements</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-checking-gpu-availability">3. Checking GPU availability</a>
+    </li>
+    </ul>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
@@ -189,6 +195,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">XRD-CT</li>
       <li class="breadcrumb-item active">GPU Support</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/gpu.md">Edit on nrxrdct</a>
@@ -200,8 +207,16 @@
             <div class="section" itemprop="articleBody">
               
                 <h1 id="gpu-support">GPU Support<a class="headerlink" href="#gpu-support" title="Permanent link">&para;</a></h1>
-<p><code>nrxrdct</code> detects NVIDIA GPUs automatically at import time via <code>astra.get_gpu_info()</code>.</p>
-<p>When a GPU is available, <code>reconstruct_slice</code> and <code>reconstruct_astra_gpu_3d</code> use CUDA-accelerated algorithms:</p>
+<p>This page describes how <code>nrxrdct</code> uses NVIDIA GPU acceleration for
+tomographic reconstruction, which algorithm is selected in each mode,
+and how to verify GPU availability.</p>
+<hr />
+<h2 id="1-automatic-device-detection">1. Automatic device detection<a class="headerlink" href="#1-automatic-device-detection" title="Permanent link">&para;</a></h2>
+<p><code>nrxrdct</code> detects NVIDIA GPUs automatically at import time via
+<code>astra.get_gpu_info()</code>.  When a GPU is available, <code>reconstruct_slice</code> and
+<code>reconstruct_astra_gpu_3d</code> switch to CUDA-accelerated algorithms; when no
+GPU is found the code falls back to CPU algorithms transparently — no code
+changes are required.</p>
 <table>
 <thead>
 <tr>
@@ -228,13 +243,14 @@
 </tr>
 </tbody>
 </table>
-<p>When no GPU is found, the code falls back to CPU algorithms transparently — no code changes required.</p>
-<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<hr />
+<h2 id="2-requirements">2. Requirements<a class="headerlink" href="#2-requirements" title="Permanent link">&para;</a></h2>
 <ul>
 <li>NVIDIA GPU with CUDA support</li>
 <li><a href="https://astra-toolbox.com/">ASTRA Toolbox</a> compiled with CUDA support</li>
 </ul>
-<h2 id="checking-gpu-availability">Checking GPU availability<a class="headerlink" href="#checking-gpu-availability" title="Permanent link">&para;</a></h2>
+<hr />
+<h2 id="3-checking-gpu-availability">3. Checking GPU availability<a class="headerlink" href="#3-checking-gpu-availability" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">astra</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">astra</span><span class="o">.</span><span class="n">get_gpu_info</span><span class="p">())</span>
 </code></pre></div>

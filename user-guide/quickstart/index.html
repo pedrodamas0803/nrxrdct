@@ -51,25 +51,29 @@
               </ul>
               <p class="caption"><span class="caption-text">User Guide</span></p>
               <ul class="current">
-                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Quickstart</a>
+                  <li class="toctree-l1 current"><a class="reference internal current" >XRD-CT</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#1-describe-your-scan">1. Describe your scan</a>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Quickstart</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-describe-your-scan">1. Describe your scan</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#2-integrate-frames">2. Integrate frames</a>
+    <li class="toctree-l3"><a class="reference internal" href="#2-integrate-frames">2. Integrate frames</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#3-assemble-sinogram-and-reconstruct">3. Assemble sinogram and reconstruct</a>
+    <li class="toctree-l3"><a class="reference internal" href="#3-assemble-sinogram-and-reconstruct">3. Assemble sinogram and reconstruct</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#4-per-voxel-rietveld-refinement">4. Per-voxel Rietveld refinement</a>
+    <li class="toctree-l3"><a class="reference internal" href="#4-per-voxel-rietveld-refinement">4. Per-voxel Rietveld refinement</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#5-extract-parameter-maps">5. Extract parameter maps</a>
+    <li class="toctree-l3"><a class="reference internal" href="#5-extract-parameter-maps">5. Extract parameter maps</a>
     </li>
     </ul>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../workflow/">Typical Workflow</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
     <ul>
@@ -195,6 +199,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
           <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">XRD-CT</li>
       <li class="breadcrumb-item active">Quickstart</li>
     <li class="wy-breadcrumbs-aside">
           <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/quickstart.md">Edit on nrxrdct</a>
@@ -206,8 +211,20 @@
             <div class="section" itemprop="articleBody">
               
                 <h1 id="quickstart">Quickstart<a class="headerlink" href="#quickstart" title="Permanent link">&para;</a></h1>
-<p>This page walks through the minimal steps to get from raw detector images to reconstructed XRD-CT maps.</p>
+<p>This page walks through the minimal steps to get from raw detector images to
+reconstructed XRD-CT maps using <code>nrxrdct</code>.  It covers the five mandatory
+pipeline stages: scan description, frame integration, sinogram assembly and
+reconstruction, per-voxel Rietveld refinement, and parameter map extraction.</p>
+<blockquote>
+<p><strong>Prerequisites</strong>: an installed <code>nrxrdct</code> environment — see
+<a href="../../installation/">Installation</a>.  For a full pipeline including instrument
+calibration see <a href="../workflow/">Typical Workflow</a>.</p>
+</blockquote>
+<hr />
 <h2 id="1-describe-your-scan">1. Describe your scan<a class="headerlink" href="#1-describe-your-scan" title="Permanent link">&para;</a></h2>
+<p>Create a <code>Scan</code> object that holds the acquisition file path and beam metadata.
+All downstream pipeline functions accept a <code>Scan</code> instance (or its fields
+directly) so that calibration parameters are not repeated.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.parameters</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scan</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -218,7 +235,12 @@
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">beam_size</span><span class="o">=</span><span class="mf">100e-6</span><span class="p">,</span>     <span class="c1"># m</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
 </code></pre></div>
+<hr />
 <h2 id="2-integrate-frames">2. Integrate frames<a class="headerlink" href="#2-integrate-frames" title="Permanent link">&para;</a></h2>
+<p>Azimuthally integrate every detector frame in parallel using the pyFAI geometry
+stored in the <code>.poni</code> calibration file.  The optional <code>remove_spots</code> flag
+applies a sigma-clipping filter to remove Bragg spots before integration
+(recommended for single-crystal or coarse-grained samples).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.integration</span><span class="w"> </span><span class="kn">import</span> <span class="n">integrate_powder_parallel</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
@@ -234,7 +256,13 @@
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">remove_spots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">)</span>
 </code></pre></div>
+<p>The result is an HDF5 file containing one 1-D powder pattern per scan position
+and rotation angle.</p>
+<hr />
 <h2 id="3-assemble-sinogram-and-reconstruct">3. Assemble sinogram and reconstruct<a class="headerlink" href="#3-assemble-sinogram-and-reconstruct" title="Permanent link">&para;</a></h2>
+<p>Stack the integrated patterns into a sinogram and reconstruct each
+two-theta channel with filtered back-projection (or an iterative algorithm
+when a GPU is available).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.reconstruction</span><span class="w"> </span><span class="kn">import</span> <span class="n">assemble_sinogram</span><span class="p">,</span> <span class="n">reconstruct_slice</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">sino</span> <span class="o">=</span> <span class="n">assemble_sinogram</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;integrated.h5&quot;</span><span class="p">),</span> <span class="n">n_rot</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span> <span class="n">n_tth_angles</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
@@ -246,19 +274,27 @@
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">sino</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="p">])</span>
 </code></pre></div>
+<p>See <a href="../gpu/">GPU Support</a> for algorithm selection when a CUDA device is present.</p>
+<hr />
 <h2 id="4-per-voxel-rietveld-refinement">4. Per-voxel Rietveld refinement<a class="headerlink" href="#4-per-voxel-rietveld-refinement" title="Permanent link">&para;</a></h2>
+<p>Wrap the reconstructed volume in a <code>ReconstructedVolume</code> object, export
+per-voxel <code>.xy</code> patterns, then run a user-supplied GSAS-II refinement
+function in parallel across all spatial voxels.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.reconstruction</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReconstructedVolume</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">rv</span> <span class="o">=</span> <span class="n">ReconstructedVolume</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">tth</span><span class="p">,</span> <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;my_sample&quot;</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Al&quot;</span><span class="p">])</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">rv</span><span class="o">.</span><span class="n">write_xy_files_parallel</span><span class="p">()</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">rv</span><span class="o">.</span><span class="n">refine_models_parallel</span><span class="p">(</span><span class="n">my_refinement_function</span><span class="p">)</span>  <span class="c1"># user-supplied</span>
 </code></pre></div>
+<hr />
 <h2 id="5-extract-parameter-maps">5. Extract parameter maps<a class="headerlink" href="#5-extract-parameter-maps" title="Permanent link">&para;</a></h2>
+<p>Query the fitted results to obtain 2-D maps of any refined parameter.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">rwp_map</span> <span class="o">=</span> <span class="n">rv</span><span class="o">.</span><span class="n">get_Rwp_map</span><span class="p">()</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">a_map</span><span class="p">,</span> <span class="n">b_map</span><span class="p">,</span> <span class="n">c_map</span> <span class="o">=</span> <span class="n">rv</span><span class="o">.</span><span class="n">get_cell_map</span><span class="p">()</span>
 </code></pre></div>
 <hr />
-<p>See <a href="../workflow/">Typical Workflow</a> for the full pipeline including instrument calibration.</p>
+<p>See <a href="../workflow/">Typical Workflow</a> for the full pipeline including instrument
+calibration and an annotated package-structure overview.</p>
               
             </div>
           </div><footer>

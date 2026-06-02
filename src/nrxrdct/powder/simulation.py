@@ -177,9 +177,9 @@ def get_powder_xrd_peaks(
             if not data["active"]:
                 continue
 
-            tth_peak = data["ang"] * 2  # ang is in radians
+            tth_peak = data["ang"] * 2  # ang is theta in degrees; tth in degrees
             # d from Bragg's law: d = lambda / (2 * sin(theta))
-            d = wavelength / (2 * np.sin(data["ang"]))  # ang is theta in radians
+            d = wavelength / (2 * np.sin(np.radians(data["ang"])))
 
             if tth_min <= tth_peak <= tth_max:
                 h, k, l = hkl

@@ -2414,7 +2414,7 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
     sc = ax_lab.scatter(x_mm[idx], z_mm[idx], c=e_plot, **sc_kw)
     fig.colorbar(sc, ax=ax_lab, pad=0.01, fraction=0.046).set_label("E (keV)", fontsize=7)
     ell_lab = Ellipse((0, 0), 2*sig_H_nm/1e6, 2*sig_V_nm/1e6,
-                      fill=False, ec="white", lw=1.5, ls="--")
+                      fill=False, ec="black", lw=1.5, ls="--")
     ax_lab.add_patch(ell_lab)
     ax_lab.set_xlabel("H  (mm)", fontsize=8); ax_lab.set_ylabel("V  (mm)", fontsize=8)
     ax_lab.set_title(f"Lab frame\nFWHM: H={fwhm_H_nm:.0f} nm  V={fwhm_V_nm:.0f} nm",
@@ -2427,7 +2427,7 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
                            c=e_plot, **sc_kw)
     fig.colorbar(sc2, ax=ax_surf, pad=0.01, fraction=0.046).set_label("E (keV)", fontsize=7)
     ell_surf = Ellipse((0, 0), 2*fp_H_sig_nm/1e3, 2*fp_V_sig_nm/1e3,
-                       fill=False, ec="white", lw=1.5, ls="--")
+                       fill=False, ec="black", lw=1.5, ls="--")
     ax_surf.add_patch(ell_surf)
     ax_surf.set_xlabel("H on surface  (µm)", fontsize=8)
     ax_surf.set_ylabel(f"V on surface  (µm)\n[stretched x{stretch:.3f}]", fontsize=8)
@@ -2509,19 +2509,19 @@ def plot_sample_footprint(beam, tilt_deg=40.0, norm_factor=1.0,
                                    lw=2.0, mutation_scale=18))
     ax_geo.text(-1.8, 0.12, "Beam", fontsize=8, color="#e07b39")
 
-    # Surface normal
-    ax_geo.annotate("", xy=(np.sin(tilt)*0.7, np.cos(tilt)*0.7),
+    # Surface normal — perpendicular to surface (cos(tilt), sin(tilt)), pointing upper-left
+    ax_geo.annotate("", xy=(-np.sin(tilt)*0.7, np.cos(tilt)*0.7),
                     xytext=(0, 0),
                     arrowprops=dict(arrowstyle="-|>", color="#4a90d9",
                                    lw=1.5, mutation_scale=14))
-    ax_geo.text(np.sin(tilt)*0.75, np.cos(tilt)*0.75 + 0.05,
+    ax_geo.text(-np.sin(tilt)*0.75, np.cos(tilt)*0.75 + 0.05,
                 "Normal", fontsize=7, color="#4a90d9", ha="center")
 
     # Angles
     theta_arc = np.linspace(0, tilt, 40)
-    ax_geo.plot(0.35 * np.sin(theta_arc), 0.35 * np.cos(theta_arc),
+    ax_geo.plot(-0.35 * np.sin(theta_arc), 0.35 * np.cos(theta_arc),
                 color="gray", lw=1, ls="--")
-    ax_geo.text(0.20, 0.42, f"{tilt_deg:.0f}°", fontsize=7, color="gray", ha="center")
+    ax_geo.text(-0.20, 0.42, f"{tilt_deg:.0f}°", fontsize=7, color="gray", ha="center")
 
     inc_arc = np.linspace(np.pi, np.pi + np.radians(inc), 40)
     ax_geo.plot(0.55 * np.cos(inc_arc), 0.55 * np.sin(inc_arc),

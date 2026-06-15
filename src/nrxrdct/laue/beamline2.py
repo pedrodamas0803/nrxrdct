@@ -289,9 +289,9 @@ def plot_beam(beam, label="beam", position_m=None, n_bins=200,
     # ── Cross-section: 2D histogram rendered as image ─────────────────────────
     # Pad limits slightly so edge rays are visible
     x_c = x_mm.mean(); z_c = z_mm.mean()
-    x_r = max(x_mm.std() * 4, 1e-6);  z_r = max(z_mm.std() * 4, 1e-6)
-    x_lim = (x_c - x_r, x_c + x_r)
-    z_lim = (z_c - z_r, z_c + z_r)
+    r = max(x_mm.std() * 4, z_mm.std() * 4, 1e-6)   # same range on both axes
+    x_lim = (x_c - r, x_c + r)
+    z_lim = (z_c - r, z_c + r)
 
     H, xedges, zedges = np.histogram2d(
         x_mm, z_mm, bins=n_bins,

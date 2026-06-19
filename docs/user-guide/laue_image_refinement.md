@@ -1,0 +1,259 @@
+# Image-based orientation and strain refinement
+
+This page describes the image-based post-refinement functions
+[`refine_orientation_image`][nrxrdct.laue.fitting.refine_orientation_image] and
+[`refine_strain_image`][nrxrdct.laue.fitting.refine_strain_image], which refine
+orientation and strain by maximising the agreement between simulated Laue spot
+positions and the raw detector image — without requiring a segmented peak list.
+
+---
+
+## Motivation
+
+The standard refinement pipeline (`fit_orientation` → `fit_strain_orientation`)
+relies on a list of segmented peak positions.  Segmentation can miss spots that
+are:
+
+- too **dim** relative to the background or to nearby stronger spots,
+- too **close** to a dominant reflection to be resolved by the peak finder,
+- from a **secondary grain** with a low match rate that falls below the
+  acceptance threshold.
+
+In all these cases the raw detector image still contains the information needed
+to refine the orientation.  The image-based functions bypass segmentation
+entirely and work directly on the pixel data.
+
+---
+
+## Objective function
+
+For a candidate rotation vector $\delta\boldsymbol{\omega}$ the orientation is
+
+$$
+\mathbf{U} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0
+$$
+
+The **score** is computed with a single FFT-based convolution per optimizer
+iteration:
+
+1. **Simulate** Laue spots for the candidate $\mathbf{U}$ using
+   `geometry_only=True` (structure factors are skipped for speed; pass a
+   pre-computed `allowed_hkl` to retain systematic-absence filtering at no
+   per-call cost).
+2. **Build a delta map** — an image of zeros with each simulated pixel position
+   incremented by the predicted spot intensity $I_\text{sim}(hkl)$.  Intensity
+   weighting means that strong reflections dominate the objective, reducing
+   sensitivity to weak background features.
+3. **Convolve** the delta map with a Gaussian kernel of width $\sigma$ (the
+   `kernel_sigma` parameter) using an FFT.  Each point becomes a smooth blob
+   of radius $\approx 3\sigma$.
+4. **Score** — element-wise product of the convolved map with the
+   background-subtracted detector image, summed over all pixels:
+
+$$
+S(\delta\boldsymbol{\omega})
+= \sum_{x,y} \bigl[D(x,y) - B(x,y)\bigr]
+  \cdot \bigl[K_\sigma * \Delta(x,y;\,\delta\boldsymbol{\omega})\bigr]
+$$
+
+where $D$ is the raw image, $B$ is the slowly-varying background estimated by a
+large-$\sigma$ Gaussian (see below), $\Delta$ is the intensity-weighted delta
+map, and $K_\sigma$ is the Gaussian kernel.
+
+Maximising $S$ pulls each simulated spot position toward the nearest bright pixel
+region, refining the orientation.
+
+### Background subtraction
+
+Before the optimizer runs, a large-$\sigma$ FFT Gaussian (default
+$\sigma_\text{bg} = 251$ px, same routine as
+[`gaussian_background`][nrxrdct.laue.segmentation.gaussian_background]) is
+subtracted from the image.  This removes the slowly-varying detector pedestal
+(beam-centre falloff, inter-module offsets, diffuse scattering) while leaving
+Bragg peaks intact.  The subtraction is computed **once**, outside the optimizer
+loop, so it adds no per-call overhead.  Set `bg_sigma=0` to skip it.
+
+---
+
+## Choosing `kernel_sigma`
+
+`kernel_sigma` ($\sigma$ in pixels) controls the spatial selectivity of the
+objective.  The Gaussian weight at distance $d$ from a predicted spot is
+$\exp(-d^2 / 2\sigma^2)$:
+
+| $\sigma$ (px) | Weight at $d = 2$ px | Use case |
+|---|---|---|
+| 5.0 | 0.92 | Isolated spots, smooth landscape, easiest convergence |
+| 1.0 | 0.14 | Spots a few pixels apart |
+| 0.3 (default) | < 0.001 | Spots 1–2 px from a dominant neighbour |
+
+!!! warning "Spot confusion with large kernels"
+    When a secondary grain's spots are dim and within a few pixels of much
+    brighter primary-grain spots, a large $\sigma$ causes the optimizer to
+    climb the gradient of the primary spot rather than the secondary one.
+    Reduce `kernel_sigma` to $\lesssim 1$ px (or the default 0.3 px) to
+    decouple them spatially.
+
+---
+
+## The two functions
+
+### `refine_orientation_image` — orientation only (3 parameters)
+
+Refines only the rotation correction $\delta\boldsymbol{\omega}$:
+
+$$
+\mathbf{U} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0
+$$
+
+**When to use:** as a first pass when segmentation-based orientation is
+unavailable or unreliable, or when you want a fast, robust refinement before
+attempting strain.
+
+```python
+import nrxrdct.laue as laue
+
+hkl = laue.precompute_allowed_hkl(crystal, E_max_eV=27000)
+
+result = laue.refine_orientation_image(
+    crystal, U0, camera, raw_frame,
+    allowed_hkl   = hkl,
+    kernel_sigma  = 0.3,     # tight — decouples spots 2 px apart
+    max_angle_deg = 0.2,     # keep small when starting from a good U
+    verbose       = True,
+)
+
+print(result)
+# ImageRefinementResult [OK]  |δω|=0.021°  score=8741.2  Δscore=+612.4  n_sim=138
+U_refined = result.U
+```
+
+### `refine_strain_image` — orientation + strain (9 parameters)
+
+Extends the parameter space to include the six independent strain components,
+using the same deformation model as [`fit_strain_orientation`][nrxrdct.laue.fitting.fit_strain_orientation]:
+
+$$
+\mathbf{U}_\text{eff} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0\,({\bf I} + \boldsymbol{\varepsilon})
+$$
+
+The parameter vector is
+
+$$
+\mathbf{p} = [\omega_x,\; \omega_y,\; \omega_z,\; \varepsilon_{xx},\; \varepsilon_{yy},\; \varepsilon_{zz},\; \varepsilon_{xy},\; \varepsilon_{xz},\; \varepsilon_{yz}]
+$$
+
+with strain components internally divided by `strain_scale` (default $10^{-4}$)
+so that all parameters have comparable magnitudes inside the optimizer.
+
+**When to use:** as a polishing step after conventional strain fitting, passing
+the prior strain tensor as `strain0` and the image-refined U as `U0`.
+
+```python
+r_str = laue.refine_strain_image(
+    crystal, r_ori.U, camera, raw_frame,
+    strain0       = prior_result.strain_tensor,
+    allowed_hkl   = hkl,
+    kernel_sigma  = 0.3,
+    max_angle_deg = 0.2,
+    verbose       = True,
+)
+
+print(r_str)
+# StrainImageRefinementResult [OK]  |δω|=0.004°  score=9102.1  Δscore=+361.9
+#   n_sim=138  ε_diag=[1.2e-04, -8.7e-05, -3.6e-05]
+
+eps_dev = r_str.strain_tensor_deviatoric   # deviatoric tensor in crystal frame
+eps_lab = r_str.strain_tensor_lab          # rotated to lab frame
+```
+
+---
+
+## Recommended workflow
+
+The image-based functions are designed as **post-processing steps** in the
+standard pipeline, not replacements for it:
+
+```
+submit_segmentation  →  submit_orientation  →  submit_strain
+                                                      ↓
+                                          submit_image_refine          (orientation polish)
+                                                      ↓
+                                      submit_strain_image_refine       (strain polish)
+```
+
+Running the conventional pipeline first gives a good starting $\mathbf{U}_0$
+and $\boldsymbol{\varepsilon}_0$.  The image steps then recover signal from
+reflections that were too weak to segment.
+
+!!! tip "Always pre-compute `allowed_hkl`"
+    Without a pre-computed HKL list, `simulate_laue` recomputes the full
+    reflection set on every optimizer call (hundreds of times per frame).
+    Always pass `allowed_hkl = laue.precompute_allowed_hkl(crystal, E_max_eV=...)`.
+
+---
+
+## SLURM batch processing
+
+Both functions have corresponding SLURM submission methods on
+[`GrainMap`][nrxrdct.laue.map.GrainMap]:
+
+| Step | Submit | Collect |
+|---|---|---|
+| Orientation polish | `gmap.submit_image_refine(...)` | `gmap.collect_image_refine(base_dir)` |
+| Strain polish | `gmap.submit_strain_image_refine(...)` | `gmap.collect_strain_image_refine(base_dir)` |
+
+Results land in `base_dir/img_refine/` and `base_dir/strain_img_refine/`
+respectively.  Each method reads the starting $\mathbf{U}$ (and optionally
+$\boldsymbol{\varepsilon}$) from a prior `ubs/` or `strain/` result specified
+via `u_source`.
+
+```python
+# Submit orientation polish (reads U from strain/)
+job_ids = gmap.submit_image_refine(
+    base_dir,
+    crystal,
+    camera,
+    h5_dataset    = "1.1/measurement/eiger4m",
+    u_source      = "strain",
+    kernel_sigma  = 0.3,
+    max_angle_deg = 0.2,
+    n_jobs        = 20,
+    time          = "01:00:00",
+    mem           = "8G",
+)
+
+# After jobs finish:
+gmap.collect_image_refine(base_dir)   # updates self.U
+
+# Submit strain polish
+job_ids = gmap.submit_strain_image_refine(
+    base_dir,
+    crystal,
+    camera,
+    h5_dataset    = "1.1/measurement/eiger4m",
+    u_source      = "strain",          # seeds strain0 from strain/ npz
+    kernel_sigma  = 0.3,
+    max_angle_deg = 0.2,
+    n_jobs        = 20,
+    time          = "02:00:00",
+    mem           = "8G",
+)
+
+# After jobs finish:
+gmap.collect_strain_image_refine(base_dir)   # updates self.U, strain_tensor, strain_voigt
+```
+
+---
+
+## Parameter reference
+
+| Parameter | Default | Description |
+|---|---|---|
+| `kernel_sigma` | 0.3 px | Gaussian kernel width at simulated spot positions.  Decrease to decouple spots that are a few pixels apart. |
+| `bg_sigma` | 251 px | Background Gaussian width.  Large values remove only the slow pedestal. |
+| `max_angle_deg` | 0.2° | Half-width of the rotation search space per axis. |
+| `allowed_hkl` | `None` | Pre-computed HKL set.  Always provide this for speed and correctness. |
+| `strain_scale` | `1e-4` | Internal divisor for strain parameters (strain refinement only). |
+| `method` | `'Powell'` | `scipy.optimize.minimize` method. |
+| `verbose` | `False` | Print starting score and convergence summary. |

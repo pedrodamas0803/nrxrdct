@@ -3215,9 +3215,9 @@ def refine_orientation_image(
     pixel intensity at simulated Laue spot positions.
 
     Unlike the spot-matching refinement in :func:`fit_orientation`, this
-    function works directly on the detector image and does not require
-    segmented peak lists.  It is therefore useful when secondary grains or
-    weak reflections are not captured by the segmentation.
+    function works directly on the raw detector image and does not require a
+    segmented peak list.  It is therefore useful for secondary grains or
+    weak reflections that are not reliably captured by the segmentation step.
 
     **Objective function**
 
@@ -3225,53 +3225,87 @@ def refine_orientation_image(
 
         U = Rotation.from_rotvec(δω) @ U0
 
-    The score is computed with a single FFT per iteration, regardless of the
-    number of simulated spots:
+    The score is computed with a single FFT per optimizer iteration,
+    regardless of the number of simulated spots:
 
-    1. Simulate Laue spots with ``geometry_only=True`` (fast, no structure
-       factors).
-    2. Build a sparse *delta map* — an image of zeros with 1.0 placed at
-       each simulated pixel position (gap pixels are skipped).
-    3. Convolve the delta map with a Gaussian kernel (σ = *kernel_sigma*) via
-       FFT — this spreads each point into a smooth blob of unit area.
-    4. Compute the Hadamard product with the background-subtracted detector
-       image and sum.
+    1. Simulate Laue spots with ``geometry_only=True`` (fast — structure
+       factors skipped; pass a pre-computed *allowed_hkl* to apply the F²
+       threshold without the per-call overhead).
+    2. Build a *delta map* — an image of zeros with each simulated pixel
+       position incremented by the predicted spot intensity (gap pixels
+       skipped).  Intensity weighting ensures that strong reflections
+       dominate the objective, reducing sensitivity to weak background
+       features.
+    3. Convolve the delta map with a Gaussian kernel (σ = *kernel_sigma*)
+       via FFT — each point becomes a smooth blob of radius ≈ 3σ.
+    4. Compute the element-wise product with the background-subtracted
+       detector image and sum.
 
     Maximising this sum pulls the simulated positions toward bright detector
     regions, refining the orientation.
 
     **Background subtraction**
 
-    A large-σ FFT Gaussian is subtracted from the image once before
-    optimisation, using the same routine as :func:`~.segmentation.gaussian_background`.
-    Set *bg_sigma=0* to skip subtraction.
+    A large-σ FFT Gaussian (same routine as
+    :func:`~.segmentation.gaussian_background`) is subtracted from the
+    image **once before the optimisation loop**, so it adds no per-call
+    overhead.  It removes the slowly-varying detector pedestal (beam-centre
+    falloff, inter-module offsets) while leaving Bragg peaks intact.
+    Set *bg_sigma=0* to skip.
+
+    **Kernel size and spot confusion**
+
+    *kernel_sigma* controls how spatially selective the objective is:
+
+    * Large σ (e.g. 5 px) — smooth landscape, easier convergence, but
+      spots within ~3σ of each other are not resolved.  The optimizer may
+      drift toward brighter nearby spots.
+    * Small σ (e.g. 0.3 px, default) — tight, position-sensitive objective.
+      At σ = 0.3 the Gaussian weight at 2 px distance is < 0.001, so spots
+      2 px apart are effectively decoupled.  Recommended when refining
+      secondary grains whose spots are close to and dimmer than primary
+      grain spots.
+
+    **always pass** *allowed_hkl* (output of :func:`precompute_allowed_hkl`)
+    to avoid recomputing the HKL list on every optimizer call and to ensure
+    that systematically absent reflections are excluded from the delta map.
 
     Args:
         crystal: Crystal object passed to :func:`simulate_laue`.
-        U0 ((3,3) ndarray): Starting orientation matrix (LT frame).
+        U0 ((3,3) ndarray): Starting orientation matrix (LT frame).  A
+            good starting point (e.g. from LaueTools indexing) is important
+            because the search space is intentionally narrow.
         camera (Camera): Detector geometry.
-        image ((ny, nx) ndarray): Raw detector frame.  Gap/invalid pixels
-            must be flagged as negative (Eiger convention).
-        kernel_sigma (float): σ in pixels of the Gaussian kernel used to
-            accumulate intensity around each simulated spot.  Should match
-            the typical spot radius on the detector.  Default 5.
-        bg_sigma (float): σ in pixels of the large-scale Gaussian background
-            that is subtracted before optimisation.  Set to 0 to skip.
-            Default 251.
-        E_min, E_max (float): Photon energy range in eV passed to
+        image ((ny, nx) ndarray): Raw detector frame.  Gap / invalid pixels
+            must be flagged as negative (Eiger convention: −1).
+        kernel_sigma (float): σ in pixels of the Gaussian kernel placed at
+            each simulated spot position.  Smaller values give a more
+            position-sensitive objective and reduce cross-talk between spots
+            separated by only a few pixels.  Default ``0.3``.
+        bg_sigma (float): σ in pixels of the large-scale background
+            Gaussian subtracted before optimisation.  Set to ``0`` to skip.
+            Default ``251``.
+        E_min, E_max (float): Photon energy range in eV forwarded to
             :func:`simulate_laue`.
-        allowed_hkl: Pre-computed allowed HKL list (output of
-            :func:`precompute_allowed_hkl`).  Pass ``None`` to let
-            :func:`simulate_laue` compute it internally each call (slower).
-        max_angle_deg (float): Half-range of the search space in degrees.
-            Used as symmetric bounds on each rotation-vector component.
-            Default 1.0°.
+        allowed_hkl: Pre-computed allowed HKL frozenset from
+            :func:`precompute_allowed_hkl`.  Strongly recommended — without
+            it :func:`simulate_laue` recomputes the full HKL list on every
+            optimizer call, which is slow and includes systematically absent
+            reflections that inflate the delta map.
+        max_angle_deg (float): Symmetric bound (degrees) applied to each
+            component of the rotation vector δω.  Restricts the search
+            space to a ±*max_angle_deg* cube in rotation-vector space.
+            Keep small (0.1–0.5°) when the starting U is already close to
+            the true orientation.  Default ``0.2``.
         method (str): ``scipy.optimize.minimize`` method.  ``'Powell'``
-            (default) is derivative-free and well-suited for the smooth
-            Gaussian objective.  ``'L-BFGS-B'`` can be faster when many
-            iterations are needed.
-        options (dict or None): Passed directly to ``scipy.optimize.minimize``
-            as the ``options`` keyword.  Merged with sensible defaults.
+            (default) is derivative-free and handles the smooth Gaussian
+            landscape well.  ``'L-BFGS-B'`` can converge faster when
+            many iterations are needed.
+        options (dict or None): Forwarded to ``scipy.optimize.minimize`` as
+            the ``options`` keyword, merged over sensible defaults
+            (``maxiter=2000``, ``xtol/ftol=1e-6`` for Powell).
+        verbose (bool): If ``True``, print the starting score and a
+            one-line result summary on completion.  Default ``False``.
 
     Returns:
         ImageRefinementResult
@@ -3385,51 +3419,89 @@ def refine_strain_image(
 ) -> "StrainImageRefinementResult":
     """
     Post-refine orientation **and** strain tensor simultaneously by maximising
-    the total Gaussian-weighted pixel intensity at simulated Laue spot positions.
+    the total Gaussian-weighted pixel intensity at simulated Laue spot
+    positions.
 
-    The effective orientation matrix used in the simulation is::
+    Uses the same image-based objective as :func:`refine_orientation_image`
+    but extends the parameter space to include the six independent strain
+    components, using the same deformation model as
+    :func:`fit_strain_orientation`::
 
         U_eff = R(δω) @ U0 @ (I + ε)
 
-    which is the same parameterisation as :func:`fit_strain_orientation`.  The
-    image-based objective (FFT-Gaussian kernel dot product) makes this step
-    useful when many reflections are too weak to segment reliably.
+    This makes it useful as a polishing pass after conventional strain fitting
+    when some reflections are too weak or too few to be reliably segmented.
 
     **Parameter vector**
 
     ``params = [ωx, ωy, ωz, *strain_free]``
 
     * The first 3 entries are the Rodriguez rotation vector δω (radians).
-    * The remaining entries are the free strain components, internally scaled
-      by ``1 / strain_scale`` so their magnitudes are comparable to the
-      rotation angles (strain ~10⁻³, angles ~10⁻²).
+    * The remaining entries are the free strain components, internally
+      divided by *strain_scale* so their magnitudes are comparable to the
+      rotation angles and Powell steps uniformly across all parameters.
+
+    **Recommended workflow**
+
+    Run :func:`refine_orientation_image` first (3-parameter, robust), then
+    pass its refined ``U`` as *U0* here together with the prior
+    ``strain_tensor`` as *strain0*::
+
+        r_ori = refine_orientation_image(crystal, U0, camera, frame,
+                                         allowed_hkl=hkl, verbose=True)
+        r_str = refine_strain_image(crystal, r_ori.U, camera, frame,
+                                     strain0=prior_strain_tensor,
+                                     allowed_hkl=hkl, verbose=True)
+
+    **Spot confusion and kernel size**
+
+    The same *kernel_sigma* / *max_angle_deg* trade-offs as
+    :func:`refine_orientation_image` apply here.  Because the 9-parameter
+    landscape is less constrained than the 3-parameter one, keeping both
+    values small is especially important when secondary spots are close to
+    and dimmer than primary grain spots.  The ±5 % hard wall on each strain
+    component prevents the optimizer from exploring unphysical deformations.
 
     Args:
         crystal: Crystal object passed to :func:`simulate_laue`.
-        U0 ((3,3) ndarray): Starting orientation matrix.
+        U0 ((3,3) ndarray): Starting orientation matrix (pure rotation
+            part).  Ideally the output of :func:`refine_orientation_image`.
         camera (Camera): Detector geometry.
-        image ((ny, nx) ndarray): Raw detector frame (gap pixels negative).
-        strain0 ((3,3) ndarray or None): Starting strain tensor.  ``None``
-            starts from zero strain.
+        image ((ny, nx) ndarray): Raw detector frame.  Gap / invalid pixels
+            must be negative (Eiger convention: −1).
+        strain0 ((3,3) ndarray or None): Starting symmetric strain tensor ε.
+            When *u_source* is ``'strain'`` in the SLURM pipeline this is
+            loaded automatically from the prior strain-fit ``.npz``.
+            ``None`` starts from zero strain.  Default ``None``.
         fit_strain (tuple of str or None): Strain components to refine.
-            Subset of ``('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')``.
-            ``None`` refines all six.
-        kernel_sigma (float): Gaussian kernel σ in pixels.  Default ``5``.
-        bg_sigma (float): Large-scale background Gaussian σ in pixels.
-            Set to ``0`` to skip subtraction.  Default ``251``.
-        E_min, E_max (float): Photon energy range in eV.
-        allowed_hkl: Pre-computed allowed HKL list.  Pass ``None`` to let
-            :func:`simulate_laue` recompute it each call (slow).
+            Any subset of
+            ``('e_xx', 'e_yy', 'e_zz', 'e_xy', 'e_xz', 'e_yz')``.
+            Components not listed are fixed at their *strain0* value.
+            ``None`` refines all six.  Default ``None``.
+        kernel_sigma (float): σ in pixels of the Gaussian kernel placed at
+            each simulated spot.  See :func:`refine_orientation_image` for
+            guidance on choosing this value.  Default ``0.3``.
+        bg_sigma (float): σ in pixels of the large-scale background
+            Gaussian subtracted before optimisation.  Set to ``0`` to skip.
+            Default ``251``.
+        E_min, E_max (float): Photon energy range in eV forwarded to
+            :func:`simulate_laue`.
+        allowed_hkl: Pre-computed allowed HKL frozenset from
+            :func:`precompute_allowed_hkl`.  Strongly recommended for the
+            same reasons as in :func:`refine_orientation_image`.
         max_angle_deg (float): Symmetric bound on each rotation-vector
-            component (degrees).  Default ``1.0``.
-        strain_scale (float): Internal scale applied to strain parameters
-            inside the optimizer so that strain values (~10⁻³) are
-            comparable in magnitude to rotation angles (~10⁻²).
-            Default ``1e-4`` (divide by 1e-4 → internal units ~10).
-        method (str): ``scipy.optimize.minimize`` method.  Default
-            ``'Powell'``.
-        options (dict or None): Extra options forwarded to
-            ``scipy.optimize.minimize``.
+            component (degrees).  Default ``0.2``.
+        strain_scale (float): Internal divisor applied to strain parameters
+            inside the optimizer.  Strain components (∼10⁻³) are divided by
+            *strain_scale* so their internal magnitudes match the rotation
+            angles (∼10⁻²).  Default ``1e-4``.
+        method (str): ``scipy.optimize.minimize`` method.  ``'Powell'``
+            (default) works well for the smooth Gaussian landscape.
+        options (dict or None): Forwarded to ``scipy.optimize.minimize``
+            as the ``options`` keyword, merged over sensible defaults
+            (``maxiter=5000``, ``xtol/ftol=1e-7`` for Powell).
+        verbose (bool): If ``True``, print the starting score, free strain
+            components, and a one-line result summary.  Default ``False``.
 
     Returns:
         StrainImageRefinementResult

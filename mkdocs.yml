@@ -57,6 +57,7 @@ nav:
       - Spot Segmentation: user-guide/laue_segmentation.md
       - Orientation Plotting: user-guide/laue_orientation_plotting.md
       - Strain Analysis: user-guide/laue_strain.md
+      - Image-Based Refinement: user-guide/laue_image_refinement.md
       - Elastic Stress from Strain Maps: user-guide/laue_stress.md
       - Grain Map Merging and Symmetry Reduction: user-guide/laue_grain_map_merge.md
     - Azimuthal Integration: user-guide/azimuthal_integration.md

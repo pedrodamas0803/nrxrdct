@@ -3684,3 +3684,129 @@ def print_bragg_table(a):
         d = a / np.sqrt(h * h + k * k + l * l)
         E90 = lam2en(d * np.sqrt(2))
         print(f"  ({h}{k}{l})    {d:8.4f}  {E90/1e3:18.3f}")
+
+
+# ── Symmetry / fundamental-zone utilities ─────────────────────────────────────
+
+_ORIX_SYM_MAP = None   # populated lazily on first call
+
+
+def _orix_symmetry_map():
+    """Return the {name: orix symmetry} lookup table (built once)."""
+    global _ORIX_SYM_MAP
+    if _ORIX_SYM_MAP is None:
+        from orix.quaternion import symmetry as _osym
+        _ORIX_SYM_MAP = {
+            "cubic":        _osym.Oh,
+            "hexagonal":    _osym.D6h,
+            "tetragonal":   _osym.D4h,
+            "orthorhombic": _osym.D2h,
+        }
+    return _ORIX_SYM_MAP
+
+
+def map_to_fundamental_zone(
+    U: "np.ndarray",
+    symmetry: str = "cubic",
+) -> "np.ndarray":
+    """
+    Map orientation matrix/matrices to the fundamental zone.
+
+    For each input rotation the symmetry-equivalent member with the smallest
+    rotation angle from the identity is selected using orix
+    ``Orientation.reduce()``.  The result is a canonical representation of
+    the orientation that is consistent across pixels / grains of the same
+    phase.
+
+    Args:
+        U ((3, 3) or (..., 3, 3) ndarray): Rotation matrix/matrices.
+            Any number of leading batch dimensions is supported.
+        symmetry (str): Crystal point-group symmetry.  One of ``'cubic'``
+            (Oh, 24 operators), ``'hexagonal'`` (D6h, 12 operators),
+            ``'tetragonal'`` (D4h, 8 operators), ``'orthorhombic'``
+            (D2h, 4 operators).
+
+    Returns:
+        U_fz (same shape as *U*, float64): Orientation matrices reduced to
+            the fundamental zone.
+
+    Example::
+
+        U_fz = map_to_fundamental_zone(U_raw, symmetry='cubic')
+    """
+    from orix.quaternion import Orientation as _Ori
+
+    sym_map = _orix_symmetry_map()
+    if symmetry not in sym_map:
+        raise ValueError(
+            f"symmetry must be one of {list(sym_map)}, got {symmetry!r}"
+        )
+    sym = sym_map[symmetry]
+
+    U = np.asarray(U, dtype=float)
+    shape = U.shape
+    U_flat = U.reshape(-1, 3, 3)
+
+    ori_fz = _Ori.from_matrix(U_flat, symmetry=sym).reduce()
+
+    # orix stores quaternions as (w, x, y, z); scipy expects (x, y, z, w)
+    q = np.asarray(ori_fz.data)                         # (N, 4)  w x y z
+    U_fz = Rotation.from_quat(q[:, [1, 2, 3, 0]]).as_matrix()  # (N, 3, 3)
+    return U_fz.reshape(shape)
+
+
+def disorientation(
+    U1: "np.ndarray",
+    U2: "np.ndarray",
+    symmetry: str = "cubic",
+) -> "tuple[float, np.ndarray]":
+    """
+    Disorientation between two orientation matrices with crystal symmetry.
+
+    The disorientation is the symmetry-equivalent misorientation
+    $\\mathbf{M} = \\mathbf{U}_2 \\mathbf{U}_1^T$ with the smallest rotation
+    angle, minimised over all pairs of point-group operators:
+
+    $$
+    \\omega_\\text{dis} =
+        \\min_{S_i,\\,S_j \\in G}\\;
+        \\bigl|\\!\\operatorname{angle}(S_i\\,\\mathbf{M}\\,S_j^T)\\bigr|
+    $$
+
+    Uses orix ``Misorientation.map_into_fundamental_zone()`` internally.
+
+    Args:
+        U1 ((3, 3) ndarray): First orientation matrix.
+        U2 ((3, 3) ndarray): Second orientation matrix.
+        symmetry (str): Crystal point-group symmetry — same options as
+            :func:`map_to_fundamental_zone`.
+
+    Returns:
+        angle_deg (float): Disorientation angle in degrees.
+        R_dis ((3, 3) ndarray): The disorientation rotation matrix
+            (minimum-angle symmetry-equivalent misorientation).
+
+    Example::
+
+        angle, R = disorientation(U1, U2, symmetry='cubic')
+        print(f"disorientation = {angle:.3f}°")
+    """
+    from orix.quaternion import Misorientation as _Mis
+
+    sym_map = _orix_symmetry_map()
+    if symmetry not in sym_map:
+        raise ValueError(
+            f"symmetry must be one of {list(sym_map)}, got {symmetry!r}"
+        )
+    sym = sym_map[symmetry]
+
+    R_mis = (np.asarray(U2, dtype=float) @ np.asarray(U1, dtype=float).T)[np.newaxis]
+    mis = _Mis.from_matrix(R_mis)
+    mis.symmetry = (sym, sym)
+    dis = mis.map_into_fundamental_zone()
+
+    # Extract rotation matrix from orix quaternion (w, x, y, z)
+    q = np.asarray(dis.data)[0]                          # (4,) w x y z
+    angle_deg = float(np.degrees(2.0 * np.arccos(np.clip(abs(q[0]), 0.0, 1.0))))
+    R_dis = Rotation.from_quat(q[[1, 2, 3, 0]]).as_matrix()  # (3, 3)
+    return angle_deg, R_dis

@@ -3705,6 +3705,77 @@ def _orix_symmetry_map():
     return _ORIX_SYM_MAP
 
 
+_SYMMETRY_OPS_CACHE: "dict[str, np.ndarray]" = {}
+
+
+def _symmetry_ops_np(symmetry: str) -> np.ndarray:
+    """
+    Return proper rotations of the crystal point group as an (N, 3, 3) array.
+
+    Pure-numpy implementation; no orix dependency.
+    Supported symmetries and operator counts:
+    ``'cubic'`` (24), ``'hexagonal'`` (12), ``'tetragonal'`` (8),
+    ``'orthorhombic'`` (4).
+    """
+    if symmetry in _SYMMETRY_OPS_CACHE:
+        return _SYMMETRY_OPS_CACHE[symmetry]
+
+    from itertools import permutations, product as _iproduct
+
+    if symmetry == "cubic":
+        ops = []
+        for perm in permutations(range(3)):
+            for signs in _iproduct((-1, 1), repeat=3):
+                R = np.zeros((3, 3))
+                for j in range(3):
+                    R[perm[j], j] = signs[j]
+                if round(np.linalg.det(R)) == 1:
+                    ops.append(R)
+        result = np.array(ops)   # (24, 3, 3)
+
+    elif symmetry == "hexagonal":
+        ops = []
+        for n in range(6):
+            a = n * np.pi / 3
+            c, s = np.cos(a), np.sin(a)
+            ops.append(np.array([[ c, -s, 0.], [ s,  c, 0.], [0., 0.,  1.]]))
+        for n in range(6):
+            a = n * np.pi / 6
+            c, s = np.cos(2 * a), np.sin(2 * a)
+            ops.append(np.array([[ c,  s, 0.], [ s, -c, 0.], [0., 0., -1.]]))
+        result = np.array(ops)   # (12, 3, 3)
+
+    elif symmetry == "tetragonal":
+        ops = []
+        for n in range(4):
+            a = n * np.pi / 2
+            c, s = np.cos(a), np.sin(a)
+            ops.append(np.array([[ c, -s, 0.], [ s,  c, 0.], [0., 0.,  1.]]))
+        for n in range(4):
+            a = n * np.pi / 2
+            c, s = np.cos(a), np.sin(a)
+            ops.append(np.array([[ c,  s, 0.], [ s, -c, 0.], [0., 0., -1.]]))
+        result = np.array(ops)   # (8, 3, 3)
+
+    elif symmetry == "orthorhombic":
+        result = np.array([
+            np.eye(3),
+            np.diag([1., -1., -1.]),
+            np.diag([-1., 1., -1.]),
+            np.diag([-1., -1., 1.]),
+        ])   # (4, 3, 3)
+
+    else:
+        raise ValueError(
+            f"symmetry must be one of "
+            f"['cubic', 'hexagonal', 'tetragonal', 'orthorhombic'], "
+            f"got {symmetry!r}"
+        )
+
+    _SYMMETRY_OPS_CACHE[symmetry] = result
+    return result
+
+
 def map_to_fundamental_zone(
     U: "np.ndarray",
     symmetry: str = "cubic",
@@ -3773,7 +3844,8 @@ def disorientation(
         \\bigl|\\!\\operatorname{angle}(S_i\\,\\mathbf{M}\\,S_j^T)\\bigr|
     $$
 
-    Uses orix ``Misorientation.map_into_fundamental_zone()`` internally.
+    Vectorised over all pairs of point-group operators using pure numpy —
+    no dependency on orix internals.
 
     Args:
         U1 ((3, 3) ndarray): First orientation matrix.
@@ -3791,22 +3863,14 @@ def disorientation(
         angle, R = disorientation(U1, U2, symmetry='cubic')
         print(f"disorientation = {angle:.3f}°")
     """
-    from orix.quaternion import Misorientation as _Mis
+    ops = _symmetry_ops_np(symmetry)                          # (N, 3, 3)
+    R_mis = np.asarray(U2, dtype=float) @ np.asarray(U1, dtype=float).T
 
-    sym_map = _orix_symmetry_map()
-    if symmetry not in sym_map:
-        raise ValueError(
-            f"symmetry must be one of {list(sym_map)}, got {symmetry!r}"
-        )
-    sym = sym_map[symmetry]
+    # Candidates: S_i @ R_mis @ S_j^T  for all (i, j) pairs → (N*N, 3, 3)
+    candidates = (ops[:, None] @ R_mis @ ops[None].transpose(0, 2, 1)).reshape(-1, 3, 3)
 
-    R_mis = (np.asarray(U2, dtype=float) @ np.asarray(U1, dtype=float).T)[np.newaxis]
-    mis = _Mis.from_matrix(R_mis)
-    mis.symmetry = (sym, sym)
-    dis = mis.map_into_fundamental_zone()
+    traces = candidates[:, 0, 0] + candidates[:, 1, 1] + candidates[:, 2, 2]
+    angles = np.arccos(np.clip((traces - 1.0) / 2.0, -1.0, 1.0))
 
-    # Extract rotation matrix from orix quaternion (w, x, y, z)
-    q = np.asarray(dis.data)[0]                          # (4,) w x y z
-    angle_deg = float(np.degrees(2.0 * np.arccos(np.clip(abs(q[0]), 0.0, 1.0))))
-    R_dis = Rotation.from_quat(q[[1, 2, 3, 0]]).as_matrix()  # (3, 3)
-    return angle_deg, R_dis
+    best = int(np.argmin(angles))
+    return float(np.degrees(angles[best])), candidates[best]

@@ -3867,7 +3867,9 @@ def disorientation(
     R_mis = np.asarray(U2, dtype=float) @ np.asarray(U1, dtype=float).T
 
     # Candidates: S_i @ R_mis @ S_j^T  for all (i, j) pairs → (N*N, 3, 3)
-    candidates = (ops[:, None] @ R_mis @ ops[None].transpose(0, 2, 1)).reshape(-1, 3, 3)
+    ops_R = ops @ R_mis                     # (N, 3, 3)  S_i @ R_mis
+    ops_T = ops.transpose(0, 2, 1)         # (N, 3, 3)  S_j^T
+    candidates = (ops_R[:, None] @ ops_T[None]).reshape(-1, 3, 3)
 
     traces = candidates[:, 0, 0] + candidates[:, 1, 1] + candidates[:, 2, 2]
     angles = np.arccos(np.clip((traces - 1.0) / 2.0, -1.0, 1.0))

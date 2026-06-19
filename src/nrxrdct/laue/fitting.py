@@ -416,6 +416,76 @@ class IndexResult:
 
 
 @dataclass
+class StrainImageRefinementResult:
+    """
+    Result of image-based strain + orientation post-refinement
+    (:func:`refine_strain_image`).
+
+    Attributes:
+        U ((3,3) ndarray): Refined rotation matrix (pure rotation part).
+        U0 ((3,3) ndarray): Starting orientation.
+        U_eff ((3,3) ndarray): Full deformation matrix used in simulation:
+            ``U_eff = R(rotvec) @ U0 @ (I + ε)``.
+        rotvec ((3,) ndarray): Rotation correction applied to U0 (radians).
+        strain_tensor ((3,3) ndarray): Symmetric strain tensor ε in the
+            crystal frame (only free components are non-zero).
+        strain_voigt ((6,) ndarray): ``[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]``.
+        fit_strain (tuple of str): Strain components that were free.
+        score (float): Total Gaussian-weighted intensity at the refined
+            spot positions (higher is better).
+        score0 (float): Score at the starting orientation/strain.
+        n_sim (int): Number of simulated spots at the refined solution.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw result (not shown in repr).
+"""
+
+    U             : np.ndarray
+    U0            : np.ndarray
+    U_eff         : np.ndarray
+    rotvec        : np.ndarray
+    strain_tensor : np.ndarray
+    strain_voigt  : np.ndarray
+    fit_strain    : tuple
+    score         : float
+    score0        : float
+    n_sim         : int
+    success       : bool
+    message       : str
+    optimizer     : object = field(repr=False)
+
+    @property
+    def strain_tensor_deviatoric(self) -> np.ndarray:
+        """Deviatoric part: ``ε_dev = ε − (Tr(ε)/3) I``."""
+        eps = self.strain_tensor
+        return eps - np.trace(eps) / 3.0 * np.eye(3)
+
+    @property
+    def strain_tensor_lab(self) -> np.ndarray:
+        """Strain tensor rotated to the lab frame: ``ε_lab = U @ ε @ Uᵀ``."""
+        return self.U @ self.strain_tensor @ self.U.T
+
+    @property
+    def strain_voigt_lab(self) -> np.ndarray:
+        """Voigt representation of ``strain_tensor_lab``."""
+        e = self.strain_tensor_lab
+        return np.array([e[0, 0], e[1, 1], e[2, 2], e[0, 1], e[0, 2], e[1, 2]])
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw   = float(np.degrees(np.linalg.norm(self.rotvec)))
+        e    = self.strain_voigt
+        gain = self.score - self.score0
+        return (
+            f"StrainImageRefinementResult [{status}]  "
+            f"|δω|={dw:.4f}°  "
+            f"score={self.score:.1f}  Δscore={gain:+.1f}  "
+            f"n_sim={self.n_sim}  "
+            f"ε_diag=[{e[0]:.2e}, {e[1]:.2e}, {e[2]:.2e}]"
+        )
+
+
+@dataclass
 class ImageRefinementResult:
     """
     Result of image-based orientation post-refinement
@@ -3282,4 +3352,174 @@ def refine_orientation_image(
         success  = result.success,
         message  = result.message,
         optimizer= result,
+    )
+
+
+def refine_strain_image(
+    crystal,
+    U0: np.ndarray,
+    camera,
+    image: np.ndarray,
+    *,
+    strain0: "np.ndarray | None" = None,
+    fit_strain: "tuple[str, ...] | None" = None,
+    kernel_sigma: float = 5.0,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    max_angle_deg: float = 1.0,
+    strain_scale: float = 1e-4,
+    method: str = "Powell",
+    options: "dict | None" = None,
+) -> "StrainImageRefinementResult":
+    """
+    Post-refine orientation **and** strain tensor simultaneously by maximising
+    the total Gaussian-weighted pixel intensity at simulated Laue spot positions.
+
+    The effective orientation matrix used in the simulation is::
+
+        U_eff = R(δω) @ U0 @ (I + ε)
+
+    which is the same parameterisation as :func:`fit_strain_orientation`.  The
+    image-based objective (FFT-Gaussian kernel dot product) makes this step
+    useful when many reflections are too weak to segment reliably.
+
+    **Parameter vector**
+
+    ``params = [ωx, ωy, ωz, *strain_free]``
+
+    * The first 3 entries are the Rodriguez rotation vector δω (radians).
+    * The remaining entries are the free strain components, internally scaled
+      by ``1 / strain_scale`` so their magnitudes are comparable to the
+      rotation angles (strain ~10⁻³, angles ~10⁻²).
+
+    Args:
+        crystal: Crystal object passed to :func:`simulate_laue`.
+        U0 ((3,3) ndarray): Starting orientation matrix.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame (gap pixels negative).
+        strain0 ((3,3) ndarray or None): Starting strain tensor.  ``None``
+            starts from zero strain.
+        fit_strain (tuple of str or None): Strain components to refine.
+            Subset of ``('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')``.
+            ``None`` refines all six.
+        kernel_sigma (float): Gaussian kernel σ in pixels.  Default ``5``.
+        bg_sigma (float): Large-scale background Gaussian σ in pixels.
+            Set to ``0`` to skip subtraction.  Default ``251``.
+        E_min, E_max (float): Photon energy range in eV.
+        allowed_hkl: Pre-computed allowed HKL list.  Pass ``None`` to let
+            :func:`simulate_laue` recompute it each call (slow).
+        max_angle_deg (float): Symmetric bound on each rotation-vector
+            component (degrees).  Default ``1.0``.
+        strain_scale (float): Internal scale applied to strain parameters
+            inside the optimizer so that strain values (~10⁻³) are
+            comparable in magnitude to rotation angles (~10⁻²).
+            Default ``1e-4`` (divide by 1e-4 → internal units ~10).
+        method (str): ``scipy.optimize.minimize`` method.  Default
+            ``'Powell'``.
+        options (dict or None): Extra options forwarded to
+            ``scipy.optimize.minimize``.
+
+    Returns:
+        StrainImageRefinementResult
+    """
+    _fit_strain: tuple[str, ...] = tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL
+
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    # Starting parameter vector: [rotvec(3), strain_free(N)] scaled.
+    eps0 = np.asarray(strain0, dtype=float) if strain0 is not None else np.zeros((3, 3))
+    strain0_vals = np.array(
+        [eps0[_STRAIN_IDX[n]] for n in _fit_strain], dtype=float
+    )
+    x0 = np.concatenate([np.zeros(3), strain0_vals / strain_scale])
+
+    rot_lim    = float(np.radians(max_angle_deg))
+    strain_lim = 0.05 / strain_scale          # ±5 % hard wall — far outside physical range
+    bounds = (
+        [(-rot_lim, rot_lim)] * 3
+        + [(-strain_lim, strain_lim)] * len(_fit_strain)
+    )
+
+    def _score(params: np.ndarray) -> float:
+        rotvec     = params[:3]
+        strain_vals = params[3:] * strain_scale
+        R          = Rotation.from_rotvec(rotvec).as_matrix()
+        eps        = _strain_matrix(strain_vals, _fit_strain)
+        U_eff      = R @ np.asarray(U0, dtype=float) @ (np.eye(3) + eps)
+
+        spots = simulate_laue(
+            crystal, U_eff, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        if not spots:
+            return 0.0
+
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for s in spots:
+            xc, yc = s["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += 1.0
+
+        kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
+        return float(np.sum(kernel_map * img))
+
+    def _objective(params: np.ndarray) -> float:
+        return -_score(params)
+
+    score0 = _score(x0)
+
+    opts: dict = {"maxiter": 5000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-7, "ftol": 1e-7})
+    else:
+        opts.update({"gtol": 1e-8})
+    if options:
+        opts.update(options)
+
+    result = minimize(_objective, x0, method=method, bounds=bounds, options=opts)
+
+    rotvec_opt   = result.x[:3]
+    strain_vals  = result.x[3:] * strain_scale
+    R_opt        = Rotation.from_rotvec(rotvec_opt).as_matrix()
+    eps_opt      = _strain_matrix(strain_vals, _fit_strain)
+    U_refined    = R_opt @ np.asarray(U0, dtype=float)
+    U_eff_final  = U_refined @ (np.eye(3) + eps_opt)
+
+    spots_final = simulate_laue(
+        crystal, U_eff_final, camera,
+        E_min=E_min, E_max=E_max,
+        allowed_hkl=allowed_hkl,
+        geometry_only=True,
+    )
+
+    return StrainImageRefinementResult(
+        U             = U_refined,
+        U0            = np.asarray(U0, dtype=float),
+        U_eff         = U_eff_final,
+        rotvec        = rotvec_opt,
+        strain_tensor = eps_opt,
+        strain_voigt  = _strain_to_voigt(strain_vals, _fit_strain),
+        fit_strain    = _fit_strain,
+        score         = -float(result.fun),
+        score0        = score0,
+        n_sim         = len(spots_final),
+        success       = result.success,
+        message       = result.message,
+        optimizer     = result,
     )

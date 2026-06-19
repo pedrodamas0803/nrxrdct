@@ -181,6 +181,8 @@
     </li>
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.decompose_matstarlab">decompose_matstarlab</a>
     </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.disorientation">disorientation</a>
+    </li>
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.estimate_instrument_broadening">estimate_instrument_broadening</a>
     </li>
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.euler_to_U">euler_to_U</a>
@@ -190,6 +192,8 @@
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.kb_reflectivity">kb_reflectivity</a>
     </li>
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.layer_contributions_spots">layer_contributions_spots</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.map_to_fundamental_zone">map_to_fundamental_zone</a>
     </li>
     <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.laue.simulation.measure_spot_widths">measure_spot_widths</a>
     </li>
@@ -1352,6 +1356,227 @@ print("shear  strains:", eps[0,1], eps[0,2], eps[1,2])</p>
 <a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="p">)</span>
 <a id="__codelineno-0-496" name="__codelineno-0-496"></a>
 <a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="k">return</span> <span class="n">U</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">eps_voigt</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.laue.simulation.disorientation" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">disorientation</span>
+
+
+<a href="#nrxrdct.laue.simulation.disorientation" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">disorientation</span><span class="p">(</span><span class="n">U1</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">U2</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">symmetry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;cubic&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Disorientation between two orientation matrices with crystal symmetry.</p>
+<p>The disorientation is the symmetry-equivalent misorientation
+<span class="arithmatex">\(\mathbf{M} = \mathbf{U}_2 \mathbf{U}_1^T\)</span> with the smallest rotation
+angle, minimised over all pairs of point-group operators:</p>
+<div class="arithmatex">\[
+\omega_\text{dis} =
+    \min_{S_i,\,S_j \in G}\;
+    \bigl|\!\operatorname{angle}(S_i\,\mathbf{M}\,S_j^T)\bigr|
+\]</div>
+<p>Vectorised over all pairs of point-group operators using pure numpy —
+no dependency on orix internals.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>U1</code></b>
+                  (<code>(3, 3) ndarray</code>)
+              –
+              <div class="doc-md-description">
+                <p>First orientation matrix.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>U2</code></b>
+                  (<code>(3, 3) ndarray</code>)
+              –
+              <div class="doc-md-description">
+                <p>Second orientation matrix.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>symmetry</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;cubic&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Crystal point-group symmetry — same options as
+:func:<code>map_to_fundamental_zone</code>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>angle_deg</code></b>(                  <code><span title="float">float</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Disorientation angle in degrees.</p>
+              </div>
+            </li>
+            <li>
+<b><code>R_dis</code></b>(                  <code>(3, 3) ndarray</code>
+)              –
+              <div class="doc-md-description">
+                <p>The disorientation rotation matrix
+(minimum-angle symmetry-equivalent misorientation).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>        <p>Example::</p>
+<div class="highlight"><pre><span></span><code>angle, R = disorientation(U1, U2, symmetry=&#39;cubic&#39;)
+print(f&quot;disorientation = {angle:.3f}°&quot;)
+</code></pre></div>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/laue/simulation.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3826">3826</a></span>
+<span class="normal"><a href="#__codelineno-0-3827">3827</a></span>
+<span class="normal"><a href="#__codelineno-0-3828">3828</a></span>
+<span class="normal"><a href="#__codelineno-0-3829">3829</a></span>
+<span class="normal"><a href="#__codelineno-0-3830">3830</a></span>
+<span class="normal"><a href="#__codelineno-0-3831">3831</a></span>
+<span class="normal"><a href="#__codelineno-0-3832">3832</a></span>
+<span class="normal"><a href="#__codelineno-0-3833">3833</a></span>
+<span class="normal"><a href="#__codelineno-0-3834">3834</a></span>
+<span class="normal"><a href="#__codelineno-0-3835">3835</a></span>
+<span class="normal"><a href="#__codelineno-0-3836">3836</a></span>
+<span class="normal"><a href="#__codelineno-0-3837">3837</a></span>
+<span class="normal"><a href="#__codelineno-0-3838">3838</a></span>
+<span class="normal"><a href="#__codelineno-0-3839">3839</a></span>
+<span class="normal"><a href="#__codelineno-0-3840">3840</a></span>
+<span class="normal"><a href="#__codelineno-0-3841">3841</a></span>
+<span class="normal"><a href="#__codelineno-0-3842">3842</a></span>
+<span class="normal"><a href="#__codelineno-0-3843">3843</a></span>
+<span class="normal"><a href="#__codelineno-0-3844">3844</a></span>
+<span class="normal"><a href="#__codelineno-0-3845">3845</a></span>
+<span class="normal"><a href="#__codelineno-0-3846">3846</a></span>
+<span class="normal"><a href="#__codelineno-0-3847">3847</a></span>
+<span class="normal"><a href="#__codelineno-0-3848">3848</a></span>
+<span class="normal"><a href="#__codelineno-0-3849">3849</a></span>
+<span class="normal"><a href="#__codelineno-0-3850">3850</a></span>
+<span class="normal"><a href="#__codelineno-0-3851">3851</a></span>
+<span class="normal"><a href="#__codelineno-0-3852">3852</a></span>
+<span class="normal"><a href="#__codelineno-0-3853">3853</a></span>
+<span class="normal"><a href="#__codelineno-0-3854">3854</a></span>
+<span class="normal"><a href="#__codelineno-0-3855">3855</a></span>
+<span class="normal"><a href="#__codelineno-0-3856">3856</a></span>
+<span class="normal"><a href="#__codelineno-0-3857">3857</a></span>
+<span class="normal"><a href="#__codelineno-0-3858">3858</a></span>
+<span class="normal"><a href="#__codelineno-0-3859">3859</a></span>
+<span class="normal"><a href="#__codelineno-0-3860">3860</a></span>
+<span class="normal"><a href="#__codelineno-0-3861">3861</a></span>
+<span class="normal"><a href="#__codelineno-0-3862">3862</a></span>
+<span class="normal"><a href="#__codelineno-0-3863">3863</a></span>
+<span class="normal"><a href="#__codelineno-0-3864">3864</a></span>
+<span class="normal"><a href="#__codelineno-0-3865">3865</a></span>
+<span class="normal"><a href="#__codelineno-0-3866">3866</a></span>
+<span class="normal"><a href="#__codelineno-0-3867">3867</a></span>
+<span class="normal"><a href="#__codelineno-0-3868">3868</a></span>
+<span class="normal"><a href="#__codelineno-0-3869">3869</a></span>
+<span class="normal"><a href="#__codelineno-0-3870">3870</a></span>
+<span class="normal"><a href="#__codelineno-0-3871">3871</a></span>
+<span class="normal"><a href="#__codelineno-0-3872">3872</a></span>
+<span class="normal"><a href="#__codelineno-0-3873">3873</a></span>
+<span class="normal"><a href="#__codelineno-0-3874">3874</a></span>
+<span class="normal"><a href="#__codelineno-0-3875">3875</a></span>
+<span class="normal"><a href="#__codelineno-0-3876">3876</a></span>
+<span class="normal"><a href="#__codelineno-0-3877">3877</a></span>
+<span class="normal"><a href="#__codelineno-0-3878">3878</a></span>
+<span class="normal"><a href="#__codelineno-0-3879">3879</a></span>
+<span class="normal"><a href="#__codelineno-0-3880">3880</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3826" name="__codelineno-0-3826"></a><span class="k">def</span><span class="w"> </span><span class="nf">disorientation</span><span class="p">(</span>
+<a id="__codelineno-0-3827" name="__codelineno-0-3827"></a>    <span class="n">U1</span><span class="p">:</span> <span class="s2">&quot;np.ndarray&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3828" name="__codelineno-0-3828"></a>    <span class="n">U2</span><span class="p">:</span> <span class="s2">&quot;np.ndarray&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3829" name="__codelineno-0-3829"></a>    <span class="n">symmetry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cubic&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3830" name="__codelineno-0-3830"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;tuple[float, np.ndarray]&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-3831" name="__codelineno-0-3831"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-3832" name="__codelineno-0-3832"></a><span class="sd">    Disorientation between two orientation matrices with crystal symmetry.</span>
+<a id="__codelineno-0-3833" name="__codelineno-0-3833"></a>
+<a id="__codelineno-0-3834" name="__codelineno-0-3834"></a><span class="sd">    The disorientation is the symmetry-equivalent misorientation</span>
+<a id="__codelineno-0-3835" name="__codelineno-0-3835"></a><span class="sd">    $\\mathbf{M} = \\mathbf{U}_2 \\mathbf{U}_1^T$ with the smallest rotation</span>
+<a id="__codelineno-0-3836" name="__codelineno-0-3836"></a><span class="sd">    angle, minimised over all pairs of point-group operators:</span>
+<a id="__codelineno-0-3837" name="__codelineno-0-3837"></a>
+<a id="__codelineno-0-3838" name="__codelineno-0-3838"></a><span class="sd">    $$</span>
+<a id="__codelineno-0-3839" name="__codelineno-0-3839"></a><span class="sd">    \\omega_\\text{dis} =</span>
+<a id="__codelineno-0-3840" name="__codelineno-0-3840"></a><span class="sd">        \\min_{S_i,\\,S_j \\in G}\\;</span>
+<a id="__codelineno-0-3841" name="__codelineno-0-3841"></a><span class="sd">        \\bigl|\\!\\operatorname{angle}(S_i\\,\\mathbf{M}\\,S_j^T)\\bigr|</span>
+<a id="__codelineno-0-3842" name="__codelineno-0-3842"></a><span class="sd">    $$</span>
+<a id="__codelineno-0-3843" name="__codelineno-0-3843"></a>
+<a id="__codelineno-0-3844" name="__codelineno-0-3844"></a><span class="sd">    Vectorised over all pairs of point-group operators using pure numpy —</span>
+<a id="__codelineno-0-3845" name="__codelineno-0-3845"></a><span class="sd">    no dependency on orix internals.</span>
+<a id="__codelineno-0-3846" name="__codelineno-0-3846"></a>
+<a id="__codelineno-0-3847" name="__codelineno-0-3847"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-3848" name="__codelineno-0-3848"></a><span class="sd">        U1 ((3, 3) ndarray): First orientation matrix.</span>
+<a id="__codelineno-0-3849" name="__codelineno-0-3849"></a><span class="sd">        U2 ((3, 3) ndarray): Second orientation matrix.</span>
+<a id="__codelineno-0-3850" name="__codelineno-0-3850"></a><span class="sd">        symmetry (str): Crystal point-group symmetry — same options as</span>
+<a id="__codelineno-0-3851" name="__codelineno-0-3851"></a><span class="sd">            :func:`map_to_fundamental_zone`.</span>
+<a id="__codelineno-0-3852" name="__codelineno-0-3852"></a>
+<a id="__codelineno-0-3853" name="__codelineno-0-3853"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-3854" name="__codelineno-0-3854"></a><span class="sd">        angle_deg (float): Disorientation angle in degrees.</span>
+<a id="__codelineno-0-3855" name="__codelineno-0-3855"></a><span class="sd">        R_dis ((3, 3) ndarray): The disorientation rotation matrix</span>
+<a id="__codelineno-0-3856" name="__codelineno-0-3856"></a><span class="sd">            (minimum-angle symmetry-equivalent misorientation).</span>
+<a id="__codelineno-0-3857" name="__codelineno-0-3857"></a>
+<a id="__codelineno-0-3858" name="__codelineno-0-3858"></a><span class="sd">    Example::</span>
+<a id="__codelineno-0-3859" name="__codelineno-0-3859"></a>
+<a id="__codelineno-0-3860" name="__codelineno-0-3860"></a><span class="sd">        angle, R = disorientation(U1, U2, symmetry=&#39;cubic&#39;)</span>
+<a id="__codelineno-0-3861" name="__codelineno-0-3861"></a><span class="sd">        print(f&quot;disorientation = {angle:.3f}°&quot;)</span>
+<a id="__codelineno-0-3862" name="__codelineno-0-3862"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3863" name="__codelineno-0-3863"></a>    <span class="n">ops</span> <span class="o">=</span> <span class="n">_symmetry_ops_np</span><span class="p">(</span><span class="n">symmetry</span><span class="p">)</span>                          <span class="c1"># (N, 3, 3)</span>
+<a id="__codelineno-0-3864" name="__codelineno-0-3864"></a>
+<a id="__codelineno-0-3865" name="__codelineno-0-3865"></a>    <span class="c1"># Project both inputs to SO(3) so non-orthogonal matrices such as</span>
+<a id="__codelineno-0-3866" name="__codelineno-0-3866"></a>    <span class="c1"># U_eff = U @ (I + ε) from strain fits give correct results.</span>
+<a id="__codelineno-0-3867" name="__codelineno-0-3867"></a>    <span class="n">R1</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">U1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-0-3868" name="__codelineno-0-3868"></a>    <span class="n">R2</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">U2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-0-3869" name="__codelineno-0-3869"></a>    <span class="n">R_mis</span> <span class="o">=</span> <span class="n">R2</span> <span class="o">@</span> <span class="n">R1</span><span class="o">.</span><span class="n">T</span>
+<a id="__codelineno-0-3870" name="__codelineno-0-3870"></a>
+<a id="__codelineno-0-3871" name="__codelineno-0-3871"></a>    <span class="c1"># Candidates: S_i @ R_mis @ S_j^T  for all (i, j) pairs → (N*N, 3, 3)</span>
+<a id="__codelineno-0-3872" name="__codelineno-0-3872"></a>    <span class="n">ops_R</span> <span class="o">=</span> <span class="n">ops</span> <span class="o">@</span> <span class="n">R_mis</span>                     <span class="c1"># (N, 3, 3)  S_i @ R_mis</span>
+<a id="__codelineno-0-3873" name="__codelineno-0-3873"></a>    <span class="n">ops_T</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>         <span class="c1"># (N, 3, 3)  S_j^T</span>
+<a id="__codelineno-0-3874" name="__codelineno-0-3874"></a>    <span class="n">candidates</span> <span class="o">=</span> <span class="p">(</span><span class="n">ops_R</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">@</span> <span class="n">ops_T</span><span class="p">[</span><span class="kc">None</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-0-3875" name="__codelineno-0-3875"></a>
+<a id="__codelineno-0-3876" name="__codelineno-0-3876"></a>    <span class="n">traces</span> <span class="o">=</span> <span class="n">candidates</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">candidates</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">candidates</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-3877" name="__codelineno-0-3877"></a>    <span class="n">angles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">traces</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+<a id="__codelineno-0-3878" name="__codelineno-0-3878"></a>
+<a id="__codelineno-0-3879" name="__codelineno-0-3879"></a>    <span class="n">best</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">angles</span><span class="p">))</span>
+<a id="__codelineno-0-3880" name="__codelineno-0-3880"></a>    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">angles</span><span class="p">[</span><span class="n">best</span><span class="p">])),</span> <span class="n">candidates</span><span class="p">[</span><span class="n">best</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3025,6 +3250,212 @@ for s in spots[:5]:
 <a id="__codelineno-0-3498" name="__codelineno-0-3498"></a>        <span class="n">s</span><span class="p">[</span><span class="s2">&quot;layer_I_frac&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">layer_I_frac</span>
 <a id="__codelineno-0-3499" name="__codelineno-0-3499"></a>
 <a id="__codelineno-0-3500" name="__codelineno-0-3500"></a>    <span class="k">return</span> <span class="n">spots</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.laue.simulation.map_to_fundamental_zone" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">map_to_fundamental_zone</span>
+
+
+<a href="#nrxrdct.laue.simulation.map_to_fundamental_zone" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">map_to_fundamental_zone</span><span class="p">(</span><span class="n">U</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">symmetry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;cubic&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Map orientation matrix/matrices to the fundamental zone.</p>
+<p>For each input rotation the symmetry-equivalent member with the smallest
+rotation angle from the identity is selected.  Only <strong>proper rotations</strong>
+(det = +1) from the crystal point group are considered, so every output
+matrix is a valid rotation matrix.</p>
+<p>The equivalent is chosen by right-multiplication:
+<code>U_fz = U @ ops[s*]</code>  where  <code>s* = argmax trace(U @ ops[s])</code>.
+Maximising the trace is equivalent to minimising the geodesic angle to
+the identity, consistent with the convention used in
+:func:<code>disorientation</code>.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>U</code></b>
+                  (<code>(3, 3) or (..., 3, 3) ndarray</code>)
+              –
+              <div class="doc-md-description">
+                <p>Rotation matrix/matrices.
+Any number of leading batch dimensions is supported.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>symmetry</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;cubic&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Crystal point-group symmetry.  One of <code>'cubic'</code>
+(24 proper rotations), <code>'hexagonal'</code> (12), <code>'tetragonal'</code>
+(8), <code>'orthorhombic'</code> (4).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>U_fz</code></b>(                  <code>same shape as *U*, float64</code>
+)              –
+              <div class="doc-md-description">
+                <p>Orientation matrices reduced to
+the fundamental zone.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>        <p>Example::</p>
+<div class="highlight"><pre><span></span><code>U_fz = map_to_fundamental_zone(U_raw, symmetry=&#39;cubic&#39;)
+</code></pre></div>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/laue/simulation.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3769">3769</a></span>
+<span class="normal"><a href="#__codelineno-0-3770">3770</a></span>
+<span class="normal"><a href="#__codelineno-0-3771">3771</a></span>
+<span class="normal"><a href="#__codelineno-0-3772">3772</a></span>
+<span class="normal"><a href="#__codelineno-0-3773">3773</a></span>
+<span class="normal"><a href="#__codelineno-0-3774">3774</a></span>
+<span class="normal"><a href="#__codelineno-0-3775">3775</a></span>
+<span class="normal"><a href="#__codelineno-0-3776">3776</a></span>
+<span class="normal"><a href="#__codelineno-0-3777">3777</a></span>
+<span class="normal"><a href="#__codelineno-0-3778">3778</a></span>
+<span class="normal"><a href="#__codelineno-0-3779">3779</a></span>
+<span class="normal"><a href="#__codelineno-0-3780">3780</a></span>
+<span class="normal"><a href="#__codelineno-0-3781">3781</a></span>
+<span class="normal"><a href="#__codelineno-0-3782">3782</a></span>
+<span class="normal"><a href="#__codelineno-0-3783">3783</a></span>
+<span class="normal"><a href="#__codelineno-0-3784">3784</a></span>
+<span class="normal"><a href="#__codelineno-0-3785">3785</a></span>
+<span class="normal"><a href="#__codelineno-0-3786">3786</a></span>
+<span class="normal"><a href="#__codelineno-0-3787">3787</a></span>
+<span class="normal"><a href="#__codelineno-0-3788">3788</a></span>
+<span class="normal"><a href="#__codelineno-0-3789">3789</a></span>
+<span class="normal"><a href="#__codelineno-0-3790">3790</a></span>
+<span class="normal"><a href="#__codelineno-0-3791">3791</a></span>
+<span class="normal"><a href="#__codelineno-0-3792">3792</a></span>
+<span class="normal"><a href="#__codelineno-0-3793">3793</a></span>
+<span class="normal"><a href="#__codelineno-0-3794">3794</a></span>
+<span class="normal"><a href="#__codelineno-0-3795">3795</a></span>
+<span class="normal"><a href="#__codelineno-0-3796">3796</a></span>
+<span class="normal"><a href="#__codelineno-0-3797">3797</a></span>
+<span class="normal"><a href="#__codelineno-0-3798">3798</a></span>
+<span class="normal"><a href="#__codelineno-0-3799">3799</a></span>
+<span class="normal"><a href="#__codelineno-0-3800">3800</a></span>
+<span class="normal"><a href="#__codelineno-0-3801">3801</a></span>
+<span class="normal"><a href="#__codelineno-0-3802">3802</a></span>
+<span class="normal"><a href="#__codelineno-0-3803">3803</a></span>
+<span class="normal"><a href="#__codelineno-0-3804">3804</a></span>
+<span class="normal"><a href="#__codelineno-0-3805">3805</a></span>
+<span class="normal"><a href="#__codelineno-0-3806">3806</a></span>
+<span class="normal"><a href="#__codelineno-0-3807">3807</a></span>
+<span class="normal"><a href="#__codelineno-0-3808">3808</a></span>
+<span class="normal"><a href="#__codelineno-0-3809">3809</a></span>
+<span class="normal"><a href="#__codelineno-0-3810">3810</a></span>
+<span class="normal"><a href="#__codelineno-0-3811">3811</a></span>
+<span class="normal"><a href="#__codelineno-0-3812">3812</a></span>
+<span class="normal"><a href="#__codelineno-0-3813">3813</a></span>
+<span class="normal"><a href="#__codelineno-0-3814">3814</a></span>
+<span class="normal"><a href="#__codelineno-0-3815">3815</a></span>
+<span class="normal"><a href="#__codelineno-0-3816">3816</a></span>
+<span class="normal"><a href="#__codelineno-0-3817">3817</a></span>
+<span class="normal"><a href="#__codelineno-0-3818">3818</a></span>
+<span class="normal"><a href="#__codelineno-0-3819">3819</a></span>
+<span class="normal"><a href="#__codelineno-0-3820">3820</a></span>
+<span class="normal"><a href="#__codelineno-0-3821">3821</a></span>
+<span class="normal"><a href="#__codelineno-0-3822">3822</a></span>
+<span class="normal"><a href="#__codelineno-0-3823">3823</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3769" name="__codelineno-0-3769"></a><span class="k">def</span><span class="w"> </span><span class="nf">map_to_fundamental_zone</span><span class="p">(</span>
+<a id="__codelineno-0-3770" name="__codelineno-0-3770"></a>    <span class="n">U</span><span class="p">:</span> <span class="s2">&quot;np.ndarray&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3771" name="__codelineno-0-3771"></a>    <span class="n">symmetry</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cubic&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3772" name="__codelineno-0-3772"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;np.ndarray&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-3773" name="__codelineno-0-3773"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-3774" name="__codelineno-0-3774"></a><span class="sd">    Map orientation matrix/matrices to the fundamental zone.</span>
+<a id="__codelineno-0-3775" name="__codelineno-0-3775"></a>
+<a id="__codelineno-0-3776" name="__codelineno-0-3776"></a><span class="sd">    For each input rotation the symmetry-equivalent member with the smallest</span>
+<a id="__codelineno-0-3777" name="__codelineno-0-3777"></a><span class="sd">    rotation angle from the identity is selected.  Only **proper rotations**</span>
+<a id="__codelineno-0-3778" name="__codelineno-0-3778"></a><span class="sd">    (det = +1) from the crystal point group are considered, so every output</span>
+<a id="__codelineno-0-3779" name="__codelineno-0-3779"></a><span class="sd">    matrix is a valid rotation matrix.</span>
+<a id="__codelineno-0-3780" name="__codelineno-0-3780"></a>
+<a id="__codelineno-0-3781" name="__codelineno-0-3781"></a><span class="sd">    The equivalent is chosen by right-multiplication:</span>
+<a id="__codelineno-0-3782" name="__codelineno-0-3782"></a><span class="sd">    ``U_fz = U @ ops[s*]``  where  ``s* = argmax trace(U @ ops[s])``.</span>
+<a id="__codelineno-0-3783" name="__codelineno-0-3783"></a><span class="sd">    Maximising the trace is equivalent to minimising the geodesic angle to</span>
+<a id="__codelineno-0-3784" name="__codelineno-0-3784"></a><span class="sd">    the identity, consistent with the convention used in</span>
+<a id="__codelineno-0-3785" name="__codelineno-0-3785"></a><span class="sd">    :func:`disorientation`.</span>
+<a id="__codelineno-0-3786" name="__codelineno-0-3786"></a>
+<a id="__codelineno-0-3787" name="__codelineno-0-3787"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-3788" name="__codelineno-0-3788"></a><span class="sd">        U ((3, 3) or (..., 3, 3) ndarray): Rotation matrix/matrices.</span>
+<a id="__codelineno-0-3789" name="__codelineno-0-3789"></a><span class="sd">            Any number of leading batch dimensions is supported.</span>
+<a id="__codelineno-0-3790" name="__codelineno-0-3790"></a><span class="sd">        symmetry (str): Crystal point-group symmetry.  One of ``&#39;cubic&#39;``</span>
+<a id="__codelineno-0-3791" name="__codelineno-0-3791"></a><span class="sd">            (24 proper rotations), ``&#39;hexagonal&#39;`` (12), ``&#39;tetragonal&#39;``</span>
+<a id="__codelineno-0-3792" name="__codelineno-0-3792"></a><span class="sd">            (8), ``&#39;orthorhombic&#39;`` (4).</span>
+<a id="__codelineno-0-3793" name="__codelineno-0-3793"></a>
+<a id="__codelineno-0-3794" name="__codelineno-0-3794"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-3795" name="__codelineno-0-3795"></a><span class="sd">        U_fz (same shape as *U*, float64): Orientation matrices reduced to</span>
+<a id="__codelineno-0-3796" name="__codelineno-0-3796"></a><span class="sd">            the fundamental zone.</span>
+<a id="__codelineno-0-3797" name="__codelineno-0-3797"></a>
+<a id="__codelineno-0-3798" name="__codelineno-0-3798"></a><span class="sd">    Example::</span>
+<a id="__codelineno-0-3799" name="__codelineno-0-3799"></a>
+<a id="__codelineno-0-3800" name="__codelineno-0-3800"></a><span class="sd">        U_fz = map_to_fundamental_zone(U_raw, symmetry=&#39;cubic&#39;)</span>
+<a id="__codelineno-0-3801" name="__codelineno-0-3801"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3802" name="__codelineno-0-3802"></a>    <span class="n">ops</span> <span class="o">=</span> <span class="n">_symmetry_ops_np</span><span class="p">(</span><span class="n">symmetry</span><span class="p">)</span>   <span class="c1"># (N_sym, 3, 3)  proper rotations only</span>
+<a id="__codelineno-0-3803" name="__codelineno-0-3803"></a>
+<a id="__codelineno-0-3804" name="__codelineno-0-3804"></a>    <span class="n">U</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+<a id="__codelineno-0-3805" name="__codelineno-0-3805"></a>    <span class="n">shape</span> <span class="o">=</span> <span class="n">U</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-3806" name="__codelineno-0-3806"></a>    <span class="n">U_flat</span> <span class="o">=</span> <span class="n">U</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>      <span class="c1"># (M, 3, 3)</span>
+<a id="__codelineno-0-3807" name="__codelineno-0-3807"></a>
+<a id="__codelineno-0-3808" name="__codelineno-0-3808"></a>    <span class="c1"># Project to nearest SO(3) element via SVD so that non-orthogonal inputs</span>
+<a id="__codelineno-0-3809" name="__codelineno-0-3809"></a>    <span class="c1"># (e.g. U_eff = U @ (I + ε) from strain fits) are handled correctly.</span>
+<a id="__codelineno-0-3810" name="__codelineno-0-3810"></a>    <span class="n">U_flat</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">U_flat</span><span class="p">)</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-0-3811" name="__codelineno-0-3811"></a>
+<a id="__codelineno-0-3812" name="__codelineno-0-3812"></a>    <span class="c1"># All equivalents: U_equiv[s, m] = U_flat[m] @ ops[s]</span>
+<a id="__codelineno-0-3813" name="__codelineno-0-3813"></a>    <span class="c1"># U_flat[None]: (1, M, 3, 3)  ops[:, None]: (N_sym, 1, 3, 3)</span>
+<a id="__codelineno-0-3814" name="__codelineno-0-3814"></a>    <span class="n">U_equiv</span> <span class="o">=</span> <span class="n">U_flat</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">@</span> <span class="n">ops</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>               <span class="c1"># (N_sym, M, 3, 3)</span>
+<a id="__codelineno-0-3815" name="__codelineno-0-3815"></a>
+<a id="__codelineno-0-3816" name="__codelineno-0-3816"></a>    <span class="c1"># Trace of each equivalent — maximise ↔ minimise angle to identity</span>
+<a id="__codelineno-0-3817" name="__codelineno-0-3817"></a>    <span class="n">traces</span> <span class="o">=</span> <span class="n">U_equiv</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">U_equiv</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">U_equiv</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="c1"># (N_sym, M)</span>
+<a id="__codelineno-0-3818" name="__codelineno-0-3818"></a>    <span class="n">best</span>   <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">traces</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>                  <span class="c1"># (M,)</span>
+<a id="__codelineno-0-3819" name="__codelineno-0-3819"></a>
+<a id="__codelineno-0-3820" name="__codelineno-0-3820"></a>    <span class="c1"># Gather: U_fz[m] = U_flat[m] @ ops[best[m]]</span>
+<a id="__codelineno-0-3821" name="__codelineno-0-3821"></a>    <span class="n">ops_sel</span> <span class="o">=</span> <span class="n">ops</span><span class="p">[</span><span class="n">best</span><span class="p">]</span>                                 <span class="c1"># (M, 3, 3)</span>
+<a id="__codelineno-0-3822" name="__codelineno-0-3822"></a>    <span class="n">U_fz</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;...ij,...jk-&gt;...ik&quot;</span><span class="p">,</span> <span class="n">U_flat</span><span class="p">,</span> <span class="n">ops_sel</span><span class="p">)</span>  <span class="c1"># (M, 3, 3)</span>
+<a id="__codelineno-0-3823" name="__codelineno-0-3823"></a>    <span class="k">return</span> <span class="n">U_fz</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

@@ -79,6 +79,8 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_strain/">Strain Analysis</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_image_refinement/">Image-Based Refinement</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
@@ -774,9 +776,9 @@ h, k, l, hkl, tth, d_hkl, r (structure factor |F|²).</p>
 <a id="__codelineno-0-177" name="__codelineno-0-177"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;active&quot;</span><span class="p">]:</span>
 <a id="__codelineno-0-178" name="__codelineno-0-178"></a>                <span class="k">continue</span>
 <a id="__codelineno-0-179" name="__codelineno-0-179"></a>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a>            <span class="n">tth_peak</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># ang is in radians</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>            <span class="n">tth_peak</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># ang is theta in degrees; tth in degrees</span>
 <a id="__codelineno-0-181" name="__codelineno-0-181"></a>            <span class="c1"># d from Bragg&#39;s law: d = lambda / (2 * sin(theta))</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a>            <span class="n">d</span> <span class="o">=</span> <span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">]))</span>  <span class="c1"># ang is theta in radians</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a>            <span class="n">d</span> <span class="o">=</span> <span class="n">wavelength</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;ang&quot;</span><span class="p">])))</span>
 <a id="__codelineno-0-183" name="__codelineno-0-183"></a>
 <a id="__codelineno-0-184" name="__codelineno-0-184"></a>            <span class="k">if</span> <span class="n">tth_min</span> <span class="o">&lt;=</span> <span class="n">tth_peak</span> <span class="o">&lt;=</span> <span class="n">tth_max</span><span class="p">:</span>
 <a id="__codelineno-0-185" name="__codelineno-0-185"></a>                <span class="n">h</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">l</span> <span class="o">=</span> <span class="n">hkl</span>

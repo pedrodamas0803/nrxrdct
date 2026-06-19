@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Image-Based Refinement - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Image-Based Refinement";
+        var mkdocs_page_input_path = "user-guide/laue_image_refinement.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Image-Based Refinement</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#motivation">Motivation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#objective-function">Objective function</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#background-subtraction">Background subtraction</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#choosing-kernel_sigma">Choosing kernel_sigma</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#the-two-functions">The two functions</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#refine_orientation_image-orientation-only-3-parameters">refine_orientation_image — orientation only (3 parameters)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#refine_strain_image-orientation-strain-9-parameters">refine_strain_image — orientation + strain (9 parameters)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#recommended-workflow">Recommended workflow</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#slurm-batch-processing">SLURM batch processing</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#parameter-reference">Parameter reference</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Image-Based Refinement</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_image_refinement.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="image-based-orientation-and-strain-refinement">Image-based orientation and strain refinement<a class="headerlink" href="#image-based-orientation-and-strain-refinement" title="Permanent link">&para;</a></h1>
+<p>This page describes the image-based post-refinement functions
+<a class="autorefs autorefs-internal" title="refine_orientation_image" href="../../api/laue/fitting/#nrxrdct.laue.fitting.refine_orientation_image"><code>refine_orientation_image</code></a> and
+<a class="autorefs autorefs-internal" title="refine_strain_image" href="../../api/laue/fitting/#nrxrdct.laue.fitting.refine_strain_image"><code>refine_strain_image</code></a>, which refine
+orientation and strain by maximising the agreement between simulated Laue spot
+positions and the raw detector image — without requiring a segmented peak list.</p>
+<hr />
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<p>The standard refinement pipeline (<code>fit_orientation</code> → <code>fit_strain_orientation</code>)
+relies on a list of segmented peak positions.  Segmentation can miss spots that
+are:</p>
+<ul>
+<li>too <strong>dim</strong> relative to the background or to nearby stronger spots,</li>
+<li>too <strong>close</strong> to a dominant reflection to be resolved by the peak finder,</li>
+<li>from a <strong>secondary grain</strong> with a low match rate that falls below the
+  acceptance threshold.</li>
+</ul>
+<p>In all these cases the raw detector image still contains the information needed
+to refine the orientation.  The image-based functions bypass segmentation
+entirely and work directly on the pixel data.</p>
+<hr />
+<h2 id="objective-function">Objective function<a class="headerlink" href="#objective-function" title="Permanent link">&para;</a></h2>
+<p>For a candidate rotation vector <span class="arithmatex">\(\delta\boldsymbol{\omega}\)</span> the orientation is</p>
+<div class="arithmatex">\[
+\mathbf{U} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0
+\]</div>
+<p>The <strong>score</strong> is computed with a single FFT-based convolution per optimizer
+iteration:</p>
+<ol>
+<li><strong>Simulate</strong> Laue spots for the candidate <span class="arithmatex">\(\mathbf{U}\)</span> using
+   <code>geometry_only=True</code> (structure factors are skipped for speed; pass a
+   pre-computed <code>allowed_hkl</code> to retain systematic-absence filtering at no
+   per-call cost).</li>
+<li><strong>Build a delta map</strong> — an image of zeros with each simulated pixel position
+   incremented by the predicted spot intensity <span class="arithmatex">\(I_\text{sim}(hkl)\)</span>.  Intensity
+   weighting means that strong reflections dominate the objective, reducing
+   sensitivity to weak background features.</li>
+<li><strong>Convolve</strong> the delta map with a Gaussian kernel of width <span class="arithmatex">\(\sigma\)</span> (the
+   <code>kernel_sigma</code> parameter) using an FFT.  Each point becomes a smooth blob
+   of radius <span class="arithmatex">\(\approx 3\sigma\)</span>.</li>
+<li><strong>Score</strong> — element-wise product of the convolved map with the
+   background-subtracted detector image, summed over all pixels:</li>
+</ol>
+<div class="arithmatex">\[
+S(\delta\boldsymbol{\omega})
+= \sum_{x,y} \bigl[D(x,y) - B(x,y)\bigr]
+  \cdot \bigl[K_\sigma * \Delta(x,y;\,\delta\boldsymbol{\omega})\bigr]
+\]</div>
+<p>where <span class="arithmatex">\(D\)</span> is the raw image, <span class="arithmatex">\(B\)</span> is the slowly-varying background estimated by a
+large-<span class="arithmatex">\(\sigma\)</span> Gaussian (see below), <span class="arithmatex">\(\Delta\)</span> is the intensity-weighted delta
+map, and <span class="arithmatex">\(K_\sigma\)</span> is the Gaussian kernel.</p>
+<p>Maximising <span class="arithmatex">\(S\)</span> pulls each simulated spot position toward the nearest bright pixel
+region, refining the orientation.</p>
+<h3 id="background-subtraction">Background subtraction<a class="headerlink" href="#background-subtraction" title="Permanent link">&para;</a></h3>
+<p>Before the optimizer runs, a large-<span class="arithmatex">\(\sigma\)</span> FFT Gaussian (default
+<span class="arithmatex">\(\sigma_\text{bg} = 251\)</span> px, same routine as
+<a class="autorefs autorefs-internal" title="gaussian_background" href="../../api/laue/segmentation/#nrxrdct.laue.segmentation.gaussian_background"><code>gaussian_background</code></a>) is
+subtracted from the image.  This removes the slowly-varying detector pedestal
+(beam-centre falloff, inter-module offsets, diffuse scattering) while leaving
+Bragg peaks intact.  The subtraction is computed <strong>once</strong>, outside the optimizer
+loop, so it adds no per-call overhead.  Set <code>bg_sigma=0</code> to skip it.</p>
+<hr />
+<h2 id="choosing-kernel_sigma">Choosing <code>kernel_sigma</code><a class="headerlink" href="#choosing-kernel_sigma" title="Permanent link">&para;</a></h2>
+<p><code>kernel_sigma</code> (<span class="arithmatex">\(\sigma\)</span> in pixels) controls the spatial selectivity of the
+objective.  The Gaussian weight at distance <span class="arithmatex">\(d\)</span> from a predicted spot is
+<span class="arithmatex">\(\exp(-d^2 / 2\sigma^2)\)</span>:</p>
+<table>
+<thead>
+<tr>
+<th><span class="arithmatex">\(\sigma\)</span> (px)</th>
+<th>Weight at <span class="arithmatex">\(d = 2\)</span> px</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.0</td>
+<td>0.92</td>
+<td>Isolated spots, smooth landscape, easiest convergence</td>
+</tr>
+<tr>
+<td>1.0</td>
+<td>0.14</td>
+<td>Spots a few pixels apart</td>
+</tr>
+<tr>
+<td>0.3 (default)</td>
+<td>&lt; 0.001</td>
+<td>Spots 1–2 px from a dominant neighbour</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Spot confusion with large kernels</p>
+<p>When a secondary grain's spots are dim and within a few pixels of much
+brighter primary-grain spots, a large <span class="arithmatex">\(\sigma\)</span> causes the optimizer to
+climb the gradient of the primary spot rather than the secondary one.
+Reduce <code>kernel_sigma</code> to <span class="arithmatex">\(\lesssim 1\)</span> px (or the default 0.3 px) to
+decouple them spatially.</p>
+</div>
+<hr />
+<h2 id="the-two-functions">The two functions<a class="headerlink" href="#the-two-functions" title="Permanent link">&para;</a></h2>
+<h3 id="refine_orientation_image-orientation-only-3-parameters"><code>refine_orientation_image</code> — orientation only (3 parameters)<a class="headerlink" href="#refine_orientation_image-orientation-only-3-parameters" title="Permanent link">&para;</a></h3>
+<p>Refines only the rotation correction <span class="arithmatex">\(\delta\boldsymbol{\omega}\)</span>:</p>
+<div class="arithmatex">\[
+\mathbf{U} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0
+\]</div>
+<p><strong>When to use:</strong> as a first pass when segmentation-based orientation is
+unavailable or unreliable, or when you want a fast, robust refinement before
+attempting strain.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">hkl</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">precompute_allowed_hkl</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">E_max_eV</span><span class="o">=</span><span class="mi">27000</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">refine_orientation_image</span><span class="p">(</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">crystal</span><span class="p">,</span> <span class="n">U0</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">raw_frame</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">allowed_hkl</span>   <span class="o">=</span> <span class="n">hkl</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>     <span class="c1"># tight — decouples spots 2 px apart</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>     <span class="c1"># keep small when starting from a good U</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">verbose</span>       <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># ImageRefinementResult [OK]  |δω|=0.021°  score=8741.2  Δscore=+612.4  n_sim=138</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">U_refined</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">U</span>
+</code></pre></div>
+<h3 id="refine_strain_image-orientation-strain-9-parameters"><code>refine_strain_image</code> — orientation + strain (9 parameters)<a class="headerlink" href="#refine_strain_image-orientation-strain-9-parameters" title="Permanent link">&para;</a></h3>
+<p>Extends the parameter space to include the six independent strain components,
+using the same deformation model as <a class="autorefs autorefs-internal" title="fit_strain_orientation" href="../../api/laue/fitting/#nrxrdct.laue.fitting.fit_strain_orientation"><code>fit_strain_orientation</code></a>:</p>
+<div class="arithmatex">\[
+\mathbf{U}_\text{eff} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_0\,({\bf I} + \boldsymbol{\varepsilon})
+\]</div>
+<p>The parameter vector is</p>
+<div class="arithmatex">\[
+\mathbf{p} = [\omega_x,\; \omega_y,\; \omega_z,\; \varepsilon_{xx},\; \varepsilon_{yy},\; \varepsilon_{zz},\; \varepsilon_{xy},\; \varepsilon_{xz},\; \varepsilon_{yz}]
+\]</div>
+<p>with strain components internally divided by <code>strain_scale</code> (default <span class="arithmatex">\(10^{-4}\)</span>)
+so that all parameters have comparable magnitudes inside the optimizer.</p>
+<p><strong>When to use:</strong> as a polishing step after conventional strain fitting, passing
+the prior strain tensor as <code>strain0</code> and the image-refined U as <code>U0</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">r_str</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">refine_strain_image</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">crystal</span><span class="p">,</span> <span class="n">r_ori</span><span class="o">.</span><span class="n">U</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">raw_frame</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">strain0</span>       <span class="o">=</span> <span class="n">prior_result</span><span class="o">.</span><span class="n">strain_tensor</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">allowed_hkl</span>   <span class="o">=</span> <span class="n">hkl</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">verbose</span>       <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">r_str</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># StrainImageRefinementResult [OK]  |δω|=0.004°  score=9102.1  Δscore=+361.9</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1">#   n_sim=138  ε_diag=[1.2e-04, -8.7e-05, -3.6e-05]</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">eps_dev</span> <span class="o">=</span> <span class="n">r_str</span><span class="o">.</span><span class="n">strain_tensor_deviatoric</span>   <span class="c1"># deviatoric tensor in crystal frame</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">eps_lab</span> <span class="o">=</span> <span class="n">r_str</span><span class="o">.</span><span class="n">strain_tensor_lab</span>          <span class="c1"># rotated to lab frame</span>
+</code></pre></div>
+<hr />
+<h2 id="recommended-workflow">Recommended workflow<a class="headerlink" href="#recommended-workflow" title="Permanent link">&para;</a></h2>
+<p>The image-based functions are designed as <strong>post-processing steps</strong> in the
+standard pipeline, not replacements for it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>submit_segmentation  →  submit_orientation  →  submit_strain
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                                                      ↓
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>                                          submit_image_refine          (orientation polish)
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>                                                      ↓
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>                                      submit_strain_image_refine       (strain polish)
+</code></pre></div>
+<p>Running the conventional pipeline first gives a good starting <span class="arithmatex">\(\mathbf{U}_0\)</span>
+and <span class="arithmatex">\(\boldsymbol{\varepsilon}_0\)</span>.  The image steps then recover signal from
+reflections that were too weak to segment.</p>
+<div class="admonition tip">
+<p class="admonition-title">Always pre-compute <code>allowed_hkl</code></p>
+<p>Without a pre-computed HKL list, <code>simulate_laue</code> recomputes the full
+reflection set on every optimizer call (hundreds of times per frame).
+Always pass <code>allowed_hkl = laue.precompute_allowed_hkl(crystal, E_max_eV=...)</code>.</p>
+</div>
+<hr />
+<h2 id="slurm-batch-processing">SLURM batch processing<a class="headerlink" href="#slurm-batch-processing" title="Permanent link">&para;</a></h2>
+<p>Both functions have corresponding SLURM submission methods on
+<a class="autorefs autorefs-internal" title="GrainMap" href="../../api/laue/map/#nrxrdct.laue.map.GrainMap"><code>GrainMap</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Submit</th>
+<th>Collect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Orientation polish</td>
+<td><code>gmap.submit_image_refine(...)</code></td>
+<td><code>gmap.collect_image_refine(base_dir)</code></td>
+</tr>
+<tr>
+<td>Strain polish</td>
+<td><code>gmap.submit_strain_image_refine(...)</code></td>
+<td><code>gmap.collect_strain_image_refine(base_dir)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Results land in <code>base_dir/img_refine/</code> and <code>base_dir/strain_img_refine/</code>
+respectively.  Each method reads the starting <span class="arithmatex">\(\mathbf{U}\)</span> (and optionally
+<span class="arithmatex">\(\boldsymbol{\varepsilon}\)</span>) from a prior <code>ubs/</code> or <code>strain/</code> result specified
+via <code>u_source</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Submit orientation polish (reads U from strain/)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">job_ids</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">submit_image_refine</span><span class="p">(</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">base_dir</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">crystal</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">&quot;strain&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">n_jobs</span>        <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">&quot;01:00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">&quot;8G&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># After jobs finish:</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">gmap</span><span class="o">.</span><span class="n">collect_image_refine</span><span class="p">(</span><span class="n">base_dir</span><span class="p">)</span>   <span class="c1"># updates self.U</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Submit strain polish</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">job_ids</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">submit_strain_image_refine</span><span class="p">(</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">base_dir</span><span class="p">,</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">crystal</span><span class="p">,</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">&quot;strain&quot;</span><span class="p">,</span>          <span class="c1"># seeds strain0 from strain/ npz</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="n">n_jobs</span>        <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">&quot;8G&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="p">)</span>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="c1"># After jobs finish:</span>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="n">gmap</span><span class="o">.</span><span class="n">collect_strain_image_refine</span><span class="p">(</span><span class="n">base_dir</span><span class="p">)</span>   <span class="c1"># updates self.U, strain_tensor, strain_voigt</span>
+</code></pre></div>
+<hr />
+<h2 id="parameter-reference">Parameter reference<a class="headerlink" href="#parameter-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kernel_sigma</code></td>
+<td>0.3 px</td>
+<td>Gaussian kernel width at simulated spot positions.  Decrease to decouple spots that are a few pixels apart.</td>
+</tr>
+<tr>
+<td><code>bg_sigma</code></td>
+<td>251 px</td>
+<td>Background Gaussian width.  Large values remove only the slow pedestal.</td>
+</tr>
+<tr>
+<td><code>max_angle_deg</code></td>
+<td>0.2°</td>
+<td>Half-width of the rotation search space per axis.</td>
+</tr>
+<tr>
+<td><code>allowed_hkl</code></td>
+<td><code>None</code></td>
+<td>Pre-computed HKL set.  Always provide this for speed and correctness.</td>
+</tr>
+<tr>
+<td><code>strain_scale</code></td>
+<td><code>1e-4</code></td>
+<td>Internal divisor for strain parameters (strain refinement only).</td>
+</tr>
+<tr>
+<td><code>method</code></td>
+<td><code>'Powell'</code></td>
+<td><code>scipy.optimize.minimize</code> method.</td>
+</tr>
+<tr>
+<td><code>verbose</code></td>
+<td><code>False</code></td>
+<td>Print starting score and convergence summary.</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_strain/" class="btn btn-neutral float-left" title="Strain Analysis"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_stress/" class="btn btn-neutral float-right" title="Elastic Stress from Strain Maps">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_strain/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_stress/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -11,6 +11,7 @@ from .interactive import (
     interactive_orientation,
 )
 from .fitting import (
+    ImageRefinementResult,
     IndexResult,
     MixedFitResult,
     OrientationFitResult,
@@ -25,6 +26,7 @@ from .fitting import (
     laue_residuals,
     laue_stack_residuals,
     laue_strain_residuals,
+    refine_orientation_image,
     remove_grain_spots,
     run_orientation_local,
     run_orientation_mixed_local,
@@ -199,6 +201,9 @@ __all__ = [
     # Autoindexing
     "IndexResult",
     "index_orientation",
+    # Image-based refinement
+    "ImageRefinementResult",
+    "refine_orientation_image",
     # Orientation fitting
     "OrientationFitResult",
     "StackFitResult",

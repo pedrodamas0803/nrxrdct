@@ -70,7 +70,9 @@ from functools import partial
 
 import dill as _dill
 import numpy as np
-from scipy.optimize import least_squares, linear_sum_assignment
+import scipy.fft as _sp_fft
+import scipy.ndimage as _ndi
+from scipy.optimize import least_squares, linear_sum_assignment, minimize
 from scipy.spatial.transform import Rotation
 
 from .simulation import (
@@ -410,6 +412,51 @@ class IndexResult:
             f"IndexResult [{status}]  "
             f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
             f"seed={h1}/{h2}  angle={self.angle_deg:.2f}°"
+        )
+
+
+@dataclass
+class ImageRefinementResult:
+    """
+    Result of image-based orientation post-refinement
+    (:func:`refine_orientation_image`).
+
+    Attributes:
+        U ((3,3) ndarray): Refined orientation matrix.
+        U0 ((3,3) ndarray): Starting orientation.
+        rotvec ((3,) ndarray): Rotation vector δω (radians) applied to U0,
+            i.e. ``U = Rotation.from_rotvec(rotvec) @ U0``.
+        score (float): Total Gaussian-weighted intensity at the refined
+            spot positions (higher is better).
+        score0 (float): Score at the starting orientation U0, for
+            comparison.
+        n_sim (int): Number of simulated spots on the detector at
+            the refined orientation.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw ``scipy.optimize.OptimizeResult``
+            (not shown in repr).
+"""
+
+    U         : np.ndarray
+    U0        : np.ndarray
+    rotvec    : np.ndarray
+    score     : float
+    score0    : float
+    n_sim     : int
+    success   : bool
+    message   : str
+    optimizer : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw = float(np.degrees(np.linalg.norm(self.rotvec)))
+        gain = self.score - self.score0
+        return (
+            f"ImageRefinementResult [{status}]  "
+            f"|δω|={dw:.4f}°  "
+            f"score={self.score:.1f}  Δscore={gain:+.1f}  "
+            f"n_sim={self.n_sim}"
         )
 
 
@@ -3063,3 +3110,176 @@ def run_strain_mixed_local(
         flush=True,
     )
     return n_saved
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image-based orientation refinement
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _fft_gauss_convolve(arr: np.ndarray, sigma: float) -> np.ndarray:
+    """FFT-based Gaussian convolution (O(N log N), same kernel as gaussian_background)."""
+    f = _sp_fft.fft2(arr, workers=-1)
+    _ndi.fourier_gaussian(f, sigma=sigma, output=f)
+    return _sp_fft.ifft2(f, workers=-1).real
+
+
+def refine_orientation_image(
+    crystal,
+    U0: np.ndarray,
+    camera,
+    image: np.ndarray,
+    *,
+    kernel_sigma: float = 5.0,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    max_angle_deg: float = 1.0,
+    method: str = "Powell",
+    options: dict | None = None,
+) -> "ImageRefinementResult":
+    """
+    Post-refine an orientation matrix by maximising the total Gaussian-weighted
+    pixel intensity at simulated Laue spot positions.
+
+    Unlike the spot-matching refinement in :func:`fit_orientation`, this
+    function works directly on the detector image and does not require
+    segmented peak lists.  It is therefore useful when secondary grains or
+    weak reflections are not captured by the segmentation.
+
+    **Objective function**
+
+    For a candidate rotation vector δω the orientation is::
+
+        U = Rotation.from_rotvec(δω) @ U0
+
+    The score is computed with a single FFT per iteration, regardless of the
+    number of simulated spots:
+
+    1. Simulate Laue spots with ``geometry_only=True`` (fast, no structure
+       factors).
+    2. Build a sparse *delta map* — an image of zeros with 1.0 placed at
+       each simulated pixel position (gap pixels are skipped).
+    3. Convolve the delta map with a Gaussian kernel (σ = *kernel_sigma*) via
+       FFT — this spreads each point into a smooth blob of unit area.
+    4. Compute the Hadamard product with the background-subtracted detector
+       image and sum.
+
+    Maximising this sum pulls the simulated positions toward bright detector
+    regions, refining the orientation.
+
+    **Background subtraction**
+
+    A large-σ FFT Gaussian is subtracted from the image once before
+    optimisation, using the same routine as :func:`~.segmentation.gaussian_background`.
+    Set *bg_sigma=0* to skip subtraction.
+
+    Args:
+        crystal: Crystal object passed to :func:`simulate_laue`.
+        U0 ((3,3) ndarray): Starting orientation matrix (LT frame).
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Gap/invalid pixels
+            must be flagged as negative (Eiger convention).
+        kernel_sigma (float): σ in pixels of the Gaussian kernel used to
+            accumulate intensity around each simulated spot.  Should match
+            the typical spot radius on the detector.  Default 5.
+        bg_sigma (float): σ in pixels of the large-scale Gaussian background
+            that is subtracted before optimisation.  Set to 0 to skip.
+            Default 251.
+        E_min, E_max (float): Photon energy range in eV passed to
+            :func:`simulate_laue`.
+        allowed_hkl: Pre-computed allowed HKL list (output of
+            :func:`precompute_allowed_hkl`).  Pass ``None`` to let
+            :func:`simulate_laue` compute it internally each call (slower).
+        max_angle_deg (float): Half-range of the search space in degrees.
+            Used as symmetric bounds on each rotation-vector component.
+            Default 1.0°.
+        method (str): ``scipy.optimize.minimize`` method.  ``'Powell'``
+            (default) is derivative-free and well-suited for the smooth
+            Gaussian objective.  ``'L-BFGS-B'`` can be faster when many
+            iterations are needed.
+        options (dict or None): Passed directly to ``scipy.optimize.minimize``
+            as the ``options`` keyword.  Merged with sensible defaults.
+
+    Returns:
+        ImageRefinementResult
+    """
+    ny, nx = image.shape
+    valid = image >= 0
+    img = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    # Background subtraction — computed once, outside the optimisation loop.
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    lim = float(np.radians(max_angle_deg))
+    bounds = [(-lim, lim)] * 3
+
+    def _score(rotvec: np.ndarray) -> float:
+        U = Rotation.from_rotvec(rotvec).as_matrix() @ U0
+        spots = simulate_laue(
+            crystal, U, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        if not spots:
+            return 0.0
+
+        # Delta map: 1.0 at each valid simulated pixel position.
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for s in spots:
+            xc, yc = s["pix"]          # pix = (col, row) in detector coords
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += 1.0
+
+        # Convolve delta map with Gaussian → each spot becomes a smooth blob.
+        kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
+
+        return float(np.sum(kernel_map * img))
+
+    def _objective(rotvec: np.ndarray) -> float:
+        return -_score(rotvec)  # minimise → maximise score
+
+    score0 = _score(np.zeros(3))
+
+    opts: dict = {"maxiter": 2000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-6, "ftol": 1e-6})
+    else:
+        opts.update({"gtol": 1e-7})
+    if options:
+        opts.update(options)
+
+    result = minimize(_objective, np.zeros(3), method=method,
+                      bounds=bounds, options=opts)
+
+    rotvec_opt = result.x
+    U_refined  = Rotation.from_rotvec(rotvec_opt).as_matrix() @ U0
+
+    spots_final = simulate_laue(
+        crystal, U_refined, camera,
+        E_min=E_min, E_max=E_max,
+        allowed_hkl=allowed_hkl,
+        geometry_only=True,
+    )
+
+    return ImageRefinementResult(
+        U        = U_refined,
+        U0       = U0,
+        rotvec   = rotvec_opt,
+        score    = -float(result.fun),
+        score0   = score0,
+        n_sim    = len(spots_final),
+        success  = result.success,
+        message  = result.message,
+        optimizer= result,
+    )

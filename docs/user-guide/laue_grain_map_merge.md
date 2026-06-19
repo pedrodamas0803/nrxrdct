@@ -300,7 +300,91 @@ representation.
 
 ---
 
-## 5. Plotting merged results
+## 5. Standalone orientation utilities
+
+The two functions below operate on raw orientation matrices (not GrainMap
+objects) and are useful wherever orientation comparisons are needed —
+including analysis of pixel pairs, cross-grain comparisons, or preparing
+inputs for plotting.
+
+### `map_to_fundamental_zone`
+
+Maps one or more orientation matrices to the fundamental zone by
+right-multiplying with the symmetry operator that minimises the rotation
+angle to the identity:
+
+$$
+\mathbf{U}_\text{fz} = \mathbf{U}\,\mathbf{S}^*, \qquad
+S^* = \underset{s}{\operatorname{argmax}}\; \operatorname{tr}(\mathbf{U}\,\mathbf{S}_s)
+$$
+
+Only **proper rotations** (det = +1) are used, so every output is a valid
+rotation matrix.  Arbitrary batch dimensions are supported.
+
+```python
+import nrxrdct.laue as laue
+
+# Single matrix
+U_fz = laue.map_to_fundamental_zone(U, symmetry='cubic')
+
+# Whole map at once — (ny, nx, 3, 3) → (ny, nx, 3, 3)
+U_fz_map = laue.map_to_fundamental_zone(gmap.U[0], symmetry='cubic')
+```
+
+!!! note "Relation to `reduce_to_fundamental_zone`"
+    `map_to_fundamental_zone` is a **pure function** — it returns a new
+    array and leaves the input unchanged.  It picks the equivalent closest
+    to the identity, not to a map-wide reference.
+    `gmap.reduce_to_fundamental_zone` is an **in-place** GrainMap method
+    that relabels every pixel to the equivalent closest to the map mean,
+    and is the right tool for correcting isolated symmetry jumps across a
+    raster scan.  Use `map_to_fundamental_zone` for one-off comparisons
+    and `reduce_to_fundamental_zone` to clean up the full map.
+
+### `disorientation`
+
+Returns the minimum-angle symmetry-equivalent misorientation between two
+orientation matrices:
+
+$$
+\omega_\text{dis} =
+    \min_{S_i,\,S_j \in G}\;
+    \bigl|\operatorname{angle}(S_i\,\mathbf{M}\,S_j^T)\bigr|,
+\quad \mathbf{M} = \mathbf{U}_2\,\mathbf{U}_1^T
+$$
+
+Both inputs are projected to SO(3) via SVD before the comparison, so
+non-orthogonal matrices such as $\mathbf{U}_\text{eff} = \mathbf{U}(\mathbf{I}+\boldsymbol{\varepsilon})$
+are handled correctly.
+
+```python
+angle_deg, R_dis = laue.disorientation(U1, U2, symmetry='cubic')
+print(f"Disorientation: {angle_deg:.3f}°")
+```
+
+A typical use case is computing the pixel-by-pixel disorientation between two
+grain slots across a raster map:
+
+```python
+U0_fz = laue.map_to_fundamental_zone(gmap.U[0], symmetry='cubic')  # (ny, nx, 3, 3)
+U1_fz = laue.map_to_fundamental_zone(gmap.U[1], symmetry='cubic')
+
+valid = (
+    np.isfinite(gmap.U[0]).all(axis=(-1, -2)) &
+    np.isfinite(gmap.U[1]).all(axis=(-1, -2))
+)
+dis_map = np.full((gmap.ny, gmap.nx), np.nan)
+for iy in range(gmap.ny):
+    for ix in range(gmap.nx):
+        if valid[iy, ix]:
+            R_mis = U1_fz[iy, ix] @ U0_fz[iy, ix].T
+            tr    = R_mis[0,0] + R_mis[1,1] + R_mis[2,2]
+            dis_map[iy, ix] = np.degrees(np.arccos(np.clip((tr - 1) / 2, -1, 1)))
+```
+
+---
+
+## 6. Plotting merged results
 
 ### IPF maps
 

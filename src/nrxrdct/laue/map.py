@@ -1283,6 +1283,7 @@ class GrainMap:
         self,
         dataset: str,
         *,
+        monitor: "str | None" = "1.1/measurement/mon",
         ax: "plt.Axes | None" = None,
         cmap: str = "viridis",
         vmin: float | None = None,
@@ -1306,6 +1307,12 @@ class GrainMap:
         Args:
             dataset (str): Full HDF5 dataset path inside the file, e.g.
                 ``'1.1/measurement/fluo'`` or ``'1.1/measurement/I0'``.
+            monitor (str or None): HDF5 dataset path of a per-frame monitor
+                scalar (e.g. ion chamber counts) used to normalise *dataset*.
+                The data are divided element-wise by the monitor values.
+                Pass ``None`` to skip normalisation.  Default
+                ``'1.1/measurement/mon'``.  If the path does not exist in the
+                file, normalisation is silently skipped with a warning.
             ax (Axes or None): Existing axes to draw into.  A new figure
                 is created when ``None``.
             cmap (str): Colormap.  Default ``'viridis'``.
@@ -1330,6 +1337,17 @@ class GrainMap:
             if dataset not in f:
                 raise KeyError(f"Dataset {dataset!r} not found in {self.h5_path!r}.")
             raw = f[dataset][()].astype(float)
+            if monitor is not None:
+                if monitor in f:
+                    mon = f[monitor][()].astype(float).ravel()
+                    raw = raw.ravel() / np.where(mon == 0, np.nan, mon)
+                else:
+                    import warnings
+                    warnings.warn(
+                        f"Monitor dataset {monitor!r} not found in {self.h5_path!r}; "
+                        "skipping normalisation.",
+                        stacklevel=2,
+                    )
 
         data = raw.reshape(self.ny, self.nx)
 
@@ -4026,34 +4044,63 @@ class GrainMap:
 
         # ── image loader ──────────────────────────────────────────────────────
         _tiff_index: "list | None" = None   # built lazily
+        _load_error: list = []              # single-element list to allow mutation
 
         def _load_image(frame_idx: int) -> "np.ndarray | None":
+            nonlocal _tiff_index
+            _load_error.clear()
             if tiff_dir is not None:
-                nonlocal _tiff_index
                 if _tiff_index is None:
                     import re as _re
-                    pat   = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    # Match any file whose name ends with one or more digits + .tif/.tiff
+                    pat   = _re.compile(r'(\d+)\.tiff?$', _re.IGNORECASE)
                     files = []
                     for fname in os.listdir(tiff_dir):
-                        m = pat.match(fname)
+                        m = pat.search(fname)
                         if m:
                             files.append(
                                 (int(m.group(1)), os.path.join(tiff_dir, fname))
                             )
                     files.sort(key=lambda x: x[0])
                     _tiff_index = [p for _, p in files]
+                    if not _tiff_index:
+                        _load_error.append(
+                            f"No .tif/.tiff files found in {tiff_dir!r}"
+                        )
+                        return None
                 if frame_idx >= len(_tiff_index):
+                    _load_error.append(
+                        f"frame {frame_idx} out of range "
+                        f"(only {len(_tiff_index)} files in {tiff_dir!r})"
+                    )
                     return None
                 try:
                     import skimage.io
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    _load_error.append(f"TIFF read error: {exc}")
                     return None
             elif h5_dataset is not None:
+                if self.h5_path is None:
+                    _load_error.append("h5_path not set on this GrainMap")
+                    return None
                 try:
                     with h5py.File(self.h5_path, "r") as f:
-                        return f[h5_dataset][frame_idx].astype(np.float32)
-                except Exception:
+                        if h5_dataset not in f:
+                            _load_error.append(
+                                f"dataset {h5_dataset!r} not found in {self.h5_path!r}"
+                            )
+                            return None
+                        ds = f[h5_dataset]
+                        if frame_idx >= ds.shape[0]:
+                            _load_error.append(
+                                f"frame {frame_idx} out of range "
+                                f"(dataset has {ds.shape[0]} frames)"
+                            )
+                            return None
+                        return ds[frame_idx].astype(np.float32)
+                except Exception as exc:
+                    _load_error.append(f"HDF5 read error: {exc}")
                     return None
             return None
 
@@ -4195,6 +4242,13 @@ class GrainMap:
             else:
                 ax_det.set_xlim(0, camera.Nh)
                 ax_det.set_ylim(camera.Nv, 0)
+                if _load_error:
+                    ax_det.text(
+                        0.5, 0.5, f"Image not loaded:\n{_load_error[0]}",
+                        transform=ax_det.transAxes, ha="center", va="center",
+                        color="#ff6666", fontsize=9, wrap=True,
+                    )
+                    print(f"  ✗ inspect_frame: {_load_error[0]}", flush=True)
 
             ax_det.set_aspect("equal")
 
@@ -4286,6 +4340,9 @@ class GrainMap:
         fit_max_match_px: "float | list[float]" = [30.0, 10.0, 3.0],
         r_squared_min: float = 0.0,
         include_unfitted: bool = True,
+        kernel_sigma: float = 0.3,
+        bg_sigma: float = 251.0,
+        img_max_angle_deg: float = 0.2,
         figsize: tuple = (14, 7),
     ) -> None:
         """
@@ -4299,9 +4356,16 @@ class GrainMap:
         2. **⚡ Fit** — refines the orientation with :func:`fit_orientation`
            starting from the index result (or from the map's existing U if
            indexing was skipped).  Cyan diamonds replace the index overlay.
-        3. **⬆ Store** — writes the fit result back into the map at the
+        3. **🖼 Img refine** — runs :func:`refine_orientation_image` on the
+           raw pixel data, starting from the best available U.  Useful for
+           verifying or improving image-based refinement results without
+           requiring a segmented spot list.
+        4. **🖼 Img strain** — runs :func:`refine_strain_image` jointly
+           refining orientation and strain against the raw image.  Enabled
+           after any successful orientation result (spot-based or image-based).
+        5. **⬆ Store** — writes the fit result back into the map at the
            selected position and grain slot chosen by the grain selector.
-        4. **💾 Save UB** — writes the best available U to an auto-numbered
+        6. **💾 Save UB** — writes the best available U to an auto-numbered
            `UB<n>.npy` file in the current directory.
 
         Args:
@@ -4314,7 +4378,8 @@ class GrainMap:
             tiff_dir (str or None): Path to a folder of `img_<number>.tif` files.  Mutually
                 exclusive with *h5_dataset*.
             map_quantity (str): Scalar quantity shown on the left panel.  One of
-                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
+                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`, `'misorientation'`.
+                Use `'misorientation'` for grains refined via image-based search methods.
             map_grain (int or None): Grain index used to build the left-panel map.  `None` uses
                 the merged grain slot when available, otherwise grain `0`.
             motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
@@ -4331,18 +4396,28 @@ class GrainMap:
                 Default `[30, 10, 3]`.
             r_squared_min (float): Minimum Gaussian-fit R² when loading the spot file.  Default `0`.
             include_unfitted (bool): Include raw centroids (fit failed) from the spot file.
+            kernel_sigma (float): Gaussian kernel width (px) for image-based refinement.  Default `0.3`.
+            bg_sigma (float): Background subtraction kernel width (px).  Default `251`.
+            img_max_angle_deg (float): Local-search radius (degrees) for image-based orientation
+                refinement.  Default `0.2`.
             figsize (tuple): Figure size.  Default `(14, 7)`.
 """
         import ipywidgets as ipw
         from IPython.display import display as _ipy_display
-        from .simulation import simulate_laue as _sim_laue
+        from .simulation import simulate_laue as _sim_laue, precompute_allowed_hkl as _precompute_hkl
         from .segmentation import convert_spotsfile2peaklist
         from .fitting import (
-            index_orientation      as _index,
-            fit_orientation        as _fit_ori,
-            fit_strain_orientation as _fit_strain,
+            index_orientation        as _index,
+            fit_orientation          as _fit_ori,
+            fit_strain_orientation   as _fit_strain,
+            refine_orientation_image as _img_ori,
+            refine_strain_image      as _img_str,
+            ImageRefinementResult,
+            StrainImageRefinementResult,
             _match_spots,
         )
+
+        _allowed_hkl = _precompute_hkl(crystal, E_max_eV=E_max_eV)
 
         seg_dir = os.path.join(base_dir, "seg")
         if map_grain is None:
@@ -4378,34 +4453,54 @@ class GrainMap:
             if tiff_dir is not None:
                 if not _tiff_index:
                     import re as _re
-                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    pat = _re.compile(r'(\d+)\.tiff?$', _re.IGNORECASE)
                     files = []
                     for fname in os.listdir(tiff_dir):
-                        m = pat.match(fname)
+                        m = pat.search(fname)
                         if m:
                             files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
                     files.sort(key=lambda t: t[0])
                     _tiff_index.extend(p for _, p in files)
+                    if not _tiff_index:
+                        print(f"  ✗ No .tif/.tiff files found in {tiff_dir!r}", flush=True)
+                        return None
                 if frame_idx >= len(_tiff_index):
+                    print(
+                        f"  ✗ frame {frame_idx} out of range "
+                        f"({len(_tiff_index)} files in {tiff_dir!r})",
+                        flush=True,
+                    )
                     return None
                 try:
                     import skimage.io
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ TIFF read error frame {frame_idx}: {exc}", flush=True)
                     return None
             elif h5_dataset is not None:
+                if self.h5_path is None:
+                    print("  ✗ h5_path not set on this GrainMap", flush=True)
+                    return None
                 try:
                     with h5py.File(self.h5_path, "r") as fh:
+                        if h5_dataset not in fh:
+                            print(
+                                f"  ✗ dataset {h5_dataset!r} not found in {self.h5_path!r}",
+                                flush=True,
+                            )
+                            return None
                         return fh[h5_dataset][frame_idx].astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
                     return None
             return None
 
         _map_opts = {
-            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
-            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
-            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
-            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+            "match_rate":    (self.match_rate[map_grain], "Match rate",      "viridis"),
+            "rms_px":        (self.rms_px[map_grain],     "RMS (px)",        "plasma_r"),
+            "mean_px":       (self.mean_px[map_grain],    "Mean dev (px)",   "plasma_r"),
+            "cost":          (self.cost[map_grain],       "Cost",            "plasma_r"),
+            "misorientation":(self.misorientation_map(map_grain), "Misor. (°)", "viridis"),
         }
         map_data, map_label, map_cmap = _map_opts.get(
             map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
@@ -4608,32 +4703,38 @@ class GrainMap:
                 + (" — existing fit in map" if has_existing else "")
                 + "</span>"
             )
-            btn_index.disabled  = not enough
-            btn_fit.disabled    = not (enough and (has_existing or False))
-            btn_strain.disabled = True
-            btn_store.disabled  = True
-            btn_save.disabled   = True
+            btn_index.disabled   = not enough
+            btn_fit.disabled     = not (enough and (has_existing or False))
+            btn_img_ori.disabled = not has_existing
+            btn_img_str.disabled = True
+            btn_strain.disabled  = True
+            btn_store.disabled   = True
+            btn_save.disabled    = True
             _draw_det()
 
         fig.canvas.mpl_connect("button_press_event", _on_click)
 
         # ── ipywidgets ────────────────────────────────────────────────────────
         _bkw = dict(layout=ipw.Layout(width="120px", height="32px"))
-        btn_index  = ipw.Button(description="⚡ Index",      button_style="primary",  **_bkw)
-        btn_fit    = ipw.Button(description="⚡ Fit",        button_style="info",     **_bkw)
-        btn_strain = ipw.Button(description="🔩 Fit strain", button_style="warning",
-                                layout=ipw.Layout(width="130px", height="32px"))
-        btn_store  = ipw.Button(description="⬆ Store",      button_style="success",  **_bkw)
-        btn_save   = ipw.Button(description="💾 Save UB",   button_style="",         **_bkw)
-        w_grain    = ipw.BoundedIntText(
+        btn_index   = ipw.Button(description="⚡ Index",      button_style="primary",  **_bkw)
+        btn_fit     = ipw.Button(description="⚡ Fit",        button_style="info",     **_bkw)
+        btn_strain  = ipw.Button(description="🔩 Fit strain", button_style="warning",
+                                 layout=ipw.Layout(width="130px", height="32px"))
+        btn_img_ori = ipw.Button(description="🖼 Img refine", button_style="info",     **_bkw)
+        btn_img_str = ipw.Button(description="🖼 Img strain", button_style="warning",  **_bkw)
+        btn_store   = ipw.Button(description="⬆ Store",      button_style="success",  **_bkw)
+        btn_save    = ipw.Button(description="💾 Save UB",   button_style="",         **_bkw)
+        w_grain     = ipw.BoundedIntText(
             value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
             layout=ipw.Layout(width="55px", height="32px"),
         )
-        btn_index.disabled  = True
-        btn_fit.disabled    = True
-        btn_strain.disabled = True
-        btn_store.disabled  = True
-        btn_save.disabled   = True
+        btn_index.disabled   = True
+        btn_fit.disabled     = True
+        btn_strain.disabled  = True
+        btn_img_ori.disabled = True
+        btn_img_str.disabled = True
+        btn_store.disabled   = True
+        btn_save.disabled    = True
 
         _info = ipw.HTML(
             "<span style='color:#666;font-style:italic'>"
@@ -4740,9 +4841,10 @@ class GrainMap:
                     _state["fit_result"] = item
                     col = "#44aaff" if item.success else "#ffaa33"
                     _info.value = f"<b style='color:{col}'>{item}</b>"
-                    btn_strain.disabled = len(_state["obs_xy"]) < 3
-                    btn_store.disabled  = False
-                    btn_save.disabled   = False
+                    btn_strain.disabled  = len(_state["obs_xy"]) < 3
+                    btn_img_str.disabled = False
+                    btn_store.disabled   = False
+                    btn_save.disabled    = False
                     _draw_det()
                 btn_fit.description = "⚡ Fit"
                 btn_fit.disabled    = False
@@ -4766,7 +4868,25 @@ class GrainMap:
                     f"(0 – {self.n_grains - 1})</b>"
                 )
                 return
-            self.set_result(iy, ix, gi, fit_result)
+            if isinstance(fit_result, (ImageRefinementResult, StrainImageRefinementResult)):
+                self.U[gi, iy, ix] = fit_result.U
+                if hasattr(fit_result, "strain_tensor"):
+                    eps = fit_result.strain_tensor
+                    self.strain_tensor[gi, iy, ix] = eps
+                    self.strain_voigt[gi, iy, ix]  = fit_result.strain_voigt
+                    self.strain_tensor_deviatoric[gi, iy, ix] = (
+                        eps - np.trace(eps) / 3.0 * np.eye(3)
+                    )
+                print_line = (
+                    f"  ⬆ Stored image result at (iy={iy}, ix={ix}) grain={gi}"
+                )
+            else:
+                self.set_result(iy, ix, gi, fit_result)
+                print_line = (
+                    f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
+                    f"rms={fit_result.rms_px:.2f} px  "
+                    f"match={fit_result.match_rate:.0%}"
+                )
             if self.save_path:
                 self.save(self.save_path)
                 save_note = f" — saved to {os.path.basename(self.save_path)}"
@@ -4777,12 +4897,7 @@ class GrainMap:
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
                 f"<span style='color:#aaa'>{save_note}</span>"
             )
-            print(
-                f"  ⬆ Stored fit result at (iy={iy}, ix={ix}) grain={gi}  "
-                f"rms={fit_result.rms_px:.2f} px  "
-                f"match={fit_result.match_rate:.0%}"
-                + (f"  → saved to {self.save_path}" if self.save_path else "  (in memory only)")
-            )
+            print(print_line + (f"  → saved to {self.save_path}" if self.save_path else "  (in memory only)"))
 
         def _cb_save(_) -> None:
             # Prefer the refined fit; fall back to index result
@@ -4857,9 +4972,158 @@ class GrainMap:
             except RuntimeError:
                 asyncio.ensure_future(_wait())
 
+        def _cb_img_ori(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if getattr(_cb_img_ori, "_running", False):
+                return
+            frame_idx = _state["frame_idx"]
+            if frame_idx is None:
+                return
+            U_start = (
+                _state["fit_result"].U if _state["fit_result"] is not None
+                else _state["result"].U if _state["result"] is not None
+                else self.U[map_grain, _state["iy"], _state["ix"]]
+            )
+            if np.any(np.isnan(U_start)):
+                _info.value = "<b style='color:#f44'>No U available — index or fit first</b>"
+                return
+            _cb_img_ori._running    = True
+            btn_img_ori.disabled    = True
+            btn_img_ori.description = "Refining…"
+
+            image = _load_image(frame_idx)
+            if image is None:
+                _info.value = "<b style='color:#f44'>Could not load image</b>"
+                btn_img_ori.description = "🖼 Img refine"
+                btn_img_ori.disabled    = False
+                _cb_img_ori._running    = False
+                return
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _img_ori(
+                        crystal, U_start.copy(), camera, image.astype(np.float64),
+                        allowed_hkl   = _allowed_hkl,
+                        kernel_sigma  = kernel_sigma,
+                        bg_sigma      = bg_sigma,
+                        max_angle_deg = img_max_angle_deg,
+                        E_min         = E_min_eV,
+                        E_max         = E_max_eV,
+                        verbose       = True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Img refine error: {item}</b>"
+                else:
+                    _state["fit_result"] = item
+                    _info.value = f"<b style='color:#44aaff'>{item}</b>"
+                    btn_img_str.disabled = False
+                    btn_store.disabled   = False
+                    btn_save.disabled    = False
+                    _draw_det()
+                btn_img_ori.description = "🖼 Img refine"
+                btn_img_ori.disabled    = False
+                _cb_img_ori._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        def _cb_img_str(_) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if getattr(_cb_img_str, "_running", False):
+                return
+            frame_idx = _state["frame_idx"]
+            if frame_idx is None:
+                return
+            fit_result = _state["fit_result"]
+            U_start = (
+                fit_result.U if fit_result is not None
+                else self.U[map_grain, _state["iy"], _state["ix"]]
+            )
+            if np.any(np.isnan(U_start)):
+                _info.value = "<b style='color:#f44'>No U available — run orientation step first</b>"
+                return
+            strain0 = (
+                fit_result.strain_tensor
+                if fit_result is not None and hasattr(fit_result, "strain_tensor")
+                else None
+            )
+            _cb_img_str._running    = True
+            btn_img_str.disabled    = True
+            btn_img_str.description = "Refining…"
+
+            image = _load_image(frame_idx)
+            if image is None:
+                _info.value = "<b style='color:#f44'>Could not load image</b>"
+                btn_img_str.description = "🖼 Img strain"
+                btn_img_str.disabled    = False
+                _cb_img_str._running    = False
+                return
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _img_str(
+                        crystal, U_start.copy(), camera, image.astype(np.float64),
+                        strain0       = strain0,
+                        allowed_hkl   = _allowed_hkl,
+                        kernel_sigma  = kernel_sigma,
+                        bg_sigma      = bg_sigma,
+                        max_angle_deg = img_max_angle_deg,
+                        E_min         = E_min_eV,
+                        E_max         = E_max_eV,
+                        verbose       = True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Img strain error: {item}</b>"
+                else:
+                    _state["fit_result"] = item
+                    _info.value = f"<b style='color:#ffcc44'>{item}</b>"
+                    btn_store.disabled = False
+                    btn_save.disabled  = False
+                    _draw_det()
+                btn_img_str.description = "🖼 Img strain"
+                btn_img_str.disabled    = False
+                _cb_img_str._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
         btn_index.on_click(_cb_index)
         btn_fit.on_click(_cb_fit)
         btn_strain.on_click(_cb_strain)
+        btn_img_ori.on_click(_cb_img_ori)
+        btn_img_str.on_click(_cb_img_str)
         btn_store.on_click(_cb_store)
         btn_save.on_click(_cb_save)
 
@@ -4870,6 +5134,11 @@ class GrainMap:
                           layout=ipw.Layout(margin="0 2px 0 10px")),
                  w_grain, btn_store, btn_save],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
+                                  align_items="center"),
+            ),
+            ipw.HBox(
+                [btn_img_ori, btn_img_str],
+                layout=ipw.Layout(gap="6px", margin="0 0 0 0",
                                   align_items="center"),
             ),
             _info,
@@ -5001,26 +5270,45 @@ class GrainMap:
             if tiff_dir is not None:
                 if not _tiff_index:
                     import re as _re
-                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    pat = _re.compile(r'(\d+)\.tiff?$', _re.IGNORECASE)
                     files = []
                     for fname in os.listdir(tiff_dir):
-                        m = pat.match(fname)
+                        m = pat.search(fname)
                         if m:
                             files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
                     files.sort(key=lambda t: t[0])
                     _tiff_index.extend(p for _, p in files)
+                    if not _tiff_index:
+                        print(f"  ✗ No .tif/.tiff files found in {tiff_dir!r}", flush=True)
+                        return None
                 if frame_idx >= len(_tiff_index):
+                    print(
+                        f"  ✗ frame {frame_idx} out of range "
+                        f"({len(_tiff_index)} files in {tiff_dir!r})",
+                        flush=True,
+                    )
                     return None
                 try:
                     import skimage.io
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ TIFF read error frame {frame_idx}: {exc}", flush=True)
                     return None
             elif h5_dataset is not None:
+                if self.h5_path is None:
+                    print("  ✗ h5_path not set on this GrainMap", flush=True)
+                    return None
                 try:
                     with h5py.File(self.h5_path, "r") as fh:
+                        if h5_dataset not in fh:
+                            print(
+                                f"  ✗ dataset {h5_dataset!r} not found in {self.h5_path!r}",
+                                flush=True,
+                            )
+                            return None
                         return fh[h5_dataset][frame_idx].astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
                     return None
             return None
 
@@ -5969,26 +6257,45 @@ class GrainMap:
             if tiff_dir is not None:
                 if not _tiff_index:
                     import re as _re
-                    pat = _re.compile(r'^img_(\d+)\.tif$', _re.IGNORECASE)
+                    pat = _re.compile(r'(\d+)\.tiff?$', _re.IGNORECASE)
                     files = []
                     for fname in os.listdir(tiff_dir):
-                        m = pat.match(fname)
+                        m = pat.search(fname)
                         if m:
                             files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
                     files.sort(key=lambda t: t[0])
                     _tiff_index.extend(p for _, p in files)
+                    if not _tiff_index:
+                        print(f"  ✗ No .tif/.tiff files found in {tiff_dir!r}", flush=True)
+                        return None
                 if frame_idx >= len(_tiff_index):
+                    print(
+                        f"  ✗ frame {frame_idx} out of range "
+                        f"({len(_tiff_index)} files in {tiff_dir!r})",
+                        flush=True,
+                    )
                     return None
                 try:
                     import skimage.io
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ TIFF read error frame {frame_idx}: {exc}", flush=True)
                     return None
             elif h5_dataset is not None:
+                if self.h5_path is None:
+                    print("  ✗ h5_path not set on this GrainMap", flush=True)
+                    return None
                 try:
                     with h5py.File(self.h5_path, "r") as fh:
+                        if h5_dataset not in fh:
+                            print(
+                                f"  ✗ dataset {h5_dataset!r} not found in {self.h5_path!r}",
+                                flush=True,
+                            )
+                            return None
                         return fh[h5_dataset][frame_idx].astype(np.float32)
-                except Exception:
+                except Exception as exc:
+                    print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
                     return None
             return None
 

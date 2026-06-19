@@ -246,13 +246,169 @@ gmap.collect_strain_image_refine(base_dir)   # updates self.U, strain_tensor, st
 
 ---
 
+## Search-based refinement
+
+The local-polish functions above require a good starting $\mathbf{U}_0$ —
+they converge to the wrong orientation if started more than `max_angle_deg`
+away from the true one.  When only a rough estimate of the orientation is
+available (e.g. a secondary grain whose orientation was not indexed by the
+standard pipeline), use the **search** variants instead.
+
+### `search_orientation_image` — grid search + local polish (3 parameters)
+
+A two-phase approach:
+
+1. **Grid search** — sample `n_search` orientations uniformly within a
+   misorientation ball of radius `search_misor_deg` around `U_ref` using
+   $r^{1/3}$ radial sampling for uniform 3-D coverage.  Each candidate is
+   scored by direct intensity lookup at the simulated spot positions (no FFT —
+   fast, O(n_spots × n_search)).
+2. **Local refinement** — Powell from the best grid candidate with the full
+   Gaussian-convolution FFT objective, constrained to ±`max_angle_deg` around
+   that point.
+
+```python
+result = laue.search_orientation_image(
+    crystal, U_ref, camera, raw_frame,
+    allowed_hkl      = hkl,
+    search_misor_deg = 5.0,    # grid-search radius — must cover the uncertainty in U_ref
+    n_search         = 500,    # random candidates; increase for noisier images
+    kernel_sigma     = 0.3,
+    max_angle_deg    = 0.2,    # local-polish radius after grid search
+)
+
+U_found = result.U
+print(f"|δω| from U_ref: {np.degrees(np.linalg.norm(result.rotvec)):.3f}°")
+```
+
+The result has the same type as `refine_orientation_image` (`ImageRefinementResult`),
+so it is a drop-in replacement wherever that result is used.
+
+### `search_strain_image` — grid search + local polish (9 parameters)
+
+Same two-phase grid search (orientation only during the grid step — strain
+shifts spots by $\lesssim 10^{-3}$ detector widths and is negligible at the
+misorientation scale being searched), followed by a 9-parameter local Powell
+that jointly refines orientation and all six strain components.
+
+```python
+result = laue.search_strain_image(
+    crystal, U_ref, camera, raw_frame,
+    allowed_hkl      = hkl,
+    search_misor_deg = 5.0,
+    n_search         = 500,
+    kernel_sigma     = 0.3,
+    max_angle_deg    = 0.2,
+    strain_scale     = 1e-4,
+)
+
+U_found    = result.U
+eps_tensor = result.strain_tensor         # (3, 3)
+eps_voigt  = result.strain_voigt          # (6,)
+```
+
+---
+
+## SLURM batch processing — search variants
+
+For raster maps where the orientation of one grain slot is only approximately
+known, use the search SLURM methods.  The starting orientation is supplied as
+`U_refs` — a dict mapping grain index to a reference matrix — rather than
+reading per-pixel fits from disk.
+
+| Step | Submit | Collect | Output dir |
+|---|---|---|---|
+| Orientation search | `gmap.submit_search_image_refine(...)` | `gmap.collect_search_image_refine(base_dir)` | `search_img_refine/` |
+| Orientation + strain search | `gmap.submit_search_strain_image_refine(...)` | `gmap.collect_search_strain_image_refine(base_dir)` | `search_strain_img_refine/` |
+
+Unlike the local-polish methods, these methods do **not** read prior per-pixel
+fits — the same `U_refs[gi]` is used as the grid-search centre for every map
+pixel.  Fields populated by the standard pipeline (`match_rate`, `cost`, …)
+are **not** written; only `U` (and strain arrays for the strain variant) are
+updated.
+
+```python
+# Rough reference orientation for grain 1
+U_ref_1 = np.array([[...], [...], [...]])   # (3, 3)
+
+# Submit orientation search
+job_ids = gmap.submit_search_image_refine(
+    base_dir,
+    crystal,
+    camera,
+    h5_dataset       = "1.1/measurement/eiger4m",
+    U_refs           = {1: U_ref_1},
+    n_jobs           = 80,
+    search_misor_deg = 5.0,
+    n_search         = 500,
+    kernel_sigma     = 0.3,
+    max_angle_deg    = 0.2,
+    partition        = "nice",
+    time             = "04:00:00",
+    mem              = "32G",
+    cpus_per_task    = 20,
+    python_bin       = "/path/to/python",
+)
+
+# After jobs finish:
+gmap.collect_search_image_refine(base_dir)   # updates self.U[1]
+
+# Submit orientation + strain search
+job_ids = gmap.submit_search_strain_image_refine(
+    base_dir,
+    crystal,
+    camera,
+    h5_dataset       = "1.1/measurement/eiger4m",
+    U_refs           = {1: U_ref_1},
+    n_jobs           = 80,
+    search_misor_deg = 5.0,
+    n_search         = 500,
+    kernel_sigma     = 0.3,
+    max_angle_deg    = 0.2,
+    partition        = "nice",
+    time             = "04:00:00",
+    mem              = "32G",
+    cpus_per_task    = 20,
+    python_bin       = "/path/to/python",
+)
+
+# After jobs finish:
+gmap.collect_search_strain_image_refine(base_dir)
+# updates self.U[1], self.strain_tensor[1], self.strain_voigt[1],
+# self.strain_tensor_deviatoric[1]
+```
+
+!!! note "HDF5 read-only guarantee"
+    All search workers open the raw data file with `"r"` mode.  The master
+    HDF5 file is never modified.
+
+!!! note "Inspecting search-refined grains"
+    Because the search methods do not fill `match_rate` / `cost`, the default
+    left-panel of `inspect_frame` will be blank for these grain slots.  Use
+    `map_quantity='misorientation'` instead, which works for any grain that
+    has `U` filled:
+
+    ```python
+    gmap.inspect_frame(
+        crystal, camera, base_dir,
+        h5_dataset   = "1.1/measurement/eiger4m",
+        grains       = [1],
+        map_grain    = 1,
+        map_quantity = 'misorientation',
+    )
+    ```
+
+---
+
 ## Parameter reference
 
 | Parameter | Default | Description |
 |---|---|---|
 | `kernel_sigma` | 0.3 px | Gaussian kernel width at simulated spot positions.  Decrease to decouple spots that are a few pixels apart. |
 | `bg_sigma` | 251 px | Background Gaussian width.  Large values remove only the slow pedestal. |
-| `max_angle_deg` | 0.2° | Half-width of the rotation search space per axis. |
+| `max_angle_deg` | 0.2° | Half-width of the local-polish rotation search space per axis. |
+| `search_misor_deg` | 5.0° | Radius of the grid-search misorientation ball (search variants only). |
+| `n_search` | 500 | Number of random grid-search candidates per frame (search variants only). |
 | `allowed_hkl` | `None` | Pre-computed HKL set.  Always provide this for speed and correctness. |
 | `strain_scale` | `1e-4` | Internal divisor for strain parameters (strain refinement only). |
 | `method` | `'Powell'` | `scipy.optimize.minimize` method. |

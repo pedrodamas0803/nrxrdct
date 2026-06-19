@@ -3208,6 +3208,7 @@ def refine_orientation_image(
     max_angle_deg: float = 1.0,
     method: str = "Powell",
     options: dict | None = None,
+    verbose: bool = False,
 ) -> "ImageRefinementResult":
     """
     Post-refine an orientation matrix by maximising the total Gaussian-weighted
@@ -3309,7 +3310,7 @@ def refine_orientation_image(
             col = int(round(xc))
             row = int(round(yc))
             if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
-                delta[row, col] += 1.0
+                delta[row, col] += float(s["intensity"])
 
         # Convolve delta map with Gaussian → each spot becomes a smooth blob.
         kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
@@ -3320,6 +3321,9 @@ def refine_orientation_image(
         return -_score(rotvec)  # minimise → maximise score
 
     score0 = _score(np.zeros(3))
+
+    if verbose:
+        print(f"refine_orientation_image: score0={score0:.1f}  method={method}  max_angle={max_angle_deg}°")
 
     opts: dict = {"maxiter": 2000}
     if method == "Powell":
@@ -3342,7 +3346,7 @@ def refine_orientation_image(
         geometry_only=True,
     )
 
-    return ImageRefinementResult(
+    out = ImageRefinementResult(
         U        = U_refined,
         U0       = U0,
         rotvec   = rotvec_opt,
@@ -3353,6 +3357,11 @@ def refine_orientation_image(
         message  = result.message,
         optimizer= result,
     )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
 
 
 def refine_strain_image(
@@ -3372,6 +3381,7 @@ def refine_strain_image(
     strain_scale: float = 1e-4,
     method: str = "Powell",
     options: "dict | None" = None,
+    verbose: bool = False,
 ) -> "StrainImageRefinementResult":
     """
     Post-refine orientation **and** strain tensor simultaneously by maximising
@@ -3474,7 +3484,7 @@ def refine_strain_image(
             col = int(round(xc))
             row = int(round(yc))
             if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
-                delta[row, col] += 1.0
+                delta[row, col] += float(s["intensity"])
 
         kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
         return float(np.sum(kernel_map * img))
@@ -3483,6 +3493,12 @@ def refine_strain_image(
         return -_score(params)
 
     score0 = _score(x0)
+
+    if verbose:
+        print(
+            f"refine_strain_image: score0={score0:.1f}  "
+            f"fit_strain={_fit_strain}  method={method}  max_angle={max_angle_deg}°"
+        )
 
     opts: dict = {"maxiter": 5000}
     if method == "Powell":
@@ -3508,7 +3524,7 @@ def refine_strain_image(
         geometry_only=True,
     )
 
-    return StrainImageRefinementResult(
+    out = StrainImageRefinementResult(
         U             = U_refined,
         U0            = np.asarray(U0, dtype=float),
         U_eff         = U_eff_final,
@@ -3523,3 +3539,8 @@ def refine_strain_image(
         message       = result.message,
         optimizer     = result,
     )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out

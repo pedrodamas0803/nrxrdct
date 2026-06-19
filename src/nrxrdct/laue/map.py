@@ -6823,8 +6823,10 @@ class GrainMap:
             "seg":        os.path.join(base_dir, "seg"),
             "ubs":        os.path.join(base_dir, "ubs"),
             "strain":     os.path.join(base_dir, "strain"),
-            "img_refine":        os.path.join(base_dir, "img_refine"),
-            "strain_img_refine": os.path.join(base_dir, "strain_img_refine"),
+            "img_refine":              os.path.join(base_dir, "img_refine"),
+            "strain_img_refine":       os.path.join(base_dir, "strain_img_refine"),
+            "search_img_refine":       os.path.join(base_dir, "search_img_refine"),
+            "search_strain_img_refine":os.path.join(base_dir, "search_strain_img_refine"),
             "slurm_logs": os.path.join(base_dir, "slurm_logs"),
             "job_meta":   os.path.join(base_dir, "job_meta"),
         }
@@ -8198,6 +8200,346 @@ class GrainMap:
             n_loaded = sum(pool.map(_load, files))
         print(
             f"collect_strain_image_refine: {n_loaded} results loaded from {strain_img_dir}",
+            flush=True,
+        )
+        return n_loaded
+
+    def submit_search_image_refine(
+        self,
+        base_dir: str,
+        crystal,
+        camera,
+        h5_dataset: str,
+        U_refs: "dict[int, np.ndarray]",
+        n_jobs: int = 10,
+        *,
+        kernel_sigma: float = 0.3,
+        bg_sigma: float = 251.0,
+        E_min_eV: float = 5000.0,
+        E_max_eV: "float | None" = None,
+        search_misor_deg: float = 5.0,
+        n_search: int = 500,
+        max_angle_deg: float = 0.2,
+        method: str = "Powell",
+        partition: str = "all",
+        time: str = "02:00:00",
+        mem: str = "4G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        extra_sbatch: "dict | None" = None,
+        overwrite: bool = False,
+    ) -> list:
+        """
+        Submit image-based orientation *search* jobs to SLURM.
+
+        For each frame and each grain in *U_refs* the worker calls
+        :func:`~nrxrdct.laue.fitting.search_orientation_image` — a two-phase
+        approach that first performs a random grid search within a
+        misorientation ball of radius *search_misor_deg* around the supplied
+        reference orientation, then polishes locally with Powell.
+
+        Unlike :meth:`submit_image_refine`, the starting orientation for each
+        grain is a **constant** you supply via *U_refs*, not read from a
+        per-pixel fit file.  This makes it suitable for grains whose
+        orientation is only approximately known (e.g. an epitaxial film grain).
+
+        Args:
+            base_dir (str): Root processing directory.
+            crystal: Crystal structure.
+            camera (Camera): Detector geometry.
+            h5_dataset (str): HDF5 dataset path for the raw image stack.
+            U_refs (dict): Mapping ``{grain_index: U_ref_3x3}`` specifying
+                which grain slots to process and the reference orientation for
+                each.  Grains not present in this dict are skipped.
+            n_jobs (int): Number of SLURM array jobs.
+            kernel_sigma (float): Gaussian kernel σ (px) for local refinement.
+                Default ``0.3``.
+            bg_sigma (float): Background subtraction σ (px).  Default ``251``.
+            E_min_eV, E_max_eV (float): Energy range in eV.
+            search_misor_deg (float): Misorientation search radius in degrees.
+                Default ``5.0``.
+            n_search (int): Number of random orientations in the grid search.
+                Default ``500``.
+            max_angle_deg (float): Local-refinement bound per rotation axis
+                (degrees).  Default ``0.2``.
+            method (str): Optimizer for local refinement.  Default ``'Powell'``.
+            partition, time, mem, cpus_per_task, python_bin, extra_sbatch:
+                Standard SLURM parameters.
+            overwrite (bool): Re-process existing results.  Default ``False``.
+
+        Returns:
+            list of str: SLURM job IDs.
+        """
+        if self.h5_path is None:
+            raise ValueError("submit_search_image_refine requires h5_path to be set.")
+
+        dirs = self.setup_processing_dirs(base_dir)
+
+        crystal_pkl = os.path.join(dirs["job_meta"], "crystal.pkl")
+        if not os.path.exists(crystal_pkl):
+            with open(crystal_pkl, "wb") as fh:
+                pickle.dump(crystal, fh)
+
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+
+        meta: dict = {
+            "h5_path":                self.h5_path,
+            "h5_dataset":             h5_dataset,
+            "U_refs":                 {str(gi): np.asarray(U).tolist()
+                                       for gi, U in U_refs.items()},
+            "search_img_refine_dir":  dirs["search_img_refine"],
+            "crystal_pkl":            crystal_pkl,
+            "camera":                 self._camera_to_dict(camera),
+            "kernel_sigma":           kernel_sigma,
+            "bg_sigma":               bg_sigma,
+            "E_min_eV":               E_min_eV,
+            "search_misor_deg":       search_misor_deg,
+            "n_search":               n_search,
+            "max_angle_deg":          max_angle_deg,
+            "method":                 method,
+            "overwrite":              overwrite,
+        }
+        if E_max_eV is not None:
+            meta["E_max_eV"] = E_max_eV
+
+        meta_path = os.path.join(dirs["job_meta"], "search_img_refine_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "searchimgref",
+            "nrxrdct.laue.workers.slurm_search_image_refine_worker",
+            meta_path, chunks, dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
+        )
+        print(
+            f"Search image refine: {len(job_ids)} jobs → {dirs['search_img_refine']} "
+            f"| grains={list(U_refs)} | search_misor={search_misor_deg}°"
+        )
+        return job_ids
+
+    def collect_search_image_refine(
+        self,
+        base_dir: str,
+        n_workers: "int | None" = None,
+    ) -> int:
+        """
+        Load search-image-refinement results into the map, updating ``self.U``.
+
+        Args:
+            base_dir (str): Root processing directory.
+            n_workers (int or None): Number of loader threads.
+
+        Returns:
+            int: Number of results loaded.
+        """
+        refine_dir = os.path.join(base_dir, "search_img_refine")
+        files = glob.glob(os.path.join(refine_dir, "frame_*_g*.npz"))
+
+        def _load(fpath: str) -> bool:
+            m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
+            if not m:
+                return False
+            frame_idx = int(m.group(1))
+            gi        = int(m.group(2))
+            iy, ix    = self.map_index(frame_idx)
+            if gi >= self.n_grains or iy >= self.ny or ix >= self.nx:
+                return False
+            try:
+                d = np.load(fpath)
+                self.U[gi, iy, ix] = d["U"]
+                return True
+            except Exception as exc:
+                print(f"  ✗  {fpath}: {exc}", flush=True)
+                return False
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
+        print(
+            f"collect_search_image_refine: {n_loaded} results loaded from {refine_dir}",
+            flush=True,
+        )
+        return n_loaded
+
+    def submit_search_strain_image_refine(
+        self,
+        base_dir: str,
+        crystal,
+        camera,
+        h5_dataset: str,
+        U_refs: "dict[int, np.ndarray]",
+        n_jobs: int = 10,
+        *,
+        fit_strain: "list | None" = None,
+        kernel_sigma: float = 0.3,
+        bg_sigma: float = 251.0,
+        E_min_eV: float = 5000.0,
+        E_max_eV: "float | None" = None,
+        search_misor_deg: float = 5.0,
+        n_search: int = 500,
+        max_angle_deg: float = 0.2,
+        strain_scale: float = 1e-4,
+        method: str = "Powell",
+        partition: str = "all",
+        time: str = "04:00:00",
+        mem: str = "4G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        extra_sbatch: "dict | None" = None,
+        overwrite: bool = False,
+    ) -> list:
+        """
+        Submit image-based orientation + strain *search* jobs to SLURM.
+
+        Same as :meth:`submit_search_image_refine` but calls
+        :func:`~nrxrdct.laue.fitting.search_strain_image`, which jointly
+        refines all six strain components and the orientation after the grid
+        search.  Suitable for an epitaxial film grain where neither the
+        orientation nor the strain state is known a priori.
+
+        Args:
+            base_dir (str): Root processing directory.
+            crystal: Crystal structure.
+            camera (Camera): Detector geometry.
+            h5_dataset (str): HDF5 dataset path for the raw image stack.
+            U_refs (dict): ``{grain_index: U_ref_3x3}`` — reference
+                orientations for the grid search centre.
+            n_jobs (int): Number of SLURM array jobs.
+            fit_strain (list of str or None): Strain components to refine.
+                ``None`` refines all six.
+            kernel_sigma (float): Gaussian kernel σ (px).  Default ``0.3``.
+            bg_sigma (float): Background subtraction σ (px).  Default ``251``.
+            E_min_eV, E_max_eV (float): Energy range in eV.
+            search_misor_deg (float): Misorientation search radius (degrees).
+                Default ``5.0``.
+            n_search (int): Grid-search sample count.  Default ``500``.
+            max_angle_deg (float): Local-refinement rotation bound (degrees).
+                Default ``0.2``.
+            strain_scale (float): Internal scale for strain parameters.
+                Default ``1e-4``.
+            method (str): Optimizer.  Default ``'Powell'``.
+            partition, time, mem, cpus_per_task, python_bin, extra_sbatch:
+                Standard SLURM parameters.
+            overwrite (bool): Re-process existing results.  Default ``False``.
+
+        Returns:
+            list of str: SLURM job IDs.
+        """
+        if self.h5_path is None:
+            raise ValueError(
+                "submit_search_strain_image_refine requires h5_path to be set."
+            )
+
+        dirs = self.setup_processing_dirs(base_dir)
+
+        crystal_pkl = os.path.join(dirs["job_meta"], "crystal.pkl")
+        if not os.path.exists(crystal_pkl):
+            with open(crystal_pkl, "wb") as fh:
+                pickle.dump(crystal, fh)
+
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+
+        meta: dict = {
+            "h5_path":                       self.h5_path,
+            "h5_dataset":                    h5_dataset,
+            "U_refs":                        {str(gi): np.asarray(U).tolist()
+                                              for gi, U in U_refs.items()},
+            "search_strain_img_refine_dir":  dirs["search_strain_img_refine"],
+            "crystal_pkl":                   crystal_pkl,
+            "camera":                        self._camera_to_dict(camera),
+            "fit_strain":                    list(fit_strain) if fit_strain is not None
+                                             else ["e_xx", "e_yy", "e_zz", "e_xy", "e_xz", "e_yz"],
+            "kernel_sigma":                  kernel_sigma,
+            "bg_sigma":                      bg_sigma,
+            "E_min_eV":                      E_min_eV,
+            "search_misor_deg":              search_misor_deg,
+            "n_search":                      n_search,
+            "max_angle_deg":                 max_angle_deg,
+            "strain_scale":                  strain_scale,
+            "method":                        method,
+            "overwrite":                     overwrite,
+        }
+        if E_max_eV is not None:
+            meta["E_max_eV"] = E_max_eV
+
+        meta_path = os.path.join(dirs["job_meta"], "search_strain_img_refine_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "searchstrainimgref",
+            "nrxrdct.laue.workers.slurm_search_strain_image_refine_worker",
+            meta_path, chunks, dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem, cpus_per_task=cpus_per_task,
+            python_bin=python_bin, extra_sbatch=extra_sbatch,
+        )
+        print(
+            f"Search strain image refine: {len(job_ids)} jobs → "
+            f"{dirs['search_strain_img_refine']} "
+            f"| grains={list(U_refs)} | search_misor={search_misor_deg}°"
+        )
+        return job_ids
+
+    def collect_search_strain_image_refine(
+        self,
+        base_dir: str,
+        n_workers: "int | None" = None,
+    ) -> int:
+        """
+        Load search-strain-image-refinement results into the map.
+
+        Updates ``self.U``, ``self.strain_tensor``, ``self.strain_voigt``, and
+        ``self.strain_tensor_deviatoric``.
+
+        Args:
+            base_dir (str): Root processing directory.
+            n_workers (int or None): Number of loader threads.
+
+        Returns:
+            int: Number of results loaded.
+        """
+        refine_dir = os.path.join(base_dir, "search_strain_img_refine")
+        files = glob.glob(os.path.join(refine_dir, "frame_*_g*.npz"))
+
+        def _load(fpath: str) -> bool:
+            m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
+            if not m:
+                return False
+            frame_idx = int(m.group(1))
+            gi        = int(m.group(2))
+            iy, ix    = self.map_index(frame_idx)
+            if gi >= self.n_grains or iy >= self.ny or ix >= self.nx:
+                return False
+            try:
+                d = np.load(fpath)
+                self.U[gi, iy, ix]             = d["U"]
+                self.strain_tensor[gi, iy, ix] = d["strain_tensor"]
+                self.strain_voigt[gi, iy, ix]  = d["strain_voigt"]
+                eps = d["strain_tensor"]
+                self.strain_tensor_deviatoric[gi, iy, ix] = (
+                    eps - np.trace(eps) / 3.0 * np.eye(3)
+                )
+                return True
+            except Exception as exc:
+                print(f"  ✗  {fpath}: {exc}", flush=True)
+                return False
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            n_loaded = sum(pool.map(_load, files))
+        print(
+            f"collect_search_strain_image_refine: {n_loaded} results loaded "
+            f"from {refine_dir}",
             flush=True,
         )
         return n_loaded

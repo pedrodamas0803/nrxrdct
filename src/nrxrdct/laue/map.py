@@ -3965,7 +3965,9 @@ class GrainMap:
                 indices.  Mutually exclusive with *h5_dataset*.
             grains (list of int or None): Grain indices to simulate.  `None` uses all grains.
             map_quantity (str): Scalar quantity shown on the left panel.  One of
-                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`.
+                `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`, `'misorientation'`.
+                Use `'misorientation'` for grains refined via the image-search methods
+                (which do not produce match-rate / cost statistics).
                 Default `'match_rate'`.
             map_grain (int or None): Grain index used to build the left-panel map.  `None` (default)
                 uses the merged grain slot when :meth:`apply_merge` has been
@@ -4057,10 +4059,11 @@ class GrainMap:
 
         # ── left-panel map data ───────────────────────────────────────────────
         _map_opts = {
-            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
-            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
-            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
-            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
+            "match_rate":    (self.match_rate[map_grain], "Match rate",      "viridis"),
+            "rms_px":        (self.rms_px[map_grain],     "RMS (px)",        "plasma_r"),
+            "mean_px":       (self.mean_px[map_grain],    "Mean dev (px)",   "plasma_r"),
+            "cost":          (self.cost[map_grain],       "Cost",            "plasma_r"),
+            "misorientation":(self.misorientation_map(map_grain), "Misor. (°)", "viridis"),
         }
         map_data, map_label, map_cmap = _map_opts.get(
             map_quantity,

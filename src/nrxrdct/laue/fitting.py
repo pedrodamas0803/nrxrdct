@@ -262,6 +262,9 @@ class StrainFitResult:
             `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`
             in the crystal frame.  Components not
             listed in `fit_strain` are zero.
+        strain_tensor_deviatoric ((3, 3) ndarray): Deviatoric part of
+            `strain_tensor` in the crystal frame:
+            ``ε − (Tr(ε)/3) I`` (computed property).
         strain_tensor_lab ((3,3) ndarray): `strain_tensor` rotated to the
             lab frame via `U @ ε @ Uᵀ`
             (computed property).
@@ -298,6 +301,18 @@ class StrainFitResult:
     success       : bool
     message       : str
     optimizer     : object = field(repr=False)
+
+    @property
+    def strain_tensor_deviatoric(self) -> np.ndarray:
+        """
+        Deviatoric part of the strain tensor in the crystal frame:
+        ``ε_dev = ε − (Tr(ε)/3) I``.
+
+        Returns:
+            (3, 3) ndarray
+"""
+        eps = self.strain_tensor
+        return eps - np.trace(eps) / 3.0 * np.eye(3)
 
     @property
     def strain_tensor_lab(self) -> np.ndarray:

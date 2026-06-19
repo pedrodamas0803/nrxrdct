@@ -1279,6 +1279,101 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    def plot_h5_scalar(
+        self,
+        dataset: str,
+        *,
+        ax: "plt.Axes | None" = None,
+        cmap: str = "viridis",
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        title: str | None = None,
+        figsize: tuple = (6, 5),
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot any scalar field stored in the master HDF5 file.
+
+        Reads *dataset* from ``self.h5_path``, reshapes it to the
+        ``(ny, nx)`` scan grid, and displays it as a 2-D map using the
+        same motor-based axis scaling as :meth:`plot_map`.  Useful for
+        fluorescence signals, ion-chamber readings, or any per-frame
+        scalar recorded during the scan.
+
+        Args:
+            dataset (str): Full HDF5 dataset path inside the file, e.g.
+                ``'1.1/measurement/fluo'`` or ``'1.1/measurement/I0'``.
+            ax (Axes or None): Existing axes to draw into.  A new figure
+                is created when ``None``.
+            cmap (str): Colormap.  Default ``'viridis'``.
+            vmin, vmax (float or None): Colour scale limits.
+            motor_x, motor_y (str or None): Motor names from
+                ``self.motors`` used to label the axes with physical
+                coordinates.
+            motor_units (dict or None): Units per motor name, e.g.
+                ``{'xech': 'mm', 'yech': 'mm'}``.
+            title (str or None): Axes title.  Defaults to *dataset*.
+            figsize (tuple): Figure size when a new figure is created.
+            colorbar (bool): Whether to add a colorbar.  Default ``True``.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+        """
+        if self.h5_path is None:
+            raise ValueError("h5_path is not set on this GrainMap.")
+
+        with h5py.File(self.h5_path, "r") as f:
+            if dataset not in f:
+                raise KeyError(f"Dataset {dataset!r} not found in {self.h5_path!r}.")
+            raw = f[dataset][()].astype(float)
+
+        data = raw.reshape(self.ny, self.nx)
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        im = ax.imshow(
+            data,
+            origin="upper",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+            aspect="auto",
+        )
+
+        if colorbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cb.set_label(dataset.split("/")[-1], fontsize=9)
+
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_title(title or dataset, fontsize=10)
+        fig.tight_layout()
+        return fig, ax
+
     def plot_mean_px(
         self,
         *,

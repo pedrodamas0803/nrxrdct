@@ -3688,22 +3688,6 @@ def print_bragg_table(a):
 
 # ── Symmetry / fundamental-zone utilities ─────────────────────────────────────
 
-_ORIX_SYM_MAP = None   # populated lazily on first call
-
-
-def _orix_symmetry_map():
-    """Return the {name: orix symmetry} lookup table (built once)."""
-    global _ORIX_SYM_MAP
-    if _ORIX_SYM_MAP is None:
-        from orix.quaternion import symmetry as _osym
-        _ORIX_SYM_MAP = {
-            "cubic":        _osym.Oh,
-            "hexagonal":    _osym.D6h,
-            "tetragonal":   _osym.D4h,
-            "orthorhombic": _osym.D2h,
-        }
-    return _ORIX_SYM_MAP
-
 
 _SYMMETRY_OPS_CACHE: "dict[str, np.ndarray]" = {}
 
@@ -3784,18 +3768,22 @@ def map_to_fundamental_zone(
     Map orientation matrix/matrices to the fundamental zone.
 
     For each input rotation the symmetry-equivalent member with the smallest
-    rotation angle from the identity is selected using orix
-    ``Orientation.reduce()``.  The result is a canonical representation of
-    the orientation that is consistent across pixels / grains of the same
-    phase.
+    rotation angle from the identity is selected.  Only **proper rotations**
+    (det = +1) from the crystal point group are considered, so every output
+    matrix is a valid rotation matrix.
+
+    The equivalent is chosen by right-multiplication:
+    ``U_fz = U @ ops[s*]``  where  ``s* = argmax trace(U @ ops[s])``.
+    Maximising the trace is equivalent to minimising the geodesic angle to
+    the identity, consistent with the convention used in
+    :func:`disorientation`.
 
     Args:
         U ((3, 3) or (..., 3, 3) ndarray): Rotation matrix/matrices.
             Any number of leading batch dimensions is supported.
         symmetry (str): Crystal point-group symmetry.  One of ``'cubic'``
-            (Oh, 24 operators), ``'hexagonal'`` (D6h, 12 operators),
-            ``'tetragonal'`` (D4h, 8 operators), ``'orthorhombic'``
-            (D2h, 4 operators).
+            (24 proper rotations), ``'hexagonal'`` (12), ``'tetragonal'``
+            (8), ``'orthorhombic'`` (4).
 
     Returns:
         U_fz (same shape as *U*, float64): Orientation matrices reduced to
@@ -3805,24 +3793,23 @@ def map_to_fundamental_zone(
 
         U_fz = map_to_fundamental_zone(U_raw, symmetry='cubic')
     """
-    from orix.quaternion import Orientation as _Ori
-
-    sym_map = _orix_symmetry_map()
-    if symmetry not in sym_map:
-        raise ValueError(
-            f"symmetry must be one of {list(sym_map)}, got {symmetry!r}"
-        )
-    sym = sym_map[symmetry]
+    ops = _symmetry_ops_np(symmetry)   # (N_sym, 3, 3)  proper rotations only
 
     U = np.asarray(U, dtype=float)
     shape = U.shape
-    U_flat = U.reshape(-1, 3, 3)
+    U_flat = U.reshape(-1, 3, 3)      # (M, 3, 3)
 
-    ori_fz = _Ori.from_matrix(U_flat, symmetry=sym).reduce()
+    # All equivalents: U_equiv[s, m] = U_flat[m] @ ops[s]
+    # U_flat[None]: (1, M, 3, 3)  ops[:, None]: (N_sym, 1, 3, 3)
+    U_equiv = U_flat[None] @ ops[:, None]               # (N_sym, M, 3, 3)
 
-    # orix stores quaternions as (w, x, y, z); scipy expects (x, y, z, w)
-    q = np.asarray(ori_fz.data)                         # (N, 4)  w x y z
-    U_fz = Rotation.from_quat(q[:, [1, 2, 3, 0]]).as_matrix()  # (N, 3, 3)
+    # Trace of each equivalent — maximise ↔ minimise angle to identity
+    traces = U_equiv[:, :, 0, 0] + U_equiv[:, :, 1, 1] + U_equiv[:, :, 2, 2]  # (N_sym, M)
+    best   = np.argmax(traces, axis=0)                  # (M,)
+
+    # Gather: U_fz[m] = U_flat[m] @ ops[best[m]]
+    ops_sel = ops[best]                                 # (M, 3, 3)
+    U_fz    = np.einsum("...ij,...jk->...ik", U_flat, ops_sel)  # (M, 3, 3)
     return U_fz.reshape(shape)
 
 

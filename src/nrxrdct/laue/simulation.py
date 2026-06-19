@@ -3701,6 +3701,12 @@ def _symmetry_ops_np(symmetry: str) -> np.ndarray:
     ``'cubic'`` (24), ``'hexagonal'`` (12), ``'tetragonal'`` (8),
     ``'orthorhombic'`` (4).
     """
+    if not isinstance(symmetry, str):
+        raise TypeError(
+            f"symmetry must be a string "
+            f"('cubic', 'hexagonal', 'tetragonal', 'orthorhombic'), "
+            f"got {type(symmetry).__name__!r}"
+        )
     if symmetry in _SYMMETRY_OPS_CACHE:
         return _SYMMETRY_OPS_CACHE[symmetry]
 
@@ -3799,6 +3805,10 @@ def map_to_fundamental_zone(
     shape = U.shape
     U_flat = U.reshape(-1, 3, 3)      # (M, 3, 3)
 
+    # Project to nearest SO(3) element via SVD so that non-orthogonal inputs
+    # (e.g. U_eff = U @ (I + ε) from strain fits) are handled correctly.
+    U_flat = Rotation.from_matrix(U_flat).as_matrix()
+
     # All equivalents: U_equiv[s, m] = U_flat[m] @ ops[s]
     # U_flat[None]: (1, M, 3, 3)  ops[:, None]: (N_sym, 1, 3, 3)
     U_equiv = U_flat[None] @ ops[:, None]               # (N_sym, M, 3, 3)
@@ -3851,7 +3861,12 @@ def disorientation(
         print(f"disorientation = {angle:.3f}°")
     """
     ops = _symmetry_ops_np(symmetry)                          # (N, 3, 3)
-    R_mis = np.asarray(U2, dtype=float) @ np.asarray(U1, dtype=float).T
+
+    # Project both inputs to SO(3) so non-orthogonal matrices such as
+    # U_eff = U @ (I + ε) from strain fits give correct results.
+    R1 = Rotation.from_matrix(np.asarray(U1, dtype=float)).as_matrix()
+    R2 = Rotation.from_matrix(np.asarray(U2, dtype=float)).as_matrix()
+    R_mis = R2 @ R1.T
 
     # Candidates: S_i @ R_mis @ S_j^T  for all (i, j) pairs → (N*N, 3, 3)
     ops_R = ops @ R_mis                     # (N, 3, 3)  S_i @ R_mis

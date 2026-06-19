@@ -28,6 +28,8 @@ from .fitting import (
     laue_stack_residuals,
     laue_strain_residuals,
     refine_orientation_image,
+    search_orientation_image,
+    search_strain_image,
     refine_strain_image,
     remove_grain_spots,
     run_orientation_local,
@@ -211,6 +213,8 @@ __all__ = [
     "ImageRefinementResult",
     "StrainImageRefinementResult",
     "refine_orientation_image",
+    "search_orientation_image",
+    "search_strain_image",
     "refine_strain_image",
     # Orientation fitting
     "OrientationFitResult",

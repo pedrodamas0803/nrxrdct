@@ -3398,6 +3398,506 @@ def refine_orientation_image(
     return out
 
 
+def search_orientation_image(
+    crystal,
+    U_ref: np.ndarray,
+    camera,
+    image: np.ndarray,
+    *,
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    search_misor_deg: float = 5.0,
+    n_search: int = 500,
+    max_angle_deg: float = 0.2,
+    seed: "int | None" = None,
+    method: str = "Powell",
+    options: "dict | None" = None,
+    verbose: bool = False,
+) -> "ImageRefinementResult":
+    """
+    Search for the best orientation within a misorientation ball around a
+    reference orientation, then locally refine from the best candidate.
+
+    Designed for **epitaxial contexts** where a film or secondary phase is
+    expected to be within a few degrees of the reference (substrate) orientation
+    but the exact rotation is unknown.  Unlike :func:`refine_orientation_image`,
+    which only performs a local gradient-based search from a single starting
+    point, this function performs a coarse grid search over the full
+    misorientation ball before the local polish.
+
+    **Algorithm**
+
+    1. **Background subtraction** — same single large-σ FFT Gaussian as the
+       other image-based functions; performed once before the optimisation.
+
+    2. **Grid search** (fast, O(n_spots × n_search)): sample *n_search* random
+       orientations uniformly within a ball of misorientation radius
+       *search_misor_deg* around *U_ref*.  For each candidate the score is
+       computed by a **direct intensity lookup** — the bg-subtracted image is
+       sampled at each simulated spot position and weighted by the predicted
+       spot intensity.  No FFT is needed for this step.  The candidate with the
+       highest score is selected as the starting point for the local search.
+
+    3. **Local refinement** (FFT objective): a Powell optimisation starting
+       from the best grid candidate, with search space constrained to
+       ±*max_angle_deg* around that point.  Uses the same Gaussian-convolution
+       objective as :func:`refine_orientation_image` for precise sub-pixel
+       accuracy.
+
+    The total rotation from *U_ref* to the final orientation is reported as
+    *rotvec* in the result.
+
+    Args:
+        crystal: Crystal object passed to :func:`simulate_laue`.
+        U_ref ((3,3) ndarray): Reference orientation matrix (e.g. substrate
+            grain).  The search is centred on this orientation.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Gap / invalid pixels
+            must be flagged as negative (Eiger convention: −1).
+        kernel_sigma (float): σ in pixels for the local-refinement Gaussian
+            kernel.  Default ``0.3``.
+        bg_sigma (float): σ in pixels for the background Gaussian.  Set to
+            ``0`` to skip.  Default ``251``.
+        E_min, E_max (float): Photon energy range in eV.
+        allowed_hkl: Pre-computed allowed HKL frozenset.  Strongly recommended.
+        search_misor_deg (float): Misorientation radius of the search ball in
+            degrees.  All orientations within this angular distance from
+            *U_ref* are candidates.  Default ``5.0``.
+        n_search (int): Number of random orientations sampled in the grid
+            search.  The reference orientation itself is always included.
+            Default ``500``.
+        max_angle_deg (float): Half-width of the local-refinement search space
+            around the best grid candidate (degrees per rotation axis).
+            Default ``0.2``.
+        seed (int or None): Random seed for reproducible grid sampling.
+        method (str): ``scipy.optimize.minimize`` method for local refinement.
+            Default ``'Powell'``.
+        options (dict or None): Options forwarded to ``scipy.optimize.minimize``.
+        verbose (bool): Print grid-search summary and local-refinement result.
+
+    Returns:
+        ImageRefinementResult: ``U0`` is *U_ref*; ``rotvec`` is the total
+            rotation from *U_ref* to the refined orientation; ``score0`` is
+            the direct-lookup score at *U_ref*; ``score`` is the FFT-objective
+            score at the refined orientation.
+
+    Example::
+
+        hkl = laue.precompute_allowed_hkl(crystal_film, E_max_eV=27000)
+
+        result = laue.search_orientation_image(
+            crystal_film, U_substrate, camera, raw_frame,
+            allowed_hkl      = hkl,
+            search_misor_deg = 5.0,   # search within 5° of substrate
+            n_search         = 500,
+            max_angle_deg    = 0.2,   # local polish radius
+            verbose          = True,
+        )
+        print(result)
+        # ImageRefinementResult [OK]  |δω|=2.341°  score=7823.4  Δscore=+1204.6  n_sim=92
+        U_film = result.U
+    """
+    U_ref = np.asarray(U_ref, dtype=float)
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    # ── background subtraction (once) ────────────────────────────────────────
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    # ── direct-lookup score (no FFT — used for grid search) ──────────────────
+    def _fast_score(U_cand: np.ndarray) -> float:
+        spots = simulate_laue(
+            crystal, U_cand, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        s = 0.0
+        for sp in spots:
+            xc, yc = sp["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                s += float(sp["intensity"]) * img[row, col]
+        return s
+
+    # ── FFT-convolution score (used for local refinement) ────────────────────
+    def _fft_score(rotvec: np.ndarray, U_base: np.ndarray) -> float:
+        U = Rotation.from_rotvec(rotvec).as_matrix() @ U_base
+        spots = simulate_laue(
+            crystal, U, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        if not spots:
+            return 0.0
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for sp in spots:
+            xc, yc = sp["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += float(sp["intensity"])
+        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
+
+    # ── grid search ──────────────────────────────────────────────────────────
+    rng = np.random.default_rng(seed)
+    max_rad = float(np.radians(search_misor_deg))
+
+    # Sample n_search random rotvecs uniform within a ball of radius max_rad.
+    # r^(1/3) sampling gives uniform density in 3-D.
+    dirs   = rng.standard_normal((n_search, 3))
+    dirs  /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    radii  = max_rad * rng.random(n_search) ** (1.0 / 3.0)
+    rotvecs_grid = np.vstack([np.zeros(3), dirs * radii[:, None]])   # include δω=0
+
+    grid_scores = np.empty(len(rotvecs_grid))
+    for i, dw in enumerate(rotvecs_grid):
+        U_cand = Rotation.from_rotvec(dw).as_matrix() @ U_ref
+        grid_scores[i] = _fast_score(U_cand)
+
+    best_idx   = int(np.argmax(grid_scores))
+    score0     = float(grid_scores[0])          # direct-lookup score at U_ref
+    best_dw    = rotvecs_grid[best_idx]
+    U_best     = Rotation.from_rotvec(best_dw).as_matrix() @ U_ref
+
+    if verbose:
+        mis_best = float(np.degrees(np.linalg.norm(best_dw)))
+        print(
+            f"search_orientation_image: grid score0={score0:.1f}  "
+            f"best={grid_scores[best_idx]:.1f} at |δω|={mis_best:.3f}°  "
+            f"n_search={n_search}  search_misor={search_misor_deg}°"
+        )
+
+    # ── local FFT refinement from best grid candidate ─────────────────────────
+    lim    = float(np.radians(max_angle_deg))
+    bounds = [(-lim, lim)] * 3
+
+    opts: dict = {"maxiter": 2000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-6, "ftol": 1e-6})
+    else:
+        opts.update({"gtol": 1e-7})
+    if options:
+        opts.update(options)
+
+    result = minimize(
+        lambda dw: -_fft_score(dw, U_best),
+        np.zeros(3),
+        method=method,
+        bounds=bounds,
+        options=opts,
+    )
+
+    rotvec_local = result.x
+    U_final      = Rotation.from_rotvec(rotvec_local).as_matrix() @ U_best
+
+    # Total rotvec from U_ref to U_final
+    rotvec_total = Rotation.from_matrix(U_final @ U_ref.T).as_rotvec()
+
+    spots_final = simulate_laue(
+        crystal, U_final, camera,
+        E_min=E_min, E_max=E_max,
+        allowed_hkl=allowed_hkl,
+        geometry_only=True,
+    )
+
+    out = ImageRefinementResult(
+        U        = U_final,
+        U0       = U_ref,
+        rotvec   = rotvec_total,
+        score    = -float(result.fun),
+        score0   = score0,
+        n_sim    = len(spots_final),
+        success  = result.success,
+        message  = result.message,
+        optimizer= result,
+    )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
+
+
+def search_strain_image(
+    crystal,
+    U_ref: np.ndarray,
+    camera,
+    image: np.ndarray,
+    *,
+    strain0: "np.ndarray | None" = None,
+    fit_strain: "tuple[str, ...] | None" = None,
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    search_misor_deg: float = 5.0,
+    n_search: int = 500,
+    max_angle_deg: float = 0.2,
+    strain_scale: float = 1e-4,
+    seed: "int | None" = None,
+    method: str = "Powell",
+    options: "dict | None" = None,
+    verbose: bool = False,
+) -> "StrainImageRefinementResult":
+    """
+    Search for the best orientation within a misorientation ball around a
+    reference orientation, then jointly refine orientation and strain from the
+    best candidate.
+
+    Combines the wide-area search of :func:`search_orientation_image` with
+    the 9-parameter (3 rotation + 6 strain) objective of
+    :func:`refine_strain_image`.  Designed for epitaxial contexts where the
+    film is expected within *search_misor_deg* of a known reference (substrate)
+    orientation but the exact rotation and lattice distortion are both unknown.
+
+    **Algorithm**
+
+    1. **Background subtraction** — single large-σ FFT Gaussian, computed once.
+
+    2. **Orientation grid search** (fast, O(n_spots × n_search)): sample
+       *n_search* random orientations uniformly within a ball of misorientation
+       radius *search_misor_deg* around *U_ref*.  Strain is **not** searched at
+       this stage — the spot-position shift from typical film strains (∼10⁻³)
+       is negligible compared to the orientation offsets being searched.  Each
+       candidate is scored by **direct intensity lookup** (no FFT).
+
+    3. **Joint orientation + strain local refinement** (9-parameter FFT
+       objective): starting from the best grid candidate and *strain0*, Powell
+       optimises all free parameters simultaneously within ±*max_angle_deg* for
+       rotations and ±5 % for strain components.  Uses the same Gaussian-
+       convolution objective as :func:`refine_strain_image`.
+
+    The result's *rotvec* is the **total** rotation from *U_ref* to the refined
+    pure-rotation part *U*, not just the local correction from the grid candidate.
+
+    Args:
+        crystal: Crystal object passed to :func:`simulate_laue`.
+        U_ref ((3,3) ndarray): Reference orientation matrix (e.g. substrate
+            grain).  The orientation search is centred on this matrix.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Gap / invalid pixels
+            must be flagged as negative (Eiger convention: −1).
+        strain0 ((3,3) ndarray or None): Starting symmetric strain tensor ε
+            for the local refinement.  ``None`` starts from zero strain.
+        fit_strain (tuple of str or None): Strain components to refine.  Any
+            subset of ``('e_xx', 'e_yy', 'e_zz', 'e_xy', 'e_xz', 'e_yz')``.
+            ``None`` refines all six.  Default ``None``.
+        kernel_sigma (float): σ in pixels for the local-refinement Gaussian
+            kernel.  Default ``0.3``.
+        bg_sigma (float): σ in pixels for the background Gaussian.  ``0``
+            skips it.  Default ``251``.
+        E_min, E_max (float): Photon energy range in eV.
+        allowed_hkl: Pre-computed allowed HKL frozenset.  Strongly recommended.
+        search_misor_deg (float): Misorientation radius of the orientation
+            search ball in degrees.  Default ``5.0``.
+        n_search (int): Number of random orientations sampled in the grid
+            search.  *U_ref* itself is always included.  Default ``500``.
+        max_angle_deg (float): Half-width of the local-refinement rotation
+            search space around the best grid candidate (degrees per axis).
+            Default ``0.2``.
+        strain_scale (float): Internal divisor for strain parameters so their
+            magnitudes match the rotation angles inside the optimizer.
+            Default ``1e-4``.
+        seed (int or None): Random seed for reproducible grid sampling.
+        method (str): ``scipy.optimize.minimize`` method.  Default ``'Powell'``.
+        options (dict or None): Options forwarded to ``scipy.optimize.minimize``.
+        verbose (bool): Print grid-search summary and local-refinement result.
+
+    Returns:
+        StrainImageRefinementResult: ``U0`` is *U_ref*; ``rotvec`` is the total
+            rotation from *U_ref* to the refined orientation; ``score0`` is the
+            direct-lookup score at *U_ref*; ``score`` is the FFT-objective score
+            at the refined orientation + strain.
+
+    Example::
+
+        hkl = laue.precompute_allowed_hkl(crystal_film, E_max_eV=27000)
+
+        result = laue.search_strain_image(
+            crystal_film, U_substrate, camera, raw_frame,
+            strain0          = prior_strain_tensor,   # or None
+            allowed_hkl      = hkl,
+            search_misor_deg = 5.0,
+            n_search         = 500,
+            max_angle_deg    = 0.2,
+            verbose          = True,
+        )
+        print(result)
+        U_film   = result.U
+        eps_film = result.strain_tensor_deviatoric
+    """
+    _fit_strain: tuple[str, ...] = tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL
+
+    U_ref = np.asarray(U_ref, dtype=float)
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    # ── background subtraction (once) ────────────────────────────────────────
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    # ── direct-lookup score — orientation only, no strain, no FFT ────────────
+    def _fast_score(U_cand: np.ndarray) -> float:
+        spots = simulate_laue(
+            crystal, U_cand, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        s = 0.0
+        for sp in spots:
+            xc, yc = sp["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                s += float(sp["intensity"]) * img[row, col]
+        return s
+
+    # ── FFT-convolution score for local 9-parameter refinement ───────────────
+    def _fft_score(params: np.ndarray, U_base: np.ndarray) -> float:
+        rotvec     = params[:3]
+        strain_vals = params[3:] * strain_scale
+        R          = Rotation.from_rotvec(rotvec).as_matrix()
+        eps        = _strain_matrix(strain_vals, _fit_strain)
+        U_eff      = R @ U_base @ (np.eye(3) + eps)
+
+        spots = simulate_laue(
+            crystal, U_eff, camera,
+            E_min=E_min, E_max=E_max,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        if not spots:
+            return 0.0
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for sp in spots:
+            xc, yc = sp["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += float(sp["intensity"])
+        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
+
+    # ── orientation grid search ───────────────────────────────────────────────
+    rng     = np.random.default_rng(seed)
+    max_rad = float(np.radians(search_misor_deg))
+
+    dirs   = rng.standard_normal((n_search, 3))
+    dirs  /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    radii  = max_rad * rng.random(n_search) ** (1.0 / 3.0)
+    rotvecs_grid = np.vstack([np.zeros(3), dirs * radii[:, None]])
+
+    grid_scores = np.empty(len(rotvecs_grid))
+    for i, dw in enumerate(rotvecs_grid):
+        U_cand = Rotation.from_rotvec(dw).as_matrix() @ U_ref
+        grid_scores[i] = _fast_score(U_cand)
+
+    best_idx = int(np.argmax(grid_scores))
+    score0   = float(grid_scores[0])           # direct-lookup score at U_ref
+    best_dw  = rotvecs_grid[best_idx]
+    U_best   = Rotation.from_rotvec(best_dw).as_matrix() @ U_ref
+
+    if verbose:
+        mis_best = float(np.degrees(np.linalg.norm(best_dw)))
+        print(
+            f"search_strain_image: grid score0={score0:.1f}  "
+            f"best={grid_scores[best_idx]:.1f} at |δω|={mis_best:.3f}°  "
+            f"n_search={n_search}  search_misor={search_misor_deg}°"
+        )
+
+    # ── local 9-parameter FFT refinement from best grid candidate ────────────
+    eps0 = np.asarray(strain0, dtype=float) if strain0 is not None else np.zeros((3, 3))
+    strain0_vals = np.array([eps0[_STRAIN_IDX[n]] for n in _fit_strain], dtype=float)
+    x0 = np.concatenate([np.zeros(3), strain0_vals / strain_scale])
+
+    rot_lim    = float(np.radians(max_angle_deg))
+    strain_lim = 0.05 / strain_scale
+    bounds = (
+        [(-rot_lim, rot_lim)] * 3
+        + [(-strain_lim, strain_lim)] * len(_fit_strain)
+    )
+
+    opts: dict = {"maxiter": 5000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-7, "ftol": 1e-7})
+    else:
+        opts.update({"gtol": 1e-8})
+    if options:
+        opts.update(options)
+
+    if verbose:
+        print(
+            f"  local refine: fit_strain={_fit_strain}  "
+            f"method={method}  max_angle={max_angle_deg}°"
+        )
+
+    result = minimize(
+        lambda p: -_fft_score(p, U_best),
+        x0,
+        method=method,
+        bounds=bounds,
+        options=opts,
+    )
+
+    rotvec_opt  = result.x[:3]
+    strain_vals = result.x[3:] * strain_scale
+    R_opt       = Rotation.from_rotvec(rotvec_opt).as_matrix()
+    eps_opt     = _strain_matrix(strain_vals, _fit_strain)
+    U_refined   = R_opt @ U_best
+    U_eff_final = U_refined @ (np.eye(3) + eps_opt)
+
+    # Total rotvec from U_ref to U_refined
+    rotvec_total = Rotation.from_matrix(U_refined @ U_ref.T).as_rotvec()
+
+    spots_final = simulate_laue(
+        crystal, U_eff_final, camera,
+        E_min=E_min, E_max=E_max,
+        allowed_hkl=allowed_hkl,
+        geometry_only=True,
+    )
+
+    out = StrainImageRefinementResult(
+        U             = U_refined,
+        U0            = U_ref,
+        U_eff         = U_eff_final,
+        rotvec        = rotvec_total,
+        strain_tensor = eps_opt,
+        strain_voigt  = _strain_to_voigt(strain_vals, _fit_strain),
+        fit_strain    = _fit_strain,
+        score         = -float(result.fun),
+        score0        = score0,
+        n_sim         = len(spots_final),
+        success       = result.success,
+        message       = result.message,
+        optimizer     = result,
+    )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
+
+
 def refine_strain_image(
     crystal,
     U0: np.ndarray,

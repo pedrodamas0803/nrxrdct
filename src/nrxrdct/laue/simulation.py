@@ -375,7 +375,7 @@ def _matstarlab_to_F(matstarlab, crystal):
     F = U @ P  where U is pure rotation and P is the right-stretch tensor.
     F maps crystal-frame reciprocal vectors to LT lab-frame vectors:
         G_LT = F @ G_crystal   (with G_crystal = B0 @ [h,k,l])
-"""
+    """
     B0 = _build_B0(crystal)
     matstarlab_LT = _R_LT2_TO_LT @ (np.asarray(matstarlab, dtype=float) * 2.0 * np.pi)
     return matstarlab_LT @ np.linalg.inv(B0)

@@ -175,6 +175,7 @@ class StackFitResult:
     U0_layers  : list[np.ndarray]
     cost       : float
     rms_px     : float
+    mean_px    : float
     n_matched  : int
     n_obs      : int
     n_sim      : int
@@ -188,7 +189,7 @@ class StackFitResult:
         dw = float(np.degrees(np.linalg.norm(self.rotvec)))
         return (
             f"StackFitResult [{status}]  "
-            f"rms={self.rms_px:.2f} px  "
+            f"rms={self.rms_px:.2f} px  mean={self.mean_px:.2f} px  "
             f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
             f"|δω|={dw:.4f}°"
         )

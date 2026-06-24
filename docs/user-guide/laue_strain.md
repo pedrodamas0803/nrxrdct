@@ -305,6 +305,72 @@ e_zz_custom = eps_custom[..., 2, 2]   # (ny, nx)
 
 ---
 
+## Layered crystal (stack) — `fit_strain_orientation_stack`
+
+For epitaxial stacks modelled as a
+[`LayeredCrystal`][nrxrdct.laue.layers.LayeredCrystal], a single global
+rotation is shared by all layers (preserving inter-layer relationships) while
+each layer receives its own independent strain tensor:
+
+$$
+\mathbf{U}_{\text{eff},i}
+= \mathbf{R}(\delta\boldsymbol{\omega})\;\mathbf{U}_{0,i}\;(\mathbf{I} + \boldsymbol{\varepsilon}_i)
+$$
+
+The parameter vector is
+
+$$
+\mathbf{x} = [\,\delta\omega_x,\;\delta\omega_y,\;\delta\omega_z,\;
+               s\,\varepsilon_{i=0,xx},\;\ldots,\;s\,\varepsilon_{i=0,yz},\;
+               s\,\varepsilon_{i=1,xx},\;\ldots\,]
+$$
+
+with total length $3 + N_\text{layers} \times n_\text{strain}$.
+
+### Usage
+
+```python
+import nrxrdct.laue as laue
+
+# stack already built and orientation fitted via fit_orientation_stack
+result = laue.fit_strain_orientation_stack(
+    stack, camera, peaks[:, :2],
+    fit_strain    = ("e_xx", "e_yy", "e_zz"),  # diagonal / biaxial only
+    max_match_px  = [5, 2, 0.5],
+    verbose       = True,
+)
+# StackStrainFitResult [OK]  rms=0.41 px  mean=0.38 px  matched=47/52 (90%)  |δω|=0.003°
+
+# per-layer strain
+for i, (eps, voigt) in enumerate(zip(result.strain_tensors, result.strain_voigts)):
+    print(f"Layer {i}: ε_zz = {eps[2,2]:.2e}")
+
+# effective matrices for simulation
+for layer, U_eff in zip(stack.all_layers, result.U_eff_layers):
+    layer.U = U_eff
+spots = laue.simulate_laue_stack(stack, camera)
+```
+
+### Result fields
+
+| Attribute | Shape | Description |
+|---|---|---|
+| `result.R_global` | `(3, 3)` | Global rotation applied to all layers |
+| `result.rotvec` | `(3,)` | Rotation vector (radians) |
+| `result.U_layers` | `list of (3, 3)` | Pure rotation part per layer |
+| `result.U_eff_layers` | `list of (3, 3)` | Effective matrix `R @ U0_i @ (I + ε_i)` — pass as `U` to `simulate_laue` |
+| `result.strain_tensors` | `list of (3, 3)` | Symmetric strain tensor per layer, crystal frame |
+| `result.strain_voigts` | `list of (6,)` | Voigt vector `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]` per layer |
+| `result.rms_px` | scalar | RMS pixel residual |
+| `result.n_matched` | int | Matched spots |
+
+!!! tip "Recommended workflow for stacks"
+    1. `fit_orientation_stack` — converge the global rotation with a loose match window.
+    2. `fit_strain_orientation_stack` — add per-layer strain starting from the refined orientations.
+    3. `refine_strain_image_stack` — image-space polishing pass (see [Image refinement](laue_image_refinement.md#layered-crystal-stack-variants)).
+
+---
+
 ## Comparison with LaueTools strain refinement
 
 `nrxrdct` adopts the LaueTools lab-frame convention and can read LaueTools

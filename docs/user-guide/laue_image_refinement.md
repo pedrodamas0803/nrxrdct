@@ -169,6 +169,89 @@ eps_lab = r_str.strain_tensor_lab          # rotated to lab frame
 
 ---
 
+## Layered crystal (stack) variants
+
+For epitaxial stacks modelled as a
+[`LayeredCrystal`][nrxrdct.laue.layers.LayeredCrystal], three stack-aware
+counterparts mirror the single-crystal functions.  All three apply a **single
+global rotation** to every layer, so inter-layer orientation relationships are
+preserved.
+
+### `refine_orientation_image_stack` — orientation only (3 parameters)
+
+$$
+\mathbf{U}_i = R(\delta\boldsymbol{\omega})\,\mathbf{U}_{0,i}
+$$
+
+```python
+import nrxrdct.laue as laue
+
+# precompute one allowed-hkl dict per unique crystal in the enumeration pool
+hkl = {
+    id(layer.crystal): laue.precompute_allowed_hkl(layer.crystal, E_max_eV=27000)
+    for layer in stack.buffer_layers + stack.layers[:1]
+}
+
+result = laue.refine_orientation_image_stack(
+    stack, camera, raw_frame,
+    allowed_hkl   = hkl,
+    kernel_sigma  = 0.3,
+    max_angle_deg = 0.2,
+    verbose       = True,
+)
+# StackImageRefinementResult [OK]  |δω|=0.018°  score=12340.5  Δscore=+890.2  n_sim=184
+
+# apply refined orientations
+for layer, U in zip(stack.all_layers, result.U_layers):
+    layer.U = U
+```
+
+### `refine_strain_image_stack` — orientation + per-layer strain
+
+$$
+\mathbf{U}_{\text{eff},i} = R(\delta\boldsymbol{\omega})\,\mathbf{U}_{0,i}\,(\mathbf{I} + \boldsymbol{\varepsilon}_i)
+$$
+
+Parameter vector length: $3 + N_\text{layers} \times n_\text{strain}$.
+
+```python
+# warm-start strain from a prior peak-based fit
+result = laue.refine_strain_image_stack(
+    stack, camera, raw_frame,
+    strain0_list  = prior.strain_tensors,   # from fit_strain_orientation_stack
+    fit_strain    = ("e_xx", "e_yy", "e_zz"),
+    allowed_hkl   = hkl,
+    kernel_sigma  = 0.3,
+    max_angle_deg = 0.2,
+    verbose       = True,
+)
+# StackStrainImageRefinementResult [OK]  |δω|=0.004°  score=13102.1  Δscore=+762.4  n_sim=184
+
+for i, voigt in enumerate(result.strain_voigts):
+    print(f"Layer {i}: ε_zz = {voigt[2]:.2e}")
+```
+
+`strain0_list` accepts a list of `(3, 3)` tensors in `stack.all_layers` order.
+Pass `result_peaks.strain_tensors` directly from
+[`fit_strain_orientation_stack`][nrxrdct.laue.fitting.fit_strain_orientation_stack]
+to warm-start the image refinement.
+
+### Stack result fields
+
+| Attribute | `refine_orientation_image_stack` | `refine_strain_image_stack` |
+|---|---|---|
+| `R_global` | Global rotation `(3, 3)` | same |
+| `rotvec` | Rotation vector `(3,)` | same |
+| `U_layers` | Refined `U` per layer | same |
+| `U0_layers` | Starting `U` per layer | same |
+| `U_eff_layers` | — | `R @ U0_i @ (I + ε_i)` per layer |
+| `strain_tensors` | — | Per-layer `(3, 3)` strain tensors |
+| `strain_voigts` | — | Per-layer Voigt `(6,)` |
+| `score` / `score0` | Gaussian-weighted pixel score | same |
+| `n_sim` | Total simulated spots | same |
+
+---
+
 ## Recommended workflow
 
 The image-based functions are designed as **post-processing steps** in the

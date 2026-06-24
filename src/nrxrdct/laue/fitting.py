@@ -196,6 +196,69 @@ class StackFitResult:
 
 
 @dataclass
+class StackStrainFitResult:
+    """
+    Result of a simultaneous orientation + per-layer strain refinement
+    (:func:`fit_strain_orientation_stack`).
+
+    Attributes:
+        R_global ((3, 3) ndarray): Global rotation matrix applied to every layer.
+        rotvec ((3,) ndarray): Rotation vector (radians) for `R_global`.
+        U_layers (list of (3, 3)): Pure rotation part per layer: `R_global @ U0_i`.
+        U0_layers (list of (3, 3)): Starting orientations.
+        U_eff_layers (list of (3, 3)): Effective deformation matrices per layer:
+            `R_global @ U0_i @ (I + ε_i)`.  Pass these as `U` to
+            :func:`~nrxrdct.laue.simulation.simulate_laue` to reproduce the
+            fitted spot pattern for each layer individually.
+        strain_tensors (list of (3, 3)): Symmetric strain tensor per layer in
+            the crystal frame.
+        strain_voigts (list of (6,)): Voigt vector per layer
+            `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`.  Components not in
+            `fit_strain` are zero.
+        fit_strain (tuple[str, …]): Strain components that were free parameters.
+        cost (float): ½ Σ residuals² at convergence.
+        rms_px (float): RMS pixel distance of matched spot pairs.
+        mean_px (float): Mean pixel distance of matched spot pairs.
+        n_matched (int): Matched spots within `max_match_px`.
+        n_obs (int): Observed spots used.
+        n_sim (int): Simulated spots on detector at solution.
+        match_rate (float): `n_matched / n_obs`.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult`.
+"""
+
+    R_global       : np.ndarray
+    rotvec         : np.ndarray
+    U_layers       : list[np.ndarray]
+    U0_layers      : list[np.ndarray]
+    U_eff_layers   : list[np.ndarray]
+    strain_tensors : list[np.ndarray]
+    strain_voigts  : list[np.ndarray]
+    fit_strain     : tuple
+    cost           : float
+    rms_px         : float
+    mean_px        : float
+    n_matched      : int
+    n_obs          : int
+    n_sim          : int
+    match_rate     : float
+    success        : bool
+    message        : str
+    optimizer      : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw = float(np.degrees(np.linalg.norm(self.rotvec)))
+        return (
+            f"StackStrainFitResult [{status}]  "
+            f"rms={self.rms_px:.2f} px  mean={self.mean_px:.2f} px  "
+            f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
+            f"|δω|={dw:.4f}°"
+        )
+
+
+@dataclass
 class MixedFitResult:
     """
     Result of a multi-phase orientation refinement (:func:`fit_orientation_mixed`).
@@ -487,6 +550,62 @@ class StrainImageRefinementResult:
 
 
 @dataclass
+class StackStrainImageRefinementResult:
+    """
+    Result of image-based strain + orientation refinement for a layered crystal
+    (:func:`refine_strain_image_stack`).
+
+    Attributes:
+        R_global ((3,3) ndarray): Global rotation matrix applied to all layers.
+        rotvec ((3,) ndarray): Rotation vector for `R_global` (radians).
+        U_layers (list of (3,3)): Pure rotation part per layer:
+            `R_global @ U0_i`.
+        U0_layers (list of (3,3)): Starting orientations.
+        U_eff_layers (list of (3,3)): Effective deformation matrices per layer:
+            `R_global @ U0_i @ (I + ε_i)`.  Pass each as `U` to
+            :func:`~nrxrdct.laue.simulation.simulate_laue` to reproduce the
+            individual layer's spot pattern.
+        strain_tensors (list of (3,3)): Per-layer symmetric strain tensor.
+        strain_voigts (list of (6,)): Per-layer Voigt vector
+            `[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]`.
+        fit_strain (tuple of str): Strain components that were free parameters.
+        score (float): Gaussian-weighted pixel score at the refined solution
+            (higher is better).
+        score0 (float): Score at the starting orientation/strain.
+        n_sim (int): Total simulated spots on the detector at the solution.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer: Raw ``scipy.optimize.OptimizeResult`` (not shown in repr).
+"""
+
+    R_global       : np.ndarray
+    rotvec         : np.ndarray
+    U_layers       : list[np.ndarray]
+    U0_layers      : list[np.ndarray]
+    U_eff_layers   : list[np.ndarray]
+    strain_tensors : list[np.ndarray]
+    strain_voigts  : list[np.ndarray]
+    fit_strain     : tuple
+    score          : float
+    score0         : float
+    n_sim          : int
+    success        : bool
+    message        : str
+    optimizer      : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw   = float(np.degrees(np.linalg.norm(self.rotvec)))
+        gain = self.score - self.score0
+        return (
+            f"StackStrainImageRefinementResult [{status}]  "
+            f"|δω|={dw:.4f}°  "
+            f"score={self.score:.1f}  Δscore={gain:+.1f}  "
+            f"n_sim={self.n_sim}"
+        )
+
+
+@dataclass
 class ImageRefinementResult:
     """
     Result of image-based orientation post-refinement
@@ -525,6 +644,49 @@ class ImageRefinementResult:
         gain = self.score - self.score0
         return (
             f"ImageRefinementResult [{status}]  "
+            f"|δω|={dw:.4f}°  "
+            f"score={self.score:.1f}  Δscore={gain:+.1f}  "
+            f"n_sim={self.n_sim}"
+        )
+
+
+@dataclass
+class StackImageRefinementResult:
+    """
+    Result of image-based orientation refinement for a layered crystal
+    (:func:`refine_orientation_image_stack`).
+
+    Attributes:
+        R_global ((3,3) ndarray): Global rotation matrix applied to all layers.
+        rotvec ((3,) ndarray): Rotation vector for `R_global` (radians).
+        U_layers (list of (3,3)): Refined orientation per layer:
+            `R_global @ U0_i`.
+        U0_layers (list of (3,3)): Starting orientations.
+        score (float): Gaussian-weighted pixel score at the refined solution.
+        score0 (float): Score at the starting orientations.
+        n_sim (int): Total simulated spots on the detector at the solution.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer: Raw ``scipy.optimize.OptimizeResult`` (not shown in repr).
+"""
+
+    R_global  : np.ndarray
+    rotvec    : np.ndarray
+    U_layers  : list[np.ndarray]
+    U0_layers : list[np.ndarray]
+    score     : float
+    score0    : float
+    n_sim     : int
+    success   : bool
+    message   : str
+    optimizer : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw   = float(np.degrees(np.linalg.norm(self.rotvec)))
+        gain = self.score - self.score0
+        return (
+            f"StackImageRefinementResult [{status}]  "
             f"|δω|={dw:.4f}°  "
             f"score={self.score:.1f}  Δscore={gain:+.1f}  "
             f"n_sim={self.n_sim}"
@@ -1283,6 +1445,90 @@ def laue_stack_residuals(
     return _build_residuals(obs_use, sim_xy, max_match_px)
 
 
+def laue_strain_stack_residuals(
+    params: np.ndarray,
+    stack,
+    camera,
+    obs_xy: np.ndarray,
+    U0_layers: list[np.ndarray],
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    structure_model: str = "average",
+    max_match_px: float = 30.0,
+    top_n_obs: int | None = None,
+    top_n_sim: int | None = None,
+    geometry_only: bool = False,
+    allowed_hkl=None,
+) -> np.ndarray:
+    """
+    Pixel-space residual vector for simultaneous orientation + per-layer strain
+    refinement of a layered crystal.
+
+    A single global rotation is applied to all layers; each layer additionally
+    gets its own strain tensor.  The effective matrix for layer *i* is::
+
+        U_eff_i = R(δω) @ U0_i @ (I + ε_i)
+
+    Parameter layout::
+
+        params = [δω_x, δω_y, δω_z,
+                  ε_layer0_0, …, ε_layer0_{n_strain-1},
+                  ε_layer1_0, …, ε_layer1_{n_strain-1}, …]
+
+    Total length: ``3 + N_layers * len(fit_strain)``.
+
+    Args:
+        params ((3 + N_layers * n_strain,) ndarray): Rotation-vector δω (first 3)
+            followed by per-layer strain components, each divided by
+            `strain_scale`.  Initialise with ``np.zeros(3 + N * n_strain)``.
+        stack (LayeredCrystal): Mutated in-place on every call.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        U0_layers (list of (3, 3)): Base orientation per layer in
+            `stack.all_layers` order.
+        fit_strain (tuple of str): Active strain components.
+        strain_scale (float): Internal scale factor for strain parameters.
+
+    Returns:
+        residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]`.
+"""
+    params = np.asarray(params, dtype=float)
+    n_strain = len(fit_strain)
+    R = Rotation.from_rotvec(params[:3]).as_matrix()
+
+    for ii, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
+        strain_vals = params[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+        eps = _strain_matrix(strain_vals, fit_strain)
+        layer.U = R @ U0 @ (np.eye(3) + eps)
+
+    spots = simulate_laue_stack(
+        stack, camera,
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        f2_thresh=f2_thresh, kb_params=kb_params,
+        structure_model=structure_model,
+        verbose=False,
+        geometry_only=geometry_only,
+        allowed_hkl=allowed_hkl,
+    )
+
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+
+    sim_xy = _extract_sim_xy(spots)
+    if top_n_sim is not None:
+        sim_xy = sim_xy[:top_n_sim]
+
+    return _build_residuals(obs_use, sim_xy, max_match_px)
+
+
 def laue_mixed_residuals(
     params: np.ndarray,
     phases: list[dict],
@@ -1850,6 +2096,206 @@ def fit_orientation_stack(
     result = StackFitResult(
         R_global=R_global, rotvec=rotvec_total,
         U_layers=U_layers_final, U0_layers=U0_layers,
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
+        n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
+        match_rate=n_matched / max(N_obs, 1),
+        success=opt.success, message=opt.message, optimizer=opt,
+    )
+
+    if verbose:
+        print(f"  {result}")
+
+    return result
+
+
+def fit_strain_orientation_stack(
+    stack,
+    camera,
+    obs_xy: np.ndarray,
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    structure_model: str = "average",
+    max_match_px: float | list[float] = (15.0, 3.0),
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
+    method: str = "lm",
+    ftol: float = 1e-8,
+    xtol: float = 1e-8,
+    gtol: float = 1e-8,
+    max_nfev: int = 2000,
+    update_stack: bool = True,
+    geometry_only: bool = True,
+    verbose: bool = False,
+) -> StackStrainFitResult:
+    """
+    Simultaneously refine orientation and per-layer lattice strain for a
+    :class:`~nrxrdct.laue.layers.LayeredCrystal`.
+
+    A single global rotation is shared by all layers (preserving inter-layer
+    relationships) while each layer is given its own independent strain tensor.
+    The effective deformation matrix for layer *i* is::
+
+        U_eff_i = R(δω) @ U0_i @ (I + ε_i)
+
+    **Staged refinement** works identically to :func:`fit_orientation_stack`:
+    between stages the accumulated rotation is baked into ``U0_stage`` and the
+    strain parameters are carried forward so the final tight stage does not
+    collapse into a degenerate minimum.
+
+    Args:
+        stack (LayeredCrystal): Layered structure to fit.  Layer U matrices
+            are used as starting orientations and optionally updated after
+            convergence.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2) ndarray): Observed pixel positions `[xcam, ycam]`.
+        fit_strain (tuple of str): Strain components to refine.  Any subset of
+            `('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')`.
+            Default: all six per layer.
+        strain_scale (float): Internal scale for strain parameters; see
+            :func:`laue_strain_residuals`.  Default ``1e-4``.
+        E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
+        structure_model, max_match_px, top_n_obs, top_n_sim, method,
+        ftol, xtol, gtol, max_nfev, geometry_only
+            Forwarded to :func:`laue_strain_stack_residuals` / ``least_squares``.
+        update_stack (bool): If ``True`` (default), write the refined ``U_eff``
+            matrices back into ``stack.all_layers`` after convergence.
+        verbose (bool): Print a one-line summary after each stage.
+
+    Returns:
+        StackStrainFitResult
+            `result.U_eff_layers[i]` is the effective matrix for layer *i*;
+            pass it as `U` to :func:`~nrxrdct.laue.simulation.simulate_laue`
+            to reproduce the fitted spot pattern for that layer alone.
+"""
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+    N_obs = len(obs_use)
+
+    n_layers = len(stack.all_layers)
+    n_strain = len(fit_strain)
+    n_params  = 3 + n_layers * n_strain
+
+    U0_layers = [layer.U.copy() for layer in stack.all_layers]
+
+    if verbose:
+        print(
+            f"fit_strain_orientation_stack: {N_obs} observed spots, "
+            f"{n_layers} layers, strain components: {list(fit_strain)}"
+        )
+
+    if geometry_only:
+        _enum_pool = (
+            stack.buffer_layers + stack.layers[:1]
+            if structure_model == "average"
+            else stack.all_layers
+        )
+        _allowed = {
+            id(layer.crystal): precompute_allowed_hkl(
+                layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
+            )
+            for layer in _enum_pool
+        }
+    else:
+        _allowed = None
+
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
+    )
+
+    U0_stage = [U0.copy() for U0 in U0_layers]
+    opt = None
+    _x0 = np.zeros(n_params)
+
+    try:
+        for _si, _px in enumerate(_stages):
+            fun = partial(
+                laue_strain_stack_residuals,
+                stack=stack, camera=camera, obs_xy=obs_use,
+                U0_layers=U0_stage,
+                fit_strain=fit_strain, strain_scale=strain_scale,
+                E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                source=source, source_kwargs=source_kwargs,
+                f2_thresh=f2_thresh, kb_params=kb_params,
+                structure_model=structure_model,
+                max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+                geometry_only=False, allowed_hkl=_allowed,
+            )
+            opt = least_squares(
+                fun, x0=_x0,
+                method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+            )
+            if verbose and len(_stages) > 1:
+                _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
+                print(
+                    f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                    f"  matched={_nm}  rms={_rms:.2f} px"
+                )
+            if _si < len(_stages) - 1:
+                R_step = Rotation.from_rotvec(opt.x[:3]).as_matrix()
+                U0_stage = [R_step @ U0 for U0 in U0_stage]
+                # Bake rotation into U0_stage; carry strain forward.
+                _x0 = np.zeros(n_params)
+                _x0[3:] = opt.x[3:]
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    # Unpack solution.
+    R_last = Rotation.from_rotvec(opt.x[:3]).as_matrix()
+    U_layers_final = []
+    U_eff_layers   = []
+    strain_tensors = []
+    strain_voigts  = []
+
+    for ii, U0 in enumerate(U0_stage):
+        strain_vals = opt.x[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+        eps    = _strain_matrix(strain_vals, fit_strain)
+        U_pure = R_last @ U0
+        U_eff  = U_pure @ (np.eye(3) + eps)
+        U_layers_final.append(U_pure)
+        U_eff_layers.append(U_eff)
+        strain_tensors.append(eps)
+        strain_voigts.append(_strain_to_voigt(strain_vals, fit_strain))
+
+    R_global = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
+
+    if update_stack:
+        for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+            layer.U = U_eff.copy()
+
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
+
+    # Final simulation for n_sim.
+    for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+        layer.U = U_eff.copy()
+    final_spots = simulate_laue_stack(
+        stack, camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        f2_thresh=f2_thresh, kb_params=kb_params,
+        structure_model=structure_model, verbose=False,
+        allowed_hkl=_allowed,
+    )
+    n_sim = len(_extract_sim_xy(final_spots))
+
+    if not update_stack:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
+    result = StackStrainFitResult(
+        R_global=R_global, rotvec=rotvec_total,
+        U_layers=U_layers_final, U0_layers=U0_layers,
+        U_eff_layers=U_eff_layers,
+        strain_tensors=strain_tensors, strain_voigts=strain_voigts,
+        fit_strain=tuple(fit_strain),
         cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
@@ -3399,6 +3845,170 @@ def refine_orientation_image(
     return out
 
 
+def refine_orientation_image_stack(
+    stack,
+    camera,
+    image: np.ndarray,
+    *,
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    max_angle_deg: float = 0.2,
+    structure_model: str = "average",
+    method: str = "Powell",
+    options: "dict | None" = None,
+    verbose: bool = False,
+) -> StackImageRefinementResult:
+    """
+    Post-refine the orientation of a
+    :class:`~nrxrdct.laue.layers.LayeredCrystal` by maximising the total
+    Gaussian-weighted pixel intensity at simulated Laue spot positions.
+
+    Extends :func:`refine_orientation_image` to the layered-crystal case.
+    A single global rotation is applied to all layers, preserving inter-layer
+    orientation relationships::
+
+        U_i = R(δω) @ U0_i   for all layers i
+
+    The image-based objective requires no segmented peak list, making it
+    useful as a polishing step after :func:`fit_orientation_stack`.
+
+    Args:
+        stack (LayeredCrystal): Layered structure.  Layer U matrices are used
+            as starting orientations and always restored if an exception
+            occurs.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Invalid / gap pixels
+            must be negative (Eiger convention: ``−1``).
+        kernel_sigma (float): σ (pixels) of the Gaussian placed at each
+            simulated spot.  Default ``0.3``.
+        bg_sigma (float): σ (pixels) of the background subtracted before
+            optimisation.  ``0`` to skip.  Default ``251``.
+        E_min, E_max (float): Photon energy range (eV).
+        allowed_hkl: Pre-computed allowed HKL dict keyed by ``id(crystal)``,
+            from :func:`precompute_allowed_hkl`.  Strongly recommended.
+        max_angle_deg (float): Symmetric bound on each rotation-vector
+            component (degrees).  Default ``0.2``.
+        structure_model (str): ``'average'`` or ``'incoherent'``.
+        method (str): ``scipy.optimize.minimize`` method.  Default ``'Powell'``.
+        options (dict or None): Forwarded to ``minimize`` (merged over
+            defaults ``maxiter=2000``, ``xtol/ftol=1e-6`` for Powell).
+        verbose (bool): Print starting score and result summary.
+
+    Returns:
+        StackImageRefinementResult
+"""
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img    = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    U0_layers = [layer.U.copy() for layer in stack.all_layers]
+
+    lim    = float(np.radians(max_angle_deg))
+    bounds = [(-lim, lim)] * 3
+
+    def _score(rotvec: np.ndarray) -> float:
+        R = Rotation.from_rotvec(rotvec).as_matrix()
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = R @ U0
+
+        spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+        )
+        if not spots:
+            return 0.0
+
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for s in spots:
+            xc, yc = s["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += float(s["intensity"])
+
+        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
+
+    score0 = _score(np.zeros(3))
+
+    if verbose:
+        print(
+            f"refine_orientation_image_stack: score0={score0:.1f}  "
+            f"method={method}  max_angle={max_angle_deg}°  "
+            f"{len(U0_layers)} layers"
+        )
+
+    opts: dict = {"maxiter": 2000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-6, "ftol": 1e-6})
+    else:
+        opts.update({"gtol": 1e-7})
+    if options:
+        opts.update(options)
+
+    try:
+        result = minimize(
+            lambda rv: -_score(rv), np.zeros(3),
+            method=method, bounds=bounds, options=opts,
+        )
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    R_opt        = Rotation.from_rotvec(result.x).as_matrix()
+    U_layers_final = [R_opt @ U0 for U0 in U0_layers]
+    R_global     = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
+
+    for layer, U in zip(stack.all_layers, U_layers_final):
+        layer.U = U.copy()
+    try:
+        final_spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+        )
+        n_sim = len(final_spots)
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    out = StackImageRefinementResult(
+        R_global  = R_global,
+        rotvec    = rotvec_total,
+        U_layers  = U_layers_final,
+        U0_layers = U0_layers,
+        score     = -float(result.fun),
+        score0    = score0,
+        n_sim     = n_sim,
+        success   = result.success,
+        message   = result.message,
+        optimizer = result,
+    )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
+
+
 def search_orientation_image(
     crystal,
     U_ref: np.ndarray,
@@ -4111,6 +4721,235 @@ def refine_strain_image(
         success       = result.success,
         message       = result.message,
         optimizer     = result,
+    )
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
+
+
+def refine_strain_image_stack(
+    stack,
+    camera,
+    image: np.ndarray,
+    *,
+    strain0_list: "list[np.ndarray] | None" = None,
+    fit_strain: "tuple[str, ...] | None" = None,
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    max_angle_deg: float = 0.2,
+    strain_scale: float = 1e-4,
+    structure_model: str = "average",
+    method: str = "Powell",
+    options: "dict | None" = None,
+    verbose: bool = False,
+) -> StackStrainImageRefinementResult:
+    """
+    Post-refine orientation **and** per-layer strain for a
+    :class:`~nrxrdct.laue.layers.LayeredCrystal` by maximising the total
+    Gaussian-weighted pixel intensity at simulated Laue spot positions.
+
+    Extends :func:`refine_strain_image` to the layered-crystal case.  A single
+    global rotation is shared by all layers while each layer receives its own
+    independent strain tensor::
+
+        U_eff_i = R(δω) @ U0_i @ (I + ε_i)
+
+    The image-based objective does not require segmented peaks, making it
+    useful when spots are too weak or too crowded to segment reliably.
+
+    **Recommended workflow**
+
+    Run :func:`fit_orientation_stack` (or :func:`fit_strain_orientation_stack`)
+    first, then pass the refined stack here for image-space polishing::
+
+        result_peaks = laue.fit_strain_orientation_stack(stack, cam, peaks, ...)
+        result_image = laue.refine_strain_image_stack(stack, cam, frame,
+                           strain0_list=result_peaks.strain_tensors,
+                           allowed_hkl=hkl, verbose=True)
+
+    Args:
+        stack (LayeredCrystal): Layered structure.  Layer U matrices are used
+            as starting orientations.  Always restored to their original state
+            if an exception occurs.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Invalid / gap pixels
+            must be negative (Eiger convention: ``−1``).
+        strain0_list (list of (3,3) or None): Starting strain tensor per layer
+            in ``stack.all_layers`` order.  ``None`` starts every layer from
+            zero strain.
+        fit_strain (tuple of str or None): Strain components to refine.  Any
+            subset of ``('e_xx','e_yy','e_zz','e_xy','e_xz','e_yz')``.
+            ``None`` refines all six.
+        kernel_sigma (float): σ (pixels) of the Gaussian placed at each
+            simulated spot.  Default ``0.3``.
+        bg_sigma (float): σ (pixels) of the background estimate subtracted
+            before optimisation.  ``0`` to skip.  Default ``251``.
+        E_min, E_max (float): Photon energy range (eV).
+        allowed_hkl: Pre-computed allowed HKL dict keyed by ``id(crystal)``,
+            as returned by :func:`precompute_allowed_hkl`.  Strongly
+            recommended to avoid recomputing structure factors on every call.
+        max_angle_deg (float): Symmetric bound on each rotation-vector
+            component (degrees).  Default ``0.2``.
+        strain_scale (float): Internal divisor for strain parameters.
+            Default ``1e-4``.
+        structure_model (str): ``'average'`` or ``'incoherent'``.
+        method (str): ``scipy.optimize.minimize`` method.  Default ``'Powell'``.
+        options (dict or None): Forwarded to ``minimize`` (merged over
+            defaults ``maxiter=5000``, ``xtol/ftol=1e-7`` for Powell).
+        verbose (bool): Print a one-line summary after optimisation.
+
+    Returns:
+        StackStrainImageRefinementResult
+"""
+    _fit_strain: tuple[str, ...] = (
+        tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL
+    )
+
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img    = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    n_layers = len(stack.all_layers)
+    n_strain = len(_fit_strain)
+    n_params  = 3 + n_layers * n_strain
+
+    U0_layers = [layer.U.copy() for layer in stack.all_layers]
+
+    # Build starting parameter vector from optional prior strain tensors.
+    x0 = np.zeros(n_params)
+    if strain0_list is not None:
+        for ii, eps0 in enumerate(strain0_list):
+            eps0_arr = np.asarray(eps0, dtype=float)
+            for jj, name in enumerate(_fit_strain):
+                x0[3 + ii * n_strain + jj] = eps0_arr[_STRAIN_IDX[name]] / strain_scale
+
+    rot_lim    = float(np.radians(max_angle_deg))
+    strain_lim = 0.05 / strain_scale
+    bounds = (
+        [(-rot_lim, rot_lim)] * 3
+        + [(-strain_lim, strain_lim)] * (n_layers * n_strain)
+    )
+
+    def _score(params: np.ndarray) -> float:
+        R = Rotation.from_rotvec(params[:3]).as_matrix()
+        for ii, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
+            sv  = params[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+            eps = _strain_matrix(sv, _fit_strain)
+            layer.U = R @ U0 @ (np.eye(3) + eps)
+
+        spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+        )
+        if not spots:
+            return 0.0
+
+        delta = np.zeros((ny, nx), dtype=np.float64)
+        for s in spots:
+            xc, yc = s["pix"]
+            col = int(round(xc))
+            row = int(round(yc))
+            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
+                delta[row, col] += float(s["intensity"])
+
+        kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
+        return float(np.sum(kernel_map * img))
+
+    score0 = _score(x0)
+
+    if verbose:
+        print(
+            f"refine_strain_image_stack: score0={score0:.1f}  "
+            f"fit_strain={_fit_strain}  {n_layers} layers  "
+            f"method={method}  max_angle={max_angle_deg}°"
+        )
+
+    opts: dict = {"maxiter": 5000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-7, "ftol": 1e-7})
+    else:
+        opts.update({"gtol": 1e-8})
+    if options:
+        opts.update(options)
+
+    try:
+        result = minimize(
+            lambda p: -_score(p), x0,
+            method=method, bounds=bounds, options=opts,
+        )
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    # Unpack solution.
+    R_opt = Rotation.from_rotvec(result.x[:3]).as_matrix()
+    U_layers_final = []
+    U_eff_layers   = []
+    strain_tensors = []
+    strain_voigts  = []
+
+    for ii, U0 in enumerate(U0_layers):
+        sv  = result.x[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+        eps = _strain_matrix(sv, _fit_strain)
+        U_pure = R_opt @ U0
+        U_eff  = U_pure @ (np.eye(3) + eps)
+        U_layers_final.append(U_pure)
+        U_eff_layers.append(U_eff)
+        strain_tensors.append(eps)
+        strain_voigts.append(_strain_to_voigt(sv, _fit_strain))
+
+    R_global     = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
+
+    # Count final simulated spots.
+    for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+        layer.U = U_eff.copy()
+    try:
+        final_spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+        )
+        n_sim = len(final_spots)
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+
+    out = StackStrainImageRefinementResult(
+        R_global       = R_global,
+        rotvec         = rotvec_total,
+        U_layers       = U_layers_final,
+        U0_layers      = U0_layers,
+        U_eff_layers   = U_eff_layers,
+        strain_tensors = strain_tensors,
+        strain_voigts  = strain_voigts,
+        fit_strain     = _fit_strain,
+        score          = -float(result.fun),
+        score0         = score0,
+        n_sim          = n_sim,
+        success        = result.success,
+        message        = result.message,
+        optimizer      = result,
     )
 
     if verbose:

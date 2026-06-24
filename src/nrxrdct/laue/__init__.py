@@ -104,6 +104,7 @@ from .segmentation import (
     gaussian_background,
 )
 from .map import GrainMap, parse_scan_title
+from .layered_map import LayeredMap
 from .fit_io import read_fit_file, read_raw, prepare_image, F_from_UBB0, plot_fit_frame, inspect_fit_map
 from .simulation import (
     BM32_KB,
@@ -207,6 +208,7 @@ __all__ = [
     "nitride_elastic_constants",
     # Grain map (raster micro-Laue)
     "GrainMap",
+    "LayeredMap",
     "parse_scan_title",
     # Interactive orientation / calibration tools
     "OrientationState",

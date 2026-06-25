@@ -36,7 +36,6 @@ from nrxrdct.laue.segmentation import (
     WTH_segmentation,
     hybrid_segmentation,
     clean_segmentation,
-    filter_and_rescale_images,
     gaussian_background,
     label_segmented_image,
     measure_peaks,
@@ -169,8 +168,16 @@ def main() -> None:
         frames = _load_tiff_frames(tiff_dir, frame_indices)
     else:
         with h5py.File(meta["h5_path"], "r") as f:
-            ds = f[meta["h5_dataset"]]
-            frames = {fi: ds[fi].astype(np.float32) for fi in frame_indices}
+            ds          = f[meta["h5_dataset"]]
+            monitor_ds  = f.get(meta["monitor"]) if meta.get("monitor") else None
+            frames = {}
+            for fi in frame_indices:
+                img = ds[fi].astype(np.float32)
+                if monitor_ds is not None:
+                    mon_val = float(monitor_ds[fi])
+                    if mon_val > 0:
+                        img /= mon_val
+                frames[fi] = img
     print(f"  image read done ({time.time() - t_io:.1f}s)", flush=True)
 
     t0 = time.time()

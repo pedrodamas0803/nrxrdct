@@ -341,6 +341,7 @@ class LayeredMap:
         motor_x: str | None = None,
         motor_y: str | None = None,
         save_path: str | None = None,
+        monitor: str | None = None,
     ) -> None:
         self.ny        = ny
         self.nx        = nx
@@ -348,6 +349,7 @@ class LayeredMap:
         self.h5_path   = h5_path
         self.entry     = entry
         self.save_path = save_path
+        self.monitor   = monitor
 
         n_layers = len(stack.all_layers)
         self.n_layers    = n_layers
@@ -1055,7 +1057,12 @@ class LayeredMap:
                         if h5_dataset not in fh:
                             print(f"  ✗ dataset {h5_dataset!r} not in {_h5!r}", flush=True)
                             return None
-                        return fh[h5_dataset][frame_idx].astype(np.float32)
+                        img = fh[h5_dataset][frame_idx].astype(np.float32)
+                        if self.monitor and self.monitor in fh:
+                            mon_val = float(fh[self.monitor][frame_idx])
+                            if mon_val > 0:
+                                img /= mon_val
+                        return img
                 except Exception as exc:
                     print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
                     return None
@@ -2106,6 +2113,7 @@ class LayeredMap:
             "tiff_dir":       tiff_dir,
             "seg_dir":        dirs["out"],
             "mask_path":      mask_path,
+            "monitor":        self.monitor,
             "method":         method,
             "method_kwargs":  method_kwargs or {},
             "min_size":       min_size,

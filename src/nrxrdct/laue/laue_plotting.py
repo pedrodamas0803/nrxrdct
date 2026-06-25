@@ -1975,7 +1975,7 @@ def plot_measured_vs_simulated(
 def plot_layer_scheme(
     stack,
     figsize=(10, 7),
-    layer_width=2.2,
+    layer_width=10,
     max_reps=6,
     min_display_frac=0.01,
     ax=None,
@@ -2162,17 +2162,24 @@ def plot_layer_scheme(
     # The beam (+x) hits the last layer (largest z0 = surface-facing end).
     surf_ctr  = total_disp_h * nh_2d
     beam_tip  = surf_ctr - 0.2 * nh_2d              # slightly inset
-    beam_tail = beam_tip + np.array([-2.2, 0.0])     # beam comes from -x
+    beam_tail = beam_tip + np.array([-(W + 1.5), 0.0])   # start outside the slab
     ax.annotate(
         "", xy=beam_tip, xytext=beam_tail,
-        arrowprops=dict(arrowstyle="->", color=COL_DB, lw=2.0, mutation_scale=14),
+        arrowprops=dict(arrowstyle="->", color=COL_DB, lw=2.5, mutation_scale=20),
         zorder=5,
     )
     mid_beam = 0.5 * (beam_tip + beam_tail)
     ax.text(
-        mid_beam[0], mid_beam[1] + 0.18,
+        mid_beam[0], mid_beam[1] + 0.25,
         "incident beam  (+x)",
         color=COL_DB, fontsize=8, ha="center", va="bottom",
+    )
+
+    # ── Beam path inside sample (dashed red) ─────────────────────────────────
+    beam_exit = beam_tip + np.array([2.0 * W, 0.0])
+    ax.plot(
+        [beam_tip[0], beam_exit[0]], [beam_tip[1], beam_exit[1]],
+        color="red", lw=1.5, linestyle="--", zorder=4,
     )
 
     # ── Surface-normal arrow ──────────────────────────────────────────────────
@@ -2204,12 +2211,12 @@ def plot_layer_scheme(
             color="#aaaaaa", fontsize=7.5, va="center", ha="left")
 
     # ── Lab frame axes (bottom-left corner) ──────────────────────────────────
-    ax_len  = 0.80
+    ax_len  = 1.5
     # Find a comfortable lower-left position
     all_pts = np.array([s * nh_2d + sign * W * th_2d
                         for s in [0, total_disp_h]
                         for sign in [-1, 1]])
-    x_min = all_pts[:, 0].min() - 2.8
+    x_min = all_pts[:, 0].min() - 4.0
     z_min = all_pts[:, 1].min() - 0.5
     orig  = np.array([x_min, z_min])
 
@@ -2217,20 +2224,20 @@ def plot_layer_scheme(
         end = orig + ax_len * direction
         ax.annotate(
             "", xy=end, xytext=orig,
-            arrowprops=dict(arrowstyle="->", color=color, lw=1.6, mutation_scale=10),
+            arrowprops=dict(arrowstyle="->", color=color, lw=2.0, mutation_scale=16),
             zorder=6,
         )
         lp = end + label_offset
         ax.text(lp[0], lp[1], label, color=color, fontsize=9,
                 fontweight="bold", ha="center", va="center")
 
-    _axis_arrow(np.array([1.0, 0.0]), "#4fc3f7", "x\n(beam)",   np.array([0.22, 0.0]))
-    _axis_arrow(np.array([0.0, 1.0]), "#ff9f43", "z\n(up)",     np.array([0.0,  0.22]))
+    _axis_arrow(np.array([1.0, 0.0]), "#4fc3f7", "x\n(beam)",   np.array([0.45, 0.0]))
+    _axis_arrow(np.array([0.0, 1.0]), "#ff9f43", "z\n(up)",     np.array([0.0,  0.45]))
 
     # y-axis: out-of-plane, shown as ⊙
     ax.plot(*orig, "o", color="#88cc88", ms=8, zorder=6)
     ax.plot(*orig, ".", color="#88cc88", ms=3, zorder=7)
-    ax.text(orig[0] - 0.22, orig[1], "y\n(out)", color="#88cc88",
+    ax.text(orig[0] - 0.45, orig[1], "y\n(out)", color="#88cc88",
             fontsize=9, fontweight="bold", ha="center", va="center")
 
     # ── n_hat numeric annotation ──────────────────────────────────────────────

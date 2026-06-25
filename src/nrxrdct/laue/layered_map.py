@@ -1529,6 +1529,106 @@ class LayeredMap:
 
         return job_ids
 
+    def submit_segmentation(
+        self,
+        base_dir: str,
+        h5_path: "str | None" = None,
+        h5_dataset: "str | None" = None,
+        n_jobs: int = 10,
+        *,
+        tiff_dir: "str | None" = None,
+        partition: str = "all",
+        time: str = "01:00:00",
+        mem: str = "4G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        mask_path: "str | None" = None,
+        method: str = "LoG",
+        method_kwargs: "dict | None" = None,
+        min_size: int = 3,
+        max_size: int = 500,
+        gap_exclude: int = 3,
+        gap_closing: int = 3,
+        bg_sigma: float = 251,
+        max_components: int = 1,
+        d: int = 10,
+        r_squared_min: float = 0.9,
+        include_unfitted: bool = False,
+        fit_spots: bool = True,
+        extra_sbatch: "dict | None" = None,
+    ) -> list:
+        """
+        Submit segmentation jobs to SLURM.
+
+        Peak-list files are written to ``<base_dir>/seg/frame_?????.h5``.
+        Pass *seg_dir* to the ``submit_orientation`` / ``submit_strain`` calls
+        (defaults to the same path automatically).
+
+        Args:
+            base_dir: Root processing directory.
+            h5_path: Path to the HDF5 scan file (must be accessible from
+                compute nodes).
+            h5_dataset: Dataset path inside *h5_path*, e.g.
+                ``'1.1/measurement/eiger4m'``.  Mutually exclusive with
+                *tiff_dir*; exactly one must be supplied.
+            tiff_dir: Path to a directory of ``img_*.tif`` files.
+                Mutually exclusive with *h5_dataset*.
+            n_jobs: Number of SLURM array jobs.
+            method: ``'LoG'``, ``'WTH'``, or ``'HYBRID'``.
+            bg_sigma: Gaussian sigma for background estimation (pixels).
+            r_squared_min: Minimum Gaussian-fit R² to accept a spot.
+
+        Returns:
+            List of SLURM job IDs.
+        """
+        h5_path = h5_path or self.h5_path
+        if h5_path is None and h5_dataset is not None:
+            raise ValueError("h5_path not set on the object and not passed as argument.")
+        if h5_dataset is None and tiff_dir is None:
+            raise ValueError("Provide either h5_dataset or tiff_dir.")
+        if h5_dataset is not None and tiff_dir is not None:
+            raise ValueError("Provide h5_dataset or tiff_dir, not both.")
+
+        dirs = self._setup_slurm_dirs(base_dir, "seg")
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+        meta = {
+            "h5_path":        h5_path,
+            "h5_dataset":     h5_dataset,
+            "tiff_dir":       tiff_dir,
+            "seg_dir":        dirs["out"],
+            "mask_path":      mask_path,
+            "method":         method,
+            "method_kwargs":  method_kwargs or {},
+            "min_size":       min_size,
+            "max_size":       max_size,
+            "gap_exclude":    gap_exclude,
+            "gap_closing":    gap_closing,
+            "bg_sigma":       bg_sigma,
+            "max_components": max_components,
+            "d":              d,
+            "r_squared_min":  r_squared_min,
+            "include_unfitted": include_unfitted,
+            "fit_spots":      fit_spots,
+        }
+        meta_path = os.path.join(dirs["job_meta"], "seg_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "lm_seg", "nrxrdct.laue.workers.slurm_seg_worker",
+            meta_path, chunks, dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem,
+            cpus_per_task=cpus_per_task, python_bin=python_bin,
+            extra_sbatch=extra_sbatch,
+        )
+        print(f"Segmentation: {len(job_ids)} jobs → {dirs['out']}")
+        return job_ids
+
     def submit_orientation(
         self,
         base_dir: str,
@@ -1692,8 +1792,8 @@ class LayeredMap:
         self,
         base_dir: str,
         camera,
-        h5_path: str,
-        h5_dataset: str,
+        h5_path: "str | None" = None,
+        h5_dataset: "str | None" = None,
         *,
         n_jobs: int = 10,
         partition: str = "all",
@@ -1713,11 +1813,16 @@ class LayeredMap:
         Writes to ``<base_dir>/layered_img_ori/frame_?????.npz``.
 
         Args:
-            h5_path: Path to the HDF5 scan file (must be accessible from
-                compute nodes).
+            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``
+                if set on the object.
             h5_dataset: Dataset path inside *h5_path*, e.g.
                 ``"1.1/measurement/eiger4m"``.
         """
+        h5_path = h5_path or self.h5_path
+        if h5_path is None:
+            raise ValueError("h5_path not set on the object and not passed as argument.")
+        if h5_dataset is None:
+            raise ValueError("h5_dataset is required.")
         dirs = self._setup_slurm_dirs(base_dir, "layered_img_ori")
         stack_pkl = self._write_stack_pkl(base_dir)
 
@@ -1756,8 +1861,8 @@ class LayeredMap:
         self,
         base_dir: str,
         camera,
-        h5_path: str,
-        h5_dataset: str,
+        h5_path: "str | None" = None,
+        h5_dataset: "str | None" = None,
         *,
         fit_strain: "tuple | None" = None,
         n_jobs: int = 10,
@@ -1779,9 +1884,15 @@ class LayeredMap:
 
         Args:
             fit_strain: Strain components to refine.  ``None`` refines all six.
-            h5_path: Path to the HDF5 scan file.
+            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``
+                if set on the object.
             h5_dataset: Dataset path inside *h5_path*.
         """
+        h5_path = h5_path or self.h5_path
+        if h5_path is None:
+            raise ValueError("h5_path not set on the object and not passed as argument.")
+        if h5_dataset is None:
+            raise ValueError("h5_dataset is required.")
         from .fitting import _STRAIN_ALL
         _fit_strain = list(fit_strain) if fit_strain is not None else list(_STRAIN_ALL)
 

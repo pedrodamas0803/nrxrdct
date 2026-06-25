@@ -945,6 +945,272 @@ def write_peaklist_dat(peaklist, outname):
 
     df.to_csv(outname, sep=" ", index=False)
 
+
+def simulation_guided_segmentation(
+    image: np.ndarray,
+    spots: list,
+    outpath: str,
+    *,
+    psf_sigma: float = 2.0,
+    search_radius: int = 10,
+    min_snr: float = 3.0,
+    bg_sigma: float = 0.0,
+    mask: "np.ndarray | None" = None,
+    d: int = 10,
+    r_squared_min: float = 0.8,
+    include_unfitted: bool = True,
+    fit_spots: bool = True,
+    overwrite: bool = False,
+) -> int:
+    """
+    Simulation-guided peak search optimised for small and faint spots.
+
+    Rather than blob-detection, this function uses the simulated spot
+    positions as seeds and applies a **matched Gaussian filter** (equivalent
+    to a PSF-matched aperture sum) to maximise the signal-to-noise before
+    deciding whether a peak is present.  The detection step operates on the
+    filtered image, so it is robust even when the raw spot is barely above
+    the noise floor.  Positions are then refined by fitting a 2-D Gaussian
+    to the raw image intensities within a bounded search window.
+
+    Pipeline per predicted spot
+    ---------------------------
+    1. Evaluate the matched-filter image (``scipy.ndimage.gaussian_filter``
+       with *psf_sigma*) at the search window around the predicted position.
+    2. Find the maximum of the matched-filter within ±*search_radius* pixels
+       — this is the refined centre estimate, robust to noise even for faint
+       spots.
+    3. Compute SNR as ``(mf_peak − mf_median) / mf_mad`` (MAD-based, global).
+       Reject the spot if ``SNR < min_snr``.
+    4. Optionally fit a 2-D Gaussian mixture to the raw image ROI (size
+       ``2d × 2d``) centred on the matched-filter maximum.
+    5. Write to HDF5 in the same format as :func:`write_h5_spotsfile` (fully
+       compatible with :func:`convert_spotsfile2peaklist`).
+
+    Args:
+        image: Raw detector frame ``(Nv, Nh) float32``.
+        spots: Simulated spot list from
+            :func:`~nrxrdct.laue.simulate_laue` or
+            :func:`~nrxrdct.laue.simulate_laue_stack`.
+            Each element must have ``'pix': (xcam, ycam)``; spots with
+            ``pix=None`` (off-detector) are silently skipped.
+        outpath: Output HDF5 file path.
+        psf_sigma: Gaussian sigma (pixels) of the expected spot PSF used
+            for the matched filter.  Match to roughly ``FWHM / 2.35`` of
+            a typical spot in the frame.
+        search_radius: Allowed position shift (pixels) from the predicted
+            position.  The matched-filter maximum within this window is
+            used as the refined centre.
+        min_snr: Minimum signal-to-noise on the *matched-filter* image to
+            accept a candidate.  SNR is defined as
+            ``(peak_mf − median_mf) / MAD_mf``.  Typical values: 2–5.
+        bg_sigma: If > 0, subtract a Gaussian background of this sigma
+            (pixels) before the matched filter.  The Gaussian fit always
+            uses the original *image* intensities.
+        mask: Boolean valid-pixel mask (``True`` = active).
+        d: Half-size of the Gaussian fit ROI (pixels).
+        r_squared_min: Minimum Gaussian fit R² to accept a result.  Can be
+            lower than the default used for blob-detection (faint spots
+            produce noisier fits).
+        include_unfitted: When ``True`` (default), spots that pass the SNR
+            gate but whose fit did not reach *r_squared_min* are written
+            using the matched-filter centre as the peak position.
+        fit_spots: If ``False``, skip Gaussian fitting entirely and write
+            the matched-filter centre directly.
+        overwrite: Overwrite an existing output file.
+
+    Returns:
+        Number of peaks successfully fitted (or accepted when
+        ``fit_spots=False``).
+    """
+    if os.path.exists(outpath):
+        if not overwrite:
+            raise FileExistsError(
+                f"Output file exists: {outpath!r}. Pass overwrite=True to replace it."
+            )
+        os.remove(outpath)
+
+    image = np.asarray(image, dtype=np.float32)
+    nv, nh = image.shape
+    valid = mask.astype(bool) if mask is not None else np.ones((nv, nh), dtype=bool)
+
+    # Background subtraction on a copy used only for matched filtering
+    if bg_sigma > 0:
+        bg = gaussian_background(image, valid, sigma=bg_sigma)
+        det_img = (image - bg).astype(np.float32)
+    else:
+        det_img = image.copy()
+    det_img[~valid] = 0.0
+
+    # Matched Gaussian filter — equivalent to aperture photometry with a
+    # Gaussian weight, optimal for detecting a Gaussian-shaped spot in noise.
+    import scipy.ndimage as _ndi
+    mf_img = _ndi.gaussian_filter(det_img, sigma=psf_sigma)
+
+    # Global noise estimate from the matched-filter image using MAD (robust).
+    mf_flat = mf_img[valid].ravel()
+    mf_median = float(np.median(mf_flat))
+    mf_mad    = float(np.median(np.abs(mf_flat - mf_median)))
+    mf_noise  = mf_mad / 0.6745  # equivalent Gaussian sigma
+    if mf_noise < 1e-12:
+        mf_noise = 1e-12
+
+    n_written = 0
+    n_success = 0
+
+    with h5py.File(outpath, "a") as hout:
+        for spot in spots:
+            pix = spot.get("pix")
+            if pix is None:
+                continue
+
+            xcam_pred = float(pix[0])
+            ycam_pred = float(pix[1])
+
+            # Matched-filter search window
+            r0 = int(max(0,  round(ycam_pred) - search_radius))
+            r1 = int(min(nv, round(ycam_pred) + search_radius + 1))
+            c0 = int(max(0,  round(xcam_pred) - search_radius))
+            c1 = int(min(nh, round(xcam_pred) + search_radius + 1))
+
+            if r1 <= r0 or c1 <= c0:
+                continue
+
+            mf_roi = mf_img[r0:r1, c0:c1]
+            mf_peak = float(mf_roi.max())
+            snr = (mf_peak - mf_median) / mf_noise
+
+            if snr < min_snr:
+                continue
+
+            # Refined centre from matched-filter maximum (robust for faint spots)
+            local_r, local_c = np.unravel_index(int(mf_roi.argmax()), mf_roi.shape)
+            y_mf = r0 + local_r
+            x_mf = c0 + local_c
+
+            # Gaussian fit ROI on raw image intensities
+            ymin, ymax, xmin, xmax = get_spot_limits(image, y_mf, x_mf, d)
+            fit_roi = image[ymin:ymax, xmin:xmax].copy()
+            Ipix = int(image[y_mf, x_mf])
+
+            # No-fit path — write matched-filter centre directly
+            if not fit_spots:
+                key = f"spot_{n_written:04d}_0"
+                hout[f"{key}/r_squared"]       = np.float32(-1)
+                hout[f"{key}/image"]            = fit_roi
+                hout[f"{key}/yxcen"]            = np.array([float(y_mf), float(x_mf)])
+                hout[f"{key}/bbox"]             = np.array([ymin, xmin, ymax, xmax])
+                hout[f"{key}/peak_X"]           = round(float(x_mf), 2)
+                hout[f"{key}/peak_Y"]           = round(float(y_mf), 2)
+                hout[f"{key}/peak_Itot"]        = round(float(image[y_mf, x_mf]), 2)
+                hout[f"{key}/peak_Isub"]        = round(float(det_img[y_mf, x_mf]), 2)
+                hout[f"{key}/peak_fwaxmaj"]     = 0.0
+                hout[f"{key}/peak_fwaxmin"]     = 0.0
+                hout[f"{key}/peak_inclination"] = 0.0
+                hout[f"{key}/Xdev"]             = round(float(x_mf) - xcam_pred, 2)
+                hout[f"{key}/Ydev"]             = round(float(y_mf) - ycam_pred, 2)
+                hout[f"{key}/peak_bkg"]         = 0.0
+                hout[f"{key}/Ipixmax"]          = Ipix
+                n_written += 1
+                n_success += 1
+                continue
+
+            # Gaussian fit on raw ROI
+            init_params_1 = None
+            r2 = 0.0
+            popt = None
+            n_comp = 1
+
+            try:
+                init_params_1 = auto_init_gaussian_mixture_global(
+                    fit_roi, n_components=1, smooth_sigma=0.5
+                )
+                best_r2, best_popt, best_n = -np.inf, None, 1
+                for n_comp in range(1, 2):   # single component for speed; faint spots rarely overlap
+                    try:
+                        init_p = auto_init_gaussian_mixture_global(
+                            fit_roi, n_components=n_comp, smooth_sigma=0.5
+                        )
+                        popt_, _, fitted, _, _ = fit_gaussian_mixture_2d(
+                            fit_roi, n_components=n_comp, init_params=init_p
+                        )
+                        r2_ = r_squared_image(fit_roi, fitted)
+                    except (ValueError, RuntimeError):
+                        break
+                    if r2_ > best_r2:
+                        best_r2, best_popt, best_n = r2_, popt_, n_comp
+                    if r2_ >= r_squared_min:
+                        break
+
+                r2, popt, n_comp = best_r2, best_popt, best_n
+
+            except Exception:
+                pass   # fall through to unfitted write below
+
+            def _write_fallback() -> None:
+                # Use matched-filter centre; init_params_1 gives shape if available
+                if init_params_1 is not None:
+                    A, xm, ym, sx, sy, th = init_params_1[0:6]
+                    C0 = float(init_params_1[-1])
+                else:
+                    xm, ym = float(x_mf - xmin), float(y_mf - ymin)
+                    sx, sy, th, C0 = 2.0, 2.0, 0.0, 0.0
+                key = f"spot_{n_written:04d}_0"
+                hout[f"{key}/r_squared"]       = np.float32(r2)
+                hout[f"{key}/image"]            = fit_roi
+                hout[f"{key}/yxcen"]            = np.array([float(y_mf), float(x_mf)])
+                hout[f"{key}/bbox"]             = np.array([ymin, xmin, ymax, xmax])
+                hout[f"{key}/peak_X"]           = round(float(xm + xmin), 2)
+                hout[f"{key}/peak_Y"]           = round(float(ym + ymin), 2)
+                hout[f"{key}/peak_Itot"]        = 65535
+                hout[f"{key}/peak_Isub"]        = 65535
+                hout[f"{key}/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sx, sy)), 2)
+                hout[f"{key}/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sx, sy)), 2)
+                hout[f"{key}/peak_inclination"] = round(float(np.rad2deg(th)), 2)
+                hout[f"{key}/Xdev"]             = round(float(xm + xmin) - xcam_pred, 2)
+                hout[f"{key}/Ydev"]             = round(float(ym + ymin) - ycam_pred, 2)
+                hout[f"{key}/peak_bkg"]         = round(C0, 2)
+                hout[f"{key}/Ipixmax"]          = Ipix
+
+            if popt is None or r2 < r_squared_min:
+                if include_unfitted:
+                    _write_fallback()
+                    n_written += 1
+                continue
+
+            # Write fitted components
+            n_success += 1
+            C = float(popt[-1])
+            for jj in range(1, n_comp + 1):
+                A, xm, ym, sx, sy, th = popt[6 * (jj - 1):6 * jj]
+                key = f"spot_{n_written:04d}_{jj}"
+                hout[f"{key}/r_squared"]       = np.float32(r2)
+                hout[f"{key}/image"]            = fit_roi
+                hout[f"{key}/yxcen"]            = np.array([float(y_mf), float(x_mf)])
+                hout[f"{key}/bbox"]             = np.array([ymin, xmin, ymax, xmax])
+                hout[f"{key}/peak_X"]           = round(float(xm + xmin), 2)
+                hout[f"{key}/peak_Y"]           = round(float(ym + ymin), 2)
+                hout[f"{key}/peak_Itot"]        = round(float(A), 2)
+                hout[f"{key}/peak_Isub"]        = round(float(A - C), 2)
+                hout[f"{key}/peak_fwaxmaj"]     = round(fwhm_from_sigma(max(sx, sy)), 2)
+                hout[f"{key}/peak_fwaxmin"]     = round(fwhm_from_sigma(min(sx, sy)), 2)
+                hout[f"{key}/peak_inclination"] = round(float(np.rad2deg(th)), 2)
+                hout[f"{key}/Xdev"]             = round(float(xm + xmin) - xcam_pred, 2)
+                hout[f"{key}/Ydev"]             = round(float(ym + ymin) - ycam_pred, 2)
+                hout[f"{key}/peak_bkg"]         = round(float(C), 2)
+                hout[f"{key}/Ipixmax"]          = Ipix
+            n_written += 1
+
+        hout.attrs["n_spots"]   = n_written
+        hout.attrs["n_success"] = n_success
+
+    print(
+        f"simulation_guided_segmentation: {n_success}/{n_written} spots fitted, "
+        f"{n_written} candidates (SNR≥{min_snr:.1f}, psf_sigma={psf_sigma})"
+    )
+    return n_success
+
+
 def _convert_one_h5_to_dat(args: tuple) -> bool:
     """Module-level worker so it is picklable by ProcessPoolExecutor."""
     h5path, out_path, include_unfitted, r_squared_min = args

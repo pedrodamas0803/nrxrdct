@@ -1932,6 +1932,7 @@ def fit_orientation_stack(
     update_stack: bool = True,
     geometry_only: bool = True,
     correct_depth: bool = False,
+    allowed_hkl=None,
     verbose: bool = False,
 ) -> StackFitResult:
     """
@@ -2016,7 +2017,9 @@ def fit_orientation_stack(
     # (buffer layers + first MQW layer for "average" model) so that _try_append
     # inside simulate_laue_stack never calls the stack structure factor during
     # fitting.  Keyed by id(crystal) for per-layer lookup.
-    if geometry_only:
+    if allowed_hkl is not None:
+        _allowed = allowed_hkl
+    elif geometry_only:
         _enum_pool = (
             stack.buffer_layers + stack.layers[:1]
             if structure_model == "average"
@@ -2138,6 +2141,7 @@ def fit_strain_orientation_stack(
     update_stack: bool = True,
     geometry_only: bool = True,
     correct_depth: bool = False,
+    allowed_hkl=None,
     verbose: bool = False,
 ) -> StackStrainFitResult:
     """
@@ -2197,7 +2201,9 @@ def fit_strain_orientation_stack(
             f"{n_layers} layers, strain components: {list(fit_strain)}"
         )
 
-    if geometry_only:
+    if allowed_hkl is not None:
+        _allowed = allowed_hkl
+    elif geometry_only:
         _enum_pool = (
             stack.buffer_layers + stack.layers[:1]
             if structure_model == "average"

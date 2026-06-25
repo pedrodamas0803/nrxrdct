@@ -3859,6 +3859,7 @@ def refine_orientation_image_stack(
     structure_model: str = "average",
     method: str = "Powell",
     options: "dict | None" = None,
+    update_stack: bool = False,
     verbose: bool = False,
 ) -> StackImageRefinementResult:
     """
@@ -4002,6 +4003,10 @@ def refine_orientation_image_stack(
         message   = result.message,
         optimizer = result,
     )
+
+    if update_stack:
+        for layer, U in zip(stack.all_layers, U_layers_final):
+            layer.U = U.copy()
 
     if verbose:
         print(f"  {out}")
@@ -4746,6 +4751,7 @@ def refine_strain_image_stack(
     structure_model: str = "average",
     method: str = "Powell",
     options: "dict | None" = None,
+    update_stack: bool = False,
     verbose: bool = False,
 ) -> StackStrainImageRefinementResult:
     """
@@ -4951,6 +4957,10 @@ def refine_strain_image_stack(
         message        = result.message,
         optimizer      = result,
     )
+
+    if update_stack:
+        for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+            layer.U = U_eff.copy()
 
     if verbose:
         print(f"  {out}")

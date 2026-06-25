@@ -1317,11 +1317,56 @@ def fill_gaps_nearest(image:np.ndarray, valid_mask:np.ndarray)-> np.ndarray:
     )
     return image[tuple(indices)]
 
+def _local_threshold_map(
+    enhanced: np.ndarray,
+    mask: np.ndarray,
+    block_size: int,
+    percentile: float,
+) -> np.ndarray:
+    """
+    Compute a spatially varying detection threshold via block-wise percentile.
+
+    The response image is divided into non-overlapping blocks of
+    ``block_size × block_size`` pixels.  The requested percentile is computed
+    within each block (restricted to valid pixels) and the resulting coarse
+    grid is bilinearly upsampled back to the full detector resolution.
+
+    This prevents a small number of very bright spots (e.g. a substrate
+    Bragg streak) from raising the detection threshold for faint neighbouring
+    spots.
+    """
+    nv, nh = enhanced.shape
+    n_by = max(1, int(np.ceil(nv / block_size)))
+    n_bx = max(1, int(np.ceil(nh / block_size)))
+    grid = np.zeros((n_by, n_bx), dtype=np.float64)
+
+    for iy in range(n_by):
+        r0 = iy * block_size
+        r1 = min(r0 + block_size, nv)
+        for ix in range(n_bx):
+            c0 = ix * block_size
+            c1 = min(c0 + block_size, nh)
+            vals = enhanced[r0:r1, c0:c1][mask[r0:r1, c0:c1]]
+            grid[iy, ix] = np.percentile(vals, percentile) if vals.size > 0 else np.inf
+
+    # Bilinear upsample to full detector resolution
+    thresh_map = ndi.zoom(grid, zoom=(nv / n_by, nh / n_bx), order=1)
+    thresh_map = thresh_map[:nv, :nh]
+    sh = thresh_map.shape
+    if sh != (nv, nh):
+        thresh_map = np.pad(thresh_map,
+                            ((0, nv - sh[0]), (0, nh - sh[1])),
+                            mode='edge')
+    return thresh_map
+
+
 def LoG_segmentation(
     image: np.ndarray,
     mask: np.ndarray,
     sigmas=0.01,
     threshold_percentile: float = 99.9,
+    local_threshold: bool = False,
+    local_block_size: int = 256,
 ) -> np.ndarray:
     """
     Segment diffraction spots using a Laplacian-of-Gaussian (LoG) filter.
@@ -1347,11 +1392,17 @@ def LoG_segmentation(
             Pass a list to detect spots over a range of sizes simultaneously
             (multi-scale LoG).  Default ``0.01`` (very small, effectively a
             plain Laplacian on the log-scaled image).
-        threshold_percentile (float): Percentile of the LoG response (within *mask*) used as the binary
-            detection threshold.  Only pixels above this level are labelled as
-            spot pixels.  Raise towards 100 to detect only the strongest
-            responses; lower to recover dimmer spots at the cost of more false
-            positives.  Default ``99.9``.
+        threshold_percentile (float): Percentile of the LoG response used as the detection threshold.
+            Only pixels above this level are labelled as spot pixels.  Raise
+            towards 100 to keep only the strongest responses; lower to recover
+            dimmer spots at the cost of more false positives.  Default ``99.9``.
+        local_threshold (bool): If ``True``, compute the threshold locally via
+            :func:`_local_threshold_map` using blocks of *local_block_size*
+            pixels.  This prevents a very bright streak or substrate spot from
+            raising the threshold for faint neighbours.  Default ``False``.
+        local_block_size (int): Block size (pixels) for local threshold estimation.
+            Smaller values make the threshold more adaptive but require more
+            valid pixels per block.  Default ``256``.
 
     Returns:
         mask_final ((Nv, Nh) bool ndarray): Binary segmentation mask (``True`` = spot pixel).
@@ -1382,12 +1433,15 @@ def LoG_segmentation(
     with ThreadPoolExecutor() as pool:
         responses = list(pool.map(_log_response, _sigmas))
 
-    enhanced = np.max(responses, axis = 0)
+    enhanced = np.max(responses, axis=0)
     enhanced[~mask] = 0
 
-    global_thresh = np.percentile(enhanced, threshold_percentile)
+    if local_threshold:
+        thresh = _local_threshold_map(enhanced, mask, local_block_size, threshold_percentile)
+    else:
+        thresh = np.percentile(enhanced[mask], threshold_percentile)
 
-    mask_final = (enhanced>=global_thresh) & mask
+    mask_final = (enhanced >= thresh) & mask
 
     return mask_final
 
@@ -1396,6 +1450,8 @@ def WTH_segmentation(
     mask: np.ndarray,
     disk_radius=7,
     threshold_percentile: float = 99.9,
+    local_threshold: bool = False,
+    local_block_size: int = 256,
 ) -> np.ndarray:
     """
     Segment diffraction spots using a white top-hat transform.
@@ -1451,9 +1507,12 @@ def WTH_segmentation(
     enhanced = np.max(responses, axis=0)
     enhanced[~mask] = 0.0
 
-    threshold = np.percentile(enhanced[mask], threshold_percentile)
-    mask_final = (enhanced >= threshold) & mask
+    if local_threshold:
+        thresh = _local_threshold_map(enhanced, mask, local_block_size, threshold_percentile)
+    else:
+        thresh = np.percentile(enhanced[mask], threshold_percentile)
 
+    mask_final = (enhanced >= thresh) & mask
     return mask_final
 
 
@@ -1463,6 +1522,8 @@ def hybrid_segmentation(
     log_sigmas=None,
     wth_disk_radius=None,
     threshold_percentile: float = 99.9,
+    local_threshold: bool = False,
+    local_block_size: int = 256,
 ) -> np.ndarray:
     """
     Segment diffraction spots by combining LoG (large/round spots) and WTH
@@ -1516,7 +1577,10 @@ def hybrid_segmentation(
     def _threshold(responses):
         enhanced = np.max(responses, axis=0)
         enhanced[~mask] = 0.0
-        thresh = np.percentile(enhanced[mask], threshold_percentile)
+        if local_threshold:
+            thresh = _local_threshold_map(enhanced, mask, local_block_size, threshold_percentile)
+        else:
+            thresh = np.percentile(enhanced[mask], threshold_percentile)
         return (enhanced >= thresh) & mask
 
     return _threshold(log_responses) | _threshold(wth_responses)

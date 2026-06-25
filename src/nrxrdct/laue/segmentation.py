@@ -1022,9 +1022,13 @@ def simulation_guided_segmentation(
         overwrite: Overwrite an existing output file.
 
     Returns:
-        ``(N, 2)`` float32 array of refined peak positions ``[xcam, ycam]``
-        (sub-pixel when ``fit_spots=True``, local-maximum pixel otherwise).
-        Empty ``(0, 2)`` array when no peaks pass the SNR gate.
+        ``(N, 9)`` float32 array with the same column layout as
+        :func:`convert_spotsfile2peaklist`:
+        ``peak_X, peak_Y, peak_Isub, peak_fwaxmaj, peak_fwaxmin,
+        peak_inclination, Xdev, Ydev, peak_bkg``.
+        Directly compatible with :func:`plot_measured_vs_simulated` and
+        :func:`fit_orientation_stack`.
+        Empty ``(0, 9)`` array when no peaks pass the SNR gate.
     """
     from skimage.feature import peak_local_max
 
@@ -1059,7 +1063,14 @@ def simulation_guided_segmentation(
         Ipix = int(image[y_pk, x_pk])
 
         if not fit_spots:
-            found_peaks.append([float(x_pk), float(y_pk)])
+            found_peaks.append([
+                float(x_pk), float(y_pk),
+                float(det_img[y_pk, x_pk]),   # Isub
+                0.0, 0.0, 0.0,                 # fwaxmaj, fwaxmin, inclination
+                float(x_pk) - xcam_pred,       # Xdev
+                float(y_pk) - ycam_pred,       # Ydev
+                0.0,                           # peak_bkg
+            ])
             if hout is not None:
                 key = f"spot_{n_written:04d}_0"
                 hout[f"{key}/r_squared"]       = np.float32(-1)
@@ -1096,7 +1107,15 @@ def simulation_guided_segmentation(
                 xm = float(x_pk - xmin)
                 ym = float(y_pk - ymin)
                 sx, sy, th, C0 = 2.0, 2.0, 0.0, 0.0
-            found_peaks.append([float(xm + xmin), float(ym + ymin)])
+            found_peaks.append([
+                float(xm + xmin), float(ym + ymin),
+                float(det_img[y_pk, x_pk]),
+                fwhm_from_sigma(max(sx, sy)), fwhm_from_sigma(min(sx, sy)),
+                float(np.rad2deg(th)),
+                float(xm + xmin) - xcam_pred,
+                float(ym + ymin) - ycam_pred,
+                C0,
+            ])
             if hout is not None:
                 key = f"spot_{n_written:04d}_0"
                 hout[f"{key}/r_squared"]       = np.float32(r2)
@@ -1122,8 +1141,16 @@ def simulation_guided_segmentation(
         # Successful fit — use first component position for the peaklist
         n_success += 1
         C = float(popt[-1])
-        A0, xm0, ym0 = popt[0], popt[1], popt[2]
-        found_peaks.append([float(xm0 + xmin), float(ym0 + ymin)])
+        A0, xm0, ym0, sx0, sy0, th0 = popt[0:6]
+        found_peaks.append([
+            float(xm0 + xmin), float(ym0 + ymin),
+            float(A0 - C),
+            fwhm_from_sigma(max(sx0, sy0)), fwhm_from_sigma(min(sx0, sy0)),
+            float(np.rad2deg(th0)),
+            float(xm0 + xmin) - xcam_pred,
+            float(ym0 + ymin) - ycam_pred,
+            C,
+        ])
         if hout is not None:
             for jj in range(1, n_comp + 1):
                 A, xm, ym, sx, sy, th = popt[6 * (jj - 1):6 * jj]
@@ -1258,7 +1285,7 @@ def simulation_guided_segmentation(
         f"min_snr={min_snr:.1f})"
     )
     return (np.array(found_peaks, dtype=np.float32)
-            if found_peaks else np.empty((0, 2), dtype=np.float32))
+            if found_peaks else np.empty((0, 9), dtype=np.float32))
 
 
 def _convert_one_h5_to_dat(args: tuple) -> bool:

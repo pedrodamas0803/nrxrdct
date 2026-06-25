@@ -980,7 +980,10 @@ def simulation_guided_segmentation(
     2. Find the maximum of the matched-filter within ±*search_radius* pixels
        — this is the refined centre estimate, robust to noise even for faint
        spots.
-    3. Compute SNR as ``(mf_peak − mf_median) / mf_mad`` (MAD-based, global).
+    3. Compute SNR as ``(mf_peak − local_median) / local_noise`` using the
+       MAD of a background annulus (outer radius 3×*search_radius*, inner
+       exclusion *search_radius*) so that a bright streak nearby does not
+       raise the threshold for a faint neighbour.
        Reject the spot if ``SNR < min_snr``.
     4. Optionally fit a 2-D Gaussian mixture to the raw image ROI (size
        ``2d × 2d``) centred on the matched-filter maximum.
@@ -1002,8 +1005,10 @@ def simulation_guided_segmentation(
             position.  The matched-filter maximum within this window is
             used as the refined centre.
         min_snr: Minimum signal-to-noise on the *matched-filter* image to
-            accept a candidate.  SNR is defined as
-            ``(peak_mf − median_mf) / MAD_mf``.  Typical values: 2–5.
+            accept a candidate.  SNR is computed locally as
+            ``(mf_peak − annulus_median) / annulus_MAD_noise`` so that a
+            bright neighbouring streak does not suppress detection of a
+            faint spot next to it.  Typical values: 2–5.
         bg_sigma: If > 0, subtract a Gaussian background of this sigma
             (pixels) before the matched filter.  The Gaussian fit always
             uses the original *image* intensities.
@@ -1047,13 +1052,11 @@ def simulation_guided_segmentation(
     import scipy.ndimage as _ndi
     mf_img = _ndi.gaussian_filter(det_img, sigma=psf_sigma)
 
-    # Global noise estimate from the matched-filter image using MAD (robust).
-    mf_flat = mf_img[valid].ravel()
-    mf_median = float(np.median(mf_flat))
-    mf_mad    = float(np.median(np.abs(mf_flat - mf_median)))
-    mf_noise  = mf_mad / 0.6745  # equivalent Gaussian sigma
-    if mf_noise < 1e-12:
-        mf_noise = 1e-12
+    # Fallback global noise (used when the local annulus has too few pixels).
+    mf_flat     = mf_img[valid].ravel()
+    _mf_med_g   = float(np.median(mf_flat))
+    _mf_mad_g   = float(np.median(np.abs(mf_flat - _mf_med_g)))
+    _mf_noise_g = max(_mf_mad_g / 0.6745, 1e-12)
 
     n_written = 0
     n_success = 0
@@ -1076,10 +1079,32 @@ def simulation_guided_segmentation(
             if r1 <= r0 or c1 <= c0:
                 continue
 
-            mf_roi = mf_img[r0:r1, c0:c1]
+            mf_roi  = mf_img[r0:r1, c0:c1]
             mf_peak = float(mf_roi.max())
-            snr = (mf_peak - mf_median) / mf_noise
 
+            # Local noise: MAD of matched-filter values in the annulus
+            # (3 × search_radius outer ring, search_radius inner exclusion).
+            # This keeps a nearby bright streak from raising the threshold
+            # for the small faint spot sitting next to it.
+            bg_r0 = int(max(0,  round(ycam_pred) - 3 * search_radius))
+            bg_r1 = int(min(nv, round(ycam_pred) + 3 * search_radius + 1))
+            bg_c0 = int(max(0,  round(xcam_pred) - 3 * search_radius))
+            bg_c1 = int(min(nh, round(xcam_pred) + 3 * search_radius + 1))
+            rr = (np.arange(bg_r0, bg_r1)[:, None] - round(ycam_pred)) ** 2
+            cc = (np.arange(bg_c0, bg_c1)[None, :] - round(xcam_pred)) ** 2
+            annulus = (rr + cc) > search_radius ** 2
+            bg_vals = mf_img[bg_r0:bg_r1, bg_c0:bg_c1][
+                annulus & valid[bg_r0:bg_r1, bg_c0:bg_c1]
+            ]
+            if bg_vals.size >= 10:
+                local_med   = float(np.median(bg_vals))
+                local_noise = max(float(np.median(np.abs(bg_vals - local_med))) / 0.6745,
+                                  1e-12)
+            else:
+                local_med   = _mf_med_g
+                local_noise = _mf_noise_g
+
+            snr = (mf_peak - local_med) / local_noise
             if snr < min_snr:
                 continue
 

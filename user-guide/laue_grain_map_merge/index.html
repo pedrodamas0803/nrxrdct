@@ -107,7 +107,15 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#4-recommended-workflow">4. Recommended workflow</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#5-plotting-merged-results">5. Plotting merged results</a>
+    <li class="toctree-l3"><a class="reference internal" href="#5-standalone-orientation-utilities">5. Standalone orientation utilities</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#map_to_fundamental_zone">map_to_fundamental_zone</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#disorientation">disorientation</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-plotting-merged-results">6. Plotting merged results</a>
         <ul>
     <li class="toctree-l4"><a class="reference internal" href="#ipf-maps">IPF maps</a>
     </li>
@@ -527,15 +535,82 @@ step compares quality metrics and selects the best grain; running symmetry
 reduction first ensures that the merged orientations are in a consistent
 representation.</p>
 <hr />
-<h2 id="5-plotting-merged-results">5. Plotting merged results<a class="headerlink" href="#5-plotting-merged-results" title="Permanent link">&para;</a></h2>
+<h2 id="5-standalone-orientation-utilities">5. Standalone orientation utilities<a class="headerlink" href="#5-standalone-orientation-utilities" title="Permanent link">&para;</a></h2>
+<p>The two functions below operate on raw orientation matrices (not GrainMap
+objects) and are useful wherever orientation comparisons are needed —
+including analysis of pixel pairs, cross-grain comparisons, or preparing
+inputs for plotting.</p>
+<h3 id="map_to_fundamental_zone"><code>map_to_fundamental_zone</code><a class="headerlink" href="#map_to_fundamental_zone" title="Permanent link">&para;</a></h3>
+<p>Maps one or more orientation matrices to the fundamental zone by
+right-multiplying with the symmetry operator that minimises the rotation
+angle to the identity:</p>
+<div class="arithmatex">\[
+\mathbf{U}_\text{fz} = \mathbf{U}\,\mathbf{S}^*, \qquad
+S^* = \underset{s}{\operatorname{argmax}}\; \operatorname{tr}(\mathbf{U}\,\mathbf{S}_s)
+\]</div>
+<p>Only <strong>proper rotations</strong> (det = +1) are used, so every output is a valid
+rotation matrix.  Arbitrary batch dimensions are supported.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Single matrix</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">U_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Whole map at once — (ny, nx, 3, 3) → (ny, nx, 3, 3)</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">U_fz_map</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Relation to <code>reduce_to_fundamental_zone</code></p>
+<p><code>map_to_fundamental_zone</code> is a <strong>pure function</strong> — it returns a new
+array and leaves the input unchanged.  It picks the equivalent closest
+to the identity, not to a map-wide reference.
+<code>gmap.reduce_to_fundamental_zone</code> is an <strong>in-place</strong> GrainMap method
+that relabels every pixel to the equivalent closest to the map mean,
+and is the right tool for correcting isolated symmetry jumps across a
+raster scan.  Use <code>map_to_fundamental_zone</code> for one-off comparisons
+and <code>reduce_to_fundamental_zone</code> to clean up the full map.</p>
+</div>
+<h3 id="disorientation"><code>disorientation</code><a class="headerlink" href="#disorientation" title="Permanent link">&para;</a></h3>
+<p>Returns the minimum-angle symmetry-equivalent misorientation between two
+orientation matrices:</p>
+<div class="arithmatex">\[
+\omega_\text{dis} =
+    \min_{S_i,\,S_j \in G}\;
+    \bigl|\operatorname{angle}(S_i\,\mathbf{M}\,S_j^T)\bigr|,
+\quad \mathbf{M} = \mathbf{U}_2\,\mathbf{U}_1^T
+\]</div>
+<p>Both inputs are projected to SO(3) via SVD before the comparison, so
+non-orthogonal matrices such as <span class="arithmatex">\(\mathbf{U}_\text{eff} = \mathbf{U}(\mathbf{I}+\boldsymbol{\varepsilon})\)</span>
+are handled correctly.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">angle_deg</span><span class="p">,</span> <span class="n">R_dis</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">disorientation</span><span class="p">(</span><span class="n">U1</span><span class="p">,</span> <span class="n">U2</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Disorientation: </span><span class="si">{</span><span class="n">angle_deg</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">°&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>A typical use case is computing the pixel-by-pixel disorientation between two
+grain slots across a raster map:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">U0_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 3, 3)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">U1_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">valid</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span> <span class="o">&amp;</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">)</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">dis_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">,</span> <span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">for</span> <span class="n">iy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">):</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="k">for</span> <span class="n">ix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">):</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>        <span class="k">if</span> <span class="n">valid</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]:</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>            <span class="n">R_mis</span> <span class="o">=</span> <span class="n">U1_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">@</span> <span class="n">U0_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span><span class="o">.</span><span class="n">T</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>            <span class="n">tr</span>    <span class="o">=</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>            <span class="n">dis_map</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">tr</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+</code></pre></div>
+<hr />
+<h2 id="6-plotting-merged-results">6. Plotting merged results<a class="headerlink" href="#6-plotting-merged-results" title="Permanent link">&para;</a></h2>
 <h3 id="ipf-maps">IPF maps<a class="headerlink" href="#ipf-maps" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Global colour stretch — spans entire map range</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Per-grain colour stretch — each grain region stretched independently</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># (requires best_grain to define the regions)</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>                  <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Global colour stretch — spans entire map range</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">)</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Per-grain colour stretch — each grain region stretched independently</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># (requires best_grain to define the regions)</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>                  <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">)</span>
 </code></pre></div>
 <p><code>stretch="local"</code> is most useful when the map contains two (or more)
 distinct grains: with global stretching the inter-grain colour contrast
@@ -543,18 +618,18 @@ dominates the gamut and the intra-grain spread is compressed.  Local
 stretching gives each grain region its own colour scale, revealing the
 internal orientation spread within each grain.</p>
 <h3 id="overview-map">Overview map<a class="headerlink" href="#overview-map" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_overview</span><span class="p">(</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">ipf_axes</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">quality_metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="s2">&quot;rms_px&quot;</span><span class="p">,</span> <span class="s2">&quot;kam&quot;</span><span class="p">],</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">show_strain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">strain_components</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;exx&quot;</span><span class="p">,</span> <span class="s2">&quot;eyy&quot;</span><span class="p">,</span> <span class="s2">&quot;ezz&quot;</span><span class="p">],</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">strain_frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_overview</span><span class="p">(</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">ipf_axes</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">quality_metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="s2">&quot;rms_px&quot;</span><span class="p">,</span> <span class="s2">&quot;kam&quot;</span><span class="p">],</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">show_strain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">strain_components</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;exx&quot;</span><span class="p">,</span> <span class="s2">&quot;eyy&quot;</span><span class="p">,</span> <span class="s2">&quot;ezz&quot;</span><span class="p">],</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">strain_frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="frame-inspection">Frame inspection<a class="headerlink" href="#frame-inspection" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># defaults to gi_merged when it exists</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">,</span> <span class="n">map_grain</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>   <span class="c1"># force a specific grain</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># defaults to gi_merged when it exists</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">,</span> <span class="n">map_grain</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>   <span class="c1"># force a specific grain</span>
 </code></pre></div>
               
             </div>

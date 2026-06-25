@@ -125,6 +125,14 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#practical-notes">Practical notes</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#layered-crystal-stack-fit_strain_orientation_stack">Layered crystal (stack) — fit_strain_orientation_stack</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#usage">Usage</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#result-fields">Result fields</a>
+    </li>
+        </ul>
+    </li>
     <li class="toctree-l3"><a class="reference internal" href="#comparison-with-lauetools-strain-refinement">Comparison with LaueTools strain refinement</a>
         <ul>
     <li class="toctree-l4"><a class="reference internal" href="#parameterisation">Parameterisation</a>
@@ -617,6 +625,104 @@ apply the rotation manually:</p>
 </li>
 </ul>
 <hr />
+<h2 id="layered-crystal-stack-fit_strain_orientation_stack">Layered crystal (stack) — <code>fit_strain_orientation_stack</code><a class="headerlink" href="#layered-crystal-stack-fit_strain_orientation_stack" title="Permanent link">&para;</a></h2>
+<p>For epitaxial stacks modelled as a
+<a class="autorefs autorefs-internal" title="LayeredCrystal" href="../../api/laue/layers/#nrxrdct.laue.layers.LayeredCrystal"><code>LayeredCrystal</code></a>, a single global
+rotation is shared by all layers (preserving inter-layer relationships) while
+each layer receives its own independent strain tensor:</p>
+<div class="arithmatex">\[
+\mathbf{U}_{\text{eff},i}
+= \mathbf{R}(\delta\boldsymbol{\omega})\;\mathbf{U}_{0,i}\;(\mathbf{I} + \boldsymbol{\varepsilon}_i)
+\]</div>
+<p>The parameter vector is</p>
+<div class="arithmatex">\[
+\mathbf{x} = [\,\delta\omega_x,\;\delta\omega_y,\;\delta\omega_z,\;
+               s\,\varepsilon_{i=0,xx},\;\ldots,\;s\,\varepsilon_{i=0,yz},\;
+               s\,\varepsilon_{i=1,xx},\;\ldots\,]
+\]</div>
+<p>with total length <span class="arithmatex">\(3 + N_\text{layers} \times n_\text{strain}\)</span>.</p>
+<h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># stack already built and orientation fitted via fit_orientation_stack</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">fit_strain_orientation_stack</span><span class="p">(</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">peaks</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">],</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">fit_strain</span>    <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;e_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_zz&quot;</span><span class="p">),</span>  <span class="c1"># diagonal / biaxial only</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">max_match_px</span>  <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">verbose</span>       <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># StackStrainFitResult [OK]  rms=0.41 px  mean=0.38 px  matched=47/52 (90%)  |δω|=0.003°</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># per-layer strain</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">eps</span><span class="p">,</span> <span class="n">voigt</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">strain_tensors</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">strain_voigts</span><span class="p">)):</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: ε_zz = </span><span class="si">{</span><span class="n">eps</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># effective matrices for simulation</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">for</span> <span class="n">layer</span><span class="p">,</span> <span class="n">U_eff</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">all_layers</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">U_eff_layers</span><span class="p">):</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="n">layer</span><span class="o">.</span><span class="n">U</span> <span class="o">=</span> <span class="n">U_eff</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">spots</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">simulate_laue_stack</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="result-fields">Result fields<a class="headerlink" href="#result-fields" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>result.R_global</code></td>
+<td><code>(3, 3)</code></td>
+<td>Global rotation applied to all layers</td>
+</tr>
+<tr>
+<td><code>result.rotvec</code></td>
+<td><code>(3,)</code></td>
+<td>Rotation vector (radians)</td>
+</tr>
+<tr>
+<td><code>result.U_layers</code></td>
+<td><code>list of (3, 3)</code></td>
+<td>Pure rotation part per layer</td>
+</tr>
+<tr>
+<td><code>result.U_eff_layers</code></td>
+<td><code>list of (3, 3)</code></td>
+<td>Effective matrix <code>R @ U0_i @ (I + ε_i)</code> — pass as <code>U</code> to <code>simulate_laue</code></td>
+</tr>
+<tr>
+<td><code>result.strain_tensors</code></td>
+<td><code>list of (3, 3)</code></td>
+<td>Symmetric strain tensor per layer, crystal frame</td>
+</tr>
+<tr>
+<td><code>result.strain_voigts</code></td>
+<td><code>list of (6,)</code></td>
+<td>Voigt vector <code>[ε_xx, ε_yy, ε_zz, ε_xy, ε_xz, ε_yz]</code> per layer</td>
+</tr>
+<tr>
+<td><code>result.rms_px</code></td>
+<td>scalar</td>
+<td>RMS pixel residual</td>
+</tr>
+<tr>
+<td><code>result.n_matched</code></td>
+<td>int</td>
+<td>Matched spots</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition tip">
+<p class="admonition-title">Recommended workflow for stacks</p>
+<ol>
+<li><code>fit_orientation_stack</code> — converge the global rotation with a loose match window.</li>
+<li><code>fit_strain_orientation_stack</code> — add per-layer strain starting from the refined orientations.</li>
+<li><code>refine_strain_image_stack</code> — image-space polishing pass (see <a href="../laue_image_refinement/#layered-crystal-stack-variants">Image refinement</a>).</li>
+</ol>
+</div>
+<hr />
 <h2 id="comparison-with-lauetools-strain-refinement">Comparison with LaueTools strain refinement<a class="headerlink" href="#comparison-with-lauetools-strain-refinement" title="Permanent link">&para;</a></h2>
 <p><code>nrxrdct</code> adopts the LaueTools lab-frame convention and can read LaueTools
 calibration files and <code>matstarlab</code> orientation matrices (see
@@ -713,15 +819,15 @@ strain tensor.</p>
 <p>Because <code>nrxrdct</code> uses the LaueTools lab frame and <span class="arithmatex">\(2\pi\)</span>-scaled reciprocal
 vectors internally, the interoperability functions handle the two frame and
 scaling differences automatically:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># matstarlab: LaueTools grain matrix (LT2/OR frame, no 2π)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">U</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">eps_voigt</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># U  — pure rotation (use in simulate_laue for rotation-only simulation)</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># F  — full deformation gradient (use in simulate_laue to include strain)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># eps — small-strain tensor in the crystal frame,  ε = P − I  (exact)</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># eps_voigt — [ε_xx, ε_yy, ε_zz, ε_yz, ε_xz, ε_xy]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># matstarlab: LaueTools grain matrix (LT2/OR frame, no 2π)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">U</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">eps_voigt</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># U  — pure rotation (use in simulate_laue for rotation-only simulation)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># F  — full deformation gradient (use in simulate_laue to include strain)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># eps — small-strain tensor in the crystal frame,  ε = P − I  (exact)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># eps_voigt — [ε_xx, ε_yy, ε_zz, ε_yz, ε_xz, ε_xy]</span>
 </code></pre></div>
 <p><code>decompose_matstarlab</code> uses the exact polar decomposition (same as LaueTools),
 so <code>eps</code> here is directly comparable to the strain output of LaueTools'
@@ -760,25 +866,25 @@ that is robustly comparable between the two methods is the <strong>deviatoric st
 (shape <code>(n_grains, ny, nx, 3, 3)</code>, crystal frame), derived from <code>strain_tensor</code>
 whenever strain results are stored or loaded.</p>
 <h4 id="practical-comparison-workflow">Practical comparison workflow<a class="headerlink" href="#practical-comparison-workflow" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_strain_orientation</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># 1. Convert a LaueTools matstarlab to strain</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">U_lt</span><span class="p">,</span> <span class="n">F_lt</span><span class="p">,</span> <span class="n">eps_lt</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">eps_dev_lt</span> <span class="o">=</span> <span class="n">eps_lt</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">eps_lt</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># 2. Run nrxrdct fitter from the same starting orientation</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_strain_orientation</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span> <span class="n">U0</span><span class="o">=</span><span class="n">U_lt</span><span class="p">)</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># 3. Compare deviatoric tensors (should agree within fit uncertainty)</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">diff</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">eps_dev_lt</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Max |Δε_dev|:&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># 4. On a full GrainMap, access the stored deviatoric field</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="c1">#    gmap.strain_tensor_deviatoric has shape (n_grains, ny, nx, 3, 3)</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">eps_dev_map</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">strain_tensor_deviatoric</span><span class="p">[</span><span class="n">grain_idx</span><span class="p">]</span>   <span class="c1"># (ny, nx, 3, 3)</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="n">e_dev_zz</span>    <span class="o">=</span> <span class="n">eps_dev_map</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>                     <span class="c1"># (ny, nx)  zz component</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">decompose_matstarlab</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_strain_orientation</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># 1. Convert a LaueTools matstarlab to strain</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">U_lt</span><span class="p">,</span> <span class="n">F_lt</span><span class="p">,</span> <span class="n">eps_lt</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">decompose_matstarlab</span><span class="p">(</span><span class="n">matstarlab</span><span class="p">,</span> <span class="n">crystal</span><span class="p">)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">eps_dev_lt</span> <span class="o">=</span> <span class="n">eps_lt</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">eps_lt</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># 2. Run nrxrdct fitter from the same starting orientation</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_strain_orientation</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span> <span class="n">U0</span><span class="o">=</span><span class="n">U_lt</span><span class="p">)</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># 3. Compare deviatoric tensors (should agree within fit uncertainty)</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">diff</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">strain_tensor</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">eps_dev_lt</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Max |Δε_dev|:&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># 4. On a full GrainMap, access the stored deviatoric field</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1">#    gmap.strain_tensor_deviatoric has shape (n_grains, ny, nx, 3, 3)</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="n">eps_dev_map</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">strain_tensor_deviatoric</span><span class="p">[</span><span class="n">grain_idx</span><span class="p">]</span>   <span class="c1"># (ny, nx, 3, 3)</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="n">e_dev_zz</span>    <span class="o">=</span> <span class="n">eps_dev_map</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>                     <span class="c1"># (ny, nx)  zz component</span>
 </code></pre></div>
 <h4 id="what-to-expect">What to expect<a class="headerlink" href="#what-to-expect" title="Permanent link">&para;</a></h4>
 <table>

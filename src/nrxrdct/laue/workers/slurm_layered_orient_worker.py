@@ -162,7 +162,8 @@ def main() -> None:
         "E_min_eV", "E_max_eV", "f2_thresh",
         "top_n_sim", "top_n_obs",
         "method", "ftol", "xtol", "gtol", "max_nfev",
-        "geometry_only", "source", "source_kwargs", "structure_model",
+        "geometry_only", "correct_depth",
+        "source", "source_kwargs", "structure_model",
     )
     fit_kwargs = {k: meta[k] for k in _FIT_KEYS if k in meta}
 

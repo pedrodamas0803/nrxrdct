@@ -296,7 +296,6 @@ def _read_motor_array(
 # Voigt helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-_VOIGT_IDX = {"e_xx": 0, "e_yy": 1, "e_zz": 2, "e_xy": 3, "e_xz": 4, "e_yz": 5}
 _VOIGT_TENSOR = {
     "e_xx": (0, 0), "e_yy": (1, 1), "e_zz": (2, 2),
     "e_xy": (0, 1), "e_xz": (0, 2), "e_yz": (1, 2),
@@ -641,6 +640,7 @@ class LayeredMap:
         min_match_rate: float = 0.2,
         max_rms_px: "float | None" = None,
         geometry_only: bool = True,
+        correct_depth: bool = False,
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -691,7 +691,8 @@ class LayeredMap:
             min_matched    = min_matched,
             min_match_rate = min_match_rate,
             max_rms_px     = max_rms_px,
-            fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only},
+            fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only,
+                               "correct_depth": correct_depth},
             overwrite      = overwrite,
         )
         stack_pkl = self._serialize_stack()
@@ -721,6 +722,7 @@ class LayeredMap:
         min_match_rate: float = 0.2,
         max_rms_px: "float | None" = None,
         geometry_only: bool = True,
+        correct_depth: bool = False,
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -769,7 +771,8 @@ class LayeredMap:
             min_matched    = min_matched,
             min_match_rate = min_match_rate,
             max_rms_px     = max_rms_px,
-            fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only},
+            fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only,
+                               "correct_depth": correct_depth},
             overwrite      = overwrite,
         )
         stack_pkl = self._serialize_stack()
@@ -793,6 +796,7 @@ class LayeredMap:
         out_dir: str,
         *,
         geometry_only: bool = True,
+        correct_depth: bool = False,
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -829,7 +833,9 @@ class LayeredMap:
             flush=True,
         )
 
-        common = dict(out_dir=out_dir, fit_kwargs=fit_kwargs, overwrite=overwrite)
+        common = dict(out_dir=out_dir,
+                      fit_kwargs={**fit_kwargs, "correct_depth": correct_depth},
+                      overwrite=overwrite)
         stack_pkl = self._serialize_stack()
         try:
             n_ok = self._run_pool(
@@ -851,6 +857,7 @@ class LayeredMap:
         *,
         fit_strain: "tuple | None" = None,
         geometry_only: bool = True,
+        correct_depth: bool = False,
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -888,7 +895,8 @@ class LayeredMap:
 
         common = dict(
             out_dir=out_dir, fit_strain=_fit_strain,
-            fit_kwargs=fit_kwargs, overwrite=overwrite,
+            fit_kwargs={**fit_kwargs, "correct_depth": correct_depth},
+            overwrite=overwrite,
         )
         stack_pkl = self._serialize_stack()
         try:

@@ -467,10 +467,18 @@ class Camera:
 
     # ── single-spot projection for simulation ────────────────────────────────
 
-    def project(self, kf_hat):
+    def project(self, kf_hat, source_depth_mm: float = 0.0):
         """
         Project one scattered beam direction (in LT frame, x // beam) onto
         the detector.  Returns (xcam, ycam) in pixels, or None if beam misses.
+
+        Args:
+            kf_hat: Unit scattered-beam vector in the LT frame.
+            source_depth_mm: Depth of the scattering centre below the surface
+                along the incident beam direction (mm).  Non-zero for layers
+                buried beneath the sample surface — corrects the parallax
+                shift that occurs when the scattering point is not at the
+                nominal sample position.  Default ``0.0`` (surface).
 """
         # Convert LT -> LT2 for camera geometry
         kf_lt = np.array(kf_hat, dtype=float)
@@ -479,8 +487,11 @@ class Camera:
         scal = float(np.dot(kf, self.normal))
         if scal < 1e-8:
             return None
-        normeIM = self.dd / scal
-        IM = kf * normeIM
+        # Depth correction: source displaced to (0, depth_mm, 0) in LT2 frame
+        # (beam is along y in LT2).  normeIM = (dd − s·n̂) / scal.
+        s_dot_n  = source_depth_mm * float(self.normal[1])
+        normeIM  = (self.dd - s_dot_n) / scal
+        IM = np.array([0.0, source_depth_mm, 0.0]) + kf * normeIM
         OM = IM - self.IOlab
         xca0 = OM[0]
         yca0 = (
@@ -496,13 +507,15 @@ class Camera:
             return float(xcam), float(ycam)
         return None
 
-    def project_batch(self, kf_hat_arr):
+    def project_batch(self, kf_hat_arr, source_depth_mm: float = 0.0):
         """
         Vectorised :meth:`project` for N directions at once.
 
         Args:
             kf_hat_arr (ndarray, shape (N, 3)): Unit vectors in the LT frame (x // beam).  Need not be
                 pre-normalised — they are normalised internally.
+            source_depth_mm (float): Depth of the scattering centre below the
+                surface along the beam direction (mm).  See :meth:`project`.
 
         Returns:
             pix (ndarray, shape (N, 2)): Pixel coordinates (xcam, ycam).  Rows for rays that miss the
@@ -514,8 +527,10 @@ class Camera:
         scal = kf @ self.normal
         hit = scal > 1e-8
         safe_scal = np.where(hit, scal, 1.0)
-        normeIM = self.dd / safe_scal
-        IM = kf * normeIM[:, None]
+        # Depth correction: source at (0, depth_mm, 0) in LT2; dd_eff = dd − d·n̂[1]
+        s_dot_n = source_depth_mm * self.normal[1]
+        normeIM = (self.dd - s_dot_n) / safe_scal
+        IM = np.array([0.0, source_depth_mm, 0.0]) + kf * normeIM[:, None]
         OM = IM - self.IOlab[None, :]
         xca0 = OM[:, 0]
         yca0 = (

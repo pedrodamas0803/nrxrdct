@@ -1379,6 +1379,7 @@ def laue_stack_residuals(
     top_n_sim: int | None = None,
     geometry_only: bool = False,
     allowed_hkl=None,
+    correct_depth: bool = False,
 ) -> np.ndarray:
     """
     Pixel-space residual vector for a layered crystal — single global rotation.
@@ -1432,6 +1433,7 @@ def laue_stack_residuals(
         verbose=False,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
+        correct_depth=correct_depth,
     )
 
     obs_use = np.asarray(obs_xy, dtype=float)
@@ -1465,6 +1467,7 @@ def laue_strain_stack_residuals(
     top_n_sim: int | None = None,
     geometry_only: bool = False,
     allowed_hkl=None,
+    correct_depth: bool = False,
 ) -> np.ndarray:
     """
     Pixel-space residual vector for simultaneous orientation + per-layer strain
@@ -1516,6 +1519,7 @@ def laue_strain_stack_residuals(
         verbose=False,
         geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
+        correct_depth=correct_depth,
     )
 
     obs_use = np.asarray(obs_xy, dtype=float)
@@ -1927,6 +1931,7 @@ def fit_orientation_stack(
     max_nfev: int = 500,
     update_stack: bool = True,
     geometry_only: bool = True,
+    correct_depth: bool = False,
     verbose: bool = False,
 ) -> StackFitResult:
     """
@@ -2046,6 +2051,7 @@ def fit_orientation_stack(
                 structure_model=structure_model,
                 max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
                 geometry_only=False, allowed_hkl=_allowed,
+                correct_depth=correct_depth,
             )
             opt = least_squares(
                 fun, x0=np.zeros(3),
@@ -2083,7 +2089,7 @@ def fit_orientation_stack(
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
-        allowed_hkl=_allowed,
+        allowed_hkl=_allowed, correct_depth=correct_depth,
     )
     n_sim = len(_extract_sim_xy(final_spots))
 
@@ -2131,6 +2137,7 @@ def fit_strain_orientation_stack(
     max_nfev: int = 2000,
     update_stack: bool = True,
     geometry_only: bool = True,
+    correct_depth: bool = False,
     verbose: bool = False,
 ) -> StackStrainFitResult:
     """
@@ -2227,6 +2234,7 @@ def fit_strain_orientation_stack(
                 structure_model=structure_model,
                 max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
                 geometry_only=False, allowed_hkl=_allowed,
+                correct_depth=correct_depth,
             )
             opt = least_squares(
                 fun, x0=_x0,
@@ -2281,7 +2289,7 @@ def fit_strain_orientation_stack(
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
-        allowed_hkl=_allowed,
+        allowed_hkl=_allowed, correct_depth=correct_depth,
     )
     n_sim = len(_extract_sim_xy(final_spots))
 
@@ -3860,6 +3868,7 @@ def refine_orientation_image_stack(
     method: str = "Powell",
     options: "dict | None" = None,
     update_stack: bool = False,
+    correct_depth: bool = False,
     verbose: bool = False,
 ) -> StackImageRefinementResult:
     """
@@ -3930,6 +3939,7 @@ def refine_orientation_image_stack(
             verbose=False,
             geometry_only=True,
             allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
         )
         if not spots:
             return 0.0
@@ -3985,6 +3995,7 @@ def refine_orientation_image_stack(
             verbose=False,
             geometry_only=True,
             allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
         )
         n_sim = len(final_spots)
     finally:
@@ -4752,6 +4763,7 @@ def refine_strain_image_stack(
     method: str = "Powell",
     options: "dict | None" = None,
     update_stack: bool = False,
+    correct_depth: bool = False,
     verbose: bool = False,
 ) -> StackStrainImageRefinementResult:
     """
@@ -4863,6 +4875,7 @@ def refine_strain_image_stack(
             verbose=False,
             geometry_only=True,
             allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
         )
         if not spots:
             return 0.0
@@ -4935,6 +4948,7 @@ def refine_strain_image_stack(
             verbose=False,
             geometry_only=True,
             allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
         )
         n_sim = len(final_spots)
     finally:

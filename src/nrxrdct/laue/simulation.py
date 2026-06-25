@@ -1566,6 +1566,7 @@ def simulate_laue(
     n_hat_sample=None,
     geometry_only=False,
     allowed_hkl=None,
+    depth_mm=0.0,
     _pixels_only=False,
 ):
     """
@@ -1746,7 +1747,7 @@ def simulate_laue(
                 km    = 2.0 * np.pi / lam
                 kf_v  = ki_hat[None, :] * km[:, None] + G_lab     # (M, 3)
                 kf_v /= np.linalg.norm(kf_v, axis=1, keepdims=True)
-                pix_arr, on_det = camera.project_batch(kf_v)
+                pix_arr, on_det = camera.project_batch(kf_v, source_depth_mm=depth_mm)
                 if np.any(on_det):
                     kf_v    = kf_v[on_det];  _hkl_arr = _hkl_arr[on_det]
                     lam     = lam[on_det];   E_arr    = E_arr[on_det]
@@ -1815,7 +1816,7 @@ def simulate_laue(
             km    = 2.0 * np.pi / lam
             kf_v  = ki_hat[None, :] * km[:, None] + G_lab_all          # (K, 3)
             kf_v /= np.linalg.norm(kf_v, axis=1, keepdims=True)
-            pix_arr, on_det = camera.project_batch(kf_v)
+            pix_arr, on_det = camera.project_batch(kf_v, source_depth_mm=depth_mm)
             if np.any(on_det):
                 G_cry_all = G_cry_all[on_det];  _hkl    = _hkl[on_det]
                 lam       = lam[on_det];        E_arr   = E_arr[on_det]
@@ -1873,6 +1874,30 @@ def simulate_laue(
     return spots
 
 
+def _layer_depths_mm(stack) -> dict:
+    """
+    Compute the centre depth of every layer in ``stack.all_layers`` (mm).
+
+    Layers are stored deepest-first (index 0 = substrate).  Thickness is in
+    Ångströms (1 Å = 1e-7 mm).  The centre depth of layer *i* is the sum of
+    thicknesses of all shallower layers (indices > i) plus half the layer's
+    own thickness.
+
+    Returns:
+        dict mapping ``id(layer) → depth_mm`` for each layer.
+    """
+    all_layers = stack.all_layers
+    n = len(all_layers)
+    thicknesses = [float(getattr(l, "thickness", 0.0)) for l in all_layers]
+    result = {}
+    for i, layer in enumerate(all_layers):
+        # Layers above i (shallower): indices i+1 … n-1
+        depth_top_ang    = sum(thicknesses[j] for j in range(i + 1, n))
+        depth_center_ang = depth_top_ang + thicknesses[i] / 2.0
+        result[id(layer)] = depth_center_ang * 1e-7  # Å → mm
+    return result
+
+
 def simulate_laue_stack(
     stack,
     camera,
@@ -1893,6 +1918,7 @@ def simulate_laue_stack(
     verbose=True,
     geometry_only=False,
     allowed_hkl=None,
+    correct_depth=False,
 ):
     """
     Compute Laue spots for a `LayeredCrystal` stack projected onto `camera`.
@@ -2082,6 +2108,12 @@ def simulate_laue_stack(
     # _try_append always sees the set that matches the crystal being enumerated.
     _layer_allowed_hkl = None
 
+    # Depth correction: per-layer centre depth (mm), updated as the outer loop
+    # advances through the enumeration pool.
+    _depth_mm_state = [0.0]
+    if correct_depth:
+        _depths_mm = _layer_depths_mm(stack)
+
     def _try_append(G_vec, hkl, sat_order, phase_label):
         """Evaluate the Laue condition + camera + F² for G_vec and append if valid."""
         nonlocal f2_thresh
@@ -2098,7 +2130,7 @@ def simulate_laue_stack(
         km = 2.0 * np.pi / lam
         kf_vec = ki * km + G_vec
         kf_hat = kf_vec / np.linalg.norm(kf_vec)
-        pix = camera.project(kf_hat)
+        pix = camera.project(kf_hat, source_depth_mm=_depth_mm_state[0])
         if pix is None:
             return 0
         # Pixel-level deduplication
@@ -2184,8 +2216,11 @@ def simulate_laue_stack(
         crystal = layer.crystal
         U = layer.U
         label = layer.label
-        # Update the closure variable so _try_append uses this layer's allowed set.
+        # Update the closure variables so _try_append uses this layer's
+        # allowed HKL set and (when requested) its centre depth.
         _layer_allowed_hkl = allowed_hkl.get(id(crystal)) if isinstance(allowed_hkl, dict) else allowed_hkl
+        if correct_depth:
+            _depth_mm_state[0] = _depths_mm.get(id(layer), 0.0)
 
         u_key = (crystal.name, tuple(np.round(U, 4).ravel()))
         if u_key in seen_combos:

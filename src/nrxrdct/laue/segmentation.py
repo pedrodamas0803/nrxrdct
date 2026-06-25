@@ -949,20 +949,20 @@ def write_peaklist_dat(peaklist, outname):
 def simulation_guided_segmentation(
     image: np.ndarray,
     spots: list,
+    mask: np.ndarray,
     outpath: "str | None" = None,
     *,
-    psf_sigma: float = 2.0,
-    search_radius: int = 10,
-    min_distance: int = 3,
-    min_snr: float = 3.0,
-    bg_sigma: float = 0.0,
-    mask: "np.ndarray | None" = None,
+    psf_sigma: float = 1.0,
+    search_radius: int = 7,
+    min_distance: int = 1,
+    min_snr: float = 1.0,
+    bg_sigma: float = 60.0,
     d: int = 10,
     r_squared_min: float = 0.8,
     include_unfitted: bool = True,
-    fit_spots: bool = True,
+    fit_spots: bool = False,
     overwrite: bool = False,
-) -> int:
+) -> np.ndarray:
     """
     Simulation-guided peak search optimised for small and faint spots.
 
@@ -993,10 +993,14 @@ def simulation_guided_segmentation(
 
     Args:
         image: Raw detector frame ``(Nv, Nh) float32``.
-        spots: Simulated spot list from :func:`~nrxrdct.laue.simulate_laue`
-            or :func:`~nrxrdct.laue.simulate_laue_stack`.  Each element
-            must have ``'pix': (xcam, ycam)``; spots with ``pix=None``
-            (off-detector) are silently skipped.
+        spots: Predicted spot positions.  Two forms are accepted:
+
+            * **List of dicts** — direct output of
+              :func:`~nrxrdct.laue.simulate_laue` or
+              :func:`~nrxrdct.laue.simulate_laue_stack`.  Each dict must
+              have ``'pix': (xcam, ycam)``; entries with ``pix=None``
+              (off-detector) are silently skipped.
+            * **numpy array** ``(N, 2)`` — columns ``[xcam, ycam]``.
         outpath: Output HDF5 file path.  If ``None`` (default), no file is
             written and only the peaklist is returned.
         psf_sigma: Gaussian smoothing sigma (pixels) applied to the
@@ -1012,7 +1016,9 @@ def simulation_guided_segmentation(
         bg_sigma: If > 0, subtract a Gaussian background of this sigma
             (pixels) from the full image before imagette extraction.  The
             Gaussian fit always uses the original *image* intensities.
-        mask: Boolean valid-pixel mask (``True`` = active).
+        mask: Boolean valid-pixel mask (``True`` = active).  Required —
+            dead pixels and detector gaps must be excluded before peak
+            finding.
         d: Half-size of the Gaussian fit ROI (pixels).
         r_squared_min: Minimum Gaussian fit R² to accept a result.
         include_unfitted: Store peaks that pass the SNR gate but whose fit
@@ -1042,7 +1048,15 @@ def simulation_guided_segmentation(
 
     image = np.asarray(image, dtype=np.float32)
     nv, nh = image.shape
-    valid = mask.astype(bool) if mask is not None else np.ones((nv, nh), dtype=bool)
+    valid = np.asarray(mask, dtype=bool)
+
+    # Normalise spots input:
+    #   • numpy (N, 2) array            → each row is [xcam, ycam]
+    #   • simulate_laue / simulate_laue_stack output (list of dicts with 'pix')
+    #     → passed through unchanged; dicts that have pix=None are already skipped below
+    if isinstance(spots, np.ndarray):
+        _arr = np.asarray(spots, dtype=np.float32)
+        spots = [{"pix": (float(r[0]), float(r[1]))} for r in _arr]
 
     # Background subtraction — used for detection only; Gaussian fit uses raw image
     if bg_sigma > 0:

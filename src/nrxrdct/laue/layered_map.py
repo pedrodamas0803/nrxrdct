@@ -2040,6 +2040,172 @@ class LayeredMap:
 
         return job_ids
 
+    # ── Simulation-guided segmentation ────────────────────────────────────────
+
+    def build_predicted_spots(
+        self,
+        camera,
+        out_h5: str,
+        *,
+        use_eff: bool = True,
+        correct_depth: bool = False,
+        overwrite: bool = False,
+        **sim_kwargs,
+    ) -> int:
+        """
+        Pre-compute simulated spot pixel positions for every fitted pixel
+        and write them to an HDF5 file consumed by
+        :meth:`submit_guided_segmentation`.
+
+        For each pixel that has been fitted (non-NaN orientation), the
+        stack's U matrices are temporarily set to the stored values and
+        :func:`~nrxrdct.laue.simulate_laue_stack` is called.  The
+        resulting pixel coordinates are stored as a ``(N, 2) float32``
+        dataset ``frame_{idx:05d}`` inside *out_h5*.
+
+        Args:
+            camera: Detector geometry.
+            out_h5: Output HDF5 path.
+            use_eff: Use ``U_eff`` (strain-corrected) if available,
+                otherwise fall back to ``U``.  Default ``True``.
+            correct_depth: Pass through to
+                :func:`~nrxrdct.laue.simulate_laue_stack`.
+            overwrite: Overwrite existing *out_h5*.
+            **sim_kwargs: Extra keyword arguments forwarded to
+                :func:`~nrxrdct.laue.simulate_laue_stack`.
+
+        Returns:
+            Number of frames for which spots were computed.
+        """
+        from .simulation import simulate_laue_stack
+
+        if os.path.exists(out_h5):
+            if not overwrite:
+                raise FileExistsError(
+                    f"{out_h5!r} already exists. Pass overwrite=True to replace it."
+                )
+            os.remove(out_h5)
+
+        orig_U = [layer.U.copy() for layer in self.stack.all_layers]
+        n_computed = 0
+
+        with h5py.File(out_h5, "w") as hf:
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    # Determine whether this pixel has a fitted orientation
+                    if use_eff and not np.all(np.isnan(self.U_eff[:, iy, ix])):
+                        U_src = self.U_eff[:, iy, ix]        # (n_layers, 3, 3)
+                    elif not np.all(np.isnan(self.U[:, iy, ix])):
+                        U_src = self.U[:, iy, ix]
+                    else:
+                        continue
+
+                    # Temporarily apply this pixel's U to the stack
+                    for i, layer in enumerate(self.stack.all_layers):
+                        layer.U = U_src[i]
+
+                    try:
+                        spots = simulate_laue_stack(
+                            self.stack, camera,
+                            correct_depth=correct_depth,
+                            **sim_kwargs,
+                        )
+                        pix_arr = np.array(
+                            [s["pix"] for s in spots if s.get("pix") is not None],
+                            dtype=np.float32,
+                        )
+                    except Exception:
+                        pix_arr = np.empty((0, 2), dtype=np.float32)
+
+                    frame_idx = self.frame_index(iy, ix)
+                    hf.create_dataset(
+                        f"frame_{frame_idx:05d}",
+                        data=pix_arr if pix_arr.size else np.empty((0, 2), dtype=np.float32),
+                    )
+                    n_computed += 1
+
+        # Restore original U matrices
+        for layer, U0 in zip(self.stack.all_layers, orig_U):
+            layer.U = U0
+
+        print(f"build_predicted_spots: {n_computed}/{self.ny * self.nx} frames → {out_h5!r}")
+        return n_computed
+
+    def submit_guided_segmentation(
+        self,
+        base_dir: str,
+        spots_h5: str,
+        h5_dataset: str,
+        mask_path: str,
+        *,
+        n_jobs: int = 10,
+        partition: str = "all",
+        time: str = "02:00:00",
+        mem: str = "8G",
+        cpus_per_task: int = 1,
+        python_bin: str = "python",
+        overwrite: bool = False,
+        extra_sbatch: "dict | None" = None,
+        **seg_kwargs,
+    ) -> list:
+        """
+        Submit simulation-guided segmentation jobs to SLURM.
+
+        Each job reads predicted pixel positions from *spots_h5*,
+        loads the corresponding raw detector frames, and runs
+        :func:`~nrxrdct.laue.segmentation.simulation_guided_segmentation`.
+        Results are written to ``<base_dir>/seg/frame_?????.h5``.
+
+        Call :meth:`build_predicted_spots` first to create *spots_h5*.
+
+        Args:
+            base_dir: Processing root directory.
+            spots_h5: HDF5 file produced by :meth:`build_predicted_spots`.
+            h5_dataset: Dataset path inside ``self.h5_path``.
+            mask_path: Path to the ``.npy`` detector mask.
+            n_jobs: Number of SLURM array jobs.
+            **seg_kwargs: Forwarded to
+                :func:`~nrxrdct.laue.segmentation.simulation_guided_segmentation`
+                (``psf_sigma``, ``search_radius``, ``min_snr``, etc.).
+
+        Returns:
+            List of SLURM job IDs.
+        """
+        if self.h5_path is None:
+            raise ValueError("h5_path not set on this LayeredMap.")
+
+        dirs = self._setup_slurm_dirs(base_dir, "seg")
+        all_frames = list(range(self.ny * self.nx))
+        chunks = [
+            list(map(int, c))
+            for c in np.array_split(all_frames, min(n_jobs, len(all_frames)))
+            if len(c) > 0
+        ]
+
+        meta = {
+            "h5_path":   self.h5_path,
+            "h5_dataset": h5_dataset,
+            "spots_h5":  spots_h5,
+            "mask_path": mask_path,
+            "monitor":   self.monitor,
+            "seg_dir":   dirs["out"],
+            "overwrite": overwrite,
+            **seg_kwargs,
+        }
+        meta_path = os.path.join(dirs["job_meta"], "guided_seg_meta.json")
+        with open(meta_path, "w") as fh:
+            json.dump(meta, fh, indent=2)
+
+        job_ids = self._submit_jobs(
+            "lm_gseg", "nrxrdct.laue.workers.slurm_guided_seg_worker",
+            meta_path, chunks, dirs["slurm_logs"],
+            partition=partition, time=time, mem=mem,
+            cpus_per_task=cpus_per_task, python_bin=python_bin,
+            extra_sbatch=extra_sbatch,
+        )
+        print(f"Guided segmentation: {len(job_ids)} jobs → {dirs['out']}")
+        return job_ids
+
     def submit_segmentation(
         self,
         base_dir: str,

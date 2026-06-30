@@ -1881,6 +1881,725 @@ class LayeredMap:
         )
         return fig, axes
 
+    def reindex_frame(
+        self,
+        camera,
+        base_dir: str,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        seg_dir: "str | None" = None,
+        map_quantity: str = "match_rate",
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        E_min_eV: float = 5_000.0,
+        E_max_eV: float = 27_000.0,
+        f2_thresh: float = 1e-4,
+        max_match_px: float = 5.0,
+        fit_max_match_px: "float | list[float]" = (30.0, 10.0, 3.0),
+        fit_strain: "tuple | None" = None,
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
+        kernel_sigma: float = 0.3,
+        bg_sigma: float = 251.0,
+        max_angle_deg: float = 0.2,
+        max_shift_px: "float | list[float] | None" = None,
+        figsize: tuple = (14, 7),
+    ) -> None:
+        """
+        Interactive single-frame fitter and inspector for a
+        :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
+
+        Click a pixel on the left map panel to load the frame, then use the
+        buttons to refit and store the result:
+
+        1. **⚡ Fit** — runs :func:`~nrxrdct.laue.fitting.fit_orientation_stack`
+           starting from the current map orientation (or the template stack U
+           matrices if no result exists for that pixel).  Per-layer simulated
+           spots are drawn in distinct colors; green lines connect matched pairs.
+        2. **🔩 Fit strain** — runs
+           :func:`~nrxrdct.laue.fitting.fit_strain_orientation_stack` from the
+           best available orientation.  Enabled after a successful spot-based
+           orientation fit.
+        3. **🖼 Img orient** — runs
+           :func:`~nrxrdct.laue.fitting.refine_orientation_image_stack` on the
+           raw pixel image.  Enabled whenever a starting orientation is
+           available (existing map result or fit result).
+        4. **🖼 Img strain** — runs
+           :func:`~nrxrdct.laue.fitting.refine_strain_image_stack` jointly
+           refining orientation and strain against the raw image.  The
+           ``max_shift_px`` constraint (if set) is forwarded to the optimizer.
+        5. **⬆ Store** — writes the best available result back into the map at
+           the selected pixel via :meth:`set_result`.  If ``self.save_path`` is
+           set the map is also persisted to disk.
+        6. **💾 Save UBs** — saves the per-layer U matrices to auto-numbered
+           ``.npy`` files in the current directory.
+
+        Args:
+            camera: Detector geometry (:class:`~nrxrdct.laue.camera.Camera`).
+            base_dir: Processing root directory.  The seg sub-folder defaults to
+                ``<base_dir>/seg`` unless *seg_dir* is given explicitly.
+            h5_dataset: HDF5 dataset path for the image stack (e.g.
+                ``"1.1/measurement/eiger4m"``).  Mutually exclusive with
+                *tiff_dir*.
+            tiff_dir: Directory of ``img_*.tif`` files.  Mutually exclusive with
+                *h5_dataset*.
+            seg_dir: Directory containing ``frame_?????.h5`` segmentation files.
+                Defaults to ``<base_dir>/seg``.
+            map_quantity: Scalar quantity displayed on the left panel.  One of
+                ``'match_rate'``, ``'rms_px'``, ``'n_matched'``, ``'score'``,
+                ``'cost'``.
+            motor_x, motor_y: Motor names for physical axis labels and
+                click-to-pixel conversion.
+            motor_units: Unit labels per motor, e.g. ``{'sy': 'mm', 'sz': 'mm'}``.
+            E_min_eV, E_max_eV: Energy range for spot simulation.
+            f2_thresh: Structure-factor threshold for allowed-HKL precomputation.
+            max_match_px: Pixel radius used when drawing match lines between
+                observed and simulated spots.
+            fit_max_match_px: Match-radius schedule passed to
+                :func:`~nrxrdct.laue.fitting.fit_orientation_stack`.  A list
+                enables staged refinement.
+            fit_strain: Strain components to refine (e.g. ``('e_xx', 'e_yy',
+                'e_zz')``).  ``None`` refines all six.
+            r_squared_min: Minimum Gaussian-fit R² when loading the seg file.
+            include_unfitted: Include raw centroids from the seg file.
+            kernel_sigma: Gaussian kernel width (px) for image-based refinement.
+            bg_sigma: Background subtraction kernel width (px).
+            max_angle_deg: Local-search radius (°) for image-based orientation.
+            max_shift_px: Per-layer pixel-displacement budget forwarded to
+                :func:`~nrxrdct.laue.fitting.refine_strain_image_stack`.
+            figsize: Figure size in inches.
+        """
+        import re as _re
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+        from .simulation import simulate_laue, precompute_allowed_hkl
+        from .segmentation import convert_spotsfile2peaklist
+        from .fitting import (
+            fit_orientation_stack,
+            fit_strain_orientation_stack,
+            refine_orientation_image_stack,
+            refine_strain_image_stack,
+            _match_spots,
+            _STRAIN_ALL,
+        )
+
+        _seg_dir    = seg_dir or os.path.join(base_dir, "seg")
+        _fit_strain = tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL
+
+        # Precompute allowed HKL for each unique crystal in the stack.
+        _allowed_by_crystal: dict = {}
+        for _layer in self.stack.all_layers:
+            _cid = id(_layer.crystal)
+            if _cid not in _allowed_by_crystal:
+                _allowed_by_crystal[_cid] = precompute_allowed_hkl(
+                    _layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
+                )
+
+        _LAYER_COLORS = [
+            "#ff6b35", "#44aaff", "#44dd66", "#ffcc44", "#ff44aa", "#aa44ff",
+        ]
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu_ = mu.get(motor_x, "")
+            yu_ = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu_})" if xu_ else motor_x
+            ylabel_map = f"{motor_y} ({yu_})" if yu_ else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        _tiff_index: list = []
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                if not _tiff_index:
+                    pat = _re.compile(r'(\d+)\.tiff?$', _re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.search(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda t: t[0])
+                    _tiff_index.extend(p for _, p in files)
+                if not _tiff_index or frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception as exc:
+                    print(f"  ✗ TIFF read error frame {frame_idx}: {exc}", flush=True)
+                    return None
+            elif h5_dataset is not None:
+                _h5 = self.h5_path
+                if _h5 is None:
+                    print("  ✗ h5_path not set on this LayeredMap.", flush=True)
+                    return None
+                try:
+                    with h5py.File(_h5, "r") as fh:
+                        if h5_dataset not in fh:
+                            print(f"  ✗ dataset {h5_dataset!r} not in {_h5!r}", flush=True)
+                            return None
+                        return fh[h5_dataset][frame_idx].astype(np.float32)
+                except Exception as exc:
+                    print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
+                    return None
+            return None
+
+        _map_opts = {
+            "match_rate": (self.match_rate,                                      "Match rate", "viridis"),
+            "rms_px":     (self.rms_px,                                          "RMS (px)",   "plasma_r"),
+            "n_matched":  (np.where(self.n_matched == -1, np.nan,
+                                    self.n_matched.astype(float)),               "N matched",  "YlOrRd"),
+            "score":      (self.score,                                           "Img score",  "viridis"),
+            "cost":       (self.cost,                                            "Cost",       "plasma_r"),
+        }
+        map_data, map_label, map_cmap = _map_opts.get(
+            map_quantity, _map_opts["match_rate"]
+        )
+
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize)
+        try:
+            fig.canvas.manager.set_window_title("Laue — LayeredMap re-index")
+        except Exception:
+            pass
+
+        gs = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        im_map = ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap=map_cmap, interpolation="nearest", aspect="auto",
+        )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label=map_label)
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title(f"Click to select — {map_label}", fontsize=9)
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_xlim(0, camera.Nh)
+        ax_det.set_ylim(camera.Nv, 0)
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+        fig.suptitle(
+            "LayeredMap re-index  —  click map → Fit → Store",
+            fontsize=9, color="#555",
+        )
+
+        _state: dict = {
+            "frame_idx": None, "iy": None, "ix": None,
+            "obs_xy": np.empty((0, 2)),
+            "fit_result": None,
+            "drawn": False,
+        }
+
+        def _best_U_layers() -> "list | None":
+            """Return U_layers from the current fit result or map arrays."""
+            r = _state["fit_result"]
+            iy, ix = _state["iy"], _state["ix"]
+            if r is not None:
+                return (r.U_eff_layers if hasattr(r, "U_eff_layers") else r.U_layers)
+            if iy is not None:
+                U_src = (
+                    self.U_eff if not np.all(np.isnan(self.U_eff[:, iy, ix]))
+                    else self.U
+                )
+                if not np.all(np.isnan(U_src[:, iy, ix])):
+                    return [U_src[li, iy, ix].copy() for li in range(self.n_layers)]
+            return None
+
+        def _overlay_sim(U_layers_list: list, obs_xy: np.ndarray) -> None:
+            """Draw per-layer simulated spots (colored) with match lines."""
+            for li, (layer, U) in enumerate(
+                zip(self.stack.all_layers, U_layers_list)
+            ):
+                if np.any(np.isnan(U)):
+                    continue
+                color = _LAYER_COLORS[li % len(_LAYER_COLORS)]
+                label = getattr(layer, "label", f"layer {li}")
+                try:
+                    spots = simulate_laue(
+                        layer.crystal, U, camera,
+                        E_min=E_min_eV, E_max=E_max_eV,
+                        geometry_only=True,
+                        allowed_hkl=_allowed_by_crystal.get(id(layer.crystal)),
+                    )
+                    sim_xy = np.array(
+                        [s["pix"] for s in spots if s.get("pix") is not None],
+                        dtype=float,
+                    ) if spots else np.empty((0, 2))
+                    if not len(sim_xy):
+                        continue
+                    ax_det.scatter(
+                        sim_xy[:, 0], sim_xy[:, 1],
+                        s=24, c=color, marker="D", linewidths=0,
+                        zorder=5, alpha=0.85,
+                        label=f"{label} ({len(sim_xy)})",
+                    )
+                    if len(obs_xy) and len(sim_xy):
+                        row_ind, col_ind, dist_px = _match_spots(
+                            obs_xy, sim_xy, max_match_px
+                        )
+                        for r, c, d in zip(row_ind, col_ind, dist_px):
+                            if d < max_match_px:
+                                ax_det.plot(
+                                    [obs_xy[r, 0], sim_xy[c, 0]],
+                                    [obs_xy[r, 1], sim_xy[c, 1]],
+                                    color="#44dd66", lw=0.7, alpha=0.55, zorder=3,
+                                )
+                except Exception as exc:
+                    print(f"  layer {li} sim error: {exc}", flush=True)
+
+        def _draw_det() -> None:
+            frame_idx  = _state["frame_idx"]
+            obs_xy     = _state["obs_xy"]
+            fit_result = _state["fit_result"]
+            iy, ix     = _state["iy"], _state["ix"]
+
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            image = _load_image(frame_idx)
+            if image is not None:
+                pos  = image[image > 0]
+                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                nv_im, nh_im = image.shape
+                ax_det.imshow(
+                    np.log1p(image / vmax * 1000),
+                    origin="upper", extent=[0, nh_im, nv_im, 0],
+                    cmap="gray", aspect="equal", zorder=0,
+                )
+            else:
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+            ax_det.set_aspect("equal")
+
+            if len(obs_xy):
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=40, c="none", edgecolors="white", linewidths=0.8,
+                    zorder=4, label=f"observed ({len(obs_xy)})",
+                )
+
+            U_layers_draw = _best_U_layers()
+            if U_layers_draw is not None:
+                _overlay_sim(U_layers_draw, obs_xy)
+
+            if len(obs_xy) or U_layers_draw is not None:
+                ax_det.legend(
+                    fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+            suffix = f"  — {fit_result}" if fit_result is not None else ""
+            ax_det.set_title(
+                f"Frame {frame_idx}  (iy={iy}, ix={ix}){suffix}",
+                fontsize=8,
+            )
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+            fig.canvas.draw_idle()
+
+        def _on_click(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            seg_path = os.path.join(_seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    obs_xy = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )[:, :2]
+                except Exception:
+                    obs_xy = np.empty((0, 2))
+            else:
+                obs_xy = np.empty((0, 2))
+
+            has_map_result = not np.all(np.isnan(self.U[:, iy, ix, 0, 0]))
+            has_image      = (h5_dataset is not None or tiff_dir is not None)
+            enough_obs     = len(obs_xy) >= 3
+
+            _state.update(
+                frame_idx=frame_idx, iy=iy, ix=ix,
+                obs_xy=obs_xy, fit_result=None,
+            )
+
+            _info.value = (
+                f"<span style='color:#aaa'>Frame {frame_idx} — "
+                f"{len(obs_xy)} observed spots"
+                + (" — existing map result" if has_map_result else "")
+                + "</span>"
+            )
+            btn_fit_ori.disabled = not (enough_obs and (has_map_result or True))
+            btn_fit_str.disabled = True
+            btn_img_ori.disabled = not (has_image and (has_map_result or enough_obs))
+            btn_img_str.disabled = not (has_image and (has_map_result or enough_obs))
+            btn_store.disabled   = True
+            btn_save.disabled    = True
+            _draw_det()
+
+        fig.canvas.mpl_connect("button_press_event", _on_click)
+
+        # ── widgets ────────────────────────────────────────────────────────────
+        _bkw  = dict(layout=ipw.Layout(width="130px", height="32px"))
+        _bkw2 = dict(layout=ipw.Layout(width="140px", height="32px"))
+
+        btn_fit_ori = ipw.Button(description="⚡ Fit",       button_style="primary", **_bkw)
+        btn_fit_str = ipw.Button(description="🔩 Fit strain", button_style="warning", **_bkw2)
+        btn_img_ori = ipw.Button(description="🖼 Img orient", button_style="info",    **_bkw2)
+        btn_img_str = ipw.Button(description="🖼 Img strain", button_style="warning", **_bkw2)
+        btn_store   = ipw.Button(description="⬆ Store",      button_style="success", **_bkw)
+        btn_save    = ipw.Button(description="💾 Save UBs",  button_style="",        **_bkw)
+
+        for _b in (btn_fit_ori, btn_fit_str, btn_img_ori, btn_img_str,
+                   btn_store, btn_save):
+            _b.disabled = True
+
+        _info = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "click a map pixel to select a frame"
+            "</span>",
+            layout=ipw.Layout(margin="4px 0 0 6px"),
+        )
+
+        # ── async-threaded button callbacks ───────────────────────────────────
+
+        def _async_run(worker_fn, btn, label_running, label_done, on_success):
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if getattr(btn, "_running", False):
+                return
+            btn._running    = True
+            btn.disabled    = True
+            btn.description = label_running
+
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run():
+                try:
+                    q.put(("ok", worker_fn()))
+                except Exception as exc:
+                    q.put(("err", exc))
+
+            async def _wait():
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                tag, payload = q.get_nowait()
+                if tag == "err":
+                    _info.value = (
+                        f"<b style='color:#f44'>{label_done} error: {payload}</b>"
+                    )
+                else:
+                    on_success(payload)
+                btn.description = label_done
+                btn.disabled    = False
+                btn._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        def _cb_fit_ori(_) -> None:
+            obs_xy = _state["obs_xy"]
+            if len(obs_xy) < 3:
+                return
+
+            start_U = _best_U_layers() or [l.U.copy() for l in self.stack.all_layers]
+            saved_U = [l.U.copy() for l in self.stack.all_layers]
+            for l, U in zip(self.stack.all_layers, start_U):
+                l.U = U.copy()
+
+            def _work():
+                try:
+                    return fit_orientation_stack(
+                        self.stack, camera, obs_xy,
+                        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                        max_match_px=list(fit_max_match_px)
+                        if hasattr(fit_max_match_px, "__iter__")
+                        else fit_max_match_px,
+                        allowed_hkl=_allowed_by_crystal,
+                        geometry_only=True,
+                        update_stack=False,
+                        verbose=True,
+                    )
+                finally:
+                    for l, U in zip(self.stack.all_layers, saved_U):
+                        l.U = U
+
+            def _on_ok(res):
+                _state["fit_result"] = res
+                col = "#44aaff" if res.success else "#ffaa33"
+                _info.value = f"<b style='color:{col}'>{res}</b>"
+                btn_fit_str.disabled = len(_state["obs_xy"]) < 3
+                btn_img_str.disabled = False
+                btn_store.disabled   = False
+                btn_save.disabled    = False
+                _draw_det()
+
+            _async_run(_work, btn_fit_ori, "Fitting…", "⚡ Fit", _on_ok)
+
+        def _cb_fit_str(_) -> None:
+            obs_xy = _state["obs_xy"]
+            if len(obs_xy) < 3:
+                return
+
+            start_U = _best_U_layers() or [l.U.copy() for l in self.stack.all_layers]
+            saved_U = [l.U.copy() for l in self.stack.all_layers]
+            for l, U in zip(self.stack.all_layers, start_U):
+                l.U = U.copy()
+
+            def _work():
+                try:
+                    return fit_strain_orientation_stack(
+                        self.stack, camera, obs_xy,
+                        fit_strain=_fit_strain,
+                        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                        max_match_px=[3.0],
+                        allowed_hkl=_allowed_by_crystal,
+                        geometry_only=True,
+                        update_stack=False,
+                        verbose=True,
+                    )
+                finally:
+                    for l, U in zip(self.stack.all_layers, saved_U):
+                        l.U = U
+
+            def _on_ok(res):
+                _state["fit_result"] = res
+                col = "#ffcc44" if res.success else "#ffaa33"
+                _info.value = f"<b style='color:{col}'>{res}</b>"
+                btn_img_str.disabled = False
+                btn_store.disabled   = False
+                btn_save.disabled    = False
+                _draw_det()
+
+            _async_run(_work, btn_fit_str, "Fitting…", "🔩 Fit strain", _on_ok)
+
+        def _cb_img_ori(_) -> None:
+            frame_idx = _state["frame_idx"]
+            if frame_idx is None:
+                return
+
+            start_U = _best_U_layers() or [l.U.copy() for l in self.stack.all_layers]
+            if any(np.any(np.isnan(U)) for U in start_U):
+                _info.value = "<b style='color:#f44'>No starting orientation available</b>"
+                return
+
+            saved_U = [l.U.copy() for l in self.stack.all_layers]
+            for l, U in zip(self.stack.all_layers, start_U):
+                l.U = U.copy()
+
+            image = _load_image(frame_idx)
+            if image is None:
+                _info.value = "<b style='color:#f44'>Could not load image</b>"
+                return
+
+            def _work():
+                try:
+                    return refine_orientation_image_stack(
+                        self.stack, camera, image.astype(np.float64),
+                        allowed_hkl=_allowed_by_crystal,
+                        kernel_sigma=kernel_sigma,
+                        bg_sigma=bg_sigma,
+                        max_angle_deg=max_angle_deg,
+                        E_min=E_min_eV, E_max=E_max_eV,
+                        verbose=True,
+                    )
+                finally:
+                    for l, U in zip(self.stack.all_layers, saved_U):
+                        l.U = U
+
+            def _on_ok(res):
+                _state["fit_result"] = res
+                _info.value = f"<b style='color:#44aaff'>{res}</b>"
+                btn_img_str.disabled = False
+                btn_store.disabled   = False
+                btn_save.disabled    = False
+                _draw_det()
+
+            _async_run(_work, btn_img_ori, "Refining…", "🖼 Img orient", _on_ok)
+
+        def _cb_img_str(_) -> None:
+            frame_idx = _state["frame_idx"]
+            if frame_idx is None:
+                return
+
+            start_U = _best_U_layers() or [l.U.copy() for l in self.stack.all_layers]
+            if any(np.any(np.isnan(U)) for U in start_U):
+                _info.value = "<b style='color:#f44'>No starting orientation available</b>"
+                return
+
+            r = _state["fit_result"]
+            strain0_list = (
+                r.strain_tensors if hasattr(r, "strain_tensors") else None
+            )
+
+            saved_U = [l.U.copy() for l in self.stack.all_layers]
+            for l, U in zip(self.stack.all_layers, start_U):
+                l.U = U.copy()
+
+            image = _load_image(frame_idx)
+            if image is None:
+                _info.value = "<b style='color:#f44'>Could not load image</b>"
+                return
+
+            def _work():
+                try:
+                    kw: dict = dict(
+                        allowed_hkl   = _allowed_by_crystal,
+                        fit_strain    = _fit_strain,
+                        kernel_sigma  = kernel_sigma,
+                        bg_sigma      = bg_sigma,
+                        max_angle_deg = max_angle_deg,
+                        E_min         = E_min_eV,
+                        E_max         = E_max_eV,
+                        verbose       = True,
+                    )
+                    if strain0_list is not None:
+                        kw["strain0_list"] = strain0_list
+                    if max_shift_px is not None:
+                        kw["max_shift_px"] = max_shift_px
+                    return refine_strain_image_stack(
+                        self.stack, camera, image.astype(np.float64), **kw
+                    )
+                finally:
+                    for l, U in zip(self.stack.all_layers, saved_U):
+                        l.U = U
+
+            def _on_ok(res):
+                _state["fit_result"] = res
+                _info.value = f"<b style='color:#ffcc44'>{res}</b>"
+                btn_store.disabled = False
+                btn_save.disabled  = False
+                _draw_det()
+
+            _async_run(_work, btn_img_str, "Refining…", "🖼 Img strain", _on_ok)
+
+        def _cb_store(_) -> None:
+            r = _state["fit_result"]
+            if r is None:
+                return
+            iy, ix = _state["iy"], _state["ix"]
+            self.set_result(iy, ix, r)
+            save_note = ""
+            if self.save_path:
+                self.save(self.save_path)
+                save_note = f" — saved to {os.path.basename(self.save_path)}"
+            else:
+                save_note = " — <b style='color:#ffaa33'>no save_path, result in memory only</b>"
+            _info.value = (
+                f"<b style='color:#44dd66'>Stored → (iy={iy}, ix={ix})</b>"
+                f"&emsp;{r}"
+                f"<span style='color:#aaa'>{save_note}</span>"
+            )
+            print(
+                f"  ⬆ Stored result at (iy={iy}, ix={ix})"
+                + (f"  → {self.save_path}" if self.save_path else " (in memory only)"),
+                flush=True,
+            )
+
+        def _cb_save(_) -> None:
+            r = _state["fit_result"]
+            if r is None:
+                return
+            U_layers = (
+                r.U_eff_layers if hasattr(r, "U_eff_layers") else r.U_layers
+            )
+            saved = []
+            for li, U in enumerate(U_layers):
+                existing = glob.glob(os.path.join(os.getcwd(), f"UB_layer{li}_*.npy"))
+                max_n = -1
+                for fpath in existing:
+                    m = _re.search(r"UB_layer\d+_(\d+)\.npy$", os.path.basename(fpath))
+                    if m:
+                        max_n = max(max_n, int(m.group(1)))
+                fname = f"UB_layer{li}_{max_n + 1:02d}.npy"
+                np.save(fname, U)
+                saved.append(fname)
+                print(f"  💾 Saved U layer {li} → {os.path.abspath(fname)}")
+            _info.value = (
+                f"<b style='color:#44dd66'>Saved {len(saved)} UB files: "
+                + ", ".join(saved) + "</b>"
+            )
+
+        btn_fit_ori.on_click(_cb_fit_ori)
+        btn_fit_str.on_click(_cb_fit_str)
+        btn_img_ori.on_click(_cb_img_ori)
+        btn_img_str.on_click(_cb_img_str)
+        btn_store.on_click(_cb_store)
+        btn_save.on_click(_cb_save)
+
+        _controls = ipw.VBox([
+            ipw.HBox(
+                [btn_fit_ori, btn_fit_str],
+                layout=ipw.Layout(gap="6px", margin="4px 0 0 0", align_items="center"),
+            ),
+            ipw.HBox(
+                [btn_img_ori, btn_img_str],
+                layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"),
+            ),
+            ipw.HBox(
+                [btn_store, btn_save],
+                layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"),
+            ),
+            _info,
+        ], layout=ipw.Layout(padding="6px 8px"))
+
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
     # ── Serialization ──────────────────────────────────────────────────────────
 
     def save(self, path: str, compress: bool = True) -> None:
@@ -2211,6 +2930,7 @@ class LayeredMap:
         mem: str = "8G",
         cpus_per_task: int = 1,
         python_bin: str = "python",
+        f2_thresh: float = 1e-4,
         correct_depth: bool = False,
         overwrite: bool = False,
         extra_sbatch: "dict | None" = None,
@@ -2266,6 +2986,7 @@ class LayeredMap:
             "mask_path":     mask_path,
             "monitor":       self.monitor,
             "seg_dir":       dirs["out"],
+            "f2_thresh":     f2_thresh,
             "correct_depth": correct_depth,
             "overwrite":     overwrite,
             **seg_kwargs,

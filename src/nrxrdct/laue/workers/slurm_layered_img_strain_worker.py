@@ -70,7 +70,7 @@ def _process_frame(
         print(f"  ✗  frame {frame_idx}: {exc}", flush=True)
         return frame_idx, False
 
-    tmp = out_path + ".tmp"
+    tmp = out_path[:-4] + ".tmp.npz"
     np.savez(
         tmp,
         result_type    = np.array("img_strain"),

@@ -293,6 +293,53 @@ def _read_motor_array(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# IPF colour fallback (no orix required)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ipf_color_fallback(U_arr: np.ndarray, ref_dir: np.ndarray) -> np.ndarray:
+    """
+    Cubic IPF-like coloring without orix.
+
+    Maps the crystal direction parallel to *ref_dir* into the [001]-[011]-[111]
+    fundamental zone and returns RGB colours:
+    [001] → blue, [011] → green, [111] → red.
+
+    Args:
+        U_arr:   (M, 3, 3) orientation matrices (crystal → sample).
+        ref_dir: (3,) unit reference direction in the sample frame.
+
+    Returns:
+        (M, 3) float32 RGB array clipped to [0, 1].
+    """
+    # Crystal direction parallel to ref: d_crystal = U^T @ ref_sample
+    d = np.einsum("mji,j->mi", U_arr, ref_dir)   # (M, 3)
+
+    # Bring to cubic fundamental zone: abs + sort descending → a >= b >= c >= 0
+    d = np.abs(d)
+    d = np.sort(d, axis=1)[:, ::-1]
+
+    norms = np.linalg.norm(d, axis=1, keepdims=True)
+    d /= np.where(norms > 0, norms, 1.0)
+
+    a, b, c = d[:, 0], d[:, 1], d[:, 2]
+
+    # Angular parameterisation of the [001]-[011]-[111] triangle
+    theta     = np.arctan2(b, a)                          # [0, pi/4]
+    phi       = np.arctan2(c * np.sqrt(2.0), a + b)      # [0, arctan(1/sqrt(2))]
+    phi_max   = np.arctan(1.0 / np.sqrt(2.0))
+
+    t = np.clip(theta / (np.pi / 4), 0.0, 1.0)   # 0=[001], 1=[011]
+    p = np.clip(phi   / phi_max,      0.0, 1.0)   # 0=[001]-[011] edge, 1=[111]
+
+    # [001]→blue (0,0,1), [011]→green (0,1,0), [111]→red (1,0,0)
+    r = p
+    g = (1.0 - p) * t
+    b = (1.0 - p) * (1.0 - t)
+
+    return np.clip(np.stack([r, g, b], axis=1).astype(np.float32), 0.0, 1.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Voigt helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1617,6 +1664,7 @@ class LayeredMap:
         layer: int,
         *,
         direction=None,
+        symmetry: str = "cubic",
         motor_x: "str | None" = None,
         motor_y: "str | None" = None,
         ax=None,
@@ -1624,48 +1672,61 @@ class LayeredMap:
         """
         Inverse pole figure colour map for *layer*.
 
-        Requires ``orix`` (``pip install orix``).
-
         Args:
             layer: Layer index.
-            direction: Reference direction as an ``orix.vector.Vector3d``
-                (default: z-axis).
+            direction: Reference direction in the sample frame as a length-3
+                sequence (default: ``[0, 0, 1]``, the beam/z axis).
+            symmetry: Crystal point-group symmetry for reducing orientations to
+                the fundamental zone.  One of ``'cubic'``, ``'hexagonal'``,
+                ``'tetragonal'``, ``'orthorhombic'``.  Used by orix when
+                available; the fallback coloring always uses cubic reduction.
         """
-        try:
-            from orix.quaternion import Rotation as ORotation
-            from orix.vector import Vector3d
-        except ImportError:
-            raise ImportError("plot_ipf_map requires orix: pip install orix")
-
-        if direction is None:
-            direction = Vector3d.zvector()
+        _dir = np.asarray(direction if direction is not None else [0, 0, 1],
+                          dtype=float)
+        _dir = _dir / np.linalg.norm(_dir)
 
         U_map = self.U[layer]                     # (ny, nx, 3, 3)
         valid = ~np.any(np.isnan(U_map), axis=(-2, -1))
 
-        # Collect valid orientations and positions
-        scipy_quats = []
-        positions   = []
-        for iy in range(self.ny):
-            for ix in range(self.nx):
-                if valid[iy, ix]:
-                    q = Rotation.from_matrix(U_map[iy, ix]).as_quat()
-                    scipy_quats.append(q)     # [x, y, z, w]
-                    positions.append((iy, ix))
-
-        if not scipy_quats:
+        idx = np.argwhere(valid)
+        if len(idx) == 0:
             print("No valid orientations to plot.")
             return ax
 
-        # Convert scipy [x,y,z,w] → orix [w,x,y,z]
-        q_arr   = np.array(scipy_quats)
-        orix_q  = q_arr[:, [3, 0, 1, 2]]
-        orot    = ORotation(orix_q)
-        rgb     = orot.IPF_color(direction)   # (n, 3) float in [0, 1]
+        U_valid = U_map[idx[:, 0], idx[:, 1]]    # (M, 3, 3)
+
+        # ── Try modern orix API (>= 0.11) ────────────────────────────────────
+        rgb = None
+        try:
+            from orix.quaternion import Rotation as ORotation
+            from orix.vector import Vector3d as OVector3d
+            from orix.plot import IPFColorKeyTSL
+            from orix.crystal_map import Phase
+
+            _sym_map = {
+                "cubic":        "m-3m",
+                "hexagonal":    "6/mmm",
+                "tetragonal":   "4/mmm",
+                "orthorhombic": "mmm",
+            }
+            pg_str = _sym_map.get(symmetry, "m-3m")
+            phase  = Phase(point_group=pg_str)
+
+            # scipy [x,y,z,w] → orix [w,x,y,z]
+            q_arr  = Rotation.from_matrix(U_valid).as_quat()          # (M,4)
+            orot   = ORotation(q_arr[:, [3, 0, 1, 2]])
+            ipf_key = IPFColorKeyTSL(phase.point_group,
+                                     direction=OVector3d(_dir))
+            rgb = np.clip(ipf_key.orientation2color(orot), 0, 1)     # (M,3)
+        except Exception:
+            pass
+
+        # ── Fallback: pure-scipy coloring (no orix needed) ───────────────────
+        if rgb is None:
+            rgb = _ipf_color_fallback(U_valid, _dir)
 
         img = np.ones((self.ny, self.nx, 3))
-        for (iy, ix), c in zip(positions, rgb):
-            img[iy, ix] = c
+        img[idx[:, 0], idx[:, 1]] = rgb
 
         extent, xlabel, ylabel = self._motor_extent(motor_x, motor_y)
         if ax is None:
@@ -1677,7 +1738,7 @@ class LayeredMap:
         ax.imshow(img, **imkw)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.set_title(f"IPF map — {self.layer_labels[layer]}")
+        ax.set_title(f"IPF map — {self.layer_labels[layer]}  [{symmetry}]")
         return ax
 
     def inspect_frame(
@@ -1747,7 +1808,7 @@ class LayeredMap:
             for layer, U0 in zip(self.stack.all_layers, saved_U):
                 layer.U = U0
 
-        fig, axes = plot_measured_vs_simulated(
+        fig = plot_measured_vs_simulated(
             np.empty((0, 9)),
             spots,
             image=image,
@@ -1755,6 +1816,7 @@ class LayeredMap:
             max_match_dist=max_match_dist,
             figsize=figsize,
         )
+        axes = fig.axes
         fig.suptitle(
             f"Frame {frame_idx}  [{iy}, {ix}]  —  LayeredMap",
             fontsize=11,

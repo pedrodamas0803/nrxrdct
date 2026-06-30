@@ -53,6 +53,7 @@ def _process_frame(
     max_rms_px: "float | None",
     fit_kwargs: dict,
     overwrite: bool,
+    orient_data: "dict | None" = None,
 ) -> tuple:
     from nrxrdct.laue.fitting import fit_strain_orientation_stack
 
@@ -61,6 +62,12 @@ def _process_frame(
         return frame_idx, True
     if obs_xy is None or len(obs_xy) < min_matched:
         return frame_idx, False
+
+    _saved_U  = [l.U.copy() for l in _g_stack.all_layers]
+    _orient_U = orient_data.get(frame_idx) if orient_data else None
+    if _orient_U is not None:
+        for l, U in zip(_g_stack.all_layers, _orient_U):
+            l.U = U.copy()
 
     try:
         result = fit_strain_orientation_stack(
@@ -74,6 +81,9 @@ def _process_frame(
     except Exception as exc:
         print(f"  ✗  frame {frame_idx}: {exc}", flush=True)
         return frame_idx, False
+    finally:
+        for l, U in zip(_g_stack.all_layers, _saved_U):
+            l.U = U
 
     if result.n_matched < min_matched or result.match_rate < min_match_rate:
         return frame_idx, False
@@ -164,7 +174,25 @@ def main() -> None:
         flush=True,
     )
 
-    # 3. Fit in parallel.
+    # 3. Load per-frame orientation warm-starts (optional).
+    orient_data: dict = {}
+    _orient_dir = meta.get("orient_dir")
+    if _orient_dir:
+        for fi in frame_indices:
+            path = os.path.join(_orient_dir, f"frame_{fi:05d}.npz")
+            if os.path.exists(path):
+                try:
+                    d = np.load(path, allow_pickle=False)
+                    if "U_layers" in d:
+                        orient_data[fi] = d["U_layers"]
+                except Exception as exc:
+                    print(f"  ✗  frame {fi}: orient load: {exc}", flush=True)
+        print(
+            f"  orient warm-start: {len(orient_data)}/{len(frame_indices)} frames",
+            flush=True,
+        )
+
+    # 4. Fit in parallel.
     _FIT_KEYS = (
         "E_min_eV", "E_max_eV", "f2_thresh",
         "top_n_sim", "top_n_obs", "strain_scale",
@@ -183,6 +211,7 @@ def main() -> None:
         max_rms_px     = meta.get("max_rms_px"),
         fit_kwargs     = fit_kwargs,
         overwrite      = meta.get("overwrite", False),
+        orient_data    = orient_data or None,
     )
     n_workers = min(len(peaklists) or 1, os.cpu_count() or 1)
     n_ok = 0

@@ -132,6 +132,7 @@ def _lm_strain_frame(
     max_rms_px: "float | None",
     fit_kwargs: dict,
     overwrite: bool,
+    orient_data: "dict | None" = None,
 ) -> tuple:
     """Orientation + per-layer strain stack fit for one frame."""
     from .fitting import fit_strain_orientation_stack
@@ -141,6 +142,13 @@ def _lm_strain_frame(
         return frame_idx, True
     if obs_xy is None or len(obs_xy) < min_matched:
         return frame_idx, False
+
+    # Save template U matrices and optionally warm-start from prior orientation.
+    _saved_U  = [l.U.copy() for l in _g_stack.all_layers]
+    _orient_U = orient_data.get(frame_idx) if orient_data else None
+    if _orient_U is not None:
+        for l, U in zip(_g_stack.all_layers, _orient_U):
+            l.U = U.copy()
 
     try:
         result = fit_strain_orientation_stack(
@@ -154,6 +162,10 @@ def _lm_strain_frame(
     except Exception as exc:
         print(f"  ✗  frame {frame_idx}: {exc}", flush=True)
         return frame_idx, False
+    finally:
+        # Always restore the template U so the next frame starts clean.
+        for l, U in zip(_g_stack.all_layers, _saved_U):
+            l.U = U
 
     if result.n_matched < min_matched:
         return frame_idx, False
@@ -764,6 +776,7 @@ class LayeredMap:
         out_dir: str,
         *,
         fit_strain: "tuple | None" = None,
+        orient_dir: "str | None" = None,
         r_squared_min: float = 0.0,
         include_unfitted: bool = False,
         max_match_px=(10, 3),
@@ -813,6 +826,24 @@ class LayeredMap:
             flush=True,
         )
 
+        # Load per-frame orientation warm-starts if an orient_dir was given.
+        orient_data: dict = {}
+        if orient_dir is not None:
+            for fi in frame_indices:
+                path = os.path.join(orient_dir, f"frame_{fi:05d}.npz")
+                if os.path.exists(path):
+                    try:
+                        d = np.load(path, allow_pickle=False)
+                        if "U_layers" in d:
+                            orient_data[fi] = d["U_layers"]   # (n_layers, 3, 3)
+                    except Exception as exc:
+                        print(f"  ✗  frame {fi}: orient load: {exc}", flush=True)
+            print(
+                f"  orient warm-start: {len(orient_data)}/{len(frame_indices)} "
+                f"frames from {orient_dir!r}",
+                flush=True,
+            )
+
         common = dict(
             out_dir        = out_dir,
             fit_strain     = _fit_strain,
@@ -823,6 +854,7 @@ class LayeredMap:
             fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only,
                                "correct_depth": correct_depth},
             overwrite      = overwrite,
+            orient_data    = orient_data or None,
         )
         stack_pkl = self._serialize_stack()
         try:
@@ -2494,6 +2526,7 @@ class LayeredMap:
         camera,
         *,
         seg_dir: "str | None" = None,
+        orient_dir: "str | None" = None,
         fit_strain: "tuple | None" = None,
         n_jobs: int = 10,
         partition: str = "all",
@@ -2588,6 +2621,7 @@ class LayeredMap:
             "stack_pkl":       stack_pkl,
             "camera":          self._camera_to_dict(camera),
             "seg_dir":         seg_dir or os.path.join(base_dir, "seg"),
+            "orient_dir":      orient_dir,
             "out_dir":         dirs["out"],
             "fit_strain":      _fit_strain,
             "max_match_px":    list(max_match_px) if hasattr(max_match_px, "__iter__") else [float(max_match_px)],

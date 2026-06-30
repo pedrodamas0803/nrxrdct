@@ -79,6 +79,11 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
 
+# Module-level cache: kb_params tuple key → (E_grid, R_grid) arrays.
+# Populated lazily on the first simulate_laue_stack call with a given KB setup
+# so the 300-point xrayutilities loop never runs more than once per configuration.
+_KB_CACHE: dict = {}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # USER PARAMETERS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -654,6 +659,17 @@ def lorentz_pol(tth_deg):
     if abs(s) < 1e-8 or abs(c) < 1e-8:
         return 0.0
     return abs((1 + np.cos(r) ** 2) / (2 * s**2 * c))
+
+
+def _lorentz_pol_vec(tth_deg):
+    """Vectorized Lorentz–polarisation factor for an array of 2θ values (degrees)."""
+    r = np.radians(np.asarray(tth_deg, dtype=float))
+    s = np.sin(r / 2)
+    c = np.cos(r / 2)
+    valid = (np.abs(s) >= 1e-8) & (np.abs(c) >= 1e-8)
+    out = np.zeros(r.shape)
+    out[valid] = np.abs((1.0 + np.cos(r[valid]) ** 2) / (2.0 * s[valid] ** 2 * c[valid]))
+    return out
 
 
 
@@ -1395,6 +1411,20 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
         f_arr = np.asarray(source_kwargs["flux"], dtype=float)
         # KB reflectivity assumed already included — ignore kb_params
 
+    # ── KB reflectivity lookup table (computed once per unique parameter set) ─
+    if kb_params is not None:
+        _kb_key = tuple(sorted(kb_params.items()))
+        if _kb_key not in _KB_CACHE:
+            _E_kb = np.linspace(1_000.0, 120_000.0, 400)
+            _R_kb = np.array([kb_reflectivity(e, **kb_params) for e in _E_kb])
+            _KB_CACHE[_kb_key] = (_E_kb, _R_kb)
+        _E_kb, _R_kb = _KB_CACHE[_kb_key]
+
+        def _kb_scale(E_arr):
+            return np.interp(E_arr, _E_kb, _R_kb)
+    else:
+        _kb_scale = None
+
     if source in ("shadow4", "tabulated"):
         from scipy.interpolate import interp1d
         f_max = f_arr.max()
@@ -1404,31 +1434,47 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
             e_arr, f_arr / f_max,
             kind="linear", bounds_error=False, fill_value=0.0,
         )
-        return lambda E: float(_interp(E))
 
-    # ── Analytical sources ────────────────────────────────────────────────────
+        def _sw(E):
+            E_arr = np.atleast_1d(np.asarray(E, dtype=float))
+            out = np.asarray(_interp(E_arr), dtype=float)
+            if _kb_scale is not None:
+                out = out * _kb_scale(E_arr)
+            return float(out[0]) if np.ndim(E) == 0 else out
+
+        return _sw
+
+    # ── Analytical sources — array-compatible ────────────────────────────────
+    _Ec    = source_kwargs.get("Ec_eV", E_CRIT_eV)
+    _N_bm  = source_kwargs.get("N_poles", 40) if source == "wiggler" else 1
+    _E1    = source_kwargs.get("E1_eV",   E_FUNDAMENTAL_eV)
+    _nh    = source_kwargs.get("n_harm",   N_HARMONICS)
+    _sig   = source_kwargs.get("sig_rel",  HARMONIC_WIDTH)
+
     def _sw(E):
-        if source == "bending_magnet":
-            sw = spectrum_bm(E, **source_kwargs)
-        elif source == "wiggler":
-            kw = {
-                "N_poles": source_kwargs.get("N_poles", 40),
-                "Ec_eV":   source_kwargs.get("Ec_eV", 20_000),
-            }
-            sw = spectrum_bm(E, **kw)
+        E_arr = np.atleast_1d(np.asarray(E, dtype=float))
+        if source in ("bending_magnet", "wiggler"):
+            y = E_arr / _Ec
+            out = np.zeros_like(y)
+            m = y > 1e-7
+            if m.any():
+                out[m] = 2.0 * _N_bm * y[m] ** 2 * kv(2 / 3, y[m] / 2) ** 2
         elif source == "undulator":
-            sw = spectrum_undulator(E, **source_kwargs)
+            out = np.zeros_like(E_arr)
+            for _n in range(1, 2 * _nh, 2):
+                En = _n * _E1
+                out += (1.0 / _n) * np.exp(-0.5 * ((E_arr - En) / (En * _sig)) ** 2)
         elif source == "flat":
-            return 1.0
+            out = np.ones_like(E_arr)
         else:
             raise ValueError(
                 f"Unknown source {source!r}.  "
                 "Choose from: 'bending_magnet', 'wiggler', 'undulator', "
                 "'flat', 'shadow4', 'tabulated'."
             )
-        if kb_params is not None:
-            sw *= kb_reflectivity(E, **kb_params)
-        return float(sw)
+        if _kb_scale is not None:
+            out = out * _kb_scale(E_arr)
+        return float(out[0]) if np.ndim(E) == 0 else out
 
     return _sw
 
@@ -2301,28 +2347,36 @@ def simulate_laue_stack(
                 chi_b = np.degrees(np.arctan2(kf_b[:, 1], kf_b[:, 2] + 1e-17))
                 az_b  = np.degrees(np.arctan2(kf_b[:, 2], kf_b[:, 1]))
 
-                for _si in range(len(lam_b)):
-                    G_lab   = _G_lab_b[_si]
-                    h, k, l = int(_hkl_b[_si, 0]), int(_hkl_b[_si, 1]), int(_hkl_b[_si, 2])
-                    pix_key = (round(float(pix_b[_si, 0])), round(float(pix_b[_si, 1])))
+                # ── Batch LP + spectrum pre-filter ────────────────────────────
+                LP_b = _lorentz_pol_vec(tth_b)
+                sw_b = spectrum(E_b)
+                pre_ok = (LP_b > 0) & (sw_b > 0)
+
+                # Batch allowed-HKL mask (skips structure-factor path entirely)
+                if _layer_allowed_hkl is not None and pre_ok.any():
+                    ok_idx = np.where(pre_ok)[0]
+                    hkl_ok = np.fromiter(
+                        (tuple(int(x) for x in _hkl_b[i]) in _layer_allowed_hkl
+                         for i in ok_idx),
+                        dtype=bool, count=len(ok_idx),
+                    )
+                    new_ok = np.zeros(len(pre_ok), dtype=bool)
+                    new_ok[ok_idx[hkl_ok]] = True
+                    pre_ok = new_ok
+
+                pix_round = np.round(pix_b).astype(np.int64)
+
+                for _si in np.where(pre_ok)[0]:
+                    pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
                     if pix_key in seen_pix:
                         continue
-                    tth = float(tth_b[_si])
-                    LP  = lorentz_pol(tth)
-                    if LP == 0.0:
-                        continue
-                    E  = float(E_b[_si])
-                    sw = spectrum(E)
-                    if sw <= 0.0:
-                        continue
-                    kf_hat = kf_b[_si]
-                    if _layer_allowed_hkl is not None:
-                        if (h, k, l) not in _layer_allowed_hkl:
-                            continue
-                        F2 = 1.0
-                    elif geometry_only:
+
+                    if _layer_allowed_hkl is not None or geometry_only:
                         F2 = 1.0
                     else:
+                        G_lab  = _G_lab_b[_si]
+                        E      = float(E_b[_si])
+                        kf_hat = kf_b[_si]
                         if structure_model == "average":
                             F_stack = stack.average_structure_factor(G_lab, energy_eV=E, kf_hat=kf_hat)
                         else:
@@ -2332,7 +2386,12 @@ def simulate_laue_stack(
                             f2_thresh = max(1.0, F2 * 1e-3)
                         if F2 < f2_thresh:
                             continue
+
                     seen_pix.add(pix_key)
+                    G_lab = _G_lab_b[_si]
+                    h = int(_hkl_b[_si, 0]); k = int(_hkl_b[_si, 1]); l = int(_hkl_b[_si, 2])
+                    lp = float(LP_b[_si]);    sw = float(sw_b[_si])
+                    E  = float(E_b[_si])
                     spots.append({
                         "phase_label":     label,
                         "hkl":             (h, k, l),
@@ -2341,15 +2400,15 @@ def simulate_laue_stack(
                         "G_lab":           G_lab.copy(),
                         "E":               E,
                         "lambda":          float(lam_b[_si]),
-                        "tth":             tth,
+                        "tth":             float(tth_b[_si]),
                         "chi":             float(chi_b[_si]),
                         "az":              float(az_b[_si]),
                         "pix":             (float(pix_b[_si, 0]), float(pix_b[_si, 1])),
                         "F2":              F2,
                         "F2_stack":        F2,
-                        "LP":              LP,
+                        "LP":              lp,
                         "sw":              sw,
-                        "I_raw":           F2 * LP * sw,
+                        "I_raw":           F2 * lp * sw,
                     })
                     n_added += 1
 

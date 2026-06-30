@@ -1816,7 +1816,7 @@ class LayeredMap:
             use_eff: If ``True`` (default), use ``U_eff`` (strained) when
                 available; otherwise use ``U``.
         """
-        from .simulation import simulate_laue_stack
+        from .simulation import simulate_laue_stack, precompute_allowed_hkl
         from .laue_plotting import plot_measured_vs_simulated
 
         iy, ix = self.map_index(frame_idx)
@@ -1848,6 +1848,17 @@ class LayeredMap:
             else:
                 print(f"  no seg file for frame {frame_idx}", flush=True)
 
+        # Precompute allowed HKL per unique crystal using the unit-cell |F|²
+        # threshold.  This is the same filter used by the fitting functions and
+        # correctly removes weak reflections before the simulation.
+        allowed_hkl: dict = {}
+        for _layer in self.stack.all_layers:
+            _cid = id(_layer.crystal)
+            if _cid not in allowed_hkl:
+                allowed_hkl[_cid] = precompute_allowed_hkl(
+                    _layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
+                )
+
         # Choose U or U_eff
         U_src = self.U_eff if (use_eff and not np.all(np.isnan(self.U_eff[:, iy, ix]))) \
                 else self.U
@@ -1862,7 +1873,8 @@ class LayeredMap:
             spots = simulate_laue_stack(
                 self.stack, camera,
                 E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-                f2_thresh=f2_thresh,
+                geometry_only=True,
+                allowed_hkl=allowed_hkl,
                 verbose=False,
             )
             if top_n_sim is not None:

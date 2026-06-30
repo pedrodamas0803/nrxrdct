@@ -2834,6 +2834,159 @@ class LayeredMap:
         )
         return angle_map
 
+    def plot_kam(
+        self,
+        layer: int,
+        *,
+        order: int = 1,
+        symmetry: str = "cubic",
+        use_eff: bool = False,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        cmap: str = "inferno",
+        vmin: float = 0.0,
+        vmax: "float | None" = None,
+        plot: bool = True,
+        ax=None,
+    ) -> np.ndarray:
+        """
+        Kernel Average Misorientation (KAM) map for *layer*.
+
+        For each valid pixel the mean disorientation angle to all valid
+        neighbors within Chebyshev distance *order* is computed after
+        minimisation over crystal symmetry operators.  The result is the
+        standard KAM metric used in EBSD analysis.
+
+        Args:
+            layer: Layer index.
+            order: Chebyshev shell radius in pixels (1 = 8 nearest
+                neighbors, 2 = 24 neighbors, …).
+            symmetry: Point-group symmetry for misorientation reduction.
+                One of ``'cubic'``, ``'hexagonal'``, ``'tetragonal'``,
+                ``'orthorhombic'``.
+            use_eff: Use ``U_eff`` (strained) instead of ``U``.  Falls back
+                to ``U`` if ``U_eff`` has not been fitted.
+            motor_x, motor_y: Motor names for physical axis labels.
+            cmap: Matplotlib colormap.  Default ``'inferno'``.
+            vmin: Minimum colorscale value (degrees).  Default ``0``.
+            vmax: Maximum colorscale value (degrees).  ``None`` uses the
+                99th percentile of valid pixel values.
+            plot: Draw the map when ``True`` (default).
+            ax: Existing ``Axes`` to draw into; a new figure is created if
+                ``None``.
+
+        Returns:
+            ``(ny, nx)`` float64 array of KAM angles in degrees.  Pixels
+            with no valid neighbors are ``NaN``.
+        """
+        from .simulation import _symmetry_ops_np
+
+        # Choose U source
+        if use_eff and not np.all(np.isnan(self.U_eff[layer])):
+            U_src = self.U_eff[layer]   # (ny, nx, 3, 3)
+        else:
+            U_src = self.U[layer]
+
+        valid = ~np.any(np.isnan(U_src), axis=(-2, -1))   # (ny, nx) bool
+
+        ny, nx = self.ny, self.nx
+        kam_map = np.full((ny, nx), np.nan)
+
+        if not valid.any():
+            if plot:
+                if ax is None:
+                    _, ax = plt.subplots(figsize=(7, 6))
+                ax.set_title(f"KAM — {self.layer_labels[layer]} (no data)")
+            return kam_map
+
+        # Project all valid orientations to SO(3) once (handles U_eff correctly).
+        U_rot = np.full((ny, nx, 3, 3), np.nan)
+        U_rot[valid] = Rotation.from_matrix(U_src[valid]).as_matrix()
+
+        ops   = _symmetry_ops_np(symmetry)   # (N_sym, 3, 3)
+
+        # Accumulate per-pixel misorientation sums and neighbor counts.
+        angle_sum = np.zeros((ny, nx), dtype=np.float64)
+        count     = np.zeros((ny, nx), dtype=np.int32)
+
+        # All neighbor offsets with 1 ≤ Chebyshev distance ≤ order.
+        offsets = [
+            (diy, dix)
+            for diy in range(-order, order + 1)
+            for dix in range(-order, order + 1)
+            if 1 <= max(abs(diy), abs(dix)) <= order
+        ]
+
+        for diy, dix in offsets:
+            # Source pixel range: rows/cols that have a valid neighbor at (diy, dix).
+            iy0_s = max(0, -diy);  iy1_s = min(ny, ny - diy)
+            ix0_s = max(0, -dix);  ix1_s = min(nx, nx - dix)
+
+            IY_s, IX_s = np.meshgrid(
+                np.arange(iy0_s, iy1_s),
+                np.arange(ix0_s, ix1_s),
+                indexing="ij",
+            )
+            IY_n = IY_s + diy
+            IX_n = IX_s + dix
+
+            mask = valid[IY_s, IX_s] & valid[IY_n, IX_n]
+            if not mask.any():
+                continue
+
+            iy_s = IY_s[mask]; ix_s = IX_s[mask]
+            iy_n = IY_n[mask]; ix_n = IX_n[mask]
+
+            Ra = U_rot[iy_s, ix_s]                        # (M, 3, 3)
+            Rb = U_rot[iy_n, ix_n]                        # (M, 3, 3)
+
+            # Misorientation: R_mis[m] = Rb[m] @ Ra[m].T
+            R_mis = Rb @ Ra.transpose(0, 2, 1)            # (M, 3, 3)
+
+            # ops[s] @ R_mis[m] → (N_sym, M, 3, 3)
+            ops_R = np.einsum("sij,mjk->smik", ops, R_mis)
+
+            # trace(ops_R[s,m] @ ops[t].T) for all (s, t, m)
+            # = einsum smij, tji -> stm
+            traces = np.einsum("smij,tji->stm", ops_R, ops)   # (N_sym, N_sym, M)
+
+            # Minimum angle over all symmetry-equivalent pairs
+            cos_ang    = np.clip((traces - 1.0) / 2.0, -1.0, 1.0)
+            angles_sym = np.degrees(np.arccos(cos_ang))        # (N_sym, N_sym, M)
+            min_ang    = angles_sym.reshape(-1, len(iy_s)).min(axis=0)  # (M,)
+
+            np.add.at(angle_sum, (iy_s, ix_s), min_ang)
+            np.add.at(count,     (iy_s, ix_s), 1)
+
+        has_nbrs = count > 0
+        kam_map[has_nbrs] = angle_sum[has_nbrs] / count[has_nbrs]
+
+        if not plot:
+            return kam_map
+
+        # ── Plot ──────────────────────────────────────────────────────────────
+        valid_vals = kam_map[np.isfinite(kam_map)]
+        if vmax is None:
+            vmax = float(np.percentile(valid_vals, 99)) if len(valid_vals) else 1.0
+
+        extent, xlabel, ylabel = self._motor_extent(motor_x, motor_y)
+        if ax is None:
+            _, ax = plt.subplots(figsize=(7, 6))
+
+        imkw = dict(origin="upper", cmap=cmap, vmin=vmin, vmax=vmax)
+        if extent is not None:
+            imkw.update(extent=extent, aspect="auto")
+
+        im = ax.imshow(kam_map, **imkw)
+        plt.colorbar(im, ax=ax, label="KAM (°)")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(
+            f"KAM — {self.layer_labels[layer]}  "
+            f"(order={order}, {symmetry})"
+        )
+        return kam_map
+
     # ── SLURM submission ───────────────────────────────────────────────────────
 
     @staticmethod

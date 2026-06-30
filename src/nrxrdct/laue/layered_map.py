@@ -1124,6 +1124,7 @@ class LayeredMap:
         _state: dict = {
             "frame_idx": None, "iy": None, "ix": None,
             "image": None, "proc_image": None, "props": None, "drawn": False,
+            "saved_xy": None,   # (N,2) xy from existing seg file, or None
         }
 
         def _parse(s: str):
@@ -1164,11 +1165,21 @@ class LayeredMap:
             disp_show = np.log1p(disp_norm * 1000) if w_log_scale.value else disp_norm
             ax_det.imshow(disp_show, origin="upper", extent=[0, nh, nv, 0],
                           cmap="gray", aspect="equal", zorder=0)
+            _has_legend = False
+            saved_xy = _state.get("saved_xy")
+            if saved_xy is not None and len(saved_xy) > 0:
+                ax_det.scatter(saved_xy[:, 0], saved_xy[:, 1], s=35,
+                               c="none", edgecolors="#ffcc00",
+                               linewidths=0.9, zorder=3,
+                               label=f"saved ({len(saved_xy)})")
+                _has_legend = True
             if props is not None and len(props) > 0:
                 ys = np.array([p.centroid_weighted[0] for p in props])
                 xs = np.array([p.centroid_weighted[1] for p in props])
                 ax_det.scatter(xs, ys, s=35, c="none", edgecolors="#44aaff",
-                               linewidths=0.9, zorder=4, label=f"spots ({len(props)})")
+                               linewidths=0.9, zorder=4, label=f"new ({len(props)})")
+                _has_legend = True
+            if _has_legend:
                 ax_det.legend(fontsize=7, loc="upper right",
                               facecolor="#111", edgecolor="#444", labelcolor="white",
                               framealpha=0.85)
@@ -1176,8 +1187,16 @@ class LayeredMap:
             ax_det.set_xlabel("x (px)", fontsize=9)
             ax_det.set_ylabel("y (px)", fontsize=9)
             iy, ix = _state["iy"], _state["ix"]
-            n_spots = len(props) if props else 0
-            suffix  = f"  — {n_spots} spots" if props is not None else ""
+            n_new   = len(props) if props is not None else None
+            n_saved = len(saved_xy) if saved_xy is not None else None
+            if n_new is not None and n_saved is not None:
+                suffix = f"  — {n_new} new  |  {n_saved} saved"
+            elif n_new is not None:
+                suffix = f"  — {n_new} spots"
+            elif n_saved is not None:
+                suffix = f"  — {n_saved} saved spots"
+            else:
+                suffix = ""
             ax_det.set_title(f"Frame {_state['frame_idx']}  (iy={iy}, ix={ix}){suffix}", fontsize=9)
             if _state["drawn"]:
                 ax_det.set_xlim(saved_xlim)
@@ -1202,12 +1221,28 @@ class LayeredMap:
             else:
                 sel_dot.set_data([ix + 0.5], [iy + 0.5])
             image = _load_image(frame_idx)
+            # Load existing segmentation if present
+            saved_xy = None
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    from .segmentation import convert_spotsfile2peaklist
+                    pl = convert_spotsfile2peaklist(
+                        seg_path, include_unfitted=True, r_squared_min=0.0
+                    )
+                    if len(pl) > 0:
+                        saved_xy = pl[:, :2]   # (N, 2) x, y
+                except Exception:
+                    pass
             _state.update(frame_idx=frame_idx, iy=iy, ix=ix,
-                          image=image, proc_image=None, props=None)
+                          image=image, proc_image=None, props=None,
+                          saved_xy=saved_xy)
             btn_segment.disabled = image is None
             btn_save.disabled    = True
+            n_saved = len(saved_xy) if saved_xy is not None else 0
             _info.value = (
                 f"<span style='color:#aaa'>Frame {frame_idx} loaded"
+                + (f" — {n_saved} existing spots" if n_saved else "")
                 + (" — no image data" if image is None else "") + "</span>"
             )
             _draw_det(props=None)
@@ -1376,6 +1411,7 @@ class LayeredMap:
                 )
                 _info.value = f"<b style='color:#44dd66'>Saved → {out_path}</b>"
                 print(f"  💾 Saved → {os.path.abspath(out_path)}")
+                _state["saved_xy"] = None   # new result replaces old overlay
                 if map_quantity == "n_obs":
                     new_data = _build_n_obs_data()
                     im_map.set_data(new_data)
@@ -2248,7 +2284,7 @@ class LayeredMap:
         r_squared_min: float = 0.9,
         include_unfitted: bool = False,
         geometry_only: bool = True,
-        f2_thresh: float = 1e-4,
+        f2_thresh: float = 1e-6,
         overwrite: bool = False,
         extra_sbatch: "dict | None" = None,
         **fit_kwargs,

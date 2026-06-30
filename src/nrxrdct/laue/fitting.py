@@ -4764,6 +4764,7 @@ def refine_strain_image_stack(
     E_max: float = E_MAX_eV,
     allowed_hkl=None,
     max_angle_deg: float = 0.2,
+    max_shift_px: "float | list[float] | None" = None,
     strain_scale: float = 1e-4,
     structure_model: str = "average",
     method: str = "Powell",
@@ -4819,6 +4820,23 @@ def refine_strain_image_stack(
             recommended to avoid recomputing structure factors on every call.
         max_angle_deg (float): Symmetric bound on each rotation-vector
             component (degrees).  Default ``0.2``.
+        max_shift_px (float or list of float, optional): Maximum allowed
+            detector-pixel displacement caused by strain for each layer.
+            Converted to a strain limit using the camera geometry
+            (``max_strain ≈ max_shift_px / (D / pixel_size)``).  A single
+            float applies the same bound to every layer; a list sets a
+            per-layer bound so that weaker or thinner layers can be
+            constrained more tightly::
+
+                # tighten the second (weaker) layer to ±3 px,
+                # leave the first layer at the default ±5 %
+                result = refine_strain_image_stack(
+                    stack, camera, frame,
+                    max_shift_px=[None, 3.0],   # None → default ±5 %
+                )
+
+            If ``None`` (default), falls back to ``±5 %`` absolute strain
+            for all layers.
         strain_scale (float): Internal divisor for strain parameters.
             Default ``1e-4``.
         structure_model (str): ``'average'`` or ``'incoherent'``.
@@ -4860,11 +4878,27 @@ def refine_strain_image_stack(
             for jj, name in enumerate(_fit_strain):
                 x0[3 + ii * n_strain + jj] = eps0_arr[_STRAIN_IDX[name]] / strain_scale
 
-    rot_lim    = float(np.radians(max_angle_deg))
-    strain_lim = 0.05 / strain_scale
+    rot_lim = float(np.radians(max_angle_deg))
+
+    # Per-layer strain limits: derived from max_shift_px if given, else ±5%.
+    # Pixel sensitivity: a unit strain shifts a spot by roughly D/pixel_size pixels,
+    # so max_strain = max_shift_px / (D / pixel_size).
+    _default_lim = 0.05 / strain_scale
+    if max_shift_px is not None:
+        _px_sens = camera.dd / camera.pixel_mm
+        if isinstance(max_shift_px, (int, float)):
+            _per_layer_lim = [float(max_shift_px) / _px_sens / strain_scale] * n_layers
+        else:
+            _per_layer_lim = [
+                _default_lim if v is None else float(v) / _px_sens / strain_scale
+                for v in max_shift_px
+            ]
+    else:
+        _per_layer_lim = [_default_lim] * n_layers
+
     bounds = (
         [(-rot_lim, rot_lim)] * 3
-        + [(-strain_lim, strain_lim)] * (n_layers * n_strain)
+        + [b for lim in _per_layer_lim for b in [(-lim, lim)] * n_strain]
     )
 
     def _score(params: np.ndarray) -> float:

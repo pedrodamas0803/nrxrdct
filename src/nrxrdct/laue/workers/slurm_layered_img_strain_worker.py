@@ -143,7 +143,8 @@ def main() -> None:
     # 3. Refine in parallel.
     _FIT_KEYS = (
         "kernel_sigma", "bg_sigma", "E_min", "E_max",
-        "max_angle_deg", "strain_scale", "correct_depth", "method", "options", "structure_model",
+        "max_angle_deg", "max_shift_px", "strain_scale", "correct_depth",
+        "method", "options", "structure_model",
     )
     fit_kwargs = {k: meta[k] for k in _FIT_KEYS if k in meta}
 

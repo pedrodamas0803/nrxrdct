@@ -3929,13 +3929,14 @@ def refine_orientation_image_stack(
         img[~valid] = 0.0
 
     U0_layers = [layer.U.copy() for layer in stack.all_layers]
+    n_layers  = len(U0_layers)
 
     lim    = float(np.radians(max_angle_deg))
-    bounds = [(-lim, lim)] * 3
+    bounds = [(-lim, lim)] * (3 * n_layers)
 
-    def _score(rotvec: np.ndarray) -> float:
-        R = Rotation.from_rotvec(rotvec).as_matrix()
-        for layer, U0 in zip(stack.all_layers, U0_layers):
+    def _score(params: np.ndarray) -> float:
+        for i, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
+            R = Rotation.from_rotvec(params[3 * i : 3 * i + 3]).as_matrix()
             layer.U = R @ U0
 
         spots = simulate_laue_stack(
@@ -3960,13 +3961,13 @@ def refine_orientation_image_stack(
 
         return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
 
-    score0 = _score(np.zeros(3))
+    score0 = _score(np.zeros(3 * n_layers))
 
     if verbose:
         print(
             f"refine_orientation_image_stack: score0={score0:.1f}  "
             f"method={method}  max_angle={max_angle_deg}°  "
-            f"{len(U0_layers)} layers"
+            f"{n_layers} layers (independent rotations)"
         )
 
     opts: dict = {"maxiter": 2000}
@@ -3979,15 +3980,18 @@ def refine_orientation_image_stack(
 
     try:
         result = minimize(
-            lambda rv: -_score(rv), np.zeros(3),
+            lambda p: -_score(p), np.zeros(3 * n_layers),
             method=method, bounds=bounds, options=opts,
         )
     finally:
         for layer, U0 in zip(stack.all_layers, U0_layers):
             layer.U = U0.copy()
 
-    R_opt        = Rotation.from_rotvec(result.x).as_matrix()
-    U_layers_final = [R_opt @ U0 for U0 in U0_layers]
+    U_layers_final = []
+    for i, U0 in enumerate(U0_layers):
+        R = Rotation.from_rotvec(result.x[3 * i : 3 * i + 3]).as_matrix()
+        U_layers_final.append(R @ U0)
+
     R_global     = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
     rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
 
@@ -4866,7 +4870,8 @@ def refine_strain_image_stack(
 
     n_layers = len(stack.all_layers)
     n_strain = len(_fit_strain)
-    n_params  = 3 + n_layers * n_strain
+    _block   = 3 + n_strain          # params per layer: [δω(3), ε(n_strain)]
+    n_params = n_layers * _block
 
     U0_layers = [layer.U.copy() for layer in stack.all_layers]
 
@@ -4876,13 +4881,10 @@ def refine_strain_image_stack(
         for ii, eps0 in enumerate(strain0_list):
             eps0_arr = np.asarray(eps0, dtype=float)
             for jj, name in enumerate(_fit_strain):
-                x0[3 + ii * n_strain + jj] = eps0_arr[_STRAIN_IDX[name]] / strain_scale
+                x0[ii * _block + 3 + jj] = eps0_arr[_STRAIN_IDX[name]] / strain_scale
 
     rot_lim = float(np.radians(max_angle_deg))
 
-    # Per-layer strain limits: derived from max_shift_px if given, else ±5%.
-    # Pixel sensitivity: a unit strain shifts a spot by roughly D/pixel_size pixels,
-    # so max_strain = max_shift_px / (D / pixel_size).
     _default_lim = 0.05 / strain_scale
     if max_shift_px is not None:
         _px_sens = camera.dd / camera.pixel_mm
@@ -4896,15 +4898,16 @@ def refine_strain_image_stack(
     else:
         _per_layer_lim = [_default_lim] * n_layers
 
-    bounds = (
-        [(-rot_lim, rot_lim)] * 3
-        + [b for lim in _per_layer_lim for b in [(-lim, lim)] * n_strain]
-    )
+    bounds = []
+    for lim in _per_layer_lim:
+        bounds += [(-rot_lim, rot_lim)] * 3
+        bounds += [(-lim, lim)] * n_strain
 
     def _score(params: np.ndarray) -> float:
-        R = Rotation.from_rotvec(params[:3]).as_matrix()
         for ii, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
-            sv  = params[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+            base = ii * _block
+            R   = Rotation.from_rotvec(params[base : base + 3]).as_matrix()
+            sv  = params[base + 3 : base + _block] * strain_scale
             eps = _strain_matrix(sv, _fit_strain)
             layer.U = R @ U0 @ (np.eye(3) + eps)
 
@@ -4928,15 +4931,14 @@ def refine_strain_image_stack(
             if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
                 delta[row, col] += float(s["intensity"])
 
-        kernel_map = _fft_gauss_convolve(delta, kernel_sigma)
-        return float(np.sum(kernel_map * img))
+        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
 
     score0 = _score(x0)
 
     if verbose:
         print(
             f"refine_strain_image_stack: score0={score0:.1f}  "
-            f"fit_strain={_fit_strain}  {n_layers} layers  "
+            f"fit_strain={_fit_strain}  {n_layers} layers (independent rotations)  "
             f"method={method}  max_angle={max_angle_deg}°"
         )
 
@@ -4958,16 +4960,17 @@ def refine_strain_image_stack(
             layer.U = U0.copy()
 
     # Unpack solution.
-    R_opt = Rotation.from_rotvec(result.x[:3]).as_matrix()
     U_layers_final = []
     U_eff_layers   = []
     strain_tensors = []
     strain_voigts  = []
 
     for ii, U0 in enumerate(U0_layers):
-        sv  = result.x[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
+        base = ii * _block
+        R   = Rotation.from_rotvec(result.x[base : base + 3]).as_matrix()
+        sv  = result.x[base + 3 : base + _block] * strain_scale
         eps = _strain_matrix(sv, _fit_strain)
-        U_pure = R_opt @ U0
+        U_pure = R @ U0
         U_eff  = U_pure @ (np.eye(3) + eps)
         U_layers_final.append(U_pure)
         U_eff_layers.append(U_eff)

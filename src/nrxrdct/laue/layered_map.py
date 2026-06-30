@@ -1749,6 +1749,9 @@ class LayeredMap:
         h5_path: "str | None" = None,
         h5_dataset: str = "1.1/measurement/eiger4m",
         tiff_dir: "str | None" = None,
+        seg_dir: "str | None" = None,
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
         E_min_eV: float = 5_000,
         E_max_eV: float = 27_000,
         max_match_dist: float = 5.0,
@@ -1757,7 +1760,7 @@ class LayeredMap:
     ):
         """
         Display the diffraction image for *frame_idx* overlaid with simulated
-        spots from all stack layers.
+        spots from all stack layers and (optionally) the measured segmented spots.
 
         The fitted orientations stored in ``U_eff`` (or ``U`` when strain is
         unavailable) are temporarily applied to the stack before simulating.
@@ -1770,6 +1773,12 @@ class LayeredMap:
             h5_dataset: Dataset path inside *h5_path*.
             tiff_dir: Directory of TIFF frames (mutually exclusive with
                 *h5_path*).
+            seg_dir: Directory containing ``frame_?????.h5`` segmentation files.
+                When provided, the measured peaklist is loaded and overlaid.
+            r_squared_min: Minimum Gaussian fit R² to accept a spot from the
+                seg file (default ``0.0`` — accept all).
+            include_unfitted: Include spots whose Gaussian fit failed
+                (default ``True``).
             use_eff: If ``True`` (default), use ``U_eff`` (strained) when
                 available; otherwise use ``U``.
         """
@@ -1787,6 +1796,23 @@ class LayeredMap:
             import skimage.io
             path  = os.path.join(tiff_dir, f"frame_{frame_idx:05d}.tif")
             image = skimage.io.imread(path).astype(np.float32)
+
+        # Load measured peaklist from seg file if available
+        peaklist = np.empty((0, 9), dtype=np.float32)
+        if seg_dir is not None:
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    from .segmentation import convert_spotsfile2peaklist
+                    peaklist = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )
+                except Exception as exc:
+                    print(f"  ✗ could not load seg file: {exc}", flush=True)
+            else:
+                print(f"  no seg file for frame {frame_idx}", flush=True)
 
         # Choose U or U_eff
         U_src = self.U_eff if (use_eff and not np.all(np.isnan(self.U_eff[:, iy, ix]))) \
@@ -1809,7 +1835,7 @@ class LayeredMap:
                 layer.U = U0
 
         fig = plot_measured_vs_simulated(
-            np.empty((0, 9)),
+            peaklist,
             spots,
             image=image,
             camera=camera,

@@ -1786,6 +1786,8 @@ class LayeredMap:
         include_unfitted: bool = True,
         E_min_eV: float = 5_000,
         E_max_eV: float = 27_000,
+        f2_thresh: float = 1e-4,
+        top_n_sim: "int | None" = None,
         max_match_dist: float = 5.0,
         use_eff: bool = True,
         figsize: tuple = (14, 6),
@@ -1860,8 +1862,11 @@ class LayeredMap:
             spots = simulate_laue_stack(
                 self.stack, camera,
                 E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                f2_thresh=f2_thresh,
                 verbose=False,
             )
+            if top_n_sim is not None:
+                spots = spots[:top_n_sim]
         finally:
             for layer, U0 in zip(self.stack.all_layers, saved_U):
                 layer.U = U0
@@ -2998,6 +3003,7 @@ class LayeredMap:
         valid_vals = kam_map[np.isfinite(kam_map)]
         if vmax is None:
             vmax = float(np.percentile(valid_vals, 99)) if len(valid_vals) else 1.0
+        vmax = max(float(vmax), float(vmin) + 1e-6)   # prevent blank image when all angles ≈ 0
 
         extent, xlabel, ylabel = self._motor_extent(motor_x, motor_y)
         if ax is None:

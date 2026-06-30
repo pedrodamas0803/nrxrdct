@@ -2379,22 +2379,74 @@ class LayeredMap:
         **fit_kwargs,
     ) -> list:
         """
-        Submit stack orientation fitting to SLURM.
+        Submit peak-list-based orientation fitting for the full LayeredCrystal
+        stack to SLURM.
 
-        Frames are split into *n_jobs* chunks.  Each job runs
-        ``slurm_layered_orient_worker`` and writes
-        ``<base_dir>/layered_ori/frame_?????.npz``.
-        Call :meth:`collect` on ``<base_dir>/layered_ori/`` after jobs finish.
+        Each frame is fitted with :func:`~nrxrdct.laue.fitting.fit_orientation_stack`,
+        which finds a single global rotation shared by all layers simultaneously.
+        Fitting is staged: ``max_match_px`` is applied as a sequence of decreasing
+        matching radii so the optimizer coarsely locks onto the orientation before
+        tightening.
+
+        **Workflow**::
+
+            job_ids = lmap.submit_orientation(base_dir, camera, seg_dir="path/to/seg")
+            # wait for SLURM jobs to finish
+            lmap.collect("path/to/base_dir/layered_ori/")
+
+        Output files are written to ``<base_dir>/layered_ori/frame_?????.npz``.
 
         Args:
-            base_dir: Root directory for all outputs.
-            camera: Detector geometry.
-            seg_dir: Directory with ``frame_?????.h5`` peaklist files.
+            base_dir: Root directory for all job artefacts.  Sub-directories
+                ``layered_ori/``, ``slurm_logs/`` and ``job_meta/`` are created
+                automatically.
+            camera: Detector geometry (:class:`~nrxrdct.laue.camera.Camera`).
+            seg_dir: Directory containing ``frame_?????.h5`` segmentation files
+                produced by :meth:`segment_frame` or the segmentation workers.
                 Defaults to ``<base_dir>/seg``.
-            n_jobs: Number of SLURM jobs to submit.
+            n_jobs: Number of SLURM array jobs.  Frames are split evenly across
+                jobs; each job runs all its frames in a ``ProcessPoolExecutor``
+                with up to ``cpus_per_task`` workers.
+            partition: SLURM partition name.
+            time: Wall-clock time limit per job (``HH:MM:SS``).
+            mem: Memory limit per job (e.g. ``"4G"``).
+            cpus_per_task: CPU cores per job, also the ``ProcessPoolExecutor``
+                worker count.  Set to ``> 1`` to parallelise frames within a job.
+            python_bin: Python interpreter to invoke on the cluster (e.g.
+                ``"python"`` or ``"/path/to/env/bin/python"``).
+            max_match_px: Staged matching threshold(s) in pixels.  A sequence
+                ``(30, 10, 3)`` runs three successive refinement stages.  Each
+                stage uses the previous stage's solution as the starting point.
+            min_matched: Minimum number of matched spots required to accept and
+                save a result.
+            min_match_rate: Minimum fraction of simulated spots that must be
+                matched (``n_matched / n_sim``).
+            max_rms_px: If set, frames with RMS pixel residual above this value
+                are rejected even if ``min_matched`` is satisfied.
+            r_squared_min: Minimum Gaussian-fit R² for peaks loaded from the
+                segmentation file.  ``0.0`` (default) keeps all peaks including
+                those with poor fits.
+            include_unfitted: If ``True``, also use peaks that failed Gaussian
+                fitting (stored with ``fitted=False`` in the segmentation file).
+            geometry_only: If ``True`` (default), precompute the allowed-HKL
+                set from structure factors at rest and skip per-spot F² evaluation
+                during the fit.  Much faster; disable only if you need exact
+                intensity weighting.
+            f2_thresh: Structure-factor threshold used when precomputing the
+                allowed-HKL set (``geometry_only=True``) or filtering spots
+                (``geometry_only=False``).
+            correct_depth: Apply depth correction to the pixel projection to
+                account for the displacement of the diffracting volume below
+                the sample surface.
+            overwrite: Re-process frames that already have a result file.
+            extra_sbatch: Additional ``#SBATCH`` directives passed verbatim,
+                e.g. ``{"account": "myproject", "constraint": "gpu"}``.
+            **fit_kwargs: Extra keyword arguments forwarded to
+                :func:`~nrxrdct.laue.fitting.fit_orientation_stack`
+                (e.g. ``E_min_eV``, ``E_max_eV``, ``source``, ``ftol``).
 
         Returns:
-            List of SLURM job IDs.
+            List of SLURM job IDs (strings).
         """
         dirs = self._setup_slurm_dirs(base_dir, "layered_ori")
         stack_pkl = self._write_stack_pkl(base_dir)
@@ -2463,14 +2515,68 @@ class LayeredMap:
         **fit_kwargs,
     ) -> list:
         """
-        Submit stack orientation + per-layer strain fitting to SLURM.
+        Submit simultaneous orientation + per-layer strain fitting to SLURM.
 
-        Writes to ``<base_dir>/layered_strain/frame_?????.npz``.
-        Call :meth:`collect` on that directory after jobs finish.
+        Each frame is fitted with
+        :func:`~nrxrdct.laue.fitting.fit_strain_orientation_stack`, which
+        refines a single shared global rotation (3 parameters) and an
+        independent strain tensor for every layer (``N_layers × len(fit_strain)``
+        parameters).  Because the parameter count grows with the number of
+        layers, this is inherently slower than single-crystal strain fitting;
+        reducing ``fit_strain`` to only the physically expected components is
+        the main lever to control cost.
+
+        **Workflow**::
+
+            job_ids = lmap.submit_strain(base_dir, camera, seg_dir="path/to/seg",
+                                         fit_strain=("e_xx", "e_yy", "e_zz"))
+            # wait for SLURM jobs to finish
+            lmap.collect("path/to/base_dir/layered_strain/")
+
+        Output files are written to ``<base_dir>/layered_strain/frame_?????.npz``.
+        Each file contains ``R_global``, ``rotvec``, ``U_layers``,
+        ``U_eff_layers``, ``strain_tensors``, ``strain_voigts``, ``rms_px``,
+        ``n_matched``, ``match_rate``, and ``n_sim``.
 
         Args:
-            fit_strain: Strain components to refine, e.g.
-                ``('e_xx', 'e_yy', 'e_zz')``.  ``None`` refines all six.
+            base_dir: Root directory for all job artefacts.
+            camera: Detector geometry (:class:`~nrxrdct.laue.camera.Camera`).
+            seg_dir: Directory containing ``frame_?????.h5`` segmentation files.
+                Defaults to ``<base_dir>/seg``.
+            fit_strain: Strain tensor components to refine, e.g.
+                ``("e_xx", "e_yy", "e_zz")`` for diagonal/biaxial strain only.
+                ``None`` (default) refines all six independent components
+                ``(e_xx, e_yy, e_zz, e_xy, e_xz, e_yz)``.  Reducing this set
+                is the most effective way to speed up the fit for systems with
+                known symmetry constraints.
+            n_jobs: Number of SLURM array jobs.
+            partition: SLURM partition name.
+            time: Wall-clock time limit per job (``HH:MM:SS``).  Strain fitting
+                is significantly slower than orientation-only; increase if jobs
+                time out.
+            mem: Memory limit per job.
+            cpus_per_task: CPU cores per job / ``ProcessPoolExecutor`` workers.
+            python_bin: Python interpreter on the cluster.
+            max_match_px: Staged matching threshold(s) in pixels.  A sequence
+                ``(10, 3)`` runs two stages.
+            min_matched: Minimum matched spots to save a result.
+            min_match_rate: Minimum fraction of simulated spots matched.
+            max_rms_px: Maximum RMS pixel residual to accept.
+            r_squared_min: Minimum peak R² for loading from segmentation files.
+                ``0.0`` (default) keeps all peaks.
+            include_unfitted: Include peaks that failed Gaussian fitting.
+            geometry_only: Skip per-spot F² evaluation during fitting by using
+                a precomputed allowed-HKL set.  Recommended (default ``True``).
+            f2_thresh: Structure-factor threshold for allowed-HKL precomputation.
+            correct_depth: Apply depth correction to pixel projections.
+            overwrite: Re-process frames that already have a result file.
+            extra_sbatch: Additional ``#SBATCH`` directives.
+            **fit_kwargs: Extra keyword arguments forwarded to
+                :func:`~nrxrdct.laue.fitting.fit_strain_orientation_stack`
+                (e.g. ``E_min_eV``, ``E_max_eV``, ``strain_scale``, ``ftol``).
+
+        Returns:
+            List of SLURM job IDs (strings).
         """
         from .fitting import _STRAIN_ALL
         _fit_strain = list(fit_strain) if fit_strain is not None else list(_STRAIN_ALL)
@@ -2539,13 +2645,56 @@ class LayeredMap:
         """
         Submit image-based orientation refinement to SLURM.
 
-        Writes to ``<base_dir>/layered_img_ori/frame_?????.npz``.
+        Unlike :meth:`submit_orientation`, which works from a pre-extracted
+        peak list, this method refines the orientation directly from the raw
+        detector image using
+        :func:`~nrxrdct.laue.fitting.refine_orientation_image_stack`.
+        The fit correlates a simulated spot pattern against the measured
+        intensity image, which is useful when segmentation is difficult or
+        unreliable.
+
+        Requires ``self.h5_path`` to be set on the object, or an explicit
+        ``h5_path`` argument.
+
+        **Workflow**::
+
+            lmap.h5_path = "/data/scan.h5"
+            job_ids = lmap.submit_image_orientation(
+                base_dir, camera, h5_dataset="1.1/measurement/eiger4m"
+            )
+            # wait for SLURM jobs to finish
+            lmap.collect("path/to/base_dir/layered_img_ori/")
+
+        Output files are written to ``<base_dir>/layered_img_ori/frame_?????.npz``.
+        Each file contains ``R_global``, ``rotvec``, ``U_layers``, ``score``,
+        ``score0``, and ``n_sim``.
 
         Args:
-            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``
-                if set on the object.
-            h5_dataset: Dataset path inside *h5_path*, e.g.
-                ``"1.1/measurement/eiger4m"``.
+            base_dir: Root directory for all job artefacts.
+            camera: Detector geometry (:class:`~nrxrdct.laue.camera.Camera`).
+            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``.
+            h5_dataset: Dataset path within the HDF5 file, e.g.
+                ``"1.1/measurement/eiger4m"``.  Required.
+            n_jobs: Number of SLURM array jobs.
+            partition: SLURM partition name.
+            time: Wall-clock time limit per job (``HH:MM:SS``).
+            mem: Memory limit per job.  Image-based fitting loads full detector
+                frames; increase if jobs are killed for OOM.
+            cpus_per_task: CPU cores per job / ``ProcessPoolExecutor`` workers.
+            python_bin: Python interpreter on the cluster.
+            geometry_only: Use precomputed allowed-HKL set instead of computing
+                structure factors per spot.  Strongly recommended (default ``True``).
+            f2_thresh: Structure-factor threshold for allowed-HKL precomputation.
+            correct_depth: Apply depth correction to pixel projections.
+            overwrite: Re-process frames that already have a result file.
+            extra_sbatch: Additional ``#SBATCH`` directives.
+            **fit_kwargs: Extra keyword arguments forwarded to
+                :func:`~nrxrdct.laue.fitting.refine_orientation_image_stack`
+                (e.g. ``E_min_eV``, ``E_max_eV``, ``kernel_sigma``,
+                ``bg_sigma``, ``max_angle_deg``).
+
+        Returns:
+            List of SLURM job IDs (strings).
         """
         h5_path = h5_path or self.h5_path
         if h5_path is None:
@@ -2611,13 +2760,59 @@ class LayeredMap:
         """
         Submit image-based orientation + per-layer strain refinement to SLURM.
 
-        Writes to ``<base_dir>/layered_img_strain/frame_?????.npz``.
+        Combines image-based fitting with full per-layer strain refinement using
+        :func:`~nrxrdct.laue.fitting.refine_strain_image_stack`.  This is the
+        most computationally intensive submit method: it fits a shared global
+        rotation plus an independent strain tensor per layer directly against
+        the raw detector image.
+
+        Use this method when you want strain maps without a prior segmentation
+        step, or as a refinement stage after :meth:`submit_image_orientation`.
+
+        **Workflow**::
+
+            lmap.h5_path = "/data/scan.h5"
+            job_ids = lmap.submit_strain_image(
+                base_dir, camera,
+                h5_dataset="1.1/measurement/eiger4m",
+                fit_strain=("e_xx", "e_yy", "e_zz"),
+            )
+            # wait for SLURM jobs to finish
+            lmap.collect("path/to/base_dir/layered_img_strain/")
+
+        Output files are written to ``<base_dir>/layered_img_strain/frame_?????.npz``.
+        Each file contains ``R_global``, ``rotvec``, ``U_layers``,
+        ``U_eff_layers``, ``strain_tensors``, ``strain_voigts``, ``score``,
+        ``score0``, and ``n_sim``.
 
         Args:
-            fit_strain: Strain components to refine.  ``None`` refines all six.
-            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``
-                if set on the object.
-            h5_dataset: Dataset path inside *h5_path*.
+            base_dir: Root directory for all job artefacts.
+            camera: Detector geometry (:class:`~nrxrdct.laue.camera.Camera`).
+            h5_path: Path to the HDF5 scan file.  Defaults to ``self.h5_path``.
+            h5_dataset: Dataset path within the HDF5 file.  Required.
+            fit_strain: Strain tensor components to refine, e.g.
+                ``("e_xx", "e_yy", "e_zz")``.  ``None`` refines all six.
+                Reducing this set is the most effective way to lower compute cost.
+            n_jobs: Number of SLURM array jobs.
+            partition: SLURM partition name.
+            time: Wall-clock time limit per job.  This method is the slowest of
+                the four; budget generously.
+            mem: Memory limit per job.
+            cpus_per_task: CPU cores per job / ``ProcessPoolExecutor`` workers.
+            python_bin: Python interpreter on the cluster.
+            geometry_only: Use precomputed allowed-HKL set.  Strongly recommended
+                (default ``True``).
+            f2_thresh: Structure-factor threshold for allowed-HKL precomputation.
+            correct_depth: Apply depth correction to pixel projections.
+            overwrite: Re-process frames that already have a result file.
+            extra_sbatch: Additional ``#SBATCH`` directives.
+            **fit_kwargs: Extra keyword arguments forwarded to
+                :func:`~nrxrdct.laue.fitting.refine_strain_image_stack`
+                (e.g. ``E_min_eV``, ``E_max_eV``, ``kernel_sigma``,
+                ``strain_scale``, ``max_angle_deg``).
+
+        Returns:
+            List of SLURM job IDs (strings).
         """
         h5_path = h5_path or self.h5_path
         if h5_path is None:

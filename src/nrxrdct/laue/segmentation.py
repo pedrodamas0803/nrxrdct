@@ -1205,8 +1205,11 @@ def simulation_guided_segmentation(
             if r1 <= r0 or c1 <= c0:
                 continue
 
+            imagette_valid = valid[r0:r1, c0:c1]
+            if not imagette_valid.any():
+                continue
             imagette = det_img[r0:r1, c0:c1].copy()
-            imagette[~valid[r0:r1, c0:c1]] = 0.0
+            imagette[~imagette_valid] = 0.0
 
             # Light smoothing for robust local-max finding
             smoothed = (ndi.gaussian_filter(imagette, sigma=psf_sigma)
@@ -1240,13 +1243,15 @@ def simulation_guided_segmentation(
             # candidates is (N, 2) array of (row, col) in imagette coordinates
 
             for local_r, local_c in candidates:
+                y_pk = r0 + local_r
+                x_pk = c0 + local_c
+                if not valid[y_pk, x_pk]:
+                    continue
+
                 peak_val = float(smoothed[local_r, local_c])
                 snr = (peak_val - local_med) / local_noise
                 if snr < min_snr:
                     continue
-
-                y_pk = r0 + local_r
-                x_pk = c0 + local_c
 
                 # Gaussian fit ROI on raw image intensities
                 ymin, ymax, xmin, xmax = get_spot_limits(image, y_pk, x_pk, d)

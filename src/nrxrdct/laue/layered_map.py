@@ -2855,29 +2855,59 @@ class LayeredMap:
         For each valid pixel the mean disorientation angle to all valid
         neighbors within Chebyshev distance *order* is computed after
         minimisation over crystal symmetry operators.  The result is the
-        standard KAM metric used in EBSD analysis.
+        standard KAM metric used in EBSD analysis to highlight orientation
+        gradients caused by geometrically necessary dislocations or grain
+        sub-structure.
 
         Args:
-            layer: Layer index.
-            order: Chebyshev shell radius in pixels (1 = 8 nearest
-                neighbors, 2 = 24 neighbors, …).
-            symmetry: Point-group symmetry for misorientation reduction.
-                One of ``'cubic'``, ``'hexagonal'``, ``'tetragonal'``,
-                ``'orthorhombic'``.
-            use_eff: Use ``U_eff`` (strained) instead of ``U``.  Falls back
-                to ``U`` if ``U_eff`` has not been fitted.
-            motor_x, motor_y: Motor names for physical axis labels.
-            cmap: Matplotlib colormap.  Default ``'inferno'``.
-            vmin: Minimum colorscale value (degrees).  Default ``0``.
-            vmax: Maximum colorscale value (degrees).  ``None`` uses the
-                99th percentile of valid pixel values.
-            plot: Draw the map when ``True`` (default).
-            ax: Existing ``Axes`` to draw into; a new figure is created if
-                ``None``.
+            layer: Index into ``stack.all_layers`` selecting which layer's
+                orientation to analyse.  Each layer has its own independent
+                ``U`` / ``U_eff`` array, so the substrate and film will
+                produce separate KAM maps reflecting gradients in their
+                respective materials.
+            order: Chebyshev shell radius in pixels.  ``1`` (default)
+                uses the 8 immediate neighbors; ``2`` adds the next ring
+                for 24 neighbors total; and so on.  Larger values smooth
+                the map and capture longer-range gradients but blur sharp
+                boundaries.  Standard EBSD convention is ``order=1``.
+            symmetry: Point-group symmetry applied when minimising the
+                misorientation angle between neighbors.  Must match the
+                crystal structure of *layer*: ``'cubic'``,
+                ``'hexagonal'``, ``'tetragonal'``, or
+                ``'orthorhombic'``.  Using the wrong symmetry
+                (e.g. ``'orthorhombic'`` for a cubic crystal) causes
+                symmetry-equivalent orientations to be reported as real
+                gradients, inflating KAM everywhere.
+            use_eff: If ``True``, use ``U_eff`` (which carries the strain
+                factor ``I + ε``) instead of the pure rotation ``U``.
+                Before computing misorientations the matrices are projected
+                onto SO(3), so large inter-pixel strain differences can
+                still bleed into the KAM value.  Keep ``False`` (default)
+                to isolate orientation gradients from strain.
+            motor_x, motor_y: Names of motor position arrays stored in
+                ``self.motors``.  When supplied the axes are labeled in
+                physical units and the map extent is set from the motor
+                ranges; without them row/column pixel indices are used.
+            cmap: Matplotlib colormap.  ``'inferno'`` (default) is the
+                standard choice for KAM because near-zero values appear
+                black and gradient regions become progressively brighter.
+            vmin: Lower colorscale bound in degrees.  Almost always left
+                at ``0.0`` since KAM is non-negative by construction.
+            vmax: Upper colorscale bound in degrees.  Set an explicit
+                value when comparing maps across different scans so all
+                images share the same scale.  ``None`` (default)
+                auto-scales to the 99th percentile of valid pixels,
+                which avoids isolated outlier pixels blowing out the
+                colour range.
+            plot: Render the map when ``True`` (default).  Set ``False``
+                to compute and return the array without any drawing, e.g.
+                for batch processing or when embedding in a custom figure.
+            ax: Existing ``Axes`` to draw into.  A new figure is created
+                when ``None``.
 
         Returns:
             ``(ny, nx)`` float64 array of KAM angles in degrees.  Pixels
-            with no valid neighbors are ``NaN``.
+            with no valid orientation or no valid neighbors are ``NaN``.
         """
         from .simulation import _symmetry_ops_np
 

@@ -1922,6 +1922,7 @@ class LayeredMap:
         bg_sigma: float = 251.0,
         max_angle_deg: float = 0.2,
         max_shift_px: "float | list[float] | None" = None,
+        correct_depth: bool = False,
         figsize: tuple = (14, 7),
     ) -> None:
         """
@@ -2389,6 +2390,7 @@ class LayeredMap:
                         else fit_max_match_px,
                         allowed_hkl=_allowed_by_crystal,
                         geometry_only=True,
+                        correct_depth=correct_depth,
                         update_stack=False,
                         verbose=True,
                     )
@@ -2427,6 +2429,7 @@ class LayeredMap:
                         max_match_px=[3.0],
                         allowed_hkl=_allowed_by_crystal,
                         geometry_only=True,
+                        correct_depth=correct_depth,
                         update_stack=False,
                         verbose=True,
                     )
@@ -2473,6 +2476,7 @@ class LayeredMap:
                         bg_sigma=bg_sigma,
                         max_angle_deg=max_angle_deg,
                         E_min=E_min_eV, E_max=E_max_eV,
+                        correct_depth=correct_depth,
                         verbose=True,
                     )
                 finally:
@@ -2523,6 +2527,7 @@ class LayeredMap:
                         max_angle_deg = max_angle_deg,
                         E_min         = E_min_eV,
                         E_max         = E_max_eV,
+                        correct_depth = correct_depth,
                         verbose       = True,
                     )
                     if strain0_list is not None:

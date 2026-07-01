@@ -3928,6 +3928,11 @@ def refine_orientation_image_stack(
         img    = np.clip(img - smooth / norm, 0.0, None)
         img[~valid] = 0.0
 
+    # Pre-blur once: score = Σ_spots intensity_s * img_blurred[row_s, col_s]
+    # is equivalent to Σ_{i,j} (delta * kernel)[i,j] * img[i,j] by convolution
+    # commutativity, but avoids an FFT on every optimizer iteration.
+    img_blurred = _fft_gauss_convolve(img, kernel_sigma)
+
     U0_layers = [layer.U.copy() for layer in stack.all_layers]
     n_layers  = len(U0_layers)
 
@@ -3951,15 +3956,15 @@ def refine_orientation_image_stack(
         if not spots:
             return 0.0
 
-        delta = np.zeros((ny, nx), dtype=np.float64)
-        for s in spots:
-            xc, yc = s["pix"]
-            col = int(round(xc))
-            row = int(round(yc))
-            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
-                delta[row, col] += float(s["intensity"])
-
-        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
+        pix_arr = np.array([s["pix"] for s in spots], dtype=np.float64)
+        int_arr = np.array([s.get("intensity", 1.0) for s in spots], dtype=np.float64)
+        cols = np.round(pix_arr[:, 0]).astype(np.intp)
+        rows = np.round(pix_arr[:, 1]).astype(np.intp)
+        mask = (rows >= 0) & (rows < ny) & (cols >= 0) & (cols < nx)
+        mask[mask] &= valid[rows[mask], cols[mask]]
+        if not mask.any():
+            return 0.0
+        return float((img_blurred[rows[mask], cols[mask]] * int_arr[mask]).sum())
 
     score0 = _score(np.zeros(3 * n_layers))
 
@@ -4868,6 +4873,8 @@ def refine_strain_image_stack(
         img    = np.clip(img - smooth / norm, 0.0, None)
         img[~valid] = 0.0
 
+    img_blurred = _fft_gauss_convolve(img, kernel_sigma)
+
     n_layers = len(stack.all_layers)
     n_strain = len(_fit_strain)
     _block   = 3 + n_strain          # params per layer: [δω(3), ε(n_strain)]
@@ -4923,15 +4930,15 @@ def refine_strain_image_stack(
         if not spots:
             return 0.0
 
-        delta = np.zeros((ny, nx), dtype=np.float64)
-        for s in spots:
-            xc, yc = s["pix"]
-            col = int(round(xc))
-            row = int(round(yc))
-            if 0 <= row < ny and 0 <= col < nx and valid[row, col]:
-                delta[row, col] += float(s["intensity"])
-
-        return float(np.sum(_fft_gauss_convolve(delta, kernel_sigma) * img))
+        pix_arr = np.array([s["pix"] for s in spots], dtype=np.float64)
+        int_arr = np.array([s.get("intensity", 1.0) for s in spots], dtype=np.float64)
+        cols = np.round(pix_arr[:, 0]).astype(np.intp)
+        rows = np.round(pix_arr[:, 1]).astype(np.intp)
+        mask = (rows >= 0) & (rows < ny) & (cols >= 0) & (cols < nx)
+        mask[mask] &= valid[rows[mask], cols[mask]]
+        if not mask.any():
+            return 0.0
+        return float((img_blurred[rows[mask], cols[mask]] * int_arr[mask]).sum())
 
     score0 = _score(x0)
 

@@ -2892,6 +2892,403 @@ def simulate_laue_darwin(
     return spots
 
 
+def simulate_laue_multibeam(
+    crystal,
+    U,
+    camera,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+    ki_hat=None,
+    kb_params=BM32_KB,
+    delta_E_rel: float = 0.005,
+    umweg_f2_thresh: float | None = None,
+    verbose: bool = True,
+):
+    """
+    White-beam Laue simulation with N-beam (multi-beam) dynamical diffraction.
+
+    Extends :func:`simulate_laue` with **Umweganregung** (detour excitation):
+    systematically-forbidden reflections that are activated via two-step
+    scattering paths through the crystal.
+
+    **Physics**
+
+    In two-beam kinematical theory, a reflection $\\mathbf{G}_t$ with
+    $|F(\\mathbf{G}_t)| = 0$ (systematic absence) produces no spot.  When a
+    secondary reflection $\\mathbf{G}_s$ is simultaneously in Bragg condition
+    at the same energy $E_t$, the beam can take the detour
+
+    .. math::
+
+        \\mathbf{k}_i \\xrightarrow{\\mathbf{G}_s} \\mathbf{k}_{int}
+        \\xrightarrow{\\mathbf{G}_r} \\mathbf{k}_f
+
+    with $\\mathbf{G}_r = \\mathbf{G}_t - \\mathbf{G}_s$, producing a spot at
+    the position $\\mathbf{G}_t$ would occupy even though
+    $F(\\mathbf{G}_t) = 0$.
+
+    The Umweganregung amplitude at $\\mathbf{G}_t$ is
+
+    .. math::
+
+        A_t = \\sum_{\\mathbf{G}_s}
+              \\frac{F(\\mathbf{G}_s)\\,F(\\mathbf{G}_r)}{\\xi_s + i\\,\\delta_s}
+
+    where
+
+    * $\\xi_s$ — excitation error of $\\mathbf{G}_s$ at energy $E_t$
+      (Å⁻¹, positive when $\\mathbf{G}_s$ is not exactly in Bragg condition)
+    * $\\delta_s = r_e \\lambda |F(\\mathbf{G}_s)| / (\\pi V_{uc} \\sin\\theta_s)$ —
+      Darwin half-width of $\\mathbf{G}_s$ (regularises the resonance when
+      $\\xi_s \\to 0$)
+
+    Resonance ($\\xi_s \\approx 0$, i.e.\\ $E_s \\approx E_t$) gives the
+    strongest contribution; off-resonance paths decay as $1/\\xi_s$.
+
+    All spots (kinematical + Umweganregung) are tagged with
+    ``'is_umweganregung'`` and extra diagnostic keys.
+
+    Args:
+    crystal : xrayutilities Crystal
+        Single-crystal object (not a LayeredCrystal stack).
+    U : ndarray, shape (3, 3)
+        Orientation matrix in the LaueTools lab frame (beam along +x).
+    camera : Camera
+        Detector geometry.
+    E_min_eV, E_max_eV : float
+        Energy window (eV).
+    source : str
+        Synchrotron source model — same options as :func:`simulate_laue`.
+    source_kwargs : dict or None
+    f2_thresh : float
+        Minimum $|F|^2$ threshold for **kinematical** reflections.
+    ki_hat : array-like (3,) or None
+        Incident beam direction (defaults to :data:`KI_HAT`).
+    kb_params : dict or None
+        KB mirror reflectivity correction.
+    delta_E_rel : float
+        Relative energy tolerance for simultaneous excitation of a secondary
+        beam $\\mathbf{G}_s$ at the primary energy $E_t$:
+
+        .. math:: |E_s - E_t| / E_t < \\text{delta\\_E\\_rel}
+
+        Default 0.005 (0.5 %).  Larger values find more (weaker) paths but
+        increase runtime and may produce spurious spots.
+    umweg_f2_thresh : float or None
+        Minimum $|A_t|^2$ to retain an Umweganregung spot.
+        Defaults to ``1e-4 * f2_thresh``.
+    verbose : bool
+
+    Returns:
+    spots : list of dict
+        All standard keys from :func:`simulate_laue` plus:
+
+        ``'is_umweganregung'`` : bool
+            True for spots produced by Umweganregung (forbidden kinematically).
+        ``'umweg_paths'`` : list of dict
+            For Umweganregung spots: one entry per contributing two-step path,
+            containing ``'hkl_s'``, ``'hkl_r'``, ``'F_s'``, ``'F_r'``,
+            ``'xi_s'``, ``'delta_s'``.  Empty list for kinematical spots.
+        ``'n_umweg_paths'`` : int
+            Number of contributing paths (0 for kinematical spots).
+        ``'F2_umweg'`` : float
+            $|A_t|^2$ for Umweganregung spots; 0 for kinematical spots.
+"""
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki /= np.linalg.norm(ki)
+    U = np.asarray(U, dtype=float)
+    source_kwargs = source_kwargs or {}
+    if umweg_f2_thresh is None:
+        umweg_f2_thresh = 1e-4 * f2_thresh
+
+    _spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
+
+    lam_lo = en2lam(E_max_eV)
+    lam_hi = en2lam(E_min_eV)
+
+    # ── Build reciprocal lattice matrix ───────────────────────────────────────
+    B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0), crystal.Q(0, 0, 1)])
+    V_uc = float(crystal.lattice.UnitCellVolume())
+
+    HC_eV_ANG = 12398.4
+    G_max = 4.0 * np.pi * E_max_eV / HC_eV_ANG
+    G_max_sq = G_max ** 2
+
+    a_star = float(np.linalg.norm(B[:, 0]))
+    b_star = float(np.linalg.norm(B[:, 1]))
+    c_star = float(np.linalg.norm(B[:, 2]))
+    h_lim = int(G_max / a_star) + 1
+    k_lim = int(G_max / b_star) + 1
+    l_lim = int(G_max / c_star) + 1
+
+    # ── Enumerate all G in sphere ─────────────────────────────────────────────
+    hv = np.arange(-h_lim, h_lim + 1, dtype=np.int32)
+    kv = np.arange(-k_lim, k_lim + 1, dtype=np.int32)
+    lv = np.arange(-l_lim, l_lim + 1, dtype=np.int32)
+    H, K, L = np.meshgrid(hv, kv, lv, indexing="ij")
+    hkl_all = np.column_stack([H.ravel(), K.ravel(), L.ravel()])
+    hkl_all = hkl_all[np.any(hkl_all != 0, axis=1)]
+
+    G_cry_all = (B @ hkl_all.T).T                                   # (N, 3)
+    G_sq_all  = np.einsum("ij,ij->i", G_cry_all, G_cry_all)
+    in_sphere = G_sq_all <= G_max_sq
+    hkl_all   = hkl_all[in_sphere]
+    G_cry_all = G_cry_all[in_sphere]
+
+    G_lab_all = G_cry_all @ U.T                                      # (N, 3)
+    kdG_all   = G_lab_all @ ki                                       # (N,)
+
+    # Laue energies for all G (NaN where kdG >= 0, i.e. not in Bragg condition)
+    G_sq_lab  = np.einsum("ij,ij->i", G_lab_all, G_lab_all)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        lam_all = np.where(
+            kdG_all < 0,
+            -4.0 * np.pi * kdG_all / G_sq_lab,
+            np.nan,
+        )
+    E_laue_all = np.where(np.isfinite(lam_all), HC_eV_ANG / lam_all, np.nan)
+
+    # Index map: (h, k, l) → position in hkl_all (for fast G_r lookup)
+    _hkl_index: dict[tuple, int] = {
+        (int(hkl_all[i, 0]), int(hkl_all[i, 1]), int(hkl_all[i, 2])): i
+        for i in range(len(hkl_all))
+    }
+
+    # Pre-compute structure factors for all G in sphere at a reference energy.
+    # Per-spot energies can vary ±~5% from midpoint; using one reference is a
+    # good approximation for the secondary-beam search (full F(E) is used for
+    # the final amplitude calculation below).
+    E_ref = 0.5 * (E_min_eV + E_max_eV)
+    if verbose:
+        print(f"  Computing structure factors for {len(hkl_all)} G vectors ...",
+              end="", flush=True)
+    F_ref_all = crystal.StructureFactorForQ(G_cry_all, en0=E_ref)   # (N,) complex
+    F2_ref_all = np.abs(F_ref_all) ** 2
+    if verbose:
+        print(" done")
+
+    # ── Step 1: kinematical spots (primary reflections on detector) ───────────
+    in_energy = (lam_all >= lam_lo) & (lam_all <= lam_hi)
+    kin_mask  = in_energy & (F2_ref_all >= f2_thresh)
+    kin_idx   = np.where(kin_mask)[0]
+
+    if verbose:
+        print(f"  Kinematical candidates: {kin_mask.sum()}  (energy window + F² cut)")
+
+    kin_spots: list[dict] = []
+    for idx in kin_idx:
+        lam   = float(lam_all[idx])
+        E     = HC_eV_ANG / lam
+        G_lab = G_lab_all[idx]
+        km    = 2.0 * np.pi / lam
+        kf    = ki * km + G_lab
+        kf_hat = kf / np.linalg.norm(kf)
+        pix = camera.project(kf_hat)
+        if pix is None:
+            continue
+        tth = float(np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0))))
+        chi = float(np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17)))
+        az  = float(np.degrees(np.arctan2(kf_hat[2], kf_hat[1])))
+        LP  = lorentz_pol(tth)
+        if LP == 0.0:
+            continue
+        sw = _spectrum(E)
+        if sw <= 0.0:
+            continue
+        F_val = crystal.StructureFactor(G_cry_all[idx], en=E)
+        F2    = abs(F_val) ** 2
+        if F2 < f2_thresh:
+            continue
+        hkl = (int(hkl_all[idx, 0]), int(hkl_all[idx, 1]), int(hkl_all[idx, 2]))
+        kin_spots.append({
+            "hkl":              hkl,
+            "is_umweganregung": False,
+            "umweg_paths":      [],
+            "n_umweg_paths":    0,
+            "F2_umweg":         0.0,
+            "G_lab":            G_lab.copy(),
+            "E":                E,
+            "lambda":           lam,
+            "tth":              tth,
+            "chi":              chi,
+            "az":               az,
+            "pix":              pix,
+            "F2":               F2,
+            "LP":               LP,
+            "sw":               sw,
+            "I_raw":            F2 * LP * sw,
+        })
+
+    if verbose:
+        print(f"  Kinematical spots on detector: {len(kin_spots)}")
+
+    # Set of pixel positions already claimed by kinematical spots (coarse grid)
+    kin_pix_set: set[tuple] = {
+        (round(s["pix"][0]), round(s["pix"][1])) for s in kin_spots
+    }
+
+    # ── Step 2: Umweganregung — forbidden G_t in energy range ─────────────────
+    # Forbidden: |F_t|² < f2_thresh but G_t is in energy window and hits detector
+    forbidden_mask = in_energy & (F2_ref_all < f2_thresh)
+    forbidden_idx  = np.where(forbidden_mask)[0]
+
+    if verbose:
+        print(f"  Forbidden G vectors in energy window: {forbidden_mask.sum()}")
+        print(f"  Searching for Umweganregung paths (delta_E_rel={delta_E_rel:.3f}) ...")
+
+    umweg_spots: list[dict] = []
+    n_forbidden_on_det = 0
+
+    # Precompute per-G normalised Laue energies for fast tolerance check
+    E_laue_finite = np.where(np.isfinite(E_laue_all), E_laue_all, -1.0)
+
+    for idx_t in forbidden_idx:
+        lam_t = float(lam_all[idx_t])
+        E_t   = HC_eV_ANG / lam_t
+        G_lab_t = G_lab_all[idx_t]
+        km_t    = 2.0 * np.pi / lam_t
+        kf_t    = ki * km_t + G_lab_t
+        kf_hat_t = kf_t / np.linalg.norm(kf_t)
+
+        pix_t = camera.project(kf_hat_t)
+        if pix_t is None:
+            continue
+        pix_key_t = (round(pix_t[0]), round(pix_t[1]))
+        if pix_key_t in kin_pix_set:
+            # Position already occupied by a kinematical spot — skip
+            continue
+
+        n_forbidden_on_det += 1
+
+        tth_t = float(np.degrees(np.arccos(np.clip(kf_hat_t[0], -1.0, 1.0))))
+        LP_t  = lorentz_pol(tth_t)
+        if LP_t == 0.0:
+            continue
+        sw_t = _spectrum(E_t)
+        if sw_t <= 0.0:
+            continue
+
+        # ── Find secondary beams G_s with E_s ≈ E_t ──────────────────────────
+        # Simultaneous excitation condition: |E_s - E_t| / E_t < delta_E_rel
+        near_mask = (
+            np.isfinite(E_laue_all)
+            & (np.abs(E_laue_finite - E_t) / E_t < delta_E_rel)
+        )
+        near_idx = np.where(near_mask)[0]
+
+        hkl_t = (int(hkl_all[idx_t, 0]),
+                 int(hkl_all[idx_t, 1]),
+                 int(hkl_all[idx_t, 2]))
+
+        A_total  = 0.0 + 0j
+        paths    = []
+        # Normalization constant for this G_t: r_e λ / (π V_uc) makes
+        # |A_total|² comparable in units to kinematical |F_uc|²
+        norm = _R_E_ANG * lam_t / (np.pi * V_uc)
+
+        for idx_s in near_idx:
+            hs, ks, ls = int(hkl_all[idx_s, 0]), int(hkl_all[idx_s, 1]), int(hkl_all[idx_s, 2])
+
+            # G_r must be in our sphere enumeration
+            hr, kr, lr = hkl_t[0] - hs, hkl_t[1] - ks, hkl_t[2] - ls
+            if (hr, kr, lr) == (0, 0, 0):
+                continue
+            idx_r = _hkl_index.get((hr, kr, lr))
+            if idx_r is None:
+                continue
+
+            F_s_ref = F_ref_all[idx_s]
+            F_r_ref = F_ref_all[idx_r]
+            if abs(F_s_ref) < 1e-6 or abs(F_r_ref) < 1e-6:
+                continue
+
+            # Evaluate structure factors at exact energy E_t
+            F_s = crystal.StructureFactor(G_cry_all[idx_s], en=E_t)
+            F_r = crystal.StructureFactor(G_cry_all[idx_r], en=E_t)
+            if abs(F_s) < 1e-8 or abs(F_r) < 1e-8:
+                continue
+
+            # Excitation error of G_s at energy E_t (Å⁻¹)
+            # ξ_s = k_m(E_t) · (k_hat · G_s_lab) + G_s²/2
+            xi_s = float(km_t * float(ki @ G_lab_all[idx_s])
+                         + 0.5 * float(G_sq_lab[idx_s]))
+
+            # Darwin half-width δ_s = r_e λ |F_s| / (π V_uc sin θ_s)
+            # θ_s is the Bragg angle G_s WOULD have at E_t
+            cos_tth_s = float(np.clip(
+                (ki * km_t + G_lab_all[idx_s]) @ (ki * km_t + G_lab_all[idx_s]),
+                0.0, None,
+            ))
+            # simpler: use tth_t as proxy for the angular factor (same order)
+            sin_th_s  = max(abs(np.sin(np.radians(tth_t / 2.0))), 1e-6)
+            delta_s   = (_R_E_ANG * lam_t * abs(F_s)
+                         / (np.pi * V_uc * sin_th_s))
+
+            denom = xi_s + 1j * delta_s
+            A_path = norm * F_s * F_r / denom
+            A_total += A_path
+
+            paths.append({
+                "hkl_s":   (hs, ks, ls),
+                "hkl_r":   (hr, kr, lr),
+                "F_s":     complex(F_s),
+                "F_r":     complex(F_r),
+                "xi_s":    xi_s,
+                "delta_s": delta_s,
+            })
+
+        if not paths:
+            continue
+
+        F2_umweg = abs(A_total) ** 2
+        if F2_umweg < umweg_f2_thresh:
+            continue
+
+        chi_t = float(np.degrees(np.arctan2(kf_hat_t[1], kf_hat_t[2] + 1e-17)))
+        az_t  = float(np.degrees(np.arctan2(kf_hat_t[2], kf_hat_t[1])))
+
+        umweg_spots.append({
+            "hkl":              hkl_t,
+            "is_umweganregung": True,
+            "umweg_paths":      paths,
+            "n_umweg_paths":    len(paths),
+            "F2_umweg":         F2_umweg,
+            "G_lab":            G_lab_t.copy(),
+            "E":                E_t,
+            "lambda":           lam_t,
+            "tth":              tth_t,
+            "chi":              chi_t,
+            "az":               az_t,
+            "pix":              pix_t,
+            "F2":               F2_umweg,
+            "LP":               LP_t,
+            "sw":               sw_t,
+            "I_raw":            F2_umweg * LP_t * sw_t,
+        })
+
+    if verbose:
+        print(f"  Forbidden G on detector (not obscured): {n_forbidden_on_det}")
+        print(f"  Umweganregung spots found: {len(umweg_spots)}")
+
+    # ── Merge and normalise ───────────────────────────────────────────────────
+    all_spots = kin_spots + umweg_spots
+    if all_spots:
+        imax = max(s["I_raw"] for s in all_spots)
+        for s in all_spots:
+            s["intensity"] = s["I_raw"] / imax
+
+    all_spots.sort(key=lambda s: s["I_raw"], reverse=True)
+
+    if verbose:
+        print(f"  Total spots (multi-beam): {len(all_spots)}  "
+              f"({len(kin_spots)} kinematical + {len(umweg_spots)} Umweganregung)")
+
+    return all_spots
+
+
 def simulate_mixed_phases(
     phases,
     camera,

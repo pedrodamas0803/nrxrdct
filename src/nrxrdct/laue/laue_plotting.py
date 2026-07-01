@@ -3807,4 +3807,279 @@ def plot_multigrain(
                     facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPTH-ELONGATION PLOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _kf_hat_from_spot(spot):
+    """Reconstruct unit scattered-beam vector from tth / chi stored in a spot dict."""
+    tth = np.radians(float(spot["tth"]))
+    chi = np.radians(float(spot["chi"]))
+    return np.array([
+        np.cos(tth),
+        np.sin(tth) * np.sin(chi),
+        np.sin(tth) * np.cos(chi),
+    ])
+
+
+def _surface_to_depth_segments(stack):
+    """
+    Return a list of (z_start_Å, z_end_Å, layer) tuples ordered from the
+    crystal surface down to the deepest buffer layer.
+
+    The repeating MQW unit is unrolled (n_rep copies, top repetition first);
+    buffer layers follow in shallowest-first order.
+    """
+    segments = []
+    z = 0.0
+    for rep in range(stack.n_rep - 1, -1, -1):
+        for layer in reversed(stack.layers):
+            segments.append((z, z + layer.thickness, layer))
+            z += layer.thickness
+    for layer in reversed(stack.buffer_layers):
+        segments.append((z, z + layer.thickness, layer))
+        z += layer.thickness
+    return segments
+
+
+def plot_depth_elongation(
+    spots,
+    stack,
+    camera,
+    ki_hat=None,
+    *,
+    top_n: int = 15,
+    min_intensity: float = 0.02,
+    n_steps_per_layer: int = 8,
+    space: str = "detector",
+    image: "np.ndarray | None" = None,
+    figsize=(10, 8),
+    ax=None,
+    out_path: "str | None" = "depth_elongation.png",
+):
+    """
+    Visualise depth-parallax spot elongation for each Laue spot.
+
+    For every spot a *trail* of projected positions is drawn, stepping from
+    the crystal surface (filled marker, full opacity) to the maximum depth
+    sampled (transparent), weighted by the Beer-Lambert absorption at each
+    layer's energy.  Trails reveal how much the spot centre would move on
+    the detector if the diffracting volume were at different depths below
+    the surface.
+
+    Args:
+        spots (list[dict]): Output of :func:`simulate_laue_stack` or
+            :func:`simulate_laue_darwin`.  Required keys: ``'tth'``,
+            ``'chi'``, ``'lambda'``, ``'E'``, ``'pix'``, ``'intensity'``.
+            Optional: ``'phase_label'``.
+        stack (LayeredCrystal): The same stack used to produce *spots*.
+            Provides layer thicknesses, absorption coefficients, and the
+            surface-normal direction.
+        camera (Camera): Detector geometry used in the simulation.
+        ki_hat (array-like (3,) or None): Incident-beam direction in the
+            LT frame.  Defaults to ``[1, 0, 0]``.
+        top_n (int): Maximum number of spots to plot (strongest first).
+        min_intensity (float): Skip spots below this normalised intensity.
+        n_steps_per_layer (int): Number of depth samples taken *per layer*.
+            Thick layers get more points but the total samples per spot
+            scales with the number of layers.
+        space (``'detector'`` | ``'angles'``): Coordinate space.
+            ``'detector'`` → pixel (col, row).
+            ``'angles'``   → (2θ °, χ °).
+        image (ndarray or None): Optional detector image to show as
+            background (only used when ``space='detector'``).
+        figsize (tuple): Figure size.
+        ax (Axes or None): Draw into an existing Axes.
+        out_path (str or None): Save path; ``None`` → do not save.
+
+    Returns:
+        fig, ax
+    """
+    from matplotlib.collections import LineCollection
+    from matplotlib.cm import get_cmap
+
+    ki = np.asarray(ki_hat if ki_hat is not None else [1.0, 0.0, 0.0], dtype=float)
+    ki /= np.linalg.norm(ki)
+
+    # cos(angle between surface normal and beam) — used for depth→beam conversion
+    cos_in = max(abs(float(stack.n_hat[0])), 1e-3)
+
+    # Layer sequence from surface to deep
+    segments = _surface_to_depth_segments(stack)
+    total_thickness_mm = sum(seg[1] - seg[0] for seg in segments) * 1e-7  # Å→mm
+
+    # ── Filter spots ──────────────────────────────────────────────────────────
+    candidates = [s for s in spots
+                  if s.get("pix") is not None
+                  and float(s.get("intensity", 1.0)) >= min_intensity]
+    candidates.sort(key=lambda s: s.get("intensity", 0.0), reverse=True)
+    candidates = candidates[:top_n]
+
+    if not candidates:
+        raise ValueError("No spots survive the intensity / top_n filter.")
+
+    # ── Colour palette — one colour per phase label ───────────────────────────
+    phase_labels = list(dict.fromkeys(
+        s.get("phase_label", "unknown") for s in candidates
+    ))
+    palette = get_cmap("tab10")
+    phase_color = {ph: palette(i % 10) for i, ph in enumerate(phase_labels)}
+
+    # ── Set up axes ───────────────────────────────────────────────────────────
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    ax.tick_params(colors=FG, labelsize=8)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    if space == "detector" and image is not None:
+        vmax = np.percentile(image, 99)
+        ax.imshow(image, origin="lower", cmap="gray", vmin=0, vmax=vmax,
+                  aspect="equal", interpolation="nearest")
+
+    # ── Per-spot depth trails ─────────────────────────────────────────────────
+    legend_handles = {}
+
+    for spot in candidates:
+        phase = spot.get("phase_label", "unknown")
+        color = phase_color[phase]
+        E_eV  = float(spot["E"])
+        kf_hat = _kf_hat_from_spot(spot)
+        cos_out = max(abs(float(np.dot(stack.n_hat, kf_hat))), 1e-3)
+
+        # Build depth samples: (z_from_surface_mm, absorption_weight)
+        depth_samples = []   # (z_mm, weight)
+        T_above = 1.0        # cumulative transmission from surface to current layer top
+
+        for z_start_ang, z_end_ang, layer in segments:
+            thick_mm = (z_end_ang - z_start_ang) * 1e-7  # Å → mm
+            mu = layer._linear_mu(E_eV) * 1e7             # Å⁻¹ → mm⁻¹
+
+            # Sample uniformly within this layer
+            n_samp = max(1, n_steps_per_layer)
+            zs_rel = np.linspace(0.0, thick_mm, n_samp + 1)[:-1]  # exclude endpoint (next layer's start)
+
+            for dz in zs_rel:
+                z_mm = z_start_ang * 1e-7 + dz
+                # Beer-Lambert: in-path through dz of current layer + out-path
+                T_partial = (np.exp(-mu * dz * (1.0 / cos_in + 1.0 / cos_out))
+                             if mu > 0 else 1.0)
+                weight = T_above * T_partial
+                depth_samples.append((z_mm, weight))
+
+            # Advance T_above through the full layer
+            if mu > 0:
+                T_above *= np.exp(-mu * thick_mm * (1.0 / cos_in + 1.0 / cos_out))
+
+            # Stop early once signal is negligible
+            if T_above < 1e-4:
+                break
+
+        if not depth_samples:
+            continue
+
+        # Project each depth sample onto the detector
+        pix_trail = []
+        weights   = []
+        for z_mm, w in depth_samples:
+            # source_depth_mm: displacement along beam = depth × cos_in
+            src_mm = z_mm * cos_in
+            if space == "detector":
+                pix = camera.project(kf_hat, source_depth_mm=src_mm)
+                if pix is not None:
+                    pix_trail.append(pix)
+                    weights.append(w)
+            else:
+                # angles space: depth doesn't shift 2θ/χ — only pixel position
+                # We still show the surface point only for clarity
+                pix_trail.append((float(spot["tth"]), float(spot["chi"])))
+                weights.append(w)
+                break  # single point in angle space
+
+        if not pix_trail:
+            continue
+
+        pix_trail = np.array(pix_trail)
+        weights   = np.array(weights)
+        weights  /= weights.max()
+
+        xs = pix_trail[:, 0]
+        ys = pix_trail[:, 1]
+
+        # Draw the trail as a sequence of line segments with fading alpha
+        if len(xs) > 1:
+            points  = np.column_stack([xs, ys]).reshape(-1, 1, 2)
+            segs    = np.concatenate([points[:-1], points[1:]], axis=1)
+            alphas  = 0.1 + 0.85 * weights[:-1]   # surface → opaque, deep → faint
+            rgba    = np.array([(*mcolors.to_rgb(color), a) for a in alphas])
+            lc = LineCollection(segs, colors=rgba, linewidths=1.5, zorder=2)
+            ax.add_collection(lc)
+
+        # Surface marker (filled, full opacity)
+        ax.scatter(xs[0], ys[0], s=30, color=color, zorder=4,
+                   edgecolors="white", linewidths=0.4)
+        # Deep-end marker (open, faint)
+        ax.scatter(xs[-1], ys[-1], s=15, color=color, alpha=0.25,
+                   zorder=3, marker="x")
+
+        # hkl annotation at the surface end
+        h, k, l = spot["hkl"]
+        ax.annotate(
+            f"({h}{k}{l})",
+            (xs[0], ys[0]),
+            xytext=(4, 4), textcoords="offset points",
+            fontsize=5, color=color, alpha=0.85, zorder=5,
+        )
+
+        if phase not in legend_handles:
+            legend_handles[phase] = plt.Line2D(
+                [], [], color=color, linewidth=2,
+                label=phase, marker="o", markersize=4,
+            )
+
+    # ── Axes decoration ───────────────────────────────────────────────────────
+    if space == "detector":
+        ax.set_xlabel("x  (px)", color=FG, fontsize=9)
+        ax.set_ylabel("y  (px)", color=FG, fontsize=9)
+        if image is None:
+            ax.invert_yaxis()
+        ax.set_aspect("equal")
+    else:
+        ax.set_xlabel("2θ  (°)", color=FG, fontsize=9)
+        ax.set_ylabel("χ  (°)",  color=FG, fontsize=9)
+
+    depth_lim_um = min(total_thickness_mm * 1e3,
+                       max(seg[1] - seg[0] for seg in segments) * 1e-4)
+    ax.set_title(
+        f"Depth-parallax elongation  "
+        f"(total stack {total_thickness_mm*1e3:.0f} µm, "
+        f"surface → deep,  cos_in = {cos_in:.3f})",
+        color=FG, fontsize=8,
+    )
+
+    if legend_handles:
+        leg = ax.legend(
+            handles=list(legend_handles.values()),
+            fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355",
+            loc="upper right",
+        )
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax
+
     return fig, ax

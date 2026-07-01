@@ -2159,6 +2159,14 @@ def simulate_laue_stack(
     _depth_mm_state = [0.0]
     if correct_depth:
         _depths_mm = _layer_depths_mm(stack)
+        # Convert perpendicular depth to depth along the incident beam.
+        # depth_along_beam = depth_perp / |cos θ|  where θ is the angle
+        # between ki and the surface normal (stack.n_hat).
+        _n_hat = np.asarray(stack.n_hat, dtype=float)
+        _n_hat = _n_hat / np.linalg.norm(_n_hat)
+        _cos_inc = abs(float(np.dot(ki, _n_hat)))
+        if _cos_inc > 1e-6:
+            _depths_mm = {k: v / _cos_inc for k, v in _depths_mm.items()}
 
     def _try_append(G_vec, hkl, sat_order, phase_label):
         """Evaluate the Laue condition + camera + F² for G_vec and append if valid."""

@@ -2303,6 +2303,7 @@ class LayeredMap:
             btn_img_str.disabled = not (has_image and (has_map_result or enough_obs))
             btn_store.disabled   = True
             btn_save.disabled    = True
+            btn_reload.disabled  = False
             _draw_det()
 
         fig.canvas.mpl_connect("button_press_event", _on_click)
@@ -2317,9 +2318,10 @@ class LayeredMap:
         btn_img_str = ipw.Button(description="🖼 Img strain", button_style="warning", **_bkw2)
         btn_store   = ipw.Button(description="⬆ Store",      button_style="success", **_bkw)
         btn_save    = ipw.Button(description="💾 Save UBs",  button_style="",        **_bkw)
+        btn_reload  = ipw.Button(description="↺ Reload",     button_style="danger",  **_bkw)
 
         for _b in (btn_fit_ori, btn_fit_str, btn_img_ori, btn_img_str,
-                   btn_store, btn_save):
+                   btn_store, btn_save, btn_reload):
             _b.disabled = True
 
         _info = ipw.HTML(
@@ -2597,26 +2599,34 @@ class LayeredMap:
                 + ", ".join(saved) + "</b>"
             )
 
+        def _cb_reload(_) -> None:
+            if _state["frame_idx"] is None:
+                return
+            _state["fit_result"] = None
+            btn_fit_str.disabled = True
+            btn_store.disabled   = True
+            btn_save.disabled    = True
+            iy, ix = _state["iy"], _state["ix"]
+            has_map = not np.all(np.isnan(self.U[:, iy, ix, 0, 0]))
+            _info.value = (
+                "<span style='color:#aaa'>Reloaded — showing "
+                + ("existing map orientation" if has_map else "template stack orientation")
+                + "</span>"
+            )
+            _draw_det()
+
         btn_fit_ori.on_click(_cb_fit_ori)
         btn_fit_str.on_click(_cb_fit_str)
         btn_img_ori.on_click(_cb_img_ori)
         btn_img_str.on_click(_cb_img_str)
         btn_store.on_click(_cb_store)
         btn_save.on_click(_cb_save)
+        btn_reload.on_click(_cb_reload)
 
+        _row_kw = dict(layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"))
         _controls = ipw.VBox([
-            ipw.HBox(
-                [btn_fit_ori, btn_fit_str],
-                layout=ipw.Layout(gap="6px", margin="4px 0 0 0", align_items="center"),
-            ),
-            ipw.HBox(
-                [btn_img_ori, btn_img_str],
-                layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"),
-            ),
-            ipw.HBox(
-                [btn_store, btn_save],
-                layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"),
-            ),
+            ipw.HBox([btn_fit_ori, btn_fit_str, btn_img_ori, btn_img_str], **_row_kw),
+            ipw.HBox([btn_store,   btn_save,    btn_reload],                **_row_kw),
             _info,
         ], layout=ipw.Layout(padding="6px 8px"))
 

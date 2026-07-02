@@ -3955,26 +3955,28 @@ def plot_depth_elongation(
         cos_out = max(abs(float(np.dot(stack.n_hat, kf_hat))), 1e-3)
 
         # Build depth samples: (z_from_surface_mm, absorption_weight)
+        # Only sample depths within the layer that produced this spot —
+        # T_above is still accumulated through ALL overlying layers so that
+        # absorption by the film is correctly applied to substrate spots.
         depth_samples = []   # (z_mm, weight)
         T_above = 1.0        # cumulative transmission from surface to current layer top
+        spot_phase = spot.get("phase_label")
 
         for z_start_ang, z_end_ang, layer in segments:
             thick_mm = (z_end_ang - z_start_ang) * 1e-7  # Å → mm
             mu = layer._linear_mu(E_eV) * 1e7             # Å⁻¹ → mm⁻¹
 
-            # Sample uniformly within this layer
-            n_samp = max(1, n_steps_per_layer)
-            zs_rel = np.linspace(0.0, thick_mm, n_samp + 1)[:-1]  # exclude endpoint (next layer's start)
+            # Only collect depth samples from the layer that produced this spot
+            if spot_phase is None or layer.label == spot_phase:
+                n_samp = max(1, n_steps_per_layer)
+                zs_rel = np.linspace(0.0, thick_mm, n_samp + 1)[:-1]
+                for dz in zs_rel:
+                    z_mm = z_start_ang * 1e-7 + dz
+                    T_partial = (np.exp(-mu * dz * (1.0 / cos_in + 1.0 / cos_out))
+                                 if mu > 0 else 1.0)
+                    depth_samples.append((z_mm, T_above * T_partial))
 
-            for dz in zs_rel:
-                z_mm = z_start_ang * 1e-7 + dz
-                # Beer-Lambert: in-path through dz of current layer + out-path
-                T_partial = (np.exp(-mu * dz * (1.0 / cos_in + 1.0 / cos_out))
-                             if mu > 0 else 1.0)
-                weight = T_above * T_partial
-                depth_samples.append((z_mm, weight))
-
-            # Advance T_above through the full layer
+            # Always advance T_above through every layer (correct absorption)
             if mu > 0:
                 T_above *= np.exp(-mu * thick_mm * (1.0 / cos_in + 1.0 / cos_out))
 

@@ -2503,7 +2503,6 @@ def plot_laue_stack_spots(
     else:
         ax.set_xlabel("column  (px)", color="#7788aa", fontsize=8)
         ax.set_ylabel("row  (px)", color="#7788aa", fontsize=8)
-        ax.invert_yaxis()
 
     n_phases = len(phases)
     n_sats = len([m for m in all_orders if m != 0])
@@ -3844,10 +3843,10 @@ def _surface_to_depth_segments(stack):
 
 
 def plot_depth_elongation(
-    spots,
-    stack,
-    camera,
-    ki_hat=None,
+    spots: list[dict],
+    stack: "LayeredCrystal",
+    camera: "Camera",
+    ki_hat: "np.ndarray | None" = None,
     *,
     top_n: int = 15,
     min_intensity: float = 0.02,
@@ -3856,8 +3855,8 @@ def plot_depth_elongation(
     show_divergence: bool = True,
     divergence_nsigma: float = 2.0,
     image: "np.ndarray | None" = None,
-    figsize=(10, 8),
-    ax=None,
+    figsize: tuple[float, float] = (10, 8),
+    ax: "plt.Axes | None" = None,
     out_path: "str | None" = None,
 ):
     """
@@ -3948,7 +3947,6 @@ def plot_depth_elongation(
 
     # ── Per-spot depth trails ─────────────────────────────────────────────────
     legend_handles = {}
-    div_spots, div_xs, div_ys, div_colors = [], [], [], []
 
     for spot in candidates:
         phase = spot.get("phase_label", "unknown")
@@ -4040,10 +4038,42 @@ def plot_depth_elongation(
             sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
         ax.add_patch(Circle((sim_x, sim_y), radius=1.5, facecolor=color,
                             edgecolor="white", linewidth=0.5, alpha=0.5, zorder=5))
-        div_spots.append(spot)
-        div_xs.append(sim_x)
-        div_ys.append(sim_y)
-        div_colors.append(color)
+
+        # Combined ellipse: depth-parallax covariance + beam-divergence covariance.
+        # Centred at the absorption-weighted mean of the trail so it spans
+        # the same region as the trail itself.
+        if show_divergence and space == "detector" and len(xs) > 1:
+            from matplotlib.patches import Ellipse as _Ellipse
+            w_norm = weights / weights.sum()
+            mx = float(np.dot(w_norm, xs))
+            my = float(np.dot(w_norm, ys))
+            dx = xs - mx
+            dy = ys - my
+            cov_depth = np.array([
+                [float(np.dot(w_norm, dx * dx)), float(np.dot(w_norm, dx * dy))],
+                [float(np.dot(w_norm, dx * dy)), float(np.dot(w_norm, dy * dy))],
+            ])
+            cov_div = np.asarray(spot.get("cov_px", np.zeros((2, 2))), dtype=float)
+            cov_total = cov_depth + cov_div
+            try:
+                eigvals, eigvecs = np.linalg.eigh(cov_total)
+                eigvals = np.maximum(eigvals, 0.0)
+                idx = int(np.argmax(eigvals))
+                sig_maj = float(np.sqrt(eigvals[idx]))
+                sig_min = float(np.sqrt(eigvals[1 - idx]))
+                if sig_maj > 0.0:
+                    v = eigvecs[:, idx]
+                    ang = float(np.degrees(np.arctan2(v[1], v[0])))
+                    ax.add_patch(_Ellipse(
+                        xy=(mx, my),
+                        width=2.0 * divergence_nsigma * sig_maj,
+                        height=2.0 * divergence_nsigma * sig_min,
+                        angle=ang,
+                        linewidth=0.8, edgecolor=color, facecolor="none",
+                        alpha=0.6, zorder=3,
+                    ))
+            except Exception:
+                pass
 
         # hkl annotation at the simulation spot position
         h, k, l = spot["hkl"]
@@ -4059,14 +4089,6 @@ def plot_depth_elongation(
                 [], [], color=color, linewidth=2,
                 label=phase, marker="o", markersize=4,
             )
-
-    # ── Divergence ellipses ───────────────────────────────────────────────────
-    if show_divergence and div_spots:
-        frame = "tth_chi" if space == "angles" else "detector"
-        _draw_divergence_ellipses(
-            ax, div_spots, np.array(div_xs), np.array(div_ys),
-            frame, divergence_nsigma, div_colors,
-        )
 
     # ── Axes decoration ───────────────────────────────────────────────────────
     if space == "detector":

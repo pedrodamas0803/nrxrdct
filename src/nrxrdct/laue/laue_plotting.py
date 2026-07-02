@@ -5,7 +5,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 import xrayutilities as xu
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Circle, Rectangle
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
 
@@ -4030,10 +4030,10 @@ def plot_depth_elongation(
         ax.scatter(xs[-1], ys[-1], s=10, color=color, alpha=0.4,
                    zorder=3, marker="|")
 
-        # Simulation spot position (filled star — reflects correct_depth if used)
+        # Simulation spot position — Circle in data coords so it grows on zoom
         sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
-        ax.scatter(sim_x, sim_y, s=40, color=color, zorder=5,
-                   edgecolors="white", linewidths=0.5, marker="*")
+        ax.add_patch(Circle((sim_x, sim_y), radius=3, color=color, zorder=5,
+                            linewidth=0.5, edgecolor="white"))
 
         # hkl annotation at the simulation spot position
         h, k, l = spot["hkl"]

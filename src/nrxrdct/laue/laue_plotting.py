@@ -4032,8 +4032,8 @@ def plot_depth_elongation(
 
         # Simulation spot position — Circle in data coords so it grows on zoom
         sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
-        ax.add_patch(Circle((sim_x, sim_y), radius=3, color=color, zorder=5,
-                            linewidth=0.5, edgecolor="white"))
+        ax.add_patch(Circle((sim_x, sim_y), radius=1.5, facecolor=color,
+                            edgecolor="white", linewidth=0.5, alpha=0.5, zorder=5))
 
         # hkl annotation at the simulation spot position
         h, k, l = spot["hkl"]

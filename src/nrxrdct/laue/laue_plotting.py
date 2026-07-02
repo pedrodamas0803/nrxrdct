@@ -2436,6 +2436,7 @@ def plot_laue_stack_spots(
                    linewidths=0.4, edgecolors="white", alpha=0.90, zorder=3)
 
     # ── Divergence ellipses ───────────────────────────────────────────────────
+    valid = [s for s in spots if _xy(s)[0] is not None]
     if show_divergence:
         frame = "tth_chi" if space == "angles" else "detector"
         div_spots, div_xs, div_ys = [], [], []
@@ -2453,7 +2454,6 @@ def plot_laue_stack_spots(
                                       frame, divergence_nsigma, cols)
 
     # ── Annotate strongest spots ───────────────────────────────────────────────
-    valid = [s for s in spots if _xy(s)[0] is not None]
     top_n = sorted(valid, key=lambda s: s["intensity"], reverse=True)[:n_label]
     for s in top_n:
         x, y = _xy(s)

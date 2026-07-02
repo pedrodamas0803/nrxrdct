@@ -4207,20 +4207,26 @@ def plot_pix_deviation(
     palette = plt.get_cmap("tab10")
     phase_color = {ph: palette(i % 10) for i, ph in enumerate(phases)}
 
-    # ── Layout: row 0 = summary, rows 1+ = per-property ──────────────────────
+    dx_all = np.array([m["dx"] for m in matched])
+    dy_all = np.array([m["dy"] for m in matched])
+    dist_all = np.sqrt(dx_all ** 2 + dy_all ** 2)
+    med = float(np.median(dist_all))
+    rms = float(np.sqrt(np.mean(dist_all ** 2)))
+
+    # ── Layout: row 0 = 2D scatter + histogram; rows 1+ = 2 props per row ────
     n_props = len(properties)
-    n_rows = 1 + n_props
+    n_prop_rows = (n_props + 1) // 2   # ceil(n_props / 2)
+    n_rows = 1 + n_prop_rows
     fig, axes = plt.subplots(n_rows, 2, figsize=figsize,
                              gridspec_kw={"hspace": 0.45, "wspace": 0.35})
+    if n_rows == 1:
+        axes = axes[np.newaxis, :]   # ensure 2D
     fig.patch.set_facecolor(BG)
     for ax in axes.flat:
         ax.set_facecolor(BG)
         ax.tick_params(colors=FG, labelsize=7)
         for sp in ax.spines.values():
             sp.set_edgecolor("#1a1f2e")
-
-    dx_all = np.array([m["dx"] for m in matched])
-    dy_all = np.array([m["dy"] for m in matched])
 
     # ── Row 0 left: 2D (Δcol, Δrow) scatter ──────────────────────────────────
     ax_2d = axes[0, 0]
@@ -4243,11 +4249,8 @@ def plot_pix_deviation(
 
     # ── Row 0 right: |Δpix| histogram ────────────────────────────────────────
     ax_hist = axes[0, 1]
-    dist_all = np.sqrt(dx_all ** 2 + dy_all ** 2)
     ax_hist.hist(dist_all, bins=min(40, max(len(matched) // 2, 5)),
                  color="#4488cc", alpha=0.85, edgecolor="none")
-    med = float(np.median(dist_all))
-    rms = float(np.sqrt(np.mean(dist_all ** 2)))
     ax_hist.axvline(med, color="orange", lw=1, label=f"median {med:.2f} px")
     ax_hist.axvline(rms, color="#ee4444", lw=1, linestyle="--",
                     label=f"RMS {rms:.2f} px")
@@ -4258,9 +4261,9 @@ def plot_pix_deviation(
     ax_hist.legend(fontsize=7, labelcolor=FG,
                    facecolor="#1a1f2e", edgecolor="#333355")
 
-    # ── Rows 1+: Δcol and Δrow vs each property ──────────────────────────────
+    # ── Rows 1+: |Δpix| vs each property, 2 per row ──────────────────────────
     _labels = {
-        "E":               "E  (eV)",
+        "E":               "E  (keV)",
         "tth":             "2θ  (°)",
         "chi":             "χ  (°)",
         "az":              "az  (°)",
@@ -4269,31 +4272,31 @@ def plot_pix_deviation(
         "source_depth_mm": "depth  (mm)",
         "F2":              "F²",
     }
+    _scale = {"E": 1e-3}
 
-    for row, prop in enumerate(properties, start=1):
-        ax_col = axes[row, 0]
-        ax_row_ax = axes[row, 1]
+    for i, prop in enumerate(properties):
+        row = 1 + i // 2
+        col = i % 2
+        ax = axes[row, col]
         xlabel = _labels.get(prop, prop)
+        scale = _scale.get(prop, 1.0)
 
         for ph in phases:
             ms = [m for m in matched if m["phase"] == ph]
-            vals = [m["spot"].get(prop, np.nan) for m in ms]
-            ax_col.scatter(vals, [m["dx"] for m in ms],
-                           s=10, color=phase_color[ph], alpha=0.7,
-                           edgecolors="none", zorder=3, label=ph)
-            ax_row_ax.scatter(vals, [m["dy"] for m in ms],
-                              s=10, color=phase_color[ph], alpha=0.7,
-                              edgecolors="none", zorder=3)
+            vals = [m["spot"].get(prop, np.nan) * scale for m in ms]
+            dists = [m["dist"] for m in ms]
+            ax.scatter(vals, dists, s=10, color=phase_color[ph], alpha=0.7,
+                       edgecolors="none", zorder=3, label=ph)
 
-        for ax in (ax_col, ax_row_ax):
-            ax.axhline(0, color=FG, lw=0.5, alpha=0.4)
-            ax.set_xlabel(xlabel, color=FG, fontsize=8)
-        ax_col.set_ylabel("Δcol  (px)", color=FG, fontsize=8)
-        ax_row_ax.set_ylabel("Δrow  (px)", color=FG, fontsize=8)
-
+        ax.set_xlabel(xlabel, color=FG, fontsize=8)
+        ax.set_ylabel("|Δpix|  (px)", color=FG, fontsize=8)
         if len(phases) > 1:
-            ax_col.legend(fontsize=6, labelcolor=FG,
-                          facecolor="#1a1f2e", edgecolor="#333355")
+            ax.legend(fontsize=6, labelcolor=FG,
+                      facecolor="#1a1f2e", edgecolor="#333355")
+
+    # hide unused axes if n_props is odd
+    if n_props % 2 == 1:
+        axes[-1, -1].set_visible(False)
 
     fig.suptitle(
         f"Pixel deviation: simulation vs measurement  "

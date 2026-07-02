@@ -3941,7 +3941,7 @@ def plot_depth_elongation(
 
     if space == "detector" and image is not None:
         vmax = np.percentile(image, 99)
-        ax.imshow(image, origin="lower", cmap="gray", vmin=0, vmax=vmax,
+        ax.imshow(image, cmap="gray", vmin=0, vmax=vmax,
                   aspect="equal", interpolation="nearest")
 
     # ── Per-spot depth trails ─────────────────────────────────────────────────
@@ -4048,8 +4048,6 @@ def plot_depth_elongation(
     if space == "detector":
         ax.set_xlabel("x  (px)", color=FG, fontsize=9)
         ax.set_ylabel("y  (px)", color=FG, fontsize=9)
-        if image is None:
-            ax.invert_yaxis()
         ax.set_aspect("equal")
     else:
         ax.set_xlabel("2θ  (°)", color=FG, fontsize=9)

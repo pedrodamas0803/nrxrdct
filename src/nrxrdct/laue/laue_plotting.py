@@ -4024,20 +4024,24 @@ def plot_depth_elongation(
             lc = LineCollection(segs, colors=rgba, linewidths=1.5, zorder=2)
             ax.add_collection(lc)
 
-        # Surface marker (filled, full opacity)
-        ax.scatter(xs[0], ys[0], s=30, color=color, zorder=4,
-                   edgecolors="white", linewidths=0.4)
-        # Deep-end marker (open, faint)
-        ax.scatter(xs[-1], ys[-1], s=15, color=color, alpha=0.25,
-                   zorder=3, marker="x")
+        # Trail endpoints
+        ax.scatter(xs[0], ys[0], s=10, color=color, alpha=0.4,
+                   zorder=3, marker="|")
+        ax.scatter(xs[-1], ys[-1], s=10, color=color, alpha=0.4,
+                   zorder=3, marker="|")
 
-        # hkl annotation at the surface end
+        # Simulation spot position (filled star — reflects correct_depth if used)
+        sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
+        ax.scatter(sim_x, sim_y, s=40, color=color, zorder=5,
+                   edgecolors="white", linewidths=0.5, marker="*")
+
+        # hkl annotation at the simulation spot position
         h, k, l = spot["hkl"]
         ax.annotate(
             f"({h}{k}{l})",
-            (xs[0], ys[0]),
+            (sim_x, sim_y),
             xytext=(4, 4), textcoords="offset points",
-            fontsize=5, color=color, alpha=0.85, zorder=5,
+            fontsize=5, color=color, alpha=0.85, zorder=6,
         )
 
         if phase not in legend_handles:

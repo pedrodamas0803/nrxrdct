@@ -2517,6 +2517,7 @@ def simulate_laue_darwin(
     sigma_beam_h_nm: float = 0.0,
     sigma_beam_v_nm: float = 0.0,
     n_hat_sample=None,
+    correct_depth: bool = False,
     verbose: bool = True,
 ):
     """
@@ -2599,6 +2600,20 @@ def simulate_laue_darwin(
     source_kwargs = source_kwargs or {}
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki /= np.linalg.norm(ki)
+
+    # ── Depth correction ──────────────────────────────────────────────────────
+    _depth_mm_state = [0.0]
+    if correct_depth:
+        _depths_mm_raw = _layer_depths_mm(stack)
+        _n_hat_norm = np.asarray(stack.n_hat, dtype=float)
+        _n_hat_norm = _n_hat_norm / np.linalg.norm(_n_hat_norm)
+        _cos_inc = abs(float(np.dot(ki, _n_hat_norm)))
+        if _cos_inc > 1e-6:
+            _depths_mm = {k: v / _cos_inc for k, v in _depths_mm_raw.items()}
+        else:
+            _depths_mm = _depths_mm_raw
+    else:
+        _depths_mm = {}
 
     lam_lo = en2lam(E_max_eV)
     lam_hi = en2lam(E_min_eV)
@@ -2748,7 +2763,7 @@ def simulate_laue_darwin(
         km = 2.0 * np.pi / lam
         kf_vec = ki * km + G_vec
         kf_hat = kf_vec / np.linalg.norm(kf_vec)
-        pix = camera.project(kf_hat)
+        pix = camera.project(kf_hat, source_depth_mm=_depth_mm_state[0])
         if pix is None:
             return 0
         pix_key = (round(pix[0]), round(pix[1]))
@@ -2784,6 +2799,7 @@ def simulate_laue_darwin(
             "chi":            chi,
             "az":             az,
             "pix":            pix,
+            "source_depth_mm": _depth_mm_state[0],
             "F2":             F2,
             "F2_darwin":      F2,
             "LP":             LP,
@@ -2822,6 +2838,9 @@ def simulate_laue_darwin(
         U = enum_layer.U
         crystal = enum_layer.crystal
         label = enum_layer.label
+
+        if correct_depth:
+            _depth_mm_state[0] = _depths_mm.get(id(enum_layer), 0.0)
 
         layer_has_satellites = id(enum_layer) not in _buffer_set and bool(fringe_q_vecs)
         sat_info = f", ±{max_satellites} satellite orders" if layer_has_satellites else ""

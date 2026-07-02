@@ -4126,4 +4126,184 @@ def plot_depth_elongation(
 
     return fig, ax
 
-    return fig, ax
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PIXEL DEVIATION: SIMULATED vs MEASURED
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_pix_deviation(
+    spots: list[dict],
+    peaklist: "np.ndarray",
+    *,
+    max_dist_px: float = 15.0,
+    properties: list[str] | None = None,
+    figsize: tuple[float, float] = (14, 10),
+    out_path: "str | None" = None,
+) -> tuple:
+    """
+    Match simulated spots to measured peaks and plot pixel deviations
+    as a function of spot properties.
+
+    Each simulated spot is paired with the nearest measured peak within
+    *max_dist_px* pixels (Euclidean distance in detector pixel space).
+    Unmatched spots are excluded.  The deviation is defined as:
+
+        Δcol = sim_col − meas_col
+        Δrow = sim_row − meas_row
+
+    Args:
+        spots: output of any ``simulate_laue_*`` function.
+        peaklist: ``(N, ≥2)`` array with columns ``[col, row, ...]``
+            (same format as :func:`convert_spotsfile2peaklist`).
+        max_dist_px: matching radius in pixels.
+        properties: spot dict keys to plot against deviations.
+            Default: ``['E', 'tth', 'chi', 'intensity']``.
+            Any key present in the spot dicts is valid (e.g.
+            ``'az'``, ``'lambda'``, ``'source_depth_mm'``).
+        figsize: figure size.
+        out_path: save path; ``None`` → do not save.
+
+    Returns:
+        ``(fig, axes, matched)`` where *matched* is a list of dicts with
+        keys ``'spot'``, ``'peak_idx'``, ``'meas_col'``, ``'meas_row'``,
+        ``'dx'``, ``'dy'``, ``'dist'``, ``'phase'``.
+    """
+    from scipy.spatial import cKDTree
+
+    if properties is None:
+        properties = ["E", "tth", "chi", "intensity"]
+
+    pl = np.asarray(peaklist, dtype=float)
+    meas_xy = pl[:, :2]
+    tree = cKDTree(meas_xy)
+
+    matched: list[dict] = []
+    for spot in spots:
+        pix = spot.get("pix")
+        if pix is None:
+            continue
+        sim_col, sim_row = float(pix[0]), float(pix[1])
+        dist, idx = tree.query([sim_col, sim_row], k=1)
+        if dist <= max_dist_px:
+            matched.append({
+                "spot":      spot,
+                "peak_idx":  int(idx),
+                "meas_col":  float(meas_xy[idx, 0]),
+                "meas_row":  float(meas_xy[idx, 1]),
+                "dx":        sim_col - float(meas_xy[idx, 0]),
+                "dy":        sim_row - float(meas_xy[idx, 1]),
+                "dist":      float(dist),
+                "phase":     spot.get("phase_label", "unknown"),
+            })
+
+    if not matched:
+        raise ValueError(
+            f"No spots matched within {max_dist_px} px. "
+            "Try increasing max_dist_px."
+        )
+
+    phases = list(dict.fromkeys(m["phase"] for m in matched))
+    palette = plt.get_cmap("tab10")
+    phase_color = {ph: palette(i % 10) for i, ph in enumerate(phases)}
+
+    # ── Layout: row 0 = summary, rows 1+ = per-property ──────────────────────
+    n_props = len(properties)
+    n_rows = 1 + n_props
+    fig, axes = plt.subplots(n_rows, 2, figsize=figsize,
+                             gridspec_kw={"hspace": 0.45, "wspace": 0.35})
+    fig.patch.set_facecolor(BG)
+    for ax in axes.flat:
+        ax.set_facecolor(BG)
+        ax.tick_params(colors=FG, labelsize=7)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+    dx_all = np.array([m["dx"] for m in matched])
+    dy_all = np.array([m["dy"] for m in matched])
+
+    # ── Row 0 left: 2D (Δcol, Δrow) scatter ──────────────────────────────────
+    ax_2d = axes[0, 0]
+    for ph in phases:
+        ms = [m for m in matched if m["phase"] == ph]
+        ax_2d.scatter(
+            [m["dx"] for m in ms], [m["dy"] for m in ms],
+            s=14, color=phase_color[ph], alpha=0.75, label=ph, zorder=3,
+            edgecolors="none",
+        )
+    ax_2d.axhline(0, color=FG, lw=0.5, alpha=0.4)
+    ax_2d.axvline(0, color=FG, lw=0.5, alpha=0.4)
+    ax_2d.set_xlabel("Δcol  (px)", color=FG, fontsize=8)
+    ax_2d.set_ylabel("Δrow  (px)", color=FG, fontsize=8)
+    ax_2d.set_title("Sim − Meas  (2D)", color=FG, fontsize=8)
+    ax_2d.set_aspect("equal")
+    if len(phases) > 1:
+        ax_2d.legend(fontsize=7, labelcolor=FG,
+                     facecolor="#1a1f2e", edgecolor="#333355")
+
+    # ── Row 0 right: |Δpix| histogram ────────────────────────────────────────
+    ax_hist = axes[0, 1]
+    dist_all = np.sqrt(dx_all ** 2 + dy_all ** 2)
+    ax_hist.hist(dist_all, bins=min(40, max(len(matched) // 2, 5)),
+                 color="#4488cc", alpha=0.85, edgecolor="none")
+    med = float(np.median(dist_all))
+    rms = float(np.sqrt(np.mean(dist_all ** 2)))
+    ax_hist.axvline(med, color="orange", lw=1, label=f"median {med:.2f} px")
+    ax_hist.axvline(rms, color="#ee4444", lw=1, linestyle="--",
+                    label=f"RMS {rms:.2f} px")
+    ax_hist.set_xlabel("|Δpix|  (px)", color=FG, fontsize=8)
+    ax_hist.set_ylabel("count", color=FG, fontsize=8)
+    ax_hist.set_title(f"|Δpix| distribution  ({len(matched)} matched)",
+                      color=FG, fontsize=8)
+    ax_hist.legend(fontsize=7, labelcolor=FG,
+                   facecolor="#1a1f2e", edgecolor="#333355")
+
+    # ── Rows 1+: Δcol and Δrow vs each property ──────────────────────────────
+    _labels = {
+        "E":               "E  (eV)",
+        "tth":             "2θ  (°)",
+        "chi":             "χ  (°)",
+        "az":              "az  (°)",
+        "intensity":       "intensity  (norm.)",
+        "lambda":          "λ  (Å)",
+        "source_depth_mm": "depth  (mm)",
+        "F2":              "F²",
+    }
+
+    for row, prop in enumerate(properties, start=1):
+        ax_col = axes[row, 0]
+        ax_row_ax = axes[row, 1]
+        xlabel = _labels.get(prop, prop)
+
+        for ph in phases:
+            ms = [m for m in matched if m["phase"] == ph]
+            vals = [m["spot"].get(prop, np.nan) for m in ms]
+            ax_col.scatter(vals, [m["dx"] for m in ms],
+                           s=10, color=phase_color[ph], alpha=0.7,
+                           edgecolors="none", zorder=3, label=ph)
+            ax_row_ax.scatter(vals, [m["dy"] for m in ms],
+                              s=10, color=phase_color[ph], alpha=0.7,
+                              edgecolors="none", zorder=3)
+
+        for ax in (ax_col, ax_row_ax):
+            ax.axhline(0, color=FG, lw=0.5, alpha=0.4)
+            ax.set_xlabel(xlabel, color=FG, fontsize=8)
+        ax_col.set_ylabel("Δcol  (px)", color=FG, fontsize=8)
+        ax_row_ax.set_ylabel("Δrow  (px)", color=FG, fontsize=8)
+
+        if len(phases) > 1:
+            ax_col.legend(fontsize=6, labelcolor=FG,
+                          facecolor="#1a1f2e", edgecolor="#333355")
+
+    fig.suptitle(
+        f"Pixel deviation: simulation vs measurement  "
+        f"({len(matched)} matched, max_dist={max_dist_px:.0f} px  |  "
+        f"RMS={rms:.2f} px  |  median={med:.2f} px)",
+        color=FG, fontsize=9, y=1.01,
+    )
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+
+    return fig, axes, matched

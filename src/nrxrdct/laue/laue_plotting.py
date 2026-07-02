@@ -3940,7 +3940,7 @@ def plot_depth_elongation(
         sp.set_edgecolor("#1a1f2e")
 
     if space == "detector" and image is not None:
-        vmax = np.percentile(image, 99)
+        vmax = np.percentile(image, 99.9)
         ax.imshow(image, cmap="gray", vmin=0, vmax=vmax,
                   aspect="equal", interpolation="nearest")
 

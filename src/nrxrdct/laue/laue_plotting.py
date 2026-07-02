@@ -3853,10 +3853,12 @@ def plot_depth_elongation(
     min_intensity: float = 0.02,
     n_steps_per_layer: int = 8,
     space: str = "detector",
+    show_divergence: bool = True,
+    divergence_nsigma: float = 2.0,
     image: "np.ndarray | None" = None,
     figsize=(10, 8),
     ax=None,
-    out_path: "str | None" = "depth_elongation.png",
+    out_path: "str | None" = None,
 ):
     """
     Visualise depth-parallax spot elongation for each Laue spot.
@@ -3946,6 +3948,7 @@ def plot_depth_elongation(
 
     # ── Per-spot depth trails ─────────────────────────────────────────────────
     legend_handles = {}
+    div_spots, div_xs, div_ys, div_colors = [], [], [], []
 
     for spot in candidates:
         phase = spot.get("phase_label", "unknown")
@@ -4031,9 +4034,16 @@ def plot_depth_elongation(
                    zorder=3, marker="|")
 
         # Simulation spot position — Circle in data coords so it grows on zoom
-        sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
+        if space == "angles":
+            sim_x, sim_y = float(spot["tth"]), float(spot["chi"])
+        else:
+            sim_x, sim_y = float(spot["pix"][0]), float(spot["pix"][1])
         ax.add_patch(Circle((sim_x, sim_y), radius=1.5, facecolor=color,
                             edgecolor="white", linewidth=0.5, alpha=0.5, zorder=5))
+        div_spots.append(spot)
+        div_xs.append(sim_x)
+        div_ys.append(sim_y)
+        div_colors.append(color)
 
         # hkl annotation at the simulation spot position
         h, k, l = spot["hkl"]
@@ -4049,6 +4059,14 @@ def plot_depth_elongation(
                 [], [], color=color, linewidth=2,
                 label=phase, marker="o", markersize=4,
             )
+
+    # ── Divergence ellipses ───────────────────────────────────────────────────
+    if show_divergence and div_spots:
+        frame = "tth_chi" if space == "angles" else "detector"
+        _draw_divergence_ellipses(
+            ax, div_spots, np.array(div_xs), np.array(div_ys),
+            frame, divergence_nsigma, div_colors,
+        )
 
     # ── Axes decoration ───────────────────────────────────────────────────────
     if space == "detector":

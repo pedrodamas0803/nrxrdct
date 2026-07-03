@@ -721,6 +721,12 @@ class LayeredMap:
             out_dir: Output directory for ``frame_?????.npz`` result files.
             max_match_px: Pixel match radius; a decreasing list enables staged
                 refinement (e.g. ``[30, 10, 3]``).
+            correct_depth: Project each layer's spots from its centre depth.
+                Default ``False``.
+            engine: Simulation engine — ``'stack'`` (default, kinematical) or
+                ``'darwin'`` (Darwin primary extinction).  The Darwin engine
+                uses physically correct intensities for thick layers
+                but is somewhat slower per frame.
             fit_kwargs: Forwarded to :func:`~nrxrdct.laue.fitting.fit_orientation_stack`.
 
         Returns:
@@ -804,6 +810,10 @@ class LayeredMap:
         Args:
             fit_strain: Strain components to refine, e.g.
                 ``('e_xx', 'e_yy', 'e_zz')``.  ``None`` refines all six.
+            correct_depth: Project each layer's spots from its centre depth.
+                Default ``False``.
+            engine: Simulation engine — ``'stack'`` (default) or
+                ``'darwin'``.  See :meth:`run_orientation_local`.
         """
         from .fitting import _STRAIN_ALL
         _fit_strain = tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL

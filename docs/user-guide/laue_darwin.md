@@ -349,6 +349,14 @@ Each spot dict gains a ``'source_depth_mm'`` key recording the beam-path
 depth used.  Without ``correct_depth``, all spots are projected from
 ``source_depth_mm = 0`` (the surface).
 
+!!! note "Consistency between `simulate_laue_stack` and `simulate_laue_darwin`"
+    Both functions now store the depth-corrected pixel position in `spot['pix']`
+    when `correct_depth=True` is passed.  In earlier versions the vectorised
+    Bragg-peak path in `simulate_laue_stack` always projected from the surface
+    regardless of the flag, causing circles in `plot_depth_elongation` to appear
+    at different positions depending on which simulation was used.  This
+    inconsistency has been fixed.
+
 ### 9.3 Visualising the elongation trail
 
 :func:`~nrxrdct.laue.plot_depth_elongation` sweeps each spot's diffracting
@@ -426,7 +434,10 @@ res_img = depth_scan_image(
     score_weighted=True,   # weight by simulated spot intensity
 )
 
-fig, axes = plot_depth_scan_image(res_img, top_n_spots=30)
+fig, axes = plot_depth_scan_image(res_img, stack=stack, top_n_spots=30)
+# Pass stack= to draw vertical lines at layer/buffer interfaces.
+# For repeated units (n_rep > 1) only the outer boundaries of the
+# repeated block are marked.
 ```
 
 The two output quantities complement each other:
@@ -451,6 +462,85 @@ The two output quantities complement each other:
 
 The two methods can be run together and their score profiles compared as a
 cross-check.
+
+---
+
+## 10. Darwin-based map fitting
+
+`fit_orientation_stack`, `fit_strain_orientation_stack`, and the corresponding
+`LayeredMap` batch methods all accept an ``engine`` keyword that selects the
+simulation engine used inside the optimizer loop.
+
+| ``engine`` | Simulation | Use when |
+|---|---|---|
+| ``'stack'`` (default) | `simulate_laue_stack` — kinematical | Thin films, mosaic crystals, fast surveys |
+| ``'darwin'`` | `simulate_laue_darwin` — Darwin extinction | Thick perfect-crystal substrates; more accurate relative intensities |
+
+### 10.1 Single-pixel fit
+
+```python
+from nrxrdct.laue import fit_orientation_stack, fit_strain_orientation_stack
+
+# Orientation fit with Darwin intensities
+result = fit_orientation_stack(
+    stack, camera, obs_xy,
+    max_match_px=[30, 10, 3],
+    engine="darwin",
+)
+
+# Orientation + strain with Darwin intensities
+result = fit_strain_orientation_stack(
+    stack, camera, obs_xy,
+    fit_strain=("e_xx", "e_yy", "e_zz"),
+    engine="darwin",
+)
+```
+
+### 10.2 Full map scan
+
+Pass ``engine="darwin"`` to the `LayeredMap` batch methods.  The engine
+choice is forwarded to every worker process through the ``fit_kwargs``
+mechanism, so no other change to the workflow is required:
+
+```python
+lmap = laue.LayeredMap(ny=21, nx=21, stack=stack, h5_path="scan.h5")
+
+# Orientation map
+lmap.run_orientation_local(
+    camera,
+    seg_dir="seg/",
+    out_dir="ubs_darwin/",
+    engine="darwin",                # ← Darwin instead of kinematical
+    max_match_px=[30, 10, 3],
+)
+lmap.collect("ubs_darwin/")
+
+# Orientation + strain map
+lmap.run_strain_local(
+    camera,
+    seg_dir="seg/",
+    out_dir="strain_darwin/",
+    engine="darwin",
+    fit_strain=("e_xx", "e_yy", "e_zz"),
+    orient_dir="ubs_darwin/",       # warm-start from prior orientation
+)
+lmap.collect("strain_darwin/")
+```
+
+### 10.3 Performance notes
+
+- Darwin computes a full slab calculation per spot rather than a single
+  structure-factor lookup, so each optimizer call is slower.  For a
+  775 µm Si substrate the difference is modest because the Darwin correction
+  is dominated by a single trigonometric function (`tanh`).
+- Pre-computing `allowed_hkl` (``geometry_only=True``, the default) still
+  filters absent reflections before any Darwin calculation, keeping the
+  number of spots — and therefore the per-call cost — the same as the
+  kinematical engine.
+- For predominantly thin-layer stacks where all layers satisfy
+  $N \ll N_\text{ext}$, the Darwin and kinematical engines yield the same
+  spot positions and essentially the same intensities, so there is no
+  practical benefit to using ``engine="darwin"`` in that case.
 
 ---
 

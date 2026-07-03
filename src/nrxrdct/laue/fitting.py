@@ -1417,6 +1417,10 @@ def laue_stack_residuals(
         max_match_px (float): Match radius in pixels.
         top_n_obs (int or None): Brightest N observed spots to use.
         top_n_sim (int or None): Brightest N simulated spots to consider.
+        correct_depth (bool): Pass ``True`` to depth-correct each spot's
+            pixel position (see :func:`simulate_laue_stack`).
+        engine (str): Simulation engine — ``'stack'`` (default, kinematical)
+            or ``'darwin'`` (Darwin primary extinction).
 
     Returns:
         residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]` residual vector.
@@ -1504,6 +1508,10 @@ def laue_strain_stack_residuals(
             `stack.all_layers` order.
         fit_strain (tuple of str): Active strain components.
         strain_scale (float): Internal scale factor for strain parameters.
+        correct_depth (bool): Pass ``True`` to depth-correct each spot's
+            pixel position.
+        engine (str): Simulation engine — ``'stack'`` (default, kinematical)
+            or ``'darwin'`` (Darwin primary extinction).
 
     Returns:
         residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]`.
@@ -2004,6 +2012,14 @@ def fit_orientation_stack(
             after convergence.  Set `False` to leave
             the stack unchanged and inspect the result
             before committing.
+        correct_depth (bool): Project each layer's spots from its centre
+            depth rather than the surface.  Requires a calibrated stack
+            with realistic layer thicknesses.  Default ``False``.
+        engine (str): Simulation engine — ``'stack'`` (default, kinematical
+            structure factors) or ``'darwin'`` (Darwin primary extinction
+            via :func:`simulate_laue_darwin`).  The Darwin engine gives
+            more physically accurate intensities for thick layers
+            (substrates, buffers) but is somewhat slower.
         verbose (bool): Print a one-line summary after convergence.
 
     Returns:
@@ -2193,6 +2209,10 @@ def fit_strain_orientation_stack(
         structure_model, max_match_px, top_n_obs, top_n_sim, method,
         ftol, xtol, gtol, max_nfev, geometry_only
             Forwarded to :func:`laue_strain_stack_residuals` / ``least_squares``.
+        correct_depth (bool): Project each layer's spots from its centre
+            depth rather than the surface.  Default ``False``.
+        engine (str): Simulation engine — ``'stack'`` (default) or
+            ``'darwin'``.  See :func:`fit_orientation_stack`.
         update_stack (bool): If ``True`` (default), write the refined ``U_eff``
             matrices back into ``stack.all_layers`` after convergence.
         verbose (bool): Print a one-line summary after each stage.

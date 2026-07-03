@@ -702,6 +702,7 @@ class LayeredMap:
         max_rms_px: "float | None" = None,
         geometry_only: bool = True,
         correct_depth: bool = False,
+        engine: str = "stack",
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -753,7 +754,7 @@ class LayeredMap:
             min_match_rate = min_match_rate,
             max_rms_px     = max_rms_px,
             fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only,
-                               "correct_depth": correct_depth},
+                               "correct_depth": correct_depth, "engine": engine},
             overwrite      = overwrite,
         )
         stack_pkl = self._serialize_stack()
@@ -785,6 +786,7 @@ class LayeredMap:
         max_rms_px: "float | None" = None,
         geometry_only: bool = True,
         correct_depth: bool = False,
+        engine: str = "stack",
         f2_thresh: float = 1e-4,
         n_workers: "int | None" = None,
         overwrite: bool = False,
@@ -852,7 +854,7 @@ class LayeredMap:
             min_match_rate = min_match_rate,
             max_rms_px     = max_rms_px,
             fit_kwargs     = {**fit_kwargs, "geometry_only": geometry_only,
-                               "correct_depth": correct_depth},
+                               "correct_depth": correct_depth, "engine": engine},
             overwrite      = overwrite,
             orient_data    = orient_data or None,
         )

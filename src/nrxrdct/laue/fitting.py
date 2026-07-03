@@ -1380,6 +1380,7 @@ def laue_stack_residuals(
     geometry_only: bool = False,
     allowed_hkl=None,
     correct_depth: bool = False,
+    engine: str = "stack",
 ) -> np.ndarray:
     """
     Pixel-space residual vector for a layered crystal — single global rotation.
@@ -1424,17 +1425,22 @@ def laue_stack_residuals(
     for layer, U0 in zip(stack.all_layers, U0_layers):
         layer.U = delta_R @ U0
 
-    spots = simulate_laue_stack(
-        stack, camera,
+    _sim_kw = dict(
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         verbose=False,
-        geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
         correct_depth=correct_depth,
     )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        spots = simulate_laue_darwin(stack, camera, **_sim_kw)
+    else:
+        spots = simulate_laue_stack(
+            stack, camera, geometry_only=geometry_only, **_sim_kw
+        )
 
     obs_use = np.asarray(obs_xy, dtype=float)
     if top_n_obs is not None:
@@ -1468,6 +1474,7 @@ def laue_strain_stack_residuals(
     geometry_only: bool = False,
     allowed_hkl=None,
     correct_depth: bool = False,
+    engine: str = "stack",
 ) -> np.ndarray:
     """
     Pixel-space residual vector for simultaneous orientation + per-layer strain
@@ -1510,17 +1517,22 @@ def laue_strain_stack_residuals(
         eps = _strain_matrix(strain_vals, fit_strain)
         layer.U = R @ U0 @ (np.eye(3) + eps)
 
-    spots = simulate_laue_stack(
-        stack, camera,
+    _sim_kw = dict(
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model,
         verbose=False,
-        geometry_only=geometry_only,
         allowed_hkl=allowed_hkl,
         correct_depth=correct_depth,
     )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        spots = simulate_laue_darwin(stack, camera, **_sim_kw)
+    else:
+        spots = simulate_laue_stack(
+            stack, camera, geometry_only=geometry_only, **_sim_kw
+        )
 
     obs_use = np.asarray(obs_xy, dtype=float)
     if top_n_obs is not None:
@@ -1934,6 +1946,7 @@ def fit_orientation_stack(
     correct_depth: bool = False,
     allowed_hkl=None,
     verbose: bool = False,
+    engine: str = "stack",
 ) -> StackFitResult:
     """
     Refine the orientation of a :class:`~nrxrdct.laue.layers.LayeredCrystal`.
@@ -2054,7 +2067,7 @@ def fit_orientation_stack(
                 structure_model=structure_model,
                 max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
                 geometry_only=False, allowed_hkl=_allowed,
-                correct_depth=correct_depth,
+                correct_depth=correct_depth, engine=engine,
             )
             opt = least_squares(
                 fun, x0=np.zeros(3),
@@ -2087,13 +2100,18 @@ def fit_orientation_stack(
     # Final simulation for n_sim.
     for layer, U_new in zip(stack.all_layers, U_layers_final):
         layer.U = U_new.copy()
-    final_spots = simulate_laue_stack(
-        stack, camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+    _final_kw = dict(
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
         allowed_hkl=_allowed, correct_depth=correct_depth,
     )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        final_spots = simulate_laue_darwin(stack, camera, **_final_kw)
+    else:
+        final_spots = simulate_laue_stack(stack, camera, **_final_kw)
     n_sim = len(_extract_sim_xy(final_spots))
 
     # Restore to the refined state (or original if update_stack is False).
@@ -2143,6 +2161,7 @@ def fit_strain_orientation_stack(
     correct_depth: bool = False,
     allowed_hkl=None,
     verbose: bool = False,
+    engine: str = "stack",
 ) -> StackStrainFitResult:
     """
     Simultaneously refine orientation and per-layer lattice strain for a
@@ -2240,7 +2259,7 @@ def fit_strain_orientation_stack(
                 structure_model=structure_model,
                 max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
                 geometry_only=False, allowed_hkl=_allowed,
-                correct_depth=correct_depth,
+                correct_depth=correct_depth, engine=engine,
             )
             opt = least_squares(
                 fun, x0=_x0,
@@ -2290,13 +2309,18 @@ def fit_strain_orientation_stack(
     # Final simulation for n_sim.
     for layer, U_eff in zip(stack.all_layers, U_eff_layers):
         layer.U = U_eff.copy()
-    final_spots = simulate_laue_stack(
-        stack, camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+    _final_kw = dict(
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
         source=source, source_kwargs=source_kwargs,
         f2_thresh=f2_thresh, kb_params=kb_params,
         structure_model=structure_model, verbose=False,
         allowed_hkl=_allowed, correct_depth=correct_depth,
     )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        final_spots = simulate_laue_darwin(stack, camera, **_final_kw)
+    else:
+        final_spots = simulate_laue_stack(stack, camera, **_final_kw)
     n_sim = len(_extract_sim_xy(final_spots))
 
     if not update_stack:

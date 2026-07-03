@@ -2344,7 +2344,7 @@ def simulate_laue_stack(
             km_b = 2.0 * np.pi / lam_b
             kf_b = ki[None, :] * km_b[:, None] + _G_lab_b
             kf_b /= np.linalg.norm(kf_b, axis=1, keepdims=True)
-            pix_b, on_det_b = camera.project_batch(kf_b)
+            pix_b, on_det_b = camera.project_batch(kf_b, source_depth_mm=_depth_mm_state[0])
 
             if np.any(on_det_b):
                 _G_lab_b = _G_lab_b[on_det_b];  _hkl_b = _hkl_b[on_det_b]

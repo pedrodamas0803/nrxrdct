@@ -4589,7 +4589,7 @@ def depth_scan_reconstruction(
                         np.sin(tth) * np.sin(chi),
                         np.sin(tth) * np.cos(chi)])
         p0 = camera.project(kf, source_depth_mm=0.0)
-        p1 = camera.project(kf, source_depth_mm=cos_in * _EPS)
+        p1 = camera.project(kf, source_depth_mm=_EPS / cos_in)
         if p0 is None or p1 is None:
             valid_mask.append(False)
             p0_list.append(np.array([np.nan, np.nan]))
@@ -4791,7 +4791,7 @@ def depth_scan_image(
                         np.sin(tth) * np.sin(chi),
                         np.sin(tth) * np.cos(chi)])
         p0 = camera.project(kf, source_depth_mm=0.0)
-        p1 = camera.project(kf, source_depth_mm=cos_in * _EPS)
+        p1 = camera.project(kf, source_depth_mm=_EPS / cos_in)
         if p0 is None or p1 is None:
             valid_mask.append(False)
             p0_list.append([np.nan, np.nan])

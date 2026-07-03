@@ -3963,7 +3963,7 @@ def plot_depth_elongation(
     ki /= np.linalg.norm(ki)
 
     # cos(angle between surface normal and beam) — used for depth→beam conversion
-    cos_in = max(abs(float(stack.n_hat[0])), 1e-3)
+    cos_in = max(abs(float(np.dot(ki, stack.n_hat))), 1e-3)
 
     # Layer sequence from surface to deep
     segments = _surface_to_depth_segments(stack)
@@ -4052,7 +4052,7 @@ def plot_depth_elongation(
         weights   = []
         for z_mm, w in depth_samples:
             # source_depth_mm: displacement along beam = depth × cos_in
-            src_mm = z_mm * cos_in
+            src_mm = z_mm / cos_in
             if space == "detector":
                 pix = camera.project(kf_hat, source_depth_mm=src_mm)
                 if pix is not None:

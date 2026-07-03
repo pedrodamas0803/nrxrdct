@@ -4419,3 +4419,210 @@ def disorientation(
 
     best = int(np.argmin(angles))
     return float(np.degrees(angles[best])), candidates[best]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPTH-SCAN RECONSTRUCTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def depth_scan_reconstruction(
+    spots: list[dict],
+    peaklist: "np.ndarray",
+    camera,
+    stack,
+    ki_hat=None,
+    *,
+    n_steps: int = 100,
+    z_min_mm: float = 0.0,
+    z_max_mm: "float | None" = None,
+    tolerance_px: float = 5.0,
+    min_intensity: float = 0.01,
+    score_weighted: bool = True,
+) -> dict:
+    """
+    Poor man's depth-resolved Laue reconstruction by parallax scanning.
+
+    For each candidate depth *z* below the surface, every simulated spot is
+    projected to its expected detector position using the depth-parallax
+    model.  A **hit-or-miss** score counts how many projections land within
+    *tolerance_px* of a measured peak.  The score profile over *z* reveals
+    which depths are actively diffracting.
+
+    Additionally, for each measured peak the depth of origin is estimated by
+    linearly inverting the parallax model against the best-matching simulated
+    spot — giving a per-peak depth assignment without scanning.
+
+    The projection is **exactly linear** in depth (``camera.project`` uses a
+    linear formula), so only two calls per spot are needed to precompute the
+    exact slope; subsequent depth evaluations are pure array operations.
+
+    Args:
+        spots: Simulated spot list from :func:`simulate_laue_darwin` or
+            :func:`simulate_laue_stack`.
+        peaklist: ``(N, ≥2)`` array ``[col, row, ...]`` as returned by
+            :func:`convert_spotsfile2peaklist`.
+        camera: :class:`Camera` used in the simulation.
+        stack: :class:`LayeredCrystal` used in the simulation.  Provides the
+            surface normal and total thickness.
+        ki_hat: Incident beam direction (3-vector, LT frame).  Defaults to
+            ``[1, 0, 0]``.
+        n_steps: Number of depth values to scan.
+        z_min_mm: Minimum physical depth (mm, along surface normal).
+        z_max_mm: Maximum physical depth (mm).  Defaults to total stack
+            thickness.
+        tolerance_px: Matching radius in pixels for hit-or-miss counting and
+            per-peak depth inversion.
+        min_intensity: Skip spots below this normalised intensity.
+        score_weighted: If ``True`` each hit is weighted by the spot's
+            normalised intensity; if ``False`` every hit counts as 1.
+
+    Returns:
+        dict with keys:
+
+        ``'z_mm'``
+            ndarray (n_steps,) — physical depth values scanned (mm).
+        ``'score'``
+            ndarray (n_steps,) — total hit score at each depth.
+        ``'score_per_phase'``
+            dict ``{phase_label: ndarray(n_steps,)}`` — score broken out by
+            phase.
+        ``'z_est_per_peak'``
+            ndarray (N_peaks,) — estimated depth of origin for each measured
+            peak (NaN if no simulated spot matched within *tolerance_px*).
+        ``'phase_per_peak'``
+            list (N_peaks,) — phase label of the best-matching simulated spot
+            for each peak (``None`` if unmatched).
+        ``'spot_idx_per_peak'``
+            list (N_peaks,) — index into the filtered spot list for each peak.
+        ``'cos_in'``
+            float — ``|k̂_i · n̂|``, used to convert beam-path depth to
+            physical depth.
+    """
+    from scipy.spatial import cKDTree
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+    n_hat = np.asarray(stack.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+    cos_in = float(abs(np.dot(ki, n_hat)))
+    if cos_in < 1e-6:
+        raise ValueError("ki is nearly parallel to the sample surface — cos_in ≈ 0")
+
+    # Total stack thickness in mm (Å → mm)
+    total_mm = sum(
+        lyr.thickness for lyr in (stack.layers * stack.n_rep + stack.buffer_layers)
+    ) * 1e-7
+    if z_max_mm is None:
+        z_max_mm = total_mm
+
+    z_mm = np.linspace(z_min_mm, z_max_mm, n_steps)
+
+    # ── Filter spots ──────────────────────────────────────────────────────────
+    filtered = [
+        s for s in spots
+        if s.get("pix") is not None and float(s.get("intensity", 0)) >= min_intensity
+    ]
+    if not filtered:
+        raise ValueError("No spots pass the min_intensity filter.")
+
+    phases = list(dict.fromkeys(s.get("phase_label", "unknown") for s in filtered))
+
+    # ── Precompute surface positions and parallax slopes ──────────────────────
+    # Projection is exact-linear in source_depth_mm, so two calls suffice.
+    _EPS = 0.01  # mm — finite-difference step (along surface normal)
+    p0_list: list[np.ndarray] = []
+    slope_list: list[np.ndarray] = []
+    valid_mask: list[bool] = []
+
+    for s in filtered:
+        tth = float(np.radians(s["tth"]))
+        chi = float(np.radians(s["chi"]))
+        kf = np.array([np.cos(tth),
+                        np.sin(tth) * np.sin(chi),
+                        np.sin(tth) * np.cos(chi)])
+        p0 = camera.project(kf, source_depth_mm=0.0)
+        p1 = camera.project(kf, source_depth_mm=cos_in * _EPS)
+        if p0 is None or p1 is None:
+            valid_mask.append(False)
+            p0_list.append(np.array([np.nan, np.nan]))
+            slope_list.append(np.array([0.0, 0.0]))
+        else:
+            valid_mask.append(True)
+            p0_arr = np.array(p0, dtype=float)
+            slope = (np.array(p1, dtype=float) - p0_arr) / _EPS
+            p0_list.append(p0_arr)
+            slope_list.append(slope)
+
+    valid = np.array(valid_mask)
+    p0_arr    = np.array(p0_list)     # (n_spots, 2)
+    slope_arr = np.array(slope_list)  # (n_spots, 2)  [px / mm of physical depth]
+    w_arr = np.array([float(s.get("intensity", 1.0)) for s in filtered])
+
+    phase_arr = np.array([s.get("phase_label", "unknown") for s in filtered])
+
+    # ── Build peaklist KDTree ─────────────────────────────────────────────────
+    pl = np.asarray(peaklist, dtype=float)
+    meas_xy = pl[:, :2]
+    tree = cKDTree(meas_xy)
+
+    # ── Depth scan — hit-or-miss scoring ──────────────────────────────────────
+    score       = np.zeros(n_steps)
+    score_phase = {ph: np.zeros(n_steps) for ph in phases}
+
+    for i_z, z in enumerate(z_mm):
+        p_z = p0_arr + z * slope_arr           # (n_spots, 2)
+        on_det = (
+            valid
+            & (p_z[:, 0] >= 0) & (p_z[:, 0] < camera.Nh)
+            & (p_z[:, 1] >= 0) & (p_z[:, 1] < camera.Nv)
+        )
+        if not on_det.any():
+            continue
+        dists, _ = tree.query(p_z[on_det])
+        hits = dists <= tolerance_px
+        w_hit = w_arr[on_det][hits] if score_weighted else hits.astype(float)
+        score[i_z] = float(w_hit.sum())
+        for ph in phases:
+            mask_ph = (phase_arr[on_det][hits] == ph)
+            score_phase[ph][i_z] = float(
+                (w_arr[on_det][hits][mask_ph] if score_weighted
+                 else mask_ph.astype(float)).sum()
+            )
+
+    # ── Per-peak depth inversion ──────────────────────────────────────────────
+    # For each measured peak p_m, find the spot i that minimises the residual
+    # |p0_i + z_opt_i * slope_i - p_m| with z_opt_i clipped to [z_min, z_max].
+    z_est_per_peak  = np.full(len(meas_xy), np.nan)
+    phase_per_peak  = [None] * len(meas_xy)
+    sidx_per_peak   = [None] * len(meas_xy)
+
+    valid_p0    = p0_arr[valid]
+    valid_slope = slope_arr[valid]
+    valid_w     = w_arr[valid]
+    valid_phase = phase_arr[valid]
+    valid_indices = np.where(valid)[0]
+
+    denom = np.einsum("ij,ij->i", valid_slope, valid_slope)
+    denom_safe = np.where(denom > 1e-12, denom, 1.0)
+
+    for j, p_m in enumerate(meas_xy):
+        dp = p_m[None, :] - valid_p0                         # (n_valid, 2)
+        z_num = np.einsum("ij,ij->i", dp, valid_slope)
+        z_opt = np.clip(z_num / denom_safe, z_min_mm, z_max_mm)
+        p_opt = valid_p0 + z_opt[:, None] * valid_slope
+        residuals = np.linalg.norm(p_opt - p_m[None], axis=1)
+        best = int(np.argmin(residuals))
+        if residuals[best] <= tolerance_px:
+            z_est_per_peak[j] = float(z_opt[best])
+            phase_per_peak[j] = str(valid_phase[best])
+            sidx_per_peak[j]  = int(valid_indices[best])
+
+    return {
+        "z_mm":             z_mm,
+        "score":            score,
+        "score_per_phase":  score_phase,
+        "z_est_per_peak":   z_est_per_peak,
+        "phase_per_peak":   phase_per_peak,
+        "spot_idx_per_peak": sidx_per_peak,
+        "cos_in":           cos_in,
+    }

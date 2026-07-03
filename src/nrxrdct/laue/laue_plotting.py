@@ -3825,6 +3825,41 @@ def _kf_hat_from_spot(spot):
     ])
 
 
+def _stack_interface_depths_mm(stack) -> list:
+    """
+    Return ``[(z_mm, label), ...]`` for each interface to be drawn as a
+    vertical line on a depth-axis plot.
+
+    * Repeated unit (``stack.layers × stack.n_rep``): only the outer
+      boundaries are returned — the start of the first period (z = 0, the
+      crystal surface, shown only as a label anchor) and the end of the last
+      period.  All internal sub-layer boundaries are suppressed.
+    * Buffer layers (``stack.buffer_layers``): every interface is returned.
+    """
+    period_A   = sum(l.thickness for l in stack.layers) if stack.layers else 0.0
+    rep_total  = stack.n_rep * period_A           # Å
+    interfaces = []
+
+    if rep_total > 0:
+        if stack.n_rep > 1:
+            # first boundary: surface itself (z = 0) — callers may skip it
+            interfaces.append((0.0, f"×{stack.n_rep} start"))
+            interfaces.append((rep_total * 1e-7, f"×{stack.n_rep} end"))
+        else:
+            # single period — show every sub-layer interface
+            z_A = 0.0
+            for layer in reversed(stack.layers):
+                z_A += layer.thickness
+                interfaces.append((z_A * 1e-7, getattr(layer, "label", "") or ""))
+
+    z_A = rep_total
+    for layer in reversed(stack.buffer_layers):
+        z_A += layer.thickness
+        interfaces.append((z_A * 1e-7, getattr(layer, "label", "") or "buffer"))
+
+    return interfaces
+
+
 def _surface_to_depth_segments(stack):
     """
     Return a list of (z_start_Å, z_end_Å, layer) tuples ordered from the
@@ -4338,6 +4373,7 @@ def plot_pix_deviation(
 
 def plot_depth_scan_image(
     result: dict,
+    stack: "LayeredCrystal | None" = None,
     *,
     top_n_spots: int = 20,
     figsize: tuple[float, float] = (12, 8),
@@ -4417,6 +4453,23 @@ def plot_depth_scan_image(
     ax_s.set_title("Depth score profile", color=FG, fontsize=9)
     ax_s.legend(fontsize=7, labelcolor=FG, facecolor="#1a1f2e", edgecolor="#333355")
 
+    # ── Layer interfaces ──────────────────────────────────────────────────────
+    if stack is not None:
+        _ifaces = _stack_interface_depths_mm(stack)
+        z_plot_min = float(z_mm[0]) * 1e3
+        for z_iface_mm, ilabel in _ifaces:
+            z_iface_um = z_iface_mm * 1e3
+            if z_iface_um <= z_plot_min:
+                continue  # skip the surface line (left edge)
+            ax_s.axvline(z_iface_um, color="#888888", lw=0.8,
+                         linestyle="--", alpha=0.6, zorder=2)
+            ax_s.text(
+                z_iface_um, 1.0, ilabel,
+                transform=ax_s.get_xaxis_transform(),
+                color="#888888", fontsize=6, rotation=90,
+                va="top", ha="right", alpha=0.8,
+            )
+
     # ── Score matrix heatmap (right panel) ───────────────────────────────────
     if ax_h is not None:
         n_valid = score_matrix.shape[1]
@@ -4443,6 +4496,13 @@ def plot_depth_scan_image(
         )
         ax_h.axvline(z_best * 1e3, color="orange", lw=1, linestyle=":",
                      alpha=0.8)
+        if stack is not None:
+            for z_iface_mm, _ in _ifaces:
+                z_iface_um = z_iface_mm * 1e3
+                if z_iface_um <= z_plot_min:
+                    continue
+                ax_h.axvline(z_iface_um, color="#888888", lw=0.8,
+                             linestyle="--", alpha=0.6, zorder=2)
         ax_h.set_xlabel("depth  (µm)", color=FG, fontsize=8)
         ax_h.set_ylabel(f"spot rank (top {n_show})", color=FG, fontsize=8)
         ax_h.set_title("Per-spot depth profile (col-normalised)", color=FG, fontsize=9)

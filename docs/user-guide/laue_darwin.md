@@ -405,6 +405,53 @@ Systematic trends in the residuals diagnose calibration errors:
 | Phase-dependent offset | Layer depth or orientation error |
 | Random scatter $\lesssim 2$ px | Acceptable residual for BM32 geometry |
 
+### 9.5 Image-based depth reconstruction
+
+`depth_scan_image` works directly on the raw detector pixel array — **no peak
+extraction required**.  For every simulated spot and every candidate depth *z*
+the expected detector position is
+
+$$p(z) = p_0 + z \cdot \frac{dp}{dz}$$
+
+where the slope $dp/dz$ is obtained from two `camera.project` calls at
+$z = 0$ and $z = \epsilon$.  The pixel intensity is then sampled at every
+$(z, \text{spot})$ combination via a single batched bilinear-interpolation
+call, yielding a **score matrix** of shape `(n_steps, n_valid_spots)`.
+
+```python
+res_img = depth_scan_image(
+    spots, detector_image, camera, stack,
+    n_steps=200, z_max_mm=0.8,
+    min_intensity=0.02,
+    score_weighted=True,   # weight by simulated spot intensity
+)
+
+fig, axes = plot_depth_scan_image(res_img, top_n_spots=30)
+```
+
+The two output quantities complement each other:
+
+| Output | Shape | Interpretation |
+|--------|-------|----------------|
+| `score` | `(n_steps,)` | Sum of sampled intensities vs depth; peak = best-matching depth |
+| `score_matrix` | `(n_steps, n_valid)` | Per-spot depth profile; narrow column = localised spot, broad column = depth-spread diffracting layer |
+
+**Advantages over the peak-list method (`depth_scan_reconstruction`):**
+
+* Works on elongated or merged spots that do not produce clean extracted peaks.
+* No threshold on peak detection — faint features in the tails contribute.
+* Naturally handles background gradients (they appear as a broad, featureless
+  baseline in the score profile).
+
+**When to prefer the peak-list method:**
+
+* When the detector image contains strong parasitic signal (fluorescence, air
+  scatter) that inflates the image score away from the true Bragg positions.
+* When you need per-peak depth estimates rather than a global profile.
+
+The two methods can be run together and their score profiles compared as a
+cross-check.
+
 ---
 
 ## References

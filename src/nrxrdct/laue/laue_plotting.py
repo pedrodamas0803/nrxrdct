@@ -4334,3 +4334,125 @@ def plot_pix_deviation(
                     facecolor=fig.get_facecolor())
 
     return fig, axes, matched
+
+
+def plot_depth_scan_image(
+    result: dict,
+    *,
+    top_n_spots: int = 20,
+    figsize: tuple[float, float] = (12, 8),
+    cmap_matrix: str = "inferno",
+    out_path: "str | None" = None,
+    ax_score: "plt.Axes | None" = None,
+) -> tuple:
+    """
+    Visualise the output of :func:`~nrxrdct.laue.simulation.depth_scan_image`.
+
+    Three panels are drawn:
+
+    * **Left** — Global depth score profile (total + per-phase).
+    * **Centre** — Score matrix heat-map: rows are depth steps, columns are the
+      ``top_n_spots`` most responsive spots (sorted by peak score).  The
+      colour scale is per-column so dim spots are not swamped by bright ones.
+    * **Right** (optional inset) — Score matrix for *all* valid spots so that
+      the column ordering can be inspected.
+
+    Args:
+        result: Dict returned by :func:`depth_scan_image`.
+        top_n_spots: Number of highest-scoring spot columns to show in the
+            centre heatmap.
+        figsize: Figure size ``(width, height)`` in inches.
+        cmap_matrix: Colormap name for the score matrix.
+        out_path: If given, save the figure to this path.
+        ax_score: Optional pre-existing :class:`~matplotlib.axes.Axes` for the
+            score profile.  If supplied the figure is *not* created internally
+            and only the score axes is drawn (useful for inline notebooks).
+
+    Returns:
+        ``(fig, axes)`` where *axes* is a list
+        ``[ax_score, ax_heatmap]`` (``ax_heatmap`` is ``None`` when
+        *ax_score* was supplied externally).
+    """
+    z_mm         = result["z_mm"]
+    score        = result["score"]
+    score_phase  = result["score_per_phase"]
+    score_matrix = result["score_matrix"]   # (n_steps, n_valid)
+    phases       = list(score_phase.keys())
+
+    PHASE_COLS = ["#4fc3f7", "#ff6633", "#ffffaa", "#aaffaa", "#ff88ff"]
+    phase_color = {ph: PHASE_COLS[i % len(PHASE_COLS)] for i, ph in enumerate(phases)}
+
+    # ── Figure layout ─────────────────────────────────────────────────────────
+    if ax_score is not None:
+        fig = ax_score.get_figure()
+        ax_s = ax_score
+        ax_h = None
+        axes_out = [ax_s, ax_h]
+    else:
+        fig, (ax_s, ax_h) = plt.subplots(
+            1, 2,
+            figsize=figsize,
+            gridspec_kw={"width_ratios": [1, 2]},
+            facecolor=BG,
+        )
+        axes_out = [ax_s, ax_h]
+
+    for ax in [ax_s] + ([ax_h] if ax_h is not None else []):
+        ax.set_facecolor(BG)
+        ax.tick_params(colors=FG, labelsize=7)
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+    # ── Score profile (left panel) ────────────────────────────────────────────
+    ax_s.plot(z_mm * 1e3, score, color=FG, lw=1.5, label="total", zorder=5)
+    for ph in phases:
+        ax_s.plot(z_mm * 1e3, score_phase[ph], lw=1, color=phase_color[ph],
+                  linestyle="--", label=ph, alpha=0.8)
+
+    z_best = float(z_mm[np.argmax(score)])
+    ax_s.axvline(z_best * 1e3, color="orange", lw=1, linestyle=":",
+                 label=f"peak z={z_best*1e3:.1f} µm")
+    ax_s.set_xlabel("depth  (µm)", color=FG, fontsize=8)
+    ax_s.set_ylabel("image score  (a.u.)", color=FG, fontsize=8)
+    ax_s.set_title("Depth score profile", color=FG, fontsize=9)
+    ax_s.legend(fontsize=7, labelcolor=FG, facecolor="#1a1f2e", edgecolor="#333355")
+
+    # ── Score matrix heatmap (right panel) ───────────────────────────────────
+    if ax_h is not None:
+        n_valid = score_matrix.shape[1]
+        n_show  = min(top_n_spots, n_valid)
+
+        # Sort by peak score, take top_n_spots
+        peak_per_spot = score_matrix.max(axis=0)
+        top_idx = np.argsort(peak_per_spot)[::-1][:n_show]
+        sub = score_matrix[:, top_idx]
+
+        # Normalise each column independently (0→1) so dim spots are visible
+        col_max = sub.max(axis=0, keepdims=True)
+        col_max[col_max == 0] = 1.0
+        sub_norm = sub / col_max
+
+        im = ax_h.imshow(
+            sub_norm.T,
+            aspect="auto",
+            origin="lower",
+            extent=[z_mm[0] * 1e3, z_mm[-1] * 1e3, 0, n_show],
+            cmap=cmap_matrix,
+            vmin=0, vmax=1,
+            interpolation="nearest",
+        )
+        ax_h.axvline(z_best * 1e3, color="orange", lw=1, linestyle=":",
+                     alpha=0.8)
+        ax_h.set_xlabel("depth  (µm)", color=FG, fontsize=8)
+        ax_h.set_ylabel(f"spot rank (top {n_show})", color=FG, fontsize=8)
+        ax_h.set_title("Per-spot depth profile (col-normalised)", color=FG, fontsize=9)
+
+        cbar = fig.colorbar(im, ax=ax_h, fraction=0.03, pad=0.01)
+        cbar.ax.tick_params(colors=FG, labelsize=6)
+        cbar.set_label("score / max", color=FG, fontsize=7)
+
+    fig.tight_layout()
+    if out_path is not None:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=BG)
+
+    return fig, axes_out

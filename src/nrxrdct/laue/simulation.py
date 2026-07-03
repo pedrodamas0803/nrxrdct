@@ -4626,3 +4626,186 @@ def depth_scan_reconstruction(
         "spot_idx_per_peak": sidx_per_peak,
         "cos_in":           cos_in,
     }
+
+
+def depth_scan_image(
+    spots: list[dict],
+    image: "np.ndarray",
+    camera,
+    stack,
+    ki_hat=None,
+    *,
+    n_steps: int = 100,
+    z_min_mm: float = 0.0,
+    z_max_mm: "float | None" = None,
+    min_intensity: float = 0.01,
+    score_weighted: bool = True,
+    interp_order: int = 1,
+) -> dict:
+    """
+    Image-based depth-resolved Laue reconstruction by parallax sampling.
+
+    For every simulated spot and every candidate depth *z*, the expected
+    detector position is computed via the exact linear parallax formula and
+    the raw pixel intensity is sampled from the detector image using
+    bilinear interpolation.  No peak extraction is required.
+
+    The full depth × spot intensity matrix is returned in a single batched
+    :func:`scipy.ndimage.map_coordinates` call, making it fast even for
+    large spot lists and fine depth grids.
+
+    Two outputs are provided:
+
+    * **Score profile** ``score[z]`` — sum (optionally intensity-weighted)
+      of all sampled image values at depth *z*; its peak indicates the
+      depth of dominant diffracting volume.
+    * **Score matrix** ``score_matrix[z, spot]`` — per-spot depth profiles;
+      each column is the raw image signal along the parallax trail of one
+      spot.  Bright columns mark spots that are genuinely localised at a
+      specific depth; broad columns indicate depth-spread (thick diffracting
+      layers).
+
+    Args:
+        spots: Simulated spot list from :func:`simulate_laue_darwin` or
+            :func:`simulate_laue_stack`.
+        image: Raw detector image ``(Nv, Nh)`` float array.
+        camera: :class:`Camera` used in the simulation.
+        stack: :class:`LayeredCrystal` used in the simulation.
+        ki_hat: Incident beam direction (3-vector, LT frame). Default
+            ``[1, 0, 0]``.
+        n_steps: Number of depth values to sample.
+        z_min_mm: Minimum physical depth (mm, along surface normal).
+        z_max_mm: Maximum physical depth (mm). Defaults to total stack
+            thickness.
+        min_intensity: Skip simulated spots below this normalised intensity.
+        score_weighted: If ``True`` each sampled value is multiplied by the
+            spot's normalised intensity before summing into ``score``.
+        interp_order: Interpolation order for
+            :func:`~scipy.ndimage.map_coordinates` (1 = bilinear,
+            3 = bicubic). Default 1.
+
+    Returns:
+        dict with keys:
+
+        ``'z_mm'``
+            ndarray (n_steps,) — physical depth values (mm).
+        ``'score'``
+            ndarray (n_steps,) — aggregated image signal at each depth.
+        ``'score_per_phase'``
+            dict ``{phase: ndarray(n_steps,)}`` — per-phase score.
+        ``'score_matrix'``
+            ndarray (n_steps, n_valid_spots) — raw sampled intensities;
+            columns are spots, rows are depths.
+        ``'spot_phases'``
+            list (n_valid_spots,) — phase label for each column of
+            ``score_matrix``.
+        ``'spot_hkls'``
+            list (n_valid_spots,) — ``(h, k, l)`` for each column.
+        ``'cos_in'``
+            float — ``|k̂_i · n̂|``.
+    """
+    from scipy.ndimage import map_coordinates
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+    n_hat = np.asarray(stack.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+    cos_in = float(abs(np.dot(ki, n_hat)))
+    if cos_in < 1e-6:
+        raise ValueError("ki is nearly parallel to the sample surface — cos_in ≈ 0")
+
+    img = np.asarray(image, dtype=float)
+    Nv, Nh = img.shape
+
+    total_mm = sum(
+        lyr.thickness for lyr in (stack.layers * stack.n_rep + stack.buffer_layers)
+    ) * 1e-7
+    if z_max_mm is None:
+        z_max_mm = total_mm
+
+    z_mm = np.linspace(z_min_mm, z_max_mm, n_steps)
+
+    # ── Filter spots and precompute parallax geometry ─────────────────────────
+    filtered = [
+        s for s in spots
+        if s.get("pix") is not None and float(s.get("intensity", 0)) >= min_intensity
+    ]
+    if not filtered:
+        raise ValueError("No spots pass the min_intensity filter.")
+
+    _EPS = 0.01  # mm
+    p0_list, slope_list, valid_mask = [], [], []
+
+    for s in filtered:
+        tth = float(np.radians(s["tth"]))
+        chi = float(np.radians(s["chi"]))
+        kf = np.array([np.cos(tth),
+                        np.sin(tth) * np.sin(chi),
+                        np.sin(tth) * np.cos(chi)])
+        p0 = camera.project(kf, source_depth_mm=0.0)
+        p1 = camera.project(kf, source_depth_mm=cos_in * _EPS)
+        if p0 is None or p1 is None:
+            valid_mask.append(False)
+            p0_list.append([np.nan, np.nan])
+            slope_list.append([0.0, 0.0])
+        else:
+            valid_mask.append(True)
+            p0_list.append(list(p0))
+            slope_list.append([(p1[0] - p0[0]) / _EPS, (p1[1] - p0[1]) / _EPS])
+
+    valid = np.array(valid_mask)
+    p0_arr    = np.array(p0_list)[valid]     # (n_valid, 2)  [col, row]
+    slope_arr = np.array(slope_list)[valid]  # (n_valid, 2)  [px / mm]
+    w_arr     = np.array([float(s.get("intensity", 1.0)) for s in filtered])[valid]
+    phase_arr = [s.get("phase_label", "unknown") for i, s in enumerate(filtered) if valid[i]]
+    hkl_arr   = [s.get("hkl", (0, 0, 0))        for i, s in enumerate(filtered) if valid[i]]
+    phases    = list(dict.fromkeys(phase_arr))
+
+    n_valid = int(valid.sum())
+
+    # ── Batch all (z, spot) positions into one map_coordinates call ───────────
+    # p_all shape: (n_steps, n_valid, 2)
+    p_all = p0_arr[None, :, :] + z_mm[:, None, None] * slope_arr[None, :, :]  # (n_steps, n_valid, 2)
+
+    # map_coordinates expects (row, col) = (y, x)
+    rows = p_all[:, :, 1].ravel()   # (n_steps * n_valid,)
+    cols = p_all[:, :, 0].ravel()
+
+    # Out-of-bounds positions → 0 via cval
+    sampled = map_coordinates(
+        img, [rows, cols],
+        order=interp_order, mode="constant", cval=0.0,
+    )
+    score_matrix = sampled.reshape(n_steps, n_valid)  # (n_steps, n_valid)
+
+    # Zero out off-detector entries
+    on_det = (
+        (p_all[:, :, 0] >= 0) & (p_all[:, :, 0] < Nh)
+        & (p_all[:, :, 1] >= 0) & (p_all[:, :, 1] < Nv)
+    )
+    score_matrix = np.where(on_det, score_matrix, 0.0)
+
+    # ── Aggregate scores ──────────────────────────────────────────────────────
+    if score_weighted:
+        score = (score_matrix * w_arr[None, :]).sum(axis=1)
+    else:
+        score = score_matrix.sum(axis=1)
+
+    phase_arr_np = np.array(phase_arr)
+    score_per_phase = {}
+    for ph in phases:
+        mask_ph = (phase_arr_np == ph)
+        if score_weighted:
+            score_per_phase[ph] = (score_matrix[:, mask_ph] * w_arr[None, mask_ph]).sum(axis=1)
+        else:
+            score_per_phase[ph] = score_matrix[:, mask_ph].sum(axis=1)
+
+    return {
+        "z_mm":            z_mm,
+        "score":           score,
+        "score_per_phase": score_per_phase,
+        "score_matrix":    score_matrix,
+        "spot_phases":     phase_arr,
+        "spot_hkls":       hkl_arr,
+        "cos_in":          cos_in,
+    }

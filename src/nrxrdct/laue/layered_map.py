@@ -3169,7 +3169,7 @@ class LayeredMap:
 
         The stack's **current U matrices** (set interactively or from a
         previous fit) are serialised to a pickle and shipped to each job.
-        Every worker simulates Laue spots once with that fixed orientation
+        Every worker simulates Laue spots **once** with that fixed orientation
         and uses the predicted positions to drive
         :func:`~nrxrdct.laue.segmentation.simulation_guided_segmentation`
         on its assigned frames.
@@ -3177,21 +3177,52 @@ class LayeredMap:
         This is the right strategy when one orientation estimate is a good
         approximation for the whole map — typically true for well-ordered
         substrate materials.  Results are written to
-        ``<base_dir>/seg/frame_?????.h5``.
+        ``<base_dir>/seg/frame_?????.h5`` in the same HDF5 format produced by
+        :func:`~nrxrdct.laue.segmentation.write_h5_spotsfile`, so the output
+        is directly compatible with
+        :meth:`run_orientation_local` and :meth:`run_strain_local`.
+
+        Workflow::
+
+            lmap.stack.all_layers[0].U = my_U    # set orientation estimate
+            lmap.submit_guided_segmentation(
+                "proc/", camera, "1.1/measurement/eiger4m", "mask.npy",
+                search_radius=8, min_snr=2.0,
+            )
+            # Wait for jobs, then:
+            lmap.run_orientation_local(camera, seg_dir="proc/seg/", out_dir="proc/ubs/")
 
         Args:
-            base_dir: Processing root directory.
-            camera: Detector geometry.
-            h5_dataset: Dataset path inside ``self.h5_path``.
-            mask_path: Path to the ``.npy`` detector mask.
-            n_jobs: Number of SLURM array jobs.
-            correct_depth: Pass to :func:`~nrxrdct.laue.simulate_laue_stack`.
+            base_dir: Processing root directory.  Sub-directories
+                ``seg/``, ``slurm_logs/``, and ``job_meta/`` are created
+                inside it automatically.
+            camera: Detector geometry (``Camera`` object).
+            h5_dataset: Dataset path inside ``self.h5_path``, e.g.
+                ``'1.1/measurement/eiger4m'``.
+            mask_path: Path to a ``.npy`` file containing the boolean
+                detector validity mask (``True`` = active pixel).
+            n_jobs: Number of SLURM array jobs.  Frames are split evenly.
+            partition: SLURM partition name.
+            time: SLURM wall-clock limit (``'HH:MM:SS'``).
+            mem: Memory per job (e.g. ``'8G'``).
+            cpus_per_task: CPU threads per SLURM task.
+            python_bin: Python interpreter path on the compute nodes.
+            f2_thresh: Structure-factor threshold for
+                :func:`~nrxrdct.laue.simulate_laue_stack` (spot
+                pre-filter).  Default ``1e-4``.
+            correct_depth: Pass ``True`` to depth-correct predicted spot
+                positions before guiding the search.
+            overwrite: If ``True``, re-segment frames that already have an
+                output file.
+            extra_sbatch: Additional ``--key=value`` sbatch arguments.
             **seg_kwargs: Forwarded to
-                :func:`~nrxrdct.laue.segmentation.simulation_guided_segmentation`
-                (``psf_sigma``, ``search_radius``, ``min_snr``, etc.).
+                :func:`~nrxrdct.laue.segmentation.simulation_guided_segmentation`:
+                ``psf_sigma``, ``search_radius``, ``min_distance``,
+                ``min_snr``, ``bg_sigma``, ``d``, ``r_squared_min``,
+                ``include_unfitted``, ``fit_spots``.
 
         Returns:
-            List of SLURM job IDs.
+            List of SLURM job ID strings.
         """
         if self.h5_path is None:
             raise ValueError("h5_path not set on this LayeredMap.")

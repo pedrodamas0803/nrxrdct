@@ -310,3 +310,129 @@ a reasonable default.  For smaller detectors or finer beam, scale accordingly.
 | Orientation indexing only | `fit_spots=False` — 5–10× faster |
 | Strain analysis | `fit_spots=True`, `max_components=1` |
 | Overlapping spots / multi-grain pixels | `fit_spots=True`, `max_components=2` |
+
+---
+
+## 9. Simulation-guided (orientation-informed) segmentation
+
+The blind methods in sections 2–8 treat every frame independently and have
+no knowledge of where spots are expected to appear.  When a prior orientation
+estimate is available — from interactive indexing or a previous fit pass —
+`simulation_guided_segmentation` uses that prediction to restrict the search
+to small imagettes centred on each predicted spot position.
+
+### 9.1 Why use it
+
+| Situation | Advantage |
+|---|---|
+| Faint or small spots | Local SNR filter finds signals buried in global noise |
+| Dense patterns | No risk of merging neighbouring spots from different layers |
+| Strong parasitic background | Blind threshold is overwhelmed; guided search is not |
+| Satellite peaks near a Bragg peak | Multiple local maxima per imagette are all recorded |
+
+The tradeoff is that spots with no predicted position within `search_radius`
+pixels are never found.  A bad orientation estimate therefore causes a
+complete miss rather than a distorted peak list.
+
+### 9.2 Single-frame usage
+
+```python
+from nrxrdct.laue import simulate_laue_stack, simulation_guided_segmentation
+import numpy as np
+
+# --- 1. Predict spot positions from the known orientation ----------------
+spots = simulate_laue_stack(stack, camera, E_min_eV=5_000, E_max_eV=22_000)
+
+# --- 2. Load image and mask -----------------------------------------------
+image = load_frame(...)                    # (Nv, Nh) float32
+mask  = np.load("mask.npy").astype(bool)  # True = valid pixel
+
+# --- 3. Run guided segmentation -------------------------------------------
+peaklist = simulation_guided_segmentation(
+    image, spots, mask,
+    outpath="seg/frame_00100.h5",  # writes HDF5; omit to get array only
+    psf_sigma=1.0,                 # smoothing ~FWHM/2.35
+    search_radius=8,               # search window half-size (px)
+    min_snr=2.0,                   # SNR gate
+    bg_sigma=60.0,                 # local background subtraction sigma
+    fit_spots=False,               # centroid-only, faster
+)
+# peaklist: (N, 9) array — same columns as convert_spotsfile2peaklist
+```
+
+The `spots` argument also accepts a plain `(N, 2)` NumPy array of `[xcam, ycam]`
+pixel positions if you want to supply predicted positions without running a
+full simulation.
+
+### 9.3 Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `psf_sigma` | `1.0` | Gaussian smoothing σ (px) in the imagette before peak finding. Set to ≈ FWHM / 2.35 of a typical spot. `0` disables. |
+| `search_radius` | `7` | Half-size (px) of the search box around each prediction. Must exceed the expected position error. |
+| `min_distance` | `1` | Minimum separation (px) between two accepted local maxima within the same imagette. |
+| `min_snr` | `1.0` | Minimum SNR to accept a local maximum. SNR = (peak − annulus median) / annulus MAD. |
+| `bg_sigma` | `60.0` | Gaussian background subtraction σ (px) applied to the full image before imagette extraction. `0` disables. |
+| `fit_spots` | `False` | If `True`, fit a 2-D Gaussian around each accepted local maximum for sub-pixel position. |
+| `d` | `10` | Half-size (px) of the Gaussian fit ROI. |
+| `r_squared_min` | `0.8` | Minimum Gaussian fit R² to accept a fitted result. |
+| `include_unfitted` | `True` | Store peaks that pass the SNR gate but whose Gaussian fit failed, using the local-maximum position. |
+
+### 9.4 Map-scale SLURM execution via `LayeredMap`
+
+For a full scan, `LayeredMap.submit_guided_segmentation` parallelises
+the work across SLURM jobs.  The stack's current U matrices are frozen
+at submission time — each job simulates spots once and applies the same
+predicted positions to all its assigned frames.
+
+```python
+# 1. Set the orientation estimate on the stack (from interactive indexing
+#    or a previous fit pass)
+stack.buffer_layers[0].U = U_substrate
+
+lmap = LayeredMap(ny=21, nx=21, stack=stack, h5_path="scan.h5")
+
+# 2. Submit — seg files go to proc/seg/frame_?????.h5
+job_ids = lmap.submit_guided_segmentation(
+    "proc/",
+    camera,
+    h5_dataset="1.1/measurement/eiger4m",
+    mask_path="mask.npy",
+    n_jobs=10,
+    # --- segmentation parameters ---
+    search_radius=8,
+    min_snr=2.5,
+    psf_sigma=1.0,
+    bg_sigma=60.0,
+    fit_spots=False,
+)
+
+# 3. Once jobs complete, run orientation fitting on the guided peak lists
+lmap.run_orientation_local(
+    camera,
+    seg_dir="proc/seg/",
+    out_dir="proc/ubs/",
+    max_match_px=[30, 10, 3],
+)
+lmap.collect("proc/ubs/")
+```
+
+!!! note "Single orientation for the whole map"
+    `submit_guided_segmentation` uses a **single fixed orientation** for
+    all frames.  This is appropriate for samples where orientation varies
+    little across the map (e.g. a single-crystal substrate).  If
+    orientation varies significantly from pixel to pixel, run a coarse
+    orientation fit first with `run_orientation_local` using blind
+    segmentation, then re-segment with the per-frame orientations stored
+    in the map arrays.
+
+### 9.5 Comparison with blind segmentation
+
+| Aspect | Blind (LoG / WTH / Hybrid) | Simulation-guided |
+|---|---|---|
+| Requires prior orientation | No | Yes |
+| Finds unexpected spots | Yes | No (only near predictions) |
+| Robust to dense patterns | Moderate | High |
+| Robust to strong background | Moderate | High |
+| Finds satellites / split peaks | Only if above threshold | Yes — multiple maxima per imagette |
+| Output format | Same `.h5` | Same `.h5` (fully compatible) |

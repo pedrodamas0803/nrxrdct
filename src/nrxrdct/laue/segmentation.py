@@ -966,16 +966,28 @@ def simulation_guided_segmentation(
     """
     Simulation-guided peak search optimised for small and faint spots.
 
-    For each simulated spot position, a small imagette is extracted and
-    lightly smoothed, then **all local maxima** within that imagette are
-    found with :func:`skimage.feature.peak_local_max`.  Each candidate is
-    SNR-filtered against the local background annulus, then optionally
-    refined with a 2-D Gaussian fit.  This finds multiple peaks per
-    predicted position — useful when the simulation predicts one reflection
-    but the actual pattern contains a satellite or split spot nearby.
+    Unlike the blind segmentation methods (LoG, WTH, Hybrid), this function
+    starts from a list of **predicted spot positions** obtained from
+    :func:`~nrxrdct.laue.simulate_laue_stack` or
+    :func:`~nrxrdct.laue.simulate_laue_darwin` and restricts the search to
+    small imagettes around each prediction.  This makes it insensitive to
+    the global frame background and is effective for:
 
-    Pipeline per predicted spot
-    ---------------------------
+    * Faint or small spots that fall below the threshold of blind methods.
+    * Dense patterns where blind thresholding merges neighbouring spots.
+    * Frames with strong parasitic background (fluorescence streaks, beam
+      stop shadows) that produce many false positives in a global search.
+
+    The output is fully compatible with the standard pipeline —
+    :func:`convert_spotsfile2peaklist`, :func:`plot_measured_vs_simulated`,
+    and :func:`~nrxrdct.laue.fitting.fit_orientation_stack` all accept it
+    unchanged.  At the :class:`~nrxrdct.laue.LayeredMap` scale the function
+    is wrapped by
+    :meth:`~nrxrdct.laue.LayeredMap.submit_guided_segmentation`
+    for parallel SLURM execution.
+
+    Per-spot pipeline
+    -----------------
     1. Extract a ``(2·search_radius) × (2·search_radius)`` imagette from
        the background-subtracted image centred on the predicted position.
     2. Apply a light Gaussian smoothing (sigma = *psf_sigma*) to suppress
@@ -984,48 +996,59 @@ def simulation_guided_segmentation(
        separation *min_distance* to collect all local maxima candidates.
     4. For each candidate: compute SNR against a background annulus
        (outer radius 3×*search_radius*, inner exclusion *search_radius*)
-       so that a bright neighbouring streak does not raise the threshold for
+       so that a bright neighbouring streak does not inflate the threshold for
        a faint spot sitting next to it.  Reject if ``SNR < min_snr``.
-    5. Optionally fit a 2-D Gaussian to the raw image ROI around each
-       accepted candidate for sub-pixel position refinement.
+    5. Optionally fit a 2-D rotated Gaussian to the raw image ROI around
+       each accepted candidate for sub-pixel position refinement.
     6. Write results to HDF5 in the same format as :func:`write_h5_spotsfile`,
        fully compatible with :func:`convert_spotsfile2peaklist`.
+
+    Note that **multiple peaks can be found per predicted position** — useful
+    when the simulation predicts one reflection but the actual pattern contains
+    a satellite or split spot nearby.
 
     Args:
         image: Raw detector frame ``(Nv, Nh) float32``.
         spots: Predicted spot positions.  Two forms are accepted:
 
             * **List of dicts** — direct output of
-              :func:`~nrxrdct.laue.simulate_laue` or
-              :func:`~nrxrdct.laue.simulate_laue_stack`.  Each dict must
+              :func:`~nrxrdct.laue.simulate_laue_stack` or
+              :func:`~nrxrdct.laue.simulate_laue_darwin`.  Each dict must
               have ``'pix': (xcam, ycam)``; entries with ``pix=None``
               (off-detector) are silently skipped.
             * **numpy array** ``(N, 2)`` — columns ``[xcam, ycam]``.
+        mask: Boolean valid-pixel mask (``True`` = active pixel).  Dead
+            pixels and detector gaps must be excluded before peak finding.
         outpath: Output HDF5 file path.  If ``None`` (default), no file is
             written and only the peaklist is returned.
         psf_sigma: Gaussian smoothing sigma (pixels) applied to the
             imagette before local-maxima finding.  Set to roughly
             ``FWHM / 2.35`` of a typical spot.  ``0`` disables smoothing.
-        search_radius: Half-size (pixels) of the imagette extracted around
-            each predicted position.
+        search_radius: Half-size (pixels) of the search imagette extracted
+            around each predicted position.  Should be at least as large
+            as the expected position error between the prediction and the
+            true peak.
         min_distance: Minimum pixel separation between two accepted local
-            maxima within the same imagette.  Prevents the same spot from
-            being reported multiple times.
-        min_snr: Minimum signal-to-noise to accept a local maximum.  SNR
-            is ``(peak − annulus_median) / annulus_MAD_noise``.
+            maxima within the same imagette.  Prevents the same intensity
+            maximum from being reported as two separate spots.
+        min_snr: Minimum signal-to-noise ratio to accept a local maximum.
+            SNR is computed as ``(peak − annulus_median) / annulus_MAD``,
+            where the annulus has inner radius *search_radius* and outer
+            radius ``3 × search_radius``.
         bg_sigma: If > 0, subtract a Gaussian background of this sigma
-            (pixels) from the full image before imagette extraction.  The
-            Gaussian fit always uses the original *image* intensities.
-        mask: Boolean valid-pixel mask (``True`` = active).  Required —
-            dead pixels and detector gaps must be excluded before peak
-            finding.
-        d: Half-size of the Gaussian fit ROI (pixels).
-        r_squared_min: Minimum Gaussian fit R² to accept a result.
-        include_unfitted: Store peaks that pass the SNR gate but whose fit
-            did not reach *r_squared_min*, using the local-maximum position.
-        fit_spots: If ``False``, skip Gaussian fitting and write each
-            accepted local maximum directly.
-        overwrite: Overwrite an existing output file.
+            (pixels) from the full image before imagette extraction.
+            Gaussian fitting always uses the original *image* intensities.
+        d: Half-size of the Gaussian fit ROI in pixels.
+        r_squared_min: Minimum Gaussian fit R² to accept a fitted position.
+            Spots whose fit does not converge or falls below this threshold
+            are handled according to *include_unfitted*.
+        include_unfitted: If ``True`` (default), store peaks that pass the
+            SNR gate but whose Gaussian fit did not reach *r_squared_min*,
+            using the local-maximum pixel as position.
+        fit_spots: If ``False``, skip Gaussian fitting entirely and write
+            each accepted local maximum directly.  Faster; sufficient for
+            orientation indexing when shape parameters are not needed.
+        overwrite: Overwrite an existing HDF5 output file.
 
     Returns:
         ``(N, 9)`` float32 array with the same column layout as
@@ -1033,8 +1056,8 @@ def simulation_guided_segmentation(
         ``peak_X, peak_Y, peak_Isub, peak_fwaxmaj, peak_fwaxmin,
         peak_inclination, Xdev, Ydev, peak_bkg``.
         Directly compatible with :func:`plot_measured_vs_simulated` and
-        :func:`fit_orientation_stack`.
-        Empty ``(0, 9)`` array when no peaks pass the SNR gate.
+        :func:`~nrxrdct.laue.fitting.fit_orientation_stack`.
+        Returns an empty ``(0, 9)`` array when no peaks pass the SNR gate.
     """
     from skimage.feature import peak_local_max
 

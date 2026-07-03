@@ -2518,6 +2518,7 @@ def simulate_laue_darwin(
     sigma_beam_v_nm: float = 0.0,
     n_hat_sample=None,
     correct_depth: bool = False,
+    allowed_hkl: "frozenset | dict | None" = None,
     verbose: bool = True,
 ):
     """
@@ -2585,6 +2586,20 @@ def simulate_laue_darwin(
         is kept — producing a single average Bragg peak with satellites, as
         seen in a monochromatic scan.  Darwin-corrected `N_eff` values are
         still computed and reported in the returned `'N_eff'` key.
+    allowed_hkl : frozenset or dict or None, optional
+        Pre-computed set of allowed reflections from
+        :func:`precompute_allowed_hkl`.  When supplied, systematically absent
+        reflections are filtered **before** any geometry computation, avoiding
+        :func:`_darwin_amp` calls for forbidden hkl.  Accepts:
+
+        * ``frozenset`` — shared across all phases (useful when all layers
+          have the same crystal type).
+        * ``dict`` mapping ``id(crystal)`` → ``frozenset`` — per-crystal
+          sets, as returned by the internal cache.
+
+        Default ``None``: all (h, k, l) in the sphere pass to the Laue
+        condition check, relying on the structure factor threshold to reject
+        forbidden reflections.
     correct_depth : bool, optional
         When ``True``, each layer's spots are projected from the beam-path
         depth of that layer's centre rather than from the sample surface
@@ -2697,7 +2712,7 @@ def simulate_laue_darwin(
             if mu <= 0:
                 return 1.0
             kf = np.asarray(kf_hat, dtype=float)
-            cos_in  = max(abs(float(stack.n_hat[0])), 1e-3)
+            cos_in  = max(abs(float(np.dot(ki, stack.n_hat))), 1e-3)
             cos_out = max(abs(float(np.dot(stack.n_hat, kf))), 1e-3)
             return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
 
@@ -2768,70 +2783,8 @@ def simulate_laue_darwin(
 
         return F_buf + F_mqw, n_eff_b + n_eff_u, n_ext_b + n_ext_u
 
-    # ── Try-append closure ────────────────────────────────────────────────────
     seen_pix: set = set()
     spots: list = []
-
-    def _try_darwin(G_vec, hkl, sat_order, phase_label):
-        Gm2 = float(np.dot(G_vec, G_vec))
-        if Gm2 < 1e-20:
-            return 0
-        kdG = float(np.dot(ki, G_vec))
-        if kdG >= 0:
-            return 0
-        lam = -4.0 * np.pi * kdG / Gm2
-        if not (lam_lo <= lam <= lam_hi):
-            return 0
-        E = lam2en(lam)
-        km = 2.0 * np.pi / lam
-        kf_vec = ki * km + G_vec
-        kf_hat = kf_vec / np.linalg.norm(kf_vec)
-        pix = camera.project(kf_hat, source_depth_mm=_depth_mm_state[0])
-        if pix is None:
-            return 0
-        pix_key = (round(pix[0]), round(pix[1]))
-        if pix_key in seen_pix:
-            return 0
-        tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
-        chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
-        az  = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-
-        F_total, n_effs, n_exts = _darwin_amp(G_vec, E, lam, tth, kf_hat=kf_hat)
-        F2 = abs(F_total) ** 2
-        # Satellites are weaker — use relaxed threshold
-        effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
-        if F2 < effective_thresh:
-            return 0
-        LP = lorentz_pol(tth)
-        if LP == 0.0:
-            return 0
-        sw = _spectrum(E)
-        if sw <= 0.0:
-            return 0
-
-        seen_pix.add(pix_key)
-        spots.append({
-            "phase_label":    phase_label,
-            "hkl":            hkl,
-            "satellite_order": sat_order,
-            "is_superlattice": sat_order != 0,
-            "G_lab":          G_vec.copy(),
-            "E":              E,
-            "lambda":         lam,
-            "tth":            tth,
-            "chi":            chi,
-            "az":             az,
-            "pix":            pix,
-            "source_depth_mm": _depth_mm_state[0],
-            "F2":             F2,
-            "F2_darwin":      F2,
-            "LP":             LP,
-            "sw":             sw,
-            "I_raw":          F2 * LP * sw,
-            "N_eff":          n_effs,
-            "N_ext":          n_exts,
-        })
-        return 1
 
     # ── Deduplicate orientations for enumeration ──────────────────────────────
     # In average mode enumerate from buffer layers plus the first MQW layer.
@@ -2884,28 +2837,123 @@ def simulate_laue_darwin(
 
         n_added = 0
 
-        for h in range(-h_lim, h_lim + 1):
-            for k in range(-k_lim, k_lim + 1):
-                for l in range(-l_lim, l_lim + 1):
-                    if h == 0 and k == 0 and l == 0:
-                        continue
+        # ── Vectorised geometry — mirrors simulate_laue_stack ─────────────────
+        # Build B matrix once; Q(h,k,l) = B @ [h,k,l] by linearity.
+        _B = np.column_stack([crystal.Q(1, 0, 0), crystal.Q(0, 1, 0),
+                              crystal.Q(0, 0, 1)])
+        _HS, _KS, _LS = np.meshgrid(
+            np.arange(-h_lim, h_lim + 1, dtype=np.int32),
+            np.arange(-k_lim, k_lim + 1, dtype=np.int32),
+            np.arange(-l_lim, l_lim + 1, dtype=np.int32),
+            indexing="ij",
+        )
+        _hkl_all = np.column_stack([_HS.ravel(), _KS.ravel(), _LS.ravel()])
+        _hkl_all = _hkl_all[np.any(_hkl_all != 0, axis=1)]
+        _G_cry_all = (_B @ _hkl_all.T).T                    # (N, 3)
+        _in_sphere = np.einsum("ij,ij->i", _G_cry_all, _G_cry_all) <= G_max_sq
+        _hkl_all = _hkl_all[_in_sphere]
 
-                    G_cry = crystal.Q(h, k, l)
-                    if np.dot(G_cry, G_cry) > G_max_sq:
-                        continue
-                    G_lab = U @ G_cry
+        # allowed_hkl pre-filter: skip systematically absent reflections before
+        # the geometry loop so _darwin_amp is never called for forbidden hkl.
+        _layer_allowed = (
+            allowed_hkl.get(id(crystal)) if isinstance(allowed_hkl, dict)
+            else allowed_hkl
+        )
+        if _layer_allowed is not None and len(_hkl_all):
+            _hkl_ok = np.fromiter(
+                (tuple(int(x) for x in row) in _layer_allowed
+                 for row in _hkl_all),
+                dtype=bool, count=len(_hkl_all),
+            )
+            _hkl_all = _hkl_all[_hkl_ok]
 
-                    # Main Bragg peak
-                    n_added += _try_darwin(G_lab, (h, k, l), 0, label)
+        # G vectors in lab frame
+        _G_lab_all = (_B @ _hkl_all.T).T @ U.T              # (M, 3)
 
-                    # Thickness fringes / superlattice satellites —
-                    # buffer / substrate layers give Bragg peaks only.
-                    if layer_has_satellites:
-                        for q_fringe_vec, _ in fringe_q_vecs:
-                            for m in sat_orders:
-                                frac = m + 0.5 if m > 0 else m - 0.5
-                                G_sat = G_lab + frac * q_fringe_vec
-                                n_added += _try_darwin(G_sat, (h, k, l), m, label)
+        def _batch_darwin(G_lab_batch, hkl_batch, sat_order):
+            """Geometry-filter a batch, call _darwin_amp on survivors, append."""
+            if len(G_lab_batch) == 0:
+                return 0
+            kdG = G_lab_batch @ ki
+            v1  = kdG < 0
+            if not np.any(v1):
+                return 0
+            G_b   = G_lab_batch[v1];  hkl_b = hkl_batch[v1];  kdG_b = kdG[v1]
+            Gm2_b = np.einsum("ij,ij->i", G_b, G_b)
+            lam_b = -4.0 * np.pi * kdG_b / Gm2_b
+            v2    = (lam_b >= lam_lo) & (lam_b <= lam_hi)
+            if not np.any(v2):
+                return 0
+            G_b   = G_b[v2];   hkl_b = hkl_b[v2];   lam_b = lam_b[v2]
+            E_b   = HC / lam_b
+            km_b  = 2.0 * np.pi / lam_b
+            kf_b  = ki[None, :] * km_b[:, None] + G_b
+            kf_b /= np.linalg.norm(kf_b, axis=1, keepdims=True)
+            pix_b, on_det_b = camera.project_batch(
+                kf_b, source_depth_mm=_depth_mm_state[0])
+            if not np.any(on_det_b):
+                return 0
+            G_b   = G_b[on_det_b];   hkl_b  = hkl_b[on_det_b]
+            lam_b = lam_b[on_det_b]; E_b    = E_b[on_det_b]
+            kf_b  = kf_b[on_det_b];  pix_b  = pix_b[on_det_b]
+            tth_b = np.degrees(np.arccos(np.clip(kf_b[:, 0], -1.0, 1.0)))
+            chi_b = np.degrees(np.arctan2(kf_b[:, 1], kf_b[:, 2] + 1e-17))
+            az_b  = np.degrees(np.arctan2(kf_b[:, 2], kf_b[:, 1]))
+            LP_b  = _lorentz_pol_vec(tth_b)
+            sw_b  = _spectrum(E_b)
+            pre_ok = (LP_b > 0) & (sw_b > 0)
+            pix_round = np.round(pix_b).astype(np.int64)
+            eff_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
+            n_new = 0
+            for _si in np.where(pre_ok)[0]:
+                pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
+                if pix_key in seen_pix:
+                    continue
+                F_total, n_effs, n_exts = _darwin_amp(
+                    G_b[_si], float(E_b[_si]), float(lam_b[_si]),
+                    float(tth_b[_si]), kf_hat=kf_b[_si],
+                )
+                F2 = abs(F_total) ** 2
+                if F2 < eff_thresh:
+                    continue
+                seen_pix.add(pix_key)
+                spots.append({
+                    "phase_label":     label,
+                    "hkl":             (int(hkl_b[_si, 0]),
+                                        int(hkl_b[_si, 1]),
+                                        int(hkl_b[_si, 2])),
+                    "satellite_order": sat_order,
+                    "is_superlattice": sat_order != 0,
+                    "G_lab":           G_b[_si].copy(),
+                    "E":               float(E_b[_si]),
+                    "lambda":          float(lam_b[_si]),
+                    "tth":             float(tth_b[_si]),
+                    "chi":             float(chi_b[_si]),
+                    "az":              float(az_b[_si]),
+                    "pix":             (float(pix_b[_si, 0]),
+                                        float(pix_b[_si, 1])),
+                    "source_depth_mm": _depth_mm_state[0],
+                    "F2":              F2,
+                    "F2_darwin":       F2,
+                    "LP":              float(LP_b[_si]),
+                    "sw":              float(sw_b[_si]),
+                    "I_raw":           F2 * float(LP_b[_si]) * float(sw_b[_si]),
+                    "N_eff":           n_effs,
+                    "N_ext":           n_exts,
+                })
+                n_new += 1
+            return n_new
+
+        # Main Bragg peaks
+        n_added += _batch_darwin(_G_lab_all, _hkl_all, 0)
+
+        # Thickness fringes / superlattice satellites
+        if layer_has_satellites:
+            for q_fringe_vec, _ in fringe_q_vecs:
+                for m in sat_orders:
+                    frac = m + 0.5 if m > 0 else m - 0.5
+                    _G_sat = _G_lab_all + frac * q_fringe_vec
+                    n_added += _batch_darwin(_G_sat, _hkl_all, m)
 
         if verbose:
             print(f" {n_added} spots")

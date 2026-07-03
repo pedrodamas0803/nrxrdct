@@ -311,6 +311,102 @@ laue.print_hkl_family(spots, 0, 0, 2, n=5)  # GaN 000ℓ family + MQW satellites
 
 ---
 
+## 9. Depth-parallax correction and spot elongation
+
+### 9.1 Physical origin
+
+In **reflection geometry**, photons that diffract from depth $z$ below the
+surface exit the crystal from a point that is **laterally displaced** relative
+to the surface intercept of the incident beam.  The displacement along the
+beam direction is
+
+$$
+\delta_\text{beam} = z \cdot \cos\alpha_\text{in},
+\qquad \cos\alpha_\text{in} = |\hat{n}\cdot\hat{k}_i|
+$$
+
+For a 775 µm Si crystal at 40° incidence ($\cos\alpha_\text{in} \approx 0.65$),
+substrate spots are displaced by ~500 µm along the beam direction relative to
+surface spots — a shift of several detector pixels that is clearly visible as
+**spot elongation** when integrating over a thick diffracting volume.
+
+### 9.2 Enabling depth-corrected projection
+
+Pass ``correct_depth=True`` to ``simulate_laue_darwin`` (or
+``simulate_laue_stack``) to project each layer's spots from its
+centre depth rather than the surface:
+
+```python
+spots = laue.simulate_laue_darwin(
+    stack, camera,
+    sigma_h_mrad=2.5,      # BM32 horizontal divergence
+    sigma_v_mrad=0.3,      # BM32 vertical divergence
+    correct_depth=True,    # substrate spots projected from ~387 µm depth
+)
+```
+
+Each spot dict gains a ``'source_depth_mm'`` key recording the beam-path
+depth used.  Without ``correct_depth``, all spots are projected from
+``source_depth_mm = 0`` (the surface).
+
+### 9.3 Visualising the elongation trail
+
+:func:`~nrxrdct.laue.plot_depth_elongation` sweeps each spot's diffracting
+depth from the top to the bottom of its contributing layer and projects the
+position at each depth, producing an absorption-weighted *trail* that shows
+exactly how much the spot moves across the detector:
+
+```python
+fig, ax = laue.plot_depth_elongation(
+    spots, stack, camera,
+    top_n=20,
+    min_intensity=1e-4,
+    n_steps_per_layer=12,
+    space="detector",
+    show_divergence=True,    # combined depth-parallax + beam-divergence ellipse
+    divergence_nsigma=2.0,
+    image=detector_image,    # optional: show real frame behind the trails
+)
+```
+
+The figure contains three elements per spot:
+
+| Element | What it shows |
+|---|---|
+| **Coloured trail** | Range of projected positions from layer top (opaque) to bottom (faint) |
+| **Tick markers** (``\|``) | Exact trail endpoints |
+| **Circle** | Where the simulation placed the spot (`spot['pix']`, at layer-centre depth when `correct_depth=True`) |
+| **Ellipse** | Combined 2σ broadening from depth-parallax covariance + beam-divergence covariance (`cov_px`) |
+
+The ellipse major axis automatically aligns with the dominant elongation
+direction: depth-parallax (trail direction) for thick layers, beam divergence
+for thin layers.
+
+### 9.4 Quantifying simulation accuracy
+
+:func:`~nrxrdct.laue.plot_pix_deviation` matches each simulated spot to the
+nearest measured peak and plots the displacement norm $|\Delta\text{pix}|$
+as a function of spot properties (energy, 2θ, χ, intensity):
+
+```python
+fig, axes, matched = laue.plot_pix_deviation(
+    spots, peaklist,
+    max_dist_px=15.0,
+    properties=["E", "tth", "chi", "intensity"],
+)
+```
+
+Systematic trends in the residuals diagnose calibration errors:
+
+| Trend | Likely cause |
+|---|---|
+| $|\Delta\text{pix}|$ grows with $2\theta$ | Detector distance or tilt error |
+| Offset correlated with energy | Incorrect ``correct_depth`` setting |
+| Phase-dependent offset | Layer depth or orientation error |
+| Random scatter $\lesssim 2$ px | Acceptable residual for BM32 geometry |
+
+---
+
 ## References
 
 - **Darwin, C. G.** The theory of X-ray reflexion. *Philos. Mag.* **27**, 315–333 and 675–690 (1914).

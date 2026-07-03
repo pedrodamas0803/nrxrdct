@@ -3835,7 +3835,7 @@ def _surface_to_depth_segments(stack):
     """
     segments = []
     z = 0.0
-    for rep in range(stack.n_rep - 1, -1, -1):
+    for _ in range(stack.n_rep - 1, -1, -1):
         for layer in reversed(stack.layers):
             segments.append((z, z + layer.thickness, layer))
             z += layer.thickness
@@ -3865,40 +3865,61 @@ def plot_depth_elongation(
     """
     Visualise depth-parallax spot elongation for each Laue spot.
 
-    For every spot a *trail* of projected positions is drawn, stepping from
-    the crystal surface (filled marker, full opacity) to the maximum depth
-    sampled (transparent), weighted by the Beer-Lambert absorption at each
-    layer's energy.  Trails reveal how much the spot centre would move on
-    the detector if the diffracting volume were at different depths below
-    the surface.
+    For every spot three graphical elements are drawn:
+
+    * **Trail** — a sequence of projected detector positions stepping from
+      the top of the contributing layer to its bottom (or until Beer-Lambert
+      absorption reduces transmission below 1e-4).  Line opacity fades with
+      depth to reflect the absorption weight.  In ``'angles'`` space a
+      single point is drawn instead (depth does not shift 2θ/χ).
+    * **Tick markers** (``|``) — low-opacity ticks at the trail endpoints
+      (layer top and bottom).
+    * **Circle** — a filled circle at ``spot['pix']``, i.e. the position
+      the simulation placed the spot.  When the simulation was run with
+      ``correct_depth=True`` this is the layer-centre depth position; when
+      run without it is the surface position (z = 0).
+
+    When ``show_divergence=True`` a combined broadening ellipse is drawn,
+    centred at the absorption-weighted mean of the trail.  Its covariance is
+    the sum of the depth-parallax covariance (computed from the trail
+    positions weighted by Beer-Lambert absorption) and the beam-divergence
+    covariance stored in ``spot['cov_px']`` (populated by
+    :func:`beam_divergence_ellipses` when ``sigma_h/v_mrad`` are passed to
+    the simulation).  The ellipse major axis therefore automatically aligns
+    with the dominant elongation direction — depth-parallax for thick
+    layers, beam divergence for thin layers.
 
     Args:
-        spots (list[dict]): Output of :func:`simulate_laue_stack` or
+        spots: Output of :func:`simulate_laue_stack` or
             :func:`simulate_laue_darwin`.  Required keys: ``'tth'``,
-            ``'chi'``, ``'lambda'``, ``'E'``, ``'pix'``, ``'intensity'``.
-            Optional: ``'phase_label'``.
-        stack (LayeredCrystal): The same stack used to produce *spots*.
+            ``'chi'``, ``'E'``, ``'pix'``, ``'intensity'``, ``'phase_label'``.
+            Optional: ``'cov_px'`` (added by :func:`beam_divergence_ellipses`).
+        stack: The same :class:`LayeredCrystal` used to produce *spots*.
             Provides layer thicknesses, absorption coefficients, and the
             surface-normal direction.
-        camera (Camera): Detector geometry used in the simulation.
-        ki_hat (array-like (3,) or None): Incident-beam direction in the
-            LT frame.  Defaults to ``[1, 0, 0]``.
-        top_n (int): Maximum number of spots to plot (strongest first).
-        min_intensity (float): Skip spots below this normalised intensity.
-        n_steps_per_layer (int): Number of depth samples taken *per layer*.
-            Thick layers get more points but the total samples per spot
-            scales with the number of layers.
-        space (``'detector'`` | ``'angles'``): Coordinate space.
-            ``'detector'`` → pixel (col, row).
-            ``'angles'``   → (2θ °, χ °).
-        image (ndarray or None): Optional detector image to show as
-            background (only used when ``space='detector'``).
-        figsize (tuple): Figure size.
-        ax (Axes or None): Draw into an existing Axes.
-        out_path (str or None): Save path; ``None`` → do not save.
+        camera: Detector geometry used in the simulation.
+        ki_hat: Incident-beam direction in the LT frame (3-vector).
+            Defaults to ``[1, 0, 0]``.
+        top_n: Maximum number of spots to plot (strongest first).
+        min_intensity: Skip spots below this normalised intensity.
+        n_steps_per_layer: Depth samples taken per layer.  More steps give
+            smoother trails at the cost of computation time.
+        space: ``'detector'`` → pixel (col, row); ``'angles'`` → (2θ °, χ °).
+        show_divergence: When ``True`` (default) draw the combined
+            depth-parallax + beam-divergence broadening ellipse for each
+            spot.  Ellipses are centred at the absorption-weighted mean of
+            the trail, not at the simulation dot.
+        divergence_nsigma: Scale factor for the broadening ellipse in units
+            of σ.  Default 2.0 (≈ 86 % enclosed probability in 2-D).
+        image: Optional detector image shown as a greyscale background
+            (only used when ``space='detector'``).
+        figsize: Figure size in inches.
+        ax: Draw into an existing :class:`~matplotlib.axes.Axes`; ``None``
+            creates a new figure.
+        out_path: Save path; ``None`` → do not save.
 
     Returns:
-        fig, ax
+        ``(fig, ax)``
     """
     from matplotlib.collections import LineCollection
     from matplotlib.cm import get_cmap

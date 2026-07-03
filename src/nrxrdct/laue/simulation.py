@@ -2585,16 +2585,39 @@ def simulate_laue_darwin(
         is kept — producing a single average Bragg peak with satellites, as
         seen in a monochromatic scan.  Darwin-corrected `N_eff` values are
         still computed and reported in the returned `'N_eff'` key.
+    correct_depth : bool, optional
+        When ``True``, each layer's spots are projected from the beam-path
+        depth of that layer's centre rather than from the sample surface
+        (depth = 0).  The depth is taken from :func:`_layer_depths_mm` and
+        divided by ``cos(angle between ki and surface normal)`` to convert
+        from normal-direction depth to along-beam displacement, which is
+        then passed as ``source_depth_mm`` to ``camera.project()``.
+
+        This corrects the **depth-parallax** shift: in reflection geometry
+        a spot originating at depth *z* exits from a laterally displaced
+        surface point, causing substrate spots to appear at a different
+        detector position than surface or film spots.  Default ``False``
+        (all spots projected from the surface, matching the behaviour of
+        :func:`simulate_laue_stack`).
+    sigma_h_mrad, sigma_v_mrad : float, optional
+        Horizontal / vertical beam divergence 1σ (mrad).  See
+        :func:`beam_divergence_ellipses`.  Typical BM32/ESRF: 2–3 / 0.2–0.5.
+    sigma_beam_h_nm, sigma_beam_v_nm : float, optional
+        Beam footprint size 1σ at the sample (nm).  Requires
+        ``n_hat_sample`` to activate footprint broadening.
+    n_hat_sample : array-like (3,), optional
+        Sample surface normal in the LT frame (for footprint broadening).
     verbose : bool
 
     Returns:
     spots : list[dict]
         Same keys as :func:`simulate_laue_stack` plus:
 
-        `'N_eff'`   – list of Darwin N_eff per layer (same order as
-                        buffer_layers + n_rep × layers)
-        `'N_ext'`   – list of extinction lengths (unit cells) per layer
-        `'F2_darwin'` – |F_total_darwin|²  (Darwin-corrected structure factor)
+        ``'N_eff'``          list of Darwin N_eff per layer
+        ``'N_ext'``          list of extinction lengths (unit cells) per layer
+        ``'F2_darwin'``      ``|F_total_darwin|²``
+        ``'source_depth_mm'``  beam-path depth used for projection (mm);
+                             0.0 when ``correct_depth=False``
 """
     stack._update_offsets()
     source_kwargs = source_kwargs or {}

@@ -97,6 +97,30 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#8-example-ingangan-mqw">8. Example — InGaN/GaN MQW</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#9-depth-parallax-correction-and-spot-elongation">9. Depth-parallax correction and spot elongation</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#91-physical-origin">9.1 Physical origin</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#92-enabling-depth-corrected-projection">9.2 Enabling depth-corrected projection</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#93-visualising-the-elongation-trail">9.3 Visualising the elongation trail</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#94-quantifying-simulation-accuracy">9.4 Quantifying simulation accuracy</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#95-image-based-depth-reconstruction">9.5 Image-based depth reconstruction</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#10-darwin-based-map-fitting">10. Darwin-based map fitting</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#101-single-pixel-fit">10.1 Single-pixel fit</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#102-full-map-scan">10.2 Full map scan</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#103-performance-notes">10.3 Performance notes</a>
+    </li>
+        </ul>
+    </li>
     <li class="toctree-l3"><a class="reference internal" href="#references">References</a>
     </li>
     </ul>
@@ -558,6 +582,270 @@ mode computes and when to use each.</p>
 <a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
 <a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="n">laue</span><span class="o">.</span><span class="n">print_hkl_family</span><span class="p">(</span><span class="n">spots</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>  <span class="c1"># GaN 000ℓ family + MQW satellites</span>
 </code></pre></div>
+<hr />
+<h2 id="9-depth-parallax-correction-and-spot-elongation">9. Depth-parallax correction and spot elongation<a class="headerlink" href="#9-depth-parallax-correction-and-spot-elongation" title="Permanent link">&para;</a></h2>
+<h3 id="91-physical-origin">9.1 Physical origin<a class="headerlink" href="#91-physical-origin" title="Permanent link">&para;</a></h3>
+<p>In <strong>reflection geometry</strong>, photons that diffract from depth <span class="arithmatex">\(z\)</span> below the
+surface exit the crystal from a point that is <strong>laterally displaced</strong> relative
+to the surface intercept of the incident beam.  The displacement along the
+beam direction is</p>
+<div class="arithmatex">\[
+\delta_\text{beam} = z \cdot \cos\alpha_\text{in},
+\qquad \cos\alpha_\text{in} = |\hat{n}\cdot\hat{k}_i|
+\]</div>
+<p>For a 775 µm Si crystal at 40° incidence (<span class="arithmatex">\(\cos\alpha_\text{in} \approx 0.65\)</span>),
+substrate spots are displaced by ~500 µm along the beam direction relative to
+surface spots — a shift of several detector pixels that is clearly visible as
+<strong>spot elongation</strong> when integrating over a thick diffracting volume.</p>
+<h3 id="92-enabling-depth-corrected-projection">9.2 Enabling depth-corrected projection<a class="headerlink" href="#92-enabling-depth-corrected-projection" title="Permanent link">&para;</a></h3>
+<p>Pass <code>correct_depth=True</code> to <code>simulate_laue_darwin</code> (or
+<code>simulate_laue_stack</code>) to project each layer's spots from its
+centre depth rather than the surface:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">spots</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">simulate_laue_darwin</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">sigma_h_mrad</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span>      <span class="c1"># BM32 horizontal divergence</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">sigma_v_mrad</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>      <span class="c1"># BM32 vertical divergence</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">correct_depth</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># substrate spots projected from ~387 µm depth</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
+</code></pre></div>
+<p>Each spot dict gains a <code>'source_depth_mm'</code> key recording the beam-path
+depth used.  Without <code>correct_depth</code>, all spots are projected from
+<code>source_depth_mm = 0</code> (the surface).</p>
+<div class="admonition note">
+<p class="admonition-title">Consistency between <code>simulate_laue_stack</code> and <code>simulate_laue_darwin</code></p>
+<p>Both functions now store the depth-corrected pixel position in <code>spot['pix']</code>
+when <code>correct_depth=True</code> is passed.  In earlier versions the vectorised
+Bragg-peak path in <code>simulate_laue_stack</code> always projected from the surface
+regardless of the flag, causing circles in <code>plot_depth_elongation</code> to appear
+at different positions depending on which simulation was used.  This
+inconsistency has been fixed.</p>
+</div>
+<h3 id="93-visualising-the-elongation-trail">9.3 Visualising the elongation trail<a class="headerlink" href="#93-visualising-the-elongation-trail" title="Permanent link">&para;</a></h3>
+<p>:func:<code>~nrxrdct.laue.plot_depth_elongation</code> sweeps each spot's diffracting
+depth from the top to the bottom of its contributing layer and projects the
+position at each depth, producing an absorption-weighted <em>trail</em> that shows
+exactly how much the spot moves across the detector:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">plot_depth_elongation</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">spots</span><span class="p">,</span> <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">top_n</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">min_intensity</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">n_steps_per_layer</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">space</span><span class="o">=</span><span class="s2">&quot;detector&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">show_divergence</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># combined depth-parallax + beam-divergence ellipse</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">divergence_nsigma</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">image</span><span class="o">=</span><span class="n">detector_image</span><span class="p">,</span>    <span class="c1"># optional: show real frame behind the trails</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="p">)</span>
+</code></pre></div>
+<p>The figure contains three elements per spot:</p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Coloured trail</strong></td>
+<td>Range of projected positions from layer top (opaque) to bottom (faint)</td>
+</tr>
+<tr>
+<td><strong>Tick markers</strong> (<code>\|</code>)</td>
+<td>Exact trail endpoints</td>
+</tr>
+<tr>
+<td><strong>Circle</strong></td>
+<td>Where the simulation placed the spot (<code>spot['pix']</code>, at layer-centre depth when <code>correct_depth=True</code>)</td>
+</tr>
+<tr>
+<td><strong>Ellipse</strong></td>
+<td>Combined 2σ broadening from depth-parallax covariance + beam-divergence covariance (<code>cov_px</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The ellipse major axis automatically aligns with the dominant elongation
+direction: depth-parallax (trail direction) for thick layers, beam divergence
+for thin layers.</p>
+<h3 id="94-quantifying-simulation-accuracy">9.4 Quantifying simulation accuracy<a class="headerlink" href="#94-quantifying-simulation-accuracy" title="Permanent link">&para;</a></h3>
+<p>:func:<code>~nrxrdct.laue.plot_pix_deviation</code> matches each simulated spot to the
+nearest measured peak and plots the displacement norm <span class="arithmatex">\(|\Delta\text{pix}|\)</span>
+as a function of spot properties (energy, 2θ, χ, intensity):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">matched</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">plot_pix_deviation</span><span class="p">(</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">spots</span><span class="p">,</span> <span class="n">peaklist</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">max_dist_px</span><span class="o">=</span><span class="mf">15.0</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">properties</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;E&quot;</span><span class="p">,</span> <span class="s2">&quot;tth&quot;</span><span class="p">,</span> <span class="s2">&quot;chi&quot;</span><span class="p">,</span> <span class="s2">&quot;intensity&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">)</span>
+</code></pre></div>
+<p>Systematic trends in the residuals diagnose calibration errors:</p>
+<table>
+<thead>
+<tr>
+<th>Trend</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>$</td>
+<td>\Delta\text{pix}</td>
+</tr>
+<tr>
+<td>Offset correlated with energy</td>
+<td>Incorrect <code>correct_depth</code> setting</td>
+</tr>
+<tr>
+<td>Phase-dependent offset</td>
+<td>Layer depth or orientation error</td>
+</tr>
+<tr>
+<td>Random scatter <span class="arithmatex">\(\lesssim 2\)</span> px</td>
+<td>Acceptable residual for BM32 geometry</td>
+</tr>
+</tbody>
+</table>
+<h3 id="95-image-based-depth-reconstruction">9.5 Image-based depth reconstruction<a class="headerlink" href="#95-image-based-depth-reconstruction" title="Permanent link">&para;</a></h3>
+<p><code>depth_scan_image</code> works directly on the raw detector pixel array — <strong>no peak
+extraction required</strong>.  For every simulated spot and every candidate depth <em>z</em>
+the expected detector position is</p>
+<div class="arithmatex">\[p(z) = p_0 + z \cdot \frac{dp}{dz}\]</div>
+<p>where the slope <span class="arithmatex">\(dp/dz\)</span> is obtained from two <code>camera.project</code> calls at
+<span class="arithmatex">\(z = 0\)</span> and <span class="arithmatex">\(z = \epsilon\)</span>.  The pixel intensity is then sampled at every
+<span class="arithmatex">\((z, \text{spot})\)</span> combination via a single batched bilinear-interpolation
+call, yielding a <strong>score matrix</strong> of shape <code>(n_steps, n_valid_spots)</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">res_img</span> <span class="o">=</span> <span class="n">depth_scan_image</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">spots</span><span class="p">,</span> <span class="n">detector_image</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">stack</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">n_steps</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">z_max_mm</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">min_intensity</span><span class="o">=</span><span class="mf">0.02</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">score_weighted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>   <span class="c1"># weight by simulated spot intensity</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plot_depth_scan_image</span><span class="p">(</span><span class="n">res_img</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="n">stack</span><span class="p">,</span> <span class="n">top_n_spots</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Pass stack= to draw vertical lines at layer/buffer interfaces.</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># For repeated units (n_rep &gt; 1) only the outer boundaries of the</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># repeated block are marked.</span>
+</code></pre></div>
+<p>The two output quantities complement each other:</p>
+<table>
+<thead>
+<tr>
+<th>Output</th>
+<th>Shape</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>score</code></td>
+<td><code>(n_steps,)</code></td>
+<td>Sum of sampled intensities vs depth; peak = best-matching depth</td>
+</tr>
+<tr>
+<td><code>score_matrix</code></td>
+<td><code>(n_steps, n_valid)</code></td>
+<td>Per-spot depth profile; narrow column = localised spot, broad column = depth-spread diffracting layer</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Advantages over the peak-list method (<code>depth_scan_reconstruction</code>):</strong></p>
+<ul>
+<li>Works on elongated or merged spots that do not produce clean extracted peaks.</li>
+<li>No threshold on peak detection — faint features in the tails contribute.</li>
+<li>Naturally handles background gradients (they appear as a broad, featureless
+  baseline in the score profile).</li>
+</ul>
+<p><strong>When to prefer the peak-list method:</strong></p>
+<ul>
+<li>When the detector image contains strong parasitic signal (fluorescence, air
+  scatter) that inflates the image score away from the true Bragg positions.</li>
+<li>When you need per-peak depth estimates rather than a global profile.</li>
+</ul>
+<p>The two methods can be run together and their score profiles compared as a
+cross-check.</p>
+<hr />
+<h2 id="10-darwin-based-map-fitting">10. Darwin-based map fitting<a class="headerlink" href="#10-darwin-based-map-fitting" title="Permanent link">&para;</a></h2>
+<p><code>fit_orientation_stack</code>, <code>fit_strain_orientation_stack</code>, and the corresponding
+<code>LayeredMap</code> batch methods all accept an <code>engine</code> keyword that selects the
+simulation engine used inside the optimizer loop.</p>
+<table>
+<thead>
+<tr>
+<th><code>engine</code></th>
+<th>Simulation</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>'stack'</code> (default)</td>
+<td><code>simulate_laue_stack</code> — kinematical</td>
+<td>Thin films, mosaic crystals, fast surveys</td>
+</tr>
+<tr>
+<td><code>'darwin'</code></td>
+<td><code>simulate_laue_darwin</code> — Darwin extinction</td>
+<td>Thick perfect-crystal substrates; more accurate relative intensities</td>
+</tr>
+</tbody>
+</table>
+<h3 id="101-single-pixel-fit">10.1 Single-pixel fit<a class="headerlink" href="#101-single-pixel-fit" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">fit_orientation_stack</span><span class="p">,</span> <span class="n">fit_strain_orientation_stack</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Orientation fit with Darwin intensities</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_orientation_stack</span><span class="p">(</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">max_match_px</span><span class="o">=</span><span class="p">[</span><span class="mi">30</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;darwin&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">)</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Orientation + strain with Darwin intensities</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">result</span> <span class="o">=</span> <span class="n">fit_strain_orientation_stack</span><span class="p">(</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">obs_xy</span><span class="p">,</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">fit_strain</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;e_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_zz&quot;</span><span class="p">),</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;darwin&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="102-full-map-scan">10.2 Full map scan<a class="headerlink" href="#102-full-map-scan" title="Permanent link">&para;</a></h3>
+<p>Pass <code>engine="darwin"</code> to the <code>LayeredMap</code> batch methods.  The engine
+choice is forwarded to every worker process through the <code>fit_kwargs</code>
+mechanism, so no other change to the workflow is required:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">lmap</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">LayeredMap</span><span class="p">(</span><span class="n">ny</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span> <span class="n">nx</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="n">stack</span><span class="p">,</span> <span class="n">h5_path</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Orientation map</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">lmap</span><span class="o">.</span><span class="n">run_orientation_local</span><span class="p">(</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">seg_dir</span><span class="o">=</span><span class="s2">&quot;seg/&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;ubs_darwin/&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;darwin&quot;</span><span class="p">,</span>                <span class="c1"># ← Darwin instead of kinematical</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">max_match_px</span><span class="o">=</span><span class="p">[</span><span class="mi">30</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">)</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">lmap</span><span class="o">.</span><span class="n">collect</span><span class="p">(</span><span class="s2">&quot;ubs_darwin/&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Orientation + strain map</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">lmap</span><span class="o">.</span><span class="n">run_strain_local</span><span class="p">(</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">seg_dir</span><span class="o">=</span><span class="s2">&quot;seg/&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;strain_darwin/&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;darwin&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="n">fit_strain</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;e_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_zz&quot;</span><span class="p">),</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="n">orient_dir</span><span class="o">=</span><span class="s2">&quot;ubs_darwin/&quot;</span><span class="p">,</span>       <span class="c1"># warm-start from prior orientation</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="p">)</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="n">lmap</span><span class="o">.</span><span class="n">collect</span><span class="p">(</span><span class="s2">&quot;strain_darwin/&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="103-performance-notes">10.3 Performance notes<a class="headerlink" href="#103-performance-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Darwin computes a full slab calculation per spot rather than a single
+  structure-factor lookup, so each optimizer call is slower.  For a
+  775 µm Si substrate the difference is modest because the Darwin correction
+  is dominated by a single trigonometric function (<code>tanh</code>).</li>
+<li>Pre-computing <code>allowed_hkl</code> (<code>geometry_only=True</code>, the default) still
+  filters absent reflections before any Darwin calculation, keeping the
+  number of spots — and therefore the per-call cost — the same as the
+  kinematical engine.</li>
+<li>For predominantly thin-layer stacks where all layers satisfy
+  <span class="arithmatex">\(N \ll N_\text{ext}\)</span>, the Darwin and kinematical engines yield the same
+  spot positions and essentially the same intensities, so there is no
+  practical benefit to using <code>engine="darwin"</code> in that case.</li>
+</ul>
 <hr />
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <ul>

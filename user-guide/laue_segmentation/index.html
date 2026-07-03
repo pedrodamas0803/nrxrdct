@@ -109,6 +109,20 @@
     </li>
         </ul>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#9-simulation-guided-orientation-informed-segmentation">9. Simulation-guided (orientation-informed) segmentation</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#91-why-use-it">9.1 Why use it</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#92-single-frame-usage">9.2 Single-frame usage</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#93-parameters">9.3 Parameters</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#94-map-scale-slurm-execution-via-layeredmap">9.4 Map-scale SLURM execution via LayeredMap</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#95-comparison-with-blind-segmentation">9.5 Comparison with blind segmentation</a>
+    </li>
+        </ul>
+    </li>
     </ul>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
@@ -616,6 +630,213 @@ a reasonable default.  For smaller detectors or finer beam, scale accordingly.</
 <tr>
 <td>Overlapping spots / multi-grain pixels</td>
 <td><code>fit_spots=True</code>, <code>max_components=2</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9-simulation-guided-orientation-informed-segmentation">9. Simulation-guided (orientation-informed) segmentation<a class="headerlink" href="#9-simulation-guided-orientation-informed-segmentation" title="Permanent link">&para;</a></h2>
+<p>The blind methods in sections 2–8 treat every frame independently and have
+no knowledge of where spots are expected to appear.  When a prior orientation
+estimate is available — from interactive indexing or a previous fit pass —
+<code>simulation_guided_segmentation</code> uses that prediction to restrict the search
+to small imagettes centred on each predicted spot position.</p>
+<h3 id="91-why-use-it">9.1 Why use it<a class="headerlink" href="#91-why-use-it" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Advantage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Faint or small spots</td>
+<td>Local SNR filter finds signals buried in global noise</td>
+</tr>
+<tr>
+<td>Dense patterns</td>
+<td>No risk of merging neighbouring spots from different layers</td>
+</tr>
+<tr>
+<td>Strong parasitic background</td>
+<td>Blind threshold is overwhelmed; guided search is not</td>
+</tr>
+<tr>
+<td>Satellite peaks near a Bragg peak</td>
+<td>Multiple local maxima per imagette are all recorded</td>
+</tr>
+</tbody>
+</table>
+<p>The tradeoff is that spots with no predicted position within <code>search_radius</code>
+pixels are never found.  A bad orientation estimate therefore causes a
+complete miss rather than a distorted peak list.</p>
+<h3 id="92-single-frame-usage">9.2 Single-frame usage<a class="headerlink" href="#92-single-frame-usage" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">simulate_laue_stack</span><span class="p">,</span> <span class="n">simulation_guided_segmentation</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># --- 1. Predict spot positions from the known orientation ----------------</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">spots</span> <span class="o">=</span> <span class="n">simulate_laue_stack</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">E_min_eV</span><span class="o">=</span><span class="mi">5_000</span><span class="p">,</span> <span class="n">E_max_eV</span><span class="o">=</span><span class="mi">22_000</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># --- 2. Load image and mask -----------------------------------------------</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">image</span> <span class="o">=</span> <span class="n">load_frame</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>                    <span class="c1"># (Nv, Nh) float32</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="n">mask</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;mask.npy&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>  <span class="c1"># True = valid pixel</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># --- 3. Run guided segmentation -------------------------------------------</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">peaklist</span> <span class="o">=</span> <span class="n">simulation_guided_segmentation</span><span class="p">(</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">image</span><span class="p">,</span> <span class="n">spots</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">outpath</span><span class="o">=</span><span class="s2">&quot;seg/frame_00100.h5&quot;</span><span class="p">,</span>  <span class="c1"># writes HDF5; omit to get array only</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">psf_sigma</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>                 <span class="c1"># smoothing ~FWHM/2.35</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>    <span class="n">search_radius</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>               <span class="c1"># search window half-size (px)</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>    <span class="n">min_snr</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>                   <span class="c1"># SNR gate</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="n">bg_sigma</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>                 <span class="c1"># local background subtraction sigma</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">fit_spots</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>               <span class="c1"># centroid-only, faster</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="p">)</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># peaklist: (N, 9) array — same columns as convert_spotsfile2peaklist</span>
+</code></pre></div>
+<p>The <code>spots</code> argument also accepts a plain <code>(N, 2)</code> NumPy array of <code>[xcam, ycam]</code>
+pixel positions if you want to supply predicted positions without running a
+full simulation.</p>
+<h3 id="93-parameters">9.3 Parameters<a class="headerlink" href="#93-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>psf_sigma</code></td>
+<td><code>1.0</code></td>
+<td>Gaussian smoothing σ (px) in the imagette before peak finding. Set to ≈ FWHM / 2.35 of a typical spot. <code>0</code> disables.</td>
+</tr>
+<tr>
+<td><code>search_radius</code></td>
+<td><code>7</code></td>
+<td>Half-size (px) of the search box around each prediction. Must exceed the expected position error.</td>
+</tr>
+<tr>
+<td><code>min_distance</code></td>
+<td><code>1</code></td>
+<td>Minimum separation (px) between two accepted local maxima within the same imagette.</td>
+</tr>
+<tr>
+<td><code>min_snr</code></td>
+<td><code>1.0</code></td>
+<td>Minimum SNR to accept a local maximum. SNR = (peak − annulus median) / annulus MAD.</td>
+</tr>
+<tr>
+<td><code>bg_sigma</code></td>
+<td><code>60.0</code></td>
+<td>Gaussian background subtraction σ (px) applied to the full image before imagette extraction. <code>0</code> disables.</td>
+</tr>
+<tr>
+<td><code>fit_spots</code></td>
+<td><code>False</code></td>
+<td>If <code>True</code>, fit a 2-D Gaussian around each accepted local maximum for sub-pixel position.</td>
+</tr>
+<tr>
+<td><code>d</code></td>
+<td><code>10</code></td>
+<td>Half-size (px) of the Gaussian fit ROI.</td>
+</tr>
+<tr>
+<td><code>r_squared_min</code></td>
+<td><code>0.8</code></td>
+<td>Minimum Gaussian fit R² to accept a fitted result.</td>
+</tr>
+<tr>
+<td><code>include_unfitted</code></td>
+<td><code>True</code></td>
+<td>Store peaks that pass the SNR gate but whose Gaussian fit failed, using the local-maximum position.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="94-map-scale-slurm-execution-via-layeredmap">9.4 Map-scale SLURM execution via <code>LayeredMap</code><a class="headerlink" href="#94-map-scale-slurm-execution-via-layeredmap" title="Permanent link">&para;</a></h3>
+<p>For a full scan, <code>LayeredMap.submit_guided_segmentation</code> parallelises
+the work across SLURM jobs.  The stack's current U matrices are frozen
+at submission time — each job simulates spots once and applies the same
+predicted positions to all its assigned frames.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># 1. Set the orientation estimate on the stack (from interactive indexing</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">#    or a previous fit pass)</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">stack</span><span class="o">.</span><span class="n">buffer_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">U</span> <span class="o">=</span> <span class="n">U_substrate</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">lmap</span> <span class="o">=</span> <span class="n">LayeredMap</span><span class="p">(</span><span class="n">ny</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span> <span class="n">nx</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="n">stack</span><span class="p">,</span> <span class="n">h5_path</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># 2. Submit — seg files go to proc/seg/frame_?????.h5</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">job_ids</span> <span class="o">=</span> <span class="n">lmap</span><span class="o">.</span><span class="n">submit_guided_segmentation</span><span class="p">(</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="s2">&quot;proc/&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">h5_dataset</span><span class="o">=</span><span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">mask_path</span><span class="o">=</span><span class="s2">&quot;mask.npy&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">n_jobs</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="c1"># --- segmentation parameters ---</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">search_radius</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">min_snr</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">psf_sigma</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">bg_sigma</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">fit_spots</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="p">)</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="c1"># 3. Once jobs complete, run orientation fitting on the guided peak lists</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="n">lmap</span><span class="o">.</span><span class="n">run_orientation_local</span><span class="p">(</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="n">camera</span><span class="p">,</span>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="n">seg_dir</span><span class="o">=</span><span class="s2">&quot;proc/seg/&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;proc/ubs/&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>    <span class="n">max_match_px</span><span class="o">=</span><span class="p">[</span><span class="mi">30</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="p">)</span>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="n">lmap</span><span class="o">.</span><span class="n">collect</span><span class="p">(</span><span class="s2">&quot;proc/ubs/&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Single orientation for the whole map</p>
+<p><code>submit_guided_segmentation</code> uses a <strong>single fixed orientation</strong> for
+all frames.  This is appropriate for samples where orientation varies
+little across the map (e.g. a single-crystal substrate).  If
+orientation varies significantly from pixel to pixel, run a coarse
+orientation fit first with <code>run_orientation_local</code> using blind
+segmentation, then re-segment with the per-frame orientations stored
+in the map arrays.</p>
+</div>
+<h3 id="95-comparison-with-blind-segmentation">9.5 Comparison with blind segmentation<a class="headerlink" href="#95-comparison-with-blind-segmentation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Blind (LoG / WTH / Hybrid)</th>
+<th>Simulation-guided</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Requires prior orientation</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Finds unexpected spots</td>
+<td>Yes</td>
+<td>No (only near predictions)</td>
+</tr>
+<tr>
+<td>Robust to dense patterns</td>
+<td>Moderate</td>
+<td>High</td>
+</tr>
+<tr>
+<td>Robust to strong background</td>
+<td>Moderate</td>
+<td>High</td>
+</tr>
+<tr>
+<td>Finds satellites / split peaks</td>
+<td>Only if above threshold</td>
+<td>Yes — multiple maxima per imagette</td>
+</tr>
+<tr>
+<td>Output format</td>
+<td>Same <code>.h5</code></td>
+<td>Same <code>.h5</code> (fully compatible)</td>
 </tr>
 </tbody>
 </table>

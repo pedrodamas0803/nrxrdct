@@ -51,7 +51,9 @@ nav:
       - GPU Support: user-guide/gpu.md
     - Laue Diffraction:
       - Diffraction and Laue Theory: user-guide/laue_theory.md
+      - Laue Theory References: user-guide/laue_theory_refs.md
       - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
+      - Thin-Film Satellite References: user-guide/laue_thin_film_satellites_refs.md
       - Layered Structures: user-guide/laue_layered_structures.md
       - Darwin Model (Thick Layers): user-guide/laue_darwin.md
       - Spot Segmentation: user-guide/laue_segmentation.md
@@ -98,6 +100,7 @@ nav:
       - segmentation: api/laue/segmentation.md
       - fitting: api/laue/fitting.md
       - map: api/laue/map.md
+      - layered_map: api/laue/layered_map.md
       - beamline: api/laue/beamline.md
       - interactive: api/laue/interactive.md
       - plotting: api/laue/plotting.md

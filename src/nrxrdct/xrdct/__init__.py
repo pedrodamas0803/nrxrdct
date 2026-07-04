@@ -29,6 +29,20 @@ from .reconstruction import (
     reconstruct_astra_gpu_3d,
     reconstruct_slice,
 )
+from .s3dxrd import (
+    IndexingResult,
+    S3DXRDSlice,
+    SegmentationOptions,
+    SegmentationResult,
+    build_columnfile,
+    combine_with_powder,
+    index_slice,
+    load_segmentation,
+    save_segmentation,
+    segment_frame,
+    segment_scan,
+    segment_slice,
+)
 from .sinogram import assemble_sinogram, get_fluo_full_spectra, get_fluo_roi
 from .visualization import (
     ZProfilePlot,
@@ -71,6 +85,19 @@ __all__ = [
     "assemble_sinogram",
     "get_fluo_roi",
     "get_fluo_full_spectra",
+    # Scanning 3DXRD (s3dxrd)
+    "SegmentationOptions",
+    "SegmentationResult",
+    "IndexingResult",
+    "S3DXRDSlice",
+    "segment_frame",
+    "segment_scan",
+    "segment_slice",
+    "save_segmentation",
+    "load_segmentation",
+    "build_columnfile",
+    "index_slice",
+    "combine_with_powder",
     # Visualization
     "visualize_volume",
     "visualize_slices",

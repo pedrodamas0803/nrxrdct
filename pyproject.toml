@@ -29,6 +29,9 @@ nrxrdct-slurm-recon = "nrxrdct.xrdct.slurm_reconstruction.cli:main"
 laue = [
     "orix>=0.11",
 ]
+xrdct = [
+    "ImageD11>=2.0.5",
+]
 docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",

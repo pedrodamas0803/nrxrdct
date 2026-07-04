@@ -8,15 +8,30 @@ from tqdm.auto import tqdm # type: ignore
 
 
 def assemble_sinogram(
-    integrated_file: Path, n_rot: int, n_tth_angles: int, n_lines: int = 10
-) -> np.ndarray:
+    integrated_file: Path,
+    n_rot: int,
+    n_tth_angles: int,
+    n_lines: int = 10,
+    translation_motor: str = "dty",
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Build a 3-D sinogram from an HDF5 file of integrated patterns.
 
     Scans stored under ``integrated/scan*`` keys are background-subtracted
     (using the mean of the first and last scans), zero-padded to
-    ``(n_rot, n_tth_angles)``, and stacked.  The resulting array is rolled so
-    that the 2θ axis comes first: shape ``(n_tth_angles, n_lines, n_rot)``.
+    ``(n_rot, n_tth_angles)``, and stacked in order of increasing
+    *translation_motor* value — read from each scan's own attribute (written
+    by :func:`nrxrdct.azimuthal.integration.integrate_powder_parallel`) rather
+    than trusted from its position in the file. This matters because a scan
+    that fails partway through integration never gets a ``scan_*`` group at
+    all, and stacking by raw file order would then silently shift every scan
+    after the gap out of alignment with the translation axis. Sorting by the
+    recorded motor value also keeps this sinogram's translation axis directly
+    comparable to per-scan ``dty`` values used elsewhere (e.g.
+    :mod:`nrxrdct.xrdct.s3dxrd`), for the same slice.
+
+    The resulting array is rolled so that the 2θ axis comes first: shape
+    ``(n_tth_angles, n_lines, n_rot)``.
 
     Args:
         integrated_file (Path): HDF5 file containing integrated patterns under
@@ -25,14 +40,25 @@ def assemble_sinogram(
         n_tth_angles (int): Number of 2θ bins (spectral dimension).
         n_lines (int, optional): Expected number of translation lines; currently
             unused (default 10).
+        translation_motor (str, optional): Name of the translation-motor
+            attribute stored on each ``integrated/scan_*`` group (default
+            ``"dty"``).
 
     Returns:
-        np.ndarray: Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)``
+        sino (np.ndarray): Sinogram array of shape ``(n_tth_angles, n_lines, n_rot)``
             as ``float32``.
+        dty (np.ndarray): Translation-motor value for each line of *sino*,
+            sorted to match its translation axis.
     """
     with h5py.File(integrated_file, "r") as hin:
-        keys = list(hin["integrated"].keys())
-        valid_keys = [key for key in keys if "scan" in key]
+        keys = [key for key in hin["integrated"].keys() if "scan" in key]
+        dty_values = np.array(
+            [hin[f"integrated/{key}"].attrs[translation_motor] for key in keys]
+        )
+        order = np.argsort(dty_values)
+        valid_keys = [keys[i] for i in order]
+        dty_values = dty_values[order]
+
         bkg1 = np.mean((hin[f"integrated/{valid_keys[0]}"][0:n_lines]), axis=0)
         bkg2 = np.mean((hin[f"integrated/{valid_keys[-1]}"][0:n_lines]), axis=0)
         bkg = (bkg1 + bkg2) / 2
@@ -51,7 +77,7 @@ def assemble_sinogram(
             sino[ii] = im
         sino = np.rollaxis(sino, 2, 0)
 
-    return np.rollaxis(sino, 1, 2)
+    return np.rollaxis(sino, 1, 2), dty_values
 
 def get_fluo_roi(
     fn, n_angles=901, data_entry="mca_det0_all", monitor_entry="fpico6", filter_size=3

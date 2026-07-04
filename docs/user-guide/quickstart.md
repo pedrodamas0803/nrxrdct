@@ -69,8 +69,8 @@ when a GPU is available).
 ```python
 from nrxrdct.reconstruction import assemble_sinogram, reconstruct_slice
 
-sino = assemble_sinogram(Path("integrated.h5"), n_rot=901, n_tth_angles=1000)
-# sino shape: (n_tth, n_lines, n_rot)
+sino, dty = assemble_sinogram(Path("integrated.h5"), n_rot=901, n_tth_angles=1000)
+# sino shape: (n_tth, n_lines, n_rot); dty is aligned with sino's line axis
 
 tth = np.load("tth.npy")
 volume = np.stack([

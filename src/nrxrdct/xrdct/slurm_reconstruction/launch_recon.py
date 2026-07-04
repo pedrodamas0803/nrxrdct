@@ -101,7 +101,7 @@ def build_sinogram(
     Returns:
         Path: Path to the written sinogram file.
     """
-    from nrxrdct.xrdct.reconstruction import assemble_sinogram
+    from nrxrdct.xrdct.sinogram import assemble_sinogram
 
     sinogram_file = Path(sinogram_file)
     integrated_file = Path(integrated_file)
@@ -114,14 +114,15 @@ def build_sinogram(
     print("Building sinogram from integrated file …")
     print("=" * 60)
 
-    sino = assemble_sinogram(integrated_file, n_rot, n_tth_angles, n_lines)
+    # dty is aligned with sino's translation axis (sorted by each scan's own
+    # dty attribute, not by its position in the file — see assemble_sinogram).
+    sino, dty = assemble_sinogram(integrated_file, n_rot, n_tth_angles, n_lines)
     # sino shape: (n_tth, n_rot, n_lines)
 
     with h5py.File(integrated_file, "r") as hin:
         radial = hin["integrated/radial"][:]
         radial_unit = hin["integrated/radial"].attrs.get("unit", "2th_deg")
         rot = hin["motors/rot"][:]
-        dty = hin["motors/dty"][:]
 
     sinogram_file.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(sinogram_file, "w") as hout:

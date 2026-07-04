@@ -210,8 +210,8 @@ integrate_powder_parallel(
 ```python
 from nrxrdct.xrdct import assemble_sinogram, reconstruct_slice
 
-sino = assemble_sinogram(Path("integrated.h5"), n_rot=901, n_tth_angles=1000)
-# sino shape: (n_tth, n_lines, n_rot)
+sino, dty = assemble_sinogram(Path("integrated.h5"), n_rot=901, n_tth_angles=1000)
+# sino shape: (n_tth, n_lines, n_rot); dty is aligned with sino's line axis
 
 volume = np.stack([
     reconstruct_slice(sino[i], angles_rad=angles)

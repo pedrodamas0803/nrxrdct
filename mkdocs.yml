@@ -1,5 +1,5 @@
 site_name: nrxrdct
-site_description: X-ray diffraction computed tomography — full XRD-CT data-reduction pipeline
+site_description: Synchrotron X-ray diffraction analysis — Laue simulation, orientation/strain mapping, segmentation, powder diffraction, XRF, and XRD-CT
 repo_url: https://github.com/pedrodamas0803/nrxrdct
 repo_name: nrxrdct
 edit_uri: edit/main/docs/

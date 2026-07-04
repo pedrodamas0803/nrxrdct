@@ -1,6 +1,6 @@
 # nrxrdct
 
-**Far-field X-ray diffraction computed tomography** — a Python toolkit for the full XRD-CT data-reduction pipeline, from raw detector images to spatially-resolved maps of crystallographic parameters.
+**A Python toolkit for synchrotron X-ray diffraction analysis** — polychromatic (Laue) diffraction simulation, thin-film satellite modelling, Darwin extinction corrections, orientation and strain mapping, simulation-guided spot segmentation, powder diffraction integration and Rietveld refinement, X-ray fluorescence, and XRD-CT data reduction.
 
 ---
 
@@ -9,8 +9,8 @@
 - [Overview](#overview)
 - [Installation](#installation)
 - [Package structure](#package-structure)
-- [Typical workflow](#typical-workflow)
-- [Volume analysis](#volume-analysis)
+- [XRD-CT workflow](#xrd-ct-workflow)
+- [XRD-CT volume analysis](#xrd-ct-volume-analysis)
 - [HPC / SLURM integration](#hpc--slurm-integration)
 - [GPU support](#gpu-support)
 - [Laue diffraction](#laue-diffraction)
@@ -21,7 +21,7 @@
 
 ## Overview
 
-`nrxrdct` is organised into focused subpackages that cover every step of a synchrotron XRD-CT experiment:
+`nrxrdct` is organised into focused subpackages for synchrotron X-ray diffraction analysis:
 
 | Subpackage | What it does |
 |---|---|
@@ -171,7 +171,7 @@ src/nrxrdct/
 
 ---
 
-## Typical workflow
+## XRD-CT workflow
 
 ### 1. Describe the scan
 
@@ -262,7 +262,7 @@ cal.plot_calibration_results()
 
 ---
 
-## Volume analysis
+## XRD-CT volume analysis
 
 `ReconstructedVolume` provides a full set of map extractors and analysis tools after refinement:
 
@@ -444,7 +444,7 @@ nrxrdct-slurm check \
 
 ## Laue diffraction
 
-`nrxrdct.laue` is a self-contained subpackage for polychromatic (Laue) diffraction analysis, targeting synchrotron micro-Laue experiments (e.g. BM32 at the ESRF).
+`nrxrdct.laue` covers the full polychromatic (Laue) diffraction analysis pipeline, from forward simulation to per-pixel orientation and strain maps, targeting synchrotron micro-Laue experiments (e.g. BM32 at the ESRF).
 
 ### Capabilities
 
@@ -454,12 +454,12 @@ nrxrdct-slurm check \
 | **Crystal structures** | `crystal_from_cif`, BCC / B2 builders, vectorised B-matrix for HKL enumeration |
 | **Forward simulation** | `simulate_laue` — single grain; `simulate_laue_stack` — thin-film satellites; `simulate_laue_darwin` — dynamical (Darwin) model |
 | **Synchrotron spectra** | Bending-magnet and undulator models, KB-mirror reflectivity, Lorentz–polarisation factors |
-| **Spot segmentation** | LoG, white-top-hat, and hybrid strategies; 2-D rotated-Gaussian peak fitting; HDF5 spotsfile I/O |
+| **Spot segmentation** | LoG, white-top-hat, and hybrid strategies; simulation-guided segmentation (`simulation_guided_segmentation`); 2-D rotated-Gaussian peak fitting; HDF5 spotsfile I/O |
 | **Orientation indexing** | `index_orientation` — exhaustive angular search; `interactive_orientation` — IPyWidgets manual indexing |
-| **Orientation fitting** | `fit_orientation`, `fit_orientation_stack`, `fit_orientation_mixed` — multi-stage Nelder-Mead |
+| **Orientation fitting** | `fit_orientation`, `fit_orientation_stack`, `fit_orientation_mixed` — multi-stage Nelder-Mead; `engine="darwin"` for dynamical forward model |
 | **Strain fitting** | `fit_strain_orientation` — simultaneous deviatoric strain tensor + orientation refinement |
 | **Layered structures** | `Layer` / `LayeredCrystal` — epitaxial stacks with orientation relationships (K–S, N–W, Pitsch, …) |
-| **Grain maps** | `GrainMap` — manages raster micro-Laue maps and SLURM jobs for each analysis step |
+| **Grain maps** | `GrainMap` — raster micro-Laue map management; `LayeredMap` — extends `GrainMap` for epitaxial thin-film stacks with SLURM-parallel fitting and guided segmentation |
 
 ### Quick example — single-grain simulation and fitting
 

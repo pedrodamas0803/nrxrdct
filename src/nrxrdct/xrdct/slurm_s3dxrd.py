@@ -479,10 +479,11 @@ def merge(
             print(f"  ✗  scan_{ii:04d}: load error — {e}")
             return ii, None
 
-    print(f"Loading {len(to_load)} scans with {n_threads} threads …")
-    with ThreadPoolExecutor(max_workers=n_threads) as pool:
-        futures = {ii: pool.submit(_load, ii) for ii in to_load}
-    # pool.__exit__ waits for all reads to finish before writing begins.
+    # Submit all reads immediately; the pool runs in the background while we write.
+    # futures[ii].result() blocks only until that specific scan is ready, so at
+    # most ~n_threads scans are held in memory at any point.
+    pool    = ThreadPoolExecutor(max_workers=n_threads)
+    futures = {ii: pool.submit(_load, ii) for ii in to_load}
 
     # Write serially in scan order (HDF5 constraint).
     results: list = []
@@ -508,6 +509,8 @@ def merge(
             _write_scan_group(hout, group_path, result, translation_motor)
             results.append(result)
             n_merged += 1
+
+    pool.shutdown(wait=False)  # all futures already done by this point
 
     print(
         f"\n✓  Merge complete — {n_merged} merged, "

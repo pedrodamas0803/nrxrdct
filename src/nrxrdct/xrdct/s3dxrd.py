@@ -533,7 +533,9 @@ def segment_slice(
         print(f"  {n_cached} scans already done — skipping")
 
     if pending_args:
-        with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        import multiprocessing
+        _ctx = multiprocessing.get_context("forkserver")
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=_ctx) as pool:
             futures = {pool.submit(_segment_scan_worker, a): a[0] for a in pending_args}
             with tqdm(total=len(futures), desc="Segmenting scans") as pbar:
                 for future in as_completed(futures):

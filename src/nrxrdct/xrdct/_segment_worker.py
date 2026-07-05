@@ -3,14 +3,15 @@ nrxrdct.xrdct._segment_worker
 ------------------------------
 Worker executed inside each SLURM job for scanning-3DXRD segmentation.
 
-Each assigned scan is segmented via segment_scan() and the peak arrays
-are written atomically as two files in a shared tmp directory:
+Each assigned scan is segmented via segment_scan() and written atomically
+as a single HDF5 file in a shared scan directory:
 
-    <tmp_dir>/scan_XXXX.npz        — arrays: sc, fc, omega, sum_intensity, n_pixels
-    <tmp_dir>/scan_XXXX.meta.json  — scan attributes (entry, dty, n_peaks)
+    <scan_dir>/scan_XXXX.h5   — datasets: sc, fc, omega, sum_intensity, n_pixels
+                               — attrs:    entry, <translation_motor>, n_peaks
 
-No HDF5 file is touched during segmentation — the final segmented.h5 is
-assembled by slurm_s3dxrd.merge() after all jobs finish.
+No shared HDF5 file is touched during segmentation — the final segmented.h5
+is assembled by slurm_s3dxrd.merge() after all jobs finish, using HDF5
+external links that point back into this directory.
 
 Invoked by slurm_s3dxrd.launch() via:
     python -m nrxrdct.xrdct._segment_worker <args>
@@ -24,9 +25,9 @@ import time
 from pathlib import Path
 
 import fabio
-import numpy as np
+import h5py
 
-from nrxrdct.xrdct.s3dxrd import SegmentationOptions, segment_scan
+from nrxrdct.xrdct.s3dxrd import SegmentationOptions, _write_scan_group, segment_scan
 
 
 def _parse_args():
@@ -34,7 +35,7 @@ def _parse_args():
         description="nrxrdct scanning-3DXRD segmentation worker (one SLURM job)"
     )
     p.add_argument("--master-file",       required=True, type=Path)
-    p.add_argument("--tmp-dir",           required=True, type=Path)
+    p.add_argument("--scan-dir",          required=True, type=Path)
     p.add_argument("--mask-file",         required=True, type=Path)
     p.add_argument(
         "--entry-indices", required=True,
@@ -54,19 +55,18 @@ def _process_scan(
     entry: str,
     *,
     master_file: Path,
-    tmp_dir: Path,
-    mask: "np.ndarray",
+    scan_dir: Path,
+    mask,
     options: SegmentationOptions,
     camera_name: str,
     translation_motor: str,
     rotation_motor: str,
 ) -> bool:
     scan_name = f"scan_{ii:04d}"
-    npz_path  = tmp_dir / f"{scan_name}.npz"
-    meta_path = tmp_dir / f"{scan_name}.meta.json"
+    h5_path   = scan_dir / f"{scan_name}.h5"
 
-    if npz_path.exists() and meta_path.exists():
-        print(f"  → Skipping {scan_name} (already in tmp)")
+    if h5_path.exists():
+        print(f"  → Skipping {scan_name} (already done)")
         return True
 
     print(f"\n{'='*60}\n{scan_name} — entry {entry}  [global idx {ii}]\n{'='*60}")
@@ -82,33 +82,13 @@ def _process_scan(
         print(f"  ✗ Failed to segment entry {entry}: {e} — skipping")
         return False
 
-    # Atomic write: write to .tmp names, then rename both together.
-    # np.savez_compressed adds .npz automatically, so use a stem without it.
-    npz_tmp_stem = tmp_dir / f"{scan_name}.tmp"   # → scan_XXXX.tmp.npz on disk
-    meta_tmp     = tmp_dir / f"{scan_name}.meta.json.tmp"
+    # Atomic write: write to .tmp.h5, then rename.
+    h5_tmp = scan_dir / f"{scan_name}.tmp.h5"
+    with h5py.File(h5_tmp, "w") as hout:
+        _write_scan_group(hout, "scan", result, translation_motor)
+    h5_tmp.rename(h5_path)
 
-    np.savez_compressed(
-        npz_tmp_stem,
-        sc            = result.sc,
-        fc            = result.fc,
-        omega         = result.omega,
-        sum_intensity = result.sum_intensity,
-        n_pixels      = result.n_pixels,
-    )
-    npz_tmp = tmp_dir / f"{scan_name}.tmp.npz"   # actual file written by savez
-
-    meta = {
-        "scan_index": ii,
-        "entry":      entry,
-        "dty":        result.dty,
-        "n_peaks":    result.n_peaks,
-    }
-    meta_tmp.write_text(json.dumps(meta, indent=2))
-
-    npz_tmp.rename(npz_path)
-    meta_tmp.rename(meta_path)
-
-    print(f"  ✓ {scan_name} — {result.n_peaks:,} peaks  →  {npz_path.name}")
+    print(f"  ✓ {scan_name} — {result.n_peaks:,} peaks  →  {h5_path.name}")
     return True
 
 
@@ -122,7 +102,7 @@ def main():
         f"pixels_in_spot={args.pixels_in_spot}"
     )
 
-    sidecar = args.tmp_dir / "launch_meta.json"
+    sidecar = args.scan_dir / "launch_meta.json"
     with open(sidecar) as f:
         launch_meta = json.load(f)
     valid_entries = launch_meta["valid_entries"]
@@ -133,7 +113,7 @@ def main():
         howmany=args.howmany,
         pixels_in_spot=args.pixels_in_spot,
     )
-    args.tmp_dir.mkdir(parents=True, exist_ok=True)
+    args.scan_dir.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
     n_ok = n_fail = 0
@@ -142,7 +122,7 @@ def main():
         ok = _process_scan(
             ii, valid_entries[ii],
             master_file=args.master_file,
-            tmp_dir=args.tmp_dir,
+            scan_dir=args.scan_dir,
             mask=mask,
             options=options,
             camera_name=args.camera_name,

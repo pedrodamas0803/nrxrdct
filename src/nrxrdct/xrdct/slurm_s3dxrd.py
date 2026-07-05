@@ -90,7 +90,7 @@ def _submit_job(
     indices: list[int],
     *,
     master_file: Path,
-    tmp_dir: Path,
+    scan_dir: Path,
     mask_file: Path,
     camera_name: str,
     translation_motor: str,
@@ -112,7 +112,7 @@ def _submit_job(
     wrap_cmd = (
         f'{python_bin} -m nrxrdct.xrdct._segment_worker'
         f' --master-file "{master_file}"'
-        f' --tmp-dir "{tmp_dir}"'
+        f' --scan-dir "{scan_dir}"'
         f' --mask-file "{mask_file}"'
         f' --entry-indices "{indices_str}"'
         f' --camera-name "{camera_name}"'
@@ -210,8 +210,8 @@ def launch(
     output_file = Path(output_file)
     mask_file   = Path(mask_file)
 
-    tmp_dir = output_file.parent / (output_file.stem + "_tmp")
-    tmp_dir.mkdir(parents=True, exist_ok=True)
+    scan_dir = output_file.parent / (output_file.stem + "_scans")
+    scan_dir.mkdir(parents=True, exist_ok=True)
     log_dir = output_file.parent / "slurm_logs_s3dxrd"
     log_dir.mkdir(exist_ok=True)
 
@@ -246,7 +246,7 @@ def launch(
         "cpus":              cpus,
         "python_bin":        python_bin,
     }
-    sidecar = tmp_dir / "launch_meta.json"
+    sidecar = scan_dir / "launch_meta.json"
     sidecar.write_text(json.dumps(launch_meta, indent=2))
     print(f"✓  launch_meta.json → {sidecar}")
 
@@ -259,7 +259,7 @@ def launch(
         sid = _submit_job(
             job_id, indices,
             master_file=master_file,
-            tmp_dir=tmp_dir,
+            scan_dir=scan_dir,
             mask_file=mask_file,
             camera_name=camera_name,
             translation_motor=translation_motor,
@@ -277,28 +277,28 @@ def launch(
         slurm_ids.append(sid)
 
     print(f"\n✓  {len(slurm_ids)} jobs submitted — IDs: {', '.join(slurm_ids)}")
-    print(f"   Tmp dir : {tmp_dir}/")
-    print(f"   Logs    : {log_dir}/")
-    return {"slurm_ids": slurm_ids, "tmp_dir": tmp_dir, "n_scans": len(valid_entries)}
+    print(f"   Scan dir : {scan_dir}/")
+    print(f"   Logs     : {log_dir}/")
+    return {"slurm_ids": slurm_ids, "scan_dir": scan_dir, "n_scans": len(valid_entries)}
 
 
 def monitor(
     slurm_ids: list,
-    tmp_dir: Union[str, Path],
+    scan_dir: Union[str, Path],
     watch: bool = False,
     interval: int = 30,
 ) -> None:
     """
-    Poll SLURM job states and count completed ``.npz`` files in *tmp_dir*.
+    Poll SLURM job states and count completed ``.h5`` files in *scan_dir*.
 
     Args:
         slurm_ids: List of SLURM job ID strings returned by :func:`launch`.
-        tmp_dir: Tmp directory written by the workers (same as
-            ``result["tmp_dir"]`` from :func:`launch`).
+        scan_dir: Scan directory written by the workers (same as
+            ``result["scan_dir"]`` from :func:`launch`).
         watch: If ``True``, poll repeatedly until all jobs finish.
         interval: Seconds between polls when *watch* is ``True``.
     """
-    tmp_dir   = Path(tmp_dir)
+    scan_dir  = Path(scan_dir)
     slurm_ids = [str(s) for s in slurm_ids]
 
     _RUNNING = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "REQUEUED"}
@@ -329,14 +329,13 @@ def monitor(
 
     def _query_progress():
         try:
-            sidecar = tmp_dir / "launch_meta.json"
+            sidecar = scan_dir / "launch_meta.json"
             with open(sidecar) as f:
                 meta = json.load(f)
             n_total = len(meta["valid_entries"])
             n_done  = sum(
                 1 for ii in range(n_total)
-                if (tmp_dir / f"scan_{ii:04d}.npz").exists()
-                and (tmp_dir / f"scan_{ii:04d}.meta.json").exists()
+                if (scan_dir / f"scan_{ii:04d}.h5").exists()
             )
             return n_done, n_total
         except Exception:
@@ -397,174 +396,130 @@ def monitor(
 
 
 def merge(
-    tmp_dir: Union[str, Path],
+    scan_dir: Union[str, Path],
     output_file: Union[str, Path],
     *,
     overwrite: bool = False,
-    n_threads: int = 8,
 ) -> List:
     """
-    Assemble per-scan ``.npz`` tmp files into ``segmented.h5``.
+    Build ``segmented.h5`` as an index of HDF5 external links into *scan_dir*.
 
-    Reads ``launch_meta.json`` to determine the expected scan list. Already-
-    merged scans are skipped unless *overwrite* is ``True``. The returned list
-    has the same format as :func:`~nrxrdct.xrdct.s3dxrd.segment_slice`, so it
-    can be fed directly to :func:`~nrxrdct.xrdct.s3dxrd.build_columnfile`.
+    Each per-scan ``scan_XXXX.h5`` written by the workers is referenced via an
+    ``h5py.ExternalLink`` rather than copied.  This makes merge essentially
+    instant (no data read or written) and leaves the scan files as the
+    authoritative data store.
 
-    Reading the ``.npz`` files is done in parallel with a thread pool;
-    writing to HDF5 is serial (h5py does not support concurrent writes).
+    .. note::
+       ``segmented.h5`` uses **relative** paths for its external links, so
+       moving it without moving *scan_dir* alongside will break the links.
+       Move both together, or keep ``segmented.h5`` in the parent of *scan_dir*.
 
     Args:
-        tmp_dir: Tmp directory written by the workers.
-        output_file: Destination ``segmented.h5``.
-        overwrite: If ``True``, re-merge scans already present in *output_file*.
-        n_threads: Number of threads for parallel ``.npz`` reading. Helps most
-            on network/parallel filesystems (Lustre, GPFS).
+        scan_dir: Directory containing per-scan ``scan_XXXX.h5`` files and
+            ``launch_meta.json``, as created by :func:`launch`.
+        output_file: Destination index file (e.g. ``segmented.h5``).  Created
+            if absent; existing links are skipped unless *overwrite* is ``True``.
+        overwrite: If ``True``, re-link scans already present in *output_file*.
 
     Returns:
-        list[:class:`~nrxrdct.xrdct.s3dxrd.SegmentationResult`] in scan order.
+        list[:class:`~nrxrdct.xrdct.s3dxrd.SegmentationResult`] in scan order,
+        read back through the newly created external links.
     """
-    from concurrent.futures import ThreadPoolExecutor
-    from nrxrdct.xrdct.s3dxrd import SegmentationResult, _read_scan_group, _write_scan_group
+    from nrxrdct.xrdct.s3dxrd import _read_scan_group
 
-    tmp_dir     = Path(tmp_dir)
+    scan_dir    = Path(scan_dir)
     output_file = Path(output_file)
 
-    sidecar = tmp_dir / "launch_meta.json"
+    sidecar = scan_dir / "launch_meta.json"
     if not sidecar.exists():
         raise FileNotFoundError(
-            f"launch_meta.json not found in {tmp_dir}. Was launch() called?"
+            f"launch_meta.json not found in {scan_dir}. Was launch() called?"
         )
     with open(sidecar) as f:
         launch_meta = json.load(f)
 
     valid_entries     = launch_meta["valid_entries"]
-    dty_values        = launch_meta["dty_values"]
     translation_motor = launch_meta.get("translation_motor", "dty")
     n_total           = len(valid_entries)
 
-    # Determine which scans are already in the output (read-only pass).
-    already_merged: set = set()
-    if output_file.exists() and not overwrite:
-        with h5py.File(output_file, "r") as hr:
-            seg = hr.get("segmented", {})
-            already_merged = {ii for ii in range(n_total) if f"scan_{ii:04d}" in seg}
+    n_linked = n_skipped = n_missing = 0
 
-    to_load = set(range(n_total)) - already_merged
+    with h5py.File(output_file, "a") as hout:
+        for ii in tqdm(range(n_total), desc="Linking scans"):
+            gp      = f"segmented/scan_{ii:04d}"
+            h5_path = scan_dir / f"scan_{ii:04d}.h5"
 
-    # Read .npz + .meta.json files in parallel (pure I/O, no HDF5 involved).
-    def _load(ii: int):
-        npz  = tmp_dir / f"scan_{ii:04d}.npz"
-        meta = tmp_dir / f"scan_{ii:04d}.meta.json"
-        if not npz.exists():
-            return ii, None
-        try:
-            data = np.load(npz)
-            if meta.exists():
-                with open(meta) as f:
-                    m = json.load(f)
-                entry, dty = m["entry"], m["dty"]
-            else:
-                entry, dty = valid_entries[ii], dty_values[ii]
-            return ii, SegmentationResult(
-                entry         = entry,
-                dty           = dty,
-                sc            = data["sc"],
-                fc            = data["fc"],
-                omega         = data["omega"],
-                sum_intensity = data["sum_intensity"],
-                n_pixels      = data["n_pixels"],
-            )
-        except Exception as e:
-            print(f"  ✗  scan_{ii:04d}: load error — {e}")
-            return ii, None
-
-    # Batch loop: read a batch in parallel, then write it serially.
-    # The ThreadPoolExecutor context manager waits for all reads to complete
-    # before any h5py operation starts, preventing heap corruption from
-    # concurrent numpy (zlib) and HDF5 C library allocations.
-    batch_size = n_threads * 4  # scans buffered per round; controls peak memory use
-
-    results: list = []
-    n_merged = n_skipped = n_missing = 0
-
-    with h5py.File(output_file, "a") as hout, \
-         tqdm(total=n_total, desc="Merging scans") as pbar:
-
-        for batch_start in range(0, n_total, batch_size):
-            batch_iis  = list(range(batch_start, min(batch_start + batch_size, n_total)))
-            batch_load = [ii for ii in batch_iis if ii in to_load]
-
-            # Parallel reads — pool exits (joins all threads) before h5py is touched.
-            if batch_load:
-                with ThreadPoolExecutor(max_workers=n_threads) as pool:
-                    futs = {ii: pool.submit(_load, ii) for ii in batch_load}
-                loaded = {ii: futs[ii].result() for ii in batch_load}
-            else:
-                loaded = {}
-
-            # Serial writes — no threads running.
-            for ii in batch_iis:
-                gp = f"segmented/scan_{ii:04d}"
-                if ii in already_merged:
-                    results.append(_read_scan_group(hout[gp], translation_motor))
+            if gp in hout:
+                if not overwrite:
                     n_skipped += 1
-                elif ii in loaded:
-                    _, result = loaded[ii]
-                    if result is None:
-                        print(f"  ⚠  scan_{ii:04d}.npz missing — skipping")
-                        n_missing += 1
-                    else:
-                        if overwrite and gp in hout:
-                            del hout[gp]
-                        _write_scan_group(hout, gp, result, translation_motor)
-                        results.append(result)
-                        n_merged += 1
-                pbar.update(1)
+                    continue
+                del hout[gp]
+
+            if not h5_path.exists():
+                print(f"  ⚠  scan_{ii:04d}.h5 missing — skipping")
+                n_missing += 1
+                continue
+
+            # Prefer relative path so the pair (output_file, scan_dir) can be
+            # moved together without breaking links.
+            try:
+                rel = h5_path.relative_to(output_file.parent)
+            except ValueError:
+                rel = h5_path  # different drive / mount: fall back to absolute
+            hout[gp] = h5py.ExternalLink(str(rel), "/scan")
+            n_linked += 1
 
     print(
-        f"\n✓  Merge complete — {n_merged} merged, "
-        f"{n_skipped} already done, {n_missing} missing"
+        f"\n✓  {n_linked} scans linked, {n_skipped} already present, "
+        f"{n_missing} missing"
     )
+
+    # Read results back through the links (h5py resolves them transparently).
+    results: list = []
+    with h5py.File(output_file, "r") as hout:
+        for ii in tqdm(range(n_total), desc="Loading results"):
+            gp = f"segmented/scan_{ii:04d}"
+            if gp in hout:
+                results.append(_read_scan_group(hout[gp], translation_motor))
     return results
 
 
 def check(
-    tmp_dir: Union[str, Path],
+    scan_dir: Union[str, Path],
     output_file: Union[str, Path],
 ) -> dict:
     """
-    Report completeness: how many scans have tmp files and how many are merged.
+    Report completeness: how many scans have ``.h5`` files and how many are linked.
 
     Args:
-        tmp_dir: Tmp directory written by the workers.
-        output_file: Destination ``segmented.h5``.
+        scan_dir: Scan directory written by the workers.
+        output_file: Index file produced by :func:`merge` (``segmented.h5``).
 
     Returns:
-        dict with keys ``'n_total'``, ``'n_tmp'``, ``'n_merged'``,
+        dict with keys ``'n_total'``, ``'n_scans'``, ``'n_linked'``,
         ``'missing_indices'``.
     """
-    tmp_dir     = Path(tmp_dir)
+    scan_dir    = Path(scan_dir)
     output_file = Path(output_file)
 
-    with open(tmp_dir / "launch_meta.json") as f:
+    with open(scan_dir / "launch_meta.json") as f:
         launch_meta = json.load(f)
     n_total = len(launch_meta["valid_entries"])
 
-    n_tmp    = sum(1 for ii in range(n_total)
-                   if (tmp_dir / f"scan_{ii:04d}.npz").exists())
-    n_merged = 0
+    n_scans  = sum(1 for ii in range(n_total)
+                   if (scan_dir / f"scan_{ii:04d}.h5").exists())
+    n_linked = 0
     if output_file.exists():
         with h5py.File(output_file, "r") as hout:
             if "segmented" in hout:
-                n_merged = len(hout["segmented"])
+                n_linked = len(hout["segmented"])
 
     missing = [ii for ii in range(n_total)
-               if not (tmp_dir / f"scan_{ii:04d}.npz").exists()]
+               if not (scan_dir / f"scan_{ii:04d}.h5").exists()]
 
     print(f"Total scans : {n_total}")
-    print(f"Tmp files   : {n_tmp} / {n_total}  ({100 * n_tmp / n_total:.1f} %)")
-    print(f"Merged      : {n_merged} / {n_total}  ({100 * n_merged / n_total:.1f} %)")
+    print(f"Scan files  : {n_scans} / {n_total}  ({100 * n_scans / n_total:.1f} %)")
+    print(f"Linked      : {n_linked} / {n_total}  ({100 * n_linked / n_total:.1f} %)")
     if missing:
         preview = missing[:20]
         suffix  = "…" if len(missing) > 20 else ""
@@ -574,7 +529,7 @@ def check(
 
     return {
         "n_total":         n_total,
-        "n_tmp":           n_tmp,
-        "n_merged":        n_merged,
+        "n_scans":         n_scans,
+        "n_linked":        n_linked,
         "missing_indices": missing,
     }

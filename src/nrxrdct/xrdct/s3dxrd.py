@@ -163,7 +163,7 @@ def poni_to_par(
         o21 (int, optional): Detector flip matrix element — see above.
         o22 (int, optional): Detector flip matrix element — see above.
     """
-    import ImageD11.parameters as _id11_params  # pure Python — safe before C extensions load
+    import ImageD11.parameters as _id11_params  # type: ignore # pure Python — safe before C extensions load
     ai = AzimuthalIntegrator()
     ai.load(str(poni_file))
     theta1, theta2, theta3 = ai.rot1, ai.rot2, ai.rot3
@@ -598,14 +598,21 @@ def save_segmentation(
 
 
 def load_segmentation(
-    segmentation_file: Union[str, Path], translation_motor: str = "dty"
+    segmentation_file: Union[str, Path],
+    translation_motor: str = "dty",
 ) -> List[SegmentationResult]:
-    """Reload the list of :class:`SegmentationResult` written by :func:`save_segmentation`."""
+    """Reload the list of :class:`SegmentationResult` from *segmentation_file*.
+
+    When the file uses HDF5 external links (SLURM path), h5py resolves them
+    transparently — each per-scan ``.h5`` is opened and read in turn.  Reads
+    are serial: h5py's global lock (``with_phil``) serialises HDF5 operations
+    across threads, so a thread pool would not help here.
+    """
+    segmentation_file = Path(segmentation_file)
     with h5py.File(segmentation_file, "r") as hin:
-        scan_keys = sorted(hin["segmented"].keys())
         return [
             _read_scan_group(hin[f"segmented/{key}"], translation_motor)
-            for key in scan_keys
+            for key in sorted(hin["segmented"].keys())
         ]
 
 
@@ -861,12 +868,22 @@ class S3DXRDSlice:
         )
         return self.segmentation
 
-    def build_columnfile(self):
-        """Assemble segmented peaks into an ImageD11 columnfile. See :func:`build_columnfile`."""
-        if self.segmentation is None:
-            raise RuntimeError("Call segment() before build_columnfile().")
+    def build_columnfile(self, segmentation=None):
+        """Assemble segmented peaks into an ImageD11 columnfile. See :func:`build_columnfile`.
+
+        Args:
+            segmentation: Override the segmentation source — accepts a list of
+                :class:`SegmentationResult`, a path to a ``segmented.h5`` file,
+                or ``None`` to use the result of a prior :meth:`segment` call.
+        """
+        seg = segmentation if segmentation is not None else self.segmentation
+        if seg is None:
+            raise RuntimeError(
+                "No segmentation available. Either call segment() first, "
+                "or pass segmentation=<list or path to segmented.h5>."
+            )
         self.columnfile = build_columnfile(
-            self.segmentation, self.par_file, phase_name=self.phase_name
+            seg, self.par_file, phase_name=self.phase_name
         )
         return self.columnfile
 

@@ -348,27 +348,47 @@ def monitor(
         filled = int(width * done / total)
         return f"[{'█' * filled}{'░' * (width - filled)}]"
 
-    def _print_snapshot(states, n_done, n_total, elapsed):
-        pct = 100 * n_done / n_total if n_total else 0
-        print(f"\n{'─'*56}")
-        print(f"  s3dxrd SLURM monitor   elapsed: {timedelta(seconds=int(elapsed))}")
-        print(f"{'─'*56}")
-        print(f"  Jobs   pending={sum(s == 'PENDING' for s in states.values())}  "
-              f"running={sum(s == 'RUNNING' for s in states.values())}  "
-              f"done={sum(s in _DONE for s in states.values())}  "
-              f"failed={sum(s in _FAILED for s in states.values())}")
-        print(f"  Scans  {_bar(n_done, n_total)}  {n_done}/{n_total}  ({pct:.1f}%)")
+    def _build_snapshot(states, n_done, n_total, elapsed) -> str:
+        pct   = 100 * n_done / n_total if n_total else 0
+        lines = [
+            f"{'─'*56}",
+            f"  s3dxrd SLURM monitor   elapsed: {timedelta(seconds=int(elapsed))}",
+            f"{'─'*56}",
+            f"  Jobs   pending={sum(s == 'PENDING' for s in states.values())}  "
+            f"running={sum(s == 'RUNNING' for s in states.values())}  "
+            f"done={sum(s in _DONE for s in states.values())}  "
+            f"failed={sum(s in _FAILED for s in states.values())}",
+            f"  Scans  {_bar(n_done, n_total)}  {n_done}/{n_total}  ({pct:.1f}%)",
+        ]
         if n_done > 0 and elapsed > 0:
             rate = n_done / elapsed
             eta  = (n_total - n_done) / rate if rate else float("inf")
-            print(f"  Rate   {rate * 3600:.1f} scans/hr  |  ETA {timedelta(seconds=int(eta))}")
-        print(f"{'─'*56}")
+            lines.append(
+                f"  Rate   {rate * 3600:.1f} scans/hr  |  ETA {timedelta(seconds=int(eta))}"
+            )
+        lines.append(f"{'─'*56}")
+        return "\n".join(lines)
 
-    t0 = time.time()
+    def _erase(n_lines: int) -> None:
+        try:
+            from IPython.display import clear_output
+            clear_output(wait=True)
+        except ImportError:
+            import sys
+            sys.stdout.write(f"\033[{n_lines}A\033[J")
+            sys.stdout.flush()
+
+    t0        = time.time()
+    prev_lines = 0
     while True:
-        states           = _query_slurm()
-        n_done, n_total  = _query_progress()
-        _print_snapshot(states, n_done, n_total, time.time() - t0)
+        states          = _query_slurm()
+        n_done, n_total = _query_progress()
+        snapshot        = _build_snapshot(states, n_done, n_total, time.time() - t0)
+
+        if prev_lines:
+            _erase(prev_lines)
+        print(snapshot)
+        prev_lines = snapshot.count("\n") + 1
 
         still_running = any(s in _RUNNING for s in states.values())
         if not watch or not still_running:

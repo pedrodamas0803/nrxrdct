@@ -400,7 +400,7 @@ def merge(
     output_file: Union[str, Path],
     *,
     overwrite: bool = False,
-) -> List:
+) -> dict:
     """
     Build ``segmented.h5`` as an index of HDF5 external links into *scan_dir*.
 
@@ -422,11 +422,10 @@ def merge(
         overwrite: If ``True``, re-link scans already present in *output_file*.
 
     Returns:
-        list[:class:`~nrxrdct.xrdct.s3dxrd.SegmentationResult`] in scan order,
-        read back through the newly created external links.
+        dict with keys ``'n_linked'``, ``'n_skipped'``, ``'n_missing'``.
+        To load the peak data call
+        :func:`~nrxrdct.xrdct.s3dxrd.load_segmentation` on *output_file*.
     """
-    from nrxrdct.xrdct.s3dxrd import _read_scan_group
-
     scan_dir    = Path(scan_dir)
     output_file = Path(output_file)
 
@@ -473,15 +472,7 @@ def merge(
         f"\n✓  {n_linked} scans linked, {n_skipped} already present, "
         f"{n_missing} missing"
     )
-
-    # Read results back through the links (h5py resolves them transparently).
-    results: list = []
-    with h5py.File(output_file, "r") as hout:
-        for ii in tqdm(range(n_total), desc="Loading results"):
-            gp = f"segmented/scan_{ii:04d}"
-            if gp in hout:
-                results.append(_read_scan_group(hout[gp], translation_motor))
-    return results
+    return {"n_linked": n_linked, "n_skipped": n_skipped, "n_missing": n_missing}
 
 
 def check(

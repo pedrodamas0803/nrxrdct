@@ -38,21 +38,52 @@ import numpy as np
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 from tqdm import tqdm
 
-try:
-    import ImageD11.columnfile
-    import ImageD11.cImageD11 as cImageD11
-    import ImageD11.parameters
-    import ImageD11.sparseframe as sparseframe
-    from ImageD11.sinograms import lima_segmenter
-    from ImageD11.sinograms.point_by_point import PBP, PBPMap
+_IMAGED11_AVAILABLE: "bool | None" = None   # None = not yet attempted
 
-    _IMAGED11_AVAILABLE = True
-except ImportError:
-    _IMAGED11_AVAILABLE = False
+# Module-level names populated lazily by _require_imaged11(); declared here so
+# static analysers don't flag undefined names in the functions that use them.
+ImageD11 = None
+cImageD11 = None
+sparseframe = None
+lima_segmenter = None
+PBP = None
+PBPMap = None
 
 
 def _require_imaged11() -> None:
-    if not _IMAGED11_AVAILABLE:
+    """Import ImageD11 on first call and bind sub-modules as module globals.
+
+    Deferred to avoid loading cImageD11 (a C extension) at module import time,
+    which can segfault Jupyter kernels when pyFAI and ImageD11 link against
+    different OpenMP runtimes (Intel libomp vs GCC libgomp).
+    """
+    global _IMAGED11_AVAILABLE
+    global ImageD11, cImageD11, sparseframe, lima_segmenter, PBP, PBPMap
+    if _IMAGED11_AVAILABLE is True:
+        return
+    if _IMAGED11_AVAILABLE is False:
+        raise ImportError(
+            "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
+            "Install it with: pip install nrxrdct[xrdct]"
+        )
+    try:
+        import ImageD11 as _id11
+        import ImageD11.columnfile    # noqa: F401 — registers sub-module on _id11
+        import ImageD11.cImageD11 as _cid11
+        import ImageD11.parameters    # noqa: F401
+        import ImageD11.sparseframe as _sf
+        from ImageD11.sinograms import lima_segmenter as _ls
+        from ImageD11.sinograms.point_by_point import PBP as _PBP, PBPMap as _PBPMap
+
+        ImageD11       = _id11
+        cImageD11      = _cid11
+        sparseframe    = _sf
+        lima_segmenter = _ls
+        PBP            = _PBP
+        PBPMap         = _PBPMap
+        _IMAGED11_AVAILABLE = True
+    except ImportError:
+        _IMAGED11_AVAILABLE = False
         raise ImportError(
             "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
             "Install it with: pip install nrxrdct[xrdct]"
@@ -563,7 +594,7 @@ def build_columnfile(
     segmentation: Union[str, Path, Sequence[SegmentationResult]],
     par_file: Union[str, Path],
     phase_name: Optional[str] = None,
-) -> "ImageD11.columnfile.columnfile":
+) -> "object":  # ImageD11.columnfile.columnfile
     """
     Assemble segmented per-scan peaks into a single ImageD11 columnfile with
     full diffraction geometry (tth, eta, g-vectors, d-spacing) computed from
@@ -609,7 +640,7 @@ def build_columnfile(
 
 
 def index_slice(
-    colf: "ImageD11.columnfile.columnfile",
+    colf: "object",  # ImageD11.columnfile.columnfile
     par_file: Union[str, Path],
     grains_file: Union[str, Path],
     symmetry: str = "cubic",

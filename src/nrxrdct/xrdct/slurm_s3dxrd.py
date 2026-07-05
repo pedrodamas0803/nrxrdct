@@ -102,66 +102,39 @@ def _submit_job(
     time_limit: str,
     mem: str,
     cpus: int,
-    env_activate: Optional[Path],
-    conda_env: Optional[str],
+    python_bin: str,
     log_dir: Path,
 ) -> str:
     indices_str = ",".join(str(i) for i in indices)
-    script_path = log_dir / f"job_{job_id:04d}.sh"
-    log_out     = log_dir / f"job_{job_id:04d}_%j.out"
-    log_err     = log_dir / f"job_{job_id:04d}_%j.err"
+    log_out = log_dir / f"job_{job_id:04d}_%j.out"
+    log_err = log_dir / f"job_{job_id:04d}_%j.err"
 
-    worker_args = (
-        f'    --master-file       "{master_file}"       \\\n'
-        f'    --tmp-dir           "{tmp_dir}"           \\\n'
-        f'    --mask-file         "{mask_file}"         \\\n'
-        f'    --entry-indices     "{indices_str}"       \\\n'
-        f'    --camera-name       "{camera_name}"       \\\n'
-        f'    --translation-motor "{translation_motor}" \\\n'
-        f'    --rotation-motor    "{rotation_motor}"    \\\n'
-        f"    --cut               {cut}                 \\\n"
-        f"    --howmany           {howmany}             \\\n"
-        f"    --pixels-in-spot    {pixels_in_spot}"
+    wrap_cmd = (
+        f'{python_bin} -m nrxrdct.xrdct._segment_worker'
+        f' --master-file "{master_file}"'
+        f' --tmp-dir "{tmp_dir}"'
+        f' --mask-file "{mask_file}"'
+        f' --entry-indices "{indices_str}"'
+        f' --camera-name "{camera_name}"'
+        f' --translation-motor "{translation_motor}"'
+        f' --rotation-motor "{rotation_motor}"'
+        f' --cut {cut}'
+        f' --howmany {howmany}'
+        f' --pixels-in-spot {pixels_in_spot}'
     )
-
-    if env_activate:
-        env_block   = f"source {env_activate}"
-        python_line = f"python -m nrxrdct.xrdct._segment_worker \\\n{worker_args}"
-    elif conda_env:
-        env_block   = "# conda run used below"
-        python_line = (
-            f"conda run -n {conda_env} --no-capture-output "
-            f"python -m nrxrdct.xrdct._segment_worker \\\n{worker_args}"
-        )
-    else:
-        env_block   = "# no environment activation"
-        python_line = f"python -m nrxrdct.xrdct._segment_worker \\\n{worker_args}"
-
-    script = (
-        f"#!/bin/bash\n"
-        f"#SBATCH --job-name=s3dxrd_{job_id:04d}\n"
-        f"#SBATCH --output={log_out}\n"
-        f"#SBATCH --error={log_err}\n"
-        f"#SBATCH --partition={partition}\n"
-        f"#SBATCH --time={time_limit}\n"
-        f"#SBATCH --mem={mem}\n"
-        f"#SBATCH --cpus-per-task={cpus}\n"
-        f"\n"
-        f"{env_block}\n"
-        f"\n"
-        f'echo "Job {job_id} started on $(hostname) at $(date)"\n'
-        f'echo "Indices: {indices_str}"\n'
-        f"\n"
-        f"{python_line}\n"
-        f"\n"
-        f'echo "Job {job_id} finished at $(date)"\n'
-    )
-
-    script_path.write_text(script)
-    script_path.chmod(0o755)
 
     result = subprocess.run(
-        ["sbatch", str(script_path)],
+        [
+            "sbatch",
+            f"--job-name=s3dxrd_{job_id:04d}",
+            f"--partition={partition}",
+            f"--time={time_limit}",
+            f"--mem={mem}",
+            f"--cpus-per-task={cpus}",
+            f"--output={log_out}",
+            f"--error={log_err}",
+            "--wrap", wrap_cmd,
+        ],
         capture_output=True, text=True, check=True,
     )
     slurm_id = result.stdout.strip().split()[-1]
@@ -194,9 +167,7 @@ def launch(
     time: str = "04:00:00",
     mem: str = "32G",
     cpus: int = 4,
-    # Environment
-    env_activate: Optional[Union[str, Path]] = None,
-    conda_env: Optional[str] = None,
+    python_bin: str = "python",
 ) -> dict:
     """
     Validate master file entries, write launch_meta.json, and submit N SLURM
@@ -227,17 +198,17 @@ def launch(
         mem: SLURM memory request (e.g. ``"32G"``).
         cpus: ``--cpus-per-task`` value (segmentation is single-threaded per
             scan, so 1–4 is typical).
-        env_activate: Shell script to ``source`` before the worker command.
-        conda_env: Conda environment for ``conda run`` (alternative to
-            *env_activate*).
+        python_bin: Full path to the Python interpreter on the compute nodes
+            (e.g. ``"/path/to/env/bin/python"``). Use the absolute path so
+            the job does not depend on the node knowing about any conda or
+            virtual environment activation.
 
     Returns:
         dict with keys ``'slurm_ids'``, ``'tmp_dir'``, ``'n_scans'``.
     """
-    master_file  = Path(master_file)
-    output_file  = Path(output_file)
-    mask_file    = Path(mask_file)
-    env_activate = Path(env_activate) if env_activate else None
+    master_file = Path(master_file)
+    output_file = Path(output_file)
+    mask_file   = Path(mask_file)
 
     tmp_dir = output_file.parent / (output_file.stem + "_tmp")
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -273,8 +244,7 @@ def launch(
         "time":              time,
         "mem":               mem,
         "cpus":              cpus,
-        "env_activate":      str(env_activate) if env_activate else None,
-        "conda_env":         conda_env,
+        "python_bin":        python_bin,
     }
     sidecar = tmp_dir / "launch_meta.json"
     sidecar.write_text(json.dumps(launch_meta, indent=2))
@@ -301,8 +271,7 @@ def launch(
             time_limit=time,
             mem=mem,
             cpus=cpus,
-            env_activate=env_activate,
-            conda_env=conda_env,
+            python_bin=python_bin,
             log_dir=log_dir,
         )
         slurm_ids.append(sid)

@@ -70,7 +70,6 @@ def _require_imaged11() -> None:
         import ImageD11 as _id11
         import ImageD11.columnfile    # noqa: F401 — registers sub-module on _id11
         import ImageD11.cImageD11 as _cid11
-        import ImageD11.parameters    # noqa: F401
         import ImageD11.sparseframe as _sf
         from ImageD11.sinograms import lima_segmenter as _ls
         from ImageD11.sinograms.point_by_point import PBP as _PBP, PBPMap as _PBPMap
@@ -144,7 +143,7 @@ def poni_to_par(
         o21 (int, optional): Detector flip matrix element — see above.
         o22 (int, optional): Detector flip matrix element — see above.
     """
-    _require_imaged11()
+    import ImageD11.parameters as _id11_params  # pure Python — safe before C extensions load
     ai = AzimuthalIntegrator()
     ai.load(str(poni_file))
     theta1, theta2, theta3 = ai.rot1, ai.rot2, ai.rot3
@@ -181,7 +180,7 @@ def poni_to_par(
     if cell_params:
         geom.update(cell_params)
 
-    pars = ImageD11.parameters.parameters(**geom)
+    pars = _id11_params.parameters(**geom)
     pars.saveparameters(str(par_file))
 
 
@@ -809,7 +808,6 @@ class S3DXRDSlice:
         phase_name: Optional[str] = None,
         symmetry: str = "cubic",
     ):
-        _require_imaged11()
         self.master_file = str(master_file)
         self.mask_file = str(mask_file)
         self.par_file = str(par_file)

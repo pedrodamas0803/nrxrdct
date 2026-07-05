@@ -401,6 +401,7 @@ def merge(
     output_file: Union[str, Path],
     *,
     overwrite: bool = False,
+    n_threads: int = 8,
 ) -> List:
     """
     Assemble per-scan ``.npz`` tmp files into ``segmented.h5``.
@@ -410,14 +411,20 @@ def merge(
     has the same format as :func:`~nrxrdct.xrdct.s3dxrd.segment_slice`, so it
     can be fed directly to :func:`~nrxrdct.xrdct.s3dxrd.build_columnfile`.
 
+    Reading the ``.npz`` files is done in parallel with a thread pool;
+    writing to HDF5 is serial (h5py does not support concurrent writes).
+
     Args:
         tmp_dir: Tmp directory written by the workers.
         output_file: Destination ``segmented.h5``.
         overwrite: If ``True``, re-merge scans already present in *output_file*.
+        n_threads: Number of threads for parallel ``.npz`` reading. Helps most
+            on network/parallel filesystems (Lustre, GPFS).
 
     Returns:
         list[:class:`~nrxrdct.xrdct.s3dxrd.SegmentationResult`] in scan order.
     """
+    from concurrent.futures import ThreadPoolExecutor
     from nrxrdct.xrdct.s3dxrd import SegmentationResult, _read_scan_group, _write_scan_group
 
     tmp_dir     = Path(tmp_dir)
@@ -436,36 +443,30 @@ def merge(
     translation_motor = launch_meta.get("translation_motor", "dty")
     n_total           = len(valid_entries)
 
-    results: list = []
-    n_merged = n_skipped = n_missing = 0
+    # Determine which scans are already in the output (read-only pass).
+    already_merged: set = set()
+    if output_file.exists() and not overwrite:
+        with h5py.File(output_file, "r") as hr:
+            seg = hr.get("segmented", {})
+            already_merged = {ii for ii in range(n_total) if f"scan_{ii:04d}" in seg}
 
-    with h5py.File(output_file, "a") as hout:
-        for ii in tqdm(range(n_total), desc="Merging scans"):
-            group_path = f"segmented/scan_{ii:04d}"
-            npz_path   = tmp_dir / f"scan_{ii:04d}.npz"
-            meta_path  = tmp_dir / f"scan_{ii:04d}.meta.json"
+    to_load = set(range(n_total)) - already_merged
 
-            if group_path in hout and not overwrite:
-                results.append(_read_scan_group(hout[group_path], translation_motor))
-                n_skipped += 1
-                continue
-
-            if not npz_path.exists():
-                print(f"  ⚠  scan_{ii:04d}.npz missing — skipping")
-                n_missing += 1
-                continue
-
-            data  = np.load(npz_path)
-            if meta_path.exists():
-                with open(meta_path) as f:
-                    meta  = json.load(f)
-                entry = meta["entry"]
-                dty   = meta["dty"]
+    # Read .npz + .meta.json files in parallel (pure I/O, no HDF5 involved).
+    def _load(ii: int):
+        npz  = tmp_dir / f"scan_{ii:04d}.npz"
+        meta = tmp_dir / f"scan_{ii:04d}.meta.json"
+        if not npz.exists():
+            return ii, None
+        try:
+            data = np.load(npz)
+            if meta.exists():
+                with open(meta) as f:
+                    m = json.load(f)
+                entry, dty = m["entry"], m["dty"]
             else:
-                entry = valid_entries[ii]
-                dty   = dty_values[ii]
-
-            result = SegmentationResult(
+                entry, dty = valid_entries[ii], dty_values[ii]
+            return ii, SegmentationResult(
                 entry         = entry,
                 dty           = dty,
                 sc            = data["sc"],
@@ -474,6 +475,33 @@ def merge(
                 sum_intensity = data["sum_intensity"],
                 n_pixels      = data["n_pixels"],
             )
+        except Exception as e:
+            print(f"  ✗  scan_{ii:04d}: load error — {e}")
+            return ii, None
+
+    print(f"Loading {len(to_load)} scans with {n_threads} threads …")
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = {ii: pool.submit(_load, ii) for ii in to_load}
+    # pool.__exit__ waits for all reads to finish before writing begins.
+
+    # Write serially in scan order (HDF5 constraint).
+    results: list = []
+    n_merged = n_skipped = n_missing = 0
+
+    with h5py.File(output_file, "a") as hout:
+        for ii in tqdm(range(n_total), desc="Merging scans"):
+            group_path = f"segmented/scan_{ii:04d}"
+
+            if ii in already_merged:
+                results.append(_read_scan_group(hout[group_path], translation_motor))
+                n_skipped += 1
+                continue
+
+            _, result = futures[ii].result()
+            if result is None:
+                print(f"  ⚠  scan_{ii:04d}.npz missing — skipping")
+                n_missing += 1
+                continue
 
             if overwrite and group_path in hout:
                 del hout[group_path]

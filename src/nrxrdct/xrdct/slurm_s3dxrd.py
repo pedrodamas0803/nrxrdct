@@ -479,38 +479,48 @@ def merge(
             print(f"  ✗  scan_{ii:04d}: load error — {e}")
             return ii, None
 
-    # Submit all reads immediately; the pool runs in the background while we write.
-    # futures[ii].result() blocks only until that specific scan is ready, so at
-    # most ~n_threads scans are held in memory at any point.
-    pool    = ThreadPoolExecutor(max_workers=n_threads)
-    futures = {ii: pool.submit(_load, ii) for ii in to_load}
+    # Batch loop: read a batch in parallel, then write it serially.
+    # The ThreadPoolExecutor context manager waits for all reads to complete
+    # before any h5py operation starts, preventing heap corruption from
+    # concurrent numpy (zlib) and HDF5 C library allocations.
+    batch_size = n_threads * 4  # scans buffered per round; controls peak memory use
 
-    # Write serially in scan order (HDF5 constraint).
     results: list = []
     n_merged = n_skipped = n_missing = 0
 
-    with h5py.File(output_file, "a") as hout:
-        for ii in tqdm(range(n_total), desc="Merging scans"):
-            group_path = f"segmented/scan_{ii:04d}"
+    with h5py.File(output_file, "a") as hout, \
+         tqdm(total=n_total, desc="Merging scans") as pbar:
 
-            if ii in already_merged:
-                results.append(_read_scan_group(hout[group_path], translation_motor))
-                n_skipped += 1
-                continue
+        for batch_start in range(0, n_total, batch_size):
+            batch_iis  = list(range(batch_start, min(batch_start + batch_size, n_total)))
+            batch_load = [ii for ii in batch_iis if ii in to_load]
 
-            _, result = futures[ii].result()
-            if result is None:
-                print(f"  ⚠  scan_{ii:04d}.npz missing — skipping")
-                n_missing += 1
-                continue
+            # Parallel reads — pool exits (joins all threads) before h5py is touched.
+            if batch_load:
+                with ThreadPoolExecutor(max_workers=n_threads) as pool:
+                    futs = {ii: pool.submit(_load, ii) for ii in batch_load}
+                loaded = {ii: futs[ii].result() for ii in batch_load}
+            else:
+                loaded = {}
 
-            if overwrite and group_path in hout:
-                del hout[group_path]
-            _write_scan_group(hout, group_path, result, translation_motor)
-            results.append(result)
-            n_merged += 1
-
-    pool.shutdown(wait=False)  # all futures already done by this point
+            # Serial writes — no threads running.
+            for ii in batch_iis:
+                gp = f"segmented/scan_{ii:04d}"
+                if ii in already_merged:
+                    results.append(_read_scan_group(hout[gp], translation_motor))
+                    n_skipped += 1
+                elif ii in loaded:
+                    _, result = loaded[ii]
+                    if result is None:
+                        print(f"  ⚠  scan_{ii:04d}.npz missing — skipping")
+                        n_missing += 1
+                    else:
+                        if overwrite and gp in hout:
+                            del hout[gp]
+                        _write_scan_group(hout, gp, result, translation_motor)
+                        results.append(result)
+                        n_merged += 1
+                pbar.update(1)
 
     print(
         f"\n✓  Merge complete — {n_merged} merged, "

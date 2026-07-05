@@ -49,6 +49,7 @@ nav:
       - Typical Workflow: user-guide/workflow.md
       - SLURM / HPC Integration: user-guide/slurm.md
       - GPU Support: user-guide/gpu.md
+      - Scanning 3DXRD (s3DXRD): user-guide/s3dxrd.md
     - Laue Diffraction:
       - Diffraction and Laue Theory: user-guide/laue_theory.md
       - Laue Theory References: user-guide/laue_theory_refs.md
@@ -91,6 +92,7 @@ nav:
       - reconstruction: api/reconstruction.md
       - visualization: api/visualization.md
       - volume: api/volume.md
+      - s3dxrd: api/s3dxrd.md
       - slurm_reconstruction: api/slurm_reconstruction.md
     - laue:
       - camera: api/laue/camera.md

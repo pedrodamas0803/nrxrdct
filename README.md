@@ -13,6 +13,7 @@
 - [XRD-CT volume analysis](#xrd-ct-volume-analysis)
 - [HPC / SLURM integration](#hpc--slurm-integration)
 - [GPU support](#gpu-support)
+- [Scanning 3DXRD (s3DXRD)](#scanning-3dxrd-s3dxrd)
 - [Laue diffraction](#laue-diffraction)
 - [Dependencies](#dependencies)
 - [Acknowledgements](#acknowledgements)
@@ -26,7 +27,7 @@
 | Subpackage | What it does |
 |---|---|
 | `nrxrdct.azimuthal` | Parallelised 1-D and CAKE azimuthal integration via pyFAI; SLURM pipeline for large datasets |
-| `nrxrdct.xrdct` | Sinogram assembly, ASTRA tomographic reconstruction, `ReconstructedVolume` for per-voxel refinement, napari visualisation |
+| `nrxrdct.xrdct` | Sinogram assembly, ASTRA tomographic reconstruction, `ReconstructedVolume` for per-voxel refinement, napari visualisation, scanning-3DXRD (`s3dxrd`) single-crystal orientation mapping |
 | `nrxrdct.rietveld` | GSAS-II scripting wrappers — `BaseRefinement`, `InstrumentCalibration`, pre-built refinement dictionaries |
 | `nrxrdct.fitting` | 1-D peak fitting and NMF decomposition for hyperspectral phase mapping |
 | `nrxrdct.fluo` | XRF sinogram loading, emission line look-up via xraylib, spectral fitting |
@@ -152,6 +153,7 @@ src/nrxrdct/
 │   ├── reconstruction.py# ASTRA tomographic reconstruction
 │   ├── volume.py        # ReconstructedVolume — per-voxel refinement and maps
 │   ├── visualization.py # napari-based interactive viewers
+│   ├── s3dxrd.py        # Scanning 3DXRD — segmentation, indexing, poni_to_par
 │   └── slurm_reconstruction/
 │       └── cli.py       # nrxrdct-slurm-recon entry point
 └── laue/                # Polychromatic (Laue) diffraction — self-contained
@@ -442,6 +444,31 @@ nrxrdct-slurm check \
 
 ---
 
+## Scanning 3DXRD (s3DXRD)
+
+`nrxrdct.xrdct.s3dxrd` reuses the exact same raw detector frames read for azimuthal (powder) integration, but instead of averaging Bragg spots away, segments and indexes them point-by-point across the scanned rotation/translation grid — recovering a per-voxel single-crystal orientation map on the same real-space cross-section that the powder signal is reconstructed onto. Built on [ImageD11](https://github.com/FABLE-3DXRD/ImageD11) (optional `xrdct` extra), driving its segmentation, columnfile, and point-by-point indexing primitives directly rather than its Bliss-folder-based `DataSet`.
+
+```python
+from nrxrdct.xrdct import S3DXRDSlice, SegmentationOptions, poni_to_par
+
+# only needed once, if you don't already have an ImageD11 .par file
+poni_to_par("detector.poni", "detector.par", cell_params={
+    "cell__a": 5.41143, "cell__b": 5.41143, "cell__c": 5.41143,
+    "cell_alpha": 90.0, "cell_beta": 90.0, "cell_gamma": 90.0,
+    "cell_lattice_[P,A,B,C,I,F,R]": 225,
+})
+
+sl = S3DXRDSlice("scan.h5", "mask.edf", "detector.par", sample_name="sample1")
+sl.segment("segmented.h5", options=SegmentationOptions(cut=50, pixels_in_spot=3))
+sl.build_columnfile()
+sl.index("grains.txt", n_procs=8)
+sl.save("s3dxrd_slice.h5")
+```
+
+See the [Scanning 3DXRD guide](docs/user-guide/s3dxrd.md) for calibration details, the full pipeline stage-by-stage, and how to superpose the result with the powder reconstruction.
+
+---
+
 ## Laue diffraction
 
 `nrxrdct.laue` covers the full polychromatic (Laue) diffraction analysis pipeline, from forward simulation to per-pixel orientation and strain maps, targeting synchrotron micro-Laue experiments (e.g. BM32 at the ESRF).
@@ -567,6 +594,7 @@ grain_map = gmap.collect_strain_map(grain_index=0)
 |---|---|---|
 | `astra-toolbox` | `xrdct.reconstruction` | Tomographic reconstruction (GPU + CPU) |
 | `GSAS-II` | `xrdct.volume`, `rietveld` | Rietveld refinement scripting |
+| `ImageD11` | `xrdct.s3dxrd` | Scanning-3DXRD segmentation, columnfiles, point-by-point indexing |
 | `orix` | `laue` | IPF colour keys and orientation symmetry |
 | `fabio` | `azimuthal.integration` | Reading mask files (`.edf`, `.cbf`) |
 | `hdf5plugin` | `xrdct` | Compressed HDF5 dataset support |
@@ -580,6 +608,13 @@ grain_map = gmap.collect_strain_map(grain_index=0)
 ```bash
 uv sync --extra laue        # with uv
 pip install "nrxrdct[laue]" # with pip
+```
+
+**XRD-CT extras (`ImageD11`) — declared optional extra:**
+
+```bash
+uv sync --extra xrdct        # with uv
+pip install "nrxrdct[xrdct]" # with pip
 ```
 
 **GSAS-II — via conda (recommended):**

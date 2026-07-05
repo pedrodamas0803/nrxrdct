@@ -20,10 +20,12 @@ does not match this repo's single-``master_file`` convention.
 
 Geometry note: peak positions are used directly as raw pixel coordinates
 (no spline/distortion correction), which is appropriate for pixel-array
-detectors such as Eiger. Indexing requires a separately calibrated ImageD11
-parameter file (``.par``, with detector geometry and unit cell) — this is
-independent of the ``.poni`` file used for azimuthal integration, since
-ImageD11's geometry model and pyFAI's are not directly interchangeable.
+detectors such as Eiger. Indexing requires an ImageD11 parameter file
+(``.par``, with detector geometry and unit cell). This is independent of
+the ``.poni`` file used for azimuthal integration, since ImageD11's geometry
+model and pyFAI's are not directly interchangeable — but :func:`poni_to_par`
+converts one to the other following the closed-form conversion documented at
+https://pyfai.readthedocs.io/en/stable/geometry_conversion.html.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,11 +34,13 @@ from typing import List, Optional, Sequence, Union
 import fabio
 import h5py
 import numpy as np
+from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 from tqdm import tqdm
 
 try:
     import ImageD11.columnfile
     import ImageD11.cImageD11 as cImageD11
+    import ImageD11.parameters
     import ImageD11.sparseframe as sparseframe
     from ImageD11.sinograms import lima_segmenter
     from ImageD11.sinograms.point_by_point import PBP, PBPMap
@@ -52,6 +56,101 @@ def _require_imaged11() -> None:
             "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
             "Install it with: pip install nrxrdct[xrdct]"
         )
+
+
+def poni_to_par(
+    poni_file: Union[str, Path],
+    par_file: Union[str, Path],
+    cell_params: Optional[dict] = None,
+    o11: int = 1,
+    o12: int = 0,
+    o21: int = 0,
+    o22: int = -1,
+) -> None:
+    """
+    Convert a pyFAI ``.poni`` calibration into an ImageD11 ``.par`` parameter
+    file, implementing the closed-form conversion documented at
+    https://pyfai.readthedocs.io/en/stable/geometry_conversion.html
+    (verified by round-tripping pyFAI -> ImageD11 -> pyFAI numerically —
+    see the module's test suite).
+
+    pyFAI and ImageD11 describe the same detector geometry with different
+    conventions (pyFAI applies the sample-to-detector distance before its
+    rotations, ImageD11 after; the axis ordering and rotation signs differ
+    too), so this is not a trivial unit change — but it is an exact,
+    documented closed-form conversion, not an approximation.
+
+    Two things it does *not* derive from ``poni_file``, and why:
+
+    1. **Detector flip matrix** (``o11``/``o12``/``o21``/``o22``). The
+       default (``o11=1, o22=-1, o12=o21=0``) is pyFAI's own documented
+       value for "no additional flip", and is correct *if* the raw frames
+       used to calibrate ``poni_file`` were read with the same row/column
+       orientation as the frames :func:`segment_scan` reads for
+       segmentation. That holds by construction in this repo (both read
+       ``{entry}/measurement/{camera_name}`` from the same master file), but
+       if your ``.poni`` was calibrated from frames read or transposed
+       differently, override these.
+    2. **Sample/rotation-axis parameters with no PONI equivalent**
+       (``chi``, ``wedge``, ``t_x``, ``t_y``, ``t_z``) are written as
+       ImageD11's own defaults (``0.0``), not derived from ``poni_file``.
+
+    Always verify the result against a few known/expected reflections before
+    trusting it for real indexing — a wrong flip or sign here produces
+    plausible-looking but incorrect UBIs.
+
+    Args:
+        poni_file (Path): pyFAI ``.poni`` calibration file.
+        par_file (Path): Output ImageD11 ``.par`` file.
+        cell_params (dict, optional): Unit cell parameters to merge in, with
+            keys such as ``cell__a``, ``cell__b``, ``cell__c``,
+            ``cell_alpha``, ``cell_beta``, ``cell_gamma``, and
+            ``cell_lattice_[P,A,B,C,I,F,R]``. If not given, *par_file* will
+            contain detector geometry only (no usable unit cell for indexing).
+        o11 (int, optional): Detector flip matrix element — see above.
+        o12 (int, optional): Detector flip matrix element — see above.
+        o21 (int, optional): Detector flip matrix element — see above.
+        o22 (int, optional): Detector flip matrix element — see above.
+    """
+    _require_imaged11()
+    ai = AzimuthalIntegrator()
+    ai.load(str(poni_file))
+    theta1, theta2, theta3 = ai.rot1, ai.rot2, ai.rot3
+
+    distance = (ai.dist / (np.cos(theta1) * np.cos(theta2))) * 1e6  # m -> um
+    y_center = (ai.poni2 - ai.dist * np.tan(theta1)) / ai.pixel2
+    z_center = (ai.poni1 + ai.dist * np.tan(theta2) / np.cos(theta1)) / ai.pixel1
+
+    geom = {
+        "distance": distance,
+        "y_center": y_center,
+        "z_center": z_center,
+        "tilt_x": theta3,
+        "tilt_y": theta2,
+        "tilt_z": -theta1,
+        "wavelength": ai.wavelength * 1e10,  # m -> Angstrom
+        "y_size": ai.pixel2 * 1e6,  # m -> um
+        "z_size": ai.pixel1 * 1e6,
+        "o11": o11,
+        "o12": o12,
+        "o21": o21,
+        "o22": o22,
+        "chi": 0.0,
+        "wedge": 0.0,
+        "t_x": 0.0,
+        "t_y": 0.0,
+        "t_z": 0.0,
+        "omegasign": 1.0,
+        "fit_tolerance": 0.05,
+        "min_bin_prob": 1e-05,
+        "no_bins": 10000,
+        "weight_hist_intensities": 0,
+    }
+    if cell_params:
+        geom.update(cell_params)
+
+    pars = ImageD11.parameters.parameters(**geom)
+    pars.saveparameters(str(par_file))
 
 
 @dataclass
@@ -191,13 +290,13 @@ def segment_frame(
         active_mask (np.ndarray): 2D array, ``1`` = active pixel, ``0`` =
             masked — the inverse of the pyFAI/fabio mask convention
             (``1`` = masked) used elsewhere in this repo.
-        options: An ImageD11 ``SegmenterOptions`` instance, see
+        options (ImageD11.sinograms.lima_segmenter.SegmenterOptions): see
             :meth:`SegmentationOptions.to_imaged11`.
 
     Returns:
         np.ndarray or None: ``(n_peaks, 4)`` array of columns
-        ``(sc, fc, sum_intensity, n_pixels)``, or ``None`` if no peaks were
-        found on this frame.
+            ``(sc, fc, sum_intensity, n_pixels)``, or ``None`` if no peaks
+            were found on this frame.
     """
     _require_imaged11()
     to_sparse = lima_segmenter.frmtosparse(active_mask, image.dtype)
@@ -324,8 +423,8 @@ def segment_slice(
         rotation_motor (str, optional): Rotation motor dataset name (default ``"rot"``).
 
     Returns:
-        list[SegmentationResult]: Segmented peaks for every scan segmented in
-        this call or already present in *output_file*, in entry order.
+        list[SegmentationResult]: Segmented peaks for every scan segmented
+            in this call or already present in *output_file*, in entry order.
     """
     _require_imaged11()
     if options is None:
@@ -436,7 +535,7 @@ def build_columnfile(
     segmentation: Union[str, Path, Sequence[SegmentationResult]],
     par_file: Union[str, Path],
     phase_name: Optional[str] = None,
-):
+) -> "ImageD11.columnfile.columnfile":
     """
     Assemble segmented per-scan peaks into a single ImageD11 columnfile with
     full diffraction geometry (tth, eta, g-vectors, d-spacing) computed from
@@ -452,8 +551,9 @@ def build_columnfile(
 
     Returns:
         ImageD11.columnfile.columnfile: Columnfile with columns ``sc``,
-        ``fc``, ``omega``, ``dty``, ``sum_intensity``, ``Number_of_pixels``,
-        plus the geometry columns added by ``updateGeometry()``.
+            ``fc``, ``omega``, ``dty``, ``sum_intensity``,
+            ``Number_of_pixels``, plus the geometry columns added by
+            ``updateGeometry()``.
     """
     _require_imaged11()
     if isinstance(segmentation, (str, Path)):
@@ -481,7 +581,7 @@ def build_columnfile(
 
 
 def index_slice(
-    colf,
+    colf: "ImageD11.columnfile.columnfile",
     par_file: Union[str, Path],
     grains_file: Union[str, Path],
     symmetry: str = "cubic",

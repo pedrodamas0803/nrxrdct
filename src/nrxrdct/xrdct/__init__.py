@@ -38,6 +38,7 @@ from .s3dxrd import (
     combine_with_powder,
     index_slice,
     load_segmentation,
+    poni_to_par,
     save_segmentation,
     segment_frame,
     segment_scan,
@@ -98,6 +99,7 @@ __all__ = [
     "build_columnfile",
     "index_slice",
     "combine_with_powder",
+    "poni_to_par",
     # Visualization
     "visualize_volume",
     "visualize_slices",

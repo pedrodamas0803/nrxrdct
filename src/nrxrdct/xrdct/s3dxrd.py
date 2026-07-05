@@ -38,10 +38,11 @@ import numpy as np
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 from tqdm import tqdm
 
-_IMAGED11_AVAILABLE: "bool | None" = None   # None = not yet attempted
+_SEG_AVAILABLE: "bool | None" = None    # cImageD11 + sparseframe + lima_segmenter
+_IDX_AVAILABLE: "bool | None" = None    # point_by_point (imports tensor_map via Numba)
 
-# Module-level names populated lazily by _require_imaged11(); declared here so
-# static analysers don't flag undefined names in the functions that use them.
+# Module-level names populated lazily; declared here so static analysers don't
+# flag undefined names in the functions that use them.
 ImageD11 = None
 cImageD11 = None
 sparseframe = None
@@ -49,44 +50,63 @@ lima_segmenter = None
 PBP = None
 PBPMap = None
 
+_ERR = (
+    "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
+    "Install it with: pip install nrxrdct[xrdct]"
+)
 
-def _require_imaged11() -> None:
-    """Import ImageD11 on first call and bind sub-modules as module globals.
 
-    Deferred to avoid loading cImageD11 (a C extension) at module import time,
-    which can segfault Jupyter kernels when pyFAI and ImageD11 link against
-    different OpenMP runtimes (Intel libomp vs GCC libgomp).
+def _require_seg() -> None:
+    """Load the segmentation C extensions (cImageD11, sparseframe, lima_segmenter).
+
+    Kept separate from _require_idx() so SLURM segmentation workers never
+    import point_by_point → tensor_map, which triggers a Numba JIT compile
+    that can fail with stale caches on heterogeneous cluster nodes.
     """
-    global _IMAGED11_AVAILABLE
-    global ImageD11, cImageD11, sparseframe, lima_segmenter, PBP, PBPMap
-    if _IMAGED11_AVAILABLE is True:
+    global _SEG_AVAILABLE, cImageD11, sparseframe, lima_segmenter
+    if _SEG_AVAILABLE is True:
         return
-    if _IMAGED11_AVAILABLE is False:
-        raise ImportError(
-            "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
-            "Install it with: pip install nrxrdct[xrdct]"
-        )
+    if _SEG_AVAILABLE is False:
+        raise ImportError(_ERR)
     try:
-        import ImageD11 as _id11
-        import ImageD11.columnfile    # noqa: F401 — registers sub-module on _id11
         import ImageD11.cImageD11 as _cid11
         import ImageD11.sparseframe as _sf
         from ImageD11.sinograms import lima_segmenter as _ls
-        from ImageD11.sinograms.point_by_point import PBP as _PBP, PBPMap as _PBPMap
 
-        ImageD11       = _id11
         cImageD11      = _cid11
         sparseframe    = _sf
         lima_segmenter = _ls
+        _SEG_AVAILABLE = True
+    except ImportError:
+        _SEG_AVAILABLE = False
+        raise ImportError(_ERR)
+
+
+def _require_idx() -> None:
+    """Load the indexing modules (ImageD11.columnfile + point_by_point).
+
+    point_by_point imports tensor_map which has Numba-compiled gufuncs —
+    only load this when indexing is actually requested, never in workers.
+    """
+    global _IDX_AVAILABLE, ImageD11, PBP, PBPMap
+    _require_seg()   # columnfile and indexing also need the seg layer
+    if _IDX_AVAILABLE is True:
+        return
+    if _IDX_AVAILABLE is False:
+        raise ImportError(_ERR)
+    try:
+        import ImageD11 as _id11
+        import ImageD11.columnfile    # noqa: F401 — registers sub-module on _id11
+        from ImageD11.sinograms.point_by_point import PBP as _PBP, PBPMap as _PBPMap
+
+        ImageD11       = _id11
         PBP            = _PBP
         PBPMap         = _PBPMap
-        _IMAGED11_AVAILABLE = True
+        _IDX_AVAILABLE = True
     except ImportError:
-        _IMAGED11_AVAILABLE = False
-        raise ImportError(
-            "ImageD11 is required for scanning-3DXRD (s3dxrd) processing. "
-            "Install it with: pip install nrxrdct[xrdct]"
-        )
+        _IDX_AVAILABLE = False
+        raise ImportError(_ERR)
+
 
 
 def poni_to_par(
@@ -215,7 +235,7 @@ class SegmentationOptions:
         (which only loads a mask from ``maskfile`` and otherwise leaves it
         ``None``).
         """
-        _require_imaged11()
+        _require_seg()
         opts = lima_segmenter.SegmenterOptions(
             cut=self.cut, howmany=self.howmany, pixels_in_spot=self.pixels_in_spot
         )
@@ -329,7 +349,7 @@ def segment_frame(
             ``(sc, fc, sum_intensity, n_pixels)``, or ``None`` if no peaks
             were found on this frame.
     """
-    _require_imaged11()
+    _require_seg()
     to_sparse = lima_segmenter.frmtosparse(active_mask, image.dtype)
     nnz, row, col, val = to_sparse(image, options.cut)
     sf = lima_segmenter.clean(nnz, row, col, val, config_options=options)
@@ -378,7 +398,7 @@ def segment_scan(
     Returns:
         SegmentationResult: Segmented peaks for this scan.
     """
-    _require_imaged11()
+    _require_seg()
     active_mask = (1 - mask).astype(np.uint8)
     id11_options = options.to_imaged11(active_mask)
 
@@ -474,7 +494,7 @@ def segment_slice(
         list[SegmentationResult]: Segmented peaks for every scan segmented
             in this call or already present in *output_file*, in entry order.
     """
-    _require_imaged11()
+    _require_seg()
     if options is None:
         options = SegmentationOptions()
     mask = fabio.open(mask_file).data
@@ -613,7 +633,7 @@ def build_columnfile(
             ``Number_of_pixels``, plus the geometry columns added by
             ``updateGeometry()``.
     """
-    _require_imaged11()
+    _require_idx()
     if isinstance(segmentation, (str, Path)):
         results = load_segmentation(segmentation)
     else:
@@ -700,7 +720,7 @@ def index_slice(
     Returns:
         IndexingResult: Per-voxel single-crystal orientation map for this slice.
     """
-    _require_imaged11()
+    _require_idx()
     dty_values = np.asarray(colf.dty)
     ybincens = np.array(sorted(set(np.round(dty_values, 6))))
     if len(ybincens) < 2:

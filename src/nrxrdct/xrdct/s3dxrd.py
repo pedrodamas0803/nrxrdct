@@ -27,6 +27,7 @@ model and pyFAI's are not directly interchangeable — but :func:`poni_to_par`
 converts one to the other following the closed-form conversion documented at
 https://pyfai.readthedocs.io/en/stable/geometry_conversion.html.
 """
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence, Union
@@ -393,6 +394,18 @@ def segment_scan(
     )
 
 
+def _segment_scan_worker(args: tuple) -> tuple:
+    """Top-level worker so ProcessPoolExecutor can pickle it."""
+    ii, master_file, entry, mask, options, camera_name, translation_motor, rotation_motor = args
+    result = segment_scan(
+        master_file, entry, mask, options,
+        camera_name=camera_name,
+        translation_motor=translation_motor,
+        rotation_motor=rotation_motor,
+    )
+    return ii, result
+
+
 def segment_slice(
     master_file: Union[str, Path],
     output_file: Union[str, Path],
@@ -401,6 +414,7 @@ def segment_slice(
     camera_name: str = "eiger",
     translation_motor: str = "dty",
     rotation_motor: str = "rot",
+    n_workers: int = 1,
 ) -> List[SegmentationResult]:
     """
     Segment every scan of one XRD-CT slice (a full rotation+translation
@@ -421,6 +435,10 @@ def segment_slice(
         camera_name (str, optional): Detector dataset name (default ``"eiger"``).
         translation_motor (str, optional): Translation motor name (default ``"dty"``).
         rotation_motor (str, optional): Rotation motor dataset name (default ``"rot"``).
+        n_workers (int, optional): Number of parallel worker processes for
+            segmentation (default ``1``). Each worker processes one scan
+            independently; HDF5 writes are always serialised in the main
+            process. Set to ``os.cpu_count()`` to use all available cores.
 
     Returns:
         list[SegmentationResult]: Segmented peaks for every scan segmented
@@ -445,35 +463,45 @@ def segment_slice(
 
     print(f"\n✓  {len(valid_entries)}/{len(all_entries)} entries OK")
 
-    results = []
-    for ii, entry in enumerate(tqdm(valid_entries, desc="Segmenting scans")):
-        group_path = f"segmented/scan_{ii:04d}"
+    results_map: dict = {}
 
-        with h5py.File(output_file, "a") as hout:
+    # Scans already on disk — read them back without re-submitting.
+    pending_args = []
+    with h5py.File(output_file, "a") as hout:
+        for ii, entry in enumerate(valid_entries):
+            group_path = f"segmented/scan_{ii:04d}"
             if group_path in hout:
-                print(f"Skipping {group_path} (already done)")
-                results.append(_read_scan_group(hout[group_path], translation_motor))
-                continue
+                results_map[ii] = _read_scan_group(hout[group_path], translation_motor)
+            else:
+                pending_args.append(
+                    (ii, str(master_file), entry, mask, options,
+                     camera_name, translation_motor, rotation_motor)
+                )
 
-        try:
-            result = segment_scan(
-                master_file,
-                entry,
-                mask,
-                options,
-                camera_name=camera_name,
-                translation_motor=translation_motor,
-                rotation_motor=rotation_motor,
-            )
-        except (OSError, KeyError) as e:
-            print(f"  ✗ Failed to segment entry {entry}: {e} — skipping")
-            continue
+    n_cached = len(results_map)
+    if n_cached:
+        print(f"  {n_cached} scans already done — skipping")
 
-        with h5py.File(output_file, "a") as hout:
-            _write_scan_group(hout, group_path, result, translation_motor)
-        results.append(result)
+    if pending_args:
+        with ProcessPoolExecutor(max_workers=n_workers) as pool:
+            futures = {pool.submit(_segment_scan_worker, a): a[0] for a in pending_args}
+            with tqdm(total=len(futures), desc="Segmenting scans") as pbar:
+                for future in as_completed(futures):
+                    ii = futures[future]
+                    entry = valid_entries[ii]
+                    group_path = f"segmented/scan_{ii:04d}"
+                    try:
+                        _, result = future.result()
+                    except (OSError, KeyError) as e:
+                        print(f"  ✗ Failed to segment entry {entry}: {e} — skipping")
+                        pbar.update()
+                        continue
+                    with h5py.File(output_file, "a") as hout:
+                        _write_scan_group(hout, group_path, result, translation_motor)
+                    results_map[ii] = result
+                    pbar.update()
 
-    return results
+    return [results_map[ii] for ii in sorted(results_map)]
 
 
 def _write_scan_group(
@@ -769,6 +797,7 @@ class S3DXRDSlice:
         camera_name: str = "eiger",
         translation_motor: str = "dty",
         rotation_motor: str = "rot",
+        n_workers: int = 1,
     ) -> List[SegmentationResult]:
         """Segment Bragg-spot peaks from every scan of this slice. See :func:`segment_slice`."""
         self.segmentation = segment_slice(
@@ -779,6 +808,7 @@ class S3DXRDSlice:
             camera_name=camera_name,
             translation_motor=translation_motor,
             rotation_motor=rotation_motor,
+            n_workers=n_workers,
         )
         return self.segmentation
 

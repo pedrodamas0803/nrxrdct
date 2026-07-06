@@ -386,13 +386,13 @@ def build_ebl_qw_stacks(
         return stack
 
     defect = _pseudomorphic_pair(
-        "defect-filtering", InGaN_defect, c_InGaN_defect, GaN, c_GaN, n_rep=5, total_nm=80.0
+        "defect-filtering", stacking_dir, InGaN_defect, c_InGaN_defect, GaN, c_GaN, n_rep=5, total_nm=80.0
     )
     active = _pseudomorphic_pair(
-        "active region", InGaN_active, c_InGaN_active, GaN, c_GaN, n_rep=4, total_nm=40.0
+        "active region", stacking_dir, InGaN_active, c_InGaN_active, GaN, c_GaN, n_rep=4, total_nm=40.0
     )
     clad = _pseudomorphic_pair(
-        "optical cladding", InGaAlN_clad, c_InGaAlN_clad, GaAlN_clad, c_GaAlN_clad,
+        "optical cladding", stacking_dir, InGaAlN_clad, c_InGaAlN_clad, GaAlN_clad, c_GaAlN_clad,
         n_rep=8, total_nm=80.0,
     )
 

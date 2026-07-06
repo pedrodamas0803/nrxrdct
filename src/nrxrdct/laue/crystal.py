@@ -306,6 +306,7 @@ def build_inn(a=3.545, c=5.703):
 
 
 def build_ebl_qw_stacks(
+    UB=np.eye(3),
     x_in_defect=0.03,
     x_in_active=0.15,
     x_al_clad=0.10,
@@ -364,16 +365,21 @@ def build_ebl_qw_stacks(
         for k in ("C11", "C12", "C13", "C33", "C44")
     }
 
+    stacking_dir = UB @ np.array([0, 0, 1])
+
+    stacking_dir /= np.linalg.norm(stacking_dir)
+
+
     def _pseudomorphic_pair(name, well, c_well, barrier, c_barrier, n_rep, total_nm):
         """One LayeredCrystal repetition unit: well+barrier, evenly split, n_rep times."""
         stack = LayeredCrystal(name=name, stacking_direction=[0, 0, 1])
         t_period_A = total_nm * 10.0 / n_rep
         stack.add_pseudomorphic_layer(
-            well, orientation_along_z([0, 0, 1], well), t_period_A / 2,
+            well, stacking_dir, t_period_A / 2,
             a_sub, C13=c_well["C13"], C33=c_well["C33"], label=f"{well.name} (well)",
         )
         stack.add_pseudomorphic_layer(
-            barrier, orientation_along_z([0, 0, 1], barrier), t_period_A / 2,
+            barrier, stacking_dir, t_period_A / 2,
             a_sub, C13=c_barrier["C13"], C33=c_barrier["C33"], label=f"{barrier.name} (barrier)",
         )
         stack.set_repetitions(n_rep)
@@ -392,7 +398,7 @@ def build_ebl_qw_stacks(
 
     ebl = LayeredCrystal(name="EBL", stacking_direction=[0, 0, 1])
     ebl.add_pseudomorphic_layer(
-        AlGaN_ebl, orientation_along_z([0, 0, 1], AlGaN_ebl), 160.0 * 10,
+        AlGaN_ebl, stacking_dir, 160.0 * 10,
         a_sub, C13=c_AlGaN_ebl["C13"], C33=c_AlGaN_ebl["C33"], label="AlGaN (EBL)",
     )
     ebl.set_repetitions(1)

@@ -370,9 +370,9 @@ def build_ebl_qw_stacks(
     stacking_dir /= np.linalg.norm(stacking_dir)
 
 
-    def _pseudomorphic_pair(name, well, c_well, barrier, c_barrier, n_rep, total_nm):
+    def _pseudomorphic_pair(name, stacking_dir,  well, c_well, barrier, c_barrier, n_rep, total_nm):
         """One LayeredCrystal repetition unit: well+barrier, evenly split, n_rep times."""
-        stack = LayeredCrystal(name=name, stacking_direction=[0, 0, 1])
+        stack = LayeredCrystal(name=name, stacking_direction=stacking_dir)
         t_period_A = total_nm * 10.0 / n_rep
         stack.add_pseudomorphic_layer(
             well, stacking_dir, t_period_A / 2,

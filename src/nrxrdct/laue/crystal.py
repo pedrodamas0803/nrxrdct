@@ -396,7 +396,7 @@ def build_ebl_qw_stacks(
         n_rep=8, total_nm=80.0,
     )
 
-    ebl = LayeredCrystal(name="EBL", stacking_direction=[0, 0, 1])
+    ebl = LayeredCrystal(name="EBL", stacking_direction=stacking_dir)
     ebl.add_pseudomorphic_layer(
         AlGaN_ebl, stacking_dir, 160.0 * 10,
         a_sub, C13=c_AlGaN_ebl["C13"], C33=c_AlGaN_ebl["C33"], label="AlGaN (EBL)",

@@ -38,6 +38,8 @@ import os
 import numpy as np
 import xrayutilities as xu
 
+from .layers import LayeredCrystal, nitride_elastic_constants, orientation_along_z
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -274,3 +276,125 @@ def build_b2(a=2.881):
         occ=[0.5, 0.5, 1 / 3, 1 / 3, 1 / 3],
     )
     return xu.materials.Crystal("B2   Pm-3m", lat)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# III-NITRIDE WURTZITE BINARIES AND ALLOYS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_wurtzite_nitride(name, element, a, c):
+    """Build a wurtzite (SG 186) binary nitride the same way xrayutilities builds GaN."""
+    ce = nitride_elastic_constants(name)
+    lat = xu.materials.SGLattice(
+        186, a, c, atoms=[element, "N"], pos=[("2b", 0), ("2b", 3 / 8.0)]
+    )
+    cij = xu.materials.HexagonalElasticTensor(
+        ce["C11"] * 1e9, ce["C12"] * 1e9, ce["C13"] * 1e9, ce["C33"] * 1e9, ce["C44"] * 1e9
+    )
+    return xu.materials.Crystal(name, lat, cij)
+
+
+def build_aln(a=3.112, c=4.982):
+    """AlN, wurtzite (Vurgaftman & Meyer 2003 lattice constants)."""
+    return _build_wurtzite_nitride("AlN", "Al", a, c)
+
+
+def build_inn(a=3.545, c=5.703):
+    """InN, wurtzite (Vurgaftman & Meyer 2003 lattice constants)."""
+    return _build_wurtzite_nitride("InN", "In", a, c)
+
+
+def build_ebl_qw_stacks(
+    x_in_defect=0.03,
+    x_in_active=0.15,
+    x_al_clad=0.10,
+    x_in_clad=0.02,
+    x_al_ebl=0.20,
+):
+    """
+    Build the four repetition units of an EBL/QW nitride LED-laser stack:
+
+        160 nm AlGaN electron-blocking layer (EBL)        1x  (cap, top)
+        80 nm optical cladding   : InGaAlN / GaAlN MQW     8x
+        40 nm active region      : InGaN / GaN MQW         4x
+        80 nm defect-filtering   : InGaN / GaN MQW          5x  (bottom, on template)
+
+    Each group is its own `LayeredCrystal` "repetition unit" (one
+    `add_pseudomorphic_layer` pair + `set_repetitions`), since a single
+    `LayeredCrystal` only supports one repeat count. All layers are grown
+    pseudomorphically on a common GaN template (`a_substrate=GaN.lattice.a`),
+    [001] (c-axis) growth. Compositions are illustrative -- adjust to your
+    real epitaxy. Wells/barriers split the group's total thickness evenly.
+
+    Returns:
+        dict[str, LayeredCrystal]: keys `'defect'`, `'active'`, `'clad'`, `'ebl'`,
+        in growth order (bottom to top).
+
+    Example:
+        >>> stacks = build_ebl_qw_stacks()
+        >>> from nrxrdct.laue.simulation import simulate_laue_stack
+        >>> spots = sum(
+        ...     (simulate_laue_stack(s, camera, allowed_hkl=allowed)
+        ...      for s in stacks.values()), []
+        ... )
+    """
+    GaN = xu.materials.GaN
+    AlN = build_aln()
+    InN = build_inn()
+
+    InGaN_defect = xu.materials.Alloy(GaN, InN, x_in_defect)
+    InGaN_active = xu.materials.Alloy(GaN, InN, x_in_active)
+    GaAlN_clad = xu.materials.Alloy(GaN, AlN, x_al_clad)
+    InGaAlN_clad = xu.materials.Alloy(GaAlN_clad, InN, x_in_clad)
+    AlGaN_ebl = xu.materials.Alloy(GaN, AlN, x_al_ebl)
+
+    a_sub = GaN.lattice.a
+    c_GaN = nitride_elastic_constants("GaN")
+    # Elastic constants for each alloy, interpolated at its own composition
+    # (Vegard's law), matching how each Alloy crystal above was built.
+    c_InGaN_defect = nitride_elastic_constants("InN", x_in_defect, "GaN")
+    c_InGaN_active = nitride_elastic_constants("InN", x_in_active, "GaN")
+    c_GaAlN_clad = nitride_elastic_constants("AlN", x_al_clad, "GaN")
+    c_AlGaN_ebl = nitride_elastic_constants("AlN", x_al_ebl, "GaN")
+    # InGaAlN_clad is a quaternary (GaAlN base + InN): interpolate InN into
+    # the already-interpolated GaAlN_clad constants for the same x_in_clad.
+    c_InGaAlN_clad = {
+        k: x_in_clad * nitride_elastic_constants("InN")[k] + (1 - x_in_clad) * c_GaAlN_clad[k]
+        for k in ("C11", "C12", "C13", "C33", "C44")
+    }
+
+    def _pseudomorphic_pair(name, well, c_well, barrier, c_barrier, n_rep, total_nm):
+        """One LayeredCrystal repetition unit: well+barrier, evenly split, n_rep times."""
+        stack = LayeredCrystal(name=name, stacking_direction=[0, 0, 1])
+        t_period_A = total_nm * 10.0 / n_rep
+        stack.add_pseudomorphic_layer(
+            well, orientation_along_z([0, 0, 1], well), t_period_A / 2,
+            a_sub, C13=c_well["C13"], C33=c_well["C33"], label=f"{well.name} (well)",
+        )
+        stack.add_pseudomorphic_layer(
+            barrier, orientation_along_z([0, 0, 1], barrier), t_period_A / 2,
+            a_sub, C13=c_barrier["C13"], C33=c_barrier["C33"], label=f"{barrier.name} (barrier)",
+        )
+        stack.set_repetitions(n_rep)
+        return stack
+
+    defect = _pseudomorphic_pair(
+        "defect-filtering", InGaN_defect, c_InGaN_defect, GaN, c_GaN, n_rep=5, total_nm=80.0
+    )
+    active = _pseudomorphic_pair(
+        "active region", InGaN_active, c_InGaN_active, GaN, c_GaN, n_rep=4, total_nm=40.0
+    )
+    clad = _pseudomorphic_pair(
+        "optical cladding", InGaAlN_clad, c_InGaAlN_clad, GaAlN_clad, c_GaAlN_clad,
+        n_rep=8, total_nm=80.0,
+    )
+
+    ebl = LayeredCrystal(name="EBL", stacking_direction=[0, 0, 1])
+    ebl.add_pseudomorphic_layer(
+        AlGaN_ebl, orientation_along_z([0, 0, 1], AlGaN_ebl), 160.0 * 10,
+        a_sub, C13=c_AlGaN_ebl["C13"], C33=c_AlGaN_ebl["C33"], label="AlGaN (EBL)",
+    )
+    ebl.set_repetitions(1)
+
+    return {"defect": defect, "active": active, "clad": clad, "ebl": ebl}

@@ -1462,3 +1462,62 @@ class LayeredCrystal:
             fig.tight_layout()
 
         return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STACK COMBINATION HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def combine_stacks(stacks, name="combined"):
+    """
+    Merge an ordered sequence of LayeredCrystal objects (bottom to top) into
+    one flat LayeredCrystal with n_rep=1.
+
+    Each sub-stack's buffer layers are transferred in order as buffer layers of
+    the combined stack.  Each sub-stack's repeating unit is unrolled ``n_rep``
+    times as individual flat layers, preserving crystal, orientation matrix,
+    physical thickness, and d-spacing.  The result has a single coherent
+    structure factor that sums over the entire multi-section sequence with the
+    correct inter-layer phase relationships.
+
+    Args:
+        stacks : iterable of LayeredCrystal, or dict[str, LayeredCrystal]
+            Sub-stacks in physical order, bottom (substrate side) first.
+            If a dict is passed its values are used in insertion order.
+        name : str, optional
+            Name for the returned combined stack.
+
+    Returns:
+        combined : LayeredCrystal with n_rep=1.
+
+    Example:
+        >>> stacks = build_ebl_qw_stacks()               # returns dict
+        >>> full = combine_stacks(stacks, name="full LED stack")
+        >>> spots = simulate_laue_stack(full, cam, structure_model='coherent')
+    """
+    if isinstance(stacks, dict):
+        stacks = list(stacks.values())
+    else:
+        stacks = list(stacks)
+    if not stacks:
+        raise ValueError("stacks must be non-empty")
+
+    n_hat = stacks[0].n_hat.copy()
+    combined = LayeredCrystal(name=name, stacking_direction=n_hat)
+
+    for stack in stacks:
+        stack._update_offsets()
+        for lyr in stack.buffer_layers:
+            combined.add_buffer_layer(
+                lyr.crystal, lyr.U.copy(), lyr.thickness,
+                d_spacing=lyr.d, label=lyr.label,
+            )
+        for _ in range(stack.n_rep):
+            for lyr in stack.layers:
+                combined.add_layer(
+                    lyr.crystal, lyr.U.copy(), lyr.thickness,
+                    d_spacing=lyr.d, label=lyr.label,
+                )
+
+    return combined

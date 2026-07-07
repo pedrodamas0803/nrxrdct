@@ -67,6 +67,7 @@ from .laue_plotting import (
 from .layers import (
     Layer,
     LayeredCrystal,
+    combine_stacks,
     d_spacing_hkl,
     or_baker_nutting,
     or_from_directions,
@@ -205,6 +206,7 @@ __all__ = [
     # Layered structures
     "Layer",
     "LayeredCrystal",
+    "combine_stacks",
     "orientation_along_z",
     "or_from_directions",
     "or_kurdjumov_sachs",

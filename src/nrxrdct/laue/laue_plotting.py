@@ -2316,6 +2316,9 @@ def plot_laue_stack_spots(
     min_size: float = 8.0,
     show_divergence: bool = True,
     divergence_nsigma: float = 2.0,
+    image=None,
+    log_scale: bool = True,
+    image_alpha: float = 0.6,
     figsize=(9, 7),
     ax=None,
     out_path: str | None = "laue_stack_spots.png",
@@ -2352,6 +2355,11 @@ def plot_laue_stack_spots(
             run without divergence parameters).
         divergence_nsigma (float): Size of the drawn ellipse in units of σ.  Default `2.0` (≈ 86 %
             enclosed probability in 2-D).
+        image (ndarray of shape (Nv, Nh) or None): Raw detector image shown as a background.
+            Only used when `space='detector'`.  `None` → no background.
+        log_scale (bool): Apply logarithmic normalisation to *image* before display.
+            Default `True`.
+        image_alpha (float): Opacity of the background image.  Default `0.6`.
         figsize ((float, float)): Figure size in inches (ignored if *ax* is supplied).
         ax (matplotlib.axes.Axes, optional): Draw into an existing Axes; if *None* a new figure is created.
         out_path (str or None): Save the figure to this path.  `None` → do not save.
@@ -2416,6 +2424,25 @@ def plot_laue_stack_spots(
         for i, ph in enumerate(phases)
         for abs_m in abs_orders_sorted
     }
+
+    # ── Background detector image ─────────────────────────────────────────────
+    if image is not None and space == "detector":
+        img = np.asarray(image, dtype=float)
+        if log_scale:
+            vmin = max(img[img > 0].min(), 1.0) if np.any(img > 0) else 1.0
+            norm_img = mcolors.LogNorm(vmin=vmin, vmax=img.max())
+        else:
+            norm_img = mcolors.Normalize(vmin=img.min(), vmax=img.max())
+        ax.imshow(
+            img,
+            origin="upper",
+            cmap="inferno",
+            norm=norm_img,
+            aspect="equal",
+            interpolation="nearest",
+            alpha=image_alpha,
+            zorder=1,
+        )
 
     # ── Plot ──────────────────────────────────────────────────────────────────
     # Group by (phase, satellite_order) so each group is one scatter call

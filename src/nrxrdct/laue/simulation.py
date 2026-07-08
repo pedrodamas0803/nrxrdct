@@ -4857,3 +4857,73 @@ def depth_scan_image(
         "spot_hkls":       hkl_arr,
         "cos_in":          cos_in,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPOT / PEAK INTERSECTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def filter_spots_by_peaks(spots, peaks, tol_pix=5.0):
+    """
+    Keep only simulated spots that have a measured peak within *tol_pix* pixels.
+
+    Args:
+    spots : list of dict
+        Output of any ``simulate_laue*`` function.  Each dict must contain a
+        ``'pix'`` key with a ``(xcam, ycam)`` tuple (column, row) in detector
+        pixel coordinates.  Spots whose ``'pix'`` is ``None`` are always dropped.
+    peaks : array-like, shape (N, ≥2), or DataFrame with columns ``peak_X``, ``peak_Y``
+        Measured peak positions from the segmentation pipeline.
+        The first two columns (or ``peak_X`` / ``peak_Y`` columns) are interpreted
+        as *(x_col, y_row)* pixel coordinates, matching the ``'pix'`` convention
+        used by the spot dicts.
+        Accepted inputs:
+
+        * ``(N, ≥2)`` ndarray — columns 0 and 1 are ``peak_X`` and ``peak_Y``.
+          This is the format returned by :func:`~nrxrdct.laue.segmentation.convert_spotsfile2peaklist`.
+        * pandas DataFrame with ``'peak_X'`` and ``'peak_Y'`` columns.
+        * Any sequence of *(x, y)* pairs.
+
+    tol_pix : float, optional
+        Maximum Euclidean distance (pixels) between a simulated spot and a
+        measured peak for the spot to be retained.  Default: 5.0.
+
+    Returns:
+    list of dict
+        Subset of *spots* — same dict objects, same order — containing only
+        spots for which at least one peak lies within *tol_pix* pixels.
+
+    Example:
+    >>> peaklist = convert_spotsfile2peaklist('frame_00001.h5')
+    >>> spots = simulate_laue(crystal, U, camera)
+    >>> matched = filter_spots_by_peaks(spots, peaklist, tol_pix=8.0)
+    >>> print(f"{len(matched)}/{len(spots)} simulated spots matched a peak")
+    """
+    from scipy.spatial import KDTree
+
+    # ── Build (N, 2) array of measured peak positions ─────────────────────────
+    try:
+        import pandas as pd
+        if isinstance(peaks, pd.DataFrame):
+            xy_peaks = peaks[["peak_X", "peak_Y"]].to_numpy(dtype=float)
+        else:
+            xy_peaks = np.asarray(peaks, dtype=float)[:, :2]
+    except ImportError:
+        xy_peaks = np.asarray(peaks, dtype=float)[:, :2]
+
+    if len(xy_peaks) == 0:
+        return []
+
+    tree = KDTree(xy_peaks)
+
+    matched = []
+    for s in spots:
+        pix = s.get("pix")
+        if pix is None:
+            continue
+        dist, _ = tree.query(pix, workers=1)
+        if dist <= tol_pix:
+            matched.append(s)
+
+    return matched

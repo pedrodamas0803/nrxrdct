@@ -148,6 +148,7 @@ from .simulation import (
     rotate_U_about_crystal_axis,
     map_to_fundamental_zone,
     disorientation,
+    filter_spots_by_peaks,
 )
 
 __all__ = [
@@ -197,6 +198,7 @@ __all__ = [
     "simulate_mixed_phases",
     "depth_scan_reconstruction",
     "depth_scan_image",
+    "filter_spots_by_peaks",
     "print_spot_table",
     "print_bragg_table",
     "print_hkl_family",

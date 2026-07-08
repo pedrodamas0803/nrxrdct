@@ -376,7 +376,7 @@ def build_MLed(
     stacking_dir /= np.linalg.norm(stacking_dir)
 
     
-    stack = laue.LayeredCrystal(name = "LED", stacking_direction=stacking_dir)
+    stack = LayeredCrystal(name = "LED", stacking_direction=stacking_dir)
 
     subst= stack.add_buffer_layer(sap, UB, micron2angstrom(600), label = 'Al2O3 Substrate')
 

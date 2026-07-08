@@ -91,8 +91,43 @@ from .simulation import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class _ResultMixin:
+    """Serialisation helpers shared by all fitting result dataclasses."""
+
+    def save_result(self, path: str) -> None:
+        """
+        Pickle this result to *path* using :mod:`dill`.
+
+        The file can be read back with :meth:`load_result`::
+
+            result.save_result("fit.pkl")
+            result2 = OrientationFitResult.load_result("fit.pkl")
+
+        Args:
+            path (str): Destination file path.  ``.pkl`` is a common
+                convention but any extension works.
+        """
+        with open(path, "wb") as fh:
+            _dill.dump(self, fh)
+        print(f"{type(self).__name__}.save_result → {os.path.abspath(path)}")
+
+    @classmethod
+    def load_result(cls, path: str):
+        """
+        Load a result previously saved with :meth:`save_result`.
+
+        Args:
+            path (str): Path to the ``.pkl`` file.
+
+        Returns:
+            The deserialised result object (same type as when saved).
+        """
+        with open(path, "rb") as fh:
+            return _dill.load(fh)
+
+
 @dataclass
-class OrientationFitResult:
+class OrientationFitResult(_ResultMixin):
     """
     Result of a single-crystal orientation refinement (:func:`fit_orientation`).
 
@@ -146,7 +181,7 @@ class OrientationFitResult:
 
 
 @dataclass
-class StackFitResult:
+class StackFitResult(_ResultMixin):
     """
     Result of a layered-crystal orientation refinement (:func:`fit_orientation_stack`).
 
@@ -196,7 +231,7 @@ class StackFitResult:
 
 
 @dataclass
-class StackStrainFitResult:
+class StackStrainFitResult(_ResultMixin):
     """
     Result of a simultaneous orientation + per-layer strain refinement
     (:func:`fit_strain_orientation_stack`).
@@ -259,7 +294,7 @@ class StackStrainFitResult:
 
 
 @dataclass
-class MixedFitResult:
+class MixedFitResult(_ResultMixin):
     """
     Result of a multi-phase orientation refinement (:func:`fit_orientation_mixed`).
 
@@ -305,7 +340,7 @@ class MixedFitResult:
 
 
 @dataclass
-class StrainFitResult:
+class StrainFitResult(_ResultMixin):
     """
     Result of a simultaneous orientation + strain refinement
     (:func:`fit_strain_orientation`).
@@ -426,7 +461,7 @@ class StrainFitResult:
 
 
 @dataclass
-class IndexResult:
+class IndexResult(_ResultMixin):
     """
     Result of Laue autoindexing (:func:`index_orientation`).
 
@@ -480,7 +515,7 @@ class IndexResult:
 
 
 @dataclass
-class StrainImageRefinementResult:
+class StrainImageRefinementResult(_ResultMixin):
     """
     Result of image-based strain + orientation post-refinement
     (:func:`refine_strain_image`).
@@ -550,7 +585,7 @@ class StrainImageRefinementResult:
 
 
 @dataclass
-class StackStrainImageRefinementResult:
+class StackStrainImageRefinementResult(_ResultMixin):
     """
     Result of image-based strain + orientation refinement for a layered crystal
     (:func:`refine_strain_image_stack`).
@@ -606,7 +641,7 @@ class StackStrainImageRefinementResult:
 
 
 @dataclass
-class ImageRefinementResult:
+class ImageRefinementResult(_ResultMixin):
     """
     Result of image-based orientation post-refinement
     (:func:`refine_orientation_image`).
@@ -651,7 +686,7 @@ class ImageRefinementResult:
 
 
 @dataclass
-class StackImageRefinementResult:
+class StackImageRefinementResult(_ResultMixin):
     """
     Result of image-based orientation refinement for a layered crystal
     (:func:`refine_orientation_image_stack`).

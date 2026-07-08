@@ -1951,7 +1951,7 @@ def simulate_laue_stack(
     E_max_eV=27_000,
     source="bending_magnet",
     source_kwargs=None,
-    f2_thresh=F2_THRESHOLD,
+    f2_thresh=None,
     ki_hat=None,
     max_satellites=5,
     kb_params=BM32_KB,

@@ -311,7 +311,8 @@ def nano2angstrom(num):
     return num * 10
 
 def build_MLed(
-    UB=np.eye(3),
+    UB_GaN=np.eye(3),
+    UB_subst = np.eye(3),
     x_in_defect=0.03,
     x_in_active=0.15,
     x_al_clad=0.10,
@@ -378,30 +379,30 @@ def build_MLed(
     
     stack = LayeredCrystal(name = "LED", stacking_direction=stacking_dir)
 
-    subst= stack.add_buffer_layer(sap, UB, micron2angstrom(600), label = 'Al2O3 Substrate')
+    subst= stack.add_buffer_layer(Al2O3, UB_subst, micron2angstrom(600), label = 'Al2O3 Substrate')
 
-    buf = stack.add_buffer_layer(GaN, UB, micron2angstrom(1.8), label = 'GaN undoped layer '  )
+    buf = stack.add_buffer_layer(GaN, UB_GaN, micron2angstrom(1.8), label = 'GaN undoped layer '  )
 
-    dop = stack.add_buffer_layer(GaN, UB, micron2angstrom(3.2), label = 'GaN doped layer '  )
+    dop = stack.add_buffer_layer(GaN, UB_GaN, micron2angstrom(3.2), label = 'GaN doped layer '  )
 
     # defect-filtering layer
-    defect = stack.add_pseudomorphic_layer(GaN, UB, nano2angstrom(8), a_sub, c_GaN["C13"], c_GaN["C33"], label = 'Defect filtering')
-    defect = stack.add_pseudomorphic_layer(InGaN_defect, UB, nano2angstrom(8), a_sub, c_InGaN_defect["C13"], c_InGaN_defect["C33"], label = 'Defect filtering')
+    defect = stack.add_pseudomorphic_layer(GaN, UB_GaN, nano2angstrom(8), a_sub, c_GaN["C13"], c_GaN["C33"], label = 'Defect filtering')
+    defect = stack.add_pseudomorphic_layer(InGaN_defect, UB_GaN, nano2angstrom(8), a_sub, c_InGaN_defect["C13"], c_InGaN_defect["C33"], label = 'Defect filtering')
     defect.set_repetitions(5)
 
     # active region
 
-    active  = stack.add_pseudomorphic_layer(GaN, UB, nano2angstrom(5), a_sub, c_GaN["C13"], c_GaN["C33"], label = 'Active zone')
-    active = stack.add_pseudomorphic_layer(InGaN_defect, UB, nano2angstrom(5), a_sub, c_InGaN_active["C13"], c_InGaN_active["C33"], label = 'Active zone')
+    active  = stack.add_pseudomorphic_layer(GaN, UB_GaN, nano2angstrom(5), a_sub, c_GaN["C13"], c_GaN["C33"], label = 'Active zone')
+    active = stack.add_pseudomorphic_layer(InGaN_active, UB_GaN, nano2angstrom(5), a_sub, c_InGaN_active["C13"], c_InGaN_active["C33"], label = 'Active zone')
     active.set_repetitions(4)
 
     # optical cladding zone
-    clad  = stack.add_pseudomorphic_layer(GaAlN_clad, UB, nano2angstrom(5), a_sub, c_GaAlN_clad["C13"], c_GaAlN_clad["C33"], label = 'Optical cladding')
-    clad = stack.add_pseudomorphic_layer(InGaAlN_clad, UB, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Optical cladding')
+    clad  = stack.add_pseudomorphic_layer(GaAlN_clad, UB_GaN, nano2angstrom(5), a_sub, c_GaAlN_clad["C13"], c_GaAlN_clad["C33"], label = 'Optical cladding')
+    clad = stack.add_pseudomorphic_layer(InGaAlN_clad, UB_GaN, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Optical cladding')
     clad.set_repetitions(8)
 
     # electron blocking layer
-    ebl  = stack.add_pseudomorphic_layer(AlGaN_ebl, UB, nano2angstrom(160), a_sub, c_GaAlN_clad["C13"], c_GaAlN_clad["C33"], label = 'Electron blocking layer')
+    ebl  = stack.add_pseudomorphic_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), a_sub, c_GaAlN_clad["C13"], c_GaAlN_clad["C33"], label = 'Electron blocking layer')
     # ebl = stack.add_pseudomorphic_layer(InGaAlN_clad, UB, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Active zone')
     ebl.set_repetitions(1)
 

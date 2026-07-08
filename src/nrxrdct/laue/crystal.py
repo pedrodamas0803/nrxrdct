@@ -372,7 +372,7 @@ def build_MLed(
         for k in ("C11", "C12", "C13", "C33", "C44")
     }
 
-    stacking_dir = UB @ np.array([0, 0, 1])
+    stacking_dir = UB_GaN @ np.array([0, 0, 1])
 
     stacking_dir /= np.linalg.norm(stacking_dir)
 
@@ -402,7 +402,7 @@ def build_MLed(
     clad.set_repetitions(8)
 
     # electron blocking layer
-    ebl  = stack.add_pseudomorphic_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), a_sub, c_GaAlN_clad["C13"], c_GaAlN_clad["C33"], label = 'Electron blocking layer')
+    ebl  = stack.add_pseudomorphic_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), a_sub, c_AlGaN_ebl["C13"], c_AlGaN_ebl["C33"], label = 'Electron blocking layer')
     # ebl = stack.add_pseudomorphic_layer(InGaAlN_clad, UB, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Active zone')
     ebl.set_repetitions(1)
 

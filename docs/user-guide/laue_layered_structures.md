@@ -11,15 +11,24 @@ between phases.
 
 ## 1. The stacking model
 
-A `LayeredCrystal` represents an epitaxial thin-film stack divided into two
-sections:
+A `LayeredCrystal` represents an epitaxial thin-film stack divided into a
+non-repeating buffer section plus **one or more independently-repeated
+blocks** stacked above it:
 
 ```
 ┌───────────────────────────────────────┐  ← surface (top)
-│  repeating unit  (layer A + layer B)  │
-│  ×  n_rep                             │
+│  block 2  (layer C)                   │
+│  ×  n_rep = 1        (a non-repeating │
+│                        "cap" layer is │
+│                        just a block   │
+│                        with n_rep=1)  │
 ├───────────────────────────────────────┤
-│  repeating unit  (layer A + layer B)  │
+│  block 1  (layer A + layer B)         │
+│  ×  n_rep = 4                         │
+│  …                                    │
+├───────────────────────────────────────┤
+│  block 0  (layer A + layer B)         │
+│  ×  n_rep = 5                         │
 │  …                                    │
 ├───────────────────────────────────────┤
 │  buffer layer  (e.g. template layer)  │
@@ -30,8 +39,43 @@ sections:
 
 | Section | Description |
 |---|---|
-| **Buffer layers** | Non-repeating layers at the bottom of the stack (substrate, thick template layers). Added deepest-first via `add_buffer_layer`. Absorption limiting is applied automatically. |
-| **Repeating unit** | One bilayer period (e.g. QW + barrier). Added in bottom-to-top order via `add_layer` or `add_pseudomorphic_layer`. Repeated `n_rep` times above the buffer. |
+| **Buffer layers** | Non-repeating layers at the very bottom of the stack (substrate, thick template layers). Added deepest-first via `add_buffer_layer`. Absorption limiting is applied automatically. Because they are always the bottommost section, a non-repeating layer that must sit *above* a repeating block (e.g. a cap layer) cannot be added this way — see below. |
+| **Repeating blocks** | An ordered sequence of independently-repeated units (e.g. one bilayer period such as QW + barrier), stacked bottom to top above the buffer. Each block has its own layer list and its own repeat count. |
+
+### 1.1 Building blocks
+
+A block is simply "the layers added since the last block was closed".
+`add_layer` (and `add_pseudomorphic_layer`, which calls it) appends to the
+*currently open* block; `set_repetitions(n)` sets that block's repeat count
+and **closes** it, so the next `add_layer` call starts a brand-new block:
+
+```python
+stack = laue.LayeredCrystal(stacking_direction=n_hat)
+
+stack.add_layer(A, U_A, tA, label='A')
+stack.add_layer(B, U_B, tB, label='B')
+stack.set_repetitions(5)          # block 0 = (A, B) × 5
+
+stack.add_layer(C, U_C, tC, label='C')
+stack.set_repetitions(8)          # block 1 = (C,) × 8
+
+stack.add_layer(D, U_D, tD, label='D')   # block 2 = (D,) × 1 -- a cap layer,
+                                          # since no set_repetitions follows
+```
+
+If `set_repetitions` is never called at all, every `add_layer` call keeps
+extending a single block — this is exactly the original single-repeating-unit
+behaviour, so simple stacks are unaffected by the existence of multiple
+blocks. `stack.blocks` returns the list of blocks (each with `.layers` and
+`.n_rep`) for inspection; `stack.layers` / `stack.n_rep` remain valid
+shortcuts *only* when the stack has a single block, and raise a clear error
+otherwise (use `.blocks` instead).
+
+A practical consequence: a non-repeating "cap" layer that must sit **above**
+a repeating block (for example an electron-blocking layer on top of an MQW)
+has to be added with `add_layer` — as its own trailing block with the
+default `n_rep=1` — **not** with `add_buffer_layer`, since buffer layers are
+always placed at the very bottom regardless of when they were added.
 
 The **stacking direction** $\hat{n}$ is a unit vector in the lab frame pointing
 from the substrate toward the surface.  All structure-factor phase calculations
@@ -78,8 +122,8 @@ The squared modulus of this sum is the **Laue interference function** (see the
 
 ### 2.2 Full stack structure factor
 
-For a stack of buffer layers plus $N_\text{rep}$ repetitions of a bilayer unit,
-the total amplitude is
+For a stack of buffer layers plus one repeating block of $N_\text{rep}$
+repetitions, the total amplitude is
 
 $$
 \boxed{
@@ -118,6 +162,27 @@ The modulus of $S_\text{rep}$ peaks sharply at the **superlattice Bragg
 conditions** $Q_n \Lambda = 2\pi m$ ($m$ integer), where
 $|S_\text{rep}|^2 = N_\text{rep}^2$.  Between these peaks it creates a pattern
 of satellite fringes with spacing $\Delta Q_n = 2\pi/\Lambda$.
+
+#### Several independently-repeated blocks
+
+When the stack has several blocks (Section 1.1) — each with its own period
+$\Lambda_b$, repeat count $N_{\text{rep},b}$, and start position $z_b$ — the
+$F_\text{MQW}$ term above is replaced by a sum over blocks, each attenuated by
+everything sitting **above** it:
+
+$$
+F_\text{MQW}(\mathbf{Q})
+= \sum_{b} T_{\text{above},b}\;
+    e^{\,i Q_n z_b}\;
+    F_{\text{unit},b}(\mathbf{Q})\;
+    S_{\text{rep},b}(Q_n \Lambda_b)
+$$
+
+where $T_{\text{above},b}$ is the transmission through every block that sits
+above block $b$ (Section 7.2 generalises the same way).  Setting $b=1$
+recovers the single-block formula exactly. This is what
+`LayeredCrystal.structure_factor` / `average_structure_factor` compute
+internally; you never need to sum over blocks by hand.
 
 ### 2.3 Intensity
 
@@ -607,11 +672,12 @@ parameter to set.
 
 A photon must also pass through every layer **above** the layer of interest
 twice: once on the way in and once on the way out.  For a layer at depth
-$z_i$ below the surface, all shallower layers (buffer layers $j > i$ and the
-entire MQW block) contribute a multiplicative transmission factor
+$z_i$ below the surface, all shallower layers (buffer layers $j > i$ and
+every repeating block above it) contribute a multiplicative transmission
+factor
 
 $$
-T_\text{above}^{(i)} = \prod_{j > i} T_j \;\times\; T_\text{MQW}
+T_\text{above}^{(i)} = \prod_{j > i} T_j \;\times\; \prod_b T_{\text{block},b}
 $$
 
 $$
@@ -629,9 +695,13 @@ $$
 Deeper buffer layers (substrate) are therefore dimmer than shallower ones (template
 layers, thin interlayers) independently of their own extinction.
 
-The MQW block sits at the top of the stack and has no overlying buffer
-material, so no $T_\text{above}$ factor is applied to the repeating-unit
-amplitude.
+With a single repeating block, that block sits at the top of the stack and
+has no overlying material, so no $T_\text{above}$ factor is applied to its
+own amplitude. With **several** blocks (Section 1.1), a deeper block *is*
+attenuated by every block stacked above it — using the same two-beam $T_j$
+formula, evaluated over that whole block's thickness ($t_j \to \Lambda_b
+\times N_{\text{rep},b}$) — while the topmost block still has
+$T_\text{above} = 1$.
 
 ### 7.3 Practical impact
 
@@ -741,6 +811,8 @@ absorption edges.
 
 ## 10. Quick reference — stack construction
 
+### 10.1 Single repeating block
+
 ```python
 import xrayutilities as xu
 import nrxrdct.laue as laue
@@ -758,7 +830,7 @@ d_GaN   = laue.d_spacing_hkl(GaN,   0, 0, 2)   # = c_GaN / 2 ≈ 2.593 Å
 d_InGaN = laue.d_spacing_hkl(InGaN, 0, 0, 2)   # relaxed (bulk)
 
 # Build stack: GaN buffer + 10× (InGaN QW + GaN barrier)
-stack = laue.LayeredCrystal(n_hat=(0, 0, 1), n_rep=10)
+stack = laue.LayeredCrystal(stacking_direction=(0, 0, 1))
 
 stack.add_buffer_layer(GaN, U, thickness=5000.0,     # 500 nm
                        d_spacing=d_GaN, label='GaN buffer')
@@ -771,11 +843,54 @@ stack.add_pseudomorphic_layer(                        # computes d_strained
 stack.add_layer(GaN, U, thickness=100.0,              # 10 nm barrier
                 d_spacing=d_GaN, label='GaN barrier')
 
+stack.set_repetitions(10)   # QW + barrier, × 10
+
 stack.describe()
 
 # Visualise
 stack.plot_lattice_parameter('c', unit='nm')
 stack.plot_strain_profile('c', reference=GaN)
+```
+
+### 10.2 Several independently-repeated blocks
+
+Real device stacks often have several MQW sections with *different* repeat
+counts stacked on top of each other (defect-filtering superlattice → active
+region → optical cladding → a non-repeating cap), which is exactly what
+`nrxrdct.laue.crystal.build_MLed` builds. Each section is one call to
+`add_layer` (or `add_pseudomorphic_layer`) per layer, followed by
+`set_repetitions` — see Section 1.1 for how block boundaries work:
+
+```python
+stack = laue.LayeredCrystal(stacking_direction=(0, 0, 1))
+
+stack.add_buffer_layer(GaN, U, thickness=600e4,   # 600 µm, in Å
+                       label='substrate')
+
+# block 0: defect-filtering superlattice, × 5
+stack.add_pseudomorphic_layer(GaN,         U, t_GaN,    a_sub, C13, C33, label='defect')
+stack.add_pseudomorphic_layer(InGaN_low_x, U, t_InGaN,  a_sub, C13, C33, label='defect')
+stack.set_repetitions(5)
+
+# block 1: active region, × 4
+stack.add_pseudomorphic_layer(GaN,          U, t_GaN,   a_sub, C13, C33, label='active')
+stack.add_pseudomorphic_layer(InGaN_high_x, U, t_InGaN, a_sub, C13, C33, label='active')
+stack.set_repetitions(4)
+
+# block 2: cap layer, × 1 (no set_repetitions call needed -- it's the last block)
+stack.add_layer(AlGaN_ebl, U, thickness=1600.0, label='EBL')
+
+stack.describe()               # prints buffer layers, then each block in turn
+stack.plot_layer_scheme()      # draws every block at its own real scale
+
+# `.n_rep` / `.layers` only work for a single-block stack -- inspect `.blocks`
+# for a multi-block one:
+for blk in stack.blocks:
+    print([lyr.label for lyr in blk.layers], '×', blk.n_rep)
+
+# simulate_laue_stack (and the rest of the Laue-spot simulation pipeline)
+# only understands a single repeating block -- flatten first:
+flat_stack = laue.combine_stacks([stack])
 ```
 
 ---

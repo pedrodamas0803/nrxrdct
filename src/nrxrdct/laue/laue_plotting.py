@@ -1206,7 +1206,7 @@ def plot_layer_contributions(
         0.5,
         0.96,
         f"Per-layer intensity decomposition  |  {stack.name}  |  "
-        f"{len(spots)} spots  |  Λ={stack.bilayer_thickness:.1f} Å × {stack.n_rep} rep",
+        f"{len(spots)} spots  |  total thickness {stack.total_thickness:.1f} Å",
         ha="center",
         fontsize=10,
         color="white",
@@ -1999,7 +1999,12 @@ def plot_layer_scheme(
     scale"). Every repeating block (see `stack.blocks` /
     :meth:`LayeredCrystal.add_layer`) is drawn above them in sequence, each
     at real relative scale, with a dashed boundary line between the buffer
-    section and the first block and between consecutive blocks.
+    section and the first block and between consecutive blocks. Every
+    repetition of a block is still drawn as its own coloured slab, but gets
+    exactly *one* text label for the whole block (its layer name(s), period,
+    and repeat count), centred on the block's full drawn span -- with
+    `n_rep` in the tens, labelling every repetition individually would be
+    unreadable.
 
     Args:
         stack (LayeredCrystal):
@@ -2068,12 +2073,19 @@ def plot_layer_scheme(
         scale      = DISP_H / stack._buffer_thickness
         buf_disp_h = None   # use real thickness
 
-    # ── Build (layer, s0_disp, s1_disp, is_buffer) list ──────────────────────
+    # ── Build (layer, s0_disp, s1_disp, is_buffer) list ───────────────────────
     # Display positions are computed independently for buffers (fixed height)
     # and repeating-block layers (real scale, shared across all blocks).
+    # Every repetition of a block is drawn as its own coloured parallelogram,
+    # but individual repetitions/sub-layers never get their own text -- with
+    # n_rep in the tens that would be a wall of duplicate, overlapping
+    # labels.  Instead each block gets exactly *one* label, centred on its
+    # full drawn span (see `block_labels` below); only buffer layers (which
+    # never repeat) keep their per-layer inline label.
     layers_to_draw = []      # (layer, s0, s1, is_buffer)
     boundary_lines = []      # display positions s where a dashed section boundary is drawn
     ellipsis_notes = []      # (s_position, text) for blocks clipped by max_reps
+    block_labels = []        # (center_s, span_disp, text, color) -- one per block
 
     # Buffer layers stacked from z_disp=0, each at a fixed display height
     z_disp = 0.0
@@ -2087,12 +2099,27 @@ def plot_layer_scheme(
 
     # Repeating blocks, each at real scale, stacked in sequence
     for bi, (blk, n_draw, _drawn_ang) in enumerate(block_draw):
-        for rep in range(n_draw):
+        block_start_disp = z_disp
+        for _rep in range(n_draw):
             for layer, z0_local in zip(blk.layers, blk._z_offsets):
                 s0 = z_disp + z0_local * scale
                 s1 = s0 + layer.thickness * scale
                 layers_to_draw.append((layer, s0, s1, False))
             z_disp += blk._period * scale
+
+        block_names = list(dict.fromkeys(lyr.label for lyr in blk.layers))
+        period_nm = blk._period / 10.0
+        block_text = (
+            f"{' + '.join(block_names)}\n"
+            f"{period_nm:.1f} nm period  ×{blk.n_rep}"
+        )
+        block_labels.append(
+            # colour resolved below, once cmap exists -- store the label
+            # name as a placeholder in its slot for now.
+            [(block_start_disp + z_disp) * 0.5, z_disp - block_start_disp,
+             block_text, blk.layers[0].label]
+        )
+
         if blk.n_rep > max_reps:
             ellipsis_notes.append((z_disp, f"⋮  ({blk.n_rep} repetitions total)"))
         if bi < len(block_draw) - 1:
@@ -2104,6 +2131,11 @@ def plot_layer_scheme(
     unique_labels = list(dict.fromkeys(t[0].label for t in layers_to_draw))
     palette = plt.cm.Set2(np.linspace(0.0, 0.85, max(len(unique_labels), 1)))
     cmap = {lbl: palette[i] for i, lbl in enumerate(unique_labels)}
+    # Resolve each block label's representative colour now that cmap exists.
+    block_labels = [
+        (center, span, text, cmap[first_label])
+        for center, span, text, first_label in block_labels
+    ]
 
     # ── Draw section boundary markers (buffer→block and block→block) ─────────
     for s_bound in boundary_lines:
@@ -2118,7 +2150,6 @@ def plot_layer_scheme(
     callout_labels = []   # [(center_xy, text, color)] for thin-layer callouts
 
     for layer, s0, s1, is_buffer in layers_to_draw:
-        ds = s1 - s0
         color = cmap[layer.label]
 
         # Parallelogram corners in (x_display, z_display)
@@ -2135,19 +2166,17 @@ def plot_layer_scheme(
         )
         ax.add_patch(poly)
 
-        cx = ((s0 + s1) * 0.5) * nh_2d   # centre of parallelogram
-        thick_nm = layer.thickness / 10.0
+        if not is_buffer:
+            # Repeating-block layers get one label for the whole block
+            # (below), not one per individual layer/repetition.
+            continue
 
-        # Buffer layers show actual thickness and flag as not to scale
-        if is_buffer:
-            thick_um = layer.thickness / 1e4
-            if thick_um >= 0.1:
-                thick_str = f"{thick_um:.2f} µm"
-            else:
-                thick_str = f"{thick_nm:.1f} nm"
-            label_str = f"{layer.label}\n{thick_str}\n(not to scale)"
-        else:
-            label_str = f"{layer.label}\n{thick_nm:.1f} nm"
+        cx = ((s0 + s1) * 0.5) * nh_2d   # centre of parallelogram
+        ds = s1 - s0
+        thick_nm = layer.thickness / 10.0
+        thick_um = layer.thickness / 1e4
+        thick_str = f"{thick_um:.2f} µm" if thick_um >= 0.1 else f"{thick_nm:.1f} nm"
+        label_str = f"{layer.label}\n{thick_str}\n(not to scale)"
 
         if ds >= min_display_frac * DISP_H:
             ax.text(
@@ -2159,6 +2188,19 @@ def plot_layer_scheme(
         else:
             # Too thin to label inside — queue a callout
             callout_labels.append((cx, label_str, color))
+
+    # ── One label per repeating block, centred on its full drawn span ────────
+    for center_s, span_disp, block_text, block_color in block_labels:
+        cx = center_s * nh_2d
+        if span_disp >= min_display_frac * DISP_H:
+            ax.text(
+                cx[0], cx[1], block_text,
+                ha="center", va="center", fontsize=7.5, fontweight="bold",
+                rotation=0, rotation_mode="anchor",
+                color="black", zorder=3, clip_on=True,
+            )
+        else:
+            callout_labels.append((cx, block_text, block_color))
 
     # Callouts for thin layers (placed to the right of the stack)
     if callout_labels:
@@ -4240,31 +4282,30 @@ def _kf_hat_from_spot(spot):
 def _stack_interface_depths_mm(stack) -> list:
     """
     Return ``[(z_mm, label), ...]`` for each interface to be drawn as a
-    vertical line on a depth-axis plot.
+    vertical line on a depth-axis plot, ordered surface (z=0) to deepest.
 
-    * Repeated unit (``stack.layers × stack.n_rep``): only the outer
-      boundaries are returned — the start of the first period (z = 0, the
-      crystal surface, shown only as a label anchor) and the end of the last
-      period.  All internal sub-layer boundaries are suppressed.
+    * Each repeating block (``stack.blocks``, surface-most first): if it
+      repeats more than once, only its outer boundaries are returned (start
+      and end of the whole block) with internal sub-layer boundaries
+      suppressed; a block with `n_rep == 1` (e.g. a non-repeating cap layer)
+      shows every sub-layer interface instead.
     * Buffer layers (``stack.buffer_layers``): every interface is returned.
     """
-    period_A   = sum(l.thickness for l in stack.layers) if stack.layers else 0.0
-    rep_total  = stack.n_rep * period_A           # Å
     interfaces = []
-
-    if rep_total > 0:
-        if stack.n_rep > 1:
-            # first boundary: surface itself (z = 0) — callers may skip it
-            interfaces.append((0.0, f"×{stack.n_rep} start"))
-            interfaces.append((rep_total * 1e-7, f"×{stack.n_rep} end"))
+    z_A = 0.0
+    for blk in reversed(stack.blocks):
+        period_A = sum(l.thickness for l in blk.layers) if blk.layers else 0.0
+        if period_A <= 0:
+            continue
+        if blk.n_rep > 1:
+            interfaces.append((z_A * 1e-7, f"×{blk.n_rep} start"))
+            z_A += period_A * blk.n_rep
+            interfaces.append((z_A * 1e-7, f"×{blk.n_rep} end"))
         else:
-            # single period — show every sub-layer interface
-            z_A = 0.0
-            for layer in reversed(stack.layers):
+            for layer in reversed(blk.layers):
                 z_A += layer.thickness
                 interfaces.append((z_A * 1e-7, getattr(layer, "label", "") or ""))
 
-    z_A = rep_total
     for layer in reversed(stack.buffer_layers):
         z_A += layer.thickness
         interfaces.append((z_A * 1e-7, getattr(layer, "label", "") or "buffer"))

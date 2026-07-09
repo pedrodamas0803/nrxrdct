@@ -285,7 +285,7 @@ InGaN = xu.materials.InGaN(0.20)   # In₀.₂₀Ga₀.₈₀N  (Vegard's law)
 U = laue.euler_to_U(0, 0, 0, sample_tilt_deg=40)
 C = laue.nitride_elastic_constants('InN', x=0.20, end_material='GaN')
 
-stack = laue.LayeredCrystal(n_hat=(0, 0, 1), n_rep=10)
+stack = laue.LayeredCrystal(stacking_direction=(0, 0, 1))
 stack.add_buffer_layer(GaN, U, thickness=5000.0,           # 500 nm buffer
                        d_spacing=laue.d_spacing_hkl(GaN, 0, 0, 2),
                        label='GaN buffer')
@@ -296,6 +296,7 @@ stack.add_pseudomorphic_layer(InGaN, U, thickness=30.0,    # 3 nm QW
 stack.add_layer(GaN, U, thickness=100.0,                   # 10 nm barrier
                 d_spacing=laue.d_spacing_hkl(GaN, 0, 0, 2),
                 label='GaN barrier')
+stack.set_repetitions(10)                                  # QW + barrier, × 10
 
 camera = laue.Camera()
 

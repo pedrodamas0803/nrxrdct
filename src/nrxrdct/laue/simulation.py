@@ -1920,6 +1920,23 @@ def simulate_laue(
     return spots
 
 
+def _flatten_if_multiblock(stack):
+    """
+    Transparently flatten a multi-block :class:`~nrxrdct.laue.layers.LayeredCrystal`
+    (see :meth:`LayeredCrystal.add_layer`) into an equivalent single-block
+    stack, so the rest of the (single-block-only) Laue-simulation pipeline
+    can consume it directly.
+
+    No-op for a plain ``Crystal``, a stack with zero or one blocks, or
+    anything without a ``.blocks`` attribute.
+"""
+    blocks = getattr(stack, "blocks", None)
+    if blocks is not None and len(blocks) > 1:
+        from .layers import combine_stacks
+        return combine_stacks([stack])
+    return stack
+
+
 def _layer_depths_mm(stack) -> dict:
     """
     Compute the centre depth of every layer in ``stack.all_layers`` (mm).
@@ -2083,7 +2100,15 @@ def simulate_laue_stack(
     Each spot requires one `stack.structure_factor()` call, which itself
     calls `crystal.StructureFactor()` once per layer.  For a 2-layer stack
     with ~4000 candidate spots, total time is ~2 s on a modern CPU.
+
+    Note:
+    If `stack` has several independently-repeated blocks (see
+    :meth:`~nrxrdct.laue.layers.LayeredCrystal.add_layer`), it is
+    transparently flattened via
+    :func:`~nrxrdct.laue.layers.combine_stacks` before simulation --
+    you can pass a multi-block stack directly, no manual flattening needed.
 """
+    stack = _flatten_if_multiblock(stack)
     stack._update_offsets()
     source_kwargs = source_kwargs or {}
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
@@ -2633,7 +2658,13 @@ def simulate_laue_darwin(
         ``'F2_darwin'``      ``|F_total_darwin|²``
         ``'source_depth_mm'``  beam-path depth used for projection (mm);
                              0.0 when ``correct_depth=False``
+
+    Note:
+    As with :func:`simulate_laue_stack`, a multi-block `stack` is
+    transparently flattened via
+    :func:`~nrxrdct.laue.layers.combine_stacks` before simulation.
 """
+    stack = _flatten_if_multiblock(stack)
     stack._update_offsets()
     source_kwargs = source_kwargs or {}
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
@@ -4039,6 +4070,7 @@ def layer_contributions_spots(spots, stack):
     >>> for s in spots[:5]:
     ...     print(s['hkl'], s['layer_I_frac'])
 """
+    stack = _flatten_if_multiblock(stack)
     stack._update_offsets()
     Lambda = stack._bilayer_thickness
     labels = [layer.label for layer in stack.layers]
@@ -4548,6 +4580,7 @@ def depth_scan_reconstruction(
     """
     from scipy.spatial import cKDTree
 
+    stack = _flatten_if_multiblock(stack)
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki = ki / np.linalg.norm(ki)
     n_hat = np.asarray(stack.n_hat, dtype=float)
@@ -4754,6 +4787,7 @@ def depth_scan_image(
     """
     from scipy.ndimage import map_coordinates
 
+    stack = _flatten_if_multiblock(stack)
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki = ki / np.linalg.norm(ki)
     n_hat = np.asarray(stack.n_hat, dtype=float)

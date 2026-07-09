@@ -3523,29 +3523,54 @@ def plot_hkl_family_classification(
     out_path: str | None = None,
 ):
     """
-    Zoom into the surroundings of every simulated spot belonging to a
-    lattice-plane family and interactively classify which candidate
-    simulated spot is the true origin of each measured peak.
+    Zoom into the surroundings of a lattice-plane (hkl) family and let you
+    manually pick, per zoomed panel, which candidate simulated spot is the
+    real origin of the measured peak there.
+
+    Why this exists: a systematic row of satellite reflections (m=0 Bragg
+    peak plus m=±1, ±2, … satellites) often lands so close together on the
+    detector that several candidates fall inside the same few pixels, and
+    it isn't obvious by eye — or by simple nearest-neighbour matching —
+    which one a given measured peak actually corresponds to. This function
+    crops the raw image around each such cluster so you can zoom in and
+    decide by hand.
 
     Simulated spots matching `hkl = m * (h, k, l)` (for `m = ±1 …
     ±n_multiples`, see :func:`print_hkl_family`) are grouped into panels:
     spots that land close enough together on the detector to fit in one
     crop window (typically a Bragg reflection together with its satellite
-    orders) share a single panel. Each panel shows:
+    orders) share a single panel. Each panel shows two *different* things
+    overlaid on the same crop — don't confuse them:
 
-    * the raw detector image, cropped around the group and log-scaled,
-    * every candidate simulated spot in the group as a `'+'` marker,
-      colour-coded by *color_by* (hover for full details — hkl, energy,
-      intensity, satellite order, phase),
-    * every measured peak from *peaklist* that falls inside the crop, as
-      a hollow white circle.
+    * coloured markers — **predictions**: where the simulation says each
+      candidate spot should be. One marker per candidate in the group,
+      colour-coded by *color_by* and shaped by which phase it originates
+      from (hover a marker for its full details — hkl, energy, intensity,
+      satellite order, phase).
+    * hollow white circles — **observations**: real peaks found by the
+      segmentation pipeline (from *peaklist*) that fall inside the crop.
+      There may be zero, one, or several.
 
-    Click near a candidate marker to record it as the classification for
-    that panel — its border is highlighted in the candidate's colour and
-    the panel title updated with the chosen `(hkl)`. Click on empty space
-    inside a panel to clear its classification. Classifications live only
-    in memory, on `fig._classifications` (dict: panel index → spot dict),
-    for as long as the figure stays open.
+    Example: a panel shows one white circle (a real peak) sitting right on
+    top of the orange `'+'` (predicted m=+1 satellite) but 4 px away from
+    the blue `'+'` (predicted m=0 Bragg spot). Clicking the orange marker
+    records "this measured peak is the m=+1 satellite, not the Bragg
+    spot" as that panel's classification.
+
+    Mechanically, clicking is just picking one of the candidate markers as
+    your answer for that panel — it does not move, fit, or alter anything,
+    it only records a label:
+
+    * click near a candidate marker → that candidate is stored as the
+      panel's classification; the panel border is recoloured to match it
+      and the title shows the chosen `(hkl)` / satellite order.
+    * click on empty space inside a panel (not near any marker) → clears
+      that panel's classification.
+
+    Classifications are visual bookkeeping only, kept in memory as
+    `fig._classifications` (dict: panel index → the classified spot's
+    dict) for as long as the figure stays open — there is no auto-save;
+    read that attribute yourself if you want to keep the picks.
 
     Args:
         image ((Nv, Nh) array): Raw detector image, in the same pixel frame as *peaklist* and the
@@ -3564,9 +3589,16 @@ def plot_hkl_family_classification(
             radius: simulated spots within `2 * crop_half_size` of each
             other share one panel.
         n_cols (int): Number of panels per row.
-        color_by (`'order'` | `'phase'`): Candidate colour coding. `'order'` — satellite order `m`
+        color_by (`'order'` | `'phase'`): Candidate *colour* coding. `'order'` — satellite order `m`
             (coolwarm, `m=0` = Bragg peak). `'phase'` — `phase_label`
-            (tab10).
+            (tab10). Independently of *color_by*, candidates are also given
+            a marker *shape* per `phase_label` (e.g. all `'bcc'` candidates
+            drawn as `'+'`, all `'fcc'` as `'x'`, a third phase as `'^'`,
+            …) so the phase a diffraction event originates from stays
+            visible even when *color_by* is `'order'`. `'o'` is never used
+            for a candidate — it is reserved for the measured-peak
+            circles. A marker-shape legend is added automatically when
+            more than one phase is present.
         cmap (str): Colormap for the background image crops.
         figsize ((float, float), optional): Figure size in inches. Defaults to a size scaled to
             the number of panels.
@@ -3639,6 +3671,7 @@ def plot_hkl_family_classification(
         pk_xy = np.asarray(peaklist, dtype=float)[:, :2]
 
     # ── candidate colour coding (shared across all panels) ─────────────────
+    labels = list(dict.fromkeys(s.get("phase_label", "sim") for s in matches))
     if color_by == "order":
         orders = np.array([s.get("satellite_order", 0) for s in matches])
         omax = max(abs(int(orders.min())), abs(int(orders.max())), 1)
@@ -3646,10 +3679,18 @@ def plot_hkl_family_classification(
         order_cmap = plt.get_cmap("coolwarm")
         color_of = lambda s: order_cmap(norm(s.get("satellite_order", 0)))
     else:
-        labels = list(dict.fromkeys(s.get("phase_label", "sim") for s in matches))
         tab10 = plt.get_cmap("tab10")
         lc = {lb: tab10(i / max(len(labels) - 1, 1)) for i, lb in enumerate(labels)}
         color_of = lambda s: lc[s.get("phase_label", "sim")]
+
+    # ── candidate marker shape, one per phase (independent of colour) ──────
+    # "o" is reserved for measured-peak circles, so it is never used here.
+    _CANDIDATE_MARKERS = ["+", "x", "^", "s", "D", "v", "p", "h", "P", "*"]
+    marker_of_phase = {
+        lb: _CANDIDATE_MARKERS[i % len(_CANDIDATE_MARKERS)]
+        for i, lb in enumerate(labels)
+    }
+    marker_of = lambda s: marker_of_phase[s.get("phase_label", "sim")]
 
     # ── figure / axes grid ───────────────────────────────────────────────────
     n_sites = len(sites)
@@ -3713,7 +3754,18 @@ def plot_hkl_family_classification(
         xs = np.array([c["pix"][0] for c in cand])
         ys = np.array([c["pix"][1] for c in cand])
         cols = [color_of(c) for c in cand]
-        ax.scatter(xs, ys, c=cols, marker="+", s=90, linewidths=1.6, zorder=4)
+        mks = [marker_of(c) for c in cand]
+        # scatter() takes one marker per call, so candidates with different
+        # phases (=> different marker shapes) are drawn in separate calls.
+        for mk in set(mks):
+            sel = [j for j, m in enumerate(mks) if m == mk]
+            is_line_marker = mk in ("+", "x")
+            ax.scatter(
+                xs[sel], ys[sel], c=[cols[j] for j in sel],
+                marker=mk, s=90, linewidths=1.4,
+                edgecolors=None if is_line_marker else "white",
+                zorder=4,
+            )
         _attach_hover_tooltip(fig, ax, cand, xs, ys)
 
         ax.set_xlim(c0c - 0.5, c1c - 0.5)
@@ -3747,7 +3799,8 @@ def plot_hkl_family_classification(
             hh, kk, ll = chosen["hkl"]
             order = chosen.get("satellite_order", 0)
             order_txt = f"  m={order:+d}" if order else ""
-            ax.set_title(f"({hh:+d}{kk:+d}{ll:+d}){order_txt}  ✓",
+            phase_txt = f"  [{chosen.get('phase_label')}]" if len(labels) > 1 else ""
+            ax.set_title(f"({hh:+d}{kk:+d}{ll:+d}){order_txt}{phase_txt}  ✓",
                          color=FG, fontsize=7, pad=3)
             edge_col = ax._family_colors[idx]
             lw = 2.5
@@ -3782,16 +3835,23 @@ def plot_hkl_family_classification(
         cb.set_label("satellite order  m", color=FG, fontsize=8)
         cb.ax.tick_params(colors="#7788aa", labelsize=7)
         cb.outline.set_edgecolor("#1a1f2e")
+        phase_legend_color = FG   # colour already used for order; keep markers neutral
     else:
+        phase_legend_color = None  # use each phase's own colour from lc
+
+    # Marker-shape legend — only meaningful when more than one phase is present.
+    if len(labels) > 1:
         handles = [
-            Line2D([0], [0], linestyle="none", marker="+", color=lc[lb],
+            Line2D([0], [0], linestyle="none", marker=marker_of_phase[lb],
+                   color=lc[lb] if phase_legend_color is None else phase_legend_color,
                    markersize=8, label=lb)
             for lb in labels
         ]
         fig.legend(
             handles=handles, loc="upper right", fontsize=7,
             framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
-            labelcolor=FG,
+            labelcolor=FG, title="phase (marker shape)",
+            title_fontsize=7,
         )
 
     if out_path:

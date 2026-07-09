@@ -545,12 +545,25 @@ class Layer:
                     proj.append(p)
             self.d = min(proj) if proj else lat.c
 
-        self.n_cells = max(1, round(float(thickness) / self.d))
+        self._thickness = float(thickness)
+        self.n_cells = max(1, round(self._thickness / self.d))
 
     @property
     def thickness(self):
-        """Total layer thickness in Å (always the real physical thickness)."""
-        return self.n_cells * self.d
+        """
+        Total layer thickness in Å -- exactly the value passed to the
+        constructor.
+
+        All geometric bookkeeping (block/buffer z-offsets, period lengths,
+        `total_thickness`, absorption-depth placement) uses this exact
+        value.  It generally differs slightly from `n_cells * d`, since
+        the requested thickness need not be an integer multiple of the
+        unit-cell repeat `d`: the *coherent structure-factor sum* still
+        runs over the nearest integer number of cells (`n_cells`), but
+        every position/period calculation is anchored to the thickness you
+        asked for, not to its lattice-quantised approximation.
+"""
+        return self._thickness
 
     def _linear_mu(self, energy_eV: float) -> float:
         """
@@ -684,6 +697,29 @@ class Layer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class _RepeatBlock:
+    """
+    One independently-repeated block of layers within a :class:`LayeredCrystal`.
+
+    Not part of the public API -- use :attr:`LayeredCrystal.blocks` to read
+    these, and :meth:`LayeredCrystal.add_layer` / :meth:`LayeredCrystal.set_repetitions`
+    to build them.
+"""
+
+    def __init__(self):
+        self.layers = []     # layers in this block, bottom to top
+        self.n_rep = 1       # number of times the block repeats
+        self._closed = False  # set True by set_repetitions(); next add_layer starts a new block
+        # Populated by LayeredCrystal._update_offsets():
+        self._z_offsets = []  # offset of each layer within one repetition (Å)
+        self._period = 0.0     # thickness of one repetition (Å)
+        self._z_start = 0.0    # absolute z where this block begins (Å)
+
+    def __repr__(self):
+        labels = [lyr.label for lyr in self.layers]
+        return f"_RepeatBlock({labels} × {self.n_rep})"
+
+
 class LayeredCrystal:
     """
     A stack of crystalline layers with specified orientations,
@@ -722,10 +758,9 @@ class LayeredCrystal:
     def __init__(self, name="layered_crystal", stacking_direction=None):
         self.name = name
         self.buffer_layers = []   # non-repeating layers (substrate, buffer) — bottom of stack
-        self.layers = []          # repeating unit (MQW bilayer)
-        self.n_rep = 1            # number of bilayer repetitions
+        self._blocks = []         # repeating blocks (bottom to top), each a _RepeatBlock
         self._buffer_z_offsets = []
-        self._z_offsets = []
+        self._buffer_thickness = 0.0
 
         if stacking_direction is None:
             self.n_hat = np.array([0.0, 0.0, 1.0])
@@ -738,7 +773,7 @@ class LayeredCrystal:
     def add_buffer_layer(self, crystal, U, thickness, d_spacing=None, label=None):
         """
         Append a **non-repeating** layer at the bottom of the stack (substrate
-        side), below the repeating MQW / bilayer unit.
+        side), below every repeating block.
 
         Buffer layers are always added in order from deepest to shallowest:
         the first call places the layer closest to the substrate, subsequent
@@ -766,11 +801,34 @@ class LayeredCrystal:
 
     def add_layer(self, crystal, U, thickness, d_spacing=None, label=None):
         """
-        Append a layer to the **repeating** unit (MQW / bilayer).
+        Append a layer to the **currently open repeating block**.
 
         Layers are stacked in the order they are added; the first call
-        places the layer at the bottom of the unit, the last at the top.
-        The full unit is then repeated `n_rep` times above the buffer layers.
+        (after the stack was created, or after the previous block was
+        closed by :meth:`set_repetitions`) starts a *new* block and places
+        this layer at its bottom; further calls add layers on top of it,
+        within the same block.
+
+        To build **several independently-repeated blocks stacked on top of
+        each other** (e.g. one unit repeated 5×, then a different unit
+        repeated 8×), call :meth:`set_repetitions` right after finishing
+        each block -- that both sets its repeat count and closes it, so the
+        next `add_layer` call starts a fresh block::
+
+            stack.add_layer(A, U_A, tA, label='A')
+            stack.add_layer(B, U_B, tB, label='B')
+            stack.set_repetitions(5)     # block 1 = (A, B) × 5
+
+            stack.add_layer(C, U_C, tC, label='C')
+            stack.set_repetitions(8)     # block 2 = (C,) × 8
+
+            stack.add_layer(D, U_D, tD, label='D')  # block 3 = (D,) × 1 (cap)
+
+        Blocks are stacked bottom to top in the order they were closed (or,
+        for the last, still-open block, in the order its layers were added).
+        If you never call `set_repetitions` at all, every `add_layer` call
+        keeps extending a single block -- the original single-repeating-unit
+        behaviour is preserved exactly.
 
         Args:
             crystal (xu.materials.Crystal):
@@ -782,7 +840,9 @@ class LayeredCrystal:
         layer = Layer(
             crystal, U, thickness, n_hat=self.n_hat, d_spacing=d_spacing, label=label
         )
-        self.layers.append(layer)
+        if not self._blocks or self._blocks[-1]._closed:
+            self._blocks.append(_RepeatBlock())
+        self._blocks[-1].layers.append(layer)
         self._update_offsets()
         return self
 
@@ -847,8 +907,23 @@ class LayeredCrystal:
         return self.add_layer(crystal, U, thickness, d_spacing=d_strained, label=lbl)
 
     def set_repetitions(self, n):
-        """Set the number of times the repeating unit (MQW bilayer) is stacked."""
-        self.n_rep = int(n)
+        """
+        Set the repeat count of the **currently open block** (the layers
+        added since the previous `set_repetitions` call, or since the stack
+        was created) and close it.
+
+        The next :meth:`add_layer` call starts a brand-new block, so
+        calling `add_layer(...)` a few times then `set_repetitions(N)`,
+        repeated as many times as needed, is how you build a sequence of
+        independently-repeated blocks -- see :meth:`add_layer`.
+"""
+        if not self._blocks:
+            raise ValueError(
+                "set_repetitions() has nothing to act on -- call add_layer(...) "
+                "at least once first to define the block to repeat."
+            )
+        self._blocks[-1].n_rep = int(n)
+        self._blocks[-1]._closed = True
         return self
 
     def set_U(self, U) -> "LayeredCrystal":
@@ -889,7 +964,7 @@ class LayeredCrystal:
         return self
 
     def _update_offsets(self):
-        """Recompute cumulative z-offsets for buffer layers and the repeating unit."""
+        """Recompute cumulative z-offsets for buffer layers and every repeating block."""
         # Buffer layers: z = 0 at deepest point, increasing toward surface
         self._buffer_z_offsets = []
         z = 0.0
@@ -898,13 +973,73 @@ class LayeredCrystal:
             z += layer.thickness
         self._buffer_thickness = z
 
-        # Repeating unit offsets (relative to the start of the MQW section)
-        self._z_offsets = []
-        z = 0.0
-        for layer in self.layers:
-            self._z_offsets.append(z)
-            z += layer.thickness
-        self._bilayer_thickness = z
+        # Repeating blocks, stacked in sequence above the buffer (bottom to top)
+        z_start = self._buffer_thickness
+        for blk in self._blocks:
+            blk._z_offsets = []
+            zl = 0.0
+            for layer in blk.layers:
+                blk._z_offsets.append(zl)
+                zl += layer.thickness
+            blk._period = zl
+            blk._z_start = z_start
+            z_start += zl * blk.n_rep
+
+    # ── Backward-compatible single-block accessors ───────────────────────────
+    # Most stacks have exactly one repeating block; `.layers` / `.n_rep` /
+    # `._z_offsets` / `._bilayer_thickness` keep working exactly as before for
+    # them.  Stacks with several independently-repeated blocks should use
+    # `.blocks` instead -- accessing these on a multi-block stack raises a
+    # clear error rather than silently guessing which block you meant.
+
+    def _require_single_block(self, attr):
+        if len(self._blocks) > 1:
+            raise AttributeError(
+                f"This LayeredCrystal has {len(self._blocks)} independently-"
+                f"repeated blocks; `.{attr}` is only defined for a single "
+                f"repeating block.  Use `.blocks` (each with `.layers` and "
+                f"`.n_rep`) instead, or a block-aware method "
+                f"(structure_factor, describe, plot_layer_scheme, ...)."
+            )
+
+    @property
+    def blocks(self):
+        """Repeating blocks, bottom to top.  Each has `.layers` (list[Layer])
+        and `.n_rep` (int).  Built by alternating :meth:`add_layer` calls
+        with :meth:`set_repetitions`."""
+        return list(self._blocks)
+
+    @property
+    def layers(self):
+        """
+        All layers belonging to repeating blocks, flattened bottom to top.
+
+        For the common case of a single repeating block this is exactly
+        that block's layer list.  For a multi-block stack this concatenates
+        every block's layers (without unrolling `n_rep`) -- enough for
+        callers that just need "some/all layers regardless of block", but
+        not for period/offset math (use `.blocks` for that).
+"""
+        out = []
+        for blk in self._blocks:
+            out.extend(blk.layers)
+        return out
+
+    @property
+    def n_rep(self):
+        """Repeat count of the (single) repeating block."""
+        self._require_single_block("n_rep")
+        return self._blocks[0].n_rep if self._blocks else 1
+
+    @property
+    def _z_offsets(self):
+        self._require_single_block("_z_offsets")
+        return self._blocks[0]._z_offsets if self._blocks else []
+
+    @property
+    def _bilayer_thickness(self):
+        self._require_single_block("_bilayer_thickness")
+        return self._blocks[0]._period if self._blocks else 0.0
 
     @property
     def buffer_thickness(self):
@@ -914,18 +1049,23 @@ class LayeredCrystal:
 
     @property
     def bilayer_thickness(self):
-        """Thickness of one repeating MQW unit (Å)."""
+        """Thickness of the (single) repeating unit (Å)."""
         self._update_offsets()
         return self._bilayer_thickness
 
     @property
     def total_thickness(self):
-        """Total stack thickness: buffer + n_rep × bilayer (Å)."""
-        return self.buffer_thickness + self.n_rep * self.bilayer_thickness
+        """Total stack thickness: buffer + Σ_blocks (n_rep × block period)  (Å)."""
+        self._update_offsets()
+        total = self._buffer_thickness
+        for blk in self._blocks:
+            total += blk._period * blk.n_rep
+        return total
 
     @property
     def all_layers(self):
-        """All layers in stack order: buffer layers then repeating unit layers."""
+        """All distinct Layer objects: buffer layers, then every repeating
+        block's layers in order (each listed once, not unrolled by `n_rep`)."""
         return self.buffer_layers + self.layers
 
     # ── Structure factor ──────────────────────────────────────────────────────
@@ -989,44 +1129,61 @@ class LayeredCrystal:
             cos_out = max(abs(float(np.dot(self.n_hat, kf))), 1e-3)
             return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
 
-        # Attenuation from the full MQW block (sits above all buffer layers)
-        T_mqw = 1.0
-        for lyr in self.layers:
-            T_mqw *= _T_slab(lyr, lyr.thickness * self.n_rep)
+        # Transmission through each repeating block, taken as a whole (all
+        # n_rep periods of it) -- this is how much a block above attenuates
+        # everything sitting below it.
+        T_block = []
+        for blk in self._blocks:
+            T = 1.0
+            for lyr in blk.layers:
+                T *= _T_slab(lyr, lyr.thickness * blk.n_rep)
+            T_block.append(T)
 
-        # ── Buffer layers (non-repeating) ─────────────────────────────────────
+        # T_above_block[i] = transmission through every block strictly above
+        # block i (i.e. blocks[i+1:], since blocks are stored bottom to top).
+        n_blk = len(self._blocks)
+        T_above_block = [1.0] * n_blk
+        T_run = 1.0
+        for i in range(n_blk - 1, -1, -1):
+            T_above_block[i] = T_run
+            T_run *= T_block[i]
+        T_above_all_blocks = T_run   # transmission through the ENTIRE repeating section
+
+        # ── Buffer layers (non-repeating, deepest) ────────────────────────────
         F_total = 0.0 + 0j
         for i, (layer, z0) in enumerate(zip(self.buffer_layers, self._buffer_z_offsets)):
-            # Attenuation from: MQW above + all buffer layers shallower than i
-            T_above = T_mqw
+            # Attenuation from: every repeating block above + shallower buffer layers
+            T_above = T_above_all_blocks
             for j in range(i + 1, len(self.buffer_layers)):
                 T_above *= _T_slab(self.buffer_layers[j],
                                    self.buffer_layers[j].thickness)
             F_total += T_above * layer.structure_factor(Q, energy_eV, z0=z0,
                                                         kf_hat=kf_hat)
 
-        # ── Repeating unit (MQW) ──────────────────────────────────────────────
-        if self.layers:
+        # ── Repeating blocks (bottom to top) ──────────────────────────────────
+        for i, blk in enumerate(self._blocks):
+            if not blk.layers:
+                continue
             F_unit = 0.0 + 0j
-            for layer, z0 in zip(self.layers, self._z_offsets):
+            for layer, z0 in zip(blk.layers, blk._z_offsets):
                 F_unit += layer.structure_factor(Q, energy_eV, z0=z0,
                                                  kf_hat=kf_hat)
 
-            # Phase to shift MQW to its z position above the buffer
-            phase_buf = np.exp(1j * Qn * self._buffer_thickness)
+            # Phase to shift this block to its z position in the stack
+            phase_start = np.exp(1j * Qn * blk._z_start)
 
-            # Geometric sum over N_rep repetitions of the bilayer
-            Lambda = self._bilayer_thickness
+            # Geometric sum over this block's own n_rep repetitions
+            Lambda = blk._period
             phi_rep = Qn * Lambda
             phi_mod = phi_rep % (2.0 * np.pi)
             if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
-                S_rep = self.n_rep + 0j
+                S_rep = blk.n_rep + 0j
             else:
-                S_rep = (1.0 - np.exp(1j * self.n_rep * phi_rep)) / (
+                S_rep = (1.0 - np.exp(1j * blk.n_rep * phi_rep)) / (
                     1.0 - np.exp(1j * phi_rep)
                 )
 
-            F_total += phase_buf * F_unit * S_rep
+            F_total += T_above_block[i] * phase_start * F_unit * S_rep
 
         return F_total
 
@@ -1079,17 +1236,28 @@ class LayeredCrystal:
             cos_out = max(abs(float(np.dot(self.n_hat, kf))), 1e-3)
             return float(np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out)))
 
-        T_mqw = 1.0
-        for lyr in self.layers:
-            T_mqw *= _T_slab(lyr, lyr.thickness * self.n_rep)
+        T_block = []
+        for blk in self._blocks:
+            T = 1.0
+            for lyr in blk.layers:
+                T *= _T_slab(lyr, lyr.thickness * blk.n_rep)
+            T_block.append(T)
+
+        n_blk = len(self._blocks)
+        T_above_block = [1.0] * n_blk
+        T_run = 1.0
+        for i in range(n_blk - 1, -1, -1):
+            T_above_block[i] = T_run
+            T_run *= T_block[i]
+        T_above_all_blocks = T_run
 
         # ── Buffer layers — coherent sum with depth phase offsets ─────────────
-        # Buffer layers are not part of the periodic unit; their positions are
-        # fixed and their phase offsets must be kept even in average mode.
+        # Buffer layers are not part of any periodic block; their positions
+        # are fixed and their phase offsets must be kept even in average mode.
         F_total = 0.0 + 0j
         for i, (layer, z0) in enumerate(
                 zip(self.buffer_layers, self._buffer_z_offsets)):
-            T_above = T_mqw
+            T_above = T_above_all_blocks
             for j in range(i + 1, len(self.buffer_layers)):
                 T_above *= _T_slab(self.buffer_layers[j],
                                    self.buffer_layers[j].thickness)
@@ -1101,30 +1269,32 @@ class LayeredCrystal:
                      if layer.absorption_limit else layer.n_cells)
             F_total += T_above * F_uc * n_eff * np.exp(1j * Qn * z0)
 
-        # ── Repeating MQW unit — average over the period, keep S_rep ─────────
-        # Sum F_uc_i × N_cells_i over one bilayer period WITHOUT intra-period
+        # ── Repeating blocks — average over each period, keep S_rep ──────────
+        # Sum F_uc_i × N_cells_i over one block period WITHOUT intra-period
         # phase factors (z_rel).  The inter-period interference is still
         # captured by the geometric series S_rep, so satellite peaks appear at
         # the correct positions with N_rep²-enhanced intensities.
-        if self.layers:
+        for i, blk in enumerate(self._blocks):
+            if not blk.layers:
+                continue
             F_unit = 0.0 + 0j
-            for layer in self.layers:
+            for layer in blk.layers:
                 Q_cry = layer.U.T @ Q
                 F_uc = layer.crystal.StructureFactor(Q_cry, en=energy_eV)
                 if not (np.isfinite(F_uc.real) and np.isfinite(F_uc.imag)):
                     continue
                 F_unit += F_uc * layer.n_cells
 
-            z_buf   = self._buffer_thickness
-            Lambda  = self._bilayer_thickness
+            Lambda  = blk._period
             phi_rep = Qn * Lambda
             phi_mod = phi_rep % (2.0 * np.pi)
             if abs(phi_mod) < 1e-10 or abs(phi_mod - 2.0 * np.pi) < 1e-10:
-                S_rep = float(self.n_rep) + 0j
+                S_rep = float(blk.n_rep) + 0j
             else:
-                S_rep = ((1.0 - np.exp(1j * self.n_rep * phi_rep))
+                S_rep = ((1.0 - np.exp(1j * blk.n_rep * phi_rep))
                          / (1.0 - np.exp(1j * phi_rep)))
-            F_total += np.exp(1j * Qn * z_buf) * F_unit * S_rep
+            F_total += (T_above_block[i] * np.exp(1j * Qn * blk._z_start)
+                        * F_unit * S_rep)
 
         return F_total
 
@@ -1148,9 +1318,10 @@ class LayeredCrystal:
         """
         Return the individual structure factor contribution of each layer.
 
-        Buffer layers are included at their absolute z positions.  Repeating
-        unit layers are included for the *first* repetition only (z0 relative
-        to the start of the MQW section), without the superlattice factor.
+        Buffer layers are included at their absolute z positions.  Layers of
+        every repeating block are included for the *first* repetition of
+        their own block only (z0 relative to that block's start position),
+        without the superlattice factor.
 
         Args:
             Q_lab (array-like (3,)):
@@ -1165,9 +1336,10 @@ class LayeredCrystal:
         for layer, z0 in zip(self.buffer_layers, self._buffer_z_offsets):
             F = layer.structure_factor(Q, energy_eV, z0=z0)
             result[layer.label] = result.get(layer.label, 0j) + F
-        for layer, z0 in zip(self.layers, self._z_offsets):
-            F = layer.structure_factor(Q, energy_eV, z0=self._buffer_thickness + z0)
-            result[layer.label] = result.get(layer.label, 0j) + F
+        for blk in self._blocks:
+            for layer, z0 in zip(blk.layers, blk._z_offsets):
+                F = layer.structure_factor(Q, energy_eV, z0=blk._z_start + z0)
+                result[layer.label] = result.get(layer.label, 0j) + F
         return result
 
     # ── Description ──────────────────────────────────────────────────────────
@@ -1209,20 +1381,23 @@ class LayeredCrystal:
         else:
             print(f"\n  Buffer layers: none")
 
-        # Repeating unit
-        if self.layers:
-            print(
-                f"\n  Repeating unit  (× {self.n_rep},"
-                f" starts at z = {self._buffer_thickness:.1f} Å):"
-            )
-            for i, (layer, z0) in enumerate(zip(self.layers, self._z_offsets)):
-                _layer_row(i, layer, self._buffer_thickness + z0)
-            Lambda = self._bilayer_thickness
-            print(f"    Bilayer period  Λ = {Lambda:.4f} Å")
-            if Lambda > 1e-6:
-                print(f"    Satellite spacing 2π/Λ = {2*np.pi/Lambda:.5f} Å⁻¹")
+        # Repeating blocks
+        if self._blocks:
+            for bi, blk in enumerate(self._blocks):
+                if not blk.layers:
+                    continue
+                print(
+                    f"\n  Repeating block [{bi}]  (× {blk.n_rep},"
+                    f" starts at z = {blk._z_start:.1f} Å):"
+                )
+                for i, (layer, z0) in enumerate(zip(blk.layers, blk._z_offsets)):
+                    _layer_row(i, layer, blk._z_start + z0)
+                Lambda = blk._period
+                print(f"    Block period  Λ = {Lambda:.4f} Å")
+                if Lambda > 1e-6:
+                    print(f"    Satellite spacing 2π/Λ = {2*np.pi/Lambda:.5f} Å⁻¹")
         else:
-            print(f"\n  Repeating unit: none")
+            print(f"\n  Repeating blocks: none")
 
         print(
             f"\n  Total thickness = {self.total_thickness:.2f} Å"
@@ -1242,8 +1417,8 @@ class LayeredCrystal:
 
         Draws a step function showing how *param* (`'a'`, `'b'`, or
         `'c'`) varies with depth, with buffer layers at the bottom and the
-        surface at the top.  The repeating MQW unit is unrolled across all
-        `n_rep` repetitions.
+        surface at the top.  Every repeating block is unrolled across all of
+        its own `n_rep` repetitions, in stack order.
 
         Args:
             param (`'a'` | `'b'` | `'c'`): Which lattice parameter to plot.
@@ -1273,10 +1448,11 @@ class LayeredCrystal:
         for layer in self.buffer_layers:
             segments.append((z, z + layer.thickness, layer))
             z += layer.thickness
-        for _ in range(self.n_rep):
-            for layer in self.layers:
-                segments.append((z, z + layer.thickness, layer))
-                z += layer.thickness
+        for blk in self._blocks:
+            for _ in range(blk.n_rep):
+                for layer in blk.layers:
+                    segments.append((z, z + layer.thickness, layer))
+                    z += layer.thickness
 
         # Collect unique phase labels for the legend
         seen_labels = {}
@@ -1400,10 +1576,11 @@ class LayeredCrystal:
         for layer in self.buffer_layers:
             segments.append((z, z + layer.thickness, layer))
             z += layer.thickness
-        for _ in range(self.n_rep):
-            for layer in self.layers:
-                segments.append((z, z + layer.thickness, layer))
-                z += layer.thickness
+        for blk in self._blocks:
+            for _ in range(blk.n_rep):
+                for layer in blk.layers:
+                    segments.append((z, z + layer.thickness, layer))
+                    z += layer.thickness
 
         seen_labels = {}
         colors_cycle = plt.get_cmap("tab10")
@@ -1472,14 +1649,21 @@ class LayeredCrystal:
 def combine_stacks(stacks, name="combined"):
     """
     Merge an ordered sequence of LayeredCrystal objects (bottom to top) into
-    one flat LayeredCrystal with n_rep=1.
+    one flat LayeredCrystal with every repeating block unrolled (so the
+    result has no blocks of its own, only a single implicit non-repeating
+    one).
 
-    Each sub-stack's buffer layers are transferred in order as buffer layers of
-    the combined stack.  Each sub-stack's repeating unit is unrolled ``n_rep``
-    times as individual flat layers, preserving crystal, orientation matrix,
-    physical thickness, and d-spacing.  The result has a single coherent
-    structure factor that sums over the entire multi-section sequence with the
-    correct inter-layer phase relationships.
+    Each sub-stack's buffer layers are transferred in order as buffer layers
+    of the combined stack.  Each of the sub-stack's repeating blocks
+    (whether it has one or several -- see :meth:`LayeredCrystal.add_layer`)
+    is unrolled across its own `n_rep` as individual flat layers, preserving
+    crystal, orientation matrix, physical thickness, and d-spacing.  The
+    result has a single coherent structure factor that sums over the entire
+    multi-section sequence with the correct inter-layer phase relationships.
+
+    This is also the way to make a multi-block stack usable with
+    single-block-only consumers (e.g. :func:`~nrxrdct.laue.simulate_laue_stack`):
+    flatten it first with `combine_stacks([my_multi_block_stack])`.
 
     Args:
         stacks : iterable of LayeredCrystal, or dict[str, LayeredCrystal]
@@ -1489,7 +1673,7 @@ def combine_stacks(stacks, name="combined"):
             Name for the returned combined stack.
 
     Returns:
-        combined : LayeredCrystal with n_rep=1.
+        combined : LayeredCrystal with every layer unrolled into one block.
 
     Example:
         >>> stacks = build_ebl_qw_stacks()               # returns dict
@@ -1513,11 +1697,12 @@ def combine_stacks(stacks, name="combined"):
                 lyr.crystal, lyr.U.copy(), lyr.thickness,
                 d_spacing=lyr.d, label=lyr.label,
             )
-        for _ in range(stack.n_rep):
-            for lyr in stack.layers:
-                combined.add_layer(
-                    lyr.crystal, lyr.U.copy(), lyr.thickness,
-                    d_spacing=lyr.d, label=lyr.label,
-                )
+        for blk in stack.blocks:
+            for _ in range(blk.n_rep):
+                for lyr in blk.layers:
+                    combined.add_layer(
+                        lyr.crystal, lyr.U.copy(), lyr.thickness,
+                        d_spacing=lyr.d, label=lyr.label,
+                    )
 
     return combined

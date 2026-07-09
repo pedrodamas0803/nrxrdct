@@ -1994,12 +1994,20 @@ def plot_layer_scheme(
     Layers too thin to label inside (< `min_display_frac` of total height)
     are annotated with an external callout.
 
+    Buffer layers are drawn at the bottom at a fixed display height (they're
+    usually far thicker than everything else and are flagged "not to
+    scale"). Every repeating block (see `stack.blocks` /
+    :meth:`LayeredCrystal.add_layer`) is drawn above them in sequence, each
+    at real relative scale, with a dashed boundary line between the buffer
+    section and the first block and between consecutive blocks.
+
     Args:
         stack (LayeredCrystal):
         figsize ((float, float)):
         layer_width (float): Half-width of the layer slabs in display units.
-        max_reps (int): Maximum number of bilayer repetitions to draw.  Stacks with more
-            repetitions show an ellipsis annotation.
+        max_reps (int): Maximum number of repetitions to draw *per block*.  Blocks with
+            more repetitions than this show an ellipsis annotation at their
+            own top boundary.
         min_display_frac (float): Layers thinner than this fraction of the drawn stack height have
             their label placed outside with a leader line instead of inside.
         ax (matplotlib Axes, optional): Draw into an existing Axes.  If None a new figure is created.
@@ -2029,35 +2037,43 @@ def plot_layer_scheme(
 
     # ── Build layer list (with repetitions) ──────────────────────────────────
     stack._update_offsets()
-    n_reps_draw = min(stack.n_rep, max_reps)
-
-    mqw_drawn_ang = n_reps_draw * stack._bilayer_thickness
-    has_mqw = bool(stack.layers) and mqw_drawn_ang > 1e-9
+    blocks = [blk for blk in stack.blocks if blk.layers]
+    has_rep = bool(blocks)
     has_buf = bool(stack.buffer_layers)
 
-    if not has_mqw and not has_buf:
+    if not has_rep and not has_buf:
         if standalone:
             return fig, ax
         return ax
 
+    # Repetition-limited drawn height of each block, in Å
+    block_draw = []   # (block, n_reps_draw, drawn_thickness_ang)
+    for blk in blocks:
+        n_draw = min(blk.n_rep, max_reps)
+        block_draw.append((blk, n_draw, n_draw * blk._period))
+    total_rep_ang = sum(t for _, _, t in block_draw)
+
     # ── Scaling ───────────────────────────────────────────────────────────────
-    DISP_H = 5.0   # display height reserved for the MQW region (display units)
+    DISP_H = 5.0   # display height reserved for the repeating section (display units)
     W      = layer_width
 
-    if has_mqw:
-        scale = DISP_H / mqw_drawn_ang          # Å → display units (MQW only)
-        # Buffer layers are drawn at a fixed height = thickest MQW layer
-        max_mqw_ang = max(lyr.thickness for lyr in stack.layers)
-        buf_disp_h  = max_mqw_ang * scale
+    if has_rep and total_rep_ang > 1e-9:
+        scale = DISP_H / total_rep_ang          # Å → display units (repeating blocks only)
+        # Buffer layers are drawn at a fixed height = thickest repeated layer,
+        # shared across all blocks so buffer layers read consistently.
+        max_rep_ang = max(lyr.thickness for blk, _, _ in block_draw for lyr in blk.layers)
+        buf_disp_h  = max_rep_ang * scale
     else:
-        # No MQW — fall back to normal scaling for buffer-only stacks
+        # No repeating blocks — fall back to normal scaling for buffer-only stacks
         scale      = DISP_H / stack._buffer_thickness
         buf_disp_h = None   # use real thickness
 
     # ── Build (layer, s0_disp, s1_disp, is_buffer) list ──────────────────────
     # Display positions are computed independently for buffers (fixed height)
-    # and MQW layers (real scale).
-    layers_to_draw = []   # (layer, s0, s1, is_buffer)
+    # and repeating-block layers (real scale, shared across all blocks).
+    layers_to_draw = []      # (layer, s0, s1, is_buffer)
+    boundary_lines = []      # display positions s where a dashed section boundary is drawn
+    ellipsis_notes = []      # (s_position, text) for blocks clipped by max_reps
 
     # Buffer layers stacked from z_disp=0, each at a fixed display height
     z_disp = 0.0
@@ -2066,26 +2082,33 @@ def plot_layer_scheme(
         layers_to_draw.append((layer, z_disp, z_disp + h, True))
         z_disp += h
 
-    s_mqw_start_disp = z_disp   # where the MQW region begins in display space
+    if has_buf and has_rep:
+        boundary_lines.append(z_disp)   # buffer → first repeating block
 
-    # MQW repeating layers at real scale above the buffer region
-    for rep in range(n_reps_draw):
-        for layer, z0_local in zip(stack.layers, stack._z_offsets):
-            s0 = s_mqw_start_disp + (rep * stack._bilayer_thickness + z0_local) * scale
-            s1 = s0 + layer.thickness * scale
-            layers_to_draw.append((layer, s0, s1, False))
+    # Repeating blocks, each at real scale, stacked in sequence
+    for bi, (blk, n_draw, _drawn_ang) in enumerate(block_draw):
+        for rep in range(n_draw):
+            for layer, z0_local in zip(blk.layers, blk._z_offsets):
+                s0 = z_disp + z0_local * scale
+                s1 = s0 + layer.thickness * scale
+                layers_to_draw.append((layer, s0, s1, False))
+            z_disp += blk._period * scale
+        if blk.n_rep > max_reps:
+            ellipsis_notes.append((z_disp, f"⋮  ({blk.n_rep} repetitions total)"))
+        if bi < len(block_draw) - 1:
+            boundary_lines.append(z_disp)   # this block → the next one
 
-    total_disp_h = s_mqw_start_disp + (mqw_drawn_ang * scale if has_mqw else 0.0)
+    total_disp_h = z_disp
 
     # ── Colour map (unique layer labels) ─────────────────────────────────────
     unique_labels = list(dict.fromkeys(t[0].label for t in layers_to_draw))
     palette = plt.cm.Set2(np.linspace(0.0, 0.85, max(len(unique_labels), 1)))
     cmap = {lbl: palette[i] for i, lbl in enumerate(unique_labels)}
 
-    # ── Draw MQW boundary marker ──────────────────────────────────────────────
-    if has_buf and has_mqw:
-        pt_l = s_mqw_start_disp * nh_2d - W * th_2d
-        pt_r = s_mqw_start_disp * nh_2d + W * th_2d
+    # ── Draw section boundary markers (buffer→block and block→block) ─────────
+    for s_bound in boundary_lines:
+        pt_l = s_bound * nh_2d - W * th_2d
+        pt_r = s_bound * nh_2d + W * th_2d
         ax.plot(
             [pt_l[0], pt_r[0]], [pt_l[1], pt_r[1]],
             color="#ffdd55", linewidth=1.8, linestyle="--", zorder=4,
@@ -2153,12 +2176,12 @@ def plot_layer_scheme(
                 zorder=4,
             )
 
-    # Clipped-reps marker
-    if stack.n_rep > max_reps:
-        tip_pos = total_disp_h * nh_2d
+    # Clipped-reps markers -- one per block that exceeded max_reps
+    for s_pos, text in ellipsis_notes:
+        tip_pos = s_pos * nh_2d
         ax.text(
             tip_pos[0] + 0.05, tip_pos[1] + 0.12,
-            f"⋮  ({stack.n_rep} repetitions total)",
+            text,
             color=FG, fontsize=8, va="bottom", zorder=4,
         )
 
@@ -2265,9 +2288,10 @@ def plot_layer_scheme(
     )
 
     # ── Title ─────────────────────────────────────────────────────────────────
-    total_um    = stack.total_thickness / 1e4
-    reps_note   = (f"  [{n_reps_draw}/{stack.n_rep} reps shown]"
-                   if stack.n_rep > max_reps else "")
+    total_um  = stack.total_thickness / 1e4
+    n_clipped = sum(1 for blk, _, _ in block_draw if blk.n_rep > max_reps)
+    reps_note = (f"  [{n_clipped} block(s) capped at {max_reps} reps for display]"
+                 if n_clipped else "")
     ax.set_title(
         f"{stack.name}   —   total thickness {total_um:.3f} µm{reps_note}",
         color=FG, fontsize=9, pad=7,
@@ -4253,15 +4277,16 @@ def _surface_to_depth_segments(stack):
     Return a list of (z_start_Å, z_end_Å, layer) tuples ordered from the
     crystal surface down to the deepest buffer layer.
 
-    The repeating MQW unit is unrolled (n_rep copies, top repetition first);
-    buffer layers follow in shallowest-first order.
+    Every repeating block is unrolled (n_rep copies, top repetition first),
+    surface-most block first; buffer layers follow in shallowest-first order.
     """
     segments = []
     z = 0.0
-    for _ in range(stack.n_rep - 1, -1, -1):
-        for layer in reversed(stack.layers):
-            segments.append((z, z + layer.thickness, layer))
-            z += layer.thickness
+    for blk in reversed(stack.blocks):
+        for _ in range(blk.n_rep - 1, -1, -1):
+            for layer in reversed(blk.layers):
+                segments.append((z, z + layer.thickness, layer))
+                z += layer.thickness
     for layer in reversed(stack.buffer_layers):
         segments.append((z, z + layer.thickness, layer))
         z += layer.thickness

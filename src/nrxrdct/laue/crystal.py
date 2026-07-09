@@ -320,31 +320,35 @@ def build_MLed(
     x_al_ebl=0.20,
 ):
     """
-    Build the four repetition units of an EBL/QW nitride LED-laser stack:
+    Build a single `LayeredCrystal` for an EBL/QW nitride LED-laser stack,
+    with four sections stacked bottom (substrate) to top (surface):
 
-        160 nm AlGaN electron-blocking layer (EBL)        1x  (cap, top)
-        80 nm optical cladding   : InGaAlN / GaAlN MQW     8x
-        40 nm active region      : InGaN / GaN MQW         4x
-        80 nm defect-filtering   : InGaN / GaN MQW          5x  (bottom, on template)
+        Al2O3 / GaN undoped / GaN doped                    buffer (non-repeating)
+        80 nm defect-filtering  : InGaN / GaN MQW           5x
+        40 nm active region     : InGaN / GaN MQW           4x
+        80 nm optical cladding  : InGaAlN / GaAlN MQW       8x
+        160 nm AlGaN electron-blocking layer (EBL)          1x  (cap, top)
 
-    Each group is its own `LayeredCrystal` "repetition unit" (one
-    `add_pseudomorphic_layer` pair + `set_repetitions`), since a single
-    `LayeredCrystal` only supports one repeat count. All layers are grown
-    pseudomorphically on a common GaN template (`a_substrate=GaN.lattice.a`),
-    [001] (c-axis) growth. Compositions are illustrative -- adjust to your
-    real epitaxy. Wells/barriers split the group's total thickness evenly.
+    Each MQW section is its own independently-repeated block (one
+    `add_pseudomorphic_layer` pair followed by `set_repetitions`) within the
+    *same* `LayeredCrystal` -- see :meth:`LayeredCrystal.add_layer` for how
+    block boundaries work. The EBL cap is added with `add_layer` (not
+    `add_buffer_layer`): buffer layers always sit at the very bottom of the
+    stack, so a genuine top-side cap layer must be its own trailing block
+    instead. All MQW/cap layers are grown pseudomorphically on a common GaN
+    template (`a_substrate=GaN.lattice.a`), [001] (c-axis) growth.
+    Compositions are illustrative -- adjust to your real epitaxy.
+    Wells/barriers split each group's total thickness evenly.
 
     Returns:
-        dict[str, LayeredCrystal]: keys `'defect'`, `'active'`, `'clad'`, `'ebl'`,
-        in growth order (bottom to top).
+        LayeredCrystal: the full stack, with `.blocks` = [defect (×5), active (×4),
+        clad (×8), ebl (×1)] on top of `.buffer_layers` = [substrate, undoped, doped].
 
     Example:
-        >>> stacks = build_ebl_qw_stacks()
+        >>> stack = build_MLed()
+        >>> stack.describe()
         >>> from nrxrdct.laue.simulation import simulate_laue_stack
-        >>> spots = sum(
-        ...     (simulate_laue_stack(s, camera, allowed_hkl=allowed)
-        ...      for s in stacks.values()), []
-        ... )
+        >>> spots = simulate_laue_stack(combine_stacks([stack]), camera, allowed_hkl=allowed)
     """
     GaN = xu.materials.GaN
     Al2O3 = xu.materials.Al2O3
@@ -401,10 +405,12 @@ def build_MLed(
     clad = stack.add_pseudomorphic_layer(InGaAlN_clad, UB_GaN, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Optical cladding')
     clad.set_repetitions(8)
 
-    # electron blocking layer
-    ebl  = stack.add_buffer_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), label = 'Electron blocking layer')
-    # ebl = stack.add_pseudomorphic_layer(InGaAlN_clad, UB, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Active zone')
-    # ebl.set_repetitions(1)
+    # electron blocking layer -- a non-repeating CAP on top of the clad MQW.
+    # Must use add_layer (its own trailing block, n_rep=1), not
+    # add_buffer_layer: buffer layers are always placed at the very bottom
+    # of the stack, so add_buffer_layer here would put the EBL underneath
+    # the defect/active/clad blocks instead of on top of them.
+    ebl = stack.add_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), label='Electron blocking layer')
 
     return stack
 

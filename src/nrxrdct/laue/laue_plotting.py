@@ -3584,6 +3584,8 @@ def plot_hkl_family_classification(
     crop_half_size: int = 20,
     n_cols: int = 5,
     color_by: str = "order",
+    spot_size: float = 90.0,
+    spot_alpha: float = 1.0,
     cmap: str = "inferno",
     figsize: tuple | None = None,
     out_path: str | None = None,
@@ -3665,6 +3667,12 @@ def plot_hkl_family_classification(
             for a candidate — it is reserved for the measured-peak
             circles. A marker-shape legend is added automatically when
             more than one phase is present.
+        spot_size (float): Marker area (points²) for the candidate simulated-spot markers.
+            Default `90.0`.
+        spot_alpha (float): Opacity of the candidate simulated-spot markers, in `[0, 1]`.
+            Default `1.0` (opaque). Lower it to make an occluding candidate
+            marker translucent so a measured-peak circle underneath it, or
+            an overlapping candidate, stays visible.
         cmap (str): Colormap for the background image crops.
         figsize ((float, float), optional): Figure size in inches. Defaults to a size scaled to
             the number of panels.
@@ -3828,7 +3836,7 @@ def plot_hkl_family_classification(
             is_line_marker = mk in ("+", "x")
             ax.scatter(
                 xs[sel], ys[sel], c=[cols[j] for j in sel],
-                marker=mk, s=90, linewidths=1.4,
+                marker=mk, s=spot_size, alpha=spot_alpha, linewidths=1.4,
                 edgecolors=None if is_line_marker else "white",
                 zorder=4,
             )

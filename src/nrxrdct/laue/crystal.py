@@ -402,9 +402,9 @@ def build_MLed(
     clad.set_repetitions(8)
 
     # electron blocking layer
-    ebl  = stack.add_pseudomorphic_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), a_sub, c_AlGaN_ebl["C13"], c_AlGaN_ebl["C33"], label = 'Electron blocking layer')
+    ebl  = stack.add_buffer_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), label = 'Electron blocking layer')
     # ebl = stack.add_pseudomorphic_layer(InGaAlN_clad, UB, nano2angstrom(5), a_sub, c_InGaAlN_clad["C13"], c_InGaAlN_clad["C33"], label = 'Active zone')
-    ebl.set_repetitions(1)
+    # ebl.set_repetitions(1)
 
     return stack
 

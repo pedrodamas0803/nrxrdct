@@ -6,6 +6,7 @@ import numpy as np
 import xrayutilities as xu
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle, Rectangle
+from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
 
@@ -3499,6 +3500,306 @@ def plot_laue_comparison(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         print(f"  Comparison saved → {out_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HKL-FAMILY SURROUNDINGS — INTERACTIVE CLASSIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_hkl_family_classification(
+    image,
+    peaklist,
+    spots,
+    hkl,
+    *,
+    n_multiples: int = 5,
+    i_thresh: float = 0.0,
+    crop_half_size: int = 20,
+    n_cols: int = 5,
+    color_by: str = "order",
+    cmap: str = "inferno",
+    figsize: tuple | None = None,
+    out_path: str | None = None,
+):
+    """
+    Zoom into the surroundings of every simulated spot belonging to a
+    lattice-plane family and interactively classify which candidate
+    simulated spot is the true origin of each measured peak.
+
+    Simulated spots matching `hkl = m * (h, k, l)` (for `m = ±1 …
+    ±n_multiples`, see :func:`print_hkl_family`) are grouped into panels:
+    spots that land close enough together on the detector to fit in one
+    crop window (typically a Bragg reflection together with its satellite
+    orders) share a single panel. Each panel shows:
+
+    * the raw detector image, cropped around the group and log-scaled,
+    * every candidate simulated spot in the group as a `'+'` marker,
+      colour-coded by *color_by* (hover for full details — hkl, energy,
+      intensity, satellite order, phase),
+    * every measured peak from *peaklist* that falls inside the crop, as
+      a hollow white circle.
+
+    Click near a candidate marker to record it as the classification for
+    that panel — its border is highlighted in the candidate's colour and
+    the panel title updated with the chosen `(hkl)`. Click on empty space
+    inside a panel to clear its classification. Classifications live only
+    in memory, on `fig._classifications` (dict: panel index → spot dict),
+    for as long as the figure stays open.
+
+    Args:
+        image ((Nv, Nh) array): Raw detector image, in the same pixel frame as *peaklist* and the
+            `'pix'` key of *spots*.
+        peaklist (ndarray (N, >=2), or DataFrame): Segmented peak table. Columns 0, 1 (or `'peak_X'`, `'peak_Y'`)
+            are pixel positions.
+        spots (list[dict]): Spot list from any `simulate_laue*` function. Each dict must contain
+            `'hkl'` and `'pix'`.
+        hkl ((int, int, int)): Base Miller indices `(h, k, l)` of the lattice-plane family to
+            inspect.
+        n_multiples (int): Highest multiple of *hkl* to search for. Default 5.
+        i_thresh (float): Minimum `intensity / max(intensity)`, evaluated over the matched
+            family only, for a candidate to be shown. Default `0.0` (show
+            every match).
+        crop_half_size (int): Half-width, in pixels, of each crop window. Also the clustering
+            radius: simulated spots within `2 * crop_half_size` of each
+            other share one panel.
+        n_cols (int): Number of panels per row.
+        color_by (`'order'` | `'phase'`): Candidate colour coding. `'order'` — satellite order `m`
+            (coolwarm, `m=0` = Bragg peak). `'phase'` — `phase_label`
+            (tab10).
+        cmap (str): Colormap for the background image crops.
+        figsize ((float, float), optional): Figure size in inches. Defaults to a size scaled to
+            the number of panels.
+        out_path (str or None): Save a static PNG snapshot (before any classification clicks)
+            if provided.
+
+    Returns:
+        fig (matplotlib.figure.Figure):
+        axes (list[matplotlib.axes.Axes]): One axes per panel, in display order.
+"""
+    if color_by not in ("order", "phase"):
+        raise ValueError(f"color_by must be 'order' or 'phase', got {color_by!r}")
+
+    # ── select the (h,k,l) family ──────────────────────────────────────────────
+    h0, k0, l0 = (int(v) for v in hkl)
+    targets = set()
+    for m in range(1, int(n_multiples) + 1):
+        targets.add((m * h0, m * k0, m * l0))
+        targets.add((-m * h0, -m * k0, -m * l0))
+
+    matches = [
+        s for s in spots
+        if s.get("pix") is not None
+        and tuple(int(x) for x in s["hkl"]) in targets
+    ]
+    if not matches:
+        raise ValueError(
+            f"No spots with a 'pix' position found for hkl family {hkl} "
+            f"(multiples 1..{n_multiples})."
+        )
+    if i_thresh > 0.0:
+        i_ref = max(s["intensity"] for s in matches)
+        matches = [s for s in matches if s["intensity"] >= i_thresh * i_ref]
+
+    # ── group nearby candidates so they share one crop window ─────────────────
+    xy = np.array([s["pix"] for s in matches], dtype=float)
+    tree = KDTree(xy)
+    parent = list(range(len(matches)))
+
+    def _find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, j in tree.query_pairs(r=2.0 * crop_half_size):
+        ri, rj = _find(i), _find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    groups = {}
+    for i in range(len(matches)):
+        groups.setdefault(_find(i), []).append(matches[i])
+
+    sites = []
+    for cand in groups.values():
+        cx = float(np.mean([c["pix"][0] for c in cand]))
+        cy = float(np.mean([c["pix"][1] for c in cand]))
+        sites.append({"candidates": cand, "center": (cx, cy)})
+    sites.sort(key=lambda site: site["center"][1])
+
+    # ── parse the measured peaklist ─────────────────────────────────────────
+    try:
+        import pandas as pd
+        if isinstance(peaklist, pd.DataFrame):
+            pk_xy = peaklist[["peak_X", "peak_Y"]].to_numpy(dtype=float)
+        else:
+            pk_xy = np.asarray(peaklist, dtype=float)[:, :2]
+    except ImportError:
+        pk_xy = np.asarray(peaklist, dtype=float)[:, :2]
+
+    # ── candidate colour coding (shared across all panels) ─────────────────
+    if color_by == "order":
+        orders = np.array([s.get("satellite_order", 0) for s in matches])
+        omax = max(abs(int(orders.min())), abs(int(orders.max())), 1)
+        norm = mcolors.Normalize(vmin=-omax, vmax=omax)
+        order_cmap = plt.get_cmap("coolwarm")
+        color_of = lambda s: order_cmap(norm(s.get("satellite_order", 0)))
+    else:
+        labels = list(dict.fromkeys(s.get("phase_label", "sim") for s in matches))
+        tab10 = plt.get_cmap("tab10")
+        lc = {lb: tab10(i / max(len(labels) - 1, 1)) for i, lb in enumerate(labels)}
+        color_of = lambda s: lc[s.get("phase_label", "sim")]
+
+    # ── figure / axes grid ───────────────────────────────────────────────────
+    n_sites = len(sites)
+    n_cols = max(1, min(n_cols, n_sites))
+    n_rows = int(np.ceil(n_sites / n_cols))
+    if figsize is None:
+        figsize = (2.6 * n_cols, 2.6 * n_rows + 0.7)
+
+    fig, axes_grid = plt.subplots(n_rows, n_cols, figsize=figsize, facecolor=BG)
+    axes = np.atleast_1d(axes_grid).ravel().tolist()
+    for ax in axes[n_sites:]:
+        ax.set_visible(False)
+    axes = axes[:n_sites]
+
+    img = np.asarray(image, dtype=float)
+    Nv, Nh = img.shape
+
+    classifications = {}
+    UNSET_EDGE = "#1a1f2e"
+
+    def _panel_title(i, n_cand):
+        return f"panel {i}  ·  {n_cand} candidate(s)"
+
+    for i, (ax, site) in enumerate(zip(axes, sites)):
+        cx, cy = site["center"]
+        r0 = int(round(cy - crop_half_size))
+        r1 = int(round(cy + crop_half_size))
+        c0 = int(round(cx - crop_half_size))
+        c1 = int(round(cx + crop_half_size))
+        r0c, r1c = max(r0, 0), min(r1, Nv)
+        c0c, c1c = max(c0, 0), min(c1, Nh)
+        crop = img[r0c:r1c, c0c:c1c]
+
+        ax.set_facecolor("#000000")
+        ax.tick_params(colors="#7788aa", labelsize=6)
+        for sp in ax.spines.values():
+            sp.set_edgecolor(UNSET_EDGE)
+            sp.set_linewidth(1.5)
+
+        disp = np.where(np.isfinite(crop) & (crop > 0), crop, np.nan)
+        ax.imshow(
+            np.log1p(disp), origin="upper", cmap=cmap,
+            extent=[c0c - 0.5, c1c - 0.5, r1c - 0.5, r0c - 0.5],
+            interpolation="nearest", aspect="equal",
+        )
+
+        # measured peaks inside this crop
+        if pk_xy.shape[0] > 0:
+            in_crop = (
+                (pk_xy[:, 0] >= c0c) & (pk_xy[:, 0] < c1c)
+                & (pk_xy[:, 1] >= r0c) & (pk_xy[:, 1] < r1c)
+            )
+            if in_crop.any():
+                ax.scatter(
+                    pk_xy[in_crop, 0], pk_xy[in_crop, 1],
+                    s=70, marker="o", facecolors="none",
+                    edgecolors="white", linewidths=1.0, alpha=0.85, zorder=3,
+                )
+
+        cand = site["candidates"]
+        xs = np.array([c["pix"][0] for c in cand])
+        ys = np.array([c["pix"][1] for c in cand])
+        cols = [color_of(c) for c in cand]
+        ax.scatter(xs, ys, c=cols, marker="+", s=90, linewidths=1.6, zorder=4)
+        _attach_hover_tooltip(fig, ax, cand, xs, ys)
+
+        ax.set_xlim(c0c - 0.5, c1c - 0.5)
+        ax.set_ylim(r1c - 0.5, r0c - 0.5)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(_panel_title(i, len(cand)), color=FG, fontsize=7, pad=3)
+
+        ax._family_candidates = cand
+        ax._family_colors = cols
+        ax._family_xy = np.column_stack([xs, ys])
+        ax._family_index = i
+
+    # ── click-to-classify ────────────────────────────────────────────────────
+    def _on_click(event):
+        ax = event.inaxes
+        if ax is None or not hasattr(ax, "_family_candidates"):
+            return
+
+        cand = ax._family_candidates
+        xy_disp = ax.transData.transform(ax._family_xy)
+        mouse_disp = np.array([event.x, event.y])
+        dists = np.linalg.norm(xy_disp - mouse_disp, axis=1)
+        threshold_px = 10.0 * fig.dpi / 72.0
+        idx = int(np.argmin(dists))
+        i = ax._family_index
+
+        if dists[idx] <= threshold_px:
+            chosen = cand[idx]
+            classifications[i] = chosen
+            hh, kk, ll = chosen["hkl"]
+            order = chosen.get("satellite_order", 0)
+            order_txt = f"  m={order:+d}" if order else ""
+            ax.set_title(f"({hh:+d}{kk:+d}{ll:+d}){order_txt}  ✓",
+                         color=FG, fontsize=7, pad=3)
+            edge_col = ax._family_colors[idx]
+            lw = 2.5
+        else:
+            classifications.pop(i, None)
+            ax.set_title(_panel_title(i, len(cand)), color=FG, fontsize=7, pad=3)
+            edge_col = UNSET_EDGE
+            lw = 1.5
+
+        for sp in ax.spines.values():
+            sp.set_edgecolor(edge_col)
+            sp.set_linewidth(lw)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("button_press_event", _on_click)
+    fig._classifications = classifications
+
+    fig.suptitle(
+        f"({h0:+d}{k0:+d}{l0:+d}) family  —  {n_sites} panel(s), "
+        f"{len(matches)} candidate spot(s)  |  click a marker to classify, "
+        f"click empty space to clear",
+        color=FG, fontsize=9, y=0.995,
+    )
+    fig.tight_layout(rect=[0, 0, 0.93, 0.96])
+
+    # ── shared colour legend (added after layout so it gets its own space) ────
+    if color_by == "order":
+        cax = fig.add_axes([0.945, 0.15, 0.015, 0.7])
+        sm = plt.cm.ScalarMappable(cmap=order_cmap, norm=norm)
+        sm.set_array([])
+        cb = fig.colorbar(sm, cax=cax)
+        cb.set_label("satellite order  m", color=FG, fontsize=8)
+        cb.ax.tick_params(colors="#7788aa", labelsize=7)
+        cb.outline.set_edgecolor("#1a1f2e")
+    else:
+        handles = [
+            Line2D([0], [0], linestyle="none", marker="+", color=lc[lb],
+                   markersize=8, label=lb)
+            for lb in labels
+        ]
+        fig.legend(
+            handles=handles, loc="upper right", fontsize=7,
+            framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+            labelcolor=FG,
+        )
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  HKL-family classification plot saved -> {out_path}")
+
+    return fig, axes
 
 
 # ─────────────────────────────────────────────────────────────────────────────

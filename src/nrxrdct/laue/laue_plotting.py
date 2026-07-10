@@ -1001,6 +1001,9 @@ def plot_layer_contributions(
     import matplotlib.pyplot as plt
     import numpy as np
 
+    if not spots or "layer_I_frac" not in spots[0]:
+        raise ValueError("Call layer_contributions_spots(spots, stack) first.")
+
     labels = [layer.label for layer in stack.layers]
     n_layers = len(labels)
 

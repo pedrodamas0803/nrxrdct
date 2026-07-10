@@ -1099,7 +1099,8 @@ def plot_layer_contributions(
                 cmap="inferno",
                 norm=img_norm,
                 aspect="auto",
-                interpolation="nearest",
+                interpolation="antialiased",
+                filternorm=True,
                 alpha=0.6,
                 zorder=1,
             )
@@ -1220,7 +1221,7 @@ def plot_layer_contributions(
         0.5,
         0.96,
         f"Per-layer intensity decomposition ({space})  |  {stack.name}  |  "
-        f"{len(spots)} spots  |  total thickness {stack.total_thickness:.1f} Å",
+        f"{len(spots)} spots  |  total thickness {stack.total_thickness / 1e4:.3f} µm",
         ha="center",
         fontsize=10,
         color="white",

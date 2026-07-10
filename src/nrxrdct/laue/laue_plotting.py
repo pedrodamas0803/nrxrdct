@@ -2305,10 +2305,10 @@ def plot_layer_scheme(
     surf_edge_r = surf_ctr + (W + 0.12) * th_2d
     subs_edge_r = 0 * nh_2d + (W + 0.12) * th_2d
     ax.text(surf_edge_r[0], surf_edge_r[1], "surface ▶",
-            color="#aaaaaa", fontsize=7.5, va="center", ha="left",
+            color="white", fontsize=9.5, fontweight="bold", va="center", ha="left",
             rotation=label_angle_deg, rotation_mode="anchor")
     ax.text(subs_edge_r[0], subs_edge_r[1], "substrate ▶",
-            color="#aaaaaa", fontsize=7.5, va="center", ha="left",
+            color="white", fontsize=9.5, fontweight="bold", va="center", ha="left",
             rotation=label_angle_deg, rotation_mode="anchor")
 
     # ── Lab frame axes (bottom-left corner) ──────────────────────────────────

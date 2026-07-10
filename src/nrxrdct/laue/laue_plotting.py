@@ -1044,7 +1044,12 @@ def plot_layer_contributions(
     if not spots or "layer_I_frac" not in spots[0]:
         raise ValueError("Call layer_contributions_spots(spots, stack) first.")
 
-    labels = [layer.label for layer in stack.layers]
+    # De-duplicated, first-seen order: a label can legitimately appear on
+    # more than one Layer object (e.g. the same material reused across two
+    # different repeating blocks), but layer_contributions_spots() already
+    # merges those into a single layer_I_frac[label] entry -- one panel per
+    # label, not per Layer instance.
+    labels = list(dict.fromkeys(layer.label for layer in stack.layers))
     n_layers = len(labels)
 
     # Layer colours

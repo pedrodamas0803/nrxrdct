@@ -4073,6 +4073,11 @@ def layer_contributions_spots(spots, stack):
     stack = _flatten_if_multiblock(stack)
     stack._update_offsets()
     Lambda = stack._bilayer_thickness
+    n_rep = stack.n_rep
+    # Hoisted out of the spot loop: `.layers` is a property that rebuilds its
+    # list on every access, and a flattened (unrolled) multi-block stack often
+    # repeats the same (crystal, U, thickness) many times.
+    layers_z0 = list(zip(stack.layers, stack._z_offsets))
     labels = [layer.label for layer in stack.layers]
 
     for s in spots:
@@ -4084,16 +4089,30 @@ def layer_contributions_spots(spots, stack):
         phi_rep = Qz * Lambda
         phi_mod = phi_rep % (2.0 * np.pi)
         if abs(phi_mod) < 1e-10 or abs(phi_mod - 2 * np.pi) < 1e-10:
-            S_rep = float(stack.n_rep) + 0j
+            S_rep = float(n_rep) + 0j
         else:
-            S_rep = (1.0 - np.exp(1j * stack.n_rep * phi_rep)) / (
+            S_rep = (1.0 - np.exp(1j * n_rep * phi_rep)) / (
                 1.0 - np.exp(1j * phi_rep)
             )
 
-        # Per-layer amplitude (including S_rep)
+        # Per-layer amplitude (including S_rep).  structure_factor(Q, E, z0)
+        # factors exactly as F0(Q, E) * exp(i * Qn * z0), so layer instances
+        # sharing the same (crystal, U, thickness) -- e.g. repeated bilayers
+        # from an unrolled multi-block stack -- can reuse one F0/Qn evaluation
+        # instead of recomputing the (relatively expensive) crystal structure
+        # factor for every repetition.
+        f0_cache = {}
         layer_F = {}
-        for layer, z0 in zip(stack.layers, stack._z_offsets):
-            F_l = layer.structure_factor(Q, E, z0=z0) * S_rep
+        for layer, z0 in layers_z0:
+            key = (id(layer.crystal), layer.U.tobytes(), layer.thickness)
+            cached = f0_cache.get(key)
+            if cached is None:
+                F0 = layer.structure_factor(Q, E, z0=0.0)
+                Qn = float(np.dot(Q, layer.n_hat))
+                cached = (F0, Qn)
+                f0_cache[key] = cached
+            F0, Qn = cached
+            F_l = F0 * np.exp(1j * Qn * z0) * S_rep
             lbl = layer.label
             layer_F[lbl] = layer_F.get(lbl, 0j) + F_l
 

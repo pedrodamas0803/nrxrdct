@@ -979,27 +979,67 @@ def plot_all(
 
 
 def plot_layer_contributions(
-    spots, stack, camera, out_path="/mnt/user-data/outputs/laue_layer_contributions.png"
+    spots,
+    stack,
+    camera,
+    space="detector",
+    image=None,
+    out_path=None,
 ):
     """
-    Visualise per-layer intensity contributions across the detector image
-    and in 2theta/chi space.
+    Visualise per-layer intensity contributions, either across the detector
+    image or in 2theta/chi space.
 
-    Produces a figure with one detector-image panel per layer, coloured by
-    each layer's fractional intensity contribution at that spot position.
-    A summary panel shows the dominant-layer map across the full detector.
+    Produces a figure with one scatter panel per layer, coloured by each
+    layer's fractional intensity contribution at that spot position, plus a
+    summary panel showing the dominant-layer map and a bar chart of mean
+    per-layer contribution. All position panels (per-layer + dominant-layer)
+    share their x/y axes, and the panel grid is laid out as close to square
+    as possible for the number of layers.
 
     Args:
         spots (list of dicts from `layer_contributions_spots()`):
         stack (LayeredCrystal):
         camera (Camera):
-        out_path: str
+        space : {'detector', 'angular'}, optional
+            Coordinate system for the position panels. `'detector'`
+            (default) plots detector pixel position (col vs row).
+            `'angular'` plots 2theta vs chi (2θ on x, χ on y -- LaueTools
+            `.cor` file convention).
+        image (ndarray of shape (Nv, Nh) or None): Optional raw/rendered detector image (e.g. from `camera.render()`
+            or a real measured frame) shown as a dimmed background on every
+            position panel, log-normalised with the `'inferno'` colormap --
+            same convention as :func:`plot_measured_vs_simulated`. Only
+            used when `space='detector'`; ignored (with a note printed)
+            for `space='angular'`.
+        out_path (str, optional): Save figure to this path if provided.  If
+            `None` (default), the figure is not saved to disk.
+
+    Returns:
+        fig
 """
-    import matplotlib.cm as mcm
     import matplotlib.colors as mcolors
     import matplotlib.gridspec as mgridspec
     import matplotlib.pyplot as plt
     import numpy as np
+    from matplotlib.lines import Line2D
+
+    if space not in ("detector", "angular"):
+        raise ValueError(f"space must be 'detector' or 'angular', got {space!r}")
+
+    img_arr, img_norm = None, None
+    if image is not None:
+        if space != "detector":
+            print("  Note: `image` is only drawn for space='detector'; ignored for 'angular'.")
+        else:
+            img_arr = np.asarray(image, dtype=float)
+            if img_arr.shape != (camera.Nv, camera.Nh):
+                raise ValueError(
+                    f"image shape {img_arr.shape} does not match "
+                    f"(camera.Nv, camera.Nh) = {(camera.Nv, camera.Nh)}"
+                )
+            vmin = max(img_arr[img_arr > 0].min(), 1.0) if np.any(img_arr > 0) else 1.0
+            img_norm = mcolors.LogNorm(vmin=vmin, vmax=img_arr.max())
 
     if not spots or "layer_I_frac" not in spots[0]:
         raise ValueError("Call layer_contributions_spots(spots, stack) first.")
@@ -1019,52 +1059,87 @@ def plot_layer_contributions(
     ][:n_layers]
 
     BG = "#080c14"
-    fig = plt.figure(figsize=(5 * n_layers + 4, 10))
-    fig.patch.set_facecolor(BG)
 
-    gs = mgridspec.GridSpec(
-        2,
-        n_layers + 1,
-        height_ratios=[1, 1],
-        hspace=0.35,
-        wspace=0.25,
-        left=0.04,
-        right=0.97,
-        top=0.91,
-        bottom=0.06,
-    )
+    # ── Position-panel coordinate system ────────────────────────────────────
+    if space == "detector":
+        Nh, Nv = camera.Nh, camera.Nv
+        xlim, ylim = (0, Nh), (Nv, 0)
+        xlabel, ylabel = "col", "row"
 
-    Nh, Nv = camera.Nh, camera.Nv
+        def get_xy(s):
+            return s["pix"][0], s["pix"][1]
 
-    # ── Row 0: per-layer detector images ────────────────────────────────────
-    for li, (label, col) in enumerate(zip(labels, layer_cols)):
-        ax = fig.add_subplot(gs[0, li])
+    else:
+        tths_all = [s["tth"] for s in spots]
+        chis_all = [s["chi"] for s in spots]
+        xlim = (min(tths_all) - 3, max(tths_all) + 3) if tths_all else (60, 130)
+        ylim = (min(chis_all) - 3, max(chis_all) + 3) if chis_all else (-50, 50)
+        xlabel, ylabel = "2theta (deg)", "chi (deg)"
+
+        def get_xy(s):
+            return s["tth"], s["chi"]
+
+    def style_position_ax(ax, title, title_color):
         ax.set_facecolor("#04060e")
-        ax.set_xlim(0, Nh)
-        ax.set_ylim(Nv, 0)
-        ax.set_aspect("auto")
-        ax.set_title(f"{label}", color=col, fontsize=8, pad=4)
-        ax.set_xlabel("col", color="#7788aa", fontsize=6)
-        ax.set_ylabel("row", color="#7788aa", fontsize=6)
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        ax.set_title(title, color=title_color, fontsize=8, pad=4)
+        ax.set_xlabel(xlabel, color="#7788aa", fontsize=6)
+        ax.set_ylabel(ylabel, color="#7788aa", fontsize=6)
         ax.tick_params(colors="#7788aa", labelsize=5)
         for sp in ax.spines.values():
             sp.set_edgecolor("#1a1f2e")
+        if space == "angular":
+            ax.grid(True, ls=":", lw=0.3, color="#181e2e")
+            ax.axhline(0, color="#222244", lw=0.5)
+        if img_arr is not None:
+            ax.imshow(
+                img_arr,
+                origin="upper",
+                cmap="inferno",
+                norm=img_norm,
+                aspect="auto",
+                interpolation="nearest",
+                alpha=0.6,
+                zorder=1,
+            )
 
-        # Scatter spots coloured by this layer's fractional contribution
-        xs = [s["pix"][0] for s in spots if label in s.get("layer_I_frac", {})]
-        ys = [s["pix"][1] for s in spots if label in s.get("layer_I_frac", {})]
-        cs = [
-            max(-1, min(1, s["layer_I_frac"][label]))
-            for s in spots
-            if label in s.get("layer_I_frac", {})
-        ]
-        sz = [
-            max(2, 40 * s["intensity"] ** 0.4)
-            for s in spots
-            if label in s.get("layer_I_frac", {})
-        ]
+    # ── Squarish grid layout: n_layers position panels + dominant-layer
+    # summary + bar chart ────────────────────────────────────────────────────
+    n_slots = n_layers + 2
+    ncols = int(np.ceil(np.sqrt(n_slots)))
+    nrows = int(np.ceil(n_slots / ncols))
 
-        if xs:
+    fig = plt.figure(figsize=(4.6 * ncols, 4.2 * nrows))
+    fig.patch.set_facecolor(BG)
+
+    gs = mgridspec.GridSpec(
+        nrows,
+        ncols,
+        hspace=0.4,
+        wspace=0.3,
+        left=0.04,
+        right=0.97,
+        top=0.90,
+        bottom=0.06,
+    )
+
+    def slot(i, **kw):
+        r, c = divmod(i, ncols)
+        return fig.add_subplot(gs[r, c], **kw)
+
+    # ── Per-layer position panels (sharex/sharey linked) ────────────────────
+    shared_ax = None
+    for li, (label, col) in enumerate(zip(labels, layer_cols)):
+        ax = slot(li, sharex=shared_ax, sharey=shared_ax)
+        shared_ax = shared_ax or ax
+        style_position_ax(ax, label, col)
+
+        sel = [s for s in spots if label in s.get("layer_I_frac", {})]
+        if sel:
+            xs, ys = zip(*(get_xy(s) for s in sel))
+            cs = [max(-1, min(1, s["layer_I_frac"][label])) for s in sel]
+            sz = [max(2, 40 * s["intensity"] ** 0.4) for s in sel]
             sc = ax.scatter(
                 xs,
                 ys,
@@ -1081,27 +1156,19 @@ def plot_layer_contributions(
             cbar.set_label("I_frac", color="#7788aa", fontsize=5)
             cbar.ax.tick_params(colors="#7788aa", labelsize=5)
 
-        # 2theta contour
-        CC, RR, TTH = camera.tth_grid(step=max(1, Nh // 15))
-        tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
-        lvls = [tc - 20, tc, tc + 20]
-        lvls = [l for l in lvls if TTH.min() < l < TTH.max()]
-        if lvls:
-            ax.contour(
-                CC, RR, TTH, levels=lvls, colors="#1a2a3a", linewidths=0.5, alpha=0.6
-            )
+        if space == "detector":
+            CC, RR, TTH = camera.tth_grid(step=max(1, Nh // 15))
+            tc, _ = camera.pixel_to_2theta_chi(camera.xcen, camera.ycen)
+            lvls = [tc - 20, tc, tc + 20]
+            lvls = [l for l in lvls if TTH.min() < l < TTH.max()]
+            if lvls:
+                ax.contour(
+                    CC, RR, TTH, levels=lvls, colors="#1a2a3a", linewidths=0.5, alpha=0.6
+                )
 
-    # ── Row 0 last panel: dominant-layer map ─────────────────────────────────
-    ax_dom = fig.add_subplot(gs[0, n_layers])
-    ax_dom.set_facecolor("#04060e")
-    ax_dom.set_xlim(0, Nh)
-    ax_dom.set_ylim(Nv, 0)
-    ax_dom.set_aspect("auto")
-    ax_dom.set_title("Dominant layer", color="#ccccee", fontsize=8, pad=4)
-    ax_dom.set_xlabel("col", color="#7788aa", fontsize=6)
-    ax_dom.tick_params(colors="#7788aa", labelsize=5)
-    for sp in ax_dom.spines.values():
-        sp.set_edgecolor("#1a1f2e")
+    # ── Dominant-layer summary panel (same shared axes) ─────────────────────
+    ax_dom = slot(n_layers, sharex=shared_ax, sharey=shared_ax)
+    style_position_ax(ax_dom, "Dominant layer", "#ccccee")
 
     for s in spots:
         if "layer_I_frac" not in s:
@@ -1111,18 +1178,8 @@ def plot_layer_contributions(
         )
         col = layer_cols[dom_idx]
         sz = max(2, 50 * s["intensity"] ** 0.4)
-        ax_dom.scatter(
-            s["pix"][0],
-            s["pix"][1],
-            s=sz,
-            color=col,
-            alpha=0.8,
-            edgecolors="none",
-            zorder=3,
-        )
-
-    # Legend
-    from matplotlib.lines import Line2D
+        x, y = get_xy(s)
+        ax_dom.scatter(x, y, s=sz, color=col, alpha=0.8, edgecolors="none", zorder=3)
 
     leg = [
         Line2D([0], [0], marker="o", lw=0, mfc=layer_cols[i], ms=6, label=labels[i])
@@ -1137,78 +1194,32 @@ def plot_layer_contributions(
         loc="upper right",
     )
 
-    # ── Row 1: 2theta/chi scatter per layer ──────────────────────────────────
-    tths_all = [s["tth"] for s in spots]
-    chis_all = [s["chi"] for s in spots]
-    tth_range = (min(tths_all) - 3, max(tths_all) + 3) if tths_all else (60, 130)
-    chi_range = (min(chis_all) - 3, max(chis_all) + 3) if chis_all else (-50, 50)
-
-    for li, (label, col) in enumerate(zip(labels, layer_cols)):
-        ax = fig.add_subplot(gs[1, li])
-        ax.set_facecolor("#04060e")
-        ax.set_xlim(*chi_range)
-        ax.set_ylim(*tth_range)
-        ax.set_xlabel("chi (deg)", color="#7788aa", fontsize=6)
-        ax.set_ylabel("2theta (deg)", color="#7788aa", fontsize=6)
-        ax.set_title(f"{label}  –  2theta/chi", color=col, fontsize=7, pad=4)
-        ax.tick_params(colors="#7788aa", labelsize=5)
-        for sp in ax.spines.values():
-            sp.set_edgecolor("#1a1f2e")
-        ax.grid(True, ls=":", lw=0.3, color="#181e2e")
-        ax.axvline(0, color="#222244", lw=0.5)
-
-        xs = [s["chi"] for s in spots if label in s.get("layer_I_frac", {})]
-        ys = [s["tth"] for s in spots if label in s.get("layer_I_frac", {})]
-        cs = [
-            max(-0.2, min(1, s["layer_I_frac"][label]))
-            for s in spots
-            if label in s.get("layer_I_frac", {})
-        ]
-        sz = [
-            max(3, 40 * s["intensity"] ** 0.4)
-            for s in spots
-            if label in s.get("layer_I_frac", {})
-        ]
-        if xs:
-            ax.scatter(
-                xs,
-                ys,
-                s=sz,
-                c=cs,
-                cmap="RdYlGn",
-                vmin=-0.2,
-                vmax=1.0,
-                alpha=0.85,
-                edgecolors="none",
-                zorder=3,
-            )
-
-    # ── Row 1 last panel: intensity bar chart per layer ───────────────────────
-    ax_bar = fig.add_subplot(gs[1, n_layers])
+    # ── Bar chart: mean intensity fraction per layer (own axes) ─────────────
+    ax_bar = slot(n_layers + 1)
     ax_bar.set_facecolor("#04060e")
     for sp in ax_bar.spines.values():
         sp.set_edgecolor("#1a1f2e")
     ax_bar.tick_params(colors="#7788aa", labelsize=7)
 
-    # Average fractional contribution of each layer across all spots
     avg_fracs = {}
     for label in labels:
         fracs = [s["layer_I_frac"].get(label, 0) for s in spots if "layer_I_frac" in s]
         avg_fracs[label] = np.mean(fracs) * 100 if fracs else 0.0
 
-    bars = ax_bar.barh(
-        labels, [avg_fracs[l] for l in labels], color=layer_cols, alpha=0.8
-    )
+    ax_bar.barh(labels, [avg_fracs[l] for l in labels], color=layer_cols, alpha=0.8)
     ax_bar.axvline(0, color="#555566", lw=0.7)
     ax_bar.set_xlabel("Mean intensity fraction (%)", color="#7788aa", fontsize=7)
     ax_bar.set_title("Mean layer contribution", color="#ccccee", fontsize=8, pad=4)
-    ax_bar.set_facecolor("#04060e")
+
+    # ── Hide unused trailing grid slots ──────────────────────────────────────
+    for i in range(n_slots, nrows * ncols):
+        slot(i).axis("off")
 
     # ── Title ─────────────────────────────────────────────────────────────────
     fig.text(
         0.5,
         0.96,
-        f"Per-layer intensity decomposition  |  {stack.name}  |  "
+        f"Per-layer intensity decomposition ({space})  |  {stack.name}  |  "
         f"{len(spots)} spots  |  total thickness {stack.total_thickness:.1f} Å",
         ha="center",
         fontsize=10,
@@ -1216,9 +1227,10 @@ def plot_layer_contributions(
         fontweight="bold",
     )
 
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-    print(f"  Figure -> {out_path}")
-    return out_path
+    if out_path is not None:
+        plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Figure -> {out_path}")
+    return fig
 
 
 def draw_det_image(

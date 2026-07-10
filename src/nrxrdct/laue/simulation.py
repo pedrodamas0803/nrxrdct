@@ -2486,6 +2486,316 @@ def simulate_laue_stack(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 3D Q-SPACE RECONSTRUCTION AROUND A SPOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def qspace_around_spot(
+    stack,
+    hkl,
+    layer=None,
+    *,
+    n_along=301,
+    n_lateral=7,
+    extent_along=None,
+    extent_lateral=None,
+    max_satellites=6,
+    camera=None,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    correct_depth=False,
+    verbose=True,
+):
+    """
+    Reconstruct the 3-D reciprocal-space intensity distribution around one
+    Bragg spot of a `LayeredCrystal` stack, and (optionally) the detector
+    pixel/energy each voxel maps to.
+
+    This generalises the discrete thickness-fringe/satellite construction
+    used internally by :func:`simulate_laue_stack` (which only evaluates a
+    handful of points at `G0 + m * q_fringe * n_hat`) into a continuous 3-D
+    grid, so the full rod shape and any off-axis behaviour can be inspected
+    directly.
+
+    **Grid geometry**
+
+    The grid is built in a local orthonormal frame centred on
+    `G0 = layer.U @ layer.crystal.Q(*hkl)`:
+
+    - one axis along `layer.n_hat` (the stack growth direction) — sampled
+      finely, since finite-thickness fringes and superlattice satellites are
+      *only* a function of `Q · n_hat` in this kinematical model;
+    - two axes transverse to `n_hat` (arbitrary orthonormal in-plane
+      directions) — sampled coarsely, since the structure factor of this
+      model has no lateral interference structure and only varies smoothly
+      there.
+
+    **Physical intensity per voxel**
+
+    For every voxel `Q = G0 + Δ`, the elastic (Laue) condition is solved
+    for the unique photon energy that would excite it:
+
+    $$
+    E(Q) = hc \\,\\big/\\, \\lambda(Q), \\qquad
+    \\lambda(Q) = -\\frac{4\\pi\\,(\\hat k_i \\cdot Q)}{|Q|^2}
+    $$
+
+    Voxels with `\\hat k_i \\cdot Q \\geq 0` or `E(Q)` outside
+    `[E_min_eV, E_max_eV]` are marked unreachable (`I2 = 0`, `E = NaN`).
+    For reachable voxels the diffracted direction `kf_hat` follows directly,
+    and the stack structure factor is evaluated there
+    (`stack.structure_factor` or `stack.average_structure_factor`,
+    per `structure_model`), giving the same `F2 · LP · S(E)` intensity
+    convention used throughout this module.
+
+    **Detector intersection**
+
+    If `camera` is given, every voxel's `kf_hat` is projected onto the
+    detector (`camera.project_batch`), so the returned `pix` / `on_detector`
+    arrays show exactly which pixel (if any) each point of the reconstructed
+    volume lands on — this is how a satellite/fringe feature in Q-space
+    connects to a supplementary spot seen on the detector image.
+
+    Args:
+    stack : LayeredCrystal
+        The layered structure.
+    hkl : (int, int, int)
+        Miller indices of the reference reflection, expressed in
+        `layer.crystal`'s lattice.
+    layer : Layer, str, or None, optional
+        Which layer's `(crystal, U, n_hat)` defines `G0` and the rod axis.
+        A `str` is looked up by `.label` against `stack.all_layers`.
+        Default `None` uses `stack.layers[0]` (the first film/repeating
+        layer) — pass explicitly for buffer/substrate reflections or
+        multi-layer stacks with more than one distinct film.
+    n_along, n_lateral : int, optional
+        Grid points along the rod axis / each transverse axis.
+        `n_lateral` is used for both transverse axes; pass `1` to collapse
+        the grid to a pure 1-D rod.
+    extent_along, extent_lateral : float or None, optional
+        Half-width of the grid (Å⁻¹) along the rod axis / transverse axes.
+        `None` auto-scales from the fringe period (see Note).
+    max_satellites : int, optional
+        Only used to size the default `extent_along`: spans
+        `±(max_satellites + 0.5) * 2π/period` so the same satellite orders
+        `simulate_laue_stack` would report are covered.
+    camera : Camera or None, optional
+        Detector geometry.  When `None` (default), only the Q-space volume
+        is computed — no pixel/energy intersection.
+    E_min_eV, E_max_eV : float, optional
+        White-beam energy window (eV).
+    source, source_kwargs, kb_params :
+        Synchrotron spectrum model, forwarded to :func:`_make_spectrum_fn`
+        (same meaning as in :func:`simulate_laue_stack`).
+    ki_hat : array-like (3,) or None, optional
+        Incident beam direction (LT frame).  Default `KI_HAT` = `[1,0,0]`.
+    structure_model : {'coherent', 'average'}, optional
+        `'coherent'` (default) evaluates the full layer-by-layer coherent
+        stack structure factor (`stack.structure_factor`) — physically
+        accurate fringe/satellite intensities.  `'average'` uses
+        `stack.average_structure_factor` — faster, satellite *positions*
+        are identical but intensities are the composition-weighted
+        average (matches `simulate_laue_stack(..., structure_model="average")`).
+    correct_depth : bool, optional
+        Apply the parallax correction for `layer`'s centre depth below the
+        sample surface (see `Camera.project`'s `source_depth_mm`).
+        Only affects `pix` when `camera` is given.  Default `False`.
+    verbose : bool, optional
+        Print a short summary (reachable/on-detector voxel counts, energy
+        range) after the grid is evaluated.
+
+    Returns:
+    dict with keys:
+
+        `'hkl'`, `'layer'` : the resolved inputs (`layer` as its label).
+        `'G0'` : ndarray (3,) — nominal reflection Q vector (lab frame, Å⁻¹).
+        `'axes'` : dict `{'n_hat', 't1', 't2'}` — orthonormal grid basis
+            (lab frame unit vectors).
+        `'along'`, `'lateral1'`, `'lateral2'` : ndarray, 1-D coordinate
+            arrays (Å⁻¹ offset from `G0` along each axis).
+        `'Q'` : ndarray, shape `(n_along, n_lateral, n_lateral, 3)` —
+            lab-frame Q at every voxel.
+        `'F2'` : ndarray, shape `(n_along, n_lateral, n_lateral)` —
+            `|F_stack(Q)|²`, zero where unreachable.
+        `'I'` : ndarray, same shape — `F2 · LP(2θ) · S(E)`, the intensity
+            convention used elsewhere in this module (un-normalised).
+        `'E'` : ndarray, same shape — photon energy (eV), `NaN` where
+            unreachable.
+        `'reachable'` : ndarray of bool, same shape — satisfies the elastic
+            condition within `[E_min_eV, E_max_eV]`.
+        `'pix'` : ndarray, shape `(n_along, n_lateral, n_lateral, 2)`, or
+            `None` if `camera` was not given.  `(xcam, ycam)`, `NaN` where
+            off-detector or unreachable.
+        `'on_detector'` : ndarray of bool, same shape as `I`, or `None`.
+
+    Note:
+    * The default `extent_along` uses `stack.bilayer_thickness` when
+      `stack.n_rep > 1`, else `layer.thickness` — the same period
+      `simulate_laue_stack` uses for its satellite spacing.  If that
+      period is degenerate (≤ 0), it falls back to `0.01 * |G0|`.
+    * The default `extent_lateral` is `0.05 * extent_along`: this model has
+      no transverse interference structure, so the transverse extent only
+      needs to be large enough to make the array genuinely 3-D (e.g. for
+      later isosurface/slice visualisation) — it is not a physical
+      resolution limit.
+    * Runtime is dominated by `n_along * n_lateral**2` calls to
+      `stack.structure_factor` (each looping over every layer with an
+      xrayutilities structure-factor evaluation).  For a quick look, reduce
+      `n_along`/`n_lateral` or pass `structure_model='average'`.
+
+    Example:
+    >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
+    >>> lit_up = vol['on_detector'] & (vol['I'] > 0)
+    >>> vol['pix'][lit_up]              # every detector pixel this rod reaches
+"""
+    from .layers import LayeredCrystal
+
+    if not isinstance(stack, LayeredCrystal):
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if structure_model not in ("coherent", "average"):
+        raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
+
+    stack = _flatten_if_multiblock(stack)
+    stack._update_offsets()
+
+    # ── resolve layer ────────────────────────────────────────────────────────
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        layer = stack.layers[0]
+    elif isinstance(layer, str):
+        match = next((l for l in stack.all_layers if l.label == layer), None)
+        if match is None:
+            available = [l.label for l in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+        layer = match
+
+    h, k, l = (int(x) for x in hkl)
+    G0 = layer.U @ layer.crystal.Q(h, k, l)
+    n_hat = np.asarray(layer.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    # ── transverse basis (arbitrary orthonormal pair ⟂ n_hat) ────────────────
+    tmp = np.array([1.0, 0.0, 0.0]) if abs(n_hat[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e_t1 = tmp - n_hat * np.dot(tmp, n_hat)
+    e_t1 /= np.linalg.norm(e_t1)
+    e_t2 = np.cross(n_hat, e_t1)
+
+    # ── default extents ───────────────────────────────────────────────────────
+    if extent_along is None:
+        t_period = stack.bilayer_thickness if stack.n_rep > 1 else layer.thickness
+        q_fringe = (2.0 * np.pi / t_period) if t_period > 1e-6 else 0.01 * float(np.linalg.norm(G0))
+        extent_along = (max_satellites + 0.5) * q_fringe
+    if extent_lateral is None:
+        extent_lateral = 0.05 * extent_along
+
+    along_vals = np.linspace(-extent_along, extent_along, n_along)
+    t1_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
+    t2_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
+
+    AA, T1, T2 = np.meshgrid(along_vals, t1_vals, t2_vals, indexing="ij")
+    shape = AA.shape
+    Q_grid = (
+        G0[None, None, None, :]
+        + AA[..., None] * n_hat
+        + T1[..., None] * e_t1
+        + T2[..., None] * e_t2
+    )
+    Q_flat = Q_grid.reshape(-1, 3)
+    n_vox = len(Q_flat)
+
+    # ── elastic (Laue) condition per voxel, vectorised ────────────────────────
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+    lam_lo, lam_hi = en2lam(E_max_eV), en2lam(E_min_eV)
+
+    kdG = Q_flat @ ki
+    Gm2 = np.einsum("ij,ij->i", Q_flat, Q_flat)
+    backward = kdG < 0
+
+    lam_flat = np.full(n_vox, np.nan)
+    lam_flat[backward] = -4.0 * np.pi * kdG[backward] / Gm2[backward]
+    reachable_flat = backward & (lam_flat >= lam_lo) & (lam_flat <= lam_hi)
+    idx = np.where(reachable_flat)[0]
+
+    E_flat = np.full(n_vox, np.nan)
+    kf_flat = np.full((n_vox, 3), np.nan)
+    if len(idx):
+        E_flat[idx] = HC / lam_flat[idx]
+        km = 2.0 * np.pi / lam_flat[idx]
+        kf = ki[None, :] * km[:, None] + Q_flat[idx]
+        kf /= np.linalg.norm(kf, axis=1, keepdims=True)
+        kf_flat[idx] = kf
+
+    # ── structure factor + LP + spectrum per reachable voxel ─────────────────
+    spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
+    F2_flat = np.zeros(n_vox)
+    I_flat = np.zeros(n_vox)
+
+    for i in idx:
+        E = float(E_flat[i])
+        kf_hat = kf_flat[i]
+        tth = float(np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0))))
+        LP = lorentz_pol(tth)
+        if LP == 0.0:
+            continue
+        sw = spectrum(E)
+        if sw <= 0.0:
+            continue
+        if structure_model == "average":
+            F = stack.average_structure_factor(Q_flat[i], energy_eV=E, kf_hat=kf_hat)
+        else:
+            F = stack.structure_factor(Q_flat[i], energy_eV=E, kf_hat=kf_hat)
+        F2 = abs(F) ** 2
+        F2_flat[i] = F2
+        I_flat[i] = F2 * LP * sw
+
+    # ── detector intersection ─────────────────────────────────────────────────
+    pix_flat = None
+    on_det_flat = None
+    if camera is not None:
+        depth_mm = _layer_depths_mm(stack).get(id(layer), 0.0) if correct_depth else 0.0
+        pix_flat = np.full((n_vox, 2), np.nan)
+        on_det_flat = np.zeros(n_vox, dtype=bool)
+        if len(idx):
+            pix_idx, on_det_idx = camera.project_batch(kf_flat[idx], source_depth_mm=depth_mm)
+            pix_flat[idx] = pix_idx
+            on_det_flat[idx] = on_det_idx
+
+    if verbose:
+        n_on_det = int(on_det_flat.sum()) if on_det_flat is not None else None
+        e_reach = E_flat[idx]
+        e_range = f"{e_reach.min():.0f}–{e_reach.max():.0f} eV" if len(idx) else "—"
+        print(
+            f"  qspace_around_spot: hkl={hkl}  layer='{layer.label}'  "
+            f"grid={shape}  reachable={len(idx)}/{n_vox}  E∈[{e_range}]"
+            + (f"  on_detector={n_on_det}" if n_on_det is not None else "")
+        )
+
+    return {
+        "hkl": (h, k, l),
+        "layer": layer.label,
+        "G0": G0,
+        "axes": {"n_hat": n_hat, "t1": e_t1, "t2": e_t2},
+        "along": along_vals,
+        "lateral1": t1_vals,
+        "lateral2": t2_vals,
+        "Q": Q_grid,
+        "F2": F2_flat.reshape(shape),
+        "I": I_flat.reshape(shape),
+        "E": E_flat.reshape(shape),
+        "reachable": reachable_flat.reshape(shape),
+        "pix": pix_flat.reshape(*shape, 2) if pix_flat is not None else None,
+        "on_detector": on_det_flat.reshape(shape) if on_det_flat is not None else None,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DARWIN (DYNAMICAL) LAUE SIMULATION
 # ─────────────────────────────────────────────────────────────────────────────
 

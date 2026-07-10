@@ -4681,6 +4681,225 @@ def plot_depth_elongation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 3D Q-SPACE RECONSTRUCTION AROUND A SPOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+_QVOL_LOW = "#140a04"    # near-black warm — blends into BG, marks ~zero intensity
+_QVOL_MID = COL_SUP      # orange — matches the existing satellite/superstructure accent
+_QVOL_HIGH = COL_DB      # pale yellow — matches the existing direct-beam accent
+_QVOL_WINDOW = COL_BCC   # translucent surface marking the energy-window boundary
+
+
+def plot_qspace_around_spot(
+    vol: dict,
+    *,
+    log_intensity: bool = True,
+    intensity_floor: float = 1e-6,
+    show_window_surface: bool = True,
+    show_off_detector: bool = True,
+    elev: float = 22.0,
+    azim: float = -60.0,
+    figsize: tuple[float, float] = (9, 8),
+    ax: "plt.Axes | None" = None,
+    out_path: "str | None" = None,
+):
+    """
+    Render the 3-D reciprocal-space volume returned by
+    :func:`~nrxrdct.laue.simulation.qspace_around_spot` and overlay the
+    boundary of the accessible white-beam energy window, to show why some
+    fringe/satellite points along the rod turn into detector spots and
+    others don't.
+
+    Three things have to go right before a voxel of the reconstructed
+    volume can appear as a spot on the detector image, and this plot makes
+    all three visible at once:
+
+    1. **Structure-factor intensity** — `vol['I']`.  Destructive
+       interference along the rod (finite-thickness fringes, superlattice
+       satellites) drives some voxels to ~0 even though they are otherwise
+       fully reachable.  Encoded as marker colour + size (sequential warm
+       ramp: near-black → orange → pale yellow, matching this project's
+       existing satellite / direct-beam accent colours).
+    2. **Energy window** — a voxel needs a photon energy inside
+       `[E_min_eV, E_max_eV]` to be excited at all.  Drawn as a translucent
+       blue surface: the boundary where `vol['reachable']` flips off.  Rod
+       points beyond this surface cannot appear on any detector, at any
+       intensity, in this beam.
+    3. **Detector footprint** — even within the energy window, the
+       diffracted ray must land on the physical detector.  Voxels that are
+       reachable but off-detector (`vol['on_detector'] == False`) are drawn
+       as small hollow markers instead of filled ones.
+
+    Args:
+        vol: Return value of
+            :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
+        log_intensity: Colour/size by `log10(I / I_max + floor)` instead of
+            the raw ratio.  Structure-factor intensities span many orders
+            of magnitude near a fringe minimum, so this is `True` by default.
+        intensity_floor: Added (as a fraction of the volume's max
+            intensity) before taking the log, so exact zeros stay finite.
+        show_window_surface: Draw the translucent energy-window boundary
+            surface.  It is only drawn where the boundary actually falls
+            inside the grid — a box entirely inside or entirely outside the
+            window has no boundary to show (widen `extent_along` /
+            `max_satellites` in `qspace_around_spot` to bring it into view).
+        show_off_detector: Draw reachable-but-off-detector voxels as hollow
+            markers.  Has no effect if `vol` was built without a `camera`
+            (no on/off-detector information exists in that case).
+        elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
+        figsize: Figure size in inches (only used when `ax is None`).
+        ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
+            (created with `projection='3d'`); `None` creates a new figure.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, ax)`
+
+    Example:
+    >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
+    >>> plot_qspace_around_spot(vol, out_path="qspace_002.png")
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
+
+    along = np.asarray(vol["along"])
+    lat1 = np.asarray(vol["lateral1"])
+    lat2 = np.asarray(vol["lateral2"])
+    I = vol["I"]
+    reachable = vol["reachable"]
+    on_det = vol["on_detector"]
+    shape = I.shape
+
+    AA, T1, T2 = np.meshgrid(along, lat1, lat2, indexing="ij")
+
+    # ── colour / size by intensity ────────────────────────────────────────────
+    Imax = float(I.max()) if I.size and I.max() > 0 else 1.0
+    if log_intensity:
+        val = np.log10(I / Imax + intensity_floor)
+        vmin, vmax = np.log10(intensity_floor), 0.0
+    else:
+        val = I / Imax
+        vmin, vmax = 0.0, 1.0
+
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+    frac = np.clip((val - vmin) / max(vmax - vmin, 1e-12), 0.0, 1.0)
+    sizes = 3.0 + 40.0 * frac ** 1.5
+
+    # ── which voxels get a marker at all ──────────────────────────────────────
+    has_camera = on_det is not None
+    if has_camera:
+        filled = on_det                       # on_detector already implies reachable
+        hollow = reachable & ~on_det
+    else:
+        filled = reachable
+        hollow = np.zeros(shape, dtype=bool)
+
+    # ── set up axes ────────────────────────────────────────────────────────────
+    standalone = ax is None
+    if standalone:
+        fig = plt.figure(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+        ax = fig.add_subplot(111, projection="3d")
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    fig.patch.set_facecolor(BG)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+        pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+
+    sc = ax.scatter(
+        AA[filled], T1[filled], T2[filled],
+        c=val[filled], cmap=cmap, norm=norm,
+        s=sizes[filled], marker="o", linewidths=0, alpha=0.9, depthshade=True,
+    )
+
+    legend_handles = []
+    if show_off_detector and has_camera and hollow.any():
+        edge_colors = cmap(norm(val[hollow]))
+        ax.scatter(
+            AA[hollow], T1[hollow], T2[hollow],
+            s=np.clip(sizes[hollow], 6, None), marker="o",
+            facecolors="none", edgecolors=edge_colors,
+            linewidths=0.6, alpha=0.85,
+        )
+        legend_handles.append(
+            Line2D([0], [0], marker="o", linestyle="", markerfacecolor="none",
+                   markeredgecolor=FG, markersize=7,
+                   label="reachable, off detector")
+        )
+
+    # ── energy-window boundary surface ────────────────────────────────────────
+    if show_window_surface:
+        # For each (lateral1, lateral2) column, find where `reachable` flips
+        # off along the rod axis. A column that is entirely True or entirely
+        # False has no boundary within this grid and is left as NaN.
+        n_lat1, n_lat2 = shape[1], shape[2]
+        drew_surface = False
+        for edge in ("lo", "hi"):
+            boundary = np.full((n_lat1, n_lat2), np.nan)
+            for j in range(n_lat1):
+                for k in range(n_lat2):
+                    col = reachable[:, j, k]
+                    if not col.any() or col.all():
+                        continue
+                    idxs = np.where(col)[0]
+                    boundary[j, k] = along[idxs.min() if edge == "lo" else idxs.max()]
+            if np.isnan(boundary).all():
+                continue
+            T1g, T2g = np.meshgrid(lat1, lat2, indexing="ij")
+            ax.plot_surface(
+                np.ma.masked_invalid(boundary), T1g, T2g,
+                color=_QVOL_WINDOW, alpha=0.18, linewidth=0, shade=False,
+            )
+            drew_surface = True
+        if drew_surface:
+            legend_handles.append(
+                Line2D([0], [0], marker="s", linestyle="", color=_QVOL_WINDOW,
+                       alpha=0.5, markersize=9,
+                       label="energy-window boundary (E_min/E_max)")
+            )
+
+    # ── labels / colorbar / legend ────────────────────────────────────────────
+    hkl = vol.get("hkl")
+    layer_label = vol.get("layer")
+    ax.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_ylabel("ΔQ transverse 1  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_zlabel("ΔQ transverse 2  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_title(
+        f"Q-space reconstruction around hkl={hkl}  (layer '{layer_label}')",
+        color=FG, fontsize=10, pad=10,
+    )
+    ax.view_init(elev=elev, azim=azim)
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+    cbar.set_label("log₁₀ I / I_max" if log_intensity else "I / I_max", color=FG, fontsize=8)
+    cbar.ax.yaxis.set_tick_params(color="#7788aa", labelsize=7)
+    plt.setp(cbar.ax.get_yticklabels(), color=FG)
+    cbar.outline.set_edgecolor("#333355")
+
+    if legend_handles:
+        ax.legend(
+            handles=legend_handles, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PIXEL DEVIATION: SIMULATED vs MEASURED
 # ─────────────────────────────────────────────────────────────────────────────
 

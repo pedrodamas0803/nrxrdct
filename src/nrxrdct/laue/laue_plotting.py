@@ -2061,6 +2061,15 @@ def plot_layer_scheme(
         nh_2d /= norm2d
     th_2d = np.array([-nh_2d[1], nh_2d[0]])   # tangent ⊥ nh_2d in XZ
 
+    # Text rotation matching the layer-dividing lines (which run along th_2d).
+    # Folded into (-90, 90] so labels stay upright rather than appearing
+    # upside-down for steeply tilted stacking directions.
+    label_angle_deg = float(np.degrees(np.arctan2(th_2d[1], th_2d[0])))
+    if label_angle_deg > 90:
+        label_angle_deg -= 180
+    elif label_angle_deg <= -90:
+        label_angle_deg += 180
+
     # ── Build layer list (with repetitions) ──────────────────────────────────
     stack._update_offsets()
     blocks = [blk for blk in stack.blocks if blk.layers]
@@ -2203,7 +2212,7 @@ def plot_layer_scheme(
             ax.text(
                 cx[0], cx[1], label_str,
                 ha="center", va="center", fontsize=7.5, fontweight="bold",
-                rotation=0, rotation_mode="anchor",
+                rotation=label_angle_deg, rotation_mode="anchor",
                 color="black", zorder=3, clip_on=True,
             )
         else:
@@ -2217,7 +2226,7 @@ def plot_layer_scheme(
             ax.text(
                 cx[0], cx[1], block_text,
                 ha="center", va="center", fontsize=7.5, fontweight="bold",
-                rotation=0, rotation_mode="anchor",
+                rotation=label_angle_deg, rotation_mode="anchor",
                 color="black", zorder=3, clip_on=True,
             )
         else:
@@ -2296,9 +2305,11 @@ def plot_layer_scheme(
     surf_edge_r = surf_ctr + (W + 0.12) * th_2d
     subs_edge_r = 0 * nh_2d + (W + 0.12) * th_2d
     ax.text(surf_edge_r[0], surf_edge_r[1], "surface ▶",
-            color="#aaaaaa", fontsize=7.5, va="center", ha="left")
+            color="#aaaaaa", fontsize=7.5, va="center", ha="left",
+            rotation=label_angle_deg, rotation_mode="anchor")
     ax.text(subs_edge_r[0], subs_edge_r[1], "substrate ▶",
-            color="#aaaaaa", fontsize=7.5, va="center", ha="left")
+            color="#aaaaaa", fontsize=7.5, va="center", ha="left",
+            rotation=label_angle_deg, rotation_mode="anchor")
 
     # ── Lab frame axes (bottom-left corner) ──────────────────────────────────
     ax_len  = 1.5

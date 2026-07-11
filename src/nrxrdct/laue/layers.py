@@ -469,6 +469,37 @@ def pseudomorphic_d_spacing(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# VECTORISED GEOMETRIC SERIES (shared by the *_batch structure-factor methods)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _geometric_sum_batch(n_arr, phi_arr):
+    """
+    Vectorised  Σ_{m=0}^{n-1} exp(i·m·φ) = (1 − e^{inφ}) / (1 − e^{iφ}),
+    safe at φ ≈ 0 (mod 2π) where the closed form is a 0/0 indeterminate and
+    the sum equals `n` exactly.
+
+    Args:
+        n_arr (float or array-like): cell/repetition count(s); broadcast against `phi_arr`.
+        phi_arr (array-like): phase(s) (rad).
+
+    Returns:
+        ndarray, complex, same shape as `phi_arr`.
+"""
+    phi_arr = np.asarray(phi_arr, dtype=float)
+    n_arr = np.broadcast_to(np.asarray(n_arr, dtype=float), phi_arr.shape)
+    out = np.empty(phi_arr.shape, dtype=complex)
+    phi_mod = phi_arr % (2.0 * np.pi)
+    near_zero = (np.abs(phi_mod) < 1e-10) | (np.abs(phi_mod - 2.0 * np.pi) < 1e-10)
+    out[near_zero] = n_arr[near_zero] + 0j
+    safe = ~near_zero
+    out[safe] = (1.0 - np.exp(1j * n_arr[safe] * phi_arr[safe])) / (
+        1.0 - np.exp(1j * phi_arr[safe])
+    )
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LAYER
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -682,6 +713,70 @@ class Layer:
         else:
             geo_sum = (1.0 - np.exp(1j * n_eff * phi)) / (1.0 - np.exp(1j * phi))
 
+        phase_z0 = np.exp(1j * Qn * z0)
+        return F_uc * phase_z0 * geo_sum
+
+    # ── Vectorised (batch-Q) counterparts ─────────────────────────────────────
+    # Same physics as structure_factor/_effective_n_cells above, evaluated for
+    # many Q (and, optionally, many kf_hat) at once against a **single**
+    # reference energy — the one approximation relative to the scalar path,
+    # justified because f'(E)/f''(E) anomalous dispersion is smooth away from
+    # absorption edges.  Everything else (Q-dependence, geometry, absorption
+    # depth) is exact.  Used by :func:`~nrxrdct.laue.simulation.qspace_around_spot`
+    # to replace thousands of scalar xrayutilities calls with one per layer.
+
+    def _structure_factor_uc_batch(self, Q_lab_arr, energy_eV):
+        """Vectorised unit-cell structure factor `F_uc(Q)` at one energy."""
+        Q_cry_arr = Q_lab_arr @ self.U  # == (self.U.T @ Q) per row
+        F_uc = np.asarray(
+            self.crystal.StructureFactorForQ(Q_cry_arr, en0=energy_eV), dtype=complex
+        )
+        bad = ~(np.isfinite(F_uc.real) & np.isfinite(F_uc.imag))
+        if np.any(bad):
+            F_uc = np.where(bad, 0.0 + 0j, F_uc)
+        return F_uc
+
+    def _effective_n_cells_batch(self, energy_eV, kf_hat_arr=None, n_points=None):
+        """Vectorised :meth:`_effective_n_cells`."""
+        mu = self._linear_mu(energy_eV)
+        if mu <= 0:
+            mu = 1e-3
+        cos_in = max(abs(float(self.n_hat[0])), 1e-3)
+        if kf_hat_arr is not None:
+            cos_out = np.maximum(np.abs(kf_hat_arr @ self.n_hat), 1e-3)
+            n_eff = cos_in * cos_out / (mu * self.d * (cos_in + cos_out))
+        else:
+            n_eff = np.full(n_points, cos_in / (mu * self.d))
+        n_eff = np.minimum(float(self.n_cells), n_eff)
+        n_eff = np.maximum(n_eff.astype(int), 1)
+        return n_eff.astype(float)
+
+    def structure_factor_batch(self, Q_lab_arr, energy_eV, z0=0.0, kf_hat_arr=None):
+        """
+        Vectorised :meth:`structure_factor` for many `Q_lab` (and, optionally,
+        many `kf_hat`) at once, evaluated against a single reference energy.
+
+        Args:
+            Q_lab_arr (ndarray, shape (N, 3)): Scattering vectors in the lab frame (Å⁻¹).
+            energy_eV (float): Reference photon energy (eV) — see the class-level note above.
+            z0 (float): Cumulative offset along `n_hat` (Å), same for every row.
+            kf_hat_arr (ndarray, shape (N, 3) or None): Per-voxel diffracted-beam unit vectors for the two-beam
+                absorption correction; `None` uses the one-beam correction.
+
+        Returns:
+            ndarray, shape (N,), complex.
+"""
+        Q_lab_arr = np.asarray(Q_lab_arr, dtype=float)
+        n = len(Q_lab_arr)
+        F_uc = self._structure_factor_uc_batch(Q_lab_arr, energy_eV)
+        Qn = Q_lab_arr @ self.n_hat
+        phi = Qn * self.d
+        n_eff = (
+            self._effective_n_cells_batch(energy_eV, kf_hat_arr=kf_hat_arr, n_points=n)
+            if self.absorption_limit
+            else np.full(n, float(self.n_cells))
+        )
+        geo_sum = _geometric_sum_batch(n_eff, phi)
         phase_z0 = np.exp(1j * Qn * z0)
         return F_uc * phase_z0 * geo_sum
 
@@ -1187,6 +1282,92 @@ class LayeredCrystal:
 
         return F_total
 
+    def structure_factor_batch(self, Q_lab_arr, energy_eV, kf_hat_arr=None):
+        """
+        Vectorised :meth:`structure_factor` for many `Q_lab` (and,
+        optionally, many `kf_hat`) at once.
+
+        Identical physics to the scalar method, with one approximation: the
+        unit-cell structure factor `F_uc(Q, E)` is evaluated at a **single**
+        reference energy for the whole batch (via `Layer.structure_factor_batch`
+        → `xu.materials.Crystal.StructureFactorForQ`) instead of each row's own
+        energy. This only affects the smooth `f'(E)`/`f''(E)` anomalous-dispersion
+        terms — safe away from absorption edges — and is what makes the batch
+        path fast: it turns `len(all_layers) × N` scalar xrayutilities calls into
+        `len(all_layers)` vectorised ones. Everything else (Q-dependence,
+        geometry, per-voxel absorption via `kf_hat_arr`) is exact and
+        per-row.
+
+        Args:
+            Q_lab_arr (ndarray, shape (N, 3)): Scattering vectors in the lab frame (Å⁻¹).
+            energy_eV (float): Reference photon energy (eV) for the `F_uc` evaluation —
+                e.g. the median energy of the batch.
+            kf_hat_arr (ndarray, shape (N, 3) or None): Per-row diffracted-beam unit vectors for the two-beam
+                absorption correction; `None` uses the one-beam correction
+                (same convention as :meth:`structure_factor`).
+
+        Returns:
+            ndarray, shape (N,), complex — total stack structure factor per row.
+"""
+        self._update_offsets()
+        Q_lab_arr = np.asarray(Q_lab_arr, dtype=float)
+        n = len(Q_lab_arr)
+        Qn = Q_lab_arr @ self.n_hat
+
+        def _T_slab_batch(lyr, thickness):
+            if kf_hat_arr is None:
+                return np.ones(n)
+            mu = lyr._linear_mu(energy_eV)
+            if mu <= 0:
+                return np.ones(n)
+            cos_in = max(abs(float(self.n_hat[0])), 1e-3)
+            cos_out = np.maximum(np.abs(kf_hat_arr @ self.n_hat), 1e-3)
+            return np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out))
+
+        T_block = []
+        for blk in self._blocks:
+            T = np.ones(n)
+            for lyr in blk.layers:
+                T = T * _T_slab_batch(lyr, lyr.thickness * blk.n_rep)
+            T_block.append(T)
+
+        n_blk = len(self._blocks)
+        T_above_block = [np.ones(n) for _ in range(n_blk)]
+        T_run = np.ones(n)
+        for i in range(n_blk - 1, -1, -1):
+            T_above_block[i] = T_run
+            T_run = T_run * T_block[i]
+        T_above_all_blocks = T_run
+
+        F_total = np.zeros(n, dtype=complex)
+        for i, (layer, z0) in enumerate(zip(self.buffer_layers, self._buffer_z_offsets)):
+            T_above = T_above_all_blocks.copy()
+            for j in range(i + 1, len(self.buffer_layers)):
+                T_above = T_above * _T_slab_batch(
+                    self.buffer_layers[j], self.buffer_layers[j].thickness
+                )
+            F_total += T_above * layer.structure_factor_batch(
+                Q_lab_arr, energy_eV, z0=z0, kf_hat_arr=kf_hat_arr
+            )
+
+        for i, blk in enumerate(self._blocks):
+            if not blk.layers:
+                continue
+            F_unit = np.zeros(n, dtype=complex)
+            for layer, z0 in zip(blk.layers, blk._z_offsets):
+                F_unit += layer.structure_factor_batch(
+                    Q_lab_arr, energy_eV, z0=z0, kf_hat_arr=kf_hat_arr
+                )
+
+            phase_start = np.exp(1j * Qn * blk._z_start)
+            Lambda = blk._period
+            phi_rep = Qn * Lambda
+            S_rep = _geometric_sum_batch(blk.n_rep, phi_rep)
+
+            F_total += T_above_block[i] * phase_start * F_unit * S_rep
+
+        return F_total
+
     def average_structure_factor(self, Q_lab, energy_eV, kf_hat=None):
         """
         Structure factor of the thickness-weighted average unit cell at Q_lab.
@@ -1293,6 +1474,88 @@ class LayeredCrystal:
             else:
                 S_rep = ((1.0 - np.exp(1j * blk.n_rep * phi_rep))
                          / (1.0 - np.exp(1j * phi_rep)))
+            F_total += (T_above_block[i] * np.exp(1j * Qn * blk._z_start)
+                        * F_unit * S_rep)
+
+        return F_total
+
+    def average_structure_factor_batch(self, Q_lab_arr, energy_eV, kf_hat_arr=None):
+        """
+        Vectorised :meth:`average_structure_factor` for many `Q_lab` (and,
+        optionally, many `kf_hat`) at once, evaluated against a single
+        reference energy — see :meth:`structure_factor_batch` for the
+        approximation this implies (exact in Q, approximate in the smooth
+        `f'(E)`/`f''(E)` dispersion terms only).
+
+        Args:
+            Q_lab_arr (ndarray, shape (N, 3)): Scattering vectors in the lab frame (Å⁻¹).
+            energy_eV (float): Reference photon energy (eV).
+            kf_hat_arr (ndarray, shape (N, 3) or None): Per-row diffracted-beam unit vectors for the two-beam
+                absorption correction; `None` uses the one-beam correction.
+
+        Returns:
+            ndarray, shape (N,), complex.
+"""
+        self._update_offsets()
+        Q_lab_arr = np.asarray(Q_lab_arr, dtype=float)
+        n = len(Q_lab_arr)
+        Qn = Q_lab_arr @ self.n_hat
+
+        def _T_slab_batch(lyr, thickness):
+            if kf_hat_arr is None:
+                return np.ones(n)
+            mu = lyr._linear_mu(energy_eV)
+            if mu <= 0:
+                return np.ones(n)
+            cos_in = max(abs(float(self.n_hat[0])), 1e-3)
+            cos_out = np.maximum(np.abs(kf_hat_arr @ self.n_hat), 1e-3)
+            return np.exp(-mu * thickness * (1.0 / cos_in + 1.0 / cos_out))
+
+        T_block = []
+        for blk in self._blocks:
+            T = np.ones(n)
+            for lyr in blk.layers:
+                T = T * _T_slab_batch(lyr, lyr.thickness * blk.n_rep)
+            T_block.append(T)
+
+        n_blk = len(self._blocks)
+        T_above_block = [np.ones(n) for _ in range(n_blk)]
+        T_run = np.ones(n)
+        for i in range(n_blk - 1, -1, -1):
+            T_above_block[i] = T_run
+            T_run = T_run * T_block[i]
+        T_above_all_blocks = T_run
+
+        # ── Buffer layers — coherent sum with depth phase offsets (branches on
+        #    absorption_limit, matching the scalar method) ─────────────────────
+        F_total = np.zeros(n, dtype=complex)
+        for i, (layer, z0) in enumerate(zip(self.buffer_layers, self._buffer_z_offsets)):
+            T_above = T_above_all_blocks.copy()
+            for j in range(i + 1, len(self.buffer_layers)):
+                T_above = T_above * _T_slab_batch(
+                    self.buffer_layers[j], self.buffer_layers[j].thickness
+                )
+            F_uc = layer._structure_factor_uc_batch(Q_lab_arr, energy_eV)
+            n_eff = (
+                layer._effective_n_cells_batch(energy_eV, kf_hat_arr=kf_hat_arr, n_points=n)
+                if layer.absorption_limit
+                else np.full(n, float(layer.n_cells))
+            )
+            F_total += T_above * F_uc * n_eff * np.exp(1j * Qn * z0)
+
+        # ── Repeating blocks — average over each period (no absorption_limit
+        #    branch on the block layers, matching the scalar method) ──────────
+        for i, blk in enumerate(self._blocks):
+            if not blk.layers:
+                continue
+            F_unit = np.zeros(n, dtype=complex)
+            for layer in blk.layers:
+                F_uc = layer._structure_factor_uc_batch(Q_lab_arr, energy_eV)
+                F_unit += F_uc * float(layer.n_cells)
+
+            Lambda = blk._period
+            phi_rep = Qn * Lambda
+            S_rep = _geometric_sum_batch(blk.n_rep, phi_rep)
             F_total += (T_above_block[i] * np.exp(1j * Qn * blk._z_start)
                         * F_unit * S_rep)
 

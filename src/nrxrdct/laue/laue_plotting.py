@@ -4899,6 +4899,179 @@ def plot_qspace_around_spot(
     return fig, ax
 
 
+def plot_qspace_on_detector(
+    vol: dict,
+    *,
+    camera: "Camera | None" = None,
+    image: "np.ndarray | None" = None,
+    log_intensity: bool = True,
+    intensity_floor: float = 1e-6,
+    figsize: tuple[float, float] = (8, 8),
+    ax: "plt.Axes | None" = None,
+    out_path: "str | None" = None,
+):
+    """
+    Project the Q-space volume from
+    :func:`~nrxrdct.laue.simulation.qspace_around_spot` onto the detector,
+    so the same rod shown by :func:`plot_qspace_around_spot` can be compared
+    directly against a real (or simulated) detector image.
+
+    Every voxel with `vol['on_detector'] == True` is drawn at its actual
+    `(xcam, ycam)` pixel position, using the same colour/size intensity
+    encoding as :func:`plot_qspace_around_spot` (and the same
+    normalisation, `I / I.max()` over the *whole* volume — pass matching
+    `log_intensity` / `intensity_floor` to both calls) so the two plots read
+    as two projections of one object: the 3-D view shows *why* a voxel is
+    bright or excluded, this view shows *where* the surviving voxels
+    actually land. Voxels that are reachable but off-detector, outside the
+    energy window, or destructively cancelled to zero are simply absent
+    here — exactly as they would be absent from a real exposure.
+
+    The nominal reflection (`ΔQ = 0`, i.e. `hkl` itself) is marked with a
+    crosshair so satellites can be read as offsets from it.
+
+    Args:
+        vol: Return value of
+            :func:`~nrxrdct.laue.simulation.qspace_around_spot`, built
+            **with a `camera`** (raises `ValueError` otherwise — there is
+            no pixel information to plot without one).
+        camera: Same `Camera` used to build `vol`. Used to draw the
+            detector's pixel-area outline/limits; safe to omit if `image`
+            is given (its shape is used instead) or if you just want the
+            scatter auto-scaled to the data.
+        image: Optional measured/simulated detector image (shape
+            `(Nv, Nh)`), shown as a greyscale background so the projected
+            rod can be matched against real spots.
+        log_intensity, intensity_floor: Same meaning as in
+            :func:`plot_qspace_around_spot`.
+        figsize: Figure size in inches (only used when `ax is None`).
+        ax: Draw into an existing 2-D :class:`~matplotlib.axes.Axes`;
+            `None` creates a new figure.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, ax)`
+
+    Example:
+    >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
+    >>> plot_qspace_around_spot(vol)                          # the rod, in Q
+    >>> plot_qspace_on_detector(vol, camera=cam, image=img)   # same rod, on the chip
+    """
+    if vol.get("pix") is None:
+        raise ValueError(
+            "vol['pix'] is None — qspace_around_spot() must be called with "
+            "camera=<Camera instance> to compute detector positions."
+        )
+
+    along = np.asarray(vol["along"])
+    lat1 = np.asarray(vol["lateral1"])
+    lat2 = np.asarray(vol["lateral2"])
+    I = vol["I"]
+    on_det = vol["on_detector"]
+    pix = vol["pix"]
+
+    pix_flat = pix.reshape(-1, 2)
+    I_flat = I.reshape(-1)
+    on_flat = on_det.reshape(-1)
+
+    Imax = float(I.max()) if I.size and I.max() > 0 else 1.0
+    if log_intensity:
+        val_flat = np.log10(I_flat / Imax + intensity_floor)
+        vmin, vmax = np.log10(intensity_floor), 0.0
+    else:
+        val_flat = I_flat / Imax
+        vmin, vmax = 0.0, 1.0
+
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    frac = np.clip((val_flat - vmin) / max(vmax - vmin, 1e-12), 0.0, 1.0)
+    sizes = 6.0 + 90.0 * frac ** 1.5
+
+    keep = on_flat
+    xs, ys = pix_flat[keep, 0], pix_flat[keep, 1]
+    vals = val_flat[keep]
+
+    # ── nearest-to-G0 voxel (ΔQ = 0), for the crosshair ───────────────────────
+    i0 = int(np.argmin(np.abs(along)))
+    j0 = int(np.argmin(np.abs(lat1)))
+    k0 = int(np.argmin(np.abs(lat2)))
+    g0_pix = pix[i0, j0, k0] if on_det[i0, j0, k0] else None
+
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    ax.tick_params(colors="#7788aa", labelsize=8)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+
+    if image is not None:
+        img = np.asarray(image, dtype=float)
+        vmax_im = np.percentile(img[img > 0], 99) if img.max() > 0 else 1.0
+        ax.imshow(
+            np.log1p(img / vmax_im * 1000), origin="upper",
+            cmap="gray", aspect="equal", interpolation="nearest",
+        )
+    elif camera is not None:
+        ax.add_patch(Rectangle(
+            (0, 0), camera.Nh, camera.Nv,
+            linewidth=0.8, edgecolor="#333355", facecolor="none", zorder=0,
+        ))
+
+    sc = ax.scatter(
+        xs, ys, c=vals, cmap=cmap, norm=norm, s=sizes[keep],
+        marker="o", linewidths=0, alpha=0.9, zorder=3,
+    )
+
+    if g0_pix is not None:
+        ax.scatter(
+            [g0_pix[0]], [g0_pix[1]], s=140, marker="+",
+            color=FG, linewidths=1.4, zorder=4,
+        )
+
+    if camera is not None:
+        ax.set_xlim(0, camera.Nh)
+        ax.set_ylim(camera.Nv, 0)
+    elif len(xs):
+        pad = 0.1 * max(xs.max() - xs.min(), ys.max() - ys.min(), 1.0)
+        ax.set_xlim(xs.min() - pad, xs.max() + pad)
+        ax.set_ylim(ys.max() + pad, ys.min() - pad)
+    ax.set_aspect("equal")
+
+    ax.set_xlabel("xcam  (px)", color=FG, fontsize=9)
+    ax.set_ylabel("ycam  (px)", color=FG, fontsize=9)
+    hkl = vol.get("hkl")
+    layer_label = vol.get("layer")
+    n_shown = int(keep.sum())
+    n_total = int(on_flat.size)
+    ax.set_title(
+        f"Q-space rod projected onto detector — hkl={hkl}  (layer '{layer_label}')\n"
+        f"{n_shown}/{n_total} voxels on-detector",
+        color=FG, fontsize=9, pad=8,
+    )
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.8, pad=0.03)
+    cbar.set_label("log₁₀ I / I_max" if log_intensity else "I / I_max", color=FG, fontsize=8)
+    cbar.ax.yaxis.set_tick_params(color="#7788aa", labelsize=7)
+    plt.setp(cbar.ax.get_yticklabels(), color=FG)
+    cbar.outline.set_edgecolor("#333355")
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PIXEL DEVIATION: SIMULATED vs MEASURED
 # ─────────────────────────────────────────────────────────────────────────────

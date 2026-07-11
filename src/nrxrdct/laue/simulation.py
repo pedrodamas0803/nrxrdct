@@ -2509,6 +2509,7 @@ def qspace_around_spot(
     ki_hat=None,
     structure_model="coherent",
     correct_depth=False,
+    energy_ref_eV=None,
     verbose=True,
 ):
     """
@@ -2605,6 +2606,17 @@ def qspace_around_spot(
         Apply the parallax correction for `layer`'s centre depth below the
         sample surface (see `Camera.project`'s `source_depth_mm`).
         Only affects `pix` when `camera` is given.  Default `False`.
+    energy_ref_eV : float or None, optional
+        Reference photon energy (eV) used to evaluate the unit-cell
+        structure factor for **every** voxel at once (via
+        `Layer.structure_factor_batch` → `StructureFactorForQ`), instead of
+        each voxel's own energy.  `None` (default) uses the median energy
+        of the reachable voxels.  This is the one approximation in an
+        otherwise-exact computation: it only affects the smooth
+        `f'(E)`/`f''(E)` anomalous-dispersion terms, which barely change
+        across a typical local energy window — pass an explicit value if
+        your window straddles an absorption edge and you want to pin it to
+        one side.
     verbose : bool, optional
         Print a short summary (reachable/on-detector voxel counts, energy
         range) after the grid is evaluated.
@@ -2643,10 +2655,11 @@ def qspace_around_spot(
       needs to be large enough to make the array genuinely 3-D (e.g. for
       later isosurface/slice visualisation) — it is not a physical
       resolution limit.
-    * Runtime is dominated by `n_along * n_lateral**2` calls to
-      `stack.structure_factor` (each looping over every layer with an
-      xrayutilities structure-factor evaluation).  For a quick look, reduce
-      `n_along`/`n_lateral` or pass `structure_model='average'`.
+    * The structure factor is evaluated for the whole grid in one vectorised
+      batch per layer (`Layer.structure_factor_batch`), not per voxel — see
+      `energy_ref_eV` above for the one approximation this introduces.
+      Runtime therefore scales with `len(stack.all_layers)` (typically a
+      handful of xrayutilities calls total), not with the number of voxels.
 
     Example:
     >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
@@ -2732,28 +2745,37 @@ def qspace_around_spot(
         kf /= np.linalg.norm(kf, axis=1, keepdims=True)
         kf_flat[idx] = kf
 
-    # ── structure factor + LP + spectrum per reachable voxel ─────────────────
+    # ── structure factor + LP + spectrum, vectorised over all reachable voxels ─
+    # The elastic-condition geometry (tth, kf_hat) stays exact and per-voxel;
+    # only the unit-cell structure factor's F_uc(Q, E) is evaluated at one
+    # shared reference energy (see `energy_ref_eV`), which is what collapses
+    # this from N scalar xrayutilities calls to len(stack.all_layers) batched
+    # ones.
     spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
     F2_flat = np.zeros(n_vox)
     I_flat = np.zeros(n_vox)
 
-    for i in idx:
-        E = float(E_flat[i])
-        kf_hat = kf_flat[i]
-        tth = float(np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0))))
-        LP = lorentz_pol(tth)
-        if LP == 0.0:
-            continue
-        sw = spectrum(E)
-        if sw <= 0.0:
-            continue
-        if structure_model == "average":
-            F = stack.average_structure_factor(Q_flat[i], energy_eV=E, kf_hat=kf_hat)
-        else:
-            F = stack.structure_factor(Q_flat[i], energy_eV=E, kf_hat=kf_hat)
-        F2 = abs(F) ** 2
-        F2_flat[i] = F2
-        I_flat[i] = F2 * LP * sw
+    if len(idx):
+        tth_arr = np.degrees(np.arccos(np.clip(kf_flat[idx, 0], -1.0, 1.0)))
+        LP_arr = _lorentz_pol_vec(tth_arr)
+        sw_arr = spectrum(E_flat[idx])
+
+        E_ref = (
+            float(energy_ref_eV) if energy_ref_eV is not None
+            else float(np.median(E_flat[idx]))
+        )
+        batch_fn = (
+            stack.average_structure_factor_batch
+            if structure_model == "average"
+            else stack.structure_factor_batch
+        )
+        F_arr = batch_fn(Q_flat[idx], E_ref, kf_hat_arr=kf_flat[idx])
+        F2_arr = np.abs(F_arr) ** 2
+
+        keep = (LP_arr > 0) & (sw_arr > 0)
+        keep_idx = idx[keep]
+        F2_flat[keep_idx] = F2_arr[keep]
+        I_flat[keep_idx] = F2_arr[keep] * LP_arr[keep] * sw_arr[keep]
 
     # ── detector intersection ─────────────────────────────────────────────────
     pix_flat = None

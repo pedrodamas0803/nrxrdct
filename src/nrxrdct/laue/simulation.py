@@ -2817,6 +2817,98 @@ def qspace_around_spot(
     }
 
 
+def qspace_per_layer(
+    stack,
+    hkl,
+    layers=None,
+    *,
+    n_along=301,
+    n_lateral=7,
+    extent_along=None,
+    extent_lateral=None,
+    max_satellites=6,
+    camera=None,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    correct_depth=False,
+    energy_ref_eV=None,
+    verbose=True,
+):
+    """
+    Run :func:`qspace_around_spot` once per layer in the stack, using each
+    layer's own G0 and n_hat as the grid centre, but always evaluating the
+    **full coherent** structure factor of the entire stack at every Q point.
+
+    Because different layers may have slightly different lattice parameters,
+    their individual Bragg peaks sit at slightly different absolute
+    ``Q · n̂`` positions.  By running the simulation for each layer
+    separately you can see all peaks on a common absolute-Qn axis and
+    directly compare them against the measured image — revealing whether
+    any apparent shift between simulation and measurement is caused by
+    inter-layer interference, lattice mismatch, or a calibration offset.
+
+    Args:
+        stack: :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
+        hkl: Miller indices ``(h, k, l)`` of the reflection.
+        layers: List of :class:`~nrxrdct.laue.layers.Layer` objects (or layer
+            labels as strings) to simulate.  ``None`` (default) uses
+            ``stack.all_layers`` — every buffer and repeating layer.
+        All remaining keyword arguments are forwarded unchanged to
+        :func:`qspace_around_spot`.
+
+    Returns:
+        ``list[dict]`` — one vol dict per layer, in the same order as
+        ``layers`` (or ``stack.all_layers``), each with the same structure as
+        the return value of :func:`qspace_around_spot`.
+
+    Example:
+    >>> vols = qspace_per_layer(stack, (0, 0, 2), camera=cam)
+    >>> plot_qspace_summary(vol_main, camera=cam, image=img,
+    ...                     per_layer_vols=vols)
+    """
+    from .layers import LayeredCrystal
+
+    if not isinstance(stack, LayeredCrystal):
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+
+    if layers is None:
+        layers = stack.all_layers
+    else:
+        resolved = []
+        for lyr in layers:
+            if isinstance(lyr, str):
+                match = next((l for l in stack.all_layers if l.label == lyr), None)
+                if match is None:
+                    raise ValueError(f"no layer labeled {lyr!r}")
+                resolved.append(match)
+            else:
+                resolved.append(lyr)
+        layers = resolved
+
+    vols = []
+    for layer in layers:
+        v = qspace_around_spot(
+            stack, hkl, layer=layer,
+            n_along=n_along, n_lateral=n_lateral,
+            extent_along=extent_along, extent_lateral=extent_lateral,
+            max_satellites=max_satellites,
+            camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs,
+            kb_params=kb_params, ki_hat=ki_hat,
+            structure_model=structure_model,
+            correct_depth=correct_depth,
+            energy_ref_eV=energy_ref_eV,
+            verbose=verbose,
+        )
+        vols.append(v)
+    return vols
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DARWIN (DYNAMICAL) LAUE SIMULATION
 # ─────────────────────────────────────────────────────────────────────────────

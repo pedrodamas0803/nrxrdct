@@ -137,6 +137,7 @@ from .simulation import (
     print_mixed_summary,
     print_spot_table,
     qspace_around_spot,
+    qspace_per_layer,
     simulate_laue,
     simulate_laue_darwin,
     simulate_laue_stack,
@@ -211,6 +212,7 @@ __all__ = [
     "print_mixed_summary",
     "layer_contributions_spots",
     "qspace_around_spot",
+    "qspace_per_layer",
     # Layered structures
     "Layer",
     "LayeredCrystal",

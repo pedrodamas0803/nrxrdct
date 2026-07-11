@@ -5324,6 +5324,9 @@ def plot_qspace_summary(
 
     # ══════════════════════════════════════════════════════════════════════════
     # Panel 4 — 1D intensity comparison along the on-detector rod path
+    # For each ΔQ_along step, average simulated and measured intensities over
+    # ALL on-detector (j, k) lateral voxels, so contributions from the full
+    # lateral extent of the projection are included.
     # ══════════════════════════════════════════════════════════════════════════
     if ax_prof is not None:
         _ax_style(ax_prof, "Intensity along detector projection")
@@ -5331,46 +5334,62 @@ def plot_qspace_summary(
         ax_prof.set_ylabel("normalised intensity", color=FG, fontsize=8)
         ax_prof.grid(True, ls=":", lw=0.35, color="#181e2e")
 
-        # on-detector indices along the rod at the centre lateral position
-        on_centre = on_det[:, j0, k0]
-        i_on = np.where(on_centre)[0]
+        pix = vol["pix"]
 
-        if len(i_on):
-            along_on = along[i_on]
-            I_sim_on = I[i_on, j0, k0]
-            peak_sim = float(I_sim_on.max()) if I_sim_on.max() > 0 else 1.0
-            I_sim_norm = I_sim_on / peak_sim
+        # ── simulated: mean over all on-detector lateral voxels per along step ─
+        n_on_lat = on_det.sum(axis=(1, 2))          # (n_along,)
+        has_any = n_on_lat > 0
+        I_sum_lat = (I * on_det).sum(axis=(1, 2))   # (n_along,)
+        I_sim_avg = np.where(has_any, I_sum_lat / np.maximum(n_on_lat, 1), np.nan)
 
-            prof_handles = []
-            if image is not None:
-                img_arr = np.asarray(image, dtype=float)
-                pix_on = vol["pix"][i_on, j0, k0]   # (N, 2): (xcam, ycam)
-                # bilinear interpolation: map_coordinates expects (row, col) = (ycam, xcam)
-                coords = np.array([pix_on[:, 1], pix_on[:, 0]])
-                I_meas_on = map_coordinates(img_arr, coords, order=1, mode="nearest")
-                peak_meas = float(I_meas_on.max()) if I_meas_on.max() > 0 else 1.0
-                I_meas_norm = I_meas_on / peak_meas
+        along_on = along[has_any]
+        I_sim_on = I_sim_avg[has_any]
+        peak_sim = float(np.nanmax(I_sim_on)) if np.any(np.isfinite(I_sim_on)) else 1.0
+        I_sim_norm = I_sim_on / peak_sim
 
-                ax_prof.plot(along_on, I_meas_norm, color=FG, lw=1.3, zorder=3)
-                ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
-                             zorder=4, ls="--")
-                prof_handles = [
-                    Line2D([0], [0], color=FG, lw=1.3, label="measured"),
-                    Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
-                           label="simulated"),
-                ]
-            else:
-                ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
-                prof_handles = [
-                    Line2D([0], [0], color=COL_SUP, lw=1.3, label="simulated"),
-                ]
+        prof_handles = []
+        if image is not None and has_any.any():
+            img_arr = np.asarray(image, dtype=float)
+            # collect all on-detector pixels at once, labelled by their along index
+            on_flat_idx = np.where(on_det.reshape(len(along), -1))
+            i_idx = on_flat_idx[0]   # which along-step
+            jk_flat = on_flat_idx[1] # flattened lateral index
+            n_lat1, n_lat2 = on_det.shape[1], on_det.shape[2]
+            j_idx = jk_flat // n_lat2
+            k_idx = jk_flat % n_lat2
+            pix_sel = pix[i_idx, j_idx, k_idx]   # (N_total_on, 2): (xcam, ycam)
+            coords = np.array([pix_sel[:, 1], pix_sel[:, 0]])
+            meas_vals = map_coordinates(img_arr, coords, order=1, mode="nearest")
 
+            # average measured intensity per along-step
+            I_meas_sum = np.zeros(len(along))
+            np.add.at(I_meas_sum, i_idx, meas_vals)
+            I_meas_avg = np.where(has_any, I_meas_sum / np.maximum(n_on_lat, 1), np.nan)
+            I_meas_on = I_meas_avg[has_any]
+            peak_meas = float(np.nanmax(I_meas_on)) if np.any(np.isfinite(I_meas_on)) else 1.0
+            I_meas_norm = I_meas_on / peak_meas
+
+            ax_prof.plot(along_on, I_meas_norm, color=FG, lw=1.3, zorder=3)
+            ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
+                         zorder=4, ls="--")
+            prof_handles = [
+                Line2D([0], [0], color=FG, lw=1.3, label="measured"),
+                Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
+                       label="simulated"),
+            ]
+        elif has_any.any():
+            ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
+            prof_handles = [
+                Line2D([0], [0], color=COL_SUP, lw=1.3, label="simulated"),
+            ]
+
+        if has_any.any():
             ax_prof.set_ylim(bottom=0)
             ax_prof.legend(handles=prof_handles, fontsize=7, labelcolor=FG,
                            facecolor="#1a1f2e", edgecolor="#333355",
                            loc="upper right")
         else:
-            ax_prof.text(0.5, 0.5, "no on-detector voxels\nat centre lateral",
+            ax_prof.text(0.5, 0.5, "no on-detector voxels",
                          color="#7788aa", ha="center", va="center",
                          transform=ax_prof.transAxes, fontsize=8)
 

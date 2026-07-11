@@ -5072,6 +5072,254 @@ def plot_qspace_on_detector(
     return fig, ax
 
 
+def plot_qspace_summary(
+    vol: dict,
+    *,
+    camera: "Camera | None" = None,
+    image: "np.ndarray | None" = None,
+    log_intensity: bool = True,
+    intensity_floor: float = 1e-6,
+    figsize: tuple[float, float] = (14, 7),
+    out_path: "str | None" = None,
+):
+    """
+    Three-panel summary of the Q-space volume from
+    :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
+
+    **Panel 1 — Rod profile** (top, full width): intensity averaged over the
+    two transverse axes vs ΔQ along the rod direction.  A shaded band marks
+    the accessible energy window; yellow dots mark voxels that reach the
+    detector.  A secondary (right) y-axis overlays the photon energy E(ΔQ)
+    along the rod centre, so fringe positions can be read directly in keV.
+
+    **Panel 2 — Mid-plane heatmap** (bottom-left): ``pcolormesh`` of the
+    volume slice at ΔQ_lateral₁ = 0 (i.e. ``I[:, n_lat//2, :]``), showing
+    the rod shape and any lateral asymmetry in a legible 2-D image.  A
+    contour marks the energy-window boundary.
+
+    **Panel 3 — Detector projection** (bottom-right): the same projection as
+    :func:`plot_qspace_on_detector`, included only when ``vol['pix']`` is
+    available.  Omitted (panel 2 widens) when no camera was used.
+
+    Args:
+        vol: Return value of :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
+        camera: Same ``Camera`` used to build ``vol``; draws the detector
+            boundary in the projection panel.
+        image: Optional measured/simulated detector image shown as a grey
+            background in the projection panel.
+        log_intensity: Colour by log₁₀(I) rather than raw I (default True).
+        intensity_floor: Floor added before the log (as a fraction of I_max).
+        figsize: Figure size in inches.
+        out_path: Save path; ``None`` → do not save.
+
+    Returns:
+        ``(fig, axes)`` — axes is a list of 2 or 3 :class:`~matplotlib.axes.Axes`.
+
+    Example:
+    >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
+    >>> plot_qspace_summary(vol, camera=cam, image=img, out_path="summary_002.png")
+    """
+    along = np.asarray(vol["along"])
+    lat1 = np.asarray(vol["lateral1"])
+    lat2 = np.asarray(vol["lateral2"])
+    I = vol["I"]
+    E = vol["E"]
+    reachable = vol["reachable"]
+    on_det = vol["on_detector"]
+    has_pix = on_det is not None and vol.get("pix") is not None
+    hkl = vol.get("hkl")
+    layer_label = vol.get("layer")
+
+    Imax = float(I.max()) if I.size and I.max() > 0 else 1.0
+    if log_intensity:
+        def _val(arr):
+            return np.log10(np.asarray(arr) / Imax + intensity_floor)
+        vlabel = "log₁₀ I / I_max"
+        vmin, vmax_c = np.log10(intensity_floor), 0.0
+    else:
+        def _val(arr):
+            return np.asarray(arr) / Imax
+        vlabel = "I / I_max"
+        vmin, vmax_c = 0.0, 1.0
+
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax_c)
+
+    # ── figure / axes layout ──────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize)
+    fig.patch.set_facecolor(BG)
+    if has_pix:
+        gs = mgridspec.GridSpec(2, 2, figure=fig,
+                                height_ratios=[1, 1.4], hspace=0.42, wspace=0.32)
+        ax_rod = fig.add_subplot(gs[0, :])
+        ax_heat = fig.add_subplot(gs[1, 0])
+        ax_det = fig.add_subplot(gs[1, 1])
+        axes = [ax_rod, ax_heat, ax_det]
+    else:
+        gs = mgridspec.GridSpec(2, 1, figure=fig,
+                                height_ratios=[1, 1.4], hspace=0.42)
+        ax_rod = fig.add_subplot(gs[0])
+        ax_heat = fig.add_subplot(gs[1])
+        ax_det = None
+        axes = [ax_rod, ax_heat]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Panel 1 — rod profile
+    # ══════════════════════════════════════════════════════════════════════════
+    _ax_style(ax_rod, f"Rod profile — hkl={hkl}  (layer '{layer_label}')")
+    ax_rod.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8)
+    ax_rod.set_ylabel(vlabel, color=FG, fontsize=8)
+
+    I_rod = I.mean(axis=(1, 2))
+    val_rod = _val(I_rod)
+    reach_rod = reachable.any(axis=(1, 2))
+
+    if reach_rod.any():
+        ax_rod.axvspan(
+            along[reach_rod].min(), along[reach_rod].max(),
+            color=_QVOL_WINDOW, alpha=0.10, label="energy window",
+        )
+
+    ax_rod.plot(along, val_rod, color=COL_SUP, lw=1.3, zorder=3)
+
+    legend_h = []
+    if has_pix:
+        on_rod = on_det.any(axis=(1, 2))
+        if on_rod.any():
+            ax_rod.scatter(
+                along[on_rod], val_rod[on_rod],
+                s=20, color=COL_DB, zorder=4, linewidths=0,
+            )
+            legend_h.append(
+                Line2D([0], [0], marker="o", linestyle="", color=COL_DB,
+                       markersize=5, label="on detector")
+            )
+    if reach_rod.any():
+        legend_h.append(
+            Line2D([0], [0], color=_QVOL_WINDOW, lw=6, alpha=0.4,
+                   label="energy window")
+        )
+    if legend_h:
+        ax_rod.legend(handles=legend_h, fontsize=7, labelcolor=FG,
+                      facecolor="#1a1f2e", edgecolor="#333355", loc="upper right")
+
+    # right y-axis: photon energy along the rod centre
+    j0 = len(lat1) // 2
+    k0 = len(lat2) // 2
+    E_rod = E[:, j0, k0]
+    valid_E = np.isfinite(E_rod)
+    if valid_E.sum() >= 2:
+        ax_e = ax_rod.twinx()
+        ax_e.set_facecolor(BG)
+        ax_e.plot(along[valid_E], E_rod[valid_E] / 1000,
+                  "--", color=COL_BCC, lw=0.9, alpha=0.75)
+        ax_e.set_ylabel("E  (keV)", color=COL_BCC, fontsize=7, labelpad=4)
+        ax_e.tick_params(colors=COL_BCC, labelsize=6)
+        ax_e.yaxis.label.set_color(COL_BCC)
+        for sp in ax_e.spines.values():
+            sp.set_edgecolor("#1a1f2e")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Panel 2 — mid-plane heatmap  I(ΔQ_along, ΔQ_lat2)  at ΔQ_lat1 = 0
+    # ══════════════════════════════════════════════════════════════════════════
+    _ax_style(ax_heat, "Mid-plane heatmap  (ΔQ_lat₁ = 0)")
+    ax_heat.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8)
+    ax_heat.set_ylabel("ΔQ transverse  (Å⁻¹)", color=FG, fontsize=8)
+
+    slice2d = I[:, j0, :]                 # (n_along, n_lat2)
+    heat_val = _val(slice2d).T            # (n_lat2, n_along) → rows = y, cols = x
+
+    im = ax_heat.pcolormesh(
+        along, lat2, heat_val, cmap=cmap, norm=norm, shading="nearest",
+    )
+    cbar_h = fig.colorbar(im, ax=ax_heat, shrink=0.9, pad=0.03)
+    cbar_h.set_label(vlabel, color=FG, fontsize=7)
+    cbar_h.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+    plt.setp(cbar_h.ax.get_yticklabels(), color=FG)
+    cbar_h.outline.set_edgecolor("#333355")
+
+    reach_slice = reachable[:, j0, :]    # (n_along, n_lat2)
+    if reach_slice.any() and not reach_slice.all():
+        ax_heat.contour(
+            along, lat2, reach_slice.T.astype(float),
+            levels=[0.5], colors=[_QVOL_WINDOW], linewidths=0.8, alpha=0.8,
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Panel 3 — detector projection
+    # ══════════════════════════════════════════════════════════════════════════
+    if ax_det is not None:
+        _ax_style(ax_det, "Detector projection")
+        ax_det.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+        ax_det.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+
+        pix = vol["pix"]
+        pix_flat = pix.reshape(-1, 2)
+        I_flat = I.reshape(-1)
+        on_flat = on_det.reshape(-1)
+        val_flat = _val(I_flat)
+        frac_flat = np.clip((val_flat - vmin) / max(vmax_c - vmin, 1e-12), 0.0, 1.0)
+        sizes_flat = 6.0 + 90.0 * frac_flat ** 1.5
+
+        xs = pix_flat[on_flat, 0]
+        ys = pix_flat[on_flat, 1]
+
+        if image is not None:
+            img_arr = np.asarray(image, dtype=float)
+            vmax_im = np.percentile(img_arr[img_arr > 0], 99) if img_arr.max() > 0 else 1.0
+            ax_det.imshow(
+                np.log1p(img_arr / vmax_im * 1000), origin="upper",
+                cmap="gray", aspect="equal", interpolation="nearest",
+            )
+        elif camera is not None:
+            ax_det.add_patch(Rectangle(
+                (0, 0), camera.Nh, camera.Nv,
+                linewidth=0.8, edgecolor="#333355", facecolor="none", zorder=0,
+            ))
+
+        sc_d = ax_det.scatter(
+            xs, ys, c=val_flat[on_flat], cmap=cmap, norm=norm,
+            s=sizes_flat[on_flat], marker="o", linewidths=0, alpha=0.9, zorder=3,
+        )
+
+        i0 = int(np.argmin(np.abs(along)))
+        if on_det[i0, j0, k0]:
+            g0_pix = pix[i0, j0, k0]
+            ax_det.scatter(
+                [g0_pix[0]], [g0_pix[1]], s=120, marker="+",
+                color=FG, linewidths=1.2, zorder=4,
+            )
+
+        if camera is not None:
+            ax_det.set_xlim(0, camera.Nh)
+            ax_det.set_ylim(camera.Nv, 0)
+        elif len(xs):
+            pad = 0.1 * max(xs.max() - xs.min(), ys.max() - ys.min(), 1.0)
+            ax_det.set_xlim(xs.min() - pad, xs.max() + pad)
+            ax_det.set_ylim(ys.max() + pad, ys.min() - pad)
+        ax_det.set_aspect("equal")
+
+        cbar_d = fig.colorbar(sc_d, ax=ax_det, shrink=0.8, pad=0.03)
+        cbar_d.set_label(vlabel, color=FG, fontsize=7)
+        cbar_d.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+        plt.setp(cbar_d.ax.get_yticklabels(), color=FG)
+        cbar_d.outline.set_edgecolor("#333355")
+
+    fig.suptitle(
+        f"Q-space summary — hkl={hkl}  (layer '{layer_label}')",
+        color=FG, fontsize=11, y=1.01,
+    )
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, axes
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PIXEL DEVIATION: SIMULATED vs MEASURED
 # ─────────────────────────────────────────────────────────────────────────────

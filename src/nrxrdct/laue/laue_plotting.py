@@ -4693,7 +4693,7 @@ _QVOL_WINDOW = COL_BCC   # translucent surface marking the energy-window boundar
 def plot_qspace_around_spot(
     vol: dict,
     *,
-    log_intensity: bool = True,
+    log_intensity: bool = False,
     intensity_floor: float = 1e-6,
     show_window_surface: bool = True,
     show_off_detector: bool = True,
@@ -4904,7 +4904,7 @@ def plot_qspace_on_detector(
     *,
     camera: "Camera | None" = None,
     image: "np.ndarray | None" = None,
-    log_intensity: bool = True,
+    log_intensity: bool = False,
     intensity_floor: float = 1e-6,
     figsize: tuple[float, float] = (8, 8),
     ax: "plt.Axes | None" = None,
@@ -5077,13 +5077,13 @@ def plot_qspace_summary(
     *,
     camera: "Camera | None" = None,
     image: "np.ndarray | None" = None,
-    log_intensity: bool = True,
+    log_intensity: bool = False,
     intensity_floor: float = 1e-6,
-    figsize: tuple[float, float] = (14, 7),
+    figsize: tuple[float, float] = (18, 8),
     out_path: "str | None" = None,
 ):
     """
-    Three-panel summary of the Q-space volume from
+    Four-panel summary of the Q-space volume from
     :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
 
     **Panel 1 — Rod profile** (top, full width): intensity averaged over the
@@ -5097,28 +5097,40 @@ def plot_qspace_summary(
     the rod shape and any lateral asymmetry in a legible 2-D image.  A
     contour marks the energy-window boundary.
 
-    **Panel 3 — Detector projection** (bottom-right): the same projection as
+    **Panel 3 — Detector projection** (bottom-centre): the same projection as
     :func:`plot_qspace_on_detector`, included only when ``vol['pix']`` is
     available.  Omitted (panel 2 widens) when no camera was used.
+
+    **Panel 4 — Intensity comparison along the rod** (bottom-right): simulated
+    intensity vs ΔQ_along, restricted to on-detector voxels and normalised to
+    its own peak.  When ``image`` is provided, the measured pixel intensity
+    sampled along the same path is overlaid (also normalised to its own peak),
+    so fringe/satellite amplitudes can be compared directly.
 
     Args:
         vol: Return value of :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
         camera: Same ``Camera`` used to build ``vol``; draws the detector
             boundary in the projection panel.
-        image: Optional measured/simulated detector image shown as a grey
-            background in the projection panel.
-        log_intensity: Colour by log₁₀(I) rather than raw I (default True).
+        image: Optional measured/simulated detector image (shape ``(Nv, Nh)``).
+            Shown as a grey background in the projection panel, and sampled
+            along the rod path for the intensity-comparison panel.
+        log_intensity: Colour/scale by log₁₀(I) rather than raw I
+            (default ``False``).
         intensity_floor: Floor added before the log (as a fraction of I_max).
+            Only used when ``log_intensity=True``.
         figsize: Figure size in inches.
         out_path: Save path; ``None`` → do not save.
 
     Returns:
-        ``(fig, axes)`` — axes is a list of 2 or 3 :class:`~matplotlib.axes.Axes`.
+        ``(fig, axes)`` — axes is a list of 2, 3, or 4
+        :class:`~matplotlib.axes.Axes` objects.
 
     Example:
     >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
     >>> plot_qspace_summary(vol, camera=cam, image=img, out_path="summary_002.png")
     """
+    from scipy.ndimage import map_coordinates
+
     along = np.asarray(vol["along"])
     lat1 = np.asarray(vol["lateral1"])
     lat2 = np.asarray(vol["lateral2"])
@@ -5147,22 +5159,27 @@ def plot_qspace_summary(
     )
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax_c)
 
+    j0 = len(lat1) // 2
+    k0 = len(lat2) // 2
+
     # ── figure / axes layout ──────────────────────────────────────────────────
     fig = plt.figure(figsize=figsize)
     fig.patch.set_facecolor(BG)
     if has_pix:
-        gs = mgridspec.GridSpec(2, 2, figure=fig,
-                                height_ratios=[1, 1.4], hspace=0.42, wspace=0.32)
+        gs = mgridspec.GridSpec(2, 3, figure=fig,
+                                height_ratios=[1, 1.4], hspace=0.42, wspace=0.36)
         ax_rod = fig.add_subplot(gs[0, :])
         ax_heat = fig.add_subplot(gs[1, 0])
         ax_det = fig.add_subplot(gs[1, 1])
-        axes = [ax_rod, ax_heat, ax_det]
+        ax_prof = fig.add_subplot(gs[1, 2])
+        axes = [ax_rod, ax_heat, ax_det, ax_prof]
     else:
         gs = mgridspec.GridSpec(2, 1, figure=fig,
                                 height_ratios=[1, 1.4], hspace=0.42)
         ax_rod = fig.add_subplot(gs[0])
         ax_heat = fig.add_subplot(gs[1])
         ax_det = None
+        ax_prof = None
         axes = [ax_rod, ax_heat]
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -5179,7 +5196,7 @@ def plot_qspace_summary(
     if reach_rod.any():
         ax_rod.axvspan(
             along[reach_rod].min(), along[reach_rod].max(),
-            color=_QVOL_WINDOW, alpha=0.10, label="energy window",
+            color=_QVOL_WINDOW, alpha=0.10,
         )
 
     ax_rod.plot(along, val_rod, color=COL_SUP, lw=1.3, zorder=3)
@@ -5206,8 +5223,6 @@ def plot_qspace_summary(
                       facecolor="#1a1f2e", edgecolor="#333355", loc="upper right")
 
     # right y-axis: photon energy along the rod centre
-    j0 = len(lat1) // 2
-    k0 = len(lat2) // 2
     E_rod = E[:, j0, k0]
     valid_E = np.isfinite(E_rod)
     if valid_E.sum() >= 2:
@@ -5306,6 +5321,58 @@ def plot_qspace_summary(
         cbar_d.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
         plt.setp(cbar_d.ax.get_yticklabels(), color=FG)
         cbar_d.outline.set_edgecolor("#333355")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Panel 4 — 1D intensity comparison along the on-detector rod path
+    # ══════════════════════════════════════════════════════════════════════════
+    if ax_prof is not None:
+        _ax_style(ax_prof, "Intensity along detector projection")
+        ax_prof.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8)
+        ax_prof.set_ylabel("normalised intensity", color=FG, fontsize=8)
+        ax_prof.grid(True, ls=":", lw=0.35, color="#181e2e")
+
+        # on-detector indices along the rod at the centre lateral position
+        on_centre = on_det[:, j0, k0]
+        i_on = np.where(on_centre)[0]
+
+        if len(i_on):
+            along_on = along[i_on]
+            I_sim_on = I[i_on, j0, k0]
+            peak_sim = float(I_sim_on.max()) if I_sim_on.max() > 0 else 1.0
+            I_sim_norm = I_sim_on / peak_sim
+
+            prof_handles = []
+            if image is not None:
+                img_arr = np.asarray(image, dtype=float)
+                pix_on = vol["pix"][i_on, j0, k0]   # (N, 2): (xcam, ycam)
+                # bilinear interpolation: map_coordinates expects (row, col) = (ycam, xcam)
+                coords = np.array([pix_on[:, 1], pix_on[:, 0]])
+                I_meas_on = map_coordinates(img_arr, coords, order=1, mode="nearest")
+                peak_meas = float(I_meas_on.max()) if I_meas_on.max() > 0 else 1.0
+                I_meas_norm = I_meas_on / peak_meas
+
+                ax_prof.plot(along_on, I_meas_norm, color=FG, lw=1.3, zorder=3)
+                ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
+                             zorder=4, ls="--")
+                prof_handles = [
+                    Line2D([0], [0], color=FG, lw=1.3, label="measured"),
+                    Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
+                           label="simulated"),
+                ]
+            else:
+                ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
+                prof_handles = [
+                    Line2D([0], [0], color=COL_SUP, lw=1.3, label="simulated"),
+                ]
+
+            ax_prof.set_ylim(bottom=0)
+            ax_prof.legend(handles=prof_handles, fontsize=7, labelcolor=FG,
+                           facecolor="#1a1f2e", edgecolor="#333355",
+                           loc="upper right")
+        else:
+            ax_prof.text(0.5, 0.5, "no on-detector voxels\nat centre lateral",
+                         color="#7788aa", ha="center", va="center",
+                         transform=ax_prof.transAxes, fontsize=8)
 
     fig.suptitle(
         f"Q-space summary — hkl={hkl}  (layer '{layer_label}')",

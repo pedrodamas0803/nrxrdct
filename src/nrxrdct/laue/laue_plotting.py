@@ -5519,10 +5519,17 @@ def plot_detector_projection(
             return np.log1p(arr)
         return arr.copy()
 
+    # ── normalise simulated to measured intensity scale ───────────────────────
+    if has_meas:
+        img_arr = np.asarray(image, dtype=float)
+        meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
+        peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
+        peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
+        sim = sim * (peak_meas / max(peak_sim, 1e-30))
+
     sim_s = _stretch(sim)
-    pos_mask = sim_s > 0
     vmin_s = 0.0
-    vmax_s = float(np.percentile(sim_s[pos_mask], vmax_percentile)) if pos_mask.any() else 1.0
+    vmax_s = float(np.percentile(sim_s[sim_s > 0], vmax_percentile)) if (sim_s > 0).any() else 1.0
 
     for ax in axes:
         _ax_style(ax, "")
@@ -5531,14 +5538,14 @@ def plot_detector_projection(
 
     # ── left panel: simulated ─────────────────────────────────────────────────
     ax_sim = axes[0]
-    ax_sim.set_title("Simulated", color=FG, fontsize=9, pad=4)
+    ax_sim.set_title("Simulated (scaled to measured)", color=FG, fontsize=9, pad=4)
     im_s = ax_sim.imshow(
         sim_s, origin="upper", extent=ext,
         cmap=cmap, vmin=vmin_s, vmax=vmax_s,
         aspect="equal", interpolation="nearest",
     )
     cbar_s = fig.colorbar(im_s, ax=ax_sim, shrink=0.85, pad=0.03)
-    cbar_s.set_label("log(1+I)" if log_intensity else "I  (a.u.)", color=FG, fontsize=7)
+    cbar_s.set_label("log(1+counts)" if log_intensity else "counts", color=FG, fontsize=7)
     cbar_s.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
     plt.setp(cbar_s.ax.get_yticklabels(), color=FG)
     cbar_s.outline.set_edgecolor("#333355")
@@ -5547,13 +5554,10 @@ def plot_detector_projection(
     if has_meas:
         ax_meas = axes[1]
         ax_meas.set_title("Measured", color=FG, fontsize=9, pad=4)
-        img_arr = np.asarray(image, dtype=float)
-        meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
         meas_s = _stretch(meas_patch)
-        vmax_m = float(np.percentile(meas_s[meas_s > 0], vmax_percentile)) if (meas_s > 0).any() else 1.0
         im_m = ax_meas.imshow(
             meas_s, origin="upper", extent=ext,
-            cmap="gray", vmin=0.0, vmax=vmax_m,
+            cmap="gray", vmin=0.0, vmax=vmax_s,
             aspect="equal", interpolation="nearest",
         )
         cbar_m = fig.colorbar(im_m, ax=ax_meas, shrink=0.85, pad=0.03)

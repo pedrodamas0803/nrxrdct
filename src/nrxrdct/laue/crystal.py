@@ -410,7 +410,7 @@ def build_MLed(
     # add_buffer_layer: buffer layers are always placed at the very bottom
     # of the stack, so add_buffer_layer here would put the EBL underneath
     # the defect/active/clad blocks instead of on top of them.
-    ebl = stack.add_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), label='Electron blocking layer')
+    # ebl = stack.add_layer(AlGaN_ebl, UB_GaN, nano2angstrom(160), label='Electron blocking layer')
 
     return stack
 

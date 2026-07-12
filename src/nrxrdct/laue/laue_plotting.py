@@ -5534,7 +5534,11 @@ def plot_detector_projection(
 
     sim_s = _stretch(sim)
     vmin_s = 0.0
-    vmax_s = float(np.percentile(sim_s[sim_s > 0], vmax_percentile)) if (sim_s > 0).any() else 1.0
+    if has_meas:
+        # use the known measured peak so noise floor pixels don't compress the scale
+        vmax_s = float(_stretch(np.array([peak_meas]))[0])
+    else:
+        vmax_s = float(np.percentile(sim_s[sim_s > 0], vmax_percentile)) if (sim_s > 0).any() else 1.0
 
     for ax in axes:
         _ax_style(ax, "")

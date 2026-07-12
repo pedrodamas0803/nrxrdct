@@ -138,6 +138,7 @@ from .simulation import (
     print_mixed_summary,
     print_spot_table,
     qspace_around_spot,
+    qspace_multi_hkl,
     qspace_per_layer,
     project_to_detector,
     simulate_laue,
@@ -214,6 +215,7 @@ __all__ = [
     "print_mixed_summary",
     "layer_contributions_spots",
     "qspace_around_spot",
+    "qspace_multi_hkl",
     "qspace_per_layer",
     "project_to_detector",
     # Layered structures

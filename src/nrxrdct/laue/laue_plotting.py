@@ -5461,6 +5461,7 @@ def plot_detector_projection(
     pad_px: int = 20,
     log_intensity: bool = True,
     vmax_percentile: float = 99.5,
+    psf_sigma_px: float = 1.0,
     figsize: "tuple[float, float] | None" = None,
     out_path: "str | None" = None,
 ) -> tuple:
@@ -5485,6 +5486,9 @@ def plot_detector_projection(
         log_intensity: Apply ``log1p`` stretch to both panels.
         vmax_percentile: Percentile of non-zero simulated pixels used as the
             colour-scale maximum (default 99.5).
+        psf_sigma_px: Gaussian PSF sigma in pixels applied to the simulated
+            image before noise is added.  Models the detector point-spread
+            function (charge sharing, optical blur).  Set to 0 to disable.
         figsize: Figure size.  Defaults to ``(8, 5)`` (one panel) or
             ``(14, 5)`` (two panels).
         out_path: If given, save the figure to this path.
@@ -5527,6 +5531,10 @@ def plot_detector_projection(
         peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
         peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
         sim = sim * (peak_meas / max(peak_sim, 1e-30))
+        # Detector PSF: applied before noise so blur acts on the photon flux.
+        if psf_sigma_px > 0:
+            from scipy.ndimage import gaussian_filter as _gf
+            sim = _gf(sim, sigma=psf_sigma_px)
         # Poisson noise: background floor estimated from the 5th-percentile of
         # the measured patch so the noise level matches detector conditions.
         noise_floor = float(np.percentile(meas_patch[meas_patch >= 0], 5))
@@ -5589,13 +5597,12 @@ def plot_detector_projection(
         for ax in axes:
             ax.plot(cx, cy, "+", color=FG, ms=10, mew=1.2, zorder=5)
 
-    # ── build title from layer labels ─────────────────────────────────────────
-    hkl = vol0.get("hkl", "?")
-    if len(vols_list) == 1:
-        title = f"Detector image — hkl={hkl}  (layer '{vol0.get('layer', '?')}')"
-    else:
-        labels = ", ".join(str(v.get("layer", "?")) for v in vols_list)
-        title = f"Detector image — hkl={hkl}  ({len(vols_list)} layers: {labels})"
+    # ── build title ───────────────────────────────────────────────────────────
+    unique_hkls = list(dict.fromkeys(str(v.get("hkl", "?")) for v in vols_list))
+    unique_layers = list(dict.fromkeys(str(v.get("layer", "?")) for v in vols_list))
+    hkl_str = unique_hkls[0] if len(unique_hkls) == 1 else f"{len(unique_hkls)} reflections"
+    layer_str = unique_layers[0] if len(unique_layers) == 1 else f"{len(unique_layers)} layers"
+    title = f"Detector projection — hkl={hkl_str}  ({layer_str})"
 
     fig.suptitle(title, color=FG, fontsize=10, y=1.01)
     fig.tight_layout()

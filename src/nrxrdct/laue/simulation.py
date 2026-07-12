@@ -2918,6 +2918,69 @@ def qspace_per_layer(
     return vols
 
 
+def qspace_multi_hkl(
+    stack,
+    hkl_list,
+    layer=None,
+    *,
+    n_along=301,
+    n_lateral=7,
+    extent_along=None,
+    extent_lateral=None,
+    max_satellites=6,
+    camera=None,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    correct_depth=False,
+    energy_ref_eV=None,
+    verbose=True,
+):
+    """
+    Run :func:`qspace_around_spot` for every HKL in *hkl_list* and return the
+    results as a flat list of vol dicts.
+
+    All vols share the same *stack*, *layer*, and simulation settings, so they
+    can be passed directly to :func:`project_to_detector` or
+    :func:`~nrxrdct.laue.laue_plotting.plot_detector_projection` to accumulate
+    all reflections onto the same detector image in one call.
+
+    Args:
+        stack: :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
+        hkl_list: Iterable of ``(h, k, l)`` tuples.
+        layer: Layer whose reciprocal-lattice vector defines the grid centre
+            for each reflection.  Forwarded unchanged to
+            :func:`qspace_around_spot`.
+        All remaining keyword arguments are forwarded to
+        :func:`qspace_around_spot`.
+
+    Returns:
+        ``list[dict]`` — one vol dict per HKL, in the same order as
+        *hkl_list*.
+    """
+    vols = []
+    for hkl in hkl_list:
+        vol = qspace_around_spot(
+            stack, hkl, layer=layer,
+            n_along=n_along, n_lateral=n_lateral,
+            extent_along=extent_along, extent_lateral=extent_lateral,
+            max_satellites=max_satellites,
+            camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs,
+            kb_params=kb_params, ki_hat=ki_hat,
+            structure_model=structure_model,
+            correct_depth=correct_depth,
+            energy_ref_eV=energy_ref_eV,
+            verbose=verbose,
+        )
+        vols.append(vol)
+    return vols
+
+
 def project_to_detector(vol_or_vols, *, pad_px=20, camera=None):
     """
     Bin Q-space voxel intensities onto detector pixel coordinates.

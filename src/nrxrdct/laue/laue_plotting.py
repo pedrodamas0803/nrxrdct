@@ -5508,6 +5508,7 @@ def plot_detector_projection(
     fig, axes_arr = plt.subplots(
         1, n_panels, figsize=figsize,
         facecolor=BG, squeeze=False,
+        sharex=True, sharey=True,
     )
     axes = list(axes_arr[0])
     cmap = mcolors.LinearSegmentedColormap.from_list(
@@ -5526,6 +5527,10 @@ def plot_detector_projection(
         peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
         peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
         sim = sim * (peak_meas / max(peak_sim, 1e-30))
+        # Poisson noise: background floor estimated from the 5th-percentile of
+        # the measured patch so the noise level matches detector conditions.
+        noise_floor = float(np.percentile(meas_patch[meas_patch >= 0], 5))
+        sim = np.random.poisson(np.maximum(sim + noise_floor, 0)).astype(float)
 
     sim_s = _stretch(sim)
     vmin_s = 0.0
@@ -5538,7 +5543,8 @@ def plot_detector_projection(
 
     # ── left panel: simulated ─────────────────────────────────────────────────
     ax_sim = axes[0]
-    ax_sim.set_title("Simulated (scaled to measured)", color=FG, fontsize=9, pad=4)
+    _sim_title = "Simulated + Poisson noise" if has_meas else "Simulated"
+    ax_sim.set_title(_sim_title, color=FG, fontsize=9, pad=4)
     im_s = ax_sim.imshow(
         sim_s, origin="upper", extent=ext,
         cmap=cmap, vmin=vmin_s, vmax=vmax_s,

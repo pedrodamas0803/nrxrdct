@@ -5312,15 +5312,18 @@ def plot_qspace_summary(
                 np.log1p(img_arr / vmax_im * 1000), origin="upper",
                 cmap="gray", aspect="equal", interpolation="nearest",
             )
-        elif camera is not None:
+        if camera is not None:
+            ec = "#6688bb" if image is not None else "#333355"
             ax_det.add_patch(Rectangle(
                 (0, 0), camera.Nh, camera.Nv,
-                linewidth=0.8, edgecolor="#333355", facecolor="none", zorder=0,
+                linewidth=0.8, edgecolor=ec, facecolor="none", zorder=5,
             ))
 
+        rgba_d = cmap(norm(val_d)).copy()
+        rgba_d[:, 3] = np.clip(0.15 + 0.8 * frac_d, 0.15, 0.95)
         sc_d = ax_det.scatter(
-            xs_d, ys_d, c=val_d, cmap=cmap, norm=norm,
-            s=sizes_d, marker="o", linewidths=0, alpha=0.9, zorder=3,
+            xs_d, ys_d, facecolors=rgba_d,
+            s=sizes_d, marker="o", linewidths=0, zorder=3,
         )
 
         # crosshair at G0 (ΔQ = 0)
@@ -5340,7 +5343,9 @@ def plot_qspace_summary(
             ax_det.set_ylim(ys_d.max() + pad, ys_d.min() - pad)
         ax_det.set_aspect("equal")
 
-        cbar_d = fig.colorbar(sc_d, ax=ax_det, shrink=0.8, pad=0.03)
+        _sm_d = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        _sm_d.set_array([])
+        cbar_d = fig.colorbar(_sm_d, ax=ax_det, shrink=0.8, pad=0.03)
         cbar_d.set_label(vlabel, color=FG, fontsize=7)
         cbar_d.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
         plt.setp(cbar_d.ax.get_yticklabels(), color=FG)
@@ -5372,6 +5377,9 @@ def plot_qspace_summary(
 
         prof_handles = []
         if has_any.any():
+            from scipy.signal import hilbert as _hilbert
+            _env = np.abs(_hilbert(I_sim_norm))
+
             if image is not None and has_pix:
                 img_arr = np.asarray(image, dtype=float)
                 pix_v = vol["pix"]
@@ -5392,16 +5400,24 @@ def plot_qspace_summary(
                              color=FG, lw=1.3, zorder=3)
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
                              ls="--", zorder=4)
+                ax_prof.plot(along_on, _env, color=COL_SUP, lw=1.0,
+                             ls=":", alpha=0.6, zorder=4)
                 prof_handles = [
                     Line2D([0], [0], color=FG, lw=1.3, label="measured"),
                     Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
                            label="simulated (coherent)"),
+                    Line2D([0], [0], color=COL_SUP, lw=1.0, ls=":",
+                           alpha=0.6, label="envelope"),
                 ]
             else:
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
+                ax_prof.plot(along_on, _env, color=COL_SUP, lw=1.0,
+                             ls=":", alpha=0.6, zorder=4)
                 prof_handles = [
                     Line2D([0], [0], color=COL_SUP, lw=1.3,
                            label="simulated (coherent)"),
+                    Line2D([0], [0], color=COL_SUP, lw=1.0, ls=":",
+                           alpha=0.6, label="envelope"),
                 ]
             ax_prof.set_ylim(bottom=0)
             ax_prof.legend(

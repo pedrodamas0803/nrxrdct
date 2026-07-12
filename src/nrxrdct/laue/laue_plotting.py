@@ -5080,6 +5080,7 @@ def plot_qspace_summary(
     image: "np.ndarray | None" = None,
     log_intensity: bool = False,
     intensity_floor: float = 1e-6,
+    resolution_dq: float = 0.01,
     figsize: tuple[float, float] = (18, 8),
     out_path: "str | None" = None,
 ):
@@ -5377,8 +5378,11 @@ def plot_qspace_summary(
 
         prof_handles = []
         if has_any.any():
-            from scipy.signal import hilbert as _hilbert
-            _env = np.abs(_hilbert(I_sim_norm))
+            from scipy.ndimage import gaussian_filter1d as _gf1d
+            dq_step = float(np.diff(along_on).mean()) if len(along_on) > 1 else 1.0
+            sigma_px = max(resolution_dq / abs(dq_step), 0.5)
+            _env = _gf1d(I_sim_norm, sigma=sigma_px)
+            _env_label = f"convolved (σ={resolution_dq*1e3:.1f} mÅ⁻¹)"
 
             if image is not None and has_pix:
                 img_arr = np.asarray(image, dtype=float)
@@ -5400,24 +5404,24 @@ def plot_qspace_summary(
                              color=FG, lw=1.3, zorder=3)
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
                              ls="--", zorder=4)
-                ax_prof.plot(along_on, _env, color=COL_SUP, lw=1.0,
-                             ls=":", alpha=0.6, zorder=4)
+                ax_prof.plot(along_on, _env, color=COL_BCC, lw=1.5,
+                             ls="-", alpha=0.75, zorder=5)
                 prof_handles = [
                     Line2D([0], [0], color=FG, lw=1.3, label="measured"),
                     Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
                            label="simulated (coherent)"),
-                    Line2D([0], [0], color=COL_SUP, lw=1.0, ls=":",
-                           alpha=0.6, label="envelope"),
+                    Line2D([0], [0], color=COL_BCC, lw=1.5,
+                           alpha=0.75, label=_env_label),
                 ]
             else:
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
-                ax_prof.plot(along_on, _env, color=COL_SUP, lw=1.0,
-                             ls=":", alpha=0.6, zorder=4)
+                ax_prof.plot(along_on, _env, color=COL_BCC, lw=1.5,
+                             ls="-", alpha=0.75, zorder=4)
                 prof_handles = [
                     Line2D([0], [0], color=COL_SUP, lw=1.3,
                            label="simulated (coherent)"),
-                    Line2D([0], [0], color=COL_SUP, lw=1.0, ls=":",
-                           alpha=0.6, label="envelope"),
+                    Line2D([0], [0], color=COL_BCC, lw=1.5,
+                           alpha=0.75, label=_env_label),
                 ]
             ax_prof.set_ylim(bottom=0)
             ax_prof.legend(

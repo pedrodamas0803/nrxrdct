@@ -5277,7 +5277,12 @@ def plot_qspace_summary(
         )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Panel 3 — detector projection
+    # Panel 3 — detector projection.
+    #
+    # One marker per along step: coherent intensity |F_total|² and pixel
+    # position are both averaged over all on-detector lateral (j,k) voxels
+    # at that step, so each dot represents the full lateral footprint collapsed
+    # to a single coherent-sum value.
     # ══════════════════════════════════════════════════════════════════════════
     if ax_det is not None:
         _ax_style(ax_det, "Detector projection")
@@ -5285,15 +5290,20 @@ def plot_qspace_summary(
         ax_det.set_ylabel("ycam  (px)", color=FG, fontsize=8)
 
         pix = vol["pix"]
-        pix_flat = pix.reshape(-1, 2)
-        I_flat = I.reshape(-1)
-        on_flat = on_det.reshape(-1)
-        val_flat = _val(I_flat)
-        frac_flat = np.clip((val_flat - vmin) / max(vmax_c - vmin, 1e-12), 0.0, 1.0)
-        sizes_flat = 6.0 + 90.0 * frac_flat ** 1.5
 
-        xs = pix_flat[on_flat, 0]
-        ys = pix_flat[on_flat, 1]
+        # collapse lateral: one (I, xcam, ycam) per along step
+        n_on_lat_d = on_det.sum(axis=(1, 2))          # (n_along,)
+        has_on = n_on_lat_d > 0
+        denom = np.maximum(n_on_lat_d, 1)
+        I_avg_d = np.where(has_on, (I * on_det).sum(axis=(1, 2)) / denom, np.nan)
+        pix_x_avg = np.where(has_on, (pix[..., 0] * on_det).sum(axis=(1, 2)) / denom, np.nan)
+        pix_y_avg = np.where(has_on, (pix[..., 1] * on_det).sum(axis=(1, 2)) / denom, np.nan)
+
+        xs_d = pix_x_avg[has_on]
+        ys_d = pix_y_avg[has_on]
+        val_d = _val(I_avg_d[has_on])
+        frac_d = np.clip((val_d - vmin) / max(vmax_c - vmin, 1e-12), 0.0, 1.0)
+        sizes_d = 8.0 + 100.0 * frac_d ** 1.5
 
         if image is not None:
             img_arr = np.asarray(image, dtype=float)
@@ -5309,25 +5319,25 @@ def plot_qspace_summary(
             ))
 
         sc_d = ax_det.scatter(
-            xs, ys, c=val_flat[on_flat], cmap=cmap, norm=norm,
-            s=sizes_flat[on_flat], marker="o", linewidths=0, alpha=0.9, zorder=3,
+            xs_d, ys_d, c=val_d, cmap=cmap, norm=norm,
+            s=sizes_d, marker="o", linewidths=0, alpha=0.9, zorder=3,
         )
 
+        # crosshair at G0 (ΔQ = 0)
         i0 = int(np.argmin(np.abs(along)))
-        if on_det[i0, j0, k0]:
-            g0_pix = pix[i0, j0, k0]
+        if has_on[i0]:
             ax_det.scatter(
-                [g0_pix[0]], [g0_pix[1]], s=120, marker="+",
+                [pix_x_avg[i0]], [pix_y_avg[i0]], s=120, marker="+",
                 color=FG, linewidths=1.2, zorder=4,
             )
 
         if camera is not None:
             ax_det.set_xlim(0, camera.Nh)
             ax_det.set_ylim(camera.Nv, 0)
-        elif len(xs):
-            pad = 0.1 * max(xs.max() - xs.min(), ys.max() - ys.min(), 1.0)
-            ax_det.set_xlim(xs.min() - pad, xs.max() + pad)
-            ax_det.set_ylim(ys.max() + pad, ys.min() - pad)
+        elif len(xs_d):
+            pad = 0.1 * max(xs_d.max() - xs_d.min(), ys_d.max() - ys_d.min(), 1.0)
+            ax_det.set_xlim(xs_d.min() - pad, xs_d.max() + pad)
+            ax_det.set_ylim(ys_d.max() + pad, ys_d.min() - pad)
         ax_det.set_aspect("equal")
 
         cbar_d = fig.colorbar(sc_d, ax=ax_det, shrink=0.8, pad=0.03)
@@ -5337,103 +5347,34 @@ def plot_qspace_summary(
         cbar_d.outline.set_edgecolor("#333355")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Panel 4 — 1D intensity comparison along the on-detector rod path.
+    # Panel 4 — coherent total intensity along the on-detector rod path.
     #
-    # When per_layer_vols is given the x-axis is absolute Q·n̂ so that layers
-    # with different lattice parameters (different G0 positions) can be
-    # compared on the same axis.  Otherwise the x-axis is ΔQ relative to the
-    # primary vol's G0.
-    #
-    # For each vol, intensities are averaged over ALL on-detector (j,k) lateral
-    # voxels at each along step so the full lateral footprint is included.
+    # vol["I"] = |F_total|²  where  F_total = Σ_layer F_layer·exp(iφ_layer)
+    # is the coherent structure-factor sum already computed by
+    # structure_factor_batch — phase shifts between layers are included.
+    # Intensities are averaged over ALL on-detector (j,k) lateral voxels at
+    # each along step, then normalised to their on-detector maximum.
     # ══════════════════════════════════════════════════════════════════════════
     if ax_prof is not None:
-        _ax_style(ax_prof, "Intensity along detector projection")
-        ax_prof.set_ylabel("normalised intensity", color=FG, fontsize=8)
+        _ax_style(ax_prof, "Coherent intensity along detector projection")
+        ax_prof.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8)
+        ax_prof.set_ylabel("I / I_max", color=FG, fontsize=8)
         ax_prof.grid(True, ls=":", lw=0.35, color="#181e2e")
 
-        use_abs_qn = bool(per_layer_vols)
-        ax_prof.set_xlabel(
-            "Q · n̂  (Å⁻¹)" if use_abs_qn else "ΔQ ∥ n̂  (Å⁻¹)",
-            color=FG, fontsize=8,
-        )
-
-        def _layer_1d(v):
-            """Return (x_values, norm_I) for on-detector averaged profile of vol v."""
-            I_v = v["I"]
-            on_v = v["on_detector"]
-            if on_v is None:
-                return None, None
-            n_on = on_v.sum(axis=(1, 2))
-            has = n_on > 0
-            if not has.any():
-                return None, None
-            I_avg = np.where(has, (I_v * on_v).sum(axis=(1, 2)) / np.maximum(n_on, 1), np.nan)
-            x = np.asarray(v["along"])
-            if use_abs_qn:
-                G0_v = np.asarray(v["G0"])
-                n_hat_v = np.asarray(v["axes"]["n_hat"])
-                x = float(G0_v @ n_hat_v) + x
-            x_on = x[has]
-            I_on = I_avg[has]
-            peak = float(np.nanmax(I_on)) if np.any(np.isfinite(I_on)) else 1.0
-            return x_on, I_on / peak if peak > 0 else I_on
+        n_on_lat = on_det.sum(axis=(1, 2))          # (n_along,)
+        has_any = n_on_lat > 0
+        I_sum_lat = (I * on_det).sum(axis=(1, 2))
+        I_sim_avg = np.where(has_any, I_sum_lat / np.maximum(n_on_lat, 1), np.nan)
+        along_on = along[has_any]
+        I_sim_on = I_sim_avg[has_any]
+        peak_sim = float(np.nanmax(I_sim_on)) if np.any(np.isfinite(I_sim_on)) else 1.0
+        I_sim_norm = I_sim_on / max(peak_sim, 1e-30)
 
         prof_handles = []
-
-        if use_abs_qn:
-            # ── per-layer simulated profiles (colour-cycled) ──────────────────
-            layer_colors = plt.cm.tab10(np.linspace(0, 0.9, len(per_layer_vols)))
-            for v, col in zip(per_layer_vols, layer_colors):
-                x_on, I_norm = _layer_1d(v)
-                if x_on is None:
-                    continue
-                lbl = str(v.get("layer", "?"))
-                ax_prof.plot(x_on, I_norm, lw=1.1, color=col, zorder=3)
-                prof_handles.append(
-                    Line2D([0], [0], color=col, lw=1.1, label=lbl)
-                )
-            # ── measured profile from the primary vol's pixel positions ───────
+        if has_any.any():
             if image is not None and has_pix:
                 img_arr = np.asarray(image, dtype=float)
                 pix_v = vol["pix"]
-                on_flat_idx = np.where(on_det.reshape(len(along), -1))
-                i_idx, jk_flat = on_flat_idx
-                n_lat2 = on_det.shape[2]
-                j_idx = jk_flat // n_lat2
-                k_idx = jk_flat % n_lat2
-                pix_sel = pix_v[i_idx, j_idx, k_idx]
-                coords = np.array([pix_sel[:, 1], pix_sel[:, 0]])
-                meas_vals = map_coordinates(img_arr, coords, order=1, mode="nearest")
-                n_on_lat = on_det.sum(axis=(1, 2))
-                has_any = n_on_lat > 0
-                I_meas_sum = np.zeros(len(along))
-                np.add.at(I_meas_sum, i_idx, meas_vals)
-                I_meas_avg = np.where(has_any, I_meas_sum / np.maximum(n_on_lat, 1), np.nan)
-                G0_ref = np.asarray(vol["G0"])
-                n_hat_ref = np.asarray(vol["axes"]["n_hat"])
-                x_ref = float(G0_ref @ n_hat_ref) + along
-                I_meas_on = I_meas_avg[has_any]
-                peak_meas = float(np.nanmax(I_meas_on)) if np.any(np.isfinite(I_meas_on)) else 1.0
-                ax_prof.plot(x_ref[has_any], I_meas_on / max(peak_meas, 1e-30),
-                             color=FG, lw=1.5, zorder=5)
-                prof_handles.append(
-                    Line2D([0], [0], color=FG, lw=1.5, label="measured")
-                )
-        else:
-            # ── single-vol mode (original ΔQ axis) ───────────────────────────
-            pix_v = vol["pix"]
-            n_on_lat = on_det.sum(axis=(1, 2))
-            has_any = n_on_lat > 0
-            I_sum_lat = (I * on_det).sum(axis=(1, 2))
-            I_sim_avg = np.where(has_any, I_sum_lat / np.maximum(n_on_lat, 1), np.nan)
-            along_on = along[has_any]
-            I_sim_on = I_sim_avg[has_any]
-            peak_sim = float(np.nanmax(I_sim_on)) if np.any(np.isfinite(I_sim_on)) else 1.0
-            I_sim_norm = I_sim_on / max(peak_sim, 1e-30)
-
-            if image is not None and has_any.any():
-                img_arr = np.asarray(image, dtype=float)
                 on_flat_idx = np.where(on_det.reshape(len(along), -1))
                 i_idx, jk_flat = on_flat_idx
                 n_lat2 = on_det.shape[2]
@@ -5450,24 +5391,18 @@ def plot_qspace_summary(
                 ax_prof.plot(along_on, I_meas_on / max(peak_meas, 1e-30),
                              color=FG, lw=1.3, zorder=3)
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3,
-                             zorder=4, ls="--")
+                             ls="--", zorder=4)
                 prof_handles = [
                     Line2D([0], [0], color=FG, lw=1.3, label="measured"),
                     Line2D([0], [0], color=COL_SUP, lw=1.3, ls="--",
-                           label="simulated"),
+                           label="simulated (coherent)"),
                 ]
-            elif has_any.any():
+            else:
                 ax_prof.plot(along_on, I_sim_norm, color=COL_SUP, lw=1.3, zorder=3)
                 prof_handles = [
-                    Line2D([0], [0], color=COL_SUP, lw=1.3, label="simulated"),
+                    Line2D([0], [0], color=COL_SUP, lw=1.3,
+                           label="simulated (coherent)"),
                 ]
-            has_any_plot = has_any
-            if not has_any_plot.any():
-                ax_prof.text(0.5, 0.5, "no on-detector voxels",
-                             color="#7788aa", ha="center", va="center",
-                             transform=ax_prof.transAxes, fontsize=8)
-
-        if prof_handles:
             ax_prof.set_ylim(bottom=0)
             ax_prof.legend(
                 handles=prof_handles, fontsize=7, labelcolor=FG,
@@ -5475,6 +5410,10 @@ def plot_qspace_summary(
                 loc="upper left", bbox_to_anchor=(1.01, 1.0),
                 borderaxespad=0, handlelength=1.4,
             )
+        else:
+            ax_prof.text(0.5, 0.5, "no on-detector voxels",
+                         color="#7788aa", ha="center", va="center",
+                         transform=ax_prof.transAxes, fontsize=8)
 
     fig.suptitle(
         f"Q-space summary — hkl={hkl}  (layer '{layer_label}')",

@@ -5449,6 +5449,149 @@ def plot_qspace_summary(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SIMULATED DETECTOR IMAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_detector_projection(
+    vol_or_vols,
+    *,
+    image: "np.ndarray | None" = None,
+    camera: "Camera | None" = None,
+    pad_px: int = 20,
+    log_intensity: bool = True,
+    vmax_percentile: float = 99.5,
+    figsize: "tuple[float, float] | None" = None,
+    out_path: "str | None" = None,
+) -> tuple:
+    """
+    Plot the Q-space projection onto detector pixels produced by
+    :func:`~nrxrdct.laue.simulation.project_to_detector`.
+
+    When *image* (a full measured detector frame) is supplied the function
+    shows two panels side by side — simulated (left) and measured patch
+    (right) — so you can compare them directly.  Both panels use the same
+    colour scale and log-stretch.
+
+    Args:
+        vol_or_vols: A single vol dict from ``qspace_around_spot`` or a list
+            of such dicts (e.g. from ``qspace_per_layer``).  Multiple volumes
+            are summed onto the same pixel grid.
+        image: Full measured detector frame (``ndarray``, shape ``(Nv, Nh)``).
+            When given a second panel is added showing the corresponding patch.
+        camera: :class:`~nrxrdct.laue.camera.Camera`.  If ``None`` the output
+            is cropped to the spot bounding box (+ *pad_px*).
+        pad_px: Extra margin (pixels) around the bounding box patch.
+        log_intensity: Apply ``log1p`` stretch to both panels.
+        vmax_percentile: Percentile of non-zero simulated pixels used as the
+            colour-scale maximum (default 99.5).
+        figsize: Figure size.  Defaults to ``(8, 5)`` (one panel) or
+            ``(14, 5)`` (two panels).
+        out_path: If given, save the figure to this path.
+
+    Returns:
+        ``(fig, axes)`` where *axes* is a 1- or 2-element list.
+    """
+    from .simulation import project_to_detector
+
+    sim, x0, y0 = project_to_detector(vol_or_vols, pad_px=pad_px, camera=camera)
+    Ny, Nx = sim.shape
+
+    # pixel-space extent for imshow: (left, right, bottom, top) with origin='upper'
+    ext = [x0, x0 + Nx, y0 + Ny, y0]
+
+    has_meas = image is not None
+    n_panels = 2 if has_meas else 1
+    if figsize is None:
+        figsize = (14.0, 5.5) if has_meas else (7.0, 5.5)
+
+    fig, axes_arr = plt.subplots(
+        1, n_panels, figsize=figsize,
+        facecolor=BG, squeeze=False,
+    )
+    axes = list(axes_arr[0])
+
+    def _stretch(arr):
+        if log_intensity:
+            return np.log1p(arr)
+        return arr.copy()
+
+    sim_s = _stretch(sim)
+    pos_mask = sim_s > 0
+    vmin_s = 0.0
+    vmax_s = float(np.percentile(sim_s[pos_mask], vmax_percentile)) if pos_mask.any() else 1.0
+
+    for ax in axes:
+        _ax_style(ax, "")
+        ax.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+        ax.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+
+    # ── left panel: simulated ─────────────────────────────────────────────────
+    ax_sim = axes[0]
+    ax_sim.set_title("Simulated", color=FG, fontsize=9, pad=4)
+    im_s = ax_sim.imshow(
+        sim_s, origin="upper", extent=ext,
+        cmap=_QVOL_CMAP, vmin=vmin_s, vmax=vmax_s,
+        aspect="equal", interpolation="nearest",
+    )
+    cbar_s = fig.colorbar(im_s, ax=ax_sim, shrink=0.85, pad=0.03)
+    cbar_s.set_label("log(1+I)" if log_intensity else "I  (a.u.)", color=FG, fontsize=7)
+    cbar_s.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+    plt.setp(cbar_s.ax.get_yticklabels(), color=FG)
+    cbar_s.outline.set_edgecolor("#333355")
+
+    # ── right panel: measured patch ───────────────────────────────────────────
+    if has_meas:
+        ax_meas = axes[1]
+        ax_meas.set_title("Measured", color=FG, fontsize=9, pad=4)
+        img_arr = np.asarray(image, dtype=float)
+        meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
+        meas_s = _stretch(meas_patch)
+        vmax_m = float(np.percentile(meas_s[meas_s > 0], vmax_percentile)) if (meas_s > 0).any() else 1.0
+        im_m = ax_meas.imshow(
+            meas_s, origin="upper", extent=ext,
+            cmap="gray", vmin=0.0, vmax=vmax_m,
+            aspect="equal", interpolation="nearest",
+        )
+        cbar_m = fig.colorbar(im_m, ax=ax_meas, shrink=0.85, pad=0.03)
+        cbar_m.set_label("log(1+counts)" if log_intensity else "counts", color=FG, fontsize=7)
+        cbar_m.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+        plt.setp(cbar_m.ax.get_yticklabels(), color=FG)
+        cbar_m.outline.set_edgecolor("#333355")
+
+    # ── crosshair at nominal Bragg pixel (along=0, lateral centre) ───────────
+    vols_list = [vol_or_vols] if isinstance(vol_or_vols, dict) else list(vol_or_vols)
+    vol0 = vols_list[0]
+    if vol0.get("pix") is not None and vol0.get("on_detector") is not None:
+        along = vol0["along"]
+        pix_v = vol0["pix"]
+        i0 = int(np.argmin(np.abs(along)))
+        j0 = pix_v.shape[1] // 2
+        k0 = pix_v.shape[2] // 2
+        cx, cy = float(pix_v[i0, j0, k0, 0]), float(pix_v[i0, j0, k0, 1])
+        for ax in axes:
+            ax.plot(cx, cy, "+", color=FG, ms=10, mew=1.2, zorder=5)
+
+    # ── build title from layer labels ─────────────────────────────────────────
+    hkl = vol0.get("hkl", "?")
+    if len(vols_list) == 1:
+        title = f"Detector image — hkl={hkl}  (layer '{vol0.get('layer', '?')}')"
+    else:
+        labels = ", ".join(str(v.get("layer", "?")) for v in vols_list)
+        title = f"Detector image — hkl={hkl}  ({len(vols_list)} layers: {labels})"
+
+    fig.suptitle(title, color=FG, fontsize=10, y=1.01)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, axes
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PIXEL DEVIATION: SIMULATED vs MEASURED
 # ─────────────────────────────────────────────────────────────────────────────
 

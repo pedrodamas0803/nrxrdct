@@ -2918,6 +2918,80 @@ def qspace_per_layer(
     return vols
 
 
+def project_to_detector(vol_or_vols, *, pad_px=20, camera=None):
+    """
+    Bin Q-space voxel intensities onto detector pixel coordinates.
+
+    Each on-detector voxel is rounded to its nearest integer pixel and its
+    intensity ``vol["I"]`` accumulated there, producing a 2-D array directly
+    comparable to a measured photon-counting image (modulo absolute scaling).
+    No detector physics (noise, efficiency, point-spread function) is modelled.
+
+    When multiple volumes are supplied (e.g. the list returned by
+    :func:`qspace_per_layer`) their intensities are summed onto the same
+    pixel grid so the result contains contributions from all layers at once.
+
+    Args:
+        vol_or_vols: A single vol dict from :func:`qspace_around_spot`, or a
+            list of such dicts (e.g. from :func:`qspace_per_layer`).
+        pad_px: Extra margin (pixels) around the bounding box.  Only used when
+            *camera* is ``None``.
+        camera: :class:`~nrxrdct.laue.camera.Camera` instance.  When given,
+            allocates a full ``(Nv, Nh)`` detector array; otherwise returns a
+            cropped patch whose bounding box is the union of all volumes.
+
+    Returns:
+        tuple ``(image, x0, y0)`` where *image* is a ``float64`` ndarray of
+        shape ``(Ny, Nx)``, and ``(x0, y0)`` is the pixel coordinate of the
+        patch's top-left corner in the full detector frame (both 0 when
+        *camera* is given).  Extract the matching patch from a measured image
+        with ``meas[y0:y0+Ny, x0:x0+Nx]``.
+    """
+    if isinstance(vol_or_vols, dict):
+        vols_list = [vol_or_vols]
+    else:
+        vols_list = list(vol_or_vols)
+
+    # Validate and gather pixel/intensity arrays from every volume
+    all_px, all_py, all_I = [], [], []
+    for vol in vols_list:
+        pix = vol["pix"]
+        on_det = vol["on_detector"]
+        if pix is None or on_det is None:
+            raise ValueError(
+                "vol does not contain pixel coordinates — rerun "
+                "qspace_around_spot with a camera= argument."
+            )
+        pix_x = pix[..., 0][on_det]
+        pix_y = pix[..., 1][on_det]
+        all_px.append(np.round(pix_x).astype(int))
+        all_py.append(np.round(pix_y).astype(int))
+        all_I.append(vol["I"][on_det])
+
+    px_i = np.concatenate(all_px)
+    py_i = np.concatenate(all_py)
+    I_on = np.concatenate(all_I)
+
+    if camera is not None:
+        Nh, Nv = int(camera.Nh), int(camera.Nv)
+        valid = (px_i >= 0) & (px_i < Nh) & (py_i >= 0) & (py_i < Nv)
+        det = np.zeros((Nv, Nh), dtype=float)
+        np.add.at(det, (py_i[valid], px_i[valid]), I_on[valid])
+        return det, 0, 0
+
+    if len(px_i) == 0:
+        return np.zeros((1, 1), dtype=float), 0, 0
+
+    x0 = max(int(px_i.min()) - pad_px, 0)
+    y0 = max(int(py_i.min()) - pad_px, 0)
+    x1 = int(px_i.max()) + pad_px + 1
+    y1 = int(py_i.max()) + pad_px + 1
+
+    det = np.zeros((y1 - y0, x1 - x0), dtype=float)
+    np.add.at(det, (py_i - y0, px_i - x0), I_on)
+    return det, x0, y0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DARWIN (DYNAMICAL) LAUE SIMULATION
 # ─────────────────────────────────────────────────────────────────────────────

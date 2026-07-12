@@ -5510,6 +5510,9 @@ def plot_detector_projection(
         facecolor=BG, squeeze=False,
     )
     axes = list(axes_arr[0])
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
 
     def _stretch(arr):
         if log_intensity:
@@ -5531,7 +5534,7 @@ def plot_detector_projection(
     ax_sim.set_title("Simulated", color=FG, fontsize=9, pad=4)
     im_s = ax_sim.imshow(
         sim_s, origin="upper", extent=ext,
-        cmap=_QVOL_CMAP, vmin=vmin_s, vmax=vmax_s,
+        cmap=cmap, vmin=vmin_s, vmax=vmax_s,
         aspect="equal", interpolation="nearest",
     )
     cbar_s = fig.colorbar(im_s, ax=ax_sim, shrink=0.85, pad=0.03)

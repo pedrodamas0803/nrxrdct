@@ -2877,7 +2877,16 @@ def qspace_per_layer(
         raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
 
     if layers is None:
-        layers = stack.all_layers
+        # Deduplicate by label: stack.layers concatenates every block's layers,
+        # so a multi-block stack (e.g. lower_cladding / MQW / upper_cladding)
+        # can contain the same material type in multiple blocks.  Keeping the
+        # first occurrence per label avoids identical duplicate simulations.
+        seen_labels: set[str] = set()
+        layers = []
+        for lyr in stack.all_layers:
+            if lyr.label not in seen_labels:
+                seen_labels.add(lyr.label)
+                layers.append(lyr)
     else:
         resolved = []
         for lyr in layers:

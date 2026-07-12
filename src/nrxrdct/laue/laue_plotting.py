@@ -5469,9 +5469,12 @@ def plot_qspace_summary(
 
         if prof_handles:
             ax_prof.set_ylim(bottom=0)
-            ax_prof.legend(handles=prof_handles, fontsize=7, labelcolor=FG,
-                           facecolor="#1a1f2e", edgecolor="#333355",
-                           loc="upper right")
+            ax_prof.legend(
+                handles=prof_handles, fontsize=7, labelcolor=FG,
+                facecolor="#1a1f2e", edgecolor="#333355",
+                loc="upper left", bbox_to_anchor=(1.01, 1.0),
+                borderaxespad=0, handlelength=1.4,
+            )
 
     fig.suptitle(
         f"Q-space summary — hkl={hkl}  (layer '{layer_label}')",

@@ -2674,6 +2674,14 @@ def qspace_around_spot(
     if structure_model not in ("coherent", "average"):
         raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
 
+    # Collect superlattice periods BEFORE flattening — combine_stacks() unrolls
+    # every repeating block into individual buffer layers, destroying n_rep info.
+    stack._update_offsets()
+    _sat_periods = [
+        blk._period for blk in getattr(stack, "_blocks", [])
+        if blk.n_rep >= 2 and blk._period > 1e-6
+    ]
+
     stack = _flatten_if_multiblock(stack)
     stack._update_offsets()
 
@@ -2716,15 +2724,11 @@ def qspace_around_spot(
     # positions are along_m = 2π·m/Λ − G0·n̂.  For thick stacks (large n_rep)
     # these peaks are far narrower than any reasonable uniform grid step, so
     # without pinning the grid skips over them entirely.
-    if pin_satellites:
+    # NOTE: _sat_periods was captured before _flatten_if_multiblock() because
+    # combine_stacks() unrolls repeating blocks into flat buffer layers.
+    if pin_satellites and _sat_periods:
         Gn = float(G0 @ stack.n_hat)
-        for blk in stack._blocks:
-            if blk.n_rep < 2:
-                continue
-            Lambda = blk._period
-            if Lambda < 1e-6:
-                continue
-            q_sat = 2.0 * np.pi / Lambda
+        for Lambda in _sat_periods:
             m_center = int(round(Gn * Lambda / (2.0 * np.pi)))
             sat_pts = []
             for m in range(m_center - max_satellites - 1,
@@ -2867,7 +2871,7 @@ def qspace_per_layer(
     structure_model="coherent",
     correct_depth=False,
     energy_ref_eV=None,
-    verbose=True,
+    verbose=False,
 ):
     """
     Run :func:`qspace_around_spot` once per layer in the stack, using each
@@ -2969,7 +2973,7 @@ def qspace_multi_hkl(
     structure_model="coherent",
     correct_depth=False,
     energy_ref_eV=None,
-    verbose=True,
+    verbose=False,
 ):
     """
     Run :func:`qspace_around_spot` for every (HKL, layer) combination and
@@ -3012,6 +3016,8 @@ def qspace_multi_hkl(
     else:
         layers_to_use = [layer]
 
+    hkl_list = list(hkl_list)
+    n_total = len(hkl_list) * len(layers_to_use)
     vols = []
     for hkl in hkl_list:
         for lyr in layers_to_use:
@@ -3026,9 +3032,14 @@ def qspace_multi_hkl(
                 structure_model=structure_model,
                 correct_depth=correct_depth,
                 energy_ref_eV=energy_ref_eV,
-                verbose=verbose,
+                verbose=False,
             )
             vols.append(vol)
+            if verbose:
+                lbl = lyr if isinstance(lyr, str) else getattr(lyr, "label", str(lyr))
+                print(f"  [{len(vols)}/{n_total}]  hkl={hkl}  layer='{lbl}'")
+    if verbose:
+        print(f"  Done — {len(vols)} vols computed.")
     return vols
 
 

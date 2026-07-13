@@ -5460,10 +5460,8 @@ def plot_detector_projection(
     camera: "Camera | None" = None,
     pad_px: int = 20,
     log_intensity: bool = True,
-    vmax_percentile: float = 99.5,
     psf_sigma_px: float = 1.0,
     exclude_bragg_along: "float | None" = None,
-    bragg_mask_radius_px: int = 10,
     figsize: "tuple[float, float] | None" = None,
     out_path: "str | None" = None,
 ) -> tuple:
@@ -5486,23 +5484,14 @@ def plot_detector_projection(
             is cropped to the spot bounding box (+ *pad_px*).
         pad_px: Extra margin (pixels) around the bounding box patch.
         log_intensity: Apply ``log1p`` stretch to both panels.
-        vmax_percentile: Percentile of non-zero pixels used for colour-scale
-            maximum (default 99.5).
         psf_sigma_px: Gaussian PSF sigma in pixels applied to the simulated
-            image before noise is added.  Models the detector point-spread
-            function (charge sharing, optical blur).  Set to 0 to disable.
+            image before normalisation.  Models detector point-spread (charge
+            sharing, optical blur).  Set to 0 to disable.
         exclude_bragg_along: float or None.  When set, voxels with
             ``|along| < exclude_bragg_along`` (Å⁻¹) are stripped from the
-            simulated projection so that the kinematical Bragg peak — which is
-            orders-of-magnitude brighter than superlattice satellites — does
-            not dominate the colour scale.  The measured patch is simultaneously
-            masked around each G0 pixel (radius *bragg_mask_radius_px*) before
-            the colour-scale percentile is computed, so both panels are
-            satellite-normalised.  A good starting value is roughly half the
-            smallest superlattice spacing: ``π / Λ`` (e.g. 0.03 for Λ=100 Å).
-        bragg_mask_radius_px: Pixel radius of the circular exclusion zone
-            applied around each G0 pixel in the measured patch when
-            *exclude_bragg_along* is set.  Default 10.
+            simulated projection so that the kinematical Bragg peak does not
+            flood the image.  A good starting value is ``π / Λ`` (e.g. 0.03
+            for Λ=100 Å).
         figsize: Figure size.  Defaults to ``(8, 5)`` (one panel) or
             ``(14, 5)`` (two panels).
         out_path: If given, save the figure to this path.
@@ -5548,34 +5537,17 @@ def plot_detector_projection(
         from scipy.ndimage import gaussian_filter as _gf
         sim = _gf(sim, sigma=psf_sigma_px)
 
-    # ── I / I_max normalisation on both panels ────────────────────────────────
-    # Divide both the simulation and the measured patch by the simulation's
-    # own maximum so they share a common, physically meaningful scale:
-    # sim pixel = 1.0 is the brightest simulated satellite; the measured panel
-    # is expressed in the same units so intensities are directly comparable
-    # without any percentile guessing.
-    I_max = float(sim.max()) if sim.max() > 0 else 1.0
+    # ── I / I_max normalisation — each panel by its own maximum ──────────────
+    sim = sim / (float(sim.max()) if sim.max() > 0 else 1.0)
 
     if has_meas:
         img_arr = np.asarray(image, dtype=float)
         meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
-        # Add Poisson noise on the simulation scaled to counts
-        # (noise_floor from measured 5th-percentile so every pixel gets
-        # realistic background counts, not just the simulated peaks).
-        noise_floor = float(np.percentile(meas_patch, 5))
-        sim_counts = np.random.poisson(
-            np.maximum(sim + noise_floor, 0)
-        ).astype(float)
-        sim = sim_counts / max(I_max, 1.0)
-        meas_norm = meas_patch / max(I_max, 1.0)
-        peak_display = float(sim.max()) if sim.max() > 0 else 1.0
-    else:
-        sim = sim / I_max
-        peak_display = 1.0
+        meas_norm = meas_patch / (float(meas_patch.max()) if meas_patch.max() > 0 else 1.0)
 
     sim_s = _stretch(sim)
     vmin_s = 0.0
-    vmax_s = float(_stretch(np.array([peak_display]))[0]) if peak_display > 0 else 1.0
+    vmax_s = float(_stretch(np.array([1.0]))[0])
 
     for ax in axes:
         _ax_style(ax, "")
@@ -5584,7 +5556,7 @@ def plot_detector_projection(
 
     # ── left panel: simulated ─────────────────────────────────────────────────
     ax_sim = axes[0]
-    _sim_title = "Simulated + Poisson noise" if has_meas else "Simulated"
+    _sim_title = "Simulated"
     ax_sim.set_title(_sim_title, color=FG, fontsize=9, pad=4)
     im_s = ax_sim.imshow(
         sim_s, origin="upper", extent=ext,

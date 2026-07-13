@@ -2972,43 +2972,63 @@ def qspace_multi_hkl(
     verbose=True,
 ):
     """
-    Run :func:`qspace_around_spot` for every HKL in *hkl_list* and return the
-    results as a flat list of vol dicts.
+    Run :func:`qspace_around_spot` for every (HKL, layer) combination and
+    return the results as a flat list of vol dicts.
 
-    All vols share the same *stack*, *layer*, and simulation settings, so they
-    can be passed directly to :func:`project_to_detector` or
-    :func:`~nrxrdct.laue.laue_plotting.plot_detector_projection` to accumulate
-    all reflections onto the same detector image in one call.
+    When *layer* is ``None`` (default) every unique layer in the stack is used,
+    so the returned list has ``len(hkl_list) × n_unique_layers`` entries —
+    enough to project all reflections from all layers onto the detector in one
+    call.  Pass a single layer label/object or an explicit list to restrict
+    which layers are simulated.
 
     Args:
         stack: :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
         hkl_list: Iterable of ``(h, k, l)`` tuples.
-        layer: Layer whose reciprocal-lattice vector defines the grid centre
-            for each reflection.  Forwarded unchanged to
-            :func:`qspace_around_spot`.
+        layer: Which layer(s) to use as the grid centre.
+
+            * ``None`` — all unique layers in ``stack.all_layers``
+              (deduplicated by label, same rule as :func:`qspace_per_layer`).
+            * A single :class:`~nrxrdct.laue.layers.Layer` object or label
+              string — that layer only, for every HKL.
+            * A list of Layer objects / label strings — those layers only.
+
         All remaining keyword arguments are forwarded to
         :func:`qspace_around_spot`.
 
     Returns:
-        ``list[dict]`` — one vol dict per HKL, in the same order as
-        *hkl_list*.
+        ``list[dict]`` — flat list of vol dicts ordered as
+        ``[(hkl0, lyr0), (hkl0, lyr1), ..., (hkl1, lyr0), ...]``.
     """
+    # ── resolve layers list ───────────────────────────────────────────────────
+    if layer is None:
+        seen: set[str] = set()
+        layers_to_use = []
+        for lyr in stack.all_layers:
+            if lyr.label not in seen:
+                seen.add(lyr.label)
+                layers_to_use.append(lyr)
+    elif isinstance(layer, (list, tuple)):
+        layers_to_use = list(layer)
+    else:
+        layers_to_use = [layer]
+
     vols = []
     for hkl in hkl_list:
-        vol = qspace_around_spot(
-            stack, hkl, layer=layer,
-            n_along=n_along, n_lateral=n_lateral,
-            extent_along=extent_along, extent_lateral=extent_lateral,
-            max_satellites=max_satellites, pin_satellites=pin_satellites,
-            camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-            source=source, source_kwargs=source_kwargs,
-            kb_params=kb_params, ki_hat=ki_hat,
-            structure_model=structure_model,
-            correct_depth=correct_depth,
-            energy_ref_eV=energy_ref_eV,
-            verbose=verbose,
-        )
-        vols.append(vol)
+        for lyr in layers_to_use:
+            vol = qspace_around_spot(
+                stack, hkl, layer=lyr,
+                n_along=n_along, n_lateral=n_lateral,
+                extent_along=extent_along, extent_lateral=extent_lateral,
+                max_satellites=max_satellites, pin_satellites=pin_satellites,
+                camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                source=source, source_kwargs=source_kwargs,
+                kb_params=kb_params, ki_hat=ki_hat,
+                structure_model=structure_model,
+                correct_depth=correct_depth,
+                energy_ref_eV=energy_ref_eV,
+                verbose=verbose,
+            )
+            vols.append(vol)
     return vols
 
 

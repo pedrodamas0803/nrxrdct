@@ -5543,51 +5543,39 @@ def plot_detector_projection(
 
     vols_list = [vol_or_vols] if isinstance(vol_or_vols, dict) else list(vol_or_vols)
 
-    # ── normalise simulated to measured intensity scale ───────────────────────
+    # ── PSF convolution (before normalisation so it acts on raw flux) ────────
+    if psf_sigma_px > 0:
+        from scipy.ndimage import gaussian_filter as _gf
+        sim = _gf(sim, sigma=psf_sigma_px)
+
+    # ── I / I_max normalisation on both panels ────────────────────────────────
+    # Divide both the simulation and the measured patch by the simulation's
+    # own maximum so they share a common, physically meaningful scale:
+    # sim pixel = 1.0 is the brightest simulated satellite; the measured panel
+    # is expressed in the same units so intensities are directly comparable
+    # without any percentile guessing.
+    I_max = float(sim.max()) if sim.max() > 0 else 1.0
+
     if has_meas:
         img_arr = np.asarray(image, dtype=float)
         meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
-
-        if exclude_bragg_along is not None:
-            # Build a Bragg-exclusion mask for the measured patch: circular
-            # regions around each G0 pixel so normalization uses only the
-            # satellite region (avoids the kinematically-inflated Bragg peak).
-            # Robust approach: compare simulation and measurement at exactly
-            # the same pixels — those where the satellite projection is non-zero.
-            # This avoids the percentile being biased by other bright spots in
-            # the measured image that are unrelated to the simulated reflections.
-            sat_mask = sim > 0
-            if sat_mask.any():
-                peak_sim = float(np.percentile(sim[sat_mask], vmax_percentile))
-                meas_at_sats = meas_patch[sat_mask]
-                peak_meas = float(np.percentile(meas_at_sats[meas_at_sats > 0], vmax_percentile)) \
-                    if (meas_at_sats > 0).any() else 1.0
-            else:
-                peak_sim, peak_meas = 1.0, 1.0
-        else:
-            # No Bragg exclusion: match the brightest simulated pixel to the
-            # brightest measured pixel (standard behaviour).
-            peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
-            peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
-
-        sim = sim * (peak_meas / max(peak_sim, 1e-30))
-        # Detector PSF: applied before noise so blur acts on the photon flux.
-        if psf_sigma_px > 0:
-            from scipy.ndimage import gaussian_filter as _gf
-            sim = _gf(sim, sigma=psf_sigma_px)
-        # Poisson noise on the entire image: noise_floor is the background level
-        # estimated from the 5th percentile of the measured patch (every pixel
-        # gets at least this many counts, matching detector conditions including
-        # dark-current and scattered background).
+        # Add Poisson noise on the simulation scaled to counts
+        # (noise_floor from measured 5th-percentile so every pixel gets
+        # realistic background counts, not just the simulated peaks).
         noise_floor = float(np.percentile(meas_patch, 5))
-        sim = np.random.poisson(np.maximum(sim + noise_floor, 0)).astype(float)
+        sim_counts = np.random.poisson(
+            np.maximum(sim + noise_floor, 0)
+        ).astype(float)
+        sim = sim_counts / max(I_max, 1.0)
+        meas_norm = meas_patch / max(I_max, 1.0)
+        peak_display = float(sim.max()) if sim.max() > 0 else 1.0
+    else:
+        sim = sim / I_max
+        peak_display = 1.0
 
     sim_s = _stretch(sim)
     vmin_s = 0.0
-    if has_meas:
-        vmax_s = float(_stretch(np.array([peak_meas + noise_floor]))[0])
-    else:
-        vmax_s = float(np.percentile(sim_s[sim_s > 0], vmax_percentile)) if (sim_s > 0).any() else 1.0
+    vmax_s = float(_stretch(np.array([peak_display]))[0]) if peak_display > 0 else 1.0
 
     for ax in axes:
         _ax_style(ax, "")
@@ -5613,7 +5601,7 @@ def plot_detector_projection(
     if has_meas:
         ax_meas = axes[1]
         ax_meas.set_title("Measured", color=FG, fontsize=9, pad=4)
-        meas_s = _stretch(meas_patch)
+        meas_s = _stretch(meas_norm)
         im_m = ax_meas.imshow(
             meas_s, origin="upper", extent=ext,
             cmap="gray", vmin=0.0, vmax=vmax_s,

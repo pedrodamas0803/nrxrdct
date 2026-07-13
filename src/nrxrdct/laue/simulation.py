@@ -2726,6 +2726,7 @@ def qspace_around_spot(
     # without pinning the grid skips over them entirely.
     # NOTE: _sat_periods was captured before _flatten_if_multiblock() because
     # combine_stacks() unrolls repeating blocks into flat buffer layers.
+    _pinned_sat_along = []  # collect for verbose reporting
     if pin_satellites and _sat_periods:
         Gn = float(G0 @ stack.n_hat)
         for Lambda in _sat_periods:
@@ -2740,6 +2741,12 @@ def qspace_around_spot(
                 along_vals = np.unique(np.concatenate(
                     [along_vals, np.array(sat_pts)]
                 ))
+                _pinned_sat_along.extend(sat_pts)
+    elif pin_satellites and not _sat_periods and verbose:
+        print(
+            f"  qspace_around_spot: pin_satellites=True but no blocks with "
+            f"n_rep≥2 found in stack — check stack.blocks"
+        )
 
     t1_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
     t2_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
@@ -2826,11 +2833,48 @@ def qspace_around_spot(
         n_on_det = int(on_det_flat.sum()) if on_det_flat is not None else None
         e_reach = E_flat[idx]
         e_range = f"{e_reach.min():.0f}–{e_reach.max():.0f} eV" if len(idx) else "—"
+        sat_info = (
+            f"  pinned_sats={len(_pinned_sat_along)}" if _pinned_sat_along else
+            f"  pinned_sats=0(no blocks w/ n_rep≥2)" if (pin_satellites and not _sat_periods) else ""
+        )
         print(
             f"  qspace_around_spot: hkl={hkl}  layer='{layer.label}'  "
             f"grid={shape}  reachable={len(idx)}/{n_vox}  E∈[{e_range}]"
             + (f"  on_detector={n_on_det}" if n_on_det is not None else "")
+            + sat_info
         )
+        # Report where the G0 point and pinned satellites land on the detector
+        if camera is not None and on_det_flat is not None:
+            # Find the voxel closest to along=0, lateral=(0,0) — the main Bragg point
+            mid_along = int(np.argmin(np.abs(along_vals)))
+            mid_t1 = len(t1_vals) // 2
+            mid_t2 = len(t2_vals) // 2
+            bragg_flat_idx = (mid_along * len(t1_vals) + mid_t1) * len(t2_vals) + mid_t2
+            if on_det_flat[bragg_flat_idx]:
+                bpx = pix_flat[bragg_flat_idx]
+                print(f"    G0 pixel: x={bpx[0]:.1f}, y={bpx[1]:.1f}  "
+                      f"(along={along_vals[mid_along]:.4f} Å⁻¹)")
+            else:
+                print(f"    G0 (along≈0) is NOT on detector")
+            # Report reachable + on-detector status for each pinned satellite
+            if _pinned_sat_along:
+                print(f"    Satellite positions (along Å⁻¹) → pixel:")
+                for a_sat in sorted(_pinned_sat_along):
+                    # find the grid index closest to this satellite
+                    j_sat = int(np.argmin(np.abs(along_vals - a_sat)))
+                    flat_sat = (j_sat * len(t1_vals) + mid_t1) * len(t2_vals) + mid_t2
+                    reach = bool(reachable_flat[flat_sat])
+                    on_d = bool(on_det_flat[flat_sat])
+                    I_sat = float(I_flat[flat_sat])
+                    if reach and on_d:
+                        spx = pix_flat[flat_sat]
+                        print(f"      along={a_sat:+.4f}  REACH ON-DET  "
+                              f"x={spx[0]:.1f} y={spx[1]:.1f}  I={I_sat:.3e}")
+                    elif reach:
+                        print(f"      along={a_sat:+.4f}  REACH off-det  I={I_sat:.3e}")
+                    else:
+                        E_sat = float(E_flat[flat_sat]) if not np.isnan(E_flat[flat_sat]) else float("nan")
+                        print(f"      along={a_sat:+.4f}  unreachable  E={E_sat:.0f} eV")
 
     return {
         "hkl": (h, k, l),
@@ -3032,12 +3076,9 @@ def qspace_multi_hkl(
                 structure_model=structure_model,
                 correct_depth=correct_depth,
                 energy_ref_eV=energy_ref_eV,
-                verbose=False,
+                verbose=verbose,
             )
             vols.append(vol)
-            if verbose:
-                lbl = lyr if isinstance(lyr, str) else getattr(lyr, "label", str(lyr))
-                print(f"  [{len(vols)}/{n_total}]  hkl={hkl}  layer='{lbl}'")
     if verbose:
         print(f"  Done — {len(vols)} vols computed.")
     return vols

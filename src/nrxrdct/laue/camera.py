@@ -656,6 +656,7 @@ class Camera:
         self,
         image: "np.ndarray",
         peak_counts: float = 1000.0,
+        noise_floor: float = 0.0,
         rng: "np.random.Generator | int | None" = None,
     ) -> "np.ndarray":
         """
@@ -663,11 +664,12 @@ class Camera:
 
         The image is treated as a map of *relative* intensities.  It is
         scaled so that the brightest pixel has `peak_counts` expected
-        photons, then every pixel is sampled independently from a Poisson
-        distribution with its own expected count λᵢ:
+        photons, then `noise_floor` is added to every pixel, and finally
+        every pixel is sampled independently from a Poisson distribution:
 
         $$
         \\lambda_i = I_i \\cdot \\frac{\\text{peak\\_counts}}{\\max(I)}
+                   + \\text{noise\\_floor}
         \\qquad
         n_i \\sim \\operatorname{Poisson}(\\lambda_i)
         $$
@@ -675,6 +677,9 @@ class Camera:
         This reproduces the correct counting statistics: the noise standard
         deviation at pixel *i* is $\\sqrt{\\lambda_i}$, so bright spots
         have more absolute noise but better signal-to-noise than dim pixels.
+        The `noise_floor` term ensures that even empty pixels receive
+        Poisson-distributed background counts (dark current, diffuse scatter),
+        matching real photon-counting detector behaviour.
 
         !!! note
             Pass a **linear** (non-log-scaled) image so that relative
@@ -689,6 +694,9 @@ class Camera:
             peak_counts (float): Expected photon count at the brightest pixel.  Controls the
                 overall exposure level and therefore the noise level:
                 SNR ∝ √peak_counts.
+            noise_floor (float): Expected background counts added to every pixel before Poisson
+                sampling.  Models dark current and diffuse scattered background.
+                Default 0 (no background — purely signal-dependent noise).
             rng (numpy.random.Generator or int or None): Random-number source.  Pass an integer seed for reproducibility,
                 or `None` (default) to use a fresh default RNG.
 
@@ -697,15 +705,15 @@ class Camera:
 
         Example:
         >>> img_linear = camera.render(spots, log_scale=False)
-        >>> img_noisy  = camera.add_poisson_noise(img_linear, peak_counts=500)
+        >>> img_noisy  = camera.add_poisson_noise(img_linear, peak_counts=500, noise_floor=2.0)
         >>> img_display = np.log1p(img_noisy / img_noisy.max() * 1000)
 """
         img = np.asarray(image, dtype=np.float64)
         img_max = img.max()
         if img_max > 0:
-            lam = img * (float(peak_counts) / img_max)
+            lam = img * (float(peak_counts) / img_max) + float(noise_floor)
         else:
-            lam = img.copy()
+            lam = np.full_like(img, float(noise_floor))
 
         if isinstance(rng, np.random.Generator):
             gen = rng
@@ -714,7 +722,7 @@ class Camera:
         else:
             gen = np.random.default_rng(int(rng))
 
-        noisy = gen.poisson(lam).astype(np.float32)
+        noisy = gen.poisson(np.maximum(lam, 0)).astype(np.float32)
         return noisy
 
     def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=False, normalize=False):

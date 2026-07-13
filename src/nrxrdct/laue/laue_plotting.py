@@ -5552,45 +5552,40 @@ def plot_detector_projection(
             # Build a Bragg-exclusion mask for the measured patch: circular
             # regions around each G0 pixel so normalization uses only the
             # satellite region (avoids the kinematically-inflated Bragg peak).
-            bragg_pixel_mask = np.zeros((Ny, Nx), dtype=bool)
-            yy, xx = np.mgrid[:Ny, :Nx]
-            for vol in vols_list:
-                pix_v = vol.get("pix")
-                along_v = vol.get("along")
-                on_det_v = vol.get("on_detector")
-                if pix_v is None or along_v is None or on_det_v is None:
-                    continue
-                i0 = int(np.argmin(np.abs(along_v)))
-                j0 = pix_v.shape[1] // 2
-                k0 = pix_v.shape[2] // 2
-                if on_det_v[i0, j0, k0]:
-                    cx = float(pix_v[i0, j0, k0, 0]) - x0
-                    cy = float(pix_v[i0, j0, k0, 1]) - y0
-                    bragg_pixel_mask |= (
-                        (xx - cx) ** 2 + (yy - cy) ** 2
-                        <= bragg_mask_radius_px ** 2
-                    )
-            good = (meas_patch > 0) & ~bragg_pixel_mask
-            peak_meas = float(np.percentile(meas_patch[good], vmax_percentile)) if good.any() else 1.0
+            # Robust approach: compare simulation and measurement at exactly
+            # the same pixels — those where the satellite projection is non-zero.
+            # This avoids the percentile being biased by other bright spots in
+            # the measured image that are unrelated to the simulated reflections.
+            sat_mask = sim > 0
+            if sat_mask.any():
+                peak_sim = float(np.percentile(sim[sat_mask], vmax_percentile))
+                meas_at_sats = meas_patch[sat_mask]
+                peak_meas = float(np.percentile(meas_at_sats[meas_at_sats > 0], vmax_percentile)) \
+                    if (meas_at_sats > 0).any() else 1.0
+            else:
+                peak_sim, peak_meas = 1.0, 1.0
         else:
+            # No Bragg exclusion: match the brightest simulated pixel to the
+            # brightest measured pixel (standard behaviour).
+            peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
             peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
 
-        peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
         sim = sim * (peak_meas / max(peak_sim, 1e-30))
         # Detector PSF: applied before noise so blur acts on the photon flux.
         if psf_sigma_px > 0:
             from scipy.ndimage import gaussian_filter as _gf
             sim = _gf(sim, sigma=psf_sigma_px)
-        # Poisson noise: background floor estimated from the 5th-percentile of
-        # the measured patch so the noise level matches detector conditions.
-        noise_floor = float(np.percentile(meas_patch[meas_patch >= 0], 5))
+        # Poisson noise on the entire image: noise_floor is the background level
+        # estimated from the 5th percentile of the measured patch (every pixel
+        # gets at least this many counts, matching detector conditions including
+        # dark-current and scattered background).
+        noise_floor = float(np.percentile(meas_patch, 5))
         sim = np.random.poisson(np.maximum(sim + noise_floor, 0)).astype(float)
 
     sim_s = _stretch(sim)
     vmin_s = 0.0
     if has_meas:
-        # use the known measured peak so noise floor pixels don't compress the scale
-        vmax_s = float(_stretch(np.array([peak_meas]))[0])
+        vmax_s = float(_stretch(np.array([peak_meas + noise_floor]))[0])
     else:
         vmax_s = float(np.percentile(sim_s[sim_s > 0], vmax_percentile)) if (sim_s > 0).any() else 1.0
 
@@ -5631,16 +5626,27 @@ def plot_detector_projection(
         cbar_m.outline.set_edgecolor("#333355")
 
     # ── crosshair at nominal Bragg pixel (along=0, lateral centre) ───────────
-    vol0 = vols_list[0]
-    if vol0.get("pix") is not None and vol0.get("on_detector") is not None:
-        along = vol0["along"]
-        pix_v = vol0["pix"]
-        i0 = int(np.argmin(np.abs(along)))
-        j0 = pix_v.shape[1] // 2
-        k0 = pix_v.shape[2] // 2
-        cx, cy = float(pix_v[i0, j0, k0, 0]), float(pix_v[i0, j0, k0, 1])
-        for ax in axes:
-            ax.plot(cx, cy, "+", color=FG, ms=10, mew=1.2, zorder=5)
+    # Draw one + per unique HKL using the first vol for that HKL that has a
+    # finite (on-detector) G0 pixel.  Using vols_list[0] blindly fails when
+    # the first vol is a substrate layer whose G0 is off-detector.
+    seen_hkls: set = set()
+    for _vol in vols_list:
+        _hkl = _vol.get("hkl")
+        if _hkl in seen_hkls:
+            continue
+        _pix = _vol.get("pix")
+        _along = _vol.get("along")
+        if _pix is None or _along is None:
+            continue
+        _i0 = int(np.argmin(np.abs(_along)))
+        _j0 = _pix.shape[1] // 2
+        _k0 = _pix.shape[2] // 2
+        _cx = float(_pix[_i0, _j0, _k0, 0])
+        _cy = float(_pix[_i0, _j0, _k0, 1])
+        if np.isfinite(_cx) and np.isfinite(_cy):
+            for ax in axes:
+                ax.plot(_cx, _cy, "+", color=FG, ms=10, mew=1.2, zorder=5)
+            seen_hkls.add(_hkl)
 
     # ── build title ───────────────────────────────────────────────────────────
     unique_hkls = list(dict.fromkeys(str(v.get("hkl", "?")) for v in vols_list))

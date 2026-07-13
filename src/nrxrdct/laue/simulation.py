@@ -3084,7 +3084,8 @@ def qspace_multi_hkl(
     return vols
 
 
-def project_to_detector(vol_or_vols, *, pad_px=20, camera=None):
+def project_to_detector(vol_or_vols, *, pad_px=20, camera=None,
+                        exclude_bragg_along=None):
     """
     Bin Q-space voxel intensities onto detector pixel coordinates.
 
@@ -3105,6 +3106,14 @@ def project_to_detector(vol_or_vols, *, pad_px=20, camera=None):
         camera: :class:`~nrxrdct.laue.camera.Camera` instance.  When given,
             allocates a full ``(Nv, Nh)`` detector array; otherwise returns a
             cropped patch whose bounding box is the union of all volumes.
+        exclude_bragg_along: float or None.  When set, voxels with
+            ``|along| < exclude_bragg_along`` (Å⁻¹) are excluded from the
+            projection.  Use this to suppress the kinematical Bragg peak,
+            which is orders of magnitude brighter than superlattice satellites
+            in the kinematical approximation (no extinction) and would
+            otherwise dominate the colour scale.  A value of roughly half the
+            smallest satellite spacing (``π/Λ``) keeps the satellite peaks
+            while removing the central Bragg spike.
 
     Returns:
         tuple ``(image, x0, y0)`` where *image* is a ``float64`` ndarray of
@@ -3128,6 +3137,12 @@ def project_to_detector(vol_or_vols, *, pad_px=20, camera=None):
                 "vol does not contain pixel coordinates — rerun "
                 "qspace_around_spot with a camera= argument."
             )
+        on_det = on_det.copy()
+        if exclude_bragg_along is not None:
+            # Build a per-voxel mask in the (n_along, n_lat, n_lat) grid.
+            # vol["along"] has shape (n_along,); broadcast over lateral dims.
+            along_3d = vol["along"][:, None, None] * np.ones_like(vol["I"])
+            on_det &= np.abs(along_3d) >= float(exclude_bragg_along)
         pix_x = pix[..., 0][on_det]
         pix_y = pix[..., 1][on_det]
         all_px.append(np.round(pix_x).astype(int))

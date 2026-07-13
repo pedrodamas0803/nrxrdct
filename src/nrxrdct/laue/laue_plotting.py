@@ -5462,6 +5462,8 @@ def plot_detector_projection(
     log_intensity: bool = True,
     vmax_percentile: float = 99.5,
     psf_sigma_px: float = 1.0,
+    exclude_bragg_along: "float | None" = None,
+    bragg_mask_radius_px: int = 10,
     figsize: "tuple[float, float] | None" = None,
     out_path: "str | None" = None,
 ) -> tuple:
@@ -5484,11 +5486,23 @@ def plot_detector_projection(
             is cropped to the spot bounding box (+ *pad_px*).
         pad_px: Extra margin (pixels) around the bounding box patch.
         log_intensity: Apply ``log1p`` stretch to both panels.
-        vmax_percentile: Percentile of non-zero simulated pixels used as the
-            colour-scale maximum (default 99.5).
+        vmax_percentile: Percentile of non-zero pixels used for colour-scale
+            maximum (default 99.5).
         psf_sigma_px: Gaussian PSF sigma in pixels applied to the simulated
             image before noise is added.  Models the detector point-spread
             function (charge sharing, optical blur).  Set to 0 to disable.
+        exclude_bragg_along: float or None.  When set, voxels with
+            ``|along| < exclude_bragg_along`` (Å⁻¹) are stripped from the
+            simulated projection so that the kinematical Bragg peak — which is
+            orders-of-magnitude brighter than superlattice satellites — does
+            not dominate the colour scale.  The measured patch is simultaneously
+            masked around each G0 pixel (radius *bragg_mask_radius_px*) before
+            the colour-scale percentile is computed, so both panels are
+            satellite-normalised.  A good starting value is roughly half the
+            smallest superlattice spacing: ``π / Λ`` (e.g. 0.03 for Λ=100 Å).
+        bragg_mask_radius_px: Pixel radius of the circular exclusion zone
+            applied around each G0 pixel in the measured patch when
+            *exclude_bragg_along* is set.  Default 10.
         figsize: Figure size.  Defaults to ``(8, 5)`` (one panel) or
             ``(14, 5)`` (two panels).
         out_path: If given, save the figure to this path.
@@ -5498,7 +5512,10 @@ def plot_detector_projection(
     """
     from .simulation import project_to_detector
 
-    sim, x0, y0 = project_to_detector(vol_or_vols, pad_px=pad_px, camera=camera)
+    sim, x0, y0 = project_to_detector(
+        vol_or_vols, pad_px=pad_px, camera=camera,
+        exclude_bragg_along=exclude_bragg_along,
+    )
     Ny, Nx = sim.shape
 
     # pixel-space extent for imshow: (left, right, bottom, top) with origin='upper'
@@ -5524,12 +5541,41 @@ def plot_detector_projection(
             return np.log1p(arr)
         return arr.copy()
 
+    vols_list = [vol_or_vols] if isinstance(vol_or_vols, dict) else list(vol_or_vols)
+
     # ── normalise simulated to measured intensity scale ───────────────────────
     if has_meas:
         img_arr = np.asarray(image, dtype=float)
         meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
+
+        if exclude_bragg_along is not None:
+            # Build a Bragg-exclusion mask for the measured patch: circular
+            # regions around each G0 pixel so normalization uses only the
+            # satellite region (avoids the kinematically-inflated Bragg peak).
+            bragg_pixel_mask = np.zeros((Ny, Nx), dtype=bool)
+            yy, xx = np.mgrid[:Ny, :Nx]
+            for vol in vols_list:
+                pix_v = vol.get("pix")
+                along_v = vol.get("along")
+                on_det_v = vol.get("on_detector")
+                if pix_v is None or along_v is None or on_det_v is None:
+                    continue
+                i0 = int(np.argmin(np.abs(along_v)))
+                j0 = pix_v.shape[1] // 2
+                k0 = pix_v.shape[2] // 2
+                if on_det_v[i0, j0, k0]:
+                    cx = float(pix_v[i0, j0, k0, 0]) - x0
+                    cy = float(pix_v[i0, j0, k0, 1]) - y0
+                    bragg_pixel_mask |= (
+                        (xx - cx) ** 2 + (yy - cy) ** 2
+                        <= bragg_mask_radius_px ** 2
+                    )
+            good = (meas_patch > 0) & ~bragg_pixel_mask
+            peak_meas = float(np.percentile(meas_patch[good], vmax_percentile)) if good.any() else 1.0
+        else:
+            peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
+
         peak_sim = float(np.percentile(sim[sim > 0], vmax_percentile)) if (sim > 0).any() else 1.0
-        peak_meas = float(np.percentile(meas_patch[meas_patch > 0], vmax_percentile)) if (meas_patch > 0).any() else 1.0
         sim = sim * (peak_meas / max(peak_sim, 1e-30))
         # Detector PSF: applied before noise so blur acts on the photon flux.
         if psf_sigma_px > 0:
@@ -5585,7 +5631,6 @@ def plot_detector_projection(
         cbar_m.outline.set_edgecolor("#333355")
 
     # ── crosshair at nominal Bragg pixel (along=0, lateral centre) ───────────
-    vols_list = [vol_or_vols] if isinstance(vol_or_vols, dict) else list(vol_or_vols)
     vol0 = vols_list[0]
     if vol0.get("pix") is not None and vol0.get("on_detector") is not None:
         along = vol0["along"]

@@ -2958,6 +2958,7 @@ def qspace_multi_hkl(
     extent_along=None,
     extent_lateral=None,
     max_satellites=6,
+    pin_satellites=True,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,

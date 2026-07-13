@@ -2500,6 +2500,7 @@ def qspace_around_spot(
     extent_along=None,
     extent_lateral=None,
     max_satellites=6,
+    pin_satellites=True,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -2708,6 +2709,34 @@ def qspace_around_spot(
         extent_lateral = 0.05 * extent_along
 
     along_vals = np.linspace(-extent_along, extent_along, n_along)
+
+    # ── pin along_vals to exact satellite positions ───────────────────────────
+    # The geometric-series factor Σ exp(i·m·Qn·Λ) peaks where Qn·Λ = 2π·m.
+    # In the `along` parameterisation Qn = G0·n̂ + along, so the satellite
+    # positions are along_m = 2π·m/Λ − G0·n̂.  For thick stacks (large n_rep)
+    # these peaks are far narrower than any reasonable uniform grid step, so
+    # without pinning the grid skips over them entirely.
+    if pin_satellites:
+        Gn = float(G0 @ stack.n_hat)
+        for blk in stack._blocks:
+            if blk.n_rep < 2:
+                continue
+            Lambda = blk._period
+            if Lambda < 1e-6:
+                continue
+            q_sat = 2.0 * np.pi / Lambda
+            m_center = int(round(Gn * Lambda / (2.0 * np.pi)))
+            sat_pts = []
+            for m in range(m_center - max_satellites - 1,
+                           m_center + max_satellites + 2):
+                a = 2.0 * np.pi * m / Lambda - Gn
+                if -extent_along <= a <= extent_along:
+                    sat_pts.append(a)
+            if sat_pts:
+                along_vals = np.unique(np.concatenate(
+                    [along_vals, np.array(sat_pts)]
+                ))
+
     t1_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
     t2_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
 
@@ -2827,6 +2856,7 @@ def qspace_per_layer(
     extent_along=None,
     extent_lateral=None,
     max_satellites=6,
+    pin_satellites=True,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -2905,7 +2935,7 @@ def qspace_per_layer(
             stack, hkl, layer=layer,
             n_along=n_along, n_lateral=n_lateral,
             extent_along=extent_along, extent_lateral=extent_lateral,
-            max_satellites=max_satellites,
+            max_satellites=max_satellites, pin_satellites=pin_satellites,
             camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
             kb_params=kb_params, ki_hat=ki_hat,
@@ -2968,7 +2998,7 @@ def qspace_multi_hkl(
             stack, hkl, layer=layer,
             n_along=n_along, n_lateral=n_lateral,
             extent_along=extent_along, extent_lateral=extent_lateral,
-            max_satellites=max_satellites,
+            max_satellites=max_satellites, pin_satellites=pin_satellites,
             camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
             kb_params=kb_params, ki_hat=ki_hat,

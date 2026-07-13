@@ -376,7 +376,7 @@ def build_MLed(
         for k in ("C11", "C12", "C13", "C33", "C44")
     }
 
-    stacking_dir = UB_GaN @ np.array([0, 0, 1])
+    stacking_dir = UB_GaN @ np.array([0, 0, 2])
 
     stacking_dir /= np.linalg.norm(stacking_dir)
 

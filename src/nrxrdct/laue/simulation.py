@@ -23,10 +23,12 @@ $$
 where
 
 - $F(\\mathbf{G}, E)$ — structure factor via xrayutilities (Cromer–Mann $f^0$ + Henke $f'(E)$, $f''(E)$ anomalous corrections)
-- $LP(2\\theta)$ — Lorentz–polarisation factor (unpolarised beam):
+- $LP(2\\theta, E)$ — Lorentz–polarisation factor for Laue (polychromatic,
+  stationary crystal, unpolarised beam):
 
 $$
-LP = \\frac{1 + \\cos^2 2\\theta}{2\\sin^2\\theta\\,\\cos\\theta}
+LP = \\frac{1 + \\cos^2 2\\theta}{2} \\cdot \\frac{\\lambda^2}{\\sin 2\\theta},
+\\qquad \\lambda = hc/E
 $$
 
 - $S(E)$ — synchrotron spectrum (bending magnet, wiggler, or undulator); no bremsstrahlung
@@ -653,22 +655,55 @@ def kb_reflectivity(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def lorentz_pol(tth_deg):
+def lorentz_pol(tth_deg, energy_eV=None):
+    r"""Lorentz–polarisation factor.
+
+    When *energy_eV* is supplied the correct **Laue** (polychromatic,
+    stationary-crystal) peak-intensity formula is used::
+
+        LP = P(2θ) · λ² / sin(2θ),   P = (1 + cos²2θ) / 2,   λ = hc/E
+
+    Without *energy_eV* the rotating-crystal formula is returned instead::
+
+        LP = (1 + cos²2θ) / (2 sin²θ cosθ)
+
+    The two differ by a factor of 2/(sinθ·λ²), which is reflection-dependent
+    and causes systematic errors in relative intensities between HKL families
+    at different energies when the rotating-crystal formula is used for Laue
+    data.  Always pass *energy_eV* for Laue experiments.
+    """
     r = np.radians(tth_deg)
+    if energy_eV is not None:
+        P = (1.0 + np.cos(r) ** 2) * 0.5
+        lam = 12398.419843 / float(energy_eV)
+        sin2th = abs(float(np.sin(r)))
+        return float(P * lam ** 2 / sin2th) if sin2th >= 1e-8 else 0.0
     s, c = np.sin(r / 2), np.cos(r / 2)
     if abs(s) < 1e-8 or abs(c) < 1e-8:
         return 0.0
     return abs((1 + np.cos(r) ** 2) / (2 * s**2 * c))
 
 
-def _lorentz_pol_vec(tth_deg):
-    """Vectorized Lorentz–polarisation factor for an array of 2θ values (degrees)."""
+def _lorentz_pol_vec(tth_deg, energy_eV=None):
+    """Vectorized Lorentz–polarisation factor for an array of 2θ values (degrees).
+
+    See :func:`lorentz_pol` for the formula.  When *energy_eV* is an array of
+    the same length as *tth_deg* the Laue formula is used per-element.
+    """
     r = np.radians(np.asarray(tth_deg, dtype=float))
-    s = np.sin(r / 2)
-    c = np.cos(r / 2)
-    valid = (np.abs(s) >= 1e-8) & (np.abs(c) >= 1e-8)
     out = np.zeros(r.shape)
-    out[valid] = np.abs((1.0 + np.cos(r[valid]) ** 2) / (2.0 * s[valid] ** 2 * c[valid]))
+    if energy_eV is not None:
+        E_arr = np.asarray(energy_eV, dtype=float)
+        P = (1.0 + np.cos(r) ** 2) * 0.5
+        lam = 12398.419843 / E_arr
+        sin2th = np.abs(np.sin(r))
+        valid = sin2th >= 1e-8
+        out[valid] = P[valid] * lam[valid] ** 2 / sin2th[valid]
+    else:
+        s = np.sin(r / 2)
+        c = np.cos(r / 2)
+        valid = (np.abs(s) >= 1e-8) & (np.abs(c) >= 1e-8)
+        out[valid] = np.abs((1.0 + np.cos(r[valid]) ** 2) / (2.0 * s[valid] ** 2 * c[valid]))
     return out
 
 
@@ -1872,10 +1907,10 @@ def simulate_laue(
                 chi_arr = np.degrees(np.arctan2(kf_v[:, 1], kf_v[:, 2] + 1e-17))
                 az_arr  = np.degrees(np.arctan2(kf_v[:, 2], kf_v[:, 1]))
                 for _i in range(len(lam)):
-                    LP = lorentz_pol(float(tth_arr[_i]))
+                    E  = float(E_arr[_i])
+                    LP = lorentz_pol(float(tth_arr[_i]), E)
                     if LP == 0.0:
                         continue
-                    E  = float(E_arr[_i])
                     sw = _spectrum(E)
                     if sw <= 0.0:
                         continue
@@ -2265,7 +2300,7 @@ def simulate_laue_stack(
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
-        LP = lorentz_pol(tth)
+        LP = lorentz_pol(tth, E)
         if LP == 0.0:
             return 0
         sw = spectrum(E)
@@ -2427,7 +2462,7 @@ def simulate_laue_stack(
                 az_b  = np.degrees(np.arctan2(kf_b[:, 2], kf_b[:, 1]))
 
                 # ── Batch LP + spectrum pre-filter ────────────────────────────
-                LP_b = _lorentz_pol_vec(tth_b)
+                LP_b = _lorentz_pol_vec(tth_b, E_b)
                 sw_b = spectrum(E_b)
                 pre_ok = (LP_b > 0) & (sw_b > 0)
 
@@ -2696,8 +2731,9 @@ def qspace_around_spot(
             lab-frame Q at every voxel.
         `'F2'` : ndarray, shape `(n_along, n_lateral, n_lateral)` —
             `|F_stack(Q)|²`, zero where unreachable.
-        `'I'` : ndarray, same shape — `F2 · LP(2θ) · S(E)`, the intensity
-            convention used elsewhere in this module (un-normalised).
+        `'I'` : ndarray, same shape — `F2 · LP_Laue(2θ, E) · S(E)`, where
+            `LP_Laue = P(2θ) · λ²/sin(2θ)` is the correct Laue peak-intensity
+            Lorentz factor (un-normalised counts, per voxel).
         `'E'` : ndarray, same shape — photon energy (eV), `NaN` where
             unreachable.
         `'reachable'` : ndarray of bool, same shape — satisfies the elastic
@@ -2869,7 +2905,7 @@ def qspace_around_spot(
 
     if len(idx):
         tth_arr = np.degrees(np.arccos(np.clip(kf_flat[idx, 0], -1.0, 1.0)))
-        LP_arr = _lorentz_pol_vec(tth_arr)
+        LP_arr = _lorentz_pol_vec(tth_arr, E_flat[idx])
         sw_arr = spectrum(E_flat[idx])
 
         E_ref = (
@@ -3702,7 +3738,7 @@ def simulate_laue_darwin(
             tth_b = np.degrees(np.arccos(np.clip(kf_b[:, 0], -1.0, 1.0)))
             chi_b = np.degrees(np.arctan2(kf_b[:, 1], kf_b[:, 2] + 1e-17))
             az_b  = np.degrees(np.arctan2(kf_b[:, 2], kf_b[:, 1]))
-            LP_b  = _lorentz_pol_vec(tth_b)
+            LP_b  = _lorentz_pol_vec(tth_b, E_b)
             sw_b  = _spectrum(E_b)
             pre_ok = (LP_b > 0) & (sw_b > 0)
             pix_round = np.round(pix_b).astype(np.int64)
@@ -3985,7 +4021,7 @@ def simulate_laue_multibeam(
         tth = float(np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0))))
         chi = float(np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17)))
         az  = float(np.degrees(np.arctan2(kf_hat[2], kf_hat[1])))
-        LP  = lorentz_pol(tth)
+        LP  = lorentz_pol(tth, E)
         if LP == 0.0:
             continue
         sw = _spectrum(E)
@@ -4057,7 +4093,7 @@ def simulate_laue_multibeam(
         n_forbidden_on_det += 1
 
         tth_t = float(np.degrees(np.arccos(np.clip(kf_hat_t[0], -1.0, 1.0))))
-        LP_t  = lorentz_pol(tth_t)
+        LP_t  = lorentz_pol(tth_t, E_t)
         if LP_t == 0.0:
             continue
         sw_t = _spectrum(E_t)

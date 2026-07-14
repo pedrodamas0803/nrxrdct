@@ -2501,6 +2501,7 @@ def qspace_around_spot(
     extent_lateral=None,
     max_satellites=6,
     pin_satellites=True,
+    spot_only=False,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -2716,6 +2717,17 @@ def qspace_around_spot(
     if extent_lateral is None:
         extent_lateral = 0.05 * extent_along
 
+    # ── spot_only: collapse grid to Bragg + satellite positions only ──────────
+    # When True, skip the dense uniform rod sampling and evaluate the structure
+    # factor only at along=0 (Bragg peak) plus the pinned satellite positions.
+    # This is equivalent to n_along=1, n_lateral=1 with pin_satellites forced
+    # on — much faster and gives clean discrete spots for direct comparison
+    # with measured peak positions/intensities.
+    if spot_only:
+        n_along = 1
+        n_lateral = 1
+        pin_satellites = True
+
     along_vals = np.linspace(-extent_along, extent_along, n_along)
 
     # ── pin along_vals to exact satellite positions ───────────────────────────
@@ -2905,6 +2917,7 @@ def qspace_per_layer(
     extent_lateral=None,
     max_satellites=6,
     pin_satellites=True,
+    spot_only=False,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -2984,6 +2997,7 @@ def qspace_per_layer(
             n_along=n_along, n_lateral=n_lateral,
             extent_along=extent_along, extent_lateral=extent_lateral,
             max_satellites=max_satellites, pin_satellites=pin_satellites,
+            spot_only=spot_only,
             camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
             source=source, source_kwargs=source_kwargs,
             kb_params=kb_params, ki_hat=ki_hat,
@@ -3007,6 +3021,7 @@ def qspace_multi_hkl(
     extent_lateral=None,
     max_satellites=6,
     pin_satellites=True,
+    spot_only=False,
     camera=None,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -3070,6 +3085,7 @@ def qspace_multi_hkl(
                 n_along=n_along, n_lateral=n_lateral,
                 extent_along=extent_along, extent_lateral=extent_lateral,
                 max_satellites=max_satellites, pin_satellites=pin_satellites,
+                spot_only=spot_only,
                 camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                 source=source, source_kwargs=source_kwargs,
                 kb_params=kb_params, ki_hat=ki_hat,

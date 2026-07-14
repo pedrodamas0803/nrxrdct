@@ -5507,6 +5507,27 @@ def plot_detector_projection(
     )
     Ny, Nx = sim.shape
 
+    # ── PSF convolution (before normalisation so it acts on raw flux) ────────
+    if psf_sigma_px > 0:
+        from scipy.ndimage import gaussian_filter as _gf
+        sim = _gf(sim, sigma=psf_sigma_px)
+
+    # ── crop to bounding box of non-zero pixels ───────────────────────────────
+    # project_to_detector already crops when camera=None.  When camera is
+    # supplied it returns the full detector frame, making any spot invisible.
+    # Crop here so the display always focuses on the simulated region.
+    nz = np.argwhere(sim > 0)
+    if len(nz):
+        ry0, rx0 = nz[:, 0].min(), nz[:, 1].min()
+        ry1, rx1 = nz[:, 0].max() + 1, nz[:, 1].max() + 1
+        ry0 = max(ry0 - pad_px, 0)
+        rx0 = max(rx0 - pad_px, 0)
+        ry1 = min(ry1 + pad_px, Ny)
+        rx1 = min(rx1 + pad_px, Nx)
+        sim = sim[ry0:ry1, rx0:rx1]
+        x0, y0 = x0 + rx0, y0 + ry0
+        Ny, Nx = sim.shape
+
     # pixel-space extent for imshow: (left, right, bottom, top) with origin='upper'
     ext = [x0, x0 + Nx, y0 + Ny, y0]
 
@@ -5531,11 +5552,6 @@ def plot_detector_projection(
         return arr.copy()
 
     vols_list = [vol_or_vols] if isinstance(vol_or_vols, dict) else list(vol_or_vols)
-
-    # ── PSF convolution (before normalisation so it acts on raw flux) ────────
-    if psf_sigma_px > 0:
-        from scipy.ndimage import gaussian_filter as _gf
-        sim = _gf(sim, sigma=psf_sigma_px)
 
     # ── I / I_max normalisation ───────────────────────────────────────────────
     # Simulated panel: divide by its own maximum so the brightest simulated

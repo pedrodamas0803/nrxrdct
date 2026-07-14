@@ -5462,6 +5462,8 @@ def plot_detector_projection(
     log_intensity: bool = True,
     psf_sigma_px: float = 1.0,
     exclude_bragg_along: "float | None" = None,
+    vmin_percentile: float = 0.0,
+    vmax_percentile: float = 99.5,
     figsize: "tuple[float, float] | None" = None,
     out_path: "str | None" = None,
 ) -> tuple:
@@ -5492,6 +5494,14 @@ def plot_detector_projection(
             simulated projection so that the kinematical Bragg peak does not
             flood the image.  A good starting value is ``π / Λ`` (e.g. 0.03
             for Λ=100 Å).
+        vmin_percentile: Percentile (0–100) of the combined non-zero pixels
+            from both panels used as the colour-scale minimum.  Default 0
+            (true minimum — no black-level clipping).  Increase to suppress
+            faint background; e.g. 5 clips the bottom 5 % of signal.
+        vmax_percentile: Percentile (0–100) used as the colour-scale maximum.
+            Default 99.5 — clips the top 0.5 % so a single bright outlier
+            (e.g. unsuppressed Bragg peak) does not compress the satellite
+            colour range.  Set to 100 for the true maximum.
         figsize: Figure size.  Defaults to ``(8, 5)`` (one panel) or
             ``(14, 5)`` (two panels).
         out_path: If given, save the figure to this path.
@@ -5577,8 +5587,21 @@ def plot_detector_projection(
         print(f"[plot_detector_projection] meas I_max={I_max_meas:.3e}")
 
     sim_s = _stretch(sim)
-    vmin_s = 0.0
-    vmax_s = float(_stretch(np.array([1.0]))[0])
+
+    # ── colour-scale limits from percentiles of non-zero pixels ───────────────
+    # Collect stretched values from both panels (non-zero only so the large
+    # empty background does not pull the percentiles to zero).
+    _nz_vals = [sim_s[sim_s > 0]]
+    if has_meas:
+        meas_s_tmp = _stretch(meas_norm)
+        _nz_m = meas_s_tmp[meas_s_tmp > 0]
+        if len(_nz_m):
+            _nz_vals.append(_nz_m)
+    _all_nz = np.concatenate(_nz_vals) if _nz_vals else np.array([0.0, 1.0])
+    vmin_s = float(np.percentile(_all_nz, vmin_percentile)) if len(_all_nz) else 0.0
+    vmax_s = float(np.percentile(_all_nz, vmax_percentile)) if len(_all_nz) else 1.0
+    if vmax_s <= vmin_s:
+        vmax_s = vmin_s + 1e-6
 
     for ax in axes:
         _ax_style(ax, "")
@@ -5604,10 +5627,10 @@ def plot_detector_projection(
     if has_meas:
         ax_meas = axes[1]
         ax_meas.set_title("Measured", color=FG, fontsize=9, pad=4)
-        meas_s = _stretch(meas_norm)
+        meas_s = meas_s_tmp
         im_m = ax_meas.imshow(
             meas_s, origin="upper", extent=ext,
-            cmap="gray", vmin=0.0, vmax=vmax_s,
+            cmap="gray", vmin=vmin_s, vmax=vmax_s,
             aspect="equal", interpolation="nearest",
         )
         cbar_m = fig.colorbar(im_m, ax=ax_meas, shrink=0.85, pad=0.03)

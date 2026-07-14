@@ -5588,22 +5588,12 @@ def plot_detector_projection(
     # otherwise) maps to 1.0.
     I_max_sim = float(sim.max()) if sim.max() > 0 else 1.0
     sim = sim / I_max_sim
-    print(f"[plot_detector_projection] sim I_max={I_max_sim:.3e}  "
-          f"non-zero px={(sim > 0).sum()}  shape={sim.shape}")
 
     if has_meas:
         img_arr = np.asarray(image, dtype=float)
         meas_patch = img_arr[y0:y0 + Ny, x0:x0 + Nx]
-        # Measured panel: normalise by the peak of the measured image at the
-        # simulated satellite positions (sim > 0), not the global max which
-        # would be the Bragg peak and would make satellites invisible.
-        sat_mask = sim > 0
-        if sat_mask.any() and meas_patch[sat_mask].max() > 0:
-            I_max_meas = float(meas_patch[sat_mask].max())
-        else:
-            I_max_meas = float(meas_patch.max()) if meas_patch.max() > 0 else 1.0
+        I_max_meas = float(meas_patch.max()) if meas_patch.max() > 0 else 1.0
         meas_norm = meas_patch / I_max_meas
-        print(f"[plot_detector_projection] meas I_max={I_max_meas:.3e}")
 
     sim_s = _stretch(sim)
 

@@ -5473,8 +5473,27 @@ def plot_detector_projection(
 
     When *image* (a full measured detector frame) is supplied the function
     shows two panels side by side — simulated (left) and measured patch
-    (right) — so you can compare them directly.  Both panels use the same
-    colour scale and log-stretch.
+    (right) — so you can compare them directly.
+
+    **Normalisation**
+
+    Each panel is independently normalised by ``I/I_max`` before the
+    log-stretch: the simulated panel divides by its own peak intensity, the
+    measured panel divides by the measured intensity at the simulated spot
+    positions (or by its own peak if none are non-zero).  A shared
+    percentile-based colour scale (*vmin_percentile* / *vmax_percentile*)
+    is then derived from the combined non-zero pixels of both stretched
+    panels so that faint features (e.g. superlattice satellites) are
+    visible at the same visual level.
+
+    **Auto-crop**
+
+    After the PSF convolution the function crops the arrays to the
+    bounding box of non-zero simulated pixels, expanded by *pad_px* on
+    every side.  This is done even when a full-frame *camera* is supplied
+    (where :func:`~nrxrdct.laue.simulation.project_to_detector` returns a
+    ~2k × 2k frame) so that a 1–2 pixel spot is never lost in an empty
+    field.
 
     Args:
         vol_or_vols: A single vol dict from ``qspace_around_spot`` or a list

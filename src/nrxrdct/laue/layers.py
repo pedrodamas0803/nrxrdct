@@ -528,6 +528,19 @@ class Layer:
         d_spacing (float, optional): Repeat distance along the stacking direction (Å).
             If `None`, computed as the primitive lattice repeat along `n_hat`.
         label (str, optional): name for this layer
+        absorption_limit (bool, optional): When ``True``, the effective
+            thickness used in the structure-factor sum is capped at the
+            absorption length ``1/μ`` (energy-dependent).  Set automatically
+            for buffer/substrate layers by
+            :meth:`LayeredCrystal.add_buffer_layer`.  Default ``False``.
+        mu_Ang (float or None, optional): Manual override for the linear
+            absorption coefficient μ (Å⁻¹) at any energy.  When set,
+            :meth:`_linear_mu` returns this value directly and skips the
+            automatic xrayutilities / ``StructureFactor`` lookup.  Useful
+            for alloy materials (InGaN, AlGaN) built from CIF files where
+            the automatic lookup may fail or return zero.  Set to ``0.0``
+            to disable absorption for this layer entirely.  Default ``None``
+            (use automatic lookup).
 """
 
     def __init__(
@@ -539,6 +552,7 @@ class Layer:
         d_spacing=None,
         label=None,
         absorption_limit=False,
+        mu_Ang=None,
     ):
         self.crystal = crystal
         self.U = np.asarray(U, dtype=float)
@@ -547,6 +561,12 @@ class Layer:
         # min(real thickness, 1/μ) to model Beer-Lambert absorption depth.
         # Set automatically for buffer layers by LayeredCrystal.add_buffer_layer.
         self.absorption_limit = bool(absorption_limit)
+        # Optional manual override for the linear absorption coefficient (Å⁻¹).
+        # When set, _linear_mu() returns this value directly without any
+        # xrayutilities lookup — useful for alloy materials (InGaN, AlGaN) where
+        # the automatic lookup may fail.  Set to 0.0 to disable absorption for
+        # this layer.  Example: layer.mu_Ang = 3.5e-5
+        self.mu_Ang = float(mu_Ang) if mu_Ang is not None else None
 
         if n_hat is None:
             self.n_hat = np.array([0.0, 0.0, 1.0])
@@ -600,25 +620,64 @@ class Layer:
         """
         Linear absorption coefficient μ (Å⁻¹) for this material at *energy_eV*.
 
-        Returns `0.0` if material data are unavailable or absorption is zero.
+        Lookup order:
+        1. ``self.mu_Ang`` — direct user override (set on the Layer instance).
+        2. ``crystal.delta_beta(energy_eV)`` — works for named xrayutilities
+           materials (e.g. Si, Al2O3).
+        3. ``Im(F(Q=0)) / V_uc`` via ``crystal.StructureFactor`` — works for
+           any crystal whose constituent elements have Henke f'' tables, which
+           covers all standard III-nitrides and oxides built from CIF files.
+
+        Returns 0.0 only when all three paths fail.
 """
         _HC_ANG = 12398.419843
+
+        # 1. Manual override
+        if self.mu_Ang is not None:
+            return float(self.mu_Ang)
+
+        # 2. xrayutilities delta_beta (named materials)
         try:
             if hasattr(self.crystal, "delta_beta"):
                 _, beta = self.crystal.delta_beta(energy_eV)
             else:
                 elem = getattr(xu.materials.elements, self.crystal.name, None)
                 if elem is None or not getattr(elem, "density", 0):
-                    return 0.0
+                    raise ValueError("no element")
                 mat = xu.materials.Amorphous(self.crystal.name, elem.density)
                 _, beta = mat.delta_beta(energy_eV)
-            if not (beta > 0):
-                return 0.0
-            lam_ang = _HC_ANG / energy_eV
-            mu = 4.0 * np.pi * beta / lam_ang
-            return float(mu) if mu > 0 else 0.0
+            if beta > 0:
+                lam_ang = _HC_ANG / energy_eV
+                return float(4.0 * np.pi * beta / lam_ang)
         except Exception:
-            return 0.0
+            pass
+
+        # 3. Im(F(Q=0)) / V_uc — works for any crystal with Henke f'' data.
+        # Physical basis:  mu = 2 r_e lambda Im(F_uc(0)) / V_uc
+        # where F_uc(0) = Σ_i (Z_i + f'_i + i f''_i) sums over all atoms in
+        # the unit cell and V_uc is the unit cell volume in Å³.
+        try:
+            F0 = complex(self.crystal.StructureFactor([0.0, 0.0, 0.0],
+                                                      en=energy_eV))
+            if F0.imag > 0:
+                lat = self.crystal.lattice
+                ca = np.cos(np.radians(float(lat.alpha)))
+                cb = np.cos(np.radians(float(lat.beta)))
+                cg = np.cos(np.radians(float(lat.gamma)))
+                V = (float(lat.a) * float(lat.b) * float(lat.c)
+                     * np.sqrt(max(0.0,
+                                   1.0 - ca**2 - cb**2 - cg**2
+                                   + 2.0*ca*cb*cg)))
+                if V > 0:
+                    r_e = 2.8179403e-5       # Å
+                    lam_ang = _HC_ANG / energy_eV
+                    mu = 2.0 * r_e * lam_ang * F0.imag / V
+                    if mu > 0:
+                        return float(mu)
+        except Exception:
+            pass
+
+        return 0.0
 
     def _effective_n_cells(self, energy_eV: float, kf_hat=None) -> int:
         """

@@ -119,6 +119,7 @@ from .fit_io import read_fit_file, read_raw, prepare_image, F_from_UBB0, plot_fi
 from .simulation import (
     BM32_KB,
     beam_divergence_ellipses,
+    print_absorption_table,
     clear_allowed_hkl_cache,
     precompute_allowed_hkl,
     beam_in_crystal,
@@ -199,6 +200,7 @@ __all__ = [
     "Camera",
     "CalibrationResult",
     # Simulation
+    "print_absorption_table",
     "clear_allowed_hkl_cache",
     "precompute_allowed_hkl",
     "simulate_laue",

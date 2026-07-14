@@ -1961,6 +1961,52 @@ def _layer_depths_mm(stack) -> dict:
     return result
 
 
+def print_absorption_table(stack, energy_eV=None, E_min_eV=None, E_max_eV=None):
+    """
+    Print the linear absorption coefficient μ (Å⁻¹) and absorption length
+    1/μ (μm) for every layer in *stack* at the given energy (or range).
+
+    Useful for diagnosing whether the automatic μ lookup succeeds for all
+    materials and for choosing manual ``layer.mu_Ang`` overrides.
+
+    Args:
+        stack: :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
+        energy_eV: Photon energy in eV (float or list).  If ``None``, uses
+            the midpoint of ``[E_min_eV, E_max_eV]``.
+        E_min_eV, E_max_eV: Energy range; only used when *energy_eV* is
+            ``None``.  Defaults to 5 000 and 27 000 eV.
+    """
+    if energy_eV is None:
+        lo = E_min_eV or 5_000
+        hi = E_max_eV or 27_000
+        energies = [0.5 * (lo + hi)]
+    elif np.isscalar(energy_eV):
+        energies = [float(energy_eV)]
+    else:
+        energies = list(energy_eV)
+
+    stack._update_offsets()
+    all_layers = stack.all_layers
+    depths_mm = _layer_depths_mm(stack)
+
+    print(f"{'Layer':<30}  {'t (Å)':>10}  {'depth (μm)':>10}", end="")
+    for E in energies:
+        print(f"  {'μ @ '+f'{E/1000:.1f}keV':>14}  {'1/μ (μm)':>10}", end="")
+    print()
+    print("-" * (55 + len(energies) * 27))
+
+    for lyr in reversed(all_layers):   # surface → substrate order
+        depth_um = depths_mm.get(id(lyr), 0.0) * 1e4
+        row = f"{lyr.label:<30}  {lyr.thickness:>10.1f}  {depth_um:>10.2f}"
+        for E in energies:
+            mu = lyr._linear_mu(E)
+            if mu > 0:
+                row += f"  {mu:>12.3e} Å⁻¹  {1e-4/mu:>10.2f}"
+            else:
+                row += f"  {'(no data)':>14}  {'—':>10}"
+        print(row)
+
+
 def simulate_laue_stack(
     stack,
     camera,
@@ -2587,6 +2633,20 @@ def qspace_around_spot(
         Only used to size the default `extent_along`: spans
         `±(max_satellites + 0.5) * 2π/period` so the same satellite orders
         `simulate_laue_stack` would report are covered.
+    pin_satellites : bool, optional
+        When ``True`` (default), the exact superlattice-satellite positions
+        (multiples of ``2π/Λ`` along the rod) are inserted into the
+        ``along`` grid in addition to the regular linspace points, ensuring
+        they are never missed due to grid coarseness.
+    spot_only : bool, optional
+        When ``True``, collapse the grid to a sparse set of discrete spots:
+        sets ``n_along=1`` and ``n_lateral=1`` and forces
+        ``pin_satellites=True``.  The resulting ``along`` array contains
+        only the Bragg peak (``along=0``) and the pinned satellite
+        positions — no continuum sampling.  This is useful for a clean
+        spot-by-spot comparison against the measured detector image via
+        :func:`plot_detector_projection`, without the continuous rod
+        background.  Default ``False`` (full dense 3-D grid).
     camera : Camera or None, optional
         Detector geometry.  When `None` (default), only the Q-space volume
         is computed — no pixel/energy intersection.
@@ -2949,6 +3009,10 @@ def qspace_per_layer(
         layers: List of :class:`~nrxrdct.laue.layers.Layer` objects (or layer
             labels as strings) to simulate.  ``None`` (default) uses
             ``stack.all_layers`` — every buffer and repeating layer.
+        spot_only (bool): Forwarded to :func:`qspace_around_spot`.  When
+            ``True``, each volume contains only the Bragg peak and pinned
+            satellite positions (no continuum grid).  Useful for a clean
+            layer-by-layer spot comparison against the measured image.
         All remaining keyword arguments are forwarded unchanged to
         :func:`qspace_around_spot`.
 
@@ -3055,6 +3119,10 @@ def qspace_multi_hkl(
               string — that layer only, for every HKL.
             * A list of Layer objects / label strings — those layers only.
 
+        spot_only (bool): Forwarded to :func:`qspace_around_spot`.  When
+            ``True``, each volume contains only the Bragg peak and pinned
+            satellite positions (no continuum grid) — useful for a clean
+            multi-reflection spot overlay on the measured detector image.
         All remaining keyword arguments are forwarded to
         :func:`qspace_around_spot`.
 

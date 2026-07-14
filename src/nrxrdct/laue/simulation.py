@@ -1565,7 +1565,7 @@ def precompute_allowed_hkl(
     if E_ref_eV is None:
         E_ref_eV = (E_MIN_eV + E_MAX_eV) / 2.0
 
-    if isinstance(crystal, LayeredCrystal):
+    if type(crystal).__name__ == "LayeredCrystal":
         _lc_key = (
             tuple(sorted({l.crystal.name for l in crystal.all_layers})),
             E_max_eV, E_ref_eV, f2_thresh,
@@ -2764,9 +2764,7 @@ def qspace_around_spot(
     >>> lit_up = vol['on_detector'] & (vol['I'] > 0)
     >>> vol['pix'][lit_up]              # every detector pixel this rod reaches
 """
-    from .layers import LayeredCrystal
-
-    if not isinstance(stack, LayeredCrystal):
+    if type(stack).__name__ != "LayeredCrystal":
         raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
     if structure_model not in ("coherent", "average"):
         raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
@@ -3062,9 +3060,7 @@ def qspace_per_layer(
     >>> plot_qspace_summary(vol_main, camera=cam, image=img,
     ...                     per_layer_vols=vols)
     """
-    from .layers import LayeredCrystal
-
-    if not isinstance(stack, LayeredCrystal):
+    if type(stack).__name__ != "LayeredCrystal":
         raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
 
     if layers is None:
@@ -4429,7 +4425,7 @@ def simulate_mixed_phases(
     # ── Compute effective unit-cell volume per phase ───────────────────────────
     def eff_vuc(crystal_or_stack):
         """Effective unit-cell volume (Å³) for weighting."""
-        if isinstance(crystal_or_stack, LayeredCrystal):
+        if type(crystal_or_stack).__name__ == "LayeredCrystal":
             stk = crystal_or_stack
             stk._update_offsets()
             total_t = stk.total_thickness
@@ -4490,7 +4486,7 @@ def simulate_mixed_phases(
         )
 
         # Simulate
-        if isinstance(crystal, LayeredCrystal):
+        if type(crystal).__name__ == "LayeredCrystal":
             spots_p = simulate_laue_stack(
                 crystal,
                 camera,

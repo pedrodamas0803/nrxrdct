@@ -2639,14 +2639,28 @@ def simulate_laue_stack(
                         kf_hat_arr=kf_b[ok_idx_all], n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
                     )
                     F2_all = np.abs(F_all) ** 2
-                    if f2_thresh == 0.0 and len(F2_all):
+                    # Seed the auto-threshold from a repeating (film/MQW)
+                    # layer's own intensity scale, never from a buffer/
+                    # substrate layer's: a thick substrate's F2 (~cell-count²)
+                    # can be 5-6 orders of magnitude larger than a thin film's,
+                    # which would otherwise silently threshold out every film
+                    # reflection (and, at 1e4x tighter, every satellite).
+                    # Falls back to buffer layers if the stack has no
+                    # repeating layers at all (e.g. a plain single crystal).
+                    if f2_thresh == 0.0 and len(F2_all) and (id(layer) not in _buffer_set or not stack.layers):
                         f2_thresh = max(1.0, float(F2_all.max()) * 1e-3)
                 else:
                     F2_all = np.empty(0)
 
+                # Until the auto-threshold has been seeded (still pending on a
+                # repeating layer -- see above), fall back to the module's
+                # baseline F2_THRESHOLD instead of "no filter at all", so
+                # numerically-negligible/forbidden buffer candidates are still
+                # dropped even before a film layer has set the real bar.
+                _f2_floor = f2_thresh if f2_thresh > 0.0 else F2_THRESHOLD
                 for _pos, _si in enumerate(ok_idx_all):
                     F2 = float(F2_all[_pos])
-                    if not skip_F2 and F2 < f2_thresh:
+                    if not skip_F2 and F2 < _f2_floor:
                         continue
 
                     pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
@@ -2757,11 +2771,12 @@ def simulate_laue_stack(
                     else:
                         F2_sat_all = np.empty(0)
 
+                    _f2_floor_sat = f2_thresh if f2_thresh > 0.0 else F2_THRESHOLD
                     for _pos_s, _si_s in enumerate(ok_idx_sat):
                         sat_order_val = int(cand_sat[_si_s])
                         F2s = float(F2_sat_all[_pos_s])
                         if not skip_F2:
-                            eff_thresh = f2_thresh * 1e-4 if sat_order_val != 0 else f2_thresh
+                            eff_thresh = _f2_floor_sat * 1e-4 if sat_order_val != 0 else _f2_floor_sat
                             if F2s < eff_thresh:
                                 continue
                         pix_key_s = (int(pix_round_sat[_si_s, 0]), int(pix_round_sat[_si_s, 1]))

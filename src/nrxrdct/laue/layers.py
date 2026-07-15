@@ -629,12 +629,29 @@ class Layer:
            covers all standard III-nitrides and oxides built from CIF files.
 
         Returns 0.0 only when all three paths fail.
+
+        Memoised to the nearest eV: paths 2-3 each hit xrayutilities'
+        (h5py-backed) atomic database, and μ(E) is smooth on an eV scale, so
+        callers that sweep many close-by candidate energies (e.g. one Bragg
+        peak's harmonic series) don't re-pay that lookup for each one.
 """
         _HC_ANG = 12398.419843
 
         # 1. Manual override
         if self.mu_Ang is not None:
             return float(self.mu_Ang)
+
+        cache = self.__dict__.setdefault("_mu_cache", {})
+        key = round(float(energy_eV))
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        mu = self._linear_mu_uncached(energy_eV)
+        cache[key] = mu
+        return mu
+
+    def _linear_mu_uncached(self, energy_eV: float) -> float:
+        _HC_ANG = 12398.419843
 
         # 2. xrayutilities delta_beta (named materials)
         try:

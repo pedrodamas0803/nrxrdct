@@ -1653,6 +1653,64 @@ def precompute_allowed_hkl(
     return result
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# HARMONIC / COINCIDENT-REFLECTION ACCUMULATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _merge_or_append_spot(spots, seen_pix, pix_key, spot):
+    """
+    Accumulate a candidate reflection onto whatever already occupies its
+    detector pixel, instead of discarding it.
+
+    A real (non energy-resolving) detector pixel records the **sum** of
+    every reflection that lands there — most commonly harmonics of the same
+    Bragg peak (`hkl`, `2·hkl`, `3·hkl`, ... each excited at a different
+    photon energy but landing at the same pixel), but the same logic
+    applies to any accidental overlap.  Keeping only the first-enumerated
+    reflection (the old behaviour) silently drops real diffracted intensity.
+
+    **Intensities, not amplitudes, are summed.**  Different harmonic orders
+    are excited by photons of different energy, which do not interfere —
+    so the physically correct combination is `Σ F2ₙ·LPₙ·swₙ` (each order's
+    own `I_raw`), never a coherent amplitude sum `|ΣFₙ|²`.  (Coherent
+    multi-beam addition of *different* G's at the *same* energy is a
+    distinct effect — Umweganregung — handled separately in
+    `simulate_laue_multibeam`.)
+
+    For auditability, every contributing order's own `hkl`, `F2`, and
+    `I_raw` is kept in `harmonic_hkls` / `harmonic_F2` / `harmonic_I_raw`,
+    so `sum(spot['harmonic_I_raw']) == spot['I_raw']` always holds and can
+    be checked rather than trusted.
+
+    Args:
+        spots (list of dict): Growing spot list; mutated in place.
+        seen_pix (dict): `{(round(xcam), round(ycam)): index into spots}`; mutated in place.
+        pix_key (tuple): `(round(xcam), round(ycam))` of `spot`.
+        spot (dict): Candidate spot to add or merge.  Must contain `'hkl'`, `'F2'`, and `'I_raw'`.
+
+    Returns:
+        bool: `True` if `spot` became a new entry, `False` if it was merged into
+            an existing one.
+    """
+    i = seen_pix.get(pix_key)
+    if i is None:
+        spot["n_harmonics"] = 1
+        spot["harmonic_hkls"] = [spot["hkl"]]
+        spot["harmonic_F2"] = [spot["F2"]]
+        spot["harmonic_I_raw"] = [spot["I_raw"]]
+        spots.append(spot)
+        seen_pix[pix_key] = len(spots) - 1
+        return True
+    existing = spots[i]
+    existing["harmonic_F2"].append(spot["F2"])
+    existing["harmonic_I_raw"].append(spot["I_raw"])
+    existing["I_raw"] += spot["I_raw"]
+    existing["n_harmonics"] += 1
+    existing["harmonic_hkls"].append(spot["hkl"])
+    return False
+
+
 def simulate_laue(
     crystal,
     U,
@@ -1929,6 +1987,11 @@ def simulate_laue(
                 tth_arr = np.degrees(np.arccos(cos2th))
                 chi_arr = np.degrees(np.arctan2(kf_v[:, 1], kf_v[:, 2] + 1e-17))
                 az_arr  = np.degrees(np.arctan2(kf_v[:, 2], kf_v[:, 1]))
+                # A detector pixel records the sum of every reflection that lands
+                # there (most commonly harmonics: hkl, 2·hkl, 3·hkl, ... each at
+                # its own energy) — merge coincident candidates instead of
+                # letting only the first-enumerated one survive.
+                seen_pix = {}
                 for _i in range(len(lam)):
                     E  = float(E_arr[_i])
                     LP = lorentz_pol(float(tth_arr[_i]), E, float(chi_arr[_i]))
@@ -1945,7 +2008,9 @@ def simulate_laue(
                         if F2 < f2_thresh:
                             continue
                     h, k, l = int(_hkl[_i, 0]), int(_hkl[_i, 1]), int(_hkl[_i, 2])
-                    spots.append({
+                    pix_i = (float(pix_arr[_i, 0]), float(pix_arr[_i, 1]))
+                    pix_key = (round(pix_i[0]), round(pix_i[1]))
+                    _merge_or_append_spot(spots, seen_pix, pix_key, {
                         "hkl":             (h, k, l),
                         "satellite_order": 0,
                         "is_superlattice": False,
@@ -1954,7 +2019,7 @@ def simulate_laue(
                         "tth":             float(tth_arr[_i]),
                         "chi":             float(chi_arr[_i]),
                         "az":              float(az_arr[_i]),
-                        "pix":             (float(pix_arr[_i, 0]), float(pix_arr[_i, 1])),
+                        "pix":             pix_i,
                         "F2":              F2,
                         "LP":              LP,
                         "sw":              sw,
@@ -2276,8 +2341,10 @@ def simulate_laue_stack(
                 f"    {desc}  →  2π/t = {np.linalg.norm(qv):.4f} Å⁻¹  (t = {t_nm:.2f} nm)"
             )
 
-    # Deduplicated pixel set: avoid appending two spots within 0.5 px of each other.
-    seen_pix = set()  # set of (round(xcam), round(ycam))
+    # Pixel → spots-index map, used to accumulate coincident reflections
+    # (harmonics and other accidental overlaps) onto one merged spot instead
+    # of discarding all but the first — see _merge_or_append_spot.
+    seen_pix = {}  # dict: (round(xcam), round(ycam)) -> index into spots
 
     # Per-layer allowed hkl set — reassigned in the outer layer loop so that
     # _try_append always sees the set that matches the crystal being enumerated.
@@ -2316,10 +2383,7 @@ def simulate_laue_stack(
         pix = camera.project(kf_hat, source_depth_mm=_depth_mm_state[0])
         if pix is None:
             return 0
-        # Pixel-level deduplication
         pix_key = (round(pix[0]), round(pix[1]))
-        if pix_key in seen_pix:
-            return 0
         tth = np.degrees(np.arccos(np.clip(kf_hat[0], -1.0, 1.0)))
         chi = np.degrees(np.arctan2(kf_hat[1], kf_hat[2] + 1e-17))
         az = np.degrees(np.arctan2(kf_hat[2], kf_hat[1]))
@@ -2346,28 +2410,25 @@ def simulate_laue_stack(
             effective_thresh = f2_thresh * 1e-4 if sat_order != 0 else f2_thresh
             if F2 < effective_thresh:
                 return 0
-        seen_pix.add(pix_key)
-        spots.append(
-            {
-                "phase_label": phase_label,
-                "hkl": hkl,
-                "satellite_order": sat_order,
-                "is_superlattice": sat_order != 0,
-                "G_lab": G_vec.copy(),
-                "E": E,
-                "lambda": lam,
-                "tth": tth,
-                "chi": chi,
-                "az": az,
-                "pix": pix,
-                "F2": F2,
-                "F2_stack": F2,
-                "LP": LP,
-                "sw": sw,
-                "I_raw": F2 * LP * sw,
-            }
-        )
-        return 1
+        is_new = _merge_or_append_spot(spots, seen_pix, pix_key, {
+            "phase_label": phase_label,
+            "hkl": hkl,
+            "satellite_order": sat_order,
+            "is_superlattice": sat_order != 0,
+            "G_lab": G_vec.copy(),
+            "E": E,
+            "lambda": lam,
+            "tth": tth,
+            "chi": chi,
+            "az": az,
+            "pix": pix,
+            "F2": F2,
+            "F2_stack": F2,
+            "LP": LP,
+            "sw": sw,
+            "I_raw": F2 * LP * sw,
+        })
+        return int(is_new)
 
     spots = []
 
@@ -2505,8 +2566,6 @@ def simulate_laue_stack(
 
                 for _si in np.where(pre_ok)[0]:
                     pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
-                    if pix_key in seen_pix:
-                        continue
 
                     if _layer_allowed_hkl is not None or geometry_only:
                         F2 = 1.0
@@ -2524,12 +2583,11 @@ def simulate_laue_stack(
                         if F2 < f2_thresh:
                             continue
 
-                    seen_pix.add(pix_key)
                     G_lab = _G_lab_b[_si]
                     h = int(_hkl_b[_si, 0]); k = int(_hkl_b[_si, 1]); l = int(_hkl_b[_si, 2])
                     lp = float(LP_b[_si]);    sw = float(sw_b[_si])
                     E  = float(E_b[_si])
-                    spots.append({
+                    is_new = _merge_or_append_spot(spots, seen_pix, pix_key, {
                         "phase_label":     label,
                         "hkl":             (h, k, l),
                         "satellite_order": 0,
@@ -2547,7 +2605,8 @@ def simulate_laue_stack(
                         "sw":              sw,
                         "I_raw":           F2 * lp * sw,
                     })
-                    n_added += 1
+                    if is_new:
+                        n_added += 1
 
                     # ── Thickness fringes / satellites for this Bragg peak ─────
                     if layer_has_satellites:
@@ -3642,7 +3701,9 @@ def simulate_laue_darwin(
 
         return F_buf + F_mqw, n_eff_b + n_eff_u, n_ext_b + n_ext_u
 
-    seen_pix: set = set()
+    # Pixel → spots-index map — see _merge_or_append_spot for why coincident
+    # reflections (harmonics, etc.) are accumulated rather than discarded.
+    seen_pix: dict = {}
     spots: list = []
 
     # ── Deduplicate orientations for enumeration ──────────────────────────────
@@ -3766,8 +3827,6 @@ def simulate_laue_darwin(
             n_new = 0
             for _si in np.where(pre_ok)[0]:
                 pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
-                if pix_key in seen_pix:
-                    continue
                 F_total, n_effs, n_exts = _darwin_amp(
                     G_b[_si], float(E_b[_si]), float(lam_b[_si]),
                     float(tth_b[_si]), kf_hat=kf_b[_si],
@@ -3775,8 +3834,7 @@ def simulate_laue_darwin(
                 F2 = abs(F_total) ** 2
                 if F2 < eff_thresh:
                     continue
-                seen_pix.add(pix_key)
-                spots.append({
+                is_new = _merge_or_append_spot(spots, seen_pix, pix_key, {
                     "phase_label":     label,
                     "hkl":             (int(hkl_b[_si, 0]),
                                         int(hkl_b[_si, 1]),
@@ -3800,7 +3858,8 @@ def simulate_laue_darwin(
                     "N_eff":           n_effs,
                     "N_ext":           n_exts,
                 })
-                n_new += 1
+                if is_new:
+                    n_new += 1
             return n_new
 
         # Main Bragg peaks
@@ -4028,6 +4087,11 @@ def simulate_laue_multibeam(
         print(f"  Kinematical candidates: {kin_mask.sum()}  (energy window + F² cut)")
 
     kin_spots: list[dict] = []
+    # Pixel → kin_spots-index map — accumulates coincident reflections
+    # (harmonics: hkl, 2·hkl, 3·hkl, ... landing on the same pixel at
+    # different energies) instead of keeping every one as a separate,
+    # unmerged entry.  See _merge_or_append_spot.
+    _kin_seen_pix: dict = {}
     for idx in kin_idx:
         lam   = float(lam_all[idx])
         E     = HC_eV_ANG / lam
@@ -4052,7 +4116,8 @@ def simulate_laue_multibeam(
         if F2 < f2_thresh:
             continue
         hkl = (int(hkl_all[idx, 0]), int(hkl_all[idx, 1]), int(hkl_all[idx, 2]))
-        kin_spots.append({
+        pix_key = (round(pix[0]), round(pix[1]))
+        _merge_or_append_spot(kin_spots, _kin_seen_pix, pix_key, {
             "hkl":              hkl,
             "is_umweganregung": False,
             "umweg_paths":      [],

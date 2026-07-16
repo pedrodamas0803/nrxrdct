@@ -625,6 +625,13 @@ def write_h5_spotsfile(
             indicate that no fit was attempted.  This is much faster and
             suitable when peak positions are all that is needed.
 """
+    if fit_spots and (not isinstance(max_components, int) or isinstance(max_components, bool) or max_components < 1):
+        raise ValueError(
+            f"max_components must be a positive int, got {max_components!r}. "
+            "Use max_components=1 for a single-Gaussian-only fit, or "
+            "fit_spots=False to skip fitting entirely."
+        )
+
     n_labels = len(regionprops)
     n_success = 0
 

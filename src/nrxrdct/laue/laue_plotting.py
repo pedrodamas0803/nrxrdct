@@ -3315,6 +3315,7 @@ def plot_laue_comparison(
     n_chi: int = 600,
     cmap: str = "gray",
     spot_marker: str = "+",
+    sat_marker: str = "x",
     spot_size: float = 60.0,
     spot_color=None,
     color_spots_by: str = "phase",
@@ -3343,7 +3344,10 @@ def plot_laue_comparison(
         tth_range, chi_range ((float, float), optional): Angular display range (*tth_chi* frame only).
         n_tth, n_chi (int): Warp resolution (*tth_chi* frame only).
         cmap (str): Matplotlib colormap (applied to both panels).
-        spot_marker (str): Marker style for simulated spots (default `'+'`).
+        spot_marker (str): Marker style for Bragg (satellite_order == 0) spots (default `'+'`).
+        sat_marker (str): Marker style for satellite spots (default `'x'`), kept visually
+            distinct from *spot_marker* so Bragg and satellite reflections
+            don't have to be told apart by size/alpha alone.
         spot_size (float): Marker size.
         spot_color (str or None): Fixed colour for all spots.  `None` → colour by `color_spots_by`.
         color_spots_by (`'phase'` | `'order'` | `'energy'`): Colouring scheme when *spot_color* is `None`.
@@ -3529,7 +3533,7 @@ def plot_laue_comparison(
         for _ax in (ax_exp, ax_sim):
             _ax.scatter(
                 xb, yb, c=cb,
-                s=spot_size, marker=spot_marker, linewidths=0.9, zorder=4,
+                s=spot_size, marker=spot_marker, linewidths=1.4, zorder=4,
             )
             if show_divergence:
                 _draw_divergence_ellipses(_ax, sb, xb, yb, frame,
@@ -3544,12 +3548,12 @@ def plot_laue_comparison(
         cs = _colors(ss)
         sc_sat_exp = ax_exp.scatter(
             xs, ys, c=cs,
-            s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
+            s=spot_size * 0.7, marker=sat_marker, linewidths=1.1,
             zorder=3, alpha=0.75,
         )
         sc_sat_sim = ax_sim.scatter(
             xs, ys, c=cs,
-            s=spot_size * 0.7, marker=spot_marker, linewidths=0.7,
+            s=spot_size * 0.7, marker=sat_marker, linewidths=1.1,
             zorder=3, alpha=0.75,
         )
         if show_divergence:
@@ -3560,17 +3564,35 @@ def plot_laue_comparison(
         _attach_hover_tooltip(fig, ax_sim, ss, xs, ys)
 
     # ── Phase legend ──────────────────────────────────────────────────────────
+    phase_legend = None
     if spots_all and spot_color is None and color_spots_by == "phase" and _all_labels:
         handles = [
             Line2D([0], [0], linestyle="none", marker=spot_marker,
                    color=_lc[lb], markersize=7, label=lb)
             for lb in _all_labels
         ]
-        ax_sim.legend(
+        phase_legend = ax_sim.legend(
             handles=handles, loc="upper right", fontsize=7,
             framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
             labelcolor=FG,
         )
+
+    # ── Marker-shape legend (Bragg vs satellite) ─────────────────────────────
+    if sb or ss:
+        shape_handles = []
+        if sb:
+            shape_handles.append(Line2D([0], [0], linestyle="none", marker=spot_marker,
+                                         color="#cccccc", markersize=7, label="Bragg"))
+        if ss:
+            shape_handles.append(Line2D([0], [0], linestyle="none", marker=sat_marker,
+                                         color="#cccccc", markersize=7, label="satellite"))
+        ax_sim.legend(
+            handles=shape_handles, loc="lower right", fontsize=7,
+            framealpha=0.5, facecolor="#1a1f2e", edgecolor="#3a3f4e",
+            labelcolor=FG,
+        )
+        if phase_legend is not None:
+            ax_sim.add_artist(phase_legend)
 
     # ── Satellite toggle checkbox ─────────────────────────────────────────────
     # Store the widget on the figure so it is not garbage-collected.

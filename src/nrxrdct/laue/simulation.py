@@ -2307,14 +2307,31 @@ def simulate_laue_stack(
 
         Keys: `material`, `grazing_angle_mrad`, `n_mirrors`,
         `roughness_ang`.
-    f2_thresh : float
-        Minimum |F_stack|²  to retain a spot (absolute, in e.u.²).
-        Because the stack coherently sums many unit cells the absolute
-        value scales roughly as (N_cells × N_rep)² at Bragg peaks.
-        A value of `None` uses an auto-scaled threshold:
-            f2_thresh = (max single-cell |F|)² × 0.001
-        which keeps spots down to 0.1 % of the strongest unit-cell peak.
-        For a manual value, typical starting point: ~10–1000.
+    f2_thresh : float or None, optional
+        Minimum |F_stack|² for a **main Bragg peak** to be kept (absolute,
+        in e.u.²).  Satellites use a separate, fixed floor (`F2_THRESHOLD`)
+        regardless of this value — see Note below.
+        `None` (default) uses the module baseline `F2_THRESHOLD` (1e-6),
+        i.e. essentially no filtering; rank/filter the returned list by
+        `intensity` afterwards instead.  Because `F2_stack` is a coherent
+        sum it scales roughly as `(N_cells × N_rep)²` at each layer's own
+        Bragg peaks (many orders of magnitude between a thin film and a
+        thick substrate in the *same* stack), so there is no single
+        stack-wide value that reliably separates "real" from "negligible"
+        reflections — pass an explicit value only if you've checked it
+        against your own stack's `F2` range, not as a general-purpose
+        noise filter.
+
+        Note: satellites are **always** thresholded against the fixed
+        `F2_THRESHOLD` floor directly, never against `f2_thresh` (or a
+        fraction of it, as in earlier versions of this function). A
+        relative rule ("satellite must be ≥ 1e-4 of its parent peak")
+        breaks down whenever the parent's own `F2` happens to coincide with
+        a much stronger, unrelated reflection elsewhere in the stack — e.g.
+        an unstrained film sublayer that is lattice-matched to a much
+        thicker buffer, which is a common real situation, not an edge case
+        (this previously caused entire film layers, and every one of their
+        satellites, to be silently dropped).
     ki_hat : array-like (3,), optional
         Incident beam direction in the LaueTools LT frame (x // beam).
         Default: [1, 0, 0].
@@ -2400,9 +2417,19 @@ def simulate_laue_stack(
 
     spectrum = _make_spectrum_fn(source, source_kwargs, kb_params)
 
-    # Auto-scale f2_thresh if not provided
+    # F2_stack is an absolute (coherent-sum) quantity that can span many
+    # orders of magnitude across one stack (~cell-count² at each layer's own
+    # Bragg peaks), so — unlike simulate_laue's per-unit-cell F2 — there is
+    # no single stack-wide scale that reliably separates "real" from
+    # "negligible" here. Rather than guess one (auto-scaling from whichever
+    # layer happens to be enumerated first previously caused entire film
+    # layers, and every one of their satellites, to be silently dropped
+    # whenever they coincided with a much stronger substrate/buffer
+    # reflection), default to the same absolute floor used everywhere else
+    # in this module and let candidates be filtered/ranked afterwards by
+    # `intensity` instead.
     if f2_thresh is None:
-        f2_thresh = 0.0  # will be set after first structure factor call
+        f2_thresh = F2_THRESHOLD
 
     # ── Fringe / satellite wavevectors ───────────────────────────────────────
     # Thickness fringes and superlattice satellites both sit at
@@ -2639,28 +2666,12 @@ def simulate_laue_stack(
                         kf_hat_arr=kf_b[ok_idx_all], n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
                     )
                     F2_all = np.abs(F_all) ** 2
-                    # Seed the auto-threshold from a repeating (film/MQW)
-                    # layer's own intensity scale, never from a buffer/
-                    # substrate layer's: a thick substrate's F2 (~cell-count²)
-                    # can be 5-6 orders of magnitude larger than a thin film's,
-                    # which would otherwise silently threshold out every film
-                    # reflection (and, at 1e4x tighter, every satellite).
-                    # Falls back to buffer layers if the stack has no
-                    # repeating layers at all (e.g. a plain single crystal).
-                    if f2_thresh == 0.0 and len(F2_all) and (id(layer) not in _buffer_set or not stack.layers):
-                        f2_thresh = max(1.0, float(F2_all.max()) * 1e-3)
                 else:
                     F2_all = np.empty(0)
 
-                # Until the auto-threshold has been seeded (still pending on a
-                # repeating layer -- see above), fall back to the module's
-                # baseline F2_THRESHOLD instead of "no filter at all", so
-                # numerically-negligible/forbidden buffer candidates are still
-                # dropped even before a film layer has set the real bar.
-                _f2_floor = f2_thresh if f2_thresh > 0.0 else F2_THRESHOLD
                 for _pos, _si in enumerate(ok_idx_all):
                     F2 = float(F2_all[_pos])
-                    if not skip_F2 and F2 < _f2_floor:
+                    if not skip_F2 and F2 < f2_thresh:
                         continue
 
                     pix_key = (int(pix_round[_si, 0]), int(pix_round[_si, 1]))
@@ -2771,14 +2782,20 @@ def simulate_laue_stack(
                     else:
                         F2_sat_all = np.empty(0)
 
-                    _f2_floor_sat = f2_thresh if f2_thresh > 0.0 else F2_THRESHOLD
                     for _pos_s, _si_s in enumerate(ok_idx_sat):
                         sat_order_val = int(cand_sat[_si_s])
                         F2s = float(F2_sat_all[_pos_s])
-                        if not skip_F2:
-                            eff_thresh = _f2_floor_sat * 1e-4 if sat_order_val != 0 else _f2_floor_sat
-                            if F2s < eff_thresh:
-                                continue
+                        if not skip_F2 and F2s < F2_THRESHOLD:
+                            # Satellites are judged against the module's absolute
+                            # baseline floor, not any relative/parent-derived
+                            # scale: a "1e-4 of the parent peak" rule breaks down
+                            # whenever the parent happens to coincide with a much
+                            # stronger, unrelated reflection elsewhere in the
+                            # stack (its own F2 no longer reflects what a real
+                            # satellite of *this* repeating structure should look
+                            # like), which is common whenever a film sublayer is
+                            # lattice-matched to a much thicker buffer/substrate.
+                            continue
                         pix_key_s = (int(pix_round_sat[_si_s, 0]), int(pix_round_sat[_si_s, 1]))
                         lp_s = float(LP_sat[_si_s]); sw_s = float(sw_sat[_si_s])
                         is_new_s = _merge_or_append_spot(spots, seen_pix, pix_key_s, {

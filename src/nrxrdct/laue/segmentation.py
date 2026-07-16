@@ -685,6 +685,8 @@ def write_h5_spotsfile(
                             image, n_components=n_comp, init_params=init_params
                         )
                         r2 = r_squared_image(image, fitted)
+
+                        C = popt[-1]
                     except ValueError:
                         n_comp -= 1
                         init_params = auto_init_gaussian_mixture_global(
@@ -694,11 +696,11 @@ def write_h5_spotsfile(
                             image, n_components=n_comp, init_params=init_params
                         )
                         r2 = r_squared_image(image, fitted)
+                        C = popt[-1]
                         break
                     if r2 > r_squared_min:
                         break
 
-                C = popt[-1]
 
                 if r2 < r_squared_min:
                     if not include_unfitted:

@@ -2878,6 +2878,7 @@ def qspace_around_spot(
     kb_params=BM32_KB,
     ki_hat=None,
     structure_model="coherent",
+    darwin=False,
     correct_depth=False,
     energy_ref_eV=None,
     verbose=True,
@@ -2919,10 +2920,13 @@ def qspace_around_spot(
     Voxels with `\\hat k_i \\cdot Q \\geq 0` or `E(Q)` outside
     `[E_min_eV, E_max_eV]` are marked unreachable (`I2 = 0`, `E = NaN`).
     For reachable voxels the diffracted direction `kf_hat` follows directly,
-    and the stack structure factor is evaluated there
-    (`stack.structure_factor` or `stack.average_structure_factor`,
-    per `structure_model`), giving the same `F2 · LP · S(E)` intensity
-    convention used throughout this module.
+    and the structure factor is evaluated there — the plain kinematical
+    stack sum (`stack.structure_factor` / `stack.average_structure_factor`,
+    per `structure_model`) by default, or the Darwin (dynamical,
+    extinction-saturated) amplitude when `darwin=True` — giving the same
+    `F2 · LP · S(E)` intensity convention used throughout this module
+    either way.  Only the intensity depends on this choice; voxel
+    *positions* are exact geometry regardless (see `darwin` below).
 
     **Detector intersection**
 
@@ -2981,26 +2985,45 @@ def qspace_around_spot(
         Incident beam direction (LT frame).  Default `KI_HAT` = `[1,0,0]`.
     structure_model : {'coherent', 'average'}, optional
         `'coherent'` (default) evaluates the full layer-by-layer coherent
-        stack structure factor (`stack.structure_factor`) — physically
-        accurate fringe/satellite intensities.  `'average'` uses
-        `stack.average_structure_factor` — faster, satellite *positions*
-        are identical but intensities are the composition-weighted
-        average (matches `simulate_laue_stack(..., structure_model="average")`).
+        stack structure factor — physically accurate fringe/satellite
+        intensities.  `'average'` uses the composition-weighted average
+        structure factor — faster, satellite *positions* are identical but
+        intensities are not.  Applies to **both** the kinematical
+        (`darwin=False`) and Darwin (`darwin=True`) amplitude, exactly as
+        in `simulate_laue_stack` / `simulate_laue_darwin`.
+    darwin : bool, optional
+        `False` (default) evaluates the plain kinematical structure factor
+        (`Layer.structure_factor_batch` / `average_structure_factor_batch`
+        — no extinction). `True` evaluates the Darwin (dynamical,
+        extinction-saturated) amplitude instead
+        (`_darwin_amp_batch` — the same physics as
+        :func:`simulate_laue_darwin`), which can differ substantially from
+        the kinematical result for strongly-diffracting/thick layers:
+        extinction saturation is nonlinear in `|F|`, so two reflections that
+        are only modestly different kinematically can end up in very
+        different saturation regimes and diverge sharply. Only the
+        intensity is affected — voxel *positions* (which pixel/energy each
+        one maps to) are exact geometry either way, independent of this
+        flag.  Slower than `darwin=False` (still batched by energy bin, but
+        with several extra layer-by-layer terms per bin).
     correct_depth : bool, optional
         Apply the parallax correction for `layer`'s centre depth below the
         sample surface (see `Camera.project`'s `source_depth_mm`).
         Only affects `pix` when `camera` is given.  Default `False`.
     energy_ref_eV : float or None, optional
-        Reference photon energy (eV) used to evaluate the unit-cell
-        structure factor for **every** voxel at once (via
-        `Layer.structure_factor_batch` → `StructureFactorForQ`), instead of
-        each voxel's own energy.  `None` (default) uses the median energy
-        of the reachable voxels.  This is the one approximation in an
-        otherwise-exact computation: it only affects the smooth
-        `f'(E)`/`f''(E)` anomalous-dispersion terms, which barely change
-        across a typical local energy window — pass an explicit value if
-        your window straddles an absorption edge and you want to pin it to
-        one side.
+        **Only used when `darwin=False`.** Reference photon energy (eV)
+        used to evaluate the unit-cell structure factor for **every**
+        voxel at once (via `Layer.structure_factor_batch` →
+        `StructureFactorForQ`), instead of each voxel's own energy.
+        `None` (default) uses the median energy of the reachable voxels.
+        This is the one approximation in an otherwise-exact computation: it
+        only affects the smooth `f'(E)`/`f''(E)` anomalous-dispersion
+        terms, which barely change across a typical local energy window —
+        pass an explicit value if your window straddles an absorption edge
+        and you want to pin it to one side.  When `darwin=True`, each
+        voxel's own energy is used instead (internally binned by
+        `_STRUCTURE_FACTOR_ENERGY_BINS`, same as `simulate_laue_darwin`);
+        this parameter has no effect.
     verbose : bool, optional
         Print a short summary (reachable/on-detector voxel counts, energy
         range) after the grid is evaluated.
@@ -3040,11 +3063,15 @@ def qspace_around_spot(
       needs to be large enough to make the array genuinely 3-D (e.g. for
       later isosurface/slice visualisation) — it is not a physical
       resolution limit.
-    * The structure factor is evaluated for the whole grid in one vectorised
-      batch per layer (`Layer.structure_factor_batch`), not per voxel — see
-      `energy_ref_eV` above for the one approximation this introduces.
-      Runtime therefore scales with `len(stack.all_layers)` (typically a
-      handful of xrayutilities calls total), not with the number of voxels.
+    * With `darwin=False` (default), the structure factor is evaluated for
+      the whole grid in one vectorised batch per layer
+      (`Layer.structure_factor_batch`), not per voxel — see `energy_ref_eV`
+      above for the one approximation this introduces. Runtime therefore
+      scales with `len(stack.all_layers)` (typically a handful of
+      xrayutilities calls total), not with the number of voxels.
+      With `darwin=True`, the same batching applies but with several extra
+      layer-by-layer terms per energy bin (extinction-saturated `N_eff`,
+      per-layer absorption) — slower, though still far from per-voxel.
 
     Example:
     >>> vol = qspace_around_spot(stack, (0, 0, 2), camera=cam)
@@ -3179,11 +3206,9 @@ def qspace_around_spot(
         kf_flat[idx] = kf
 
     # ── structure factor + LP + spectrum, vectorised over all reachable voxels ─
-    # The elastic-condition geometry (tth, kf_hat) stays exact and per-voxel;
-    # only the unit-cell structure factor's F_uc(Q, E) is evaluated at one
-    # shared reference energy (see `energy_ref_eV`), which is what collapses
-    # this from N scalar xrayutilities calls to len(stack.all_layers) batched
-    # ones.
+    # The elastic-condition geometry (tth, kf_hat) stays exact and per-voxel
+    # in both branches below; only the structure-factor amplitude itself
+    # differs (kinematical vs Darwin — see `darwin`).
     spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
     F2_flat = np.zeros(n_vox)
     I_flat = np.zeros(n_vox)
@@ -3194,16 +3219,30 @@ def qspace_around_spot(
         LP_arr = _lorentz_pol_vec(tth_arr, E_flat[idx], chi_arr)
         sw_arr = spectrum(E_flat[idx])
 
-        E_ref = (
-            float(energy_ref_eV) if energy_ref_eV is not None
-            else float(np.median(E_flat[idx]))
-        )
-        batch_fn = (
-            stack.average_structure_factor_batch
-            if structure_model == "average"
-            else stack.structure_factor_batch
-        )
-        F_arr = batch_fn(Q_flat[idx], E_ref, kf_hat_arr=kf_flat[idx])
+        if darwin:
+            # Each voxel's own energy is used (binned internally by
+            # _darwin_amp_batch, same as simulate_laue_darwin) — the box is
+            # small enough that this is usually just 1-2 bins in practice.
+            F_arr, _, _ = _darwin_amp_batch(
+                stack, ki, structure_model,
+                Q_flat[idx], E_flat[idx], lam_flat[idx], tth_arr,
+                kf_hat_arr=kf_flat[idx], n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
+            )
+        else:
+            # F_uc(Q, E) is evaluated at one shared reference energy (see
+            # `energy_ref_eV`), which collapses this from N scalar
+            # xrayutilities calls to len(stack.all_layers) batched ones.
+            E_ref = (
+                float(energy_ref_eV) if energy_ref_eV is not None
+                else float(np.median(E_flat[idx]))
+            )
+            batch_fn = (
+                stack.average_structure_factor_batch
+                if structure_model == "average"
+                else stack.structure_factor_batch
+            )
+            F_arr = batch_fn(Q_flat[idx], E_ref, kf_hat_arr=kf_flat[idx])
+
         F2_arr = np.abs(F_arr) ** 2
 
         keep = (LP_arr > 0) & (sw_arr > 0)
@@ -3308,6 +3347,7 @@ def qspace_per_layer(
     kb_params=BM32_KB,
     ki_hat=None,
     structure_model="coherent",
+    darwin=False,
     correct_depth=False,
     energy_ref_eV=None,
     verbose=False,
@@ -3386,6 +3426,7 @@ def qspace_per_layer(
             source=source, source_kwargs=source_kwargs,
             kb_params=kb_params, ki_hat=ki_hat,
             structure_model=structure_model,
+            darwin=darwin,
             correct_depth=correct_depth,
             energy_ref_eV=energy_ref_eV,
             verbose=verbose,
@@ -3414,6 +3455,7 @@ def qspace_multi_hkl(
     kb_params=BM32_KB,
     ki_hat=None,
     structure_model="coherent",
+    darwin=False,
     correct_depth=False,
     energy_ref_eV=None,
     verbose=False,
@@ -3478,6 +3520,7 @@ def qspace_multi_hkl(
                 source=source, source_kwargs=source_kwargs,
                 kb_params=kb_params, ki_hat=ki_hat,
                 structure_model=structure_model,
+                darwin=darwin,
                 correct_depth=correct_depth,
                 energy_ref_eV=energy_ref_eV,
                 verbose=verbose,
@@ -3619,6 +3662,174 @@ def _darwin_n_eff_batch(F_abs_arr, lam_arr, tth_deg_arr, V_uc, n_cells, d):
     normal = ~small_ext
     out[sub[normal]] = N_ext[normal] * np.tanh(float(n_cells) / N_ext[normal])
     return out
+
+
+def _darwin_amp_batch(stack, ki, structure_model, G_arr, E_arr, lam_arr, tth_arr,
+                       kf_hat_arr=None, n_bins=_STRUCTURE_FACTOR_ENERGY_BINS):
+    """
+    Compute the Darwin-corrected coherent amplitude F_total for many
+    candidates at once.
+
+    Same physics as a per-candidate Darwin amplitude calculation, with the
+    same energy-binning tradeoff used everywhere else in this module (see
+    `_binned_structure_factor`): each layer's `F_uc(Q, E)` and (when
+    `kf_hat_arr` is given) its absorption coefficient `μ(E)` are evaluated
+    once per energy bin instead of once per candidate. Everything else —
+    the extinction-saturated `N_eff` (`_darwin_n_eff_batch`), phases, and
+    the superlattice geometric series — is exact and per-candidate.
+
+    Standalone (module-level) so both :func:`simulate_laue_darwin` and
+    :func:`qspace_around_spot` can evaluate Darwin-corrected intensities
+    without duplicating this physics.
+
+    Args:
+        stack (LayeredCrystal): The layered structure.
+        ki (ndarray, shape (3,)): Unit incident-beam direction (LT frame).
+        structure_model (str): `'coherent'` or `'average'` — same meaning as elsewhere in
+            this module (average drops intra-period phases for the block layers).
+        G_arr (ndarray, shape (N, 3)): Scattering vectors (lab frame, Å⁻¹).
+        E_arr, lam_arr, tth_arr (ndarray, shape (N,)): Photon energy (eV), wavelength (Å), and
+            2θ (deg) per candidate.
+        kf_hat_arr (ndarray, shape (N, 3) or None): Diffracted-beam unit vectors, for the two-beam
+            absorption correction; `None` uses the one-beam correction.
+        n_bins (int): Energy bins for the `F_uc`/`μ` lookups.
+
+    Returns:
+        tuple: `(F_total, n_eff_rows, n_ext_rows)` — `F_total` is a complex
+            ndarray shape `(N,)`; `n_eff_rows`/`n_ext_rows` are lists of
+            per-candidate lists (buffer layers then block layers), matching
+            the original scalar function's per-spot diagnostic fields.
+"""
+    n = len(G_arr)
+    if n == 0:
+        return np.zeros(0, dtype=complex), [], []
+
+    Qn_arr = G_arr @ stack.n_hat
+    sin_th_arr = np.maximum(np.abs(np.sin(np.radians(tth_arr / 2.0))), 1e-6)
+    cos_in = max(abs(float(np.dot(ki, stack.n_hat))), 1e-3)
+    cos_out_arr = (
+        np.maximum(np.abs(kf_hat_arr @ stack.n_hat), 1e-3)
+        if kf_hat_arr is not None else None
+    )
+
+    e_lo, e_hi = float(E_arr.min()), float(E_arr.max())
+    if e_hi - e_lo < 1.0 or n_bins <= 1:
+        _bin_idx = np.zeros(n, dtype=int)
+    else:
+        _edges = np.linspace(e_lo, e_hi, n_bins + 1)
+        _bin_idx = np.clip(np.digitize(E_arr, _edges) - 1, 0, n_bins - 1)
+
+    def _mu_batch(lyr):
+        """Per-candidate μ(E), one _linear_mu call per energy bin."""
+        out = np.zeros(n)
+        for b in np.unique(_bin_idx):
+            mask = _bin_idx == b
+            out[mask] = lyr._linear_mu(float(np.median(E_arr[mask])))
+        return out
+
+    def _T_slab_batch(lyr, thickness):
+        if kf_hat_arr is None:
+            return np.ones(n)
+        mu_arr = _mu_batch(lyr)
+        out = np.ones(n)
+        has_mu = mu_arr > 0
+        out[has_mu] = np.exp(
+            -mu_arr[has_mu] * thickness * (1.0 / cos_in + 1.0 / cos_out_arr[has_mu])
+        )
+        return out
+
+    def _F_uc_batch(lyr):
+        return _binned_structure_factor(
+            G_arr, E_arr,
+            lambda G, E, kf: lyr._structure_factor_uc_batch(G, E),
+            n_bins=n_bins,
+        )
+
+    def _N_a_batch(lyr):
+        """Per-candidate absorption-limited cell count, one _linear_mu
+        call per energy bin (same binning as _mu_batch/_F_uc_batch —
+        using a single whole-batch reference energy here instead would
+        badly mis-cap N_eff whenever the batch spans a wide energy
+        range, since μ(E) can vary a lot over the full window)."""
+        out = np.zeros(n)
+        for b in np.unique(_bin_idx):
+            mask = _bin_idx == b
+            E_ref = float(np.median(E_arr[mask]))
+            kf_sub = kf_hat_arr[mask] if kf_hat_arr is not None else None
+            out[mask] = lyr._effective_n_cells_batch(
+                E_ref, kf_hat_arr=kf_sub, n_points=int(mask.sum())
+            )
+        return out
+
+    # Attenuation from the full MQW block (sits above all buffer layers)
+    T_mqw = np.ones(n)
+    for lyr in stack.layers:
+        T_mqw = T_mqw * _T_slab_batch(lyr, lyr.thickness * stack.n_rep)
+
+    F_buf = np.zeros(n, dtype=complex)
+    n_eff_cols, n_ext_cols = [], []
+    for i, (lyr, z0) in enumerate(zip(stack.buffer_layers, stack._buffer_z_offsets)):
+        T_above = T_mqw.copy()
+        for j in range(i + 1, len(stack.buffer_layers)):
+            T_above = T_above * _T_slab_batch(
+                stack.buffer_layers[j], stack.buffer_layers[j].thickness
+            )
+
+        F_uc = _F_uc_batch(lyr)
+        finite = np.isfinite(F_uc.real) & np.isfinite(F_uc.imag)
+        F_abs = np.where(finite, np.abs(F_uc), 0.0)
+        V_uc = float(lyr.crystal.lattice.UnitCellVolume())
+        N_d = _darwin_n_eff_batch(F_abs, lam_arr, tth_arr, V_uc, lyr.n_cells, lyr.d)
+        N_a = _N_a_batch(lyr)
+        N_eff = np.where(finite, np.minimum(N_d, N_a), 0.0)
+        N_ext = np.where(
+            finite,
+            V_uc * sin_th_arr / (_R_E_ANG * lam_arr * np.maximum(F_abs, 1e-30)) / lyr.d,
+            np.inf,
+        )
+        n_eff_cols.append(N_eff); n_ext_cols.append(N_ext)
+        # Buffer layers always keep their depth phase — they are not part
+        # of the periodic unit and their z0 offsets are fixed.
+        F_buf = F_buf + T_above * np.where(finite, F_uc, 0.0) * N_eff * np.exp(1j * Qn_arr * z0)
+
+    F_unit = np.zeros(n, dtype=complex)
+    for lyr, z0_rel in zip(stack.layers, stack._z_offsets):
+        F_uc = _F_uc_batch(lyr)
+        finite = np.isfinite(F_uc.real) & np.isfinite(F_uc.imag)
+        F_abs = np.where(finite, np.abs(F_uc), 0.0)
+        V_uc = float(lyr.crystal.lattice.UnitCellVolume())
+        N_d = _darwin_n_eff_batch(F_abs, lam_arr, tth_arr, V_uc, lyr.n_cells, lyr.d)
+        N_d = np.where(finite, N_d, 0.0)
+        N_ext = np.where(
+            finite,
+            V_uc * sin_th_arr / (_R_E_ANG * lam_arr * np.maximum(F_abs, 1e-30)) / lyr.d,
+            np.inf,
+        )
+        n_eff_cols.append(N_d); n_ext_cols.append(N_ext)
+        # Average mode: drop intra-period z_rel phases to produce the
+        # structural envelope of one bilayer period.  S_rep is still
+        # applied below so satellite peaks appear at the correct positions.
+        phase = np.ones(n) if structure_model == "average" else np.exp(1j * Qn_arr * z0_rel)
+        F_unit = F_unit + np.where(finite, F_uc, 0.0) * N_d * phase
+
+    if stack.layers:
+        from .layers import _geometric_sum_batch
+        z_buf = stack._buffer_thickness
+        Lambda = stack._bilayer_thickness
+        phi_rep = Qn_arr * Lambda
+        S_rep = _geometric_sum_batch(stack.n_rep, phi_rep)
+        F_mqw = np.exp(1j * Qn_arr * z_buf) * F_unit * S_rep
+    else:
+        F_mqw = np.zeros(n, dtype=complex)
+
+    F_total = F_buf + F_mqw
+    if n_eff_cols:
+        n_eff_rows = [list(row) for row in np.array(n_eff_cols).T]
+        n_ext_rows = [list(row) for row in np.array(n_ext_cols).T]
+    else:
+        n_eff_rows = [[] for _ in range(n)]
+        n_ext_rows = [[] for _ in range(n)]
+    return F_total, n_eff_rows, n_ext_rows
 
 
 def simulate_laue_darwin(
@@ -3837,166 +4048,9 @@ def simulate_laue_darwin(
             t_nm = 2.0 * np.pi / np.linalg.norm(qv) / 10.0
             print(f"    {desc}  →  2π/t = {np.linalg.norm(qv):.4f} Å⁻¹  (t = {t_nm:.2f} nm)")
 
-    # ── Darwin amplitude helper (vectorised, energy-binned) ──────────────────
-    def _darwin_amp_batch(G_arr, E_arr, lam_arr, tth_arr, kf_hat_arr=None,
-                           n_bins=_STRUCTURE_FACTOR_ENERGY_BINS):
-        """
-        Compute the Darwin-corrected coherent amplitude F_total for many
-        candidates at once.
-
-        Same physics as the original per-candidate Darwin amplitude
-        calculation, with the same energy-binning tradeoff used everywhere
-        else in this module (see `_binned_structure_factor`): each layer's
-        `F_uc(Q, E)` and (when `kf_hat_arr` is given) its absorption
-        coefficient `μ(E)` are evaluated once per energy bin instead of once
-        per candidate. Everything else — the extinction-saturated `N_eff`
-        (`_darwin_n_eff_batch`), phases, and the superlattice geometric
-        series — is exact and per-candidate.
-
-        Args:
-            G_arr (ndarray, shape (N, 3)): Scattering vectors (lab frame, Å⁻¹).
-            E_arr, lam_arr, tth_arr (ndarray, shape (N,)): Photon energy (eV), wavelength (Å), and
-                2θ (deg) per candidate.
-            kf_hat_arr (ndarray, shape (N, 3) or None): Diffracted-beam unit vectors, for the two-beam
-                absorption correction; `None` uses the one-beam correction.
-            n_bins (int): Energy bins for the `F_uc`/`μ` lookups.
-
-        Returns:
-            tuple: `(F_total, n_eff_rows, n_ext_rows)` — `F_total` is a complex
-                ndarray shape `(N,)`; `n_eff_rows`/`n_ext_rows` are lists of
-                per-candidate lists (buffer layers then block layers), matching
-                the original scalar function's per-spot diagnostic fields.
-"""
-        n = len(G_arr)
-        if n == 0:
-            return np.zeros(0, dtype=complex), [], []
-
-        Qn_arr = G_arr @ stack.n_hat
-        sin_th_arr = np.maximum(np.abs(np.sin(np.radians(tth_arr / 2.0))), 1e-6)
-        cos_in = max(abs(float(np.dot(ki, stack.n_hat))), 1e-3)
-        cos_out_arr = (
-            np.maximum(np.abs(kf_hat_arr @ stack.n_hat), 1e-3)
-            if kf_hat_arr is not None else None
-        )
-
-        e_lo, e_hi = float(E_arr.min()), float(E_arr.max())
-        if e_hi - e_lo < 1.0 or n_bins <= 1:
-            _bin_idx = np.zeros(n, dtype=int)
-        else:
-            _edges = np.linspace(e_lo, e_hi, n_bins + 1)
-            _bin_idx = np.clip(np.digitize(E_arr, _edges) - 1, 0, n_bins - 1)
-
-        def _mu_batch(lyr):
-            """Per-candidate μ(E), one _linear_mu call per energy bin."""
-            out = np.zeros(n)
-            for b in np.unique(_bin_idx):
-                mask = _bin_idx == b
-                out[mask] = lyr._linear_mu(float(np.median(E_arr[mask])))
-            return out
-
-        def _T_slab_batch(lyr, thickness):
-            if kf_hat_arr is None:
-                return np.ones(n)
-            mu_arr = _mu_batch(lyr)
-            out = np.ones(n)
-            has_mu = mu_arr > 0
-            out[has_mu] = np.exp(
-                -mu_arr[has_mu] * thickness * (1.0 / cos_in + 1.0 / cos_out_arr[has_mu])
-            )
-            return out
-
-        def _F_uc_batch(lyr):
-            return _binned_structure_factor(
-                G_arr, E_arr,
-                lambda G, E, kf: lyr._structure_factor_uc_batch(G, E),
-                n_bins=n_bins,
-            )
-
-        def _N_a_batch(lyr):
-            """Per-candidate absorption-limited cell count, one _linear_mu
-            call per energy bin (same binning as _mu_batch/_F_uc_batch —
-            using a single whole-batch reference energy here instead would
-            badly mis-cap N_eff whenever the batch spans a wide energy
-            range, since μ(E) can vary a lot over the full window)."""
-            out = np.zeros(n)
-            for b in np.unique(_bin_idx):
-                mask = _bin_idx == b
-                E_ref = float(np.median(E_arr[mask]))
-                kf_sub = kf_hat_arr[mask] if kf_hat_arr is not None else None
-                out[mask] = lyr._effective_n_cells_batch(
-                    E_ref, kf_hat_arr=kf_sub, n_points=int(mask.sum())
-                )
-            return out
-
-        # Attenuation from the full MQW block (sits above all buffer layers)
-        T_mqw = np.ones(n)
-        for lyr in stack.layers:
-            T_mqw = T_mqw * _T_slab_batch(lyr, lyr.thickness * stack.n_rep)
-
-        F_buf = np.zeros(n, dtype=complex)
-        n_eff_cols, n_ext_cols = [], []
-        for i, (lyr, z0) in enumerate(zip(stack.buffer_layers, stack._buffer_z_offsets)):
-            T_above = T_mqw.copy()
-            for j in range(i + 1, len(stack.buffer_layers)):
-                T_above = T_above * _T_slab_batch(
-                    stack.buffer_layers[j], stack.buffer_layers[j].thickness
-                )
-
-            F_uc = _F_uc_batch(lyr)
-            finite = np.isfinite(F_uc.real) & np.isfinite(F_uc.imag)
-            F_abs = np.where(finite, np.abs(F_uc), 0.0)
-            V_uc = float(lyr.crystal.lattice.UnitCellVolume())
-            N_d = _darwin_n_eff_batch(F_abs, lam_arr, tth_arr, V_uc, lyr.n_cells, lyr.d)
-            N_a = _N_a_batch(lyr)
-            N_eff = np.where(finite, np.minimum(N_d, N_a), 0.0)
-            N_ext = np.where(
-                finite,
-                V_uc * sin_th_arr / (_R_E_ANG * lam_arr * np.maximum(F_abs, 1e-30)) / lyr.d,
-                np.inf,
-            )
-            n_eff_cols.append(N_eff); n_ext_cols.append(N_ext)
-            # Buffer layers always keep their depth phase — they are not part
-            # of the periodic unit and their z0 offsets are fixed.
-            F_buf = F_buf + T_above * np.where(finite, F_uc, 0.0) * N_eff * np.exp(1j * Qn_arr * z0)
-
-        F_unit = np.zeros(n, dtype=complex)
-        for lyr, z0_rel in zip(stack.layers, stack._z_offsets):
-            F_uc = _F_uc_batch(lyr)
-            finite = np.isfinite(F_uc.real) & np.isfinite(F_uc.imag)
-            F_abs = np.where(finite, np.abs(F_uc), 0.0)
-            V_uc = float(lyr.crystal.lattice.UnitCellVolume())
-            N_d = _darwin_n_eff_batch(F_abs, lam_arr, tth_arr, V_uc, lyr.n_cells, lyr.d)
-            N_d = np.where(finite, N_d, 0.0)
-            N_ext = np.where(
-                finite,
-                V_uc * sin_th_arr / (_R_E_ANG * lam_arr * np.maximum(F_abs, 1e-30)) / lyr.d,
-                np.inf,
-            )
-            n_eff_cols.append(N_d); n_ext_cols.append(N_ext)
-            # Average mode: drop intra-period z_rel phases to produce the
-            # structural envelope of one bilayer period.  S_rep is still
-            # applied below so satellite peaks appear at the correct positions.
-            phase = np.ones(n) if structure_model == "average" else np.exp(1j * Qn_arr * z0_rel)
-            F_unit = F_unit + np.where(finite, F_uc, 0.0) * N_d * phase
-
-        if stack.layers:
-            from .layers import _geometric_sum_batch
-            z_buf = stack._buffer_thickness
-            Lambda = stack._bilayer_thickness
-            phi_rep = Qn_arr * Lambda
-            S_rep = _geometric_sum_batch(stack.n_rep, phi_rep)
-            F_mqw = np.exp(1j * Qn_arr * z_buf) * F_unit * S_rep
-        else:
-            F_mqw = np.zeros(n, dtype=complex)
-
-        F_total = F_buf + F_mqw
-        if n_eff_cols:
-            n_eff_rows = [list(row) for row in np.array(n_eff_cols).T]
-            n_ext_rows = [list(row) for row in np.array(n_ext_cols).T]
-        else:
-            n_eff_rows = [[] for _ in range(n)]
-            n_ext_rows = [[] for _ in range(n)]
-        return F_total, n_eff_rows, n_ext_rows
+    # Darwin amplitude helper is now the module-level _darwin_amp_batch
+    # (shared with qspace_around_spot) — called below via
+    # _darwin_amp_batch(stack, ki, structure_model, ...).
 
     # Pixel → spots-index map — see _merge_or_append_spot for why coincident
     # reflections (harmonics, etc.) are accumulated rather than discarded.
@@ -4125,6 +4179,7 @@ def simulate_laue_darwin(
             ok_idx_dw = np.where(pre_ok)[0]
             if len(ok_idx_dw):
                 F_total_all, n_effs_all, n_exts_all = _darwin_amp_batch(
+                    stack, ki, structure_model,
                     G_b[ok_idx_dw], E_b[ok_idx_dw], lam_b[ok_idx_dw], tth_b[ok_idx_dw],
                     kf_hat_arr=kf_b[ok_idx_dw],
                 )

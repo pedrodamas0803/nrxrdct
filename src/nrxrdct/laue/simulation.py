@@ -3550,6 +3550,10 @@ def simulate_spot_image(
     ki_hat=None,
     structure_model="coherent",
     darwin=False,
+    isolate_layer=False,
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
+    n_div=5,
     verbose=True,
 ):
     """
@@ -3623,7 +3627,48 @@ def simulate_spot_image(
             `False` (default) evaluates the kinematical structure factor.
             `True` evaluates the Darwin (dynamical, extinction-saturated)
             amplitude instead — see `qspace_around_spot`'s `darwin` for the
-            physics; same tradeoff applies here.
+            physics; same tradeoff applies here.  Compatible with
+            `isolate_layer=True`.
+        isolate_layer : bool, optional
+            `False` (default) evaluates the full multi-layer coherent (or
+            average) stack sum, exactly like `qspace_around_spot` /
+            `simulate_laue_stack`.  `True` builds a minimal stand-in stack
+            containing **only** the reflecting layer (or, if it belongs to
+            a repeating block, only that block — reusing the same `Layer`
+            object(s), so `absorption_limit`/`d_spacing`/`n_cells` are
+            preserved exactly) and evaluates `structure_model`/`darwin`
+            against that instead of the full stack.  This drops every
+            cross-term with other buffer layers or blocks, while still
+            fully modelling the reflecting layer's own repeating-block
+            period/satellite structure if it has one.  See the Note below —
+            this is the practical fix when the reflecting layer sits on a
+            deep buffer/substrate (large absolute `z0`), where those
+            cross-terms are numerically unresolvable at pixel/energy
+            sampling anyway.  Works with both `darwin=False` and
+            `darwin=True`.
+        sigma_h_mrad, sigma_v_mrad : float, optional
+            1σ incident-beam angular divergence (mrad), horizontal/vertical
+            (same convention as `beam_divergence_ellipses`; typical
+            BM32/ESRF values are 2-3 mrad horizontal, 0.2-0.5 mrad
+            vertical).  Both default to `0.0` (a perfectly parallel,
+            point-like incident beam — the same idealisation used
+            throughout this module).  With zero divergence, a single
+            reflection's *intrinsic* Q-response is often far narrower than
+            any realistic pixel/energy sampling can resolve (see the Note
+            below), and looks flat/featureless as a result — that is not a
+            bug, it is what a delta-function beam actually implies.  A real
+            measured spot's finite size mostly comes from convolving that
+            intrinsic response with the source's actual divergence (and,
+            to a lesser extent, detector point-spread, not modelled here).
+            Setting these lets the image show that realistic spot size.
+        n_div : int, optional
+            Divergence grid resolution per axis (`n_div × n_div` samples,
+            Gaussian-weighted, spanning ±2.5σ) when divergence is enabled.
+            No effect when `sigma_h_mrad == sigma_v_mrad == 0`.  Cost scales
+            linearly with `n_div**2` (an extra outer loop around the
+            existing pixel/energy batch, so still fully vectorised per
+            sample) — 5 is a reasonable default; raise it if the spot shape
+            looks blocky.
         verbose : bool, optional
             Print the resolved reference spot and per-harmonic summary.
 
@@ -3653,18 +3698,30 @@ def simulate_spot_image(
       exact geometry; only the intra-band sampling (`dE_eV`, `n_energy`)
       is an approximation — widen/refine it if a real thickness-fringe
       feature looks under-resolved.
-    * `structure_model="coherent"` sums phases `exp(i·Qn·z0)` across every
-      layer, including any deep buffer/substrate the reflecting layer sits
-      on (`z0` up to hundreds of thousands of Å).  That makes the coherent
-      structure factor an extremely narrow function of Q — for a stack with
-      a thick substrate, the true fringe width can be **narrower than one
-      detector pixel**, so a per-pixel point sample cannot resolve it (the
-      image will look aliased/patchy no matter how fine `dE_eV`/`n_energy`
-      are, short of expensive sub-pixel supersampling that isn't done here).
-      `structure_model="average"` does not have this pathology and is the
-      practical default for this function; reach for `"coherent"` only for
-      thin, shallow stacks or once you've confirmed the fringe width is
-      resolvable at your pixel/energy sampling.
+    * Both `structure_model="coherent"` and `"average"` sum phases
+      `exp(i·Qn·z0)` across every **buffer layer** (only the treatment of
+      *repeating-block* layers differs between the two — see
+      `average_structure_factor`'s docstring).  When the reflecting layer
+      sits on a deep buffer/substrate (`z0` up to hundreds of thousands of
+      Å — e.g. a growth substrate under a nucleation/buffer layer), that
+      cross-term phase is an extremely narrow function of Q: the true
+      fringe period can be **far narrower than one detector pixel or one
+      `dE_eV` sampling step**, in either structure model, so a per-pixel
+      point sample cannot resolve it — the image looks flat/featureless no
+      matter how fine `dE_eV`/`n_energy` are.  This is not fixable by more
+      sampling; use `isolate_layer=True` instead, which drops exactly
+      those unresolvable cross-terms and keeps only the reflecting layer's
+      (and, if applicable, its own repeating block's) structure — the
+      practical choice whenever the reflecting layer is buried under
+      another deep buffer layer.
+    * Even a fully isolated single layer's intrinsic Q-response can still
+      look essentially flat at realistic `half_size_px`/`dE_eV` — this is
+      *not* necessarily unresolved fringe structure; with zero beam
+      divergence (`sigma_h_mrad == sigma_v_mrad == 0`) a Bragg reflection
+      is a true delta function in angle, so there is nothing broader than
+      that to resolve in the first place.  If the image is flat even after
+      `isolate_layer=True`, set `sigma_h_mrad`/`sigma_v_mrad` to your
+      source's real divergence before concluding anything is wrong.
 
     Example:
     >>> spots = simulate_laue_stack(stack, cam)
@@ -3675,7 +3732,6 @@ def simulate_spot_image(
         raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
     if structure_model not in ("coherent", "average"):
         raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
-
     h, k, l = (int(x) for x in hkl)
     layer_label = layer.label if hasattr(layer, "label") else layer
     candidates = [
@@ -3696,6 +3752,40 @@ def simulate_spot_image(
     if resolved_layer is None:
         raise ValueError(f"spot's phase_label {phase_label!r} not found in stack.all_layers")
 
+    iso_stack = None
+    if isolate_layer:
+        stack._update_offsets()
+        owning_block = None
+        if resolved_layer not in stack.buffer_layers:
+            owning_block = next(
+                (blk for blk in stack._blocks if resolved_layer in blk.layers), None
+            )
+            if owning_block is None:
+                raise ValueError(
+                    f"isolate_layer=True: layer {phase_label!r} not found among "
+                    "stack.buffer_layers or any repeating block"
+                )
+        # A minimal LayeredCrystal containing only the reflecting layer (or
+        # its own repeating block), reusing the *same* Layer object(s) (so
+        # absorption_limit / d_spacing / n_cells are exactly preserved) —
+        # everything else (other buffer layers, other blocks) is simply
+        # absent, so their deep-z0 cross-terms never enter the sum.  This
+        # lets us reuse structure_factor_batch / average_structure_factor_batch
+        # / _darwin_amp_batch completely unchanged, just scoped to a smaller
+        # stack, instead of duplicating that physics here.
+        from .layers import LayeredCrystal as _LayeredCrystal
+        from .layers import _RepeatBlock as _RepeatBlockCls
+        iso_stack = _LayeredCrystal(name="_isolated", stacking_direction=stack.n_hat)
+        if owning_block is None:
+            iso_stack.buffer_layers.append(resolved_layer)
+        else:
+            blk = _RepeatBlockCls()
+            blk.layers = list(owning_block.layers)
+            blk.n_rep = owning_block.n_rep
+            blk._closed = True
+            iso_stack._blocks.append(blk)
+        iso_stack._update_offsets()
+
     xs = np.arange(int(round(x0_center)) - half_size_px, int(round(x0_center)) + half_size_px + 1)
     ys = np.arange(int(round(y0_center)) - half_size_px, int(round(y0_center)) + half_size_px + 1)
     xs = xs[(xs >= 0) & (xs < camera.Nh)]
@@ -3709,7 +3799,6 @@ def simulate_spot_image(
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki = ki / np.linalg.norm(ki)
     spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
-    diff = kf_hat - ki[None, :]  # (n_pix, 3) — fixed per pixel, direction of the energy sweep
 
     # ── anchor Q to the exact reciprocal-lattice point ────────────────────────
     # `camera.pixel_to_kf` reconstructs kf_hat from the *stored* (float, but
@@ -3728,6 +3817,35 @@ def simulate_spot_image(
     kf_hat0 = camera.pixel_to_kf(np.array([x0_center]), np.array([y0_center]))[0]
     k0 = 2.0 * np.pi / float(en2lam(np.array([E0]))[0])
     Q_correction = G0_exact - k0 * (kf_hat0 - ki)
+
+    # ── incident-beam angular divergence grid ─────────────────────────────────
+    # `ki` above is the single, perfectly-parallel nominal beam direction used
+    # throughout this module.  With zero divergence a Bragg reflection is a
+    # true delta function in angle, so a real measured spot's finite size
+    # mostly comes from the source's actual divergence — see `sigma_h_mrad`
+    # docstring.  Same (e_h, e_v) convention as `beam_divergence_ellipses`.
+    if sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0:
+        ki_pert_arr = ki[None, :]
+        div_weights = np.array([1.0])
+    else:
+        z_hat = np.array([0.0, 0.0, 1.0])
+        cross_zk = np.cross(z_hat, ki)
+        e_h = cross_zk / np.linalg.norm(cross_zk) if np.linalg.norm(cross_zk) > 1e-6 else np.array([0.0, 1.0, 0.0])
+        e_v = np.cross(ki, e_h)
+        e_v /= np.linalg.norm(e_v)
+        sigma_h = sigma_h_mrad * 1e-3
+        sigma_v = sigma_v_mrad * 1e-3
+        dh_vals = np.linspace(-2.5, 2.5, n_div) * sigma_h if sigma_h > 0 else np.zeros(1)
+        dv_vals = np.linspace(-2.5, 2.5, n_div) * sigma_v if sigma_v > 0 else np.zeros(1)
+        DH, DV = np.meshgrid(dh_vals, dv_vals, indexing="ij")
+        DH, DV = DH.reshape(-1), DV.reshape(-1)
+        ki_pert_arr = ki[None, :] + DH[:, None] * e_h[None, :] + DV[:, None] * e_v[None, :]
+        ki_pert_arr /= np.linalg.norm(ki_pert_arr, axis=1, keepdims=True)
+        wh = np.exp(-0.5 * (DH / sigma_h) ** 2) if sigma_h > 0 else np.ones_like(DH)
+        wv = np.exp(-0.5 * (DV / sigma_v) ** 2) if sigma_v > 0 else np.ones_like(DV)
+        div_weights = wh * wv
+        div_weights = div_weights / div_weights.sum()
+    n_div_actual = len(div_weights)
 
     n_pix = kf_hat.shape[0]
     n_max = min(max_harmonics, int(np.floor(E_max_eV / E0)))
@@ -3749,41 +3867,56 @@ def simulate_spot_image(
 
         lam_samples = en2lam(E_samples)
         k_samples = 2.0 * np.pi / lam_samples
-        Q_all = k_samples[None, :, None] * diff[:, None, :]  # (n_pix, n_e, 3)
-        # energy-scaled anchor correction — see note above `Q_correction`
-        Q_all = Q_all + (E_samples / E0)[None, :, None] * Q_correction[None, None, :]
-        Q_flat = Q_all.reshape(-1, 3)
         E_flat = np.tile(E_samples, n_pix)
         kf_flat = np.repeat(kf_hat, n_e, axis=0)
 
+        # tth/chi/LP/spectrum depend only on kf_hat (fixed by pixel) and
+        # energy — identical across divergence samples, so computed once.
         tth_flat = np.degrees(np.arccos(np.clip(kf_flat[:, 0], -1.0, 1.0)))
         chi_flat = np.degrees(np.arctan2(kf_flat[:, 1], kf_flat[:, 2] + 1e-17))
         LP_flat = _lorentz_pol_vec(tth_flat, E_flat, chi_flat)
         sw_flat = spectrum(E_flat)
 
-        if darwin:
-            lam_flat = en2lam(E_flat)
-            F_arr, _, _ = _darwin_amp_batch(
-                stack, ki, structure_model, Q_flat, E_flat, lam_flat, tth_flat,
-                kf_hat_arr=kf_flat, n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
-            )
-        else:
-            batch_fn = (
-                stack.average_structure_factor_batch
-                if structure_model == "average"
-                else stack.structure_factor_batch
-            )
-            F_arr = batch_fn(Q_flat, float(E_center), kf_hat_arr=kf_flat)
+        # `isolate_layer` swaps in the minimal `iso_stack` built above (only
+        # the reflecting layer / its own block, no cross-terms with other
+        # buffer layers or blocks) — everything below is otherwise identical
+        # for both cases, kinematical or Darwin.
+        eval_stack = iso_stack if isolate_layer else stack
 
-        F2_flat = np.abs(F_arr) ** 2
-        I_flat = (F2_flat * LP_flat * sw_flat).reshape(n_pix, n_e)
-        I_n = I_flat.sum(axis=1) * dE_step
+        I_n = np.zeros(n_pix)
+        for d in range(n_div_actual):
+            ki_d = ki_pert_arr[d]
+            diff_d = kf_hat - ki_d[None, :]  # (n_pix, 3)
+            Q_all = k_samples[None, :, None] * diff_d[:, None, :]  # (n_pix, n_e, 3)
+            # energy-scaled anchor correction — see note above `Q_correction`
+            Q_all = Q_all + (E_samples / E0)[None, :, None] * Q_correction[None, None, :]
+            Q_flat = Q_all.reshape(-1, 3)
+
+            if darwin:
+                lam_flat = en2lam(E_flat)
+                F_arr, _, _ = _darwin_amp_batch(
+                    eval_stack, ki_d, structure_model, Q_flat, E_flat, lam_flat, tth_flat,
+                    kf_hat_arr=kf_flat, n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
+                )
+            else:
+                batch_fn = (
+                    eval_stack.average_structure_factor_batch
+                    if structure_model == "average"
+                    else eval_stack.structure_factor_batch
+                )
+                F_arr = batch_fn(Q_flat, float(E_center), kf_hat_arr=kf_flat)
+
+            F2_flat = np.abs(F_arr) ** 2
+            I_flat = (F2_flat * LP_flat * sw_flat).reshape(n_pix, n_e)
+            I_n += div_weights[d] * I_flat.sum(axis=1) * dE_step
+
         I_harmonics[n] = I_n.reshape(shape)
         I_total += I_n
 
         if verbose:
             print(f"    n={n}  E_center={E_center:.0f} eV  "
                   f"{n_e}/{n_energy} samples in window  "
+                  f"{n_div_actual} divergence sample(s)  "
                   f"peak I={I_n.max():.3e}")
 
     if verbose:

@@ -3538,6 +3538,7 @@ def simulate_spot_image(
     camera,
     layer=None,
     *,
+    satellite_order=0,
     half_size_px=30,
     n_energy=101,
     dE_eV=300.0,
@@ -3601,6 +3602,14 @@ def simulate_spot_image(
             Which layer's reflection to use when multiple layers share the
             same `hkl` (matched against `spots[i]['phase_label']`).
             `None` (default) uses whichever matching spot is brightest.
+        satellite_order : int, optional
+            Which `spots[i]['satellite_order']` to match — `0` (default)
+            targets the main (`m=0`) Bragg peak.  A reflection commonly
+            exists in `spots` *only* as a satellite (e.g. the main peak fell
+            below `f2_thresh` or off-detector while a satellite didn't, or
+            vice versa) — if you get a "no on-detector spot ... found"
+            error, check the error message's suggested `satellite_order`
+            values and pass one explicitly to target that entry instead.
         half_size_px : int, optional
             Pixel window is `(2*half_size_px+1)` square, centred on the
             reference spot's own pixel (from `spots`).
@@ -3725,6 +3734,21 @@ def simulate_spot_image(
             order `n` (only orders that contributed at least one in-window
             energy sample are included).
         `'n_harmonics'` : int — number of harmonic orders included.
+        `'I_satellites'` : dict `{n: {m: ndarray}}` — same shape, `I_harmonics[n]`
+            further split by satellite order `m` (relative to the harmonic's
+            own centre order, so `m=0` is the fringe order nearest `n·E0`).
+            `sum(I_satellites[n].values()) == I_harmonics[n]` (up to the
+            same trapezoidal-integration precision).  Only populated when
+            `pin_satellites=True` **and** `eval_stack` has exactly one
+            repeating block (see `pin_satellites`) — empty otherwise, since
+            a single order index isn't uniquely meaningful across several
+            independent periods.  This is the fix for a per-pixel image
+            that looks like one flat, uniformly-bright streak: a wide
+            `dE_eV` correctly integrates the destructive interference at
+            *each* pixel, but also means most pixels in the window end up
+            summing over the *same* few dominant orders — `I_satellites`
+            lets you see which order actually dominates where, instead of
+            one pre-blended total.
 
     Note:
     * Because this integrates over an energy band (Riemann sum with a
@@ -3787,12 +3811,31 @@ def simulate_spot_image(
     candidates = [
         s for s in spots
         if tuple(s["hkl"]) == (h, k, l)
-        and s.get("satellite_order", 0) == 0
+        and s.get("satellite_order", 0) == satellite_order
         and s.get("pix") is not None
         and (layer_label is None or s.get("phase_label") == layer_label)
     ]
     if not candidates:
+        # A spot with this hkl/layer often *does* exist in `spots` but at a
+        # different satellite_order than requested (e.g. only as a satellite,
+        # not the m=0 main peak, or vice versa) — report what's actually
+        # there instead of a bare "not found", since that's the most common
+        # cause of this error despite the reflection genuinely being present.
+        same_hkl_layer = [
+            s for s in spots
+            if tuple(s["hkl"]) == (h, k, l) and s.get("pix") is not None
+            and (layer_label is None or s.get("phase_label") == layer_label)
+        ]
         layer_part = f", layer={layer_label!r}" if layer_label is not None else ""
+        if same_hkl_layer:
+            available = sorted({s.get("satellite_order", 0) for s in same_hkl_layer})
+            raise ValueError(
+                f"no on-detector spot with hkl={(h, k, l)}{layer_part} at "
+                f"satellite_order={satellite_order} found in `spots` — but "
+                f"{len(same_hkl_layer)} spot(s) with this hkl/layer exist at "
+                f"satellite_order in {available}; pass satellite_order=... "
+                f"to target one of those."
+            )
         raise ValueError(f"no on-detector spot with hkl={(h, k, l)}{layer_part} found in `spots`")
     s0 = max(candidates, key=lambda s: s.get("intensity", 0.0))
     E0 = float(s0["E"])
@@ -3959,12 +4002,19 @@ def simulate_spot_image(
 
     I_total = np.zeros(n_pix)
     I_harmonics = {}
+    I_satellites = {}
     for n in range(1, n_max + 1):
         E_center = n * E0
         if E_center > E_max_eV:
             break
         E_samples = np.linspace(E_center - dE_eV, E_center + dE_eV, n_energy)
 
+        # `pinned_with_m` keeps (E_pin, m) so the energy axis can also be
+        # segmented per satellite order below — only when there is exactly
+        # one relevant repeating block, since a single "m" isn't uniquely
+        # meaningful across several independent periods.
+        pinned_with_m = []
+        m_center_single = None
         if pin_satellites and _pin_periods:
             Qn_c = float(_Qn_center(np.array([E_center]))[0])
             Qn_slope = float(_Qn_center(np.array([E_center + 1.0]))[0]) - Qn_c  # per eV
@@ -3973,11 +4023,15 @@ def simulate_spot_image(
                 for Lambda in _pin_periods:
                     q_fringe = 2.0 * np.pi / Lambda
                     m_center = round(Qn_c / q_fringe)
+                    if len(_pin_periods) == 1:
+                        m_center_single = m_center
                     m_span = int(np.ceil(abs(dE_eV * Qn_slope) / q_fringe)) + 2
                     for m in range(m_center - m_span, m_center + m_span + 1):
                         E_pin = E_center + (m * q_fringe - Qn_c) / Qn_slope
                         if E_center - dE_eV <= E_pin <= E_center + dE_eV:
                             pinned.append(E_pin)
+                            if len(_pin_periods) == 1:
+                                pinned_with_m.append((E_pin, m))
             if pinned:
                 E_samples = np.concatenate([E_samples, np.array(pinned)])
 
@@ -3986,6 +4040,31 @@ def simulate_spot_image(
         if len(E_samples) == 0:
             continue
         n_e = len(E_samples)
+
+        # Segment the energy axis at the midpoints between consecutive
+        # pinned satellite orders, so each order's own contribution to the
+        # energy integral can be reported separately — the fix for a wide
+        # dE_eV blending every order into one flat-looking total (see
+        # `I_satellites`/pin_satellites docstring).  Consecutive segments
+        # share their boundary *sample* (not just an energy range) — trapz
+        # over [a..b] plus trapz over [b..c] only equals trapz over [a..c]
+        # when point `b` is included in both pieces; splitting on an energy
+        # range with no sample exactly at the midpoint silently drops the
+        # sliver of area straddling it.
+        _order_segments = None
+        if pinned_with_m and m_center_single is not None:
+            _sorted_pins = sorted(pinned_with_m)
+            pin_E = np.array([e for e, _ in _sorted_pins])
+            pin_m = np.array([m for _, m in _sorted_pins])
+            mid_E = 0.5 * (pin_E[:-1] + pin_E[1:])
+            boundary_idx = np.searchsorted(E_samples, mid_E)
+            starts = np.concatenate([[0], boundary_idx])
+            ends = np.concatenate([boundary_idx, [len(E_samples) - 1]])
+            _order_segments = []
+            for m, start, end in zip(pin_m, starts, ends):
+                if end - start >= 1:
+                    idx = np.arange(start, end + 1)
+                    _order_segments.append((int(m - m_center_single), idx))
 
         lam_samples = en2lam(E_samples)
         k_samples = 2.0 * np.pi / lam_samples
@@ -4032,6 +4111,14 @@ def simulate_spot_image(
                 else I_flat[:, 0] * 2.0 * dE_eV
             )
 
+            if _order_segments:
+                harm_sat = I_satellites.setdefault(n, {})
+                for rel_m, seg_idx in _order_segments:
+                    contrib = np.trapz(I_flat[:, seg_idx], x=E_samples[seg_idx], axis=1)
+                    if rel_m not in harm_sat:
+                        harm_sat[rel_m] = np.zeros(n_pix)
+                    harm_sat[rel_m] += div_weights[d] * contrib
+
         I_harmonics[n] = I_n.reshape(shape)
         I_total += I_n
 
@@ -4058,6 +4145,10 @@ def simulate_spot_image(
         "I": I_total.reshape(shape),
         "I_harmonics": I_harmonics,
         "n_harmonics": len(I_harmonics),
+        "I_satellites": {
+            n: {m: arr.reshape(shape) for m, arr in sat.items()}
+            for n, sat in I_satellites.items()
+        },
     }
 
 

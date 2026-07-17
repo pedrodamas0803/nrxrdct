@@ -3539,8 +3539,9 @@ def simulate_spot_image(
     layer=None,
     *,
     half_size_px=30,
-    n_energy=41,
-    dE_eV=50.0,
+    n_energy=101,
+    dE_eV=300.0,
+    pin_satellites=True,
     max_harmonics=5,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -3604,12 +3605,37 @@ def simulate_spot_image(
             Pixel window is `(2*half_size_px+1)` square, centred on the
             reference spot's own pixel (from `spots`).
         n_energy : int, optional
-            Energy samples per harmonic band (Riemann-sum resolution).
+            Energy samples per harmonic band (trapezoidal-integration
+            resolution — see `pin_satellites`).  Default `101`.
         dE_eV : float, optional
             Half-width (eV) of the energy band sampled around each `n·E0`.
-            This is the one free parameter with no first-principles
-            default: widen it to capture more of a thick stack's narrow
-            thickness-fringe/satellite structure, at proportional cost.
+            Default `300.0`.  A repeating block's `S_rep` interference term
+            oscillates with period `2π/Λ` in `Qn` (peaks spaced ~`E0·2π /
+            (Λ·|Q|)` apart in energy, only `1/n_rep` as wide — a few eV to
+            a few tens of eV for a typical MQW).  `pin_satellites=True`
+            guarantees peaks aren't skipped, but a `dE_eV` narrower than a
+            few periods still under-counts the destructive-interference
+            minima between them and *underestimates* the true dynamic
+            range — in one test case dynamic range roughly doubled going
+            from a 150 eV to a 500 eV half-width before plateauing.
+            `300.0` is a reasonable general-purpose default, not a
+            precisely-tuned one — widen it further for a thick/many-repeat
+            block, or if the image still looks flatter than expected.
+        pin_satellites : bool, optional
+            `True` (default).  A repeating block's `S_rep` term produces
+            energy-domain fringe peaks spaced by (and only
+            `1/n_rep` as wide as) a period set by the block's own
+            thickness — often much finer than any reasonable uniform
+            `n_energy` grid can resolve, the same problem
+            `qspace_around_spot`'s own `pin_satellites` solves in Q-space.
+            When `True`, the *exact* fringe-peak energies (evaluated at the
+            window's centre pixel, valid over a modest window) are inserted
+            into the energy grid in addition to the uniform samples, for
+            every repeating block still present in `eval_stack` (i.e.
+            respecting `isolate_layer`) — so they are never skipped
+            regardless of `n_energy`/`dE_eV`.  The energy integral then
+            uses trapezoidal integration (not a fixed-step Riemann sum) to
+            handle the resulting non-uniform grid correctly.
         max_harmonics : int, optional
             Upper bound on harmonic order `n`, independent of the
             `E_max_eV` cutoff (whichever is more restrictive wins).
@@ -3735,6 +3761,17 @@ def simulate_spot_image(
       that to resolve in the first place.  If the image is flat even after
       `isolate_layer=True`, set `sigma_h_mrad`/`sigma_v_mrad` to your
       source's real divergence before concluding anything is wrong.
+    * A repeating block sitting in `eval_stack` (i.e. not excluded by
+      `isolate_layer`) contributes an `S_rep` interference term that is
+      genuinely periodic in energy at a fixed pixel — real destructive
+      interference, not noise.  `pin_satellites=True` (default) makes sure
+      those peaks are never skipped by inserting their exact energies into
+      the grid, but a `dE_eV` narrower than a few oscillation periods still
+      *underestimates* the true peak-to-background contrast, because it
+      only sees part of one rise/fall rather than full periods including
+      their minima — see `dE_eV`.  `pin_satellites` fixes "missing a peak
+      entirely"; it does not by itself fix "window too narrow to judge
+      contrast" — widen `dE_eV` for that.
 
     Example:
     >>> spots = simulate_laue_stack(stack, cam)
@@ -3901,6 +3938,25 @@ def simulate_spot_image(
     if n_max < 1:
         raise ValueError(f"reference energy E0={E0:.0f} eV already exceeds E_max_eV={E_max_eV:.0f}")
 
+    # `isolate_layer` swaps in the minimal `iso_stack` built above (only the
+    # reflecting layer / its own block, no cross-terms with other buffer
+    # layers or blocks) — everything below is otherwise identical for both
+    # cases, kinematical or Darwin.
+    eval_stack = iso_stack if isolate_layer else stack
+    eval_stack._update_offsets()
+    _pin_periods = [
+        blk._period for blk in eval_stack._blocks
+        if blk.n_rep >= 2 and blk._period > 1e-6
+    ]
+
+    def _Qn_center(E_arr):
+        """Qn(E) at the window's centre pixel (kf_hat0) — used only to
+        locate exact S_rep fringe-peak energies for pinning below."""
+        lam_c = en2lam(E_arr)
+        k_c = 2.0 * np.pi / lam_c
+        Q_c = k_c[:, None] * (kf_hat0 - ki)[None, :] + (E_arr / E0)[:, None] * Q_correction[None, :]
+        return Q_c @ stack.n_hat
+
     I_total = np.zeros(n_pix)
     I_harmonics = {}
     for n in range(1, n_max + 1):
@@ -3908,11 +3964,28 @@ def simulate_spot_image(
         if E_center > E_max_eV:
             break
         E_samples = np.linspace(E_center - dE_eV, E_center + dE_eV, n_energy)
+
+        if pin_satellites and _pin_periods:
+            Qn_c = float(_Qn_center(np.array([E_center]))[0])
+            Qn_slope = float(_Qn_center(np.array([E_center + 1.0]))[0]) - Qn_c  # per eV
+            pinned = []
+            if abs(Qn_slope) > 1e-14:
+                for Lambda in _pin_periods:
+                    q_fringe = 2.0 * np.pi / Lambda
+                    m_center = round(Qn_c / q_fringe)
+                    m_span = int(np.ceil(abs(dE_eV * Qn_slope) / q_fringe)) + 2
+                    for m in range(m_center - m_span, m_center + m_span + 1):
+                        E_pin = E_center + (m * q_fringe - Qn_c) / Qn_slope
+                        if E_center - dE_eV <= E_pin <= E_center + dE_eV:
+                            pinned.append(E_pin)
+            if pinned:
+                E_samples = np.concatenate([E_samples, np.array(pinned)])
+
+        E_samples = np.unique(E_samples)
         E_samples = E_samples[(E_samples >= E_min_eV) & (E_samples <= E_max_eV)]
         if len(E_samples) == 0:
             continue
         n_e = len(E_samples)
-        dE_step = (E_samples[-1] - E_samples[0]) / (n_e - 1) if n_e > 1 else (2.0 * dE_eV)
 
         lam_samples = en2lam(E_samples)
         k_samples = 2.0 * np.pi / lam_samples
@@ -3925,12 +3998,6 @@ def simulate_spot_image(
         chi_flat = np.degrees(np.arctan2(kf_flat[:, 1], kf_flat[:, 2] + 1e-17))
         LP_flat = _lorentz_pol_vec(tth_flat, E_flat, chi_flat)
         sw_flat = spectrum(E_flat)
-
-        # `isolate_layer` swaps in the minimal `iso_stack` built above (only
-        # the reflecting layer / its own block, no cross-terms with other
-        # buffer layers or blocks) — everything below is otherwise identical
-        # for both cases, kinematical or Darwin.
-        eval_stack = iso_stack if isolate_layer else stack
 
         I_n = np.zeros(n_pix)
         for d in range(n_div_actual):
@@ -3957,7 +4024,13 @@ def simulate_spot_image(
 
             F2_flat = np.abs(F_arr) ** 2
             I_flat = (F2_flat * LP_flat * sw_flat).reshape(n_pix, n_e)
-            I_n += div_weights[d] * I_flat.sum(axis=1) * dE_step
+            # Trapezoidal, not a fixed-step Riemann sum — E_samples is
+            # generally non-uniform once pin_satellites has inserted exact
+            # fringe-peak energies alongside the uniform grid.
+            I_n += div_weights[d] * (
+                np.trapz(I_flat, x=E_samples, axis=1) if n_e > 1
+                else I_flat[:, 0] * 2.0 * dE_eV
+            )
 
         I_harmonics[n] = I_n.reshape(shape)
         I_total += I_n

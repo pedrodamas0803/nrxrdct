@@ -3531,6 +3531,246 @@ def qspace_multi_hkl(
     return vols
 
 
+def simulate_spot_image(
+    stack,
+    spots,
+    hkl,
+    camera,
+    layer=None,
+    *,
+    half_size_px=30,
+    n_energy=41,
+    dE_eV=50.0,
+    max_harmonics=5,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    darwin=False,
+    verbose=True,
+):
+    """
+    Forward-simulate a small detector-image patch around one already-indexed
+    Bragg spot, evaluated **per pixel** rather than per reflection.
+
+    This inverts the usual direction of :func:`qspace_around_spot`: instead
+    of building a grid in Q-space and asking which pixel/energy each point
+    maps to, it starts from real pixel positions (via
+    `Camera.pixel_to_kf`, an exact closed-form inverse — no root-finding)
+    and asks what `Q` a photon of a given energy would need to have arrived
+    there.  For a fixed pixel, the elastic condition makes this a direct
+    function of energy:
+
+    $$
+    Q(E) = k(E)\\,(\\hat k_f - \\hat k_i), \\qquad k(E) = 2\\pi E / hc
+    $$
+
+    So each pixel's structure factor is evaluated by sampling a narrow band
+    of energies around the reference reflection's own energy `E0` (from
+    `spots`) — and around every integer multiple `n·E0` that still falls in
+    `[E_min_eV, E_max_eV]`, since those are exactly the energies at which
+    the *same* pixel also receives the `n`-th harmonic (`n·hkl`, exactly
+    collinear with `hkl` in Q-space — see `simulate_laue_stack`'s harmonic
+    handling).  Each harmonic's contribution is a Riemann-sum integral over
+    its energy band; the total image is the sum over harmonics.  This gives
+    a directly comparable, per-pixel simulated image that automatically
+    includes harmonic buildup, without any hkl-candidate enumeration or
+    `f2_thresh` bookkeeping.
+
+    Args:
+        stack : LayeredCrystal
+            The layered structure.
+        spots : list[dict]
+            Output of any `simulate_laue*` function — used only to look up
+            the reference reflection's energy and layer (see `hkl`,
+            `layer`).
+        hkl : (int, int, int)
+            Miller indices of the reference (fundamental, `n=1`) reflection.
+        camera : Camera
+            Detector geometry — required (unlike `qspace_around_spot`,
+            where it is optional) since pixels are the starting point here.
+        layer : Layer, str, or None, optional
+            Which layer's reflection to use when multiple layers share the
+            same `hkl` (matched against `spots[i]['phase_label']`).
+            `None` (default) uses whichever matching spot is brightest.
+        half_size_px : int, optional
+            Pixel window is `(2*half_size_px+1)` square, centred on the
+            reference spot's own pixel (from `spots`).
+        n_energy : int, optional
+            Energy samples per harmonic band (Riemann-sum resolution).
+        dE_eV : float, optional
+            Half-width (eV) of the energy band sampled around each `n·E0`.
+            This is the one free parameter with no first-principles
+            default: widen it to capture more of a thick stack's narrow
+            thickness-fringe/satellite structure, at proportional cost.
+        max_harmonics : int, optional
+            Upper bound on harmonic order `n`, independent of the
+            `E_max_eV` cutoff (whichever is more restrictive wins).
+        E_min_eV, E_max_eV : float, optional
+            White-beam energy window (eV).
+        source, source_kwargs, kb_params : optional
+            Synchrotron spectrum model, forwarded to `_make_spectrum_fn`.
+        ki_hat : array-like (3,) or None, optional
+            Incident beam direction (LT frame).  Default `KI_HAT`.
+        structure_model : {'coherent', 'average'}, optional
+            Forwarded to `LayeredCrystal.structure_factor_batch` /
+            `average_structure_factor_batch` (or, when `darwin=True`, to
+            `_darwin_amp_batch`) — same meaning as in `qspace_around_spot`.
+        darwin : bool, optional
+            `False` (default) evaluates the kinematical structure factor.
+            `True` evaluates the Darwin (dynamical, extinction-saturated)
+            amplitude instead — see `qspace_around_spot`'s `darwin` for the
+            physics; same tradeoff applies here.
+        verbose : bool, optional
+            Print the resolved reference spot and per-harmonic summary.
+
+    Returns:
+    dict with keys:
+
+        `'hkl'`, `'layer'` : the resolved inputs (`layer` as its label).
+        `'E0'` : float — the reference reflection's energy (eV).
+        `'x0'`, `'y0'` : ndarray, 1-D pixel coordinate arrays of the window.
+        `'I'` : ndarray, shape `(len(y0), len(x0))` — total simulated
+            intensity per pixel, summed over all harmonics.
+        `'I_harmonics'` : dict `{n: ndarray}` — same shape, per harmonic
+            order `n` (only orders that contributed at least one in-window
+            energy sample are included).
+        `'n_harmonics'` : int — number of harmonic orders included.
+
+    Note:
+    * Because this integrates over an energy band (Riemann sum with a
+      finite `dE_eV` and `n_energy`), `I` is on a different physical scale
+      than `spots[i]['I_raw']` (a single delta-like evaluation at exactly
+      `E`) — treat pixel-to-pixel and harmonic-to-harmonic comparisons
+      *within* this function's output as meaningful, not raw magnitude
+      comparisons against `simulate_laue_stack`'s spot list.
+    * Every voxel's position (which energy band centres at which `n`) is
+      exact geometry; only the intra-band sampling (`dE_eV`, `n_energy`)
+      is an approximation — widen/refine it if a real thickness-fringe
+      feature looks under-resolved.
+
+    Example:
+    >>> spots = simulate_laue_stack(stack, cam)
+    >>> img = simulate_spot_image(stack, spots, (0, 0, 4), cam, layer='GaN')
+    >>> plt.imshow(np.log1p(img['I']))
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if structure_model not in ("coherent", "average"):
+        raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
+
+    h, k, l = (int(x) for x in hkl)
+    layer_label = layer.label if hasattr(layer, "label") else layer
+    candidates = [
+        s for s in spots
+        if tuple(s["hkl"]) == (h, k, l)
+        and s.get("satellite_order", 0) == 0
+        and s.get("pix") is not None
+        and (layer_label is None or s.get("phase_label") == layer_label)
+    ]
+    if not candidates:
+        layer_part = f", layer={layer_label!r}" if layer_label is not None else ""
+        raise ValueError(f"no on-detector spot with hkl={(h, k, l)}{layer_part} found in `spots`")
+    s0 = max(candidates, key=lambda s: s.get("intensity", 0.0))
+    E0 = float(s0["E"])
+    x0_center, y0_center = s0["pix"]
+    phase_label = s0["phase_label"]
+    resolved_layer = next((ly for ly in stack.all_layers if ly.label == phase_label), None)
+    if resolved_layer is None:
+        raise ValueError(f"spot's phase_label {phase_label!r} not found in stack.all_layers")
+
+    xs = np.arange(int(round(x0_center)) - half_size_px, int(round(x0_center)) + half_size_px + 1)
+    ys = np.arange(int(round(y0_center)) - half_size_px, int(round(y0_center)) + half_size_px + 1)
+    xs = xs[(xs >= 0) & (xs < camera.Nh)]
+    ys = ys[(ys >= 0) & (ys < camera.Nv)]
+    if len(xs) == 0 or len(ys) == 0:
+        raise ValueError("pixel window falls entirely off the detector")
+    XX, YY = np.meshgrid(xs, ys)
+    shape = XX.shape
+    kf_hat = camera.pixel_to_kf(XX.ravel().astype(float), YY.ravel().astype(float))
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+    spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
+    diff = kf_hat - ki[None, :]  # (n_pix, 3) — fixed per pixel, direction of the energy sweep
+
+    n_pix = kf_hat.shape[0]
+    n_max = min(max_harmonics, int(np.floor(E_max_eV / E0)))
+    if n_max < 1:
+        raise ValueError(f"reference energy E0={E0:.0f} eV already exceeds E_max_eV={E_max_eV:.0f}")
+
+    I_total = np.zeros(n_pix)
+    I_harmonics = {}
+    for n in range(1, n_max + 1):
+        E_center = n * E0
+        if E_center > E_max_eV:
+            break
+        E_samples = np.linspace(E_center - dE_eV, E_center + dE_eV, n_energy)
+        E_samples = E_samples[(E_samples >= E_min_eV) & (E_samples <= E_max_eV)]
+        if len(E_samples) == 0:
+            continue
+        n_e = len(E_samples)
+        dE_step = (E_samples[-1] - E_samples[0]) / (n_e - 1) if n_e > 1 else (2.0 * dE_eV)
+
+        lam_samples = en2lam(E_samples)
+        k_samples = 2.0 * np.pi / lam_samples
+        Q_all = k_samples[None, :, None] * diff[:, None, :]  # (n_pix, n_e, 3)
+        Q_flat = Q_all.reshape(-1, 3)
+        E_flat = np.tile(E_samples, n_pix)
+        kf_flat = np.repeat(kf_hat, n_e, axis=0)
+
+        tth_flat = np.degrees(np.arccos(np.clip(kf_flat[:, 0], -1.0, 1.0)))
+        chi_flat = np.degrees(np.arctan2(kf_flat[:, 1], kf_flat[:, 2] + 1e-17))
+        LP_flat = _lorentz_pol_vec(tth_flat, E_flat, chi_flat)
+        sw_flat = spectrum(E_flat)
+
+        if darwin:
+            lam_flat = en2lam(E_flat)
+            F_arr, _, _ = _darwin_amp_batch(
+                stack, ki, structure_model, Q_flat, E_flat, lam_flat, tth_flat,
+                kf_hat_arr=kf_flat, n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
+            )
+        else:
+            batch_fn = (
+                stack.average_structure_factor_batch
+                if structure_model == "average"
+                else stack.structure_factor_batch
+            )
+            F_arr = batch_fn(Q_flat, float(E_center), kf_hat_arr=kf_flat)
+
+        F2_flat = np.abs(F_arr) ** 2
+        I_flat = (F2_flat * LP_flat * sw_flat).reshape(n_pix, n_e)
+        I_n = I_flat.sum(axis=1) * dE_step
+        I_harmonics[n] = I_n.reshape(shape)
+        I_total += I_n
+
+        if verbose:
+            print(f"    n={n}  E_center={E_center:.0f} eV  "
+                  f"{n_e}/{n_energy} samples in window  "
+                  f"peak I={I_n.max():.3e}")
+
+    if verbose:
+        print(
+            f"  simulate_spot_image: hkl={(h, k, l)}  layer={phase_label!r}  "
+            f"E0={E0:.0f} eV  window={shape[1]}x{shape[0]} px  "
+            f"harmonics=1..{len(I_harmonics)}"
+        )
+
+    return {
+        "hkl": (h, k, l),
+        "layer": phase_label,
+        "E0": E0,
+        "x0": xs.astype(float),
+        "y0": ys.astype(float),
+        "I": I_total.reshape(shape),
+        "I_harmonics": I_harmonics,
+        "n_harmonics": len(I_harmonics),
+    }
+
+
 def project_to_detector(vol_or_vols, *, pad_px=20, camera=None,
                         exclude_bragg_along=None):
     """

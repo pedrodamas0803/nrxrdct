@@ -3632,6 +3632,8 @@ def simulate_spot_image(
 
         `'hkl'`, `'layer'` : the resolved inputs (`layer` as its label).
         `'E0'` : float — the reference reflection's energy (eV).
+        `'ref_pix'` : `(x, y)` — the reference spot's own pixel (from
+            `spots`), not necessarily the window centre after edge clipping.
         `'x0'`, `'y0'` : ndarray, 1-D pixel coordinate arrays of the window.
         `'I'` : ndarray, shape `(len(y0), len(x0))` — total simulated
             intensity per pixel, summed over all harmonics.
@@ -3651,6 +3653,18 @@ def simulate_spot_image(
       exact geometry; only the intra-band sampling (`dE_eV`, `n_energy`)
       is an approximation — widen/refine it if a real thickness-fringe
       feature looks under-resolved.
+    * `structure_model="coherent"` sums phases `exp(i·Qn·z0)` across every
+      layer, including any deep buffer/substrate the reflecting layer sits
+      on (`z0` up to hundreds of thousands of Å).  That makes the coherent
+      structure factor an extremely narrow function of Q — for a stack with
+      a thick substrate, the true fringe width can be **narrower than one
+      detector pixel**, so a per-pixel point sample cannot resolve it (the
+      image will look aliased/patchy no matter how fine `dE_eV`/`n_energy`
+      are, short of expensive sub-pixel supersampling that isn't done here).
+      `structure_model="average"` does not have this pathology and is the
+      practical default for this function; reach for `"coherent"` only for
+      thin, shallow stacks or once you've confirmed the fringe width is
+      resolvable at your pixel/energy sampling.
 
     Example:
     >>> spots = simulate_laue_stack(stack, cam)
@@ -3697,6 +3711,24 @@ def simulate_spot_image(
     spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
     diff = kf_hat - ki[None, :]  # (n_pix, 3) — fixed per pixel, direction of the energy sweep
 
+    # ── anchor Q to the exact reciprocal-lattice point ────────────────────────
+    # `camera.pixel_to_kf` reconstructs kf_hat from the *stored* (float, but
+    # not infinite-precision) reference pixel, which differs from the true
+    # kf_hat0 (the one `simulate_laue_stack` actually used to place this spot)
+    # by a tiny angular bias — sub-1e-4 px worth of calibration/round-trip
+    # noise.  That is utterly negligible geometrically, but every buried
+    # layer's coherent phase is `exp(i * Qn * z0)` with `z0` up to hundreds of
+    # thousands of Å (a deep substrate), so `Δ(Qn) * z0` can be many radians —
+    # the coherent structure factor is essentially randomised at every pixel,
+    # including the reference one, unless Q is anchored to the reflection's
+    # exact analytic G0.  We do that anchoring once here and re-apply the same
+    # (energy-scaled) correction to every sampled pixel/energy below — a
+    # locally constant angular-bias correction, valid over a modest window.
+    G0_exact = resolved_layer.U @ resolved_layer.crystal.Q(h, k, l)
+    kf_hat0 = camera.pixel_to_kf(np.array([x0_center]), np.array([y0_center]))[0]
+    k0 = 2.0 * np.pi / float(en2lam(np.array([E0]))[0])
+    Q_correction = G0_exact - k0 * (kf_hat0 - ki)
+
     n_pix = kf_hat.shape[0]
     n_max = min(max_harmonics, int(np.floor(E_max_eV / E0)))
     if n_max < 1:
@@ -3718,6 +3750,8 @@ def simulate_spot_image(
         lam_samples = en2lam(E_samples)
         k_samples = 2.0 * np.pi / lam_samples
         Q_all = k_samples[None, :, None] * diff[:, None, :]  # (n_pix, n_e, 3)
+        # energy-scaled anchor correction — see note above `Q_correction`
+        Q_all = Q_all + (E_samples / E0)[None, :, None] * Q_correction[None, None, :]
         Q_flat = Q_all.reshape(-1, 3)
         E_flat = np.tile(E_samples, n_pix)
         kf_flat = np.repeat(kf_hat, n_e, axis=0)
@@ -3763,6 +3797,7 @@ def simulate_spot_image(
         "hkl": (h, k, l),
         "layer": phase_label,
         "E0": E0,
+        "ref_pix": (float(x0_center), float(y0_center)),
         "x0": xs.astype(float),
         "y0": ys.astype(float),
         "I": I_total.reshape(shape),

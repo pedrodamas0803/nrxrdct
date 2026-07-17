@@ -17,3 +17,4 @@ wheels/
 *.png
 *.txt
 *.DS_Store
+.claude

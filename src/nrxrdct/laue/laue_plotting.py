@@ -5712,6 +5712,148 @@ def plot_detector_projection(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PER-PIXEL SPOT IMAGE: SIMULATED vs MEASURED
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_spot_image(
+    img,
+    *,
+    exp_image=None,
+    log_intensity=True,
+    vmin_percentile=0.0,
+    vmax_percentile=99.5,
+    figsize=None,
+    out_path=None,
+):
+    """
+    Plot the output of :func:`~nrxrdct.laue.simulation.simulate_spot_image`,
+    optionally next to the matching patch cropped from a real measured
+    detector frame.
+
+    **Normalisation.** Each panel is independently normalised by its own
+    `I / I_max` before the log-stretch — the simulated panel by its own
+    peak, the measured patch by its own peak within the cropped window.
+    A shared percentile-based colour scale (`vmin_percentile` /
+    `vmax_percentile`) is then derived from the combined non-zero pixels of
+    both stretched panels, so faint features are visible at the same
+    visual level in both — same convention as
+    :func:`plot_detector_projection`.
+
+    Args:
+        img (dict): Return value of
+            :func:`~nrxrdct.laue.simulation.simulate_spot_image`.
+        exp_image (ndarray, shape (Nv, Nh), optional): Full measured
+            detector frame, in the same pixel convention as the `camera`
+            used to build `img`.  When given, a second "Measured" panel is
+            added, cropped to `img['x0']` / `img['y0']`.
+        log_intensity (bool): Apply `log1p` stretch to both panels.
+        vmin_percentile, vmax_percentile (float): Percentile (0-100) of the
+            combined non-zero stretched pixels used as the colour-scale
+            min/max.  Defaults `0` / `99.5` — true minimum, top 0.5% clipped.
+        figsize: Figure size.  Defaults to `(7, 5.5)` (one panel) or
+            `(14, 5.5)` (two panels).
+        out_path (str or None): Save figure to this path if given.
+
+    Returns:
+        ``(fig, axes)`` where *axes* is a 1- or 2-element list.
+    """
+    sim = np.asarray(img["I"], dtype=float)
+    x0, y0 = img["x0"], img["y0"]
+    ext = [x0[0] - 0.5, x0[-1] + 0.5, y0[-1] + 0.5, y0[0] - 0.5]
+
+    has_meas = exp_image is not None
+    n_panels = 2 if has_meas else 1
+    if figsize is None:
+        figsize = (14.0, 5.5) if has_meas else (7.0, 5.5)
+
+    fig, axes_arr = plt.subplots(
+        1, n_panels, figsize=figsize, facecolor=BG, squeeze=False,
+        sharex=True, sharey=True,
+    )
+    axes = list(axes_arr[0])
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+
+    def _stretch(arr):
+        return np.log1p(arr) if log_intensity else arr.copy()
+
+    I_max_sim = float(sim.max()) if sim.max() > 0 else 1.0
+    sim_n = sim / I_max_sim
+    sim_s = _stretch(sim_n)
+
+    if has_meas:
+        img_arr = np.asarray(exp_image, dtype=float)
+        iy0, iy1 = int(round(y0[0])), int(round(y0[-1])) + 1
+        ix0, ix1 = int(round(x0[0])), int(round(x0[-1])) + 1
+        meas_patch = img_arr[iy0:iy1, ix0:ix1]
+        I_max_meas = float(meas_patch.max()) if meas_patch.max() > 0 else 1.0
+        meas_n = meas_patch / I_max_meas
+        meas_s = _stretch(meas_n)
+
+    _nz_vals = [sim_s[sim_s > 0]]
+    if has_meas:
+        _nz_m = meas_s[meas_s > 0]
+        if len(_nz_m):
+            _nz_vals.append(_nz_m)
+    _all_nz = np.concatenate(_nz_vals) if _nz_vals else np.array([0.0, 1.0])
+    vmin_s = float(np.percentile(_all_nz, vmin_percentile)) if len(_all_nz) else 0.0
+    vmax_s = float(np.percentile(_all_nz, vmax_percentile)) if len(_all_nz) else 1.0
+    if vmax_s <= vmin_s:
+        vmax_s = vmin_s + 1e-6
+
+    for ax in axes:
+        _ax_style(ax, "")
+        ax.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+        ax.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+
+    ax_sim = axes[0]
+    ax_sim.set_title("Simulated", color=FG, fontsize=9, pad=4)
+    im_s = ax_sim.imshow(
+        sim_s, origin="upper", extent=ext, cmap=cmap,
+        vmin=vmin_s, vmax=vmax_s, aspect="equal", interpolation="nearest",
+    )
+    cbar_s = fig.colorbar(im_s, ax=ax_sim, shrink=0.85, pad=0.03)
+    cbar_s.set_label("log(1+I/I_max)" if log_intensity else "I/I_max", color=FG, fontsize=7)
+    cbar_s.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+    plt.setp(cbar_s.ax.get_yticklabels(), color=FG)
+    cbar_s.outline.set_edgecolor("#333355")
+
+    if has_meas:
+        ax_meas = axes[1]
+        ax_meas.set_title("Measured", color=FG, fontsize=9, pad=4)
+        im_m = ax_meas.imshow(
+            meas_s, origin="upper", extent=ext, cmap="gray",
+            vmin=vmin_s, vmax=vmax_s, aspect="equal", interpolation="nearest",
+        )
+        cbar_m = fig.colorbar(im_m, ax=ax_meas, shrink=0.85, pad=0.03)
+        cbar_m.set_label("log(1+I/I_max)" if log_intensity else "I/I_max", color=FG, fontsize=7)
+        cbar_m.ax.yaxis.set_tick_params(color="#7788aa", labelsize=6)
+        plt.setp(cbar_m.ax.get_yticklabels(), color=FG)
+        cbar_m.outline.set_edgecolor("#333355")
+
+    ref_x, ref_y = img.get("ref_pix", (None, None))
+    if ref_x is not None:
+        for ax in axes:
+            ax.plot(ref_x, ref_y, "+", color=FG, ms=10, mew=1.2, zorder=5)
+
+    hkl_str = str(img.get("hkl", "?"))
+    layer_str = str(img.get("layer", "?"))
+    E0 = img.get("E0")
+    n_harm = img.get("n_harmonics")
+    title = f"hkl={hkl_str}  ({layer_str})  E0={E0:.0f} eV  harmonics=1..{n_harm}"
+    fig.suptitle(title, color=FG, fontsize=10, y=1.01)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, axes
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PIXEL DEVIATION: SIMULATED vs MEASURED
 # ─────────────────────────────────────────────────────────────────────────────
 

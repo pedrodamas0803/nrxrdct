@@ -3543,6 +3543,7 @@ def simulate_spot_image(
     n_energy=101,
     dE_eV=300.0,
     pin_satellites=True,
+    max_satellite_order=None,
     max_harmonics=5,
     E_min_eV=E_MIN_eV,
     E_max_eV=E_MAX_eV,
@@ -3645,6 +3646,21 @@ def simulate_spot_image(
             regardless of `n_energy`/`dE_eV`.  The energy integral then
             uses trapezoidal integration (not a fixed-step Riemann sum) to
             handle the resulting non-uniform grid correctly.
+        max_satellite_order : int or None, optional
+            `None` (default) sums *every* satellite order that falls within
+            `dE_eV` of each harmonic centre, however many that is — `dE_eV`
+            wide enough to integrate destructive interference correctly
+            (see `dE_eV`) can easily span 5+ orders, most of them weak.
+            Set this to cap how many orders (`|m - m_center| <=
+            max_satellite_order`) actually get summed into `I`/`I_harmonics`
+            — e.g. `1` keeps only the main peak and its nearest satellite on
+            each side.  This is a *different* knob from `dE_eV`: `dE_eV`
+            controls how finely/widely the *kept* orders are integrated
+            (for correctness), `max_satellite_order` controls how many
+            orders are kept in the first place (for a cleaner, less
+            blended-looking image).  Only takes effect in the same
+            single-repeating-block case as `I_satellites`; ignored
+            otherwise.
         max_harmonics : int, optional
             Upper bound on harmonic order `n`, independent of the
             `E_max_eV` cutoff (whichever is more restrictive wins).
@@ -4065,6 +4081,26 @@ def simulate_spot_image(
                 if end - start >= 1:
                     idx = np.arange(start, end + 1)
                     _order_segments.append((int(m - m_center_single), idx))
+
+        # `max_satellite_order` — drop samples belonging to far orders
+        # *before* the (expensive) structure-factor evaluation below, both
+        # to keep the total less blended and to save compute.  Re-indexes
+        # `_order_segments` against the filtered E_samples.
+        if max_satellite_order is not None and _order_segments:
+            keep_mask = np.zeros(len(E_samples), dtype=bool)
+            for rel_m, idx in _order_segments:
+                if abs(rel_m) <= max_satellite_order:
+                    keep_mask[idx] = True
+            if keep_mask.any() and not keep_mask.all():
+                keep_idx = np.where(keep_mask)[0]
+                remap = -np.ones(len(E_samples), dtype=int)
+                remap[keep_idx] = np.arange(len(keep_idx))
+                E_samples = E_samples[keep_idx]
+                _order_segments = [
+                    (rel_m, remap[idx]) for rel_m, idx in _order_segments
+                    if abs(rel_m) <= max_satellite_order
+                ]
+                n_e = len(E_samples)
 
         lam_samples = en2lam(E_samples)
         k_samples = 2.0 * np.pi / lam_samples

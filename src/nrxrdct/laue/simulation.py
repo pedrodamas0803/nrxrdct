@@ -3853,7 +3853,16 @@ def simulate_spot_image(
     # exact analytic G0.  We do that anchoring once here and re-apply the same
     # (energy-scaled) correction to every sampled pixel/energy below — a
     # locally constant angular-bias correction, valid over a modest window.
-    G0_exact = resolved_layer.U @ resolved_layer.crystal.Q(h, k, l)
+    if s0.get("G_lab") is not None:
+        # Trust the *exact* Q that simulate_laue_stack itself used to place
+        # this spot — critical for a pseudomorphically strained layer
+        # (add_pseudomorphic_layer only corrects the growth-direction
+        # d-spacing, not layer.crystal, so layer.U @ layer.crystal.Q(h,k,l)
+        # below silently recomputes the *bulk*, unstrained G0 — wrong
+        # whenever strain shifts the true reflection position).
+        G0_exact = np.asarray(s0["G_lab"], dtype=float)
+    else:
+        G0_exact = resolved_layer.U @ resolved_layer.crystal.Q(h, k, l)
     kf_hat0 = camera.pixel_to_kf(np.array([x0_center]), np.array([y0_center]))[0]
     k0 = 2.0 * np.pi / float(en2lam(np.array([E0]))[0])
     Q_correction = G0_exact - k0 * (kf_hat0 - ki)

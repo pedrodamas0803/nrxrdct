@@ -3629,23 +3629,36 @@ def simulate_spot_image(
             amplitude instead — see `qspace_around_spot`'s `darwin` for the
             physics; same tradeoff applies here.  Compatible with
             `isolate_layer=True`.
-        isolate_layer : bool, optional
+        isolate_layer : bool or list[str], optional
             `False` (default) evaluates the full multi-layer coherent (or
             average) stack sum, exactly like `qspace_around_spot` /
-            `simulate_laue_stack`.  `True` builds a minimal stand-in stack
-            containing **only** the reflecting layer (or, if it belongs to
-            a repeating block, only that block — reusing the same `Layer`
-            object(s), so `absorption_limit`/`d_spacing`/`n_cells` are
-            preserved exactly) and evaluates `structure_model`/`darwin`
-            against that instead of the full stack.  This drops every
-            cross-term with other buffer layers or blocks, while still
-            fully modelling the reflecting layer's own repeating-block
-            period/satellite structure if it has one.  See the Note below —
-            this is the practical fix when the reflecting layer sits on a
-            deep buffer/substrate (large absolute `z0`), where those
-            cross-terms are numerically unresolvable at pixel/energy
-            sampling anyway.  Works with both `darwin=False` and
-            `darwin=True`.
+            `simulate_laue_stack`.
+
+            * `True` — builds a minimal stand-in stack containing **only**
+              the reflecting layer (or, if it belongs to a repeating block,
+              only that block), dropping cross-terms with *every* other
+              buffer layer or block.  The most aggressive option — use when
+              you don't yet know which layer(s) are causing the problem.
+            * A list of buffer-layer labels — builds a stand-in stack with
+              exactly those buffer layers **excluded**, keeping every other
+              buffer layer and every repeating block coherently summed
+              together.  This is the practical choice once you've
+              identified the problem layer (usually the deepest one, e.g.
+              a growth substrate): it lets genuinely resolvable cross-terms
+              between layers that are physically close together (e.g. a
+              repeating block and the buffer layer immediately beneath it)
+              still interfere constructively — which is often what actually
+              produces the sharp, bright measured peak — while dropping
+              only the pathologically deep one(s).
+
+            Either form reuses the same `Layer` object(s) (so
+            `absorption_limit`/`d_spacing`/`n_cells` are preserved exactly)
+            and evaluates `structure_model`/`darwin` against the reduced
+            stack instead of the full one.  See the Note below — this is
+            the practical fix when a buffer layer sits on a deep
+            buffer/substrate (large absolute `z0`), where cross-terms with
+            it are numerically unresolvable at pixel/energy sampling
+            anyway.  Works with both `darwin=False` and `darwin=True`.
         sigma_h_mrad, sigma_v_mrad : float, optional
             1σ incident-beam angular divergence (mrad), horizontal/vertical
             (same convention as `beam_divergence_ellipses`; typical
@@ -3755,35 +3768,62 @@ def simulate_spot_image(
     iso_stack = None
     if isolate_layer:
         stack._update_offsets()
-        owning_block = None
-        if resolved_layer not in stack.buffer_layers:
-            owning_block = next(
-                (blk for blk in stack._blocks if resolved_layer in blk.layers), None
-            )
-            if owning_block is None:
-                raise ValueError(
-                    f"isolate_layer=True: layer {phase_label!r} not found among "
-                    "stack.buffer_layers or any repeating block"
-                )
-        # A minimal LayeredCrystal containing only the reflecting layer (or
-        # its own repeating block), reusing the *same* Layer object(s) (so
-        # absorption_limit / d_spacing / n_cells are exactly preserved) —
-        # everything else (other buffer layers, other blocks) is simply
-        # absent, so their deep-z0 cross-terms never enter the sum.  This
-        # lets us reuse structure_factor_batch / average_structure_factor_batch
-        # / _darwin_amp_batch completely unchanged, just scoped to a smaller
-        # stack, instead of duplicating that physics here.
+        # A reduced LayeredCrystal reusing the *same* Layer object(s) (so
+        # absorption_limit / d_spacing / n_cells are exactly preserved), so
+        # some deep-z0 cross-terms never enter the coherent sum.  This lets
+        # us reuse structure_factor_batch / average_structure_factor_batch /
+        # _darwin_amp_batch completely unchanged, just scoped to a smaller
+        # stack, instead of duplicating that physics here.  `_RepeatBlock`
+        # instances are always shallow-copied (never shared with `stack`
+        # itself), since `_update_offsets()` mutates them in place — sharing
+        # would corrupt the original stack's cached offsets.
         from .layers import LayeredCrystal as _LayeredCrystal
         from .layers import _RepeatBlock as _RepeatBlockCls
-        iso_stack = _LayeredCrystal(name="_isolated", stacking_direction=stack.n_hat)
-        if owning_block is None:
-            iso_stack.buffer_layers.append(resolved_layer)
+
+        def _copy_block(blk):
+            new_blk = _RepeatBlockCls()
+            new_blk.layers = list(blk.layers)
+            new_blk.n_rep = blk.n_rep
+            new_blk._closed = True
+            return new_blk
+
+        if isolate_layer is True:
+            # Isolate to just the reflecting layer (or its own block) —
+            # drops cross-terms with *every* other buffer layer/block.
+            owning_block = None
+            if resolved_layer not in stack.buffer_layers:
+                owning_block = next(
+                    (blk for blk in stack._blocks if resolved_layer in blk.layers), None
+                )
+                if owning_block is None:
+                    raise ValueError(
+                        f"isolate_layer=True: layer {phase_label!r} not found among "
+                        "stack.buffer_layers or any repeating block"
+                    )
+            iso_stack = _LayeredCrystal(name="_isolated", stacking_direction=stack.n_hat)
+            if owning_block is None:
+                iso_stack.buffer_layers.append(resolved_layer)
+            else:
+                iso_stack._blocks.append(_copy_block(owning_block))
         else:
-            blk = _RepeatBlockCls()
-            blk.layers = list(owning_block.layers)
-            blk.n_rep = owning_block.n_rep
-            blk._closed = True
-            iso_stack._blocks.append(blk)
+            # isolate_layer is an iterable of buffer-layer labels to exclude
+            # — keep everything else (all blocks, all other buffer layers)
+            # coherently summed, so genuinely resolvable cross-terms (e.g.
+            # between a repeating block and the buffer layer immediately
+            # beneath it) are preserved; only the excluded (typically
+            # pathologically deep) buffer layers are dropped.
+            exclude_labels = set(isolate_layer)
+            missing = exclude_labels - {ly.label for ly in stack.buffer_layers}
+            if missing:
+                raise ValueError(
+                    f"isolate_layer excludes labels not found in stack.buffer_layers: {missing}"
+                )
+            iso_stack = _LayeredCrystal(name="_isolated", stacking_direction=stack.n_hat)
+            for ly in stack.buffer_layers:
+                if ly.label not in exclude_labels:
+                    iso_stack.buffer_layers.append(ly)
+            for blk in stack._blocks:
+                iso_stack._blocks.append(_copy_block(blk))
         iso_stack._update_offsets()
 
     xs = np.arange(int(round(x0_center)) - half_size_px, int(round(x0_center)) + half_size_px + 1)

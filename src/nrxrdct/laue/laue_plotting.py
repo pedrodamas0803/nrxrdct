@@ -13,7 +13,15 @@ from scipy.special import kv
 from nrxrdct.laue.camera import Camera
 from nrxrdct.laue.layers import LayeredCrystal
 
-from .simulation import beam_in_crystal, synchrotron_spectrum
+from .simulation import (
+    BM32_KB,
+    E_MAX_eV,
+    E_MIN_eV,
+    KI_HAT,
+    beam_in_crystal,
+    qspace_around_spot,
+    synchrotron_spectrum,
+)
 
 # from .simulation import (  # A_LATTICE,; HARMONIC_WIDTH,; N_HARMONICS,; PHI1_DEG,; PHI2_DEG,; PHI_DEG,; E_FUNDAMENTAL_eV,
 #     beam_in_crystal,
@@ -5709,6 +5717,311 @@ def plot_detector_projection(
         print(f"  Saved → {out_path}")
 
     return fig, axes
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RECIPROCAL SPACE MAPS (sample-frame Qx / Qz)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _hkl_mathtext(hkl):
+    """``(h, k, l)`` → mathtext string with an overline on negative indices,
+    e.g. ``(-1, 1, -2)`` → ``r'$(\\bar{1}1\\bar{2})$'``."""
+    parts = [rf"\bar{{{-n}}}" if n < 0 else str(n) for n in hkl]
+    return "$(" + "".join(parts) + ")$"
+
+
+def plot_rsm(
+    stack,
+    hkl_list,
+    layer=None,
+    *,
+    camera=None,
+    exp_image=None,
+    x_hat=None,
+    ref_label="G0",
+    n_along=151,
+    n_lateral=11,
+    extent_along=None,
+    extent_lateral=None,
+    max_satellites=4,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    darwin=False,
+    exp_pad_px=40,
+    exp_intensity_floor=0.0,
+    exp_match_radius_px=6.0,
+    log_intensity=True,
+    label_satellites=True,
+    mark_ref=True,
+    figsize=None,
+    out_path=None,
+    verbose=False,
+):
+    """
+    Reciprocal-space map(s) in sample-frame ``(Qx, Qz)`` for one or more
+    reflections of the same layer — the classic side-by-side "measured vs.
+    simulated" RSM figure used to compare superlattice satellite positions
+    (``SL0``, ``SL±1``, ...) across a symmetric and an asymmetric reflection.
+
+    Unlike :func:`qspace_around_spot`'s own local ``along`` / ``lateral1`` /
+    ``lateral2`` frame (an arbitrary orthonormal basis picked only from
+    ``layer.n_hat``), this function re-projects each volume's lab-frame
+    ``Q`` onto a **physically fixed** sample frame shared across every
+    requested reflection:
+
+    * ``Qz = Q · n_hat`` — component along the growth normal.
+    * ``Qx = Q · x_hat`` — component along a fixed in-plane azimuth.
+
+    ``x_hat`` defaults to the in-plane projection of the first *asymmetric*
+    reflection's ``G0`` in `hkl_list` (a symmetric reflection alone cannot
+    fix an azimuth, since its ``G0`` has no in-plane component) — this
+    reproduces the standard convention where a symmetric reflection's
+    satellites cluster near ``Qx = 0`` while an asymmetric reflection's sit
+    offset at its own in-plane ``G0`` component, both drawn on the same
+    physical axis.  Pass `x_hat` explicitly to override.
+
+    **Measured panel (approximate).** A real white-beam Laue detector pixel
+    does not have a unique ``Q`` — for a fixed pixel (fixed `kf_hat`), the
+    elastic condition allows a whole line of `Q` at different photon
+    energies (this is the same one-pixel-many-`Q` ambiguity behind
+    harmonics).  The measured panel resolves this the same way real Laue
+    spot-indexing does: it assumes each measured pixel near the requested
+    reflection belongs to *this* reflection's rod, and looks up its
+    ``(Qx, Qz)`` via nearest-neighbour match (`scipy.spatial.KDTree`) against
+    the dense simulated grid's own `pix` positions (within
+    `exp_match_radius_px`).  This is an assignment heuristic, not an exact
+    inversion — it is only meaningful within `exp_pad_px` of the expected
+    spot, where the single-reflection assumption is reasonable.
+
+    Args:
+        stack: :class:`~nrxrdct.laue.layers.LayeredCrystal` stack.
+        hkl_list: Reflections to plot, one row per entry, e.g.
+            ``[(0, 0, 4), (1, 1, -2, 4)]`` → wait, ``(1, 1, -2, 4)`` is
+            4-index hexagonal; pass 3-index ``(h, k, l)`` tuples matching
+            `layer.crystal`'s convention.
+        layer: Which layer's `(crystal, U, n_hat)` to use — forwarded to
+            :func:`qspace_around_spot` for every reflection in `hkl_list`.
+        camera: :class:`~nrxrdct.laue.camera.Camera`.  Required for the
+            measured panel (to compute `pix` for the lookup); optional for
+            simulated-only maps.
+        exp_image (ndarray, shape (Nv, Nh), optional): Full measured
+            detector frame.  When given (and `camera` is set), a left
+            "Measured" panel is added next to each "Simulated" panel.
+        x_hat (array-like (3,) or None): Fixed in-plane azimuth (lab frame).
+            `None` (default) auto-derives it from the first asymmetric
+            reflection in `hkl_list` (see above).
+        ref_label (str): Label for the marker at each reflection's nominal
+            `G0` (default ``'G0'``).
+        n_along, n_lateral, extent_along, extent_lateral, max_satellites,
+        E_min_eV, E_max_eV, source, source_kwargs, kb_params, ki_hat,
+        structure_model, darwin: Forwarded to :func:`qspace_around_spot`
+            for every reflection.  Defaults are deliberately coarser
+            (`n_along=151`, `n_lateral=11`, kinematical `darwin=False`)
+            than `qspace_around_spot`'s own defaults, since an RSM overview
+            rarely needs the full per-voxel accuracy — raise them for a
+            publication-quality map.
+        exp_pad_px (float): Pixel-space margin around the simulated grid's
+            on-detector bounding box searched for measured pixels.
+        exp_intensity_floor (float): Minimum measured counts to include a
+            pixel in the measured scatter (background suppression).
+        exp_match_radius_px (float): Maximum nearest-neighbour distance
+            (pixels) for a measured pixel to be assigned a `(Qx, Qz)` —
+            pixels farther than this from the simulated grid are dropped
+            as unrelated to this reflection.
+        log_intensity (bool): Colour scatter points by `log1p(I)`.
+        label_satellites (bool): Annotate ``SL0`` / ``SL±m`` at the exact
+            `Qz` positions implied by the stack's bilayer period, on the
+            right margin of each simulated panel.
+        mark_ref (bool): Draw the `ref_label` marker at each reflection's
+            `(Qx, Qz)` for `G0`.
+        figsize: Figure size.  Defaults to `(6, 4.5)` per row, times the
+            number of columns.
+        out_path (str or None): Save figure to this path if given.
+        verbose (bool): Forwarded to each :func:`qspace_around_spot` call.
+
+    Returns:
+        ``(fig, axes, vols)`` — `axes` is a list of `(ax_exp, ax_sim)` pairs
+        (or single-element rows when `exp_image` is `None`), one per
+        `hkl_list` entry; `vols` is the list of `qspace_around_spot` return
+        dicts, in the same order.
+    """
+    hkl_list = [tuple(int(x) for x in hkl) for hkl in hkl_list]
+    vols = [
+        qspace_around_spot(
+            stack, hkl, layer=layer,
+            n_along=n_along, n_lateral=n_lateral,
+            extent_along=extent_along, extent_lateral=extent_lateral,
+            max_satellites=max_satellites,
+            camera=camera, E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+            source=source, source_kwargs=source_kwargs, kb_params=kb_params,
+            ki_hat=ki_hat, structure_model=structure_model, darwin=darwin,
+            verbose=verbose,
+        )
+        for hkl in hkl_list
+    ]
+
+    n_hat = np.asarray(vols[0]["axes"]["n_hat"], dtype=float)
+
+    if x_hat is None:
+        x_hat = None
+        for v in vols:
+            G0v = np.asarray(v["G0"], dtype=float)
+            in_plane = G0v - np.dot(G0v, n_hat) * n_hat
+            if np.linalg.norm(in_plane) > 1e-3 * np.linalg.norm(G0v):
+                x_hat = in_plane / np.linalg.norm(in_plane)
+                break
+        if x_hat is None:
+            x_hat = np.asarray(vols[0]["axes"]["t1"], dtype=float)
+            print(
+                "  plot_rsm: no asymmetric reflection in hkl_list to fix the "
+                "in-plane azimuth — falling back to qspace_around_spot's "
+                "arbitrary transverse axis 't1'.  Pass x_hat explicitly for "
+                "a physically meaningful Qx."
+            )
+    else:
+        x_hat = np.asarray(x_hat, dtype=float)
+        x_hat = x_hat - np.dot(x_hat, n_hat) * n_hat
+        x_hat = x_hat / np.linalg.norm(x_hat)
+
+    has_meas = exp_image is not None and camera is not None
+    n_cols = 2 if has_meas else 1
+    n_rows = len(vols)
+    if figsize is None:
+        figsize = (6.0 * n_cols, 4.5 * n_rows)
+
+    cmap_sim = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+
+    fig, axes_grid = plt.subplots(
+        n_rows, n_cols, figsize=figsize, facecolor=BG, squeeze=False,
+    )
+
+    axes_out = []
+    for row, vol in enumerate(vols):
+        Q = vol["Q"]
+        Qx = Q @ x_hat
+        Qz = Q @ n_hat
+        I_arr = vol["I"]
+        reach = vol["reachable"]
+        mask_sim = reach & (I_arr > 0)
+
+        G0v = np.asarray(vol["G0"], dtype=float)
+        Qx0, Qz0 = float(G0v @ x_hat), float(G0v @ n_hat)
+
+        # ── measured panel ────────────────────────────────────────────────
+        ax_exp = axes_grid[row, 0] if has_meas else None
+        ax_sim = axes_grid[row, -1]
+
+        if has_meas:
+            pix = vol["pix"]
+            on_det = vol["on_detector"]
+            valid = reach & on_det & np.all(np.isfinite(pix), axis=-1)
+            exp_qxz = np.zeros((0, 2))
+            exp_w = np.zeros(0)
+            if valid.sum() >= 4:
+                pts_pix = pix[valid]
+                pts_qxz = np.stack([Qx[valid], Qz[valid]], axis=-1)
+                tree = KDTree(pts_pix)
+
+                img = np.asarray(exp_image, dtype=float)
+                Ny, Nx = img.shape
+                x0 = max(int(np.floor(pts_pix[:, 0].min() - exp_pad_px)), 0)
+                x1 = min(int(np.ceil(pts_pix[:, 0].max() + exp_pad_px)), Nx)
+                y0 = max(int(np.floor(pts_pix[:, 1].min() - exp_pad_px)), 0)
+                y1 = min(int(np.ceil(pts_pix[:, 1].max() + exp_pad_px)), Ny)
+                patch = img[y0:y1, x0:x1]
+                yy, xx = np.nonzero(patch > exp_intensity_floor)
+                if len(xx):
+                    px_query = np.stack([xx + x0, yy + y0], axis=-1).astype(float)
+                    counts = patch[yy, xx]
+                    dist, nn_idx = tree.query(px_query)
+                    keep = dist <= exp_match_radius_px
+                    exp_qxz = pts_qxz[nn_idx[keep]]
+                    exp_w = counts[keep]
+
+            w_plot = np.log1p(exp_w) if log_intensity else exp_w
+            ax_exp.scatter(
+                exp_qxz[:, 0], exp_qxz[:, 1], c=w_plot, cmap="gray",
+                s=4, alpha=0.7, linewidths=0, marker="s",
+            )
+            _ax_style(ax_exp, "")
+            ax_exp.set_facecolor("black")
+            if row == 0:
+                ax_exp.set_title("Measured", color=FG, fontsize=9, pad=4)
+
+        # ── simulated panel ───────────────────────────────────────────────
+        w_plot = np.log1p(I_arr[mask_sim]) if log_intensity else I_arr[mask_sim]
+        vmax = float(w_plot.max()) if w_plot.size else 1.0
+        ax_sim.scatter(
+            Qx[mask_sim], Qz[mask_sim], c=w_plot, cmap=cmap_sim,
+            vmin=0.0, vmax=vmax, s=5, alpha=0.6, linewidths=0,
+        )
+        _ax_style(ax_sim, "")
+        if row == 0:
+            ax_sim.set_title("Simulated", color=FG, fontsize=9, pad=4)
+
+        row_axes = (ax_exp, ax_sim) if has_meas else (ax_sim,)
+        for ax in row_axes:
+            ax.set_xlim(Qx[reach].min() - 1e-4 if reach.any() else -1, Qx[reach].max() + 1e-4 if reach.any() else 1)
+            ax.set_ylim(Qz[reach].min() if reach.any() else Qz0 - 1, Qz[reach].max() if reach.any() else Qz0 + 1)
+            if row == n_rows - 1:
+                ax.set_xlabel(r"$Q_x$  (Å$^{-1}$)", color=FG, fontsize=8)
+
+        row_axes[0].set_ylabel(r"$Q_z$  (Å$^{-1}$)", color=FG, fontsize=8)
+        ax_sim.text(
+            0.97, 0.94, _hkl_mathtext(vol["hkl"]), transform=ax_sim.transAxes,
+            ha="right", va="top", color=FG, fontsize=11,
+            bbox=dict(boxstyle="round,pad=0.25", fc=BG, ec="#333355", alpha=0.85),
+        )
+
+        # ── satellite order labels ──────────────────────────────────────────
+        if label_satellites:
+            resolved_layer = next(
+                (l for l in stack.all_layers if l.label == vol["layer"]), None
+            )
+            t_period = (
+                stack.bilayer_thickness if getattr(stack, "n_rep", 1) > 1
+                else getattr(resolved_layer, "thickness", 0.0)
+            )
+            if t_period and t_period > 1e-6:
+                q_fringe = 2.0 * np.pi / t_period
+                for m in range(-max_satellites, max_satellites + 1):
+                    Qz_m = Qz0 + m * q_fringe
+                    if not (ax_sim.get_ylim()[0] <= Qz_m <= ax_sim.get_ylim()[1]):
+                        continue
+                    label = "SL0" if m == 0 else f"SL{m:+d}"
+                    ax_sim.text(
+                        1.02, (Qz_m - ax_sim.get_ylim()[0]) / (ax_sim.get_ylim()[1] - ax_sim.get_ylim()[0]),
+                        label, transform=ax_sim.transAxes, ha="left", va="center",
+                        color=FG, fontsize=7,
+                    )
+
+        # ── reference (G0) marker ────────────────────────────────────────
+        if mark_ref:
+            for ax in row_axes:
+                ax.plot(Qx0, Qz0, "o", ms=4, mfc="none", mec=FG, mew=1.0, zorder=5)
+                ax.annotate(
+                    ref_label, xy=(Qx0, Qz0), xytext=(-14, 0),
+                    textcoords="offset points", color=FG, fontsize=7,
+                    ha="right", va="center",
+                    arrowprops=dict(arrowstyle="-", color=FG, lw=0.7),
+                )
+
+        axes_out.append(row_axes)
+
+    fig.tight_layout()
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, axes_out, vols
 
 
 # ─────────────────────────────────────────────────────────────────────────────

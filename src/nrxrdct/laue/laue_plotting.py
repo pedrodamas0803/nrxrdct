@@ -4990,6 +4990,21 @@ def _bragg_kf_hat(G_lab, ki_hat=_KI_HAT):
     return kf / np.linalg.norm(kf)
 
 
+def _draw_lab_axes_triad(ax, origin, length):
+    """x (beam, sky blue) / y (green) / z (up, orange) triad, matching the
+    axis colours used by `plot_layer_scheme`."""
+    for direction, color, label in (
+        (np.array([1.0, 0.0, 0.0]), "#4fc3f7", "x (beam)"),
+        (np.array([0.0, 1.0, 0.0]), "#88cc88", "y"),
+        (np.array([0.0, 0.0, 1.0]), "#ff9f43", "z (up)"),
+    ):
+        tip = origin + length * direction
+        ax.quiver(*origin, *(tip - origin), color=color, linewidth=2.0,
+                  arrow_length_ratio=0.2)
+        ax.text(*(tip + 0.1 * length * direction), label, color=color,
+                fontsize=9, fontweight="bold")
+
+
 def plot_unit_cell_in_lab(
     crystal,
     U: "np.ndarray",
@@ -5004,72 +5019,68 @@ def plot_unit_cell_in_lab(
     show_scattered_rays: bool = True,
     cell_color: str = FG,
     plane_colors: "str | list[str] | None" = None,
-    normal_color: str = COL_DB,
     beam_color: str = "red",
     elev: float = 0.0,
     azim: float = -90.0,
-    figsize: "tuple[float, float]" = (8, 8),
-    ax: "plt.Axes | None" = None,
+    figsize: "tuple[float, float]" = (14, 7),
     out_path: "str | None" = None,
 ):
     """
-    Like :func:`plot_unit_cell`, but rotates the crystal's unit cell (and
-    `hkl` plane(s)) into the lab frame via the orientation matrix `U`, and
-    adds the lab-frame furniture from :func:`plot_layer_scheme` -- incident
-    beam, x/y/z lab axes and each hkl's scattered-ray direction -- rendered
-    in 3-D instead of a 2-D XZ cross-section.
+    Two-panel 3-D view of a crystal's unit cell rotated into the lab frame
+    via the orientation matrix `U`.
+
+    Left panel: the real-space cell with `hkl` plane(s) cut through it, as
+    in :func:`plot_unit_cell`. Right panel: a scattering diagram -- one
+    incident beam and every plane's normal and elastically diffracted-ray
+    direction, all sharing a common origin and colour-coded to match their
+    plane in the left panel. Both panels share the same view angle (`elev`,
+    `azim`), so a plane's cut in the cell and its normal/ray direction in
+    the diagram can be read together for a given orientation.
 
     Lab frame convention (LaueTools / this project, matching
     `plot_layer_scheme`): x = incident beam direction, z = vertical up,
     y completes the right-handed frame. `v_lab = U @ v_crystal` for any
-    crystal-frame vector (cell edges, `crystal.Q(hkl)`, etc.) -- the same
-    convention used throughout `nrxrdct.laue.simulation`
-    (e.g. `layer.U @ layer.crystal.Q(h, k, l)`).
+    crystal-frame vector -- the same convention used throughout
+    `nrxrdct.laue.simulation` (e.g. `layer.U @ layer.crystal.Q(h, k, l)`).
 
-    The incident beam and every scattered ray are drawn touching the same
-    point: the centroid of the first `hkl` plane that was actually drawn
-    (the same point its normal arrow is anchored to), falling back to the
-    cell centroid if no plane intersects the cell.
+    The right-hand diagram is deliberately decoupled from the cell's Å
+    scale: every vector there is unit length, regardless of `camera` or
+    physical distance. A future version could rescale it into true
+    detector millimetres (reintroducing a to-scale detector) without
+    touching the cell panel, as long as both keep using the same `U` and
+    lab-frame axis convention.
 
     Each `hkl`'s elastically diffracted direction is found by solving the
-    Laue condition `|k0·x̂ + G_lab| = k0` (see `_bragg_kf_hat`) and drawn as
-    a ray of schematic length from the scattering point -- reflections with
-    no elastic solution for a beam along +x are skipped with a printed
-    note. Passing a `camera` adds the detail of *where it actually lands*:
-    each ray is projected with `camera.project` and drawn solid when it
-    hits the active detector area, dashed when it doesn't (annotated with
-    the pixel coordinate). No detector geometry is drawn -- the cell is
-    Å-sized and `camera.dd` is tens of millimetres, so a to-scale detector
-    would either vanish or swallow the cell.
+    Laue condition `|k0·x̂ + G_lab| = k0` (see `_bragg_kf_hat`); reflections
+    with no elastic solution for a beam along +x are skipped with a
+    printed note. Passing a `camera` adds a projected-pixel label at each
+    ray tip (via `camera.project`) without otherwise changing the diagram.
 
     Args:
         crystal: xrayutilities-compatible crystal object (see `plot_unit_cell`).
         U: `(3, 3)` orientation matrix rotating crystal-frame vectors into
             the lab frame.
         hkl: Miller indices of the plane(s) to draw (single tuple or list).
-        camera: Optional :class:`~nrxrdct.laue.camera.Camera`. When given,
-            scattered rays are drawn solid/dashed by whether they land on
-            the detector, and labelled with the projected pixel coordinate.
-        plane_offset, show_normal, plane_colors, normal_color: see
-            `plot_unit_cell`.
+        camera: Optional :class:`~nrxrdct.laue.camera.Camera`; when given,
+            each diffracted ray is labelled with its projected pixel.
+        plane_offset, plane_colors: see `plot_unit_cell`.
+        show_normal: Draw each plane's normal vector in the right panel.
         show_crystal_axes: Draw labelled `a`, `b`, `c` arrows (rotated into
-            the lab frame) from the cell origin.
-        show_lab_axes: Draw the fixed lab-frame x/y/z axes near the cell.
-        show_beam: Draw the incident-beam arrow travelling along +x, tip
-            touching the scattering point.
-        show_scattered_rays: Draw each hkl's diffracted-ray direction (works
-            with or without `camera`).
+            the lab frame) in the left (cell) panel.
+        show_lab_axes: Draw the fixed lab-frame x/y/z triad in both panels.
+        show_beam: Draw the single incident-beam arrow in the right panel.
+        show_scattered_rays: Draw each plane's diffracted-ray direction
+            (dashed, to distinguish it from the solid normal vectors) in
+            the right panel.
         cell_color, beam_color: Line colours.
-        elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
+        elev, azim: 3-D view angle (degrees), shared by both panels.
             Defaults to a view looking down +y (elev=0, azim=-90), so the
             beam (x) / up (z) plane is seen face-on.
-        figsize: Figure size in inches (only used when `ax is None`).
-        ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
-            (created with `projection='3d'`); `None` creates a new figure.
+        figsize: Figure size in inches.
         out_path: Save path; `None` → do not save.
 
     Returns:
-        `(fig, ax)`
+        `(fig, (ax_cell, ax_scatter))`
 
     Example:
     >>> U = euler_to_U(10, 20, 30)
@@ -5106,32 +5117,26 @@ def plot_unit_cell_in_lab(
         if np.sum(_CELL_CORNERS_FRAC[i] != _CELL_CORNERS_FRAC[j]) == 1
     ]
 
-    standalone = ax is None
-    if standalone:
-        fig = plt.figure(figsize=figsize)
-        fig.patch.set_facecolor(BG)
-        ax = fig.add_subplot(111, projection="3d")
-    else:
-        fig = ax.figure
-
-    ax.set_facecolor(BG)
+    fig = plt.figure(figsize=figsize)
     fig.patch.set_facecolor(BG)
-    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
-        pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
-        pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
-    ax.tick_params(colors="#7788aa", labelsize=7)
+    ax_cell = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_scat = fig.add_subplot(1, 2, 2, projection="3d")
+    for ax in (ax_cell, ax_scat):
+        ax.set_facecolor(BG)
+        for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+            pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+            pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+        ax.tick_params(colors="#7788aa", labelsize=7)
+        ax.view_init(elev=elev, azim=azim)   # shared view: same orientation reads on both panels
 
+    # ── Left panel: real-space cell + hkl plane(s) ─────────────────────────────
     for i, j in edges:
         p, q = cart_corners[i], cart_corners[j]
-        ax.plot(*zip(p, q), color=cell_color, lw=1.2, alpha=0.6)
-    ax.scatter(*cart_corners.T, color=cell_color, s=12, alpha=0.8)
+        ax_cell.plot(*zip(p, q), color=cell_color, lw=1.2, alpha=0.6)
+    ax_cell.scatter(*cart_corners.T, color=cell_color, s=12, alpha=0.8)
 
-    legend_handles = []
-    drew_any_normal = False
-    G_labs = []                 # one entry per hkl, aligned with hkls/colors
-    plane_centroids = []        # one entry per hkl (or None if plane wasn't drawn)
-    scatter_pt = None           # centroid of the first successfully-drawn plane
-    normal_arrow_len = 0.6 * min(np.linalg.norm(v) for v in ai)
+    cell_legend = []
+    G_labs = []   # one entry per hkl, aligned with hkls/colors
     for (h, k, l), user_offset, plane_color in zip(hkls, offsets, colors):
         G_lab = U @ crystal.Q(h, k, l)
         G_labs.append(G_lab)
@@ -5154,141 +5159,121 @@ def plot_unit_cell_in_lab(
                   f"cell for the offsets tried ({offsets_to_try}); pass "
                   f"plane_offset explicitly to pick a different member of "
                   f"the family.")
-            plane_centroids.append(None)
             continue
 
         cart_poly = np.array(frac_poly) @ ai
-        ax.add_collection3d(Poly3DCollection(
+        ax_cell.add_collection3d(Poly3DCollection(
             [cart_poly], facecolor=plane_color, edgecolor=plane_color,
             linewidths=1.2, alpha=0.35,
         ))
-        legend_handles.append(
+        cell_legend.append(
             Line2D([0], [0], color=plane_color, lw=2,
                    label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
         )
 
-        # Anchored at this plane's own centroid, and rotated by U along with
-        # everything else -- see plot_unit_cell for why the centroid (not
-        # the cell centroid) is the correct anchor. The first plane drawn
-        # also becomes the incident beam's scattering point below; each
-        # plane's own centroid anchors its own scattered ray.
-        plane_centroid = cart_poly.mean(axis=0)
-        plane_centroids.append(plane_centroid)
-        if scatter_pt is None:
-            scatter_pt = plane_centroid
-        if show_normal:
-            n_hat = G_lab / np.linalg.norm(G_lab)
-            ax.quiver(*plane_centroid, *(n_hat * normal_arrow_len),
-                       color=normal_color, linewidth=1.8, arrow_length_ratio=0.15)
-            drew_any_normal = True
-
-    if drew_any_normal:
-        legend_handles.append(
-            Line2D([0], [0], color=normal_color, lw=2, label="plane normal (Q_hkl)")
-        )
-
     if show_crystal_axes:
         for vec, label in zip(ai, ("a", "b", "c")):
-            ax.quiver(0, 0, 0, *vec, color=cell_color, linewidth=1.0,
-                      arrow_length_ratio=0.08, alpha=0.9)
-            ax.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
+            ax_cell.quiver(0, 0, 0, *vec, color=cell_color, linewidth=1.0,
+                            arrow_length_ratio=0.08, alpha=0.9)
+            ax_cell.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
 
-    if scatter_pt is None:
-        scatter_pt = cart_corners.mean(axis=0)
-
-    # ── Lab furniture: incident beam (+x), x/y/z axes, scattered rays ─────────
-    # Mirrors the beam arrow / axis triad drawn by plot_layer_scheme, just in
-    # 3-D and anchored relative to the (possibly tilted) cell's own extent.
     cell_span = np.ptp(cart_corners, axis=0)
-    scale = float(cell_span.max()) if cell_span.max() > 0 else 1.0
+    cell_scale = float(cell_span.max()) if cell_span.max() > 0 else 1.0
+    if show_lab_axes:
+        _draw_lab_axes_triad(
+            ax_cell, origin=cart_corners.min(axis=0) - 0.6 * cell_scale,
+            length=0.5 * cell_scale,
+        )
+
+    ax_cell.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax_cell.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax_cell.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
+    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
+    ax_cell.set_title(f"Unit cell in lab frame — {title}", color=FG, fontsize=10, pad=10)
+    try:
+        ax_cell.set_box_aspect(cell_span)
+    except AttributeError:
+        pass
+    if cell_legend:
+        ax_cell.legend(
+            handles=cell_legend, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    # ── Right panel: scattering diagram -- coincident origin, unit vectors ────
+    origin2 = np.zeros(3)
+    scat_legend = []
 
     if show_beam:
-        # Tip touches the scattering point -- the same anchor used for the
-        # plane normal(s) above -- rather than merely approaching the cell.
-        beam_tip = scatter_pt
-        beam_tail = beam_tip - np.array([0.8 * scale, 0.0, 0.0])
-        ax.quiver(*beam_tail, *(beam_tip - beam_tail), color=beam_color,
-                  linewidth=2.2, arrow_length_ratio=0.1)
-        ax.text(*beam_tail, "incident beam", color=beam_color, fontsize=8,
-                ha="left", va="bottom")
-        legend_handles.append(
+        beam_tail = origin2 - np.array([1.0, 0.0, 0.0])
+        ax_scat.quiver(*beam_tail, *(origin2 - beam_tail), color=beam_color,
+                       linewidth=2.2, arrow_length_ratio=0.15)
+        scat_legend.append(
             Line2D([0], [0], color=beam_color, lw=2, label="incident beam (+x)")
         )
 
-    if show_scattered_rays:
-        ray_length = 1.2 * scale
-        drew_any_ray = False
-        for (h, k, l), G_lab, plane_centroid, plane_color in zip(hkls, G_labs, plane_centroids, colors):
+    drew_any_normal = drew_any_ray = False
+    for (h, k, l), G_lab, plane_color in zip(hkls, G_labs, colors):
+        if show_normal:
+            n_hat = G_lab / np.linalg.norm(G_lab)
+            ax_scat.quiver(*origin2, *n_hat, color=plane_color, linewidth=1.8,
+                           arrow_length_ratio=0.15)
+            ax_scat.text(*(n_hat * 1.1), f"n({h}{k}{l})", color=plane_color, fontsize=7)
+            drew_any_normal = True
+
+        if show_scattered_rays:
             kf_hat = _bragg_kf_hat(G_lab)
             if kf_hat is None:
                 print(f"  Note: ({h}{k}{l}) is not excited for a beam along "
                       f"+x (G·x̂ ≥ 0) -- no elastic scattered ray to draw.")
                 continue
-            # Offset to this plane's own normal-vector origin, not the
-            # shared beam-scattering point, so each ray starts where its
-            # plane actually sits in the cell.
-            ray_start = plane_centroid if plane_centroid is not None else scatter_pt
-            ray_end = ray_start + kf_hat * ray_length
+            ax_scat.quiver(*origin2, *kf_hat, color=plane_color, linewidth=1.6,
+                           linestyle="--", arrow_length_ratio=0.15, alpha=0.9)
+            label = f"({h}{k}{l})"
             if camera is not None:
                 pix = camera.project(kf_hat, source_depth_mm=0.0)
-                linestyle = "-" if pix is not None else "--"
-                label = (f"({h}{k}{l}) → px({pix[0]:.0f}, {pix[1]:.0f})"
-                          if pix is not None else f"({h}{k}{l}) → off detector")
-            else:
-                linestyle = "-"
-                label = f"({h}{k}{l})"
-            ax.plot(*zip(ray_start, ray_end), color=plane_color, lw=1.4,
-                    linestyle=linestyle, alpha=0.85)
-            ax.text(*ray_end, label, color=plane_color, fontsize=7)
+                label += (f" → px({pix[0]:.0f}, {pix[1]:.0f})"
+                          if pix is not None else " → off detector")
+            ax_scat.text(*(kf_hat * 1.1), label, color=plane_color, fontsize=7)
             drew_any_ray = True
-        if drew_any_ray:
-            ray_legend_label = (
-                "scattered ray  (— on det.,  -- off det.)"
-                if camera is not None else "scattered ray"
-            )
-            legend_handles.append(
-                Line2D([0], [0], color=FG, lw=1.4, linestyle="-", label=ray_legend_label)
-            )
+
+    if drew_any_normal:
+        scat_legend.append(
+            Line2D([0], [0], color=FG, lw=1.8, linestyle="-", label="plane normal")
+        )
+    if drew_any_ray:
+        scat_legend.append(
+            Line2D([0], [0], color=FG, lw=1.6, linestyle="--", label="diffracted ray")
+        )
 
     if show_lab_axes:
-        origin = cart_corners.min(axis=0) - 0.6 * scale
-        ax_len = 0.5 * scale
-        for direction, color, label in (
-            (np.array([1.0, 0.0, 0.0]), "#4fc3f7", "x (beam)"),
-            (np.array([0.0, 1.0, 0.0]), "#88cc88", "y"),
-            (np.array([0.0, 0.0, 1.0]), "#ff9f43", "z (up)"),
-        ):
-            tip = origin + ax_len * direction
-            ax.quiver(*origin, *(tip - origin), color=color, linewidth=2.0,
-                      arrow_length_ratio=0.2)
-            ax.text(*(tip + 0.1 * ax_len * direction), label, color=color,
-                    fontsize=9, fontweight="bold")
+        _draw_lab_axes_triad(ax_scat, origin=np.array([-1.3, -1.3, -1.3]), length=0.5)
 
-    ax.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
-    ax.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
-    ax.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
-    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
-    ax.set_title(f"Unit cell in lab frame — {title}", color=FG, fontsize=10, pad=10)
-    ax.view_init(elev=elev, azim=azim)
+    lim = 1.4
+    ax_scat.set_xlim(-lim, lim)
+    ax_scat.set_ylim(-lim, lim)
+    ax_scat.set_zlim(-lim, lim)
     try:
-        ax.set_box_aspect(cell_span)
+        ax_scat.set_box_aspect((1, 1, 1))
     except AttributeError:
         pass
-
-    if legend_handles:
-        ax.legend(
-            handles=legend_handles, fontsize=7, labelcolor=FG,
+    ax_scat.set_xlabel("x", color=FG, fontsize=8, labelpad=8)
+    ax_scat.set_ylabel("y", color=FG, fontsize=8, labelpad=8)
+    ax_scat.set_zlabel("z", color=FG, fontsize=8, labelpad=8)
+    ax_scat.set_title("Scattering diagram (unit vectors)", color=FG, fontsize=10, pad=10)
+    if scat_legend:
+        ax_scat.legend(
+            handles=scat_legend, fontsize=7, labelcolor=FG,
             facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
         )
 
-    if standalone:
-        fig.tight_layout()
+    fig.tight_layout()
 
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
-    return fig, ax
+    return fig, (ax_cell, ax_scat)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

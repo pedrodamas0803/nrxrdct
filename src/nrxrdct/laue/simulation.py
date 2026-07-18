@@ -4265,6 +4265,243 @@ def simulate_spot_image(
     }
 
 
+def simulate_full_detector_image(
+    stack,
+    camera,
+    *,
+    bin_px=8,
+    n_energy=101,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    darwin=False,
+    exclude_layers=None,
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
+    n_div=5,
+    verbose=True,
+):
+    """
+    Forward-simulate an entire detector frame **without** any hkl
+    enumeration — the pixel-space sibling of :func:`simulate_spot_image`,
+    generalised from "one already-indexed reflection" to "every pixel".
+
+    For every (binned) pixel, the elastic condition makes `Q` a direct
+    function of energy at that pixel's own `kf_hat` (from
+    `Camera.pixel_to_kf`, exact, no reconstruction/anchoring needed here —
+    unlike `simulate_spot_image`, there is no independently-known "true" `Q`
+    to anchor against; every pixel's `Q(E)` is simply computed fresh):
+
+    $$
+    Q(E) = k(E)\\,(\\hat k_f - \\hat k_i), \\qquad k(E) = 2\\pi E / hc
+    $$
+
+    The structure factor is evaluated across the full `[E_min_eV,
+    E_max_eV]` white-beam window at each pixel and integrated
+    (trapezoidal) to give that pixel's total simulated intensity — no
+    candidate `hkl` list, no `f2_thresh`, no satellite-order bookkeeping.
+    Real Bragg peaks and satellite streaks appear automatically wherever
+    `Q(pixel, E)` happens to pass near a reciprocal-lattice feature for
+    some energy in the window.
+
+    Args:
+        stack : LayeredCrystal
+            The layered structure.
+        camera : Camera
+            Detector geometry — required (there is no meaningful "off
+            detector" fallback for a whole-frame simulation).
+        bin_px : int, optional
+            Downsampling factor: the image is computed on a grid of
+            `camera.Nh // bin_px` × `camera.Nv // bin_px` block centres,
+            not the full native resolution.  A full-resolution sweep is
+            usually not worth the cost (see Note) — start coarse
+            (`bin_px=8`–`16`) and refine only the region of interest, e.g.
+            with :func:`simulate_spot_image` once you've spotted something.
+        n_energy : int, optional
+            Uniform energy samples per pixel across the *entire*
+            `[E_min_eV, E_max_eV]` window.  There is no `pin_satellites`
+            here (nothing to pin without a known reflection) — see Note.
+        E_min_eV, E_max_eV : float, optional
+            White-beam energy window (eV).
+        source, source_kwargs, kb_params : optional
+            Synchrotron spectrum model, forwarded to `_make_spectrum_fn`.
+        ki_hat : array-like (3,) or None, optional
+            Incident beam direction (LT frame).  Default `KI_HAT`.
+        structure_model : {'coherent', 'average'}, optional
+            Forwarded to `LayeredCrystal.structure_factor_batch` /
+            `average_structure_factor_batch` (or `_darwin_amp_batch` when
+            `darwin=True`) — same meaning as in `qspace_around_spot` /
+            `simulate_spot_image`.
+        darwin : bool, optional
+            `False` (default) evaluates the kinematical structure factor;
+            `True` evaluates the Darwin (dynamical, extinction-saturated)
+            amplitude instead.
+        exclude_layers : list[str] or None, optional
+            Buffer-layer labels to drop from the coherent sum entirely —
+            the whole-frame analogue of `simulate_spot_image`'s
+            `isolate_layer` list form.  Use this for a deep growth
+            substrate: its cross-term phase (`exp(i·Qn·z0)` with `z0` up to
+            hundreds of thousands of Å) is numerically unresolvable at any
+            realistic `bin_px`/`n_energy`, the same issue documented on
+            `simulate_spot_image`.  `None` (default) keeps every layer.
+        sigma_h_mrad, sigma_v_mrad, n_div : optional
+            Incident-beam angular divergence — same meaning and defaults
+            (`0.0`, off) as `simulate_spot_image`.
+        verbose : bool, optional
+            Print progress (one line per row-chunk) and a final summary.
+
+    Returns:
+    dict with keys:
+
+        `'I'` : ndarray, shape `(n_pix_v, n_pix_h)` — total simulated
+            intensity per binned pixel.
+        `'x0'`, `'y0'` : ndarray, 1-D pixel-centre coordinate arrays
+            (native detector pixels) matching `I`'s columns/rows.
+        `'bin_px'` : the downsampling factor used.
+
+    Note:
+    * **Cost.** `(n_pix_h // bin_px) × (n_pix_v // bin_px) × n_energy`
+      structure-factor evaluations, batched but still substantial for a
+      full frame — e.g. `bin_px=8` on a 2048×2162 detector with
+      `n_energy=101` is ≈2.6×10⁷ evaluations.  There is no equivalent of
+      `pin_satellites` (no known reflection to derive an exact peak energy
+      from), so real Bragg peaks narrower than the `n_energy` step at a
+      given pixel can be aliased away entirely — this function is an
+      overview/screening tool, not a substitute for
+      :func:`simulate_spot_image` once you know where to look.
+    * Every voxel's position is exact geometry (no anchoring
+      approximation, unlike `simulate_spot_image` — see the docstring
+      intro above for why none is needed here); only the *intra-window*
+      energy sampling is approximate.
+    * A deep buffer/substrate layer makes the coherent structure factor an
+      extremely narrow function of `Q` — see `exclude_layers` — this is
+      the same numerical reality documented at length on
+      `simulate_spot_image`, not a separate issue.
+
+    Example:
+    >>> img = simulate_full_detector_image(stack, cam, bin_px=8, exclude_layers=['Sapphire'])
+    >>> plt.imshow(np.log1p(img['I']), extent=[img['x0'][0], img['x0'][-1], img['y0'][-1], img['y0'][0]])
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if structure_model not in ("coherent", "average"):
+        raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
+
+    stack._update_offsets()
+    if exclude_layers:
+        from .layers import LayeredCrystal as _LayeredCrystal
+        from .layers import _RepeatBlock as _RepeatBlockCls
+        exclude_labels = set(exclude_layers)
+        missing = exclude_labels - {ly.label for ly in stack.buffer_layers}
+        if missing:
+            raise ValueError(
+                f"exclude_layers has labels not found in stack.buffer_layers: {missing}"
+            )
+        eval_stack = _LayeredCrystal(name="_reduced", stacking_direction=stack.n_hat)
+        for ly in stack.buffer_layers:
+            if ly.label not in exclude_labels:
+                eval_stack.buffer_layers.append(ly)
+        for blk in stack._blocks:
+            new_blk = _RepeatBlockCls()
+            new_blk.layers = list(blk.layers)
+            new_blk.n_rep = blk.n_rep
+            new_blk._closed = True
+            eval_stack._blocks.append(new_blk)
+        eval_stack._update_offsets()
+    else:
+        eval_stack = stack
+
+    xs = np.arange(bin_px // 2, camera.Nh, bin_px, dtype=float)
+    ys = np.arange(bin_px // 2, camera.Nv, bin_px, dtype=float)
+    XX, YY = np.meshgrid(xs, ys)
+    shape = XX.shape
+    kf_hat = camera.pixel_to_kf(XX.ravel(), YY.ravel())
+    n_pix = kf_hat.shape[0]
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+    spectrum = _make_spectrum_fn(source, source_kwargs or {}, kb_params)
+
+    if sigma_h_mrad <= 0.0 and sigma_v_mrad <= 0.0:
+        ki_pert_arr = ki[None, :]
+        div_weights = np.array([1.0])
+    else:
+        z_hat = np.array([0.0, 0.0, 1.0])
+        cross_zk = np.cross(z_hat, ki)
+        e_h = cross_zk / np.linalg.norm(cross_zk) if np.linalg.norm(cross_zk) > 1e-6 else np.array([0.0, 1.0, 0.0])
+        e_v = np.cross(ki, e_h)
+        e_v /= np.linalg.norm(e_v)
+        sigma_h = sigma_h_mrad * 1e-3
+        sigma_v = sigma_v_mrad * 1e-3
+        dh_vals = np.linspace(-2.5, 2.5, n_div) * sigma_h if sigma_h > 0 else np.zeros(1)
+        dv_vals = np.linspace(-2.5, 2.5, n_div) * sigma_v if sigma_v > 0 else np.zeros(1)
+        DH, DV = np.meshgrid(dh_vals, dv_vals, indexing="ij")
+        DH, DV = DH.reshape(-1), DV.reshape(-1)
+        ki_pert_arr = ki[None, :] + DH[:, None] * e_h[None, :] + DV[:, None] * e_v[None, :]
+        ki_pert_arr /= np.linalg.norm(ki_pert_arr, axis=1, keepdims=True)
+        wh = np.exp(-0.5 * (DH / sigma_h) ** 2) if sigma_h > 0 else np.ones_like(DH)
+        wv = np.exp(-0.5 * (DV / sigma_v) ** 2) if sigma_v > 0 else np.ones_like(DV)
+        div_weights = wh * wv
+        div_weights = div_weights / div_weights.sum()
+    n_div_actual = len(div_weights)
+
+    E_samples = np.linspace(E_min_eV, E_max_eV, n_energy)
+    n_e = len(E_samples)
+    lam_samples = en2lam(E_samples)
+    k_samples = 2.0 * np.pi / lam_samples
+    E_flat = np.tile(E_samples, n_pix)
+    kf_flat = np.repeat(kf_hat, n_e, axis=0)
+    tth_flat = np.degrees(np.arccos(np.clip(kf_flat[:, 0], -1.0, 1.0)))
+    chi_flat = np.degrees(np.arctan2(kf_flat[:, 1], kf_flat[:, 2] + 1e-17))
+    LP_flat = _lorentz_pol_vec(tth_flat, E_flat, chi_flat)
+    sw_flat = spectrum(E_flat)
+
+    I_total = np.zeros(n_pix)
+    for d in range(n_div_actual):
+        ki_d = ki_pert_arr[d]
+        diff_d = kf_hat - ki_d[None, :]
+        Q_all = k_samples[None, :, None] * diff_d[:, None, :]
+        Q_flat = Q_all.reshape(-1, 3)
+
+        if darwin:
+            lam_flat = en2lam(E_flat)
+            F_arr, _, _ = _darwin_amp_batch(
+                eval_stack, ki_d, structure_model, Q_flat, E_flat, lam_flat, tth_flat,
+                kf_hat_arr=kf_flat, n_bins=_STRUCTURE_FACTOR_ENERGY_BINS,
+            )
+        else:
+            batch_fn = (
+                eval_stack.average_structure_factor_batch
+                if structure_model == "average"
+                else eval_stack.structure_factor_batch
+            )
+            F_arr = batch_fn(Q_flat, float(np.median(E_samples)), kf_hat_arr=kf_flat)
+
+        F2_flat = np.abs(F_arr) ** 2
+        I_flat = (F2_flat * LP_flat * sw_flat).reshape(n_pix, n_e)
+        I_total += div_weights[d] * np.trapz(I_flat, x=E_samples, axis=1)
+
+        if verbose:
+            print(f"  simulate_full_detector_image: divergence sample {d + 1}/{n_div_actual} done")
+
+    if verbose:
+        print(
+            f"  simulate_full_detector_image: grid={shape[1]}x{shape[0]} "
+            f"(bin_px={bin_px})  n_energy={n_energy}  I_max={I_total.max():.3e}"
+        )
+
+    return {
+        "I": I_total.reshape(shape),
+        "x0": xs,
+        "y0": ys,
+        "bin_px": bin_px,
+    }
+
+
 def project_to_detector(vol_or_vols, *, pad_px=20, camera=None,
                         exclude_bragg_along=None):
     """

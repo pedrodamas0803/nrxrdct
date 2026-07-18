@@ -68,6 +68,7 @@ from .laue_plotting import (
     plot_segmentation,
     plot_strain_broadening,
     plot_tth_chi_overlay,
+    plot_unit_cell,
     warp_image_to_tth_chi,
 )
 from .layers import (
@@ -144,6 +145,7 @@ from .simulation import (
     qspace_per_layer,
     project_to_detector,
     simulate_spot_image,
+    simulate_full_detector_image,
     simulate_laue,
     simulate_laue_darwin,
     simulate_laue_stack,
@@ -223,6 +225,7 @@ __all__ = [
     "qspace_per_layer",
     "project_to_detector",
     "simulate_spot_image",
+    "simulate_full_detector_image",
     # Layered structures
     "Layer",
     "LayeredCrystal",
@@ -304,6 +307,7 @@ __all__ = [
     "plot_segmentation",
     "plot_strain_broadening",
     "plot_tth_chi_overlay",
+    "plot_unit_cell",
     "warp_image_to_tth_chi",
     # Segmentation
     "auto_init_gaussian_mixture_global",

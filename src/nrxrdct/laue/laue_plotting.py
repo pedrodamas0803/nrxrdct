@@ -4703,6 +4703,233 @@ def plot_depth_elongation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 3D UNIT CELL + HKL PLANE
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CELL_CORNERS_FRAC = np.array([
+    [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+    [1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1],
+], dtype=float)
+
+
+def _clip_polygon_axis(poly, axis, bound, keep_min):
+    """Sutherland-Hodgman clip of a planar polygon against one axis-aligned
+    half-space (`coord >= bound` if `keep_min` else `coord <= bound`)."""
+    if len(poly) == 0:
+        return poly
+    out = []
+    n = len(poly)
+    for i in range(n):
+        curr, prev = poly[i], poly[i - 1]
+        curr_in = (curr[axis] >= bound) if keep_min else (curr[axis] <= bound)
+        prev_in = (prev[axis] >= bound) if keep_min else (prev[axis] <= bound)
+        if curr_in != prev_in:
+            t = (bound - prev[axis]) / (curr[axis] - prev[axis])
+            out.append(prev + t * (curr - prev))
+        if curr_in:
+            out.append(curr)
+    return out
+
+
+def _hkl_plane_fractional(h, k, l, m):
+    """Intersection polygon (fractional coords) of the plane h·u+k·v+l·w=m
+    with the unit cell cube [0,1]³, as a list of ordered vertices."""
+    n = np.array([h, k, l], dtype=float)
+    if h != 0:
+        p0 = np.array([m / h, 0.0, 0.0])
+    elif k != 0:
+        p0 = np.array([0.0, m / k, 0.0])
+    else:
+        p0 = np.array([0.0, 0.0, m / l])
+
+    tmp = np.array([1.0, 0.0, 0.0])
+    if abs(np.dot(n, tmp)) > 0.9 * np.linalg.norm(n):
+        tmp = np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(n, tmp)
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(n, e1)
+    e2 /= np.linalg.norm(e2)
+
+    big = 5.0  # spans well beyond the unit cube before clipping
+    poly = [p0 + big * e1 + big * e2, p0 - big * e1 + big * e2,
+            p0 - big * e1 - big * e2, p0 + big * e1 - big * e2]
+    for axis in range(3):
+        poly = _clip_polygon_axis(poly, axis, 0.0, keep_min=True)
+        poly = _clip_polygon_axis(poly, axis, 1.0, keep_min=False)
+    return poly
+
+
+def plot_unit_cell(
+    crystal,
+    hkl: "tuple[int, int, int]" = (1, 1, 1),
+    *,
+    plane_offset: "int | None" = None,
+    show_normal: bool = True,
+    show_axes_arrows: bool = True,
+    cell_color: str = FG,
+    plane_color: str = COL_SUP,
+    normal_color: str = COL_DB,
+    elev: float = 20.0,
+    azim: float = -50.0,
+    figsize: "tuple[float, float]" = (7, 7),
+    ax: "plt.Axes | None" = None,
+    out_path: "str | None" = None,
+):
+    """
+    Draw the full (conventional, non-reduced) unit cell of *crystal* in 3-D
+    and overlay one representative plane of the `hkl` family for
+    visualization.
+
+    The cell is the parallelepiped spanned by `crystal.a1`, `crystal.a2`,
+    `crystal.a3` (the real-space lattice vectors exactly as built by
+    `xrayutilities.materials.SGLattice`/`Crystal` — no Niggli/Delaunay
+    reduction is applied, matching what CIF or `build_bcc`/`build_b2` etc.
+    hand back). The `(hkl)` plane is found as the intersection of
+    `h·u + k·v + l·w = m` (fractional coordinates `u,v,w`, the textbook
+    Miller-index construction) with the unit cell cube, then mapped back to
+    Cartesian space through `crystal.a1/a2/a3`. `m` (the plane's distance
+    from the origin, in lattice-plane units) defaults to whichever of ±1
+    actually intersects the cell interior, so both all-positive and
+    mixed-sign index families render a sensible cross-section.
+
+    Args:
+        crystal: An *xrayutilities*-compatible crystal object exposing
+            `.a1 .a2 .a3` (Cartesian real-space cell vectors, Å),
+            `.Q(h, k, l)` (reciprocal-lattice vector) and
+            `.planeDistance(h, k, l)` (d-spacing).
+        hkl: Miller indices of the plane to draw.
+        plane_offset: Override the automatic choice of `m` above (e.g. `2`
+            to draw the second plane of the family instead of the first).
+        show_normal: Draw an arrow along `crystal.Q(hkl)` (the plane
+            normal) from the cell centroid.
+        show_axes_arrows: Draw labelled `a`, `b`, `c` arrows from the
+            origin.
+        cell_color, plane_color, normal_color: Line/fill colours.
+        elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
+        figsize: Figure size in inches (only used when `ax is None`).
+        ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
+            (created with `projection='3d'`); `None` creates a new figure.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, ax)`
+
+    Example:
+    >>> crystal = crystal_from_cif("Al2O3.cif")
+    >>> plot_unit_cell(crystal, hkl=(1, 0, 4), out_path="al2o3_104.png")
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    h, k, l = (int(x) for x in hkl)
+    if h == 0 and k == 0 and l == 0:
+        raise ValueError("hkl=(0, 0, 0) does not define a plane")
+
+    ai = np.array([crystal.a1, crystal.a2, crystal.a3], dtype=float)
+    cart_corners = _CELL_CORNERS_FRAC @ ai
+    edges = [
+        (i, j)
+        for i in range(8)
+        for j in range(i + 1, 8)
+        if np.sum(_CELL_CORNERS_FRAC[i] != _CELL_CORNERS_FRAC[j]) == 1
+    ]
+
+    if plane_offset is not None:
+        offsets_to_try = [plane_offset]
+    else:
+        f_max = max(h, 0) + max(k, 0) + max(l, 0)
+        offsets_to_try = [1, -1] if f_max >= 1 else [-1, 1]
+
+    frac_poly = []
+    for m in offsets_to_try:
+        frac_poly = _hkl_plane_fractional(h, k, l, m)
+        if len(frac_poly) >= 3:
+            break
+    cart_poly = np.array(frac_poly) @ ai if len(frac_poly) >= 3 else None
+
+    standalone = ax is None
+    if standalone:
+        fig = plt.figure(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+        ax = fig.add_subplot(111, projection="3d")
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    fig.patch.set_facecolor(BG)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+        pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+
+    for i, j in edges:
+        p, q = cart_corners[i], cart_corners[j]
+        ax.plot(*zip(p, q), color=cell_color, lw=1.2, alpha=0.6)
+    ax.scatter(*cart_corners.T, color=cell_color, s=12, alpha=0.8)
+
+    legend_handles = []
+    if cart_poly is not None:
+        ax.add_collection3d(Poly3DCollection(
+            [cart_poly], facecolor=plane_color, edgecolor=plane_color,
+            linewidths=1.2, alpha=0.35,
+        ))
+        legend_handles.append(
+            Line2D([0], [0], color=plane_color, lw=2,
+                   label=f"({h}{k}{l}) plane")
+        )
+    else:
+        print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit cell "
+              f"for the offsets tried ({offsets_to_try}); pass plane_offset "
+              f"explicitly to pick a different member of the family.")
+
+    centroid = cart_corners.mean(axis=0)
+    if show_normal:
+        n_hat = crystal.Q(h, k, l)
+        n_hat = n_hat / np.linalg.norm(n_hat)
+        arrow_len = 0.6 * np.linalg.norm(ai[0])
+        ax.quiver(*centroid, *(n_hat * arrow_len), color=normal_color,
+                   linewidth=1.8, arrow_length_ratio=0.15)
+        legend_handles.append(
+            Line2D([0], [0], color=normal_color, lw=2, label="plane normal (Q_hkl)")
+        )
+
+    if show_axes_arrows:
+        for vec, label in zip(ai, ("a", "b", "c")):
+            ax.quiver(0, 0, 0, *vec, color=cell_color, linewidth=1.0,
+                      arrow_length_ratio=0.08, alpha=0.9)
+            ax.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
+
+    d_hkl = crystal.planeDistance(h, k, l)
+    ax.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax.set_title(
+        f"Unit cell — ({h}{k}{l}) plane, d = {d_hkl:.4f} Å",
+        color=FG, fontsize=10, pad=10,
+    )
+    ax.view_init(elev=elev, azim=azim)
+    try:
+        ax.set_box_aspect(np.ptp(cart_corners, axis=0))
+    except AttributeError:
+        pass
+
+    if legend_handles:
+        ax.legend(
+            handles=legend_handles, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 3D Q-SPACE RECONSTRUCTION AROUND A SPOT
 # ─────────────────────────────────────────────────────────────────────────────
 

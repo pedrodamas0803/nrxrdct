@@ -5129,6 +5129,7 @@ def plot_unit_cell_in_lab(
     legend_handles = []
     drew_any_normal = False
     G_labs = []                 # one entry per hkl, aligned with hkls/colors
+    plane_centroids = []        # one entry per hkl (or None if plane wasn't drawn)
     scatter_pt = None           # centroid of the first successfully-drawn plane
     normal_arrow_len = 0.6 * min(np.linalg.norm(v) for v in ai)
     for (h, k, l), user_offset, plane_color in zip(hkls, offsets, colors):
@@ -5153,6 +5154,7 @@ def plot_unit_cell_in_lab(
                   f"cell for the offsets tried ({offsets_to_try}); pass "
                   f"plane_offset explicitly to pick a different member of "
                   f"the family.")
+            plane_centroids.append(None)
             continue
 
         cart_poly = np.array(frac_poly) @ ai
@@ -5168,8 +5170,10 @@ def plot_unit_cell_in_lab(
         # Anchored at this plane's own centroid, and rotated by U along with
         # everything else -- see plot_unit_cell for why the centroid (not
         # the cell centroid) is the correct anchor. The first plane drawn
-        # also becomes the common scattering point for the beam/rays below.
+        # also becomes the incident beam's scattering point below; each
+        # plane's own centroid anchors its own scattered ray.
         plane_centroid = cart_poly.mean(axis=0)
+        plane_centroids.append(plane_centroid)
         if scatter_pt is None:
             scatter_pt = plane_centroid
         if show_normal:
@@ -5214,13 +5218,17 @@ def plot_unit_cell_in_lab(
     if show_scattered_rays:
         ray_length = 1.2 * scale
         drew_any_ray = False
-        for (h, k, l), G_lab, plane_color in zip(hkls, G_labs, colors):
+        for (h, k, l), G_lab, plane_centroid, plane_color in zip(hkls, G_labs, plane_centroids, colors):
             kf_hat = _bragg_kf_hat(G_lab)
             if kf_hat is None:
                 print(f"  Note: ({h}{k}{l}) is not excited for a beam along "
                       f"+x (G·x̂ ≥ 0) -- no elastic scattered ray to draw.")
                 continue
-            ray_end = scatter_pt + kf_hat * ray_length
+            # Offset to this plane's own normal-vector origin, not the
+            # shared beam-scattering point, so each ray starts where its
+            # plane actually sits in the cell.
+            ray_start = plane_centroid if plane_centroid is not None else scatter_pt
+            ray_end = ray_start + kf_hat * ray_length
             if camera is not None:
                 pix = camera.project(kf_hat, source_depth_mm=0.0)
                 linestyle = "-" if pix is not None else "--"
@@ -5229,7 +5237,7 @@ def plot_unit_cell_in_lab(
             else:
                 linestyle = "-"
                 label = f"({h}{k}{l})"
-            ax.plot(*zip(scatter_pt, ray_end), color=plane_color, lw=1.4,
+            ax.plot(*zip(ray_start, ray_end), color=plane_color, lw=1.4,
                     linestyle=linestyle, alpha=0.85)
             ax.text(*ray_end, label, color=plane_color, fontsize=7)
             drew_any_ray = True

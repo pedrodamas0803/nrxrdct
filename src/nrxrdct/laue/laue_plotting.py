@@ -6966,21 +6966,25 @@ def plot_rod_tangency(
 ):
     """
     Show a reflection's superlattice-rod orientation relative to the
-    detector — the streak elongation direction (orange) and the direction
-    that confines its width (blue), computed by
-    :func:`~nrxrdct.laue.simulation.rod_tangency`.
+    detector — the streak elongation direction (orange, `d(pixel)/d(along)`
+    from :func:`~nrxrdct.laue.simulation.rod_tangency`) with a perpendicular
+    reference line (blue, a display axis only — the streak's *width* comes
+    from off-rod structure-factor decay, not something derived here).
 
-    A long orange line roughly the size of the crop means this reflection
-    sits near a tangency condition and will produce an elongated streak
-    (see `simulate_spot_image`'s discussion of this); a short one next to
-    a comparably-sized blue one means the reflection is a better candidate
-    for a compact-spot comparison.
+    The orange line's length is fixed (`arrow_length_px`, for legibility);
+    what to actually compare across candidate `hkl` is `info['dpix_dalong']`
+    (also shown in the title) — large means a given accessible `Qn` range
+    maps to a long streak on the detector, small means the rod stays
+    compact even over several satellite orders.  Overlay this on a
+    measured/simulated `image` to see whether the orange line's direction
+    tracks a real elongated feature.
 
     Args:
         stack, hkl, layer, camera, ki_hat: Forwarded to
             :func:`~nrxrdct.laue.simulation.rod_tangency`.
         arrow_length_px (float): Half-length of the streak-direction line
-            (pixels); the perpendicular indicator is drawn at 1/3 of this.
+            (pixels); the perpendicular reference line is drawn at 1/3 of
+            this.
         image (ndarray, shape (Nv, Nh), optional): Measured or simulated
             detector frame to show cropped behind the arrows, for context.
             `None` (default) shows a plain dark background.
@@ -7029,13 +7033,13 @@ def plot_rod_tangency(
         [px0 - arrow_length_px * streak[0], px0 + arrow_length_px * streak[0]],
         [py0 - arrow_length_px * streak[1], py0 + arrow_length_px * streak[1]],
         "-", color=COL_SUP, lw=2.5, solid_capstyle="round",
-        label="streak direction (least energy-sensitive)",
+        label="streak direction (d(pixel)/d(along))",
     )
     ax.plot(
         [px0 - perp_len * perp[0], px0 + perp_len * perp[0]],
         [py0 - perp_len * perp[1], py0 + perp_len * perp[1]],
-        "-", color=COL_BCC, lw=2.5, solid_capstyle="round",
-        label="confining direction (most energy-sensitive)",
+        "--", color=COL_BCC, lw=1.5, solid_capstyle="round",
+        label="perpendicular (reference axis only)",
     )
     ax.plot(px0, py0, "+", color=FG, ms=10, mew=1.2, zorder=5)
 
@@ -7048,7 +7052,7 @@ def plot_rod_tangency(
 
     title = (
         f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV\n"
-        f"|dQn/dpix|_perp = {info['dQn_dpix_perp']:.2e} Å⁻¹/px"
+        f"|d(pixel)/d(along)| = {info['dpix_dalong']:.2e} px/Å⁻¹"
     )
     ax.set_title(title, color=FG, fontsize=9, pad=6)
     fig.tight_layout()

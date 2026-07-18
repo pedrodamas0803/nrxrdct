@@ -3608,28 +3608,31 @@ def qspace_multi_hkl(
     return vols
 
 
-def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, h_step_px=1.0):
+def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e-4):
     """
-    Local pixel-space direction along which a reflection's superlattice rod
-    stays tangent to the Ewald sphere — the geometric root cause of the
-    elongated satellite streaks discussed at length around
-    :func:`simulate_spot_image` (near-tangency ⇒ a tiny energy shift
-    compensates a large pixel displacement ⇒ a long, narrow streak; far
-    from tangency ⇒ a compact spot).  Pure geometry, no simulation — a fast
-    screening check across candidate `hkl` before committing to
-    :func:`qspace_around_spot` / :func:`simulate_spot_image`.
+    Local pixel-space direction a reflection's superlattice rod traces out
+    on the detector — the geometric root cause of the elongated satellite
+    streaks discussed at length around :func:`simulate_spot_image` (a rod
+    that maps to a large pixel displacement per unit `Qn` produces a long,
+    thin streak; one that barely moves the pixel produces a compact spot).
+    Pure geometry, no simulation — a fast screening check across candidate
+    `hkl` before committing to :func:`qspace_around_spot` /
+    :func:`simulate_spot_image`.
 
-    For the reflection's own nominal pixel `pix0` (from the exact elastic
-    condition at `G0 = layer.U @ layer.crystal.Q(h,k,l)`), the local
-    gradient `(∂Qn/∂px, ∂Qn/∂py)` is estimated by finite differences on
-    `Camera.pixel_to_kf` at fixed energy `E0` (`Qn = Q·layer.n_hat`, the
-    rod's own projection — the same quantity `qspace_around_spot`'s
-    `S_rep` term depends on).  The **streak direction** is perpendicular to
-    this gradient (the iso-`Qn` contour — moving along it needs the least
-    energy compensation to stay on the elastic condition, so it's the
-    direction a fixed-width energy band traces out the furthest); the
-    **perpendicular direction** is the gradient itself (where `Qn` changes
-    fastest, confining the streak's width).
+    **This must match `qspace_around_spot`'s own construction, not a
+    fixed-energy pixel gradient.** The rod is the set of points
+    `Q(t) = G0 + t·n_hat`; at *each* `t` the elastic condition is solved
+    fresh for its own `(E(t), kf_hat(t))` — energy and pixel co-vary along
+    the rod, they are not independent.  (An earlier version of this
+    function computed `∂Qn/∂pixel` at *fixed* energy instead — the iso-`Qn`
+    contour for a beam that can't change energy — which is a different,
+    unrelated direction; it was wrong and gave angles that didn't match the
+    actual simulated rod.)  This function instead takes two small steps
+    `±d_along` along `n_hat`, solves the exact elastic condition at each
+    (same formula as `qspace_around_spot`), projects both to pixels via
+    `camera.project_batch`, and reports the resulting direction — i.e. a
+    two-point finite-difference estimate of `d(pixel)/d(along)` evaluated
+    at `t=0`.
 
     Args:
         stack : LayeredCrystal
@@ -3643,8 +3646,12 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, h_step_px=
             gradient without one).
         ki_hat : array-like (3,) or None, optional
             Incident beam direction (LT frame).  Default `KI_HAT`.
-        h_step_px : float, optional
-            Finite-difference step (pixels) for the gradient estimate.
+        d_along : float, optional
+            Finite-difference step (Å⁻¹) along `n_hat`.  Small relative to
+            a typical satellite fringe spacing (`2π/Λ`, usually
+            `0.01`-`0.1` Å⁻¹) so the estimate is local; the default
+            `1e-4` is safely small for that range without hitting
+            floating-point noise.
 
     Returns:
     dict with keys:
@@ -3653,19 +3660,25 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, h_step_px=
         `'pix0'` : `(x, y)` — the reflection's nominal pixel.
         `'E0'` : float — nominal energy (eV).
         `'streak_dir_px'` : ndarray (2,) — unit vector in `(xcam, ycam)`,
-            the streak's elongation direction.
-        `'perp_dir_px'` : ndarray (2,) — unit vector perpendicular to it.
-        `'dQn_dpix_perp'` : float (Å⁻¹/px) — how fast `Qn` changes moving
-            across the streak (the confining gradient's magnitude).  Small
-            values mean the feature isn't confined in *either* direction at
-            this pixel scale (rare — usually indicates a reflection with no
-            reachable rod nearby); compare this number across candidate
-            `hkl` rather than reading it in isolation.
+            the streak's elongation direction (`d(pixel)/d(along)`,
+            normalised).
+        `'perp_dir_px'` : ndarray (2,) — unit vector perpendicular to it
+            (a display convenience — the streak's *width* is governed by
+            the off-rod structure-factor/transverse decay, not derived
+            here).
+        `'dpix_dalong'` : float (px / Å⁻¹) — magnitude of `d(pixel)/d(along)`.
+            Large values mean a given accessible `Qn` range (bounded by the
+            fringe-order envelope decay — see `simulate_spot_image`'s
+            `I_satellites`) maps to a long streak in pixels; small values
+            mean the rod is compact on the detector even over many orders.
+            Multiply by an expected `Qn` range to estimate streak length in
+            pixels; compare across candidate `hkl` rather than reading it
+            in isolation.
         `'on_detector'` : bool — whether `pix0` actually lands on `camera`.
 
     Example:
     >>> info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam)
-    >>> print(info['streak_dir_px'])   # e.g. [0.68, 0.73] -> ~47° from horizontal
+    >>> print(info['streak_dir_px'])   # e.g. [0.71, 0.70] -> ~45° from horizontal
     """
     if type(stack).__name__ != "LayeredCrystal":
         raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
@@ -3691,43 +3704,52 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, h_step_px=
     ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
     ki = ki / np.linalg.norm(ki)
 
-    kdG = float(G0 @ ki)
-    Gm2 = float(G0 @ G0)
-    if kdG >= 0:
+    def _solve(Q):
+        """Exact elastic condition at Q -- same formula as qspace_around_spot."""
+        kdG = float(Q @ ki)
+        Gm2 = float(Q @ Q)
+        if kdG >= 0:
+            return None
+        lam = -4.0 * np.pi * kdG / Gm2
+        E = HC / lam
+        km = 2.0 * np.pi / lam
+        kf = ki * km + Q
+        kf /= np.linalg.norm(kf)
+        pix, on_det = camera.project_batch(kf[None, :])
+        return float(E), pix[0].copy(), bool(on_det[0])
+
+    res0 = _solve(G0)
+    if res0 is None:
         raise ValueError(f"hkl={(h, k, l)} does not satisfy the elastic (backward) condition for this ki_hat")
-    lam0 = -4.0 * np.pi * kdG / Gm2
-    E0 = HC / lam0
-    k0 = 2.0 * np.pi / lam0
-    kf0 = ki * k0 + G0
-    kf0 /= np.linalg.norm(kf0)
-    pix0, on_det = camera.project_batch(kf0[None, :])
-    px0, py0 = float(pix0[0, 0]), float(pix0[0, 1])
+    E0, pix0, on_det0 = res0
 
-    def _Qn(px, py):
-        kf = camera.pixel_to_kf(np.array([px]), np.array([py]))[0]
-        return float((k0 * (kf - ki)) @ n_hat)
+    res_plus = _solve(G0 + d_along * n_hat)
+    res_minus = _solve(G0 - d_along * n_hat)
+    if res_plus is not None and res_minus is not None:
+        d_pix = (res_plus[1] - res_minus[1]) / (2.0 * d_along)
+    elif res_plus is not None:
+        d_pix = (res_plus[1] - pix0) / d_along
+    elif res_minus is not None:
+        d_pix = (pix0 - res_minus[1]) / d_along
+    else:
+        d_pix = np.zeros(2)
 
-    Qn0 = _Qn(px0, py0)
-    A = (_Qn(px0 + h_step_px, py0) - Qn0) / h_step_px
-    B = (_Qn(px0, py0 + h_step_px) - Qn0) / h_step_px
-    grad = np.array([A, B])
-    grad_mag = float(np.linalg.norm(grad))
-    if grad_mag > 1e-14:
-        perp_dir = grad / grad_mag
-        streak_dir = np.array([-perp_dir[1], perp_dir[0]])
+    jac_mag = float(np.linalg.norm(d_pix))
+    if jac_mag > 1e-9:
+        streak_dir = d_pix / jac_mag
     else:
         streak_dir = np.array([1.0, 0.0])
-        perp_dir = np.array([0.0, 1.0])
+    perp_dir = np.array([-streak_dir[1], streak_dir[0]])
 
     return {
         "hkl": (h, k, l),
         "layer": layer.label,
-        "pix0": (px0, py0),
-        "E0": float(E0),
+        "pix0": (float(pix0[0]), float(pix0[1])),
+        "E0": E0,
         "streak_dir_px": streak_dir,
         "perp_dir_px": perp_dir,
-        "dQn_dpix_perp": grad_mag,
-        "on_detector": bool(on_det[0]),
+        "dpix_dalong": jac_mag,
+        "on_detector": on_det0,
     }
 
 

@@ -3608,6 +3608,129 @@ def qspace_multi_hkl(
     return vols
 
 
+def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, h_step_px=1.0):
+    """
+    Local pixel-space direction along which a reflection's superlattice rod
+    stays tangent to the Ewald sphere — the geometric root cause of the
+    elongated satellite streaks discussed at length around
+    :func:`simulate_spot_image` (near-tangency ⇒ a tiny energy shift
+    compensates a large pixel displacement ⇒ a long, narrow streak; far
+    from tangency ⇒ a compact spot).  Pure geometry, no simulation — a fast
+    screening check across candidate `hkl` before committing to
+    :func:`qspace_around_spot` / :func:`simulate_spot_image`.
+
+    For the reflection's own nominal pixel `pix0` (from the exact elastic
+    condition at `G0 = layer.U @ layer.crystal.Q(h,k,l)`), the local
+    gradient `(∂Qn/∂px, ∂Qn/∂py)` is estimated by finite differences on
+    `Camera.pixel_to_kf` at fixed energy `E0` (`Qn = Q·layer.n_hat`, the
+    rod's own projection — the same quantity `qspace_around_spot`'s
+    `S_rep` term depends on).  The **streak direction** is perpendicular to
+    this gradient (the iso-`Qn` contour — moving along it needs the least
+    energy compensation to stay on the elastic condition, so it's the
+    direction a fixed-width energy band traces out the furthest); the
+    **perpendicular direction** is the gradient itself (where `Qn` changes
+    fastest, confining the streak's width).
+
+    Args:
+        stack : LayeredCrystal
+        hkl : (int, int, int)
+            Miller indices of the reflection (in `layer.crystal`'s frame).
+        layer : Layer, str, or None, optional
+            Which layer's `(crystal, U, n_hat)` to use.  `None` (default)
+            uses `stack.layers[0]`, matching `qspace_around_spot`.
+        camera : Camera
+            Detector geometry — required (there is no meaningful pixel
+            gradient without one).
+        ki_hat : array-like (3,) or None, optional
+            Incident beam direction (LT frame).  Default `KI_HAT`.
+        h_step_px : float, optional
+            Finite-difference step (pixels) for the gradient estimate.
+
+    Returns:
+    dict with keys:
+
+        `'hkl'`, `'layer'` : the resolved inputs.
+        `'pix0'` : `(x, y)` — the reflection's nominal pixel.
+        `'E0'` : float — nominal energy (eV).
+        `'streak_dir_px'` : ndarray (2,) — unit vector in `(xcam, ycam)`,
+            the streak's elongation direction.
+        `'perp_dir_px'` : ndarray (2,) — unit vector perpendicular to it.
+        `'dQn_dpix_perp'` : float (Å⁻¹/px) — how fast `Qn` changes moving
+            across the streak (the confining gradient's magnitude).  Small
+            values mean the feature isn't confined in *either* direction at
+            this pixel scale (rare — usually indicates a reflection with no
+            reachable rod nearby); compare this number across candidate
+            `hkl` rather than reading it in isolation.
+        `'on_detector'` : bool — whether `pix0` actually lands on `camera`.
+
+    Example:
+    >>> info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam)
+    >>> print(info['streak_dir_px'])   # e.g. [0.68, 0.73] -> ~47° from horizontal
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if camera is None:
+        raise ValueError("camera is required")
+
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        layer = stack.layers[0]
+    elif isinstance(layer, str):
+        match = next((ly for ly in stack.all_layers if ly.label == layer), None)
+        if match is None:
+            available = [ly.label for ly in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+        layer = match
+
+    h, k, l = (int(x) for x in hkl)
+    G0 = layer.U @ layer.crystal.Q(h, k, l)
+    n_hat = np.asarray(layer.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+
+    kdG = float(G0 @ ki)
+    Gm2 = float(G0 @ G0)
+    if kdG >= 0:
+        raise ValueError(f"hkl={(h, k, l)} does not satisfy the elastic (backward) condition for this ki_hat")
+    lam0 = -4.0 * np.pi * kdG / Gm2
+    E0 = HC / lam0
+    k0 = 2.0 * np.pi / lam0
+    kf0 = ki * k0 + G0
+    kf0 /= np.linalg.norm(kf0)
+    pix0, on_det = camera.project_batch(kf0[None, :])
+    px0, py0 = float(pix0[0, 0]), float(pix0[0, 1])
+
+    def _Qn(px, py):
+        kf = camera.pixel_to_kf(np.array([px]), np.array([py]))[0]
+        return float((k0 * (kf - ki)) @ n_hat)
+
+    Qn0 = _Qn(px0, py0)
+    A = (_Qn(px0 + h_step_px, py0) - Qn0) / h_step_px
+    B = (_Qn(px0, py0 + h_step_px) - Qn0) / h_step_px
+    grad = np.array([A, B])
+    grad_mag = float(np.linalg.norm(grad))
+    if grad_mag > 1e-14:
+        perp_dir = grad / grad_mag
+        streak_dir = np.array([-perp_dir[1], perp_dir[0]])
+    else:
+        streak_dir = np.array([1.0, 0.0])
+        perp_dir = np.array([0.0, 1.0])
+
+    return {
+        "hkl": (h, k, l),
+        "layer": layer.label,
+        "pix0": (px0, py0),
+        "E0": float(E0),
+        "streak_dir_px": streak_dir,
+        "perp_dir_px": perp_dir,
+        "dQn_dpix_perp": grad_mag,
+        "on_detector": bool(on_det[0]),
+    }
+
+
 def simulate_spot_image(
     stack,
     spots,

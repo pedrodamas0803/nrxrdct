@@ -5263,8 +5263,28 @@ def plot_unit_cell_in_lab(
     origin2 = np.zeros(3)
     scat_legend = []
     has_camera = camera is not None
-    diagram_scale = 0.15 * camera.dd if has_camera else 1.0   # schematic (non-spatial) vector length
     all_pts = [origin2]   # tracks extent for axis limits when a camera is given
+
+    # Pre-pass: find each hkl's Bragg direction and (if it truly lands on
+    # the active detector) its real landing distance, *before* drawing
+    # anything. The beam/normal-vector arrows are then sized as a fraction
+    # of the longest real ray instead of a fixed length disconnected from
+    # it -- otherwise they'd look like a tiny cluster next to a ray that
+    # actually reaches all the way to the detector.
+    kf_hats = []
+    hit_lengths = []
+    for G_lab in G_labs:
+        kf_hat = _bragg_kf_hat(G_lab)
+        kf_hats.append(kf_hat)
+        if has_camera and kf_hat is not None and camera.project(kf_hat, source_depth_mm=0.0) is not None:
+            hit = _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
+            hit_lengths.append(np.linalg.norm(hit))
+
+    if has_camera:
+        ray_scale = max(hit_lengths) if hit_lengths else 0.5 * camera.dd
+        diagram_scale = 0.3 * ray_scale
+    else:
+        diagram_scale = 1.0
 
     if show_beam:
         beam_tail = origin2 - np.array([diagram_scale, 0.0, 0.0])
@@ -5276,7 +5296,7 @@ def plot_unit_cell_in_lab(
         all_pts.append(beam_tail)
 
     drew_any_normal = drew_any_ray = False
-    for (h, k, l), G_lab, plane_color in zip(hkls, G_labs, colors):
+    for (h, k, l), G_lab, kf_hat, plane_color in zip(hkls, G_labs, kf_hats, colors):
         if show_normal:
             n_vec = (G_lab / np.linalg.norm(G_lab)) * diagram_scale
             ax_scat.quiver(*origin2, *n_vec, color=plane_color, linewidth=1.8,
@@ -5287,7 +5307,6 @@ def plot_unit_cell_in_lab(
             drew_any_normal = True
 
         if show_scattered_rays:
-            kf_hat = _bragg_kf_hat(G_lab)
             if kf_hat is None:
                 print(f"  Note: ({_hkl_label(h, k, l)}) is not excited for a "
                       f"beam along +x (G·x̂ ≥ 0) -- no elastic scattered ray "
@@ -5330,6 +5349,379 @@ def plot_unit_cell_in_lab(
     if has_camera:
         # True detector position/orientation/size, via the same pixel -> 3-D
         # point math used internally by Camera.project.
+        def _pixel_point(xcam, ycam):
+            kf_hat = camera.pixel_to_kf(np.array([xcam]), np.array([ycam]))[0]
+            return _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
+
+        c_pt = _pixel_point(camera.xcen, camera.ycen)
+        r_pt = _pixel_point(camera.xcen + camera.Nh / 2.0, camera.ycen)
+        u_pt = _pixel_point(camera.xcen, camera.ycen - camera.Nv / 2.0)
+        if c_pt is not None and r_pt is not None and u_pt is not None:
+            h_vec, v_vec = r_pt - c_pt, u_pt - c_pt
+            det_corners = np.array([
+                c_pt + h_vec + v_vec, c_pt - h_vec + v_vec,
+                c_pt - h_vec - v_vec, c_pt + h_vec - v_vec,
+            ])
+            ax_scat.add_collection3d(Poly3DCollection(
+                [det_corners], facecolor="#dddddd", edgecolor="#dddddd",
+                linewidths=1.4, alpha=0.2,
+            ))
+            ax_scat.text(*c_pt, f"detector\n(dd = {camera.dd:.1f} mm)",
+                         color="#dddddd", fontsize=7, ha="center", va="center")
+            scat_legend.append(
+                Line2D([0], [0], color="#dddddd", lw=2, label="detector (true scale)")
+            )
+            all_pts.extend(det_corners)
+
+    pts = np.array(all_pts)
+    if show_lab_axes:
+        axes_len = diagram_scale * (0.4 if has_camera else 0.5)
+        tri_origin = pts.min(axis=0) - 0.3 * axes_len if has_camera else np.array([-1.3, -1.3, -1.3])
+        _draw_lab_axes_triad(ax_scat, origin=tri_origin, length=axes_len)
+
+    if has_camera:
+        span = np.ptp(pts, axis=0)
+        span = np.where(span > 1e-6, span, 1.0)
+        center = pts.mean(axis=0)
+        pad = 0.15
+        for set_lim, c, s in zip(
+            (ax_scat.set_xlim, ax_scat.set_ylim, ax_scat.set_zlim), center, span
+        ):
+            set_lim(c - s * (0.5 + pad), c + s * (0.5 + pad))
+        try:
+            ax_scat.set_box_aspect(span * (1 + 2 * pad))
+        except AttributeError:
+            pass
+        ax_scat.set_xlabel("x  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_ylabel("y  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_zlabel("z  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_title("Scattering diagram (true detector scale, mm)",
+                          color=FG, fontsize=10, pad=10)
+    else:
+        lim = 1.4
+        ax_scat.set_xlim(-lim, lim)
+        ax_scat.set_ylim(-lim, lim)
+        ax_scat.set_zlim(-lim, lim)
+        try:
+            ax_scat.set_box_aspect((1, 1, 1))
+        except AttributeError:
+            pass
+        ax_scat.set_xlabel("x", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_ylabel("y", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_zlabel("z", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_title("Scattering diagram (unit vectors)", color=FG, fontsize=10, pad=10)
+
+    if scat_legend:
+        ax_scat.legend(
+            handles=scat_legend, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, (ax_cell, ax_scat)
+
+
+def plot_crystals_in_lab(
+    crystals: "list",
+    U: "np.ndarray | list[np.ndarray]",
+    hkl: "tuple[int, int, int] | list[tuple[int, int, int]]" = (1, 1, 1),
+    *,
+    camera: "Camera | None" = None,
+    plane_offset: "int | list[int | None] | None" = None,
+    show_normal: bool = True,
+    show_crystal_axes: bool = False,
+    show_lab_axes: bool = True,
+    show_beam: bool = True,
+    show_scattered_rays: bool = True,
+    crystal_colors: "str | list[str] | None" = None,
+    beam_color: str = "red",
+    elev: float = 0.0,
+    azim: float = -90.0,
+    figsize: "tuple[float, float]" = (12, 9),
+    out_path: "str | None" = None,
+):
+    """
+    Multi-crystal version of :func:`plot_unit_cell_in_lab`: draws each
+    crystal's unit cell (with one `hkl` plane cut through it) in the lab
+    frame, one colour per crystal, all anchored at the same lab-frame
+    origin -- as if several grains occupied the same sample position with
+    different orientations, matching how :func:`plot_multigrain` overlays
+    multiple grains without a spatial offset. The right panel is a shared
+    scattering diagram, exactly as in `plot_unit_cell_in_lab`, with one
+    normal + one diffracted ray per crystal colour-matched to its cell.
+
+    Args:
+        crystals: List of xrayutilities-compatible crystal objects (see
+            `plot_unit_cell`).
+        U: A single `(3, 3)` orientation matrix applied to every crystal,
+            or a list of one matrix per crystal.
+        hkl: A single `(h, k, l)` applied to every crystal, or a list of
+            one `(h, k, l)` per crystal (one plane per crystal -- for
+            several planes on the *same* crystal use `plot_unit_cell_in_lab`
+            instead, whose `hkl` accepts a list).
+        camera: Optional :class:`~nrxrdct.laue.camera.Camera`; when given,
+            each diffracted ray is labelled with its projected pixel and
+            drawn to true detector scale, as in `plot_unit_cell_in_lab`.
+        plane_offset: Override the automatic first-plane choice (see
+            `plot_unit_cell`); a single value applied to every crystal, or
+            a list matching `crystals` one-to-one.
+        show_normal: Draw each crystal's plane normal in the right panel.
+        show_crystal_axes: Draw labelled `a`, `b`, `c` arrows per crystal
+            in the left panel. Off by default here (unlike
+            `plot_unit_cell_in_lab`) since with several crystals sharing
+            the origin the labels overlap badly.
+        show_lab_axes: Draw the fixed lab-frame x/y/z triad in both panels.
+        show_beam: Draw the single incident-beam arrow in the right panel.
+        show_scattered_rays: Draw each crystal's diffracted-ray direction
+            (dashed, to distinguish it from the solid normal vectors) in
+            the right panel.
+        crystal_colors: Fill/line colour(s) for the cells and their
+            matching normal/ray -- a single colour applied to all, a list
+            matching `crystals` one-to-one, or `None` to cycle through the
+            project's standard grain palette.
+        beam_color: Line colour for the incident beam.
+        elev, azim: 3-D view angle (degrees), shared by both panels.
+            Defaults to a view looking down +y (elev=0, azim=-90).
+        figsize: Figure size in inches.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, (ax_cell, ax_scatter))`
+
+    Example:
+    >>> U0 = orientation_along_z(substrate, [0, 0, 1], [1, 0, 0])
+    >>> U1 = rotate_U_about_axis(U0, 30.0, axis="z")   # a twin/second grain
+    >>> plot_crystals_in_lab([substrate, film], [U0, U1], hkl=(0, 0, 1))
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    n_crys = len(crystals)
+    if n_crys == 0:
+        raise ValueError("crystals must contain at least one crystal")
+
+    U_arr = np.asarray(U, dtype=float)
+    if U_arr.shape == (3, 3):
+        Us = [U_arr] * n_crys
+    elif U_arr.shape == (n_crys, 3, 3):
+        Us = [U_arr[i] for i in range(n_crys)]
+    else:
+        raise ValueError(
+            f"U must be a single (3, 3) matrix (applied to every crystal) or "
+            f"a list of {n_crys} (3, 3) matrices, one per crystal; got shape "
+            f"{U_arr.shape}"
+        )
+
+    hkls = _normalize_hkl_list(hkl)
+    if len(hkls) == 1:
+        hkls = hkls * n_crys
+    elif len(hkls) != n_crys:
+        raise ValueError(
+            "hkl list must be a single (h, k, l) applied to every crystal, "
+            "or match the number of crystals one-to-one"
+        )
+    if any(h == 0 and k == 0 and l == 0 for h, k, l in hkls):
+        raise ValueError("hkl=(0, 0, 0) does not define a plane")
+
+    offsets = plane_offset if isinstance(plane_offset, (list, tuple)) else [plane_offset] * n_crys
+    if len(offsets) != n_crys:
+        raise ValueError("plane_offset list must match the number of crystals")
+    if crystal_colors is None:
+        colors = [_GRAIN_COLORS[i % len(_GRAIN_COLORS)] for i in range(n_crys)]
+    elif isinstance(crystal_colors, str):
+        colors = [crystal_colors] * n_crys
+    else:
+        colors = list(crystal_colors)
+        if len(colors) != n_crys:
+            raise ValueError("crystal_colors list must match the number of crystals")
+
+    names = [getattr(c, "name", None) or f"crystal {i}" for i, c in enumerate(crystals)]
+
+    edges = [
+        (i, j)
+        for i in range(8)
+        for j in range(i + 1, 8)
+        if np.sum(_CELL_CORNERS_FRAC[i] != _CELL_CORNERS_FRAC[j]) == 1
+    ]
+
+    fig = plt.figure(figsize=figsize)
+    fig.patch.set_facecolor(BG)
+    ax_cell = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_scat = fig.add_subplot(1, 2, 2, projection="3d")
+    for ax in (ax_cell, ax_scat):
+        ax.set_facecolor(BG)
+        for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+            pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+            pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+        ax.tick_params(colors="#7788aa", labelsize=7)
+        ax.view_init(elev=elev, azim=azim)   # shared initial view: same orientation reads on both panels
+    _sync_3d_views(fig, ax_cell, ax_scat)   # keep them synced if the user drag-rotates either one
+
+    # ── Left panel: one unit cell + plane per crystal, all anchored at the
+    #    shared lab-frame origin ────────────────────────────────────────────
+    cell_legend = []
+    G_labs = []          # one entry per crystal, aligned with crystals/colors
+    all_corners = []     # every crystal's cell corners, for the combined axis span
+    for crystal, U_i, (h, k, l), user_offset, crystal_color, name in zip(
+        crystals, Us, hkls, offsets, colors, names
+    ):
+        ai_cry = np.array([crystal.a1, crystal.a2, crystal.a3], dtype=float)
+        ai = ai_cry @ U_i.T   # rows a1,a2,a3 rotated into the lab frame
+        cart_corners = _CELL_CORNERS_FRAC @ ai
+        all_corners.append(cart_corners)
+
+        G_lab = U_i @ crystal.Q(h, k, l)
+        G_labs.append(G_lab)
+
+        for i, j in edges:
+            p, q = cart_corners[i], cart_corners[j]
+            ax_cell.plot(*zip(p, q), color=crystal_color, lw=1.2, alpha=0.6)
+        ax_cell.scatter(*cart_corners.T, color=crystal_color, s=12, alpha=0.8)
+
+        if show_crystal_axes:
+            for vec, label in zip(ai, ("a", "b", "c")):
+                ax_cell.quiver(0, 0, 0, *vec, color=crystal_color, linewidth=1.0,
+                                arrow_length_ratio=0.08, alpha=0.9)
+                ax_cell.text(*(vec * 1.08), label, color=crystal_color, fontsize=10)
+
+        if user_offset is not None:
+            offsets_to_try = [user_offset]
+        else:
+            f_max = max(h, 0) + max(k, 0) + max(l, 0)
+            offsets_to_try = [1, -1] if f_max >= 1 else [-1, 1]
+
+        frac_poly = []
+        for m in offsets_to_try:
+            frac_poly = _hkl_plane_fractional(h, k, l, m)
+            if len(frac_poly) >= 3:
+                break
+
+        d_hkl = crystal.planeDistance(h, k, l)
+        if len(frac_poly) < 3:
+            print(f"  Warning: {name} ({_hkl_label(h, k, l)}) plane does not "
+                  f"intersect its unit cell for the offsets tried "
+                  f"({offsets_to_try}); pass plane_offset explicitly to pick "
+                  f"a different member of the family.")
+            continue
+
+        cart_poly = np.array(frac_poly) @ ai
+        ax_cell.add_collection3d(Poly3DCollection(
+            [cart_poly], facecolor=crystal_color, edgecolor=crystal_color,
+            linewidths=1.2, alpha=0.35,
+        ))
+        cell_legend.append(
+            Line2D([0], [0], color=crystal_color, lw=2,
+                   label=f"{name}: ({_hkl_label(h, k, l)})  d = {d_hkl:.4f} Å")
+        )
+
+    all_corners = np.vstack(all_corners)
+    cell_span = np.ptp(all_corners, axis=0)
+    cell_scale = float(cell_span.max()) if cell_span.max() > 0 else 1.0
+    if show_lab_axes:
+        _draw_lab_axes_triad(
+            ax_cell, origin=all_corners.min(axis=0) - 0.6 * cell_scale,
+            length=0.5 * cell_scale,
+        )
+
+    ax_cell.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax_cell.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax_cell.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax_cell.set_title(f"{n_crys} crystals in lab frame", color=FG, fontsize=10, pad=10)
+    try:
+        ax_cell.set_box_aspect(cell_span)
+    except AttributeError:
+        pass
+    if cell_legend:
+        ax_cell.legend(
+            handles=cell_legend, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    # ── Right panel: scattering diagram, coincident origin, one normal + one
+    #    ray per crystal ───────────────────────────────────────────────────
+    origin2 = np.zeros(3)
+    scat_legend = []
+    has_camera = camera is not None
+    all_pts = [origin2]
+
+    kf_hats = []
+    hit_lengths = []
+    for G_lab in G_labs:
+        kf_hat = _bragg_kf_hat(G_lab)
+        kf_hats.append(kf_hat)
+        if has_camera and kf_hat is not None and camera.project(kf_hat, source_depth_mm=0.0) is not None:
+            hit = _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
+            hit_lengths.append(np.linalg.norm(hit))
+
+    if has_camera:
+        ray_scale = max(hit_lengths) if hit_lengths else 0.5 * camera.dd
+        diagram_scale = 0.3 * ray_scale
+    else:
+        diagram_scale = 1.0
+
+    if show_beam:
+        beam_tail = origin2 - np.array([diagram_scale, 0.0, 0.0])
+        ax_scat.quiver(*beam_tail, *(origin2 - beam_tail), color=beam_color,
+                       linewidth=2.2, arrow_length_ratio=0.15)
+        scat_legend.append(
+            Line2D([0], [0], color=beam_color, lw=2, label="incident beam (+x)")
+        )
+        all_pts.append(beam_tail)
+
+    drew_any_normal = drew_any_ray = False
+    for (h, k, l), G_lab, kf_hat, crystal_color, name in zip(
+        hkls, G_labs, kf_hats, colors, names
+    ):
+        if show_normal:
+            n_vec = (G_lab / np.linalg.norm(G_lab)) * diagram_scale
+            ax_scat.quiver(*origin2, *n_vec, color=crystal_color, linewidth=1.8,
+                           arrow_length_ratio=0.15)
+            ax_scat.text(*(n_vec * 1.1), f"n({_hkl_label(h, k, l)})",
+                         color=crystal_color, fontsize=7)
+            all_pts.append(n_vec)
+            drew_any_normal = True
+
+        if show_scattered_rays:
+            if kf_hat is None:
+                print(f"  Note: {name} ({_hkl_label(h, k, l)}) is not excited "
+                      f"for a beam along +x (G·x̂ ≥ 0) -- no elastic "
+                      f"scattered ray to draw.")
+                continue
+
+            if has_camera:
+                pix = camera.project(kf_hat, source_depth_mm=0.0)
+                if pix is not None:
+                    ray_end = _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
+                    linestyle = "-"
+                    label = f"{name} ({_hkl_label(h, k, l)}) → px({pix[0]:.0f}, {pix[1]:.0f})"
+                else:
+                    ray_end, linestyle = kf_hat * diagram_scale, "--"
+                    label = f"{name} ({_hkl_label(h, k, l)}) → off detector"
+            else:
+                ray_end, linestyle = kf_hat * diagram_scale, "-"
+                label = f"{name} ({_hkl_label(h, k, l)})"
+
+            ax_scat.quiver(*origin2, *ray_end, color=crystal_color, linewidth=1.6,
+                           linestyle=linestyle, arrow_length_ratio=0.1, alpha=0.9)
+            ax_scat.text(*ray_end, label, color=crystal_color, fontsize=7)
+            all_pts.append(ray_end)
+            drew_any_ray = True
+
+    if drew_any_normal:
+        scat_legend.append(
+            Line2D([0], [0], color=FG, lw=1.8, linestyle="-", label="plane normal")
+        )
+    if drew_any_ray:
+        scat_legend.append(
+            Line2D([0], [0], color=FG, lw=1.6, linestyle="--", label="diffracted ray")
+        )
+
+    if has_camera:
         def _pixel_point(xcam, ycam):
             kf_hat = camera.pixel_to_kf(np.array([xcam]), np.array([ycam]))[0]
             return _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
@@ -6556,6 +6948,116 @@ def plot_spot_image(
         print(f"  Saved → {out_path}")
 
     return fig, axes
+
+
+def plot_rod_tangency(
+    stack,
+    hkl,
+    layer=None,
+    camera=None,
+    *,
+    ki_hat=None,
+    arrow_length_px=60,
+    image=None,
+    pad_px=40,
+    ax=None,
+    figsize=(6.0, 6.0),
+    out_path=None,
+):
+    """
+    Show a reflection's superlattice-rod orientation relative to the
+    detector — the streak elongation direction (orange) and the direction
+    that confines its width (blue), computed by
+    :func:`~nrxrdct.laue.simulation.rod_tangency`.
+
+    A long orange line roughly the size of the crop means this reflection
+    sits near a tangency condition and will produce an elongated streak
+    (see `simulate_spot_image`'s discussion of this); a short one next to
+    a comparably-sized blue one means the reflection is a better candidate
+    for a compact-spot comparison.
+
+    Args:
+        stack, hkl, layer, camera, ki_hat: Forwarded to
+            :func:`~nrxrdct.laue.simulation.rod_tangency`.
+        arrow_length_px (float): Half-length of the streak-direction line
+            (pixels); the perpendicular indicator is drawn at 1/3 of this.
+        image (ndarray, shape (Nv, Nh), optional): Measured or simulated
+            detector frame to show cropped behind the arrows, for context.
+            `None` (default) shows a plain dark background.
+        pad_px (float): Half-size of the cropped window shown around the
+            reflection's nominal pixel (only used when `image` is given,
+            or to set axis limits either way).
+        ax (matplotlib.axes.Axes, optional): Draw into an existing axes
+            instead of creating a new figure.
+        figsize: Figure size (ignored if `ax` is given).
+        out_path (str or None): Save figure to this path if given.
+
+    Returns:
+        ``(fig, ax, info)`` — `info` is `rod_tangency`'s own return dict.
+    """
+    from .simulation import rod_tangency
+
+    info = rod_tangency(stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat)
+    px0, py0 = info["pix0"]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
+    else:
+        fig = ax.figure
+    _ax_style(ax, "")
+    ax.set_xlabel("xcam  (px)", color=FG, fontsize=8)
+    ax.set_ylabel("ycam  (px)", color=FG, fontsize=8)
+
+    if image is not None:
+        img_arr = np.asarray(image, dtype=float)
+        Ny, Nx = img_arr.shape
+        x0 = max(int(px0 - pad_px), 0)
+        x1 = min(int(px0 + pad_px), Nx)
+        y0 = max(int(py0 - pad_px), 0)
+        y1 = min(int(py0 + pad_px), Ny)
+        patch = img_arr[y0:y1, x0:x1]
+        ax.imshow(
+            np.log1p(patch), origin="upper", extent=[x0, x1, y1, y0],
+            cmap="gray", aspect="equal",
+        )
+
+    streak = info["streak_dir_px"]
+    perp = info["perp_dir_px"]
+    perp_len = arrow_length_px / 3.0
+
+    ax.plot(
+        [px0 - arrow_length_px * streak[0], px0 + arrow_length_px * streak[0]],
+        [py0 - arrow_length_px * streak[1], py0 + arrow_length_px * streak[1]],
+        "-", color=COL_SUP, lw=2.5, solid_capstyle="round",
+        label="streak direction (least energy-sensitive)",
+    )
+    ax.plot(
+        [px0 - perp_len * perp[0], px0 + perp_len * perp[0]],
+        [py0 - perp_len * perp[1], py0 + perp_len * perp[1]],
+        "-", color=COL_BCC, lw=2.5, solid_capstyle="round",
+        label="confining direction (most energy-sensitive)",
+    )
+    ax.plot(px0, py0, "+", color=FG, ms=10, mew=1.2, zorder=5)
+
+    ax.set_xlim(px0 - pad_px, px0 + pad_px)
+    ax.set_ylim(py0 + pad_px, py0 - pad_px)
+    ax.set_aspect("equal")
+
+    leg = ax.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+    leg.get_frame().set_alpha(0.85)
+
+    title = (
+        f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV\n"
+        f"|dQn/dpix|_perp = {info['dQn_dpix_perp']:.2e} Å⁻¹/px"
+    )
+    ax.set_title(title, color=FG, fontsize=9, pad=6)
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax, info
 
 
 # ─────────────────────────────────────────────────────────────────────────────

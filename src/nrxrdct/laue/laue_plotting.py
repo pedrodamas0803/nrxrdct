@@ -4898,8 +4898,8 @@ def plot_unit_cell(
 
         d_hkl = crystal.planeDistance(h, k, l)
         if len(frac_poly) < 3:
-            print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit "
-                  f"cell for the offsets tried ({offsets_to_try}); pass "
+            print(f"  Warning: ({_hkl_label(h, k, l)}) plane does not intersect "
+                  f"the unit cell for the offsets tried ({offsets_to_try}); pass "
                   f"plane_offset explicitly to pick a different member of "
                   f"the family.")
             continue
@@ -4911,7 +4911,7 @@ def plot_unit_cell(
         ))
         legend_handles.append(
             Line2D([0], [0], color=plane_color, lw=2,
-                   label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
+                   label=f"({_hkl_label(h, k, l)})  d = {d_hkl:.4f} Å")
         )
 
         if show_normal:
@@ -4938,7 +4938,7 @@ def plot_unit_cell(
     ax.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
     ax.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
     ax.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
-    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
+    title = ", ".join(f"({_hkl_label(h, k, l)})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
     ax.set_title(f"Unit cell — {title}", color=FG, fontsize=10, pad=10)
     ax.view_init(elev=elev, azim=azim)
     try:
@@ -4988,6 +4988,36 @@ def _bragg_kf_hat(G_lab, ki_hat=_KI_HAT):
     k0 = 2.0 * np.pi / lam
     kf = k0 * ki_hat + G_lab
     return kf / np.linalg.norm(kf)
+
+
+def _camera_hit_point_lab(camera, kf_hat_lab, source_lab_mm=None):
+    """
+    3-D point (mm, LT lab frame) where the ray `kf_hat_lab` from
+    `source_lab_mm` (default: origin) intersects the detector plane of
+    `camera`. Mirrors the internal LT<->LT2 math of `Camera.project`
+    (see `nrxrdct.laue.camera.Camera`), but returns the 3-D hit point
+    instead of a pixel coordinate. `None` if the ray travels away from the
+    detector plane.
+    """
+    kf_hat_lab = np.asarray(kf_hat_lab, dtype=float)
+    kf_hat_lab = kf_hat_lab / np.linalg.norm(kf_hat_lab)
+    src = np.zeros(3) if source_lab_mm is None else np.asarray(source_lab_mm, dtype=float)
+    # LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
+    kf_lt2 = np.array([-kf_hat_lab[1], kf_hat_lab[0], kf_hat_lab[2]])
+    src_lt2 = np.array([-src[1], src[0], src[2]])
+    scal = float(np.dot(kf_lt2, camera.normal))
+    if scal < 1e-8:
+        return None
+    dd_eff = camera.dd - float(np.dot(src_lt2, camera.normal))
+    im_lt2 = src_lt2 + kf_lt2 * (dd_eff / scal)
+    # LT2 -> LT:  x_LT = y_LT2,  y_LT = -x_LT2,  z_LT = z_LT2
+    return np.array([im_lt2[1], -im_lt2[0], im_lt2[2]])
+
+
+def _hkl_label(h, k, l):
+    """Space-separated Miller indices, e.g. '1 1 1' or '-1 0 0' -- avoids
+    the ambiguity of concatenated digits like '(-100)'."""
+    return f"{h} {k} {l}"
 
 
 def _draw_lab_axes_triad(ax, origin, length):
@@ -5042,7 +5072,7 @@ def plot_unit_cell_in_lab(
     beam_color: str = "red",
     elev: float = 0.0,
     azim: float = -90.0,
-    figsize: "tuple[float, float]" = (14, 7),
+    figsize: "tuple[float, float]" = (12, 9),
     out_path: "str | None" = None,
 ):
     """
@@ -5179,8 +5209,8 @@ def plot_unit_cell_in_lab(
 
         d_hkl = crystal.planeDistance(h, k, l)
         if len(frac_poly) < 3:
-            print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit "
-                  f"cell for the offsets tried ({offsets_to_try}); pass "
+            print(f"  Warning: ({_hkl_label(h, k, l)}) plane does not intersect "
+                  f"the unit cell for the offsets tried ({offsets_to_try}); pass "
                   f"plane_offset explicitly to pick a different member of "
                   f"the family.")
             continue
@@ -5192,7 +5222,7 @@ def plot_unit_cell_in_lab(
         ))
         cell_legend.append(
             Line2D([0], [0], color=plane_color, lw=2,
-                   label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
+                   label=f"({_hkl_label(h, k, l)})  d = {d_hkl:.4f} Å")
         )
 
     if show_crystal_axes:
@@ -5212,7 +5242,7 @@ def plot_unit_cell_in_lab(
     ax_cell.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
     ax_cell.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
     ax_cell.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
-    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
+    title = ", ".join(f"({_hkl_label(h, k, l)})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
     ax_cell.set_title(f"Unit cell in lab frame — {title}", color=FG, fontsize=10, pad=10)
     try:
         ax_cell.set_box_aspect(cell_span)
@@ -5224,41 +5254,68 @@ def plot_unit_cell_in_lab(
             facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
         )
 
-    # ── Right panel: scattering diagram -- coincident origin, unit vectors ────
+    # ── Right panel: scattering diagram, coincident origin ─────────────────────
+    # Without a camera this is a schematic unit-vector diagram (direction
+    # only). With one, it switches to the camera's true millimetre scale --
+    # the detector panel and the rays reaching it are drawn to real geometry.
+    # This panel is decoupled from the cell's Å scale (unlike the left one),
+    # so a to-scale detector fits here without swallowing the cell.
     origin2 = np.zeros(3)
     scat_legend = []
+    has_camera = camera is not None
+    diagram_scale = 0.15 * camera.dd if has_camera else 1.0   # schematic (non-spatial) vector length
+    all_pts = [origin2]   # tracks extent for axis limits when a camera is given
 
     if show_beam:
-        beam_tail = origin2 - np.array([1.0, 0.0, 0.0])
+        beam_tail = origin2 - np.array([diagram_scale, 0.0, 0.0])
         ax_scat.quiver(*beam_tail, *(origin2 - beam_tail), color=beam_color,
                        linewidth=2.2, arrow_length_ratio=0.15)
         scat_legend.append(
             Line2D([0], [0], color=beam_color, lw=2, label="incident beam (+x)")
         )
+        all_pts.append(beam_tail)
 
     drew_any_normal = drew_any_ray = False
     for (h, k, l), G_lab, plane_color in zip(hkls, G_labs, colors):
         if show_normal:
-            n_hat = G_lab / np.linalg.norm(G_lab)
-            ax_scat.quiver(*origin2, *n_hat, color=plane_color, linewidth=1.8,
+            n_vec = (G_lab / np.linalg.norm(G_lab)) * diagram_scale
+            ax_scat.quiver(*origin2, *n_vec, color=plane_color, linewidth=1.8,
                            arrow_length_ratio=0.15)
-            ax_scat.text(*(n_hat * 1.1), f"n({h}{k}{l})", color=plane_color, fontsize=7)
+            ax_scat.text(*(n_vec * 1.1), f"n({_hkl_label(h, k, l)})",
+                         color=plane_color, fontsize=7)
+            all_pts.append(n_vec)
             drew_any_normal = True
 
         if show_scattered_rays:
             kf_hat = _bragg_kf_hat(G_lab)
             if kf_hat is None:
-                print(f"  Note: ({h}{k}{l}) is not excited for a beam along "
-                      f"+x (G·x̂ ≥ 0) -- no elastic scattered ray to draw.")
+                print(f"  Note: ({_hkl_label(h, k, l)}) is not excited for a "
+                      f"beam along +x (G·x̂ ≥ 0) -- no elastic scattered ray "
+                      f"to draw.")
                 continue
-            ax_scat.quiver(*origin2, *kf_hat, color=plane_color, linewidth=1.6,
-                           linestyle="--", arrow_length_ratio=0.15, alpha=0.9)
-            label = f"({h}{k}{l})"
-            if camera is not None:
+
+            if has_camera:
+                # camera.project's bounds check is the sole authority for
+                # "really lands on the panel" -- a raw plane intersection
+                # can land arbitrarily far away for a near-grazing ray (the
+                # infinite plane extends well past the finite panel), which
+                # would blow up the axis scale for the whole diagram.
                 pix = camera.project(kf_hat, source_depth_mm=0.0)
-                label += (f" → px({pix[0]:.0f}, {pix[1]:.0f})"
-                          if pix is not None else " → off detector")
-            ax_scat.text(*(kf_hat * 1.1), label, color=plane_color, fontsize=7)
+                if pix is not None:
+                    ray_end = _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
+                    linestyle = "-"
+                    label = f"({_hkl_label(h, k, l)}) → px({pix[0]:.0f}, {pix[1]:.0f})"
+                else:
+                    ray_end, linestyle = kf_hat * diagram_scale, "--"
+                    label = f"({_hkl_label(h, k, l)}) → off detector"
+            else:
+                ray_end, linestyle = kf_hat * diagram_scale, "-"
+                label = f"({_hkl_label(h, k, l)})"
+
+            ax_scat.quiver(*origin2, *ray_end, color=plane_color, linewidth=1.6,
+                           linestyle=linestyle, arrow_length_ratio=0.1, alpha=0.9)
+            ax_scat.text(*ray_end, label, color=plane_color, fontsize=7)
+            all_pts.append(ray_end)
             drew_any_ray = True
 
     if drew_any_normal:
@@ -5270,21 +5327,71 @@ def plot_unit_cell_in_lab(
             Line2D([0], [0], color=FG, lw=1.6, linestyle="--", label="diffracted ray")
         )
 
-    if show_lab_axes:
-        _draw_lab_axes_triad(ax_scat, origin=np.array([-1.3, -1.3, -1.3]), length=0.5)
+    if has_camera:
+        # True detector position/orientation/size, via the same pixel -> 3-D
+        # point math used internally by Camera.project.
+        def _pixel_point(xcam, ycam):
+            kf_hat = camera.pixel_to_kf(np.array([xcam]), np.array([ycam]))[0]
+            return _camera_hit_point_lab(camera, kf_hat, source_lab_mm=origin2)
 
-    lim = 1.4
-    ax_scat.set_xlim(-lim, lim)
-    ax_scat.set_ylim(-lim, lim)
-    ax_scat.set_zlim(-lim, lim)
-    try:
-        ax_scat.set_box_aspect((1, 1, 1))
-    except AttributeError:
-        pass
-    ax_scat.set_xlabel("x", color=FG, fontsize=8, labelpad=8)
-    ax_scat.set_ylabel("y", color=FG, fontsize=8, labelpad=8)
-    ax_scat.set_zlabel("z", color=FG, fontsize=8, labelpad=8)
-    ax_scat.set_title("Scattering diagram (unit vectors)", color=FG, fontsize=10, pad=10)
+        c_pt = _pixel_point(camera.xcen, camera.ycen)
+        r_pt = _pixel_point(camera.xcen + camera.Nh / 2.0, camera.ycen)
+        u_pt = _pixel_point(camera.xcen, camera.ycen - camera.Nv / 2.0)
+        if c_pt is not None and r_pt is not None and u_pt is not None:
+            h_vec, v_vec = r_pt - c_pt, u_pt - c_pt
+            det_corners = np.array([
+                c_pt + h_vec + v_vec, c_pt - h_vec + v_vec,
+                c_pt - h_vec - v_vec, c_pt + h_vec - v_vec,
+            ])
+            ax_scat.add_collection3d(Poly3DCollection(
+                [det_corners], facecolor="#dddddd", edgecolor="#dddddd",
+                linewidths=1.4, alpha=0.2,
+            ))
+            ax_scat.text(*c_pt, f"detector\n(dd = {camera.dd:.1f} mm)",
+                         color="#dddddd", fontsize=7, ha="center", va="center")
+            scat_legend.append(
+                Line2D([0], [0], color="#dddddd", lw=2, label="detector (true scale)")
+            )
+            all_pts.extend(det_corners)
+
+    pts = np.array(all_pts)
+    if show_lab_axes:
+        axes_len = diagram_scale * (0.4 if has_camera else 0.5)
+        tri_origin = pts.min(axis=0) - 0.3 * axes_len if has_camera else np.array([-1.3, -1.3, -1.3])
+        _draw_lab_axes_triad(ax_scat, origin=tri_origin, length=axes_len)
+
+    if has_camera:
+        span = np.ptp(pts, axis=0)
+        span = np.where(span > 1e-6, span, 1.0)
+        center = pts.mean(axis=0)
+        pad = 0.15
+        for set_lim, c, s in zip(
+            (ax_scat.set_xlim, ax_scat.set_ylim, ax_scat.set_zlim), center, span
+        ):
+            set_lim(c - s * (0.5 + pad), c + s * (0.5 + pad))
+        try:
+            ax_scat.set_box_aspect(span * (1 + 2 * pad))
+        except AttributeError:
+            pass
+        ax_scat.set_xlabel("x  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_ylabel("y  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_zlabel("z  (mm)", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_title("Scattering diagram (true detector scale, mm)",
+                          color=FG, fontsize=10, pad=10)
+    else:
+        lim = 1.4
+        ax_scat.set_xlim(-lim, lim)
+        ax_scat.set_ylim(-lim, lim)
+        ax_scat.set_zlim(-lim, lim)
+        try:
+            ax_scat.set_box_aspect((1, 1, 1))
+        except AttributeError:
+            pass
+        ax_scat.set_xlabel("x", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_ylabel("y", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_zlabel("z", color=FG, fontsize=8, labelpad=8)
+        ax_scat.set_title("Scattering diagram (unit vectors)", color=FG, fontsize=10, pad=10)
+
     if scat_legend:
         ax_scat.legend(
             handles=scat_legend, fontsize=7, labelcolor=FG,

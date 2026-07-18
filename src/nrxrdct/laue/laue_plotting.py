@@ -4966,21 +4966,72 @@ def plot_unit_cell(
 # 3D UNIT CELL IN THE LAB FRAME
 # ─────────────────────────────────────────────────────────────────────────────
 
+_KI_HAT = np.array([1.0, 0.0, 0.0])   # incident-beam direction, LT lab frame
+
+
+def _bragg_kf_hat(G_lab, ki_hat=_KI_HAT):
+    """
+    Direction of the elastically diffracted beam for reciprocal-lattice
+    vector `G_lab` (lab frame) given an incident beam along `ki_hat`, or
+    `None` if no elastic solution exists (`G_lab · ki_hat >= 0` -- this
+    reflection is never excited for a beam along `ki_hat`, at any energy).
+
+    Solves `|k0·ki_hat + G_lab| = k0` for `k0`, the same convention used
+    throughout `nrxrdct.laue.simulation` (e.g. the harmonic search in
+    `beam_divergence_ellipses`).
+    """
+    Gm2 = float(np.dot(G_lab, G_lab))
+    kdG = float(np.dot(ki_hat, G_lab))
+    if kdG >= 0:
+        return None
+    lam = -4.0 * np.pi * kdG / Gm2
+    k0 = 2.0 * np.pi / lam
+    kf = k0 * ki_hat + G_lab
+    return kf / np.linalg.norm(kf)
+
+
+def _camera_hit_point_lab(camera, kf_hat_lab, source_lab_mm=None):
+    """
+    3-D point (mm, LT lab frame) where the ray `kf_hat_lab` from
+    `source_lab_mm` (default: origin) intersects the detector plane of
+    `camera`. Mirrors the internal LT<->LT2 math of `Camera.project`
+    (see `nrxrdct.laue.camera.Camera`), but returns the 3-D hit point
+    instead of a pixel coordinate. `None` if the ray travels away from the
+    detector plane.
+    """
+    kf_hat_lab = np.asarray(kf_hat_lab, dtype=float)
+    kf_hat_lab = kf_hat_lab / np.linalg.norm(kf_hat_lab)
+    src = np.zeros(3) if source_lab_mm is None else np.asarray(source_lab_mm, dtype=float)
+    # LT -> LT2:  x_LT2 = -y_LT,  y_LT2 = x_LT,  z_LT2 = z_LT
+    kf_lt2 = np.array([-kf_hat_lab[1], kf_hat_lab[0], kf_hat_lab[2]])
+    src_lt2 = np.array([-src[1], src[0], src[2]])
+    scal = float(np.dot(kf_lt2, camera.normal))
+    if scal < 1e-8:
+        return None
+    dd_eff = camera.dd - float(np.dot(src_lt2, camera.normal))
+    im_lt2 = src_lt2 + kf_lt2 * (dd_eff / scal)
+    # LT2 -> LT:  x_LT = y_LT2,  y_LT = -x_LT2,  z_LT = z_LT2
+    return np.array([im_lt2[1], -im_lt2[0], im_lt2[2]])
+
 
 def plot_unit_cell_in_lab(
     crystal,
     U: "np.ndarray",
     hkl: "tuple[int, int, int] | list[tuple[int, int, int]]" = (1, 1, 1),
     *,
+    camera: "Camera | None" = None,
     plane_offset: "int | list[int | None] | None" = None,
     show_normal: bool = True,
     show_crystal_axes: bool = True,
     show_lab_axes: bool = True,
     show_beam: bool = True,
+    show_detector: bool = True,
+    detector_display_dist: "float | None" = None,
     cell_color: str = FG,
     plane_colors: "str | list[str] | None" = None,
     normal_color: str = COL_DB,
-    beam_color: str = COL_DB,
+    beam_color: str = "red",
+    detector_color: str = "#dddddd",
     elev: float = 20.0,
     azim: float = -50.0,
     figsize: "tuple[float, float]" = (8, 8),
@@ -4990,9 +5041,9 @@ def plot_unit_cell_in_lab(
     """
     Like :func:`plot_unit_cell`, but rotates the crystal's unit cell (and
     `hkl` plane(s)) into the lab frame via the orientation matrix `U`, and
-    adds the lab-frame furniture from :func:`plot_layer_scheme` -- the
-    incident beam and the x/y/z lab axes -- rendered in 3-D instead of a
-    2-D XZ cross-section.
+    adds the lab-frame furniture from :func:`plot_layer_scheme` -- incident
+    beam, x/y/z lab axes and (optionally) the scattered ray(s) projected
+    onto a `Camera` -- rendered in 3-D instead of a 2-D XZ cross-section.
 
     Lab frame convention (LaueTools / this project, matching
     `plot_layer_scheme`): x = incident beam direction, z = vertical up,
@@ -5001,19 +5052,44 @@ def plot_unit_cell_in_lab(
     convention used throughout `nrxrdct.laue.simulation`
     (e.g. `layer.U @ layer.crystal.Q(h, k, l)`).
 
+    The incident beam and every scattered ray are drawn touching the same
+    point: the centroid of the first `hkl` plane that was actually drawn
+    (the same point its normal arrow is anchored to), falling back to the
+    cell centroid if no plane intersects the cell. This is also the point
+    used as the scattering origin for the `camera` projection.
+
+    If `camera` is given, each `hkl`'s elastically diffracted direction is
+    found by solving the Laue condition `|k0·x̂ + G_lab| = k0` (see
+    `_bragg_kf_hat`) and projected with `camera.project`. Because the cell
+    is Å-sized and `camera.dd` is tens of millimetres, the detector cannot
+    be drawn to true scale next to the cell: it is drawn as a flat,
+    semi-transparent rectangle at `detector_display_dist` (in the same
+    display units as the cell, default `6x` the cell's own span) along the
+    true geometric directions -- i.e. correctly oriented/tilted, just not
+    at the true distance. Scattered rays are solid when they land on the
+    active detector area and dashed when they don't (annotated with the
+    projected pixel, from `camera.project`); reflections with no elastic
+    solution for a beam along +x are skipped with a printed note.
+
     Args:
         crystal: xrayutilities-compatible crystal object (see `plot_unit_cell`).
         U: `(3, 3)` orientation matrix rotating crystal-frame vectors into
             the lab frame.
         hkl: Miller indices of the plane(s) to draw (single tuple or list).
+        camera: Optional :class:`~nrxrdct.laue.camera.Camera`. When given,
+            draws each hkl's scattered ray and a schematic detector plane.
         plane_offset, show_normal, plane_colors, normal_color: see
             `plot_unit_cell`.
         show_crystal_axes: Draw labelled `a`, `b`, `c` arrows (rotated into
             the lab frame) from the cell origin.
         show_lab_axes: Draw the fixed lab-frame x/y/z axes near the cell.
-        show_beam: Draw the incident-beam arrow travelling along +x into
-            the cell.
-        cell_color, beam_color: Line colours.
+        show_beam: Draw the incident-beam arrow travelling along +x, tip
+            touching the scattering point.
+        show_detector: When `camera` is given, draw the scattered ray(s)
+            and the schematic detector rectangle.
+        detector_display_dist: Schematic sample-to-detector display
+            distance (same units as the cell). `None` -> `6x` the cell span.
+        cell_color, beam_color, detector_color: Line/fill colours.
         elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
         figsize: Figure size in inches (only used when `ax is None`).
         ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
@@ -5025,7 +5101,7 @@ def plot_unit_cell_in_lab(
 
     Example:
     >>> U = euler_to_U(10, 20, 30)
-    >>> plot_unit_cell_in_lab(crystal, U, hkl=[(1, 1, 1), (1, 0, 0)])
+    >>> plot_unit_cell_in_lab(crystal, U, hkl=[(1, 1, 1), (1, 0, 0)], camera=cam)
     """
     from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -5080,8 +5156,13 @@ def plot_unit_cell_in_lab(
 
     legend_handles = []
     drew_any_normal = False
+    G_labs = []                 # one entry per hkl, aligned with hkls/colors
+    scatter_pt = None           # centroid of the first successfully-drawn plane
     normal_arrow_len = 0.6 * min(np.linalg.norm(v) for v in ai)
     for (h, k, l), user_offset, plane_color in zip(hkls, offsets, colors):
+        G_lab = U @ crystal.Q(h, k, l)
+        G_labs.append(G_lab)
+
         if user_offset is not None:
             offsets_to_try = [user_offset]
         else:
@@ -5112,13 +5193,15 @@ def plot_unit_cell_in_lab(
                    label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
         )
 
+        # Anchored at this plane's own centroid, and rotated by U along with
+        # everything else -- see plot_unit_cell for why the centroid (not
+        # the cell centroid) is the correct anchor. The first plane drawn
+        # also becomes the common scattering point for the beam/rays below.
+        plane_centroid = cart_poly.mean(axis=0)
+        if scatter_pt is None:
+            scatter_pt = plane_centroid
         if show_normal:
-            # Anchored at this plane's own centroid, and rotated by U along
-            # with everything else -- see plot_unit_cell for why the
-            # centroid (not the cell centroid) is the correct anchor.
-            plane_centroid = cart_poly.mean(axis=0)
-            n_hat = U @ crystal.Q(h, k, l)
-            n_hat = n_hat / np.linalg.norm(n_hat)
+            n_hat = G_lab / np.linalg.norm(G_lab)
             ax.quiver(*plane_centroid, *(n_hat * normal_arrow_len),
                        color=normal_color, linewidth=1.8, arrow_length_ratio=0.15)
             drew_any_normal = True
@@ -5134,21 +5217,82 @@ def plot_unit_cell_in_lab(
                       arrow_length_ratio=0.08, alpha=0.9)
             ax.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
 
-    # ── Lab furniture: incident beam (+x) and x/y/z axes ──────────────────────
+    if scatter_pt is None:
+        scatter_pt = cart_corners.mean(axis=0)
+
+    # ── Lab furniture: incident beam (+x), x/y/z axes, scattered rays ─────────
     # Mirrors the beam arrow / axis triad drawn by plot_layer_scheme, just in
     # 3-D and anchored relative to the (possibly tilted) cell's own extent.
     cell_span = np.ptp(cart_corners, axis=0)
     scale = float(cell_span.max()) if cell_span.max() > 0 else 1.0
 
     if show_beam:
-        beam_tip = np.array([cart_corners[:, 0].min(), 0.0, 0.0])
+        # Tip touches the scattering point -- the same anchor used for the
+        # plane normal(s) above -- rather than merely approaching the cell.
+        beam_tip = scatter_pt
         beam_tail = beam_tip - np.array([0.8 * scale, 0.0, 0.0])
         ax.quiver(*beam_tail, *(beam_tip - beam_tail), color=beam_color,
-                  linewidth=2.2, arrow_length_ratio=0.18)
+                  linewidth=2.2, arrow_length_ratio=0.1)
         ax.text(*beam_tail, "incident beam", color=beam_color, fontsize=8,
                 ha="left", va="bottom")
         legend_handles.append(
             Line2D([0], [0], color=beam_color, lw=2, label="incident beam (+x)")
+        )
+
+    if camera is not None and show_detector:
+        disp_dist = detector_display_dist if detector_display_dist is not None else 6.0 * scale
+        mm_to_disp = disp_dist / camera.dd
+
+        def _pixel_point_disp(xcam, ycam):
+            kf_hat = camera.pixel_to_kf(np.array([xcam]), np.array([ycam]))[0]
+            hit = _camera_hit_point_lab(camera, kf_hat)
+            return hit * mm_to_disp if hit is not None else None
+
+        c_pt = _pixel_point_disp(camera.xcen, camera.ycen)
+        r_pt = _pixel_point_disp(camera.xcen + camera.Nh / 2.0, camera.ycen)
+        u_pt = _pixel_point_disp(camera.xcen, camera.ycen - camera.Nv / 2.0)
+        if c_pt is not None and r_pt is not None and u_pt is not None:
+            h_vec, v_vec = r_pt - c_pt, u_pt - c_pt
+            # The real panel is often comparable in size to dd itself (e.g. a
+            # 150 mm detector at dd=85 mm), so scaling it by the same
+            # distance-compression factor as everything else would make it
+            # swallow the whole schematic view. Cap its *drawn* size to a
+            # fixed fraction of disp_dist, independently of disp_dist itself,
+            # while preserving its true orientation and aspect ratio.
+            panel_half_size = 0.35 * disp_dist
+            size_scale = panel_half_size / max(np.linalg.norm(h_vec), np.linalg.norm(v_vec))
+            h_vec, v_vec = h_vec * size_scale, v_vec * size_scale
+            det_corners = np.array([
+                c_pt + h_vec + v_vec, c_pt - h_vec + v_vec,
+                c_pt - h_vec - v_vec, c_pt + h_vec - v_vec,
+            ])
+            ax.add_collection3d(Poly3DCollection(
+                [det_corners], facecolor=detector_color, edgecolor=detector_color,
+                linewidths=1.6, alpha=0.25,
+            ))
+            ax.text(*(c_pt + 0.15 * (h_vec + v_vec)),
+                    f"detector (dd={camera.dd:.0f} mm,\nschematic distance)",
+                    color=detector_color, fontsize=7, ha="center", va="center")
+            legend_handles.append(
+                Line2D([0], [0], color=detector_color, lw=2, label="detector (schematic)")
+            )
+
+        for (h, k, l), G_lab, plane_color in zip(hkls, G_labs, colors):
+            kf_hat = _bragg_kf_hat(G_lab)
+            if kf_hat is None:
+                print(f"  Note: ({h}{k}{l}) is not excited for a beam along "
+                      f"+x (G·x̂ ≥ 0) -- no elastic scattered ray to draw.")
+                continue
+            pix = camera.project(kf_hat, source_depth_mm=0.0)
+            ray_end = scatter_pt + kf_hat * disp_dist
+            ax.plot(*zip(scatter_pt, ray_end), color=plane_color, lw=1.4,
+                    linestyle="-" if pix is not None else "--", alpha=0.85)
+            label = (f"({h}{k}{l}) → px({pix[0]:.0f}, {pix[1]:.0f})"
+                      if pix is not None else f"({h}{k}{l}) → off detector")
+            ax.text(*ray_end, label, color=plane_color, fontsize=7)
+        legend_handles.append(
+            Line2D([0], [0], color=FG, lw=1.4, linestyle="-",
+                   label="scattered ray  (— on det.,  -- off det.)")
         )
 
     if show_lab_axes:

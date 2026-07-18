@@ -5005,6 +5005,26 @@ def _draw_lab_axes_triad(ax, origin, length):
                 fontsize=9, fontweight="bold")
 
 
+def _sync_3d_views(fig, ax_a, ax_b):
+    """
+    Keep two `Axes3D` panels' view angle in lock-step while the user
+    mouse-drags either one to rotate it (interactive backends only -- a
+    no-op when rendering straight to a static image, since the underlying
+    event never fires there).
+    """
+    axes_by_id = {id(ax_a): ax_a, id(ax_b): ax_b}
+
+    def _on_move(event):
+        src = axes_by_id.get(id(event.inaxes))
+        if src is None or src.button_pressed not in src._rotate_btn:
+            return
+        dst = ax_b if src is ax_a else ax_a
+        dst.view_init(elev=src.elev, azim=src.azim, roll=src.roll)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", _on_move)
+
+
 def plot_unit_cell_in_lab(
     crystal,
     U: "np.ndarray",
@@ -5033,9 +5053,12 @@ def plot_unit_cell_in_lab(
     in :func:`plot_unit_cell`. Right panel: a scattering diagram -- one
     incident beam and every plane's normal and elastically diffracted-ray
     direction, all sharing a common origin and colour-coded to match their
-    plane in the left panel. Both panels share the same view angle (`elev`,
-    `azim`), so a plane's cut in the cell and its normal/ray direction in
-    the diagram can be read together for a given orientation.
+    plane in the left panel. Both panels start at the same view angle
+    (`elev`, `azim`) and stay in lock-step afterwards: on an interactive
+    backend, mouse-drag-rotating either panel rotates the other to match,
+    so a plane's cut in the cell and its normal/ray direction in the
+    diagram can always be read together for the current orientation
+    (a no-op when rendering straight to a static image via `out_path`).
 
     Lab frame convention (LaueTools / this project, matching
     `plot_layer_scheme`): x = incident beam direction, z = vertical up,
@@ -5127,7 +5150,8 @@ def plot_unit_cell_in_lab(
             pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
             pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
         ax.tick_params(colors="#7788aa", labelsize=7)
-        ax.view_init(elev=elev, azim=azim)   # shared view: same orientation reads on both panels
+        ax.view_init(elev=elev, azim=azim)   # shared initial view: same orientation reads on both panels
+    _sync_3d_views(fig, ax_cell, ax_scat)   # keep them synced if the user drag-rotates either one
 
     # ── Left panel: real-space cell + hkl plane(s) ─────────────────────────────
     for i, j in edges:

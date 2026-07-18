@@ -6950,6 +6950,9 @@ def plot_spot_image(
     return fig, axes
 
 
+_ROD_TANGENCY_PALETTE = [COL_SUP, COL_BCC, COL_DB, "#a78bfa", "#4ade80", "#f472b6", "#fb923c", "#38bdf8"]
+
+
 def plot_rod_tangency(
     stack,
     hkl,
@@ -6957,6 +6960,7 @@ def plot_rod_tangency(
     camera=None,
     *,
     ki_hat=None,
+    max_satellites=0,
     arrow_length_px=60,
     image=None,
     pad_px=40,
@@ -6966,43 +6970,87 @@ def plot_rod_tangency(
 ):
     """
     Show a reflection's superlattice-rod orientation relative to the
-    detector — the streak elongation direction (orange, `d(pixel)/d(along)`
-    from :func:`~nrxrdct.laue.simulation.rod_tangency`) with a perpendicular
-    reference line (blue, a display axis only — the streak's *width* comes
-    from off-rod structure-factor decay, not something derived here).
+    detector — the streak elongation direction (`d(pixel)/d(along)` from
+    :func:`~nrxrdct.laue.simulation.rod_tangency`) with a perpendicular
+    reference line (a display axis only — the streak's *width* comes from
+    off-rod structure-factor decay, not something derived here).
 
-    The orange line's length is fixed (`arrow_length_px`, for legibility);
-    what to actually compare across candidate `hkl` is `info['dpix_dalong']`
-    (also shown in the title) — large means a given accessible `Qn` range
-    maps to a long streak on the detector, small means the rod stays
-    compact even over several satellite orders.  Overlay this on a
-    measured/simulated `image` to see whether the orange line's direction
-    tracks a real elongated feature.
+    `layer` accepts several forms so the **same** `hkl` can be compared
+    across every layer in the stack at once — since each layer generally
+    has its own (possibly pseudomorphically strained) lattice, "the same"
+    Miller indices land at a slightly different `G0`, hence a different
+    pixel, energy, and streak direction, for each one:
+
+    * a single `Layer`/label (or `None`, the default `stack.layers[0]`) —
+      one coloured line, as before;
+    * a list of `Layer`/label — one coloured line per entry;
+    * `'all'` — every layer in `stack.all_layers`.
+
+    With `max_satellites > 0`, each layer's own discrete satellite comb
+    (`m = -max_satellites, ..., max_satellites`, at that layer's own
+    period) is marked with small dots along its streak line — so you can
+    directly compare *where* each layer's satellite orders would land,
+    not just the fundamental's direction.
+
+    What to actually compare across candidates is `info['dpix_dalong']`
+    (shown in the title for a single layer, or in the legend per layer for
+    several) — large means a given accessible `Qn` range maps to a long
+    streak on the detector, small means the rod stays compact even over
+    several satellite orders. Overlay this on a measured/simulated `image`
+    to see whether a line's direction tracks a real elongated feature.
 
     Args:
-        stack, hkl, layer, camera, ki_hat: Forwarded to
+        stack, hkl, camera, ki_hat: Forwarded to
             :func:`~nrxrdct.laue.simulation.rod_tangency`.
+        layer: Single layer/label/`None`, a list of them, or `'all'` — see
+            above.
+        max_satellites (int): Forwarded to `rod_tangency` for every layer —
+            `0` (default) shows only the streak-direction line; `> 0` also
+            marks each layer's own satellite-order positions.
         arrow_length_px (float): Half-length of the streak-direction line
             (pixels); the perpendicular reference line is drawn at 1/3 of
             this.
         image (ndarray, shape (Nv, Nh), optional): Measured or simulated
             detector frame to show cropped behind the arrows, for context.
             `None` (default) shows a plain dark background.
-        pad_px (float): Half-size of the cropped window shown around the
-            reflection's nominal pixel (only used when `image` is given,
-            or to set axis limits either way).
+        pad_px (float): Half-size of the cropped window shown, centred on
+            the mean of every plotted layer's `pix0`.
         ax (matplotlib.axes.Axes, optional): Draw into an existing axes
             instead of creating a new figure.
         figsize: Figure size (ignored if `ax` is given).
         out_path (str or None): Save figure to this path if given.
 
     Returns:
-        ``(fig, ax, info)`` — `info` is `rod_tangency`'s own return dict.
+        ``(fig, ax, infos)`` — `infos` is a list of `rod_tangency`'s own
+        return dicts, one per plotted layer, in the same order as drawn.
     """
     from .simulation import rod_tangency
 
-    info = rod_tangency(stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat)
-    px0, py0 = info["pix0"]
+    if layer is None or isinstance(layer, str) and layer != "all":
+        layers_to_plot = [layer]
+    elif isinstance(layer, str) and layer == "all":
+        layers_to_plot = list(stack.all_layers)
+    elif isinstance(layer, (list, tuple)):
+        layers_to_plot = list(layer)
+    else:
+        layers_to_plot = [layer]
+
+    infos = []
+    for ly in layers_to_plot:
+        try:
+            info = rod_tangency(stack, hkl, layer=ly, camera=camera, ki_hat=ki_hat, max_satellites=max_satellites)
+        except ValueError as e:
+            print(f"  plot_rod_tangency: skipping layer {ly!r} — {e}")
+            continue
+        if not info["on_detector"]:
+            print(f"  plot_rod_tangency: skipping layer {info['layer']!r} — hkl={info['hkl']} is off-detector")
+            continue
+        infos.append(info)
+    if not infos:
+        raise ValueError(f"hkl={tuple(int(x) for x in hkl)} lands on-detector for none of the requested layers")
+
+    cx = float(np.mean([info["pix0"][0] for info in infos]))
+    cy = float(np.mean([info["pix0"][1] for info in infos]))
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
@@ -7015,45 +7063,60 @@ def plot_rod_tangency(
     if image is not None:
         img_arr = np.asarray(image, dtype=float)
         Ny, Nx = img_arr.shape
-        x0 = max(int(px0 - pad_px), 0)
-        x1 = min(int(px0 + pad_px), Nx)
-        y0 = max(int(py0 - pad_px), 0)
-        y1 = min(int(py0 + pad_px), Ny)
+        x0 = max(int(cx - pad_px), 0)
+        x1 = min(int(cx + pad_px), Nx)
+        y0 = max(int(cy - pad_px), 0)
+        y1 = min(int(cy + pad_px), Ny)
         patch = img_arr[y0:y1, x0:x1]
         ax.imshow(
             np.log1p(patch), origin="upper", extent=[x0, x1, y1, y0],
             cmap="gray", aspect="equal",
         )
 
-    streak = info["streak_dir_px"]
-    perp = info["perp_dir_px"]
     perp_len = arrow_length_px / 3.0
+    multi = len(infos) > 1
+    for i, info in enumerate(infos):
+        color = _ROD_TANGENCY_PALETTE[i % len(_ROD_TANGENCY_PALETTE)]
+        px0, py0 = info["pix0"]
+        streak = info["streak_dir_px"]
+        perp = info["perp_dir_px"]
 
-    ax.plot(
-        [px0 - arrow_length_px * streak[0], px0 + arrow_length_px * streak[0]],
-        [py0 - arrow_length_px * streak[1], py0 + arrow_length_px * streak[1]],
-        "-", color=COL_SUP, lw=2.5, solid_capstyle="round",
-        label="streak direction (d(pixel)/d(along))",
-    )
-    ax.plot(
-        [px0 - perp_len * perp[0], px0 + perp_len * perp[0]],
-        [py0 - perp_len * perp[1], py0 + perp_len * perp[1]],
-        "--", color=COL_BCC, lw=1.5, solid_capstyle="round",
-        label="perpendicular (reference axis only)",
-    )
-    ax.plot(px0, py0, "+", color=FG, ms=10, mew=1.2, zorder=5)
+        label = f"{info['layer']}  ({info['dpix_dalong']:.1e} px/Å⁻¹)" if multi else "streak direction (d(pixel)/d(along))"
+        ax.plot(
+            [px0 - arrow_length_px * streak[0], px0 + arrow_length_px * streak[0]],
+            [py0 - arrow_length_px * streak[1], py0 + arrow_length_px * streak[1]],
+            "-", color=color, lw=2.5, solid_capstyle="round", label=label,
+        )
+        if not multi:
+            ax.plot(
+                [px0 - perp_len * perp[0], px0 + perp_len * perp[0]],
+                [py0 - perp_len * perp[1], py0 + perp_len * perp[1]],
+                "--", color=COL_BCC, lw=1.5, solid_capstyle="round",
+                label="perpendicular (reference axis only)",
+            )
+        ax.plot(px0, py0, "+", color=color if multi else FG, ms=10, mew=1.4, zorder=5)
 
-    ax.set_xlim(px0 - pad_px, px0 + pad_px)
-    ax.set_ylim(py0 + pad_px, py0 - pad_px)
+        for m, sat in info["satellites"].items():
+            if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                continue
+            sx, sy = sat["pix"]
+            ax.plot(sx, sy, "o", color=color, ms=4, mfc=color, mec=BG, mew=0.5, zorder=4)
+
+    ax.set_xlim(cx - pad_px, cx + pad_px)
+    ax.set_ylim(cy + pad_px, cy - pad_px)
     ax.set_aspect("equal")
 
     leg = ax.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
     leg.get_frame().set_alpha(0.85)
 
-    title = (
-        f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV\n"
-        f"|d(pixel)/d(along)| = {info['dpix_dalong']:.2e} px/Å⁻¹"
-    )
+    if multi:
+        title = f"hkl={infos[0]['hkl']}  — {len(infos)} layers compared"
+    else:
+        info = infos[0]
+        title = (
+            f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV\n"
+            f"|d(pixel)/d(along)| = {info['dpix_dalong']:.2e} px/Å⁻¹"
+        )
     ax.set_title(title, color=FG, fontsize=9, pad=6)
     fig.tight_layout()
 
@@ -7061,7 +7124,7 @@ def plot_rod_tangency(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
-    return fig, ax, info
+    return fig, ax, infos
 
 
 # ─────────────────────────────────────────────────────────────────────────────

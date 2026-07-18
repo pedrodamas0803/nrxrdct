@@ -3608,7 +3608,7 @@ def qspace_multi_hkl(
     return vols
 
 
-def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e-4):
+def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e-4, max_satellites=0):
     """
     Local pixel-space direction a reflection's superlattice rod traces out
     on the detector — the geometric root cause of the elongated satellite
@@ -3652,6 +3652,15 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
             `0.01`-`0.1` Å⁻¹) so the estimate is local; the default
             `1e-4` is safely small for that range without hitting
             floating-point noise.
+        max_satellites : int, optional
+            `0` (default) — only `pix0`/`E0` (the `m=0` main peak) are
+            computed.  Set to `N > 0` to also solve the exact elastic
+            condition at `G0 + m·(2π/Λ)·n_hat` for `m = -N, ..., N` (the
+            same discrete satellite comb `qspace_around_spot` pins), and
+            project each to a pixel — see `'satellites'` below.  `Λ` is
+            `layer`'s own repeating block's period if it belongs to one
+            with `n_rep > 1`, else `layer.thickness`, matching
+            `qspace_around_spot`'s own fallback.
 
     Returns:
     dict with keys:
@@ -3675,6 +3684,12 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
             pixels; compare across candidate `hkl` rather than reading it
             in isolation.
         `'on_detector'` : bool — whether `pix0` actually lands on `camera`.
+        `'period'` : float or None — the `Λ` (Å) used for the satellite
+            comb, or `None` if `max_satellites=0`.
+        `'satellites'` : dict `{m: {'pix', 'E', 'on_detector'}}` for
+            `m = -max_satellites, ..., max_satellites` (`m=0` duplicates
+            `pix0`/`E0`); `'pix'`/`'E'` are `None` where `m` doesn't
+            satisfy the elastic condition.  Empty when `max_satellites=0`.
 
     Example:
     >>> info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam)
@@ -3741,6 +3756,31 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         streak_dir = np.array([1.0, 0.0])
     perp_dir = np.array([-streak_dir[1], streak_dir[0]])
 
+    period = None
+    satellites = {}
+    if max_satellites > 0:
+        stack._update_offsets()
+        owning_block = None
+        if layer not in stack.buffer_layers:
+            owning_block = next((blk for blk in stack._blocks if layer in blk.layers), None)
+        if owning_block is not None and owning_block.n_rep > 1 and owning_block._period > 1e-6:
+            period = float(owning_block._period)
+        elif getattr(layer, "thickness", 0.0) > 1e-6:
+            period = float(layer.thickness)
+        else:
+            period = 0.01 * float(np.linalg.norm(G0))
+        q_fringe = 2.0 * np.pi / period
+        for m in range(-max_satellites, max_satellites + 1):
+            if m == 0:
+                satellites[0] = {"pix": (float(pix0[0]), float(pix0[1])), "E": E0, "on_detector": on_det0}
+                continue
+            res_m = _solve(G0 + m * q_fringe * n_hat)
+            satellites[m] = (
+                {"pix": (float(res_m[1][0]), float(res_m[1][1])), "E": res_m[0], "on_detector": res_m[2]}
+                if res_m is not None
+                else {"pix": None, "E": None, "on_detector": False}
+            )
+
     return {
         "hkl": (h, k, l),
         "layer": layer.label,
@@ -3750,6 +3790,8 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         "perp_dir_px": perp_dir,
         "dpix_dalong": jac_mag,
         "on_detector": on_det0,
+        "period": period,
+        "satellites": satellites,
     }
 
 

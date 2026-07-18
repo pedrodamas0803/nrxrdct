@@ -57,6 +57,7 @@ nav:
       - Thin-Film Satellite References: user-guide/laue_thin_film_satellites_refs.md
       - Layered Structures: user-guide/laue_layered_structures.md
       - Darwin Model (Thick Layers): user-guide/laue_darwin.md
+      - Rod Tangency and Per-Pixel Simulation: user-guide/laue_rod_tangency.md
       - Spot Segmentation: user-guide/laue_segmentation.md
       - Orientation Plotting: user-guide/laue_orientation_plotting.md
       - Strain Analysis: user-guide/laue_strain.md

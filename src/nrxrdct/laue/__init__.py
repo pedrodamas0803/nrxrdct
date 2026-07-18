@@ -69,6 +69,7 @@ from .laue_plotting import (
     plot_strain_broadening,
     plot_tth_chi_overlay,
     plot_unit_cell,
+    plot_unit_cell_in_lab,
     warp_image_to_tth_chi,
 )
 from .layers import (
@@ -308,6 +309,7 @@ __all__ = [
     "plot_strain_broadening",
     "plot_tth_chi_overlay",
     "plot_unit_cell",
+    "plot_unit_cell_in_lab",
     "warp_image_to_tth_chi",
     # Segmentation
     "auto_init_gaussian_mixture_global",

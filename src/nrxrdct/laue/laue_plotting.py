@@ -4759,15 +4759,22 @@ def _hkl_plane_fractional(h, k, l, m):
     return poly
 
 
+def _normalize_hkl_list(hkl):
+    """Accept a single `(h, k, l)` or a list of them; always return a list."""
+    if len(hkl) == 3 and all(np.isscalar(v) for v in hkl):
+        return [tuple(int(v) for v in hkl)]
+    return [tuple(int(v) for v in item) for item in hkl]
+
+
 def plot_unit_cell(
     crystal,
-    hkl: "tuple[int, int, int]" = (1, 1, 1),
+    hkl: "tuple[int, int, int] | list[tuple[int, int, int]]" = (1, 1, 1),
     *,
-    plane_offset: "int | None" = None,
+    plane_offset: "int | list[int | None] | None" = None,
     show_normal: bool = True,
     show_axes_arrows: bool = True,
     cell_color: str = FG,
-    plane_color: str = COL_SUP,
+    plane_colors: "str | list[str] | None" = None,
     normal_color: str = COL_DB,
     elev: float = 20.0,
     azim: float = -50.0,
@@ -4777,14 +4784,14 @@ def plot_unit_cell(
 ):
     """
     Draw the full (conventional, non-reduced) unit cell of *crystal* in 3-D
-    and overlay one representative plane of the `hkl` family for
-    visualization.
+    and overlay one or more representative planes from the `hkl` families
+    for visualization.
 
     The cell is the parallelepiped spanned by `crystal.a1`, `crystal.a2`,
     `crystal.a3` (the real-space lattice vectors exactly as built by
     `xrayutilities.materials.SGLattice`/`Crystal` — no Niggli/Delaunay
     reduction is applied, matching what CIF or `build_bcc`/`build_b2` etc.
-    hand back). The `(hkl)` plane is found as the intersection of
+    hand back). Each `(hkl)` plane is found as the intersection of
     `h·u + k·v + l·w = m` (fractional coordinates `u,v,w`, the textbook
     Miller-index construction) with the unit cell cube, then mapped back to
     Cartesian space through `crystal.a1/a2/a3`. `m` (the plane's distance
@@ -4797,14 +4804,20 @@ def plot_unit_cell(
             `.a1 .a2 .a3` (Cartesian real-space cell vectors, Å),
             `.Q(h, k, l)` (reciprocal-lattice vector) and
             `.planeDistance(h, k, l)` (d-spacing).
-        hkl: Miller indices of the plane to draw.
+        hkl: Miller indices of the plane to draw, e.g. `(1, 1, 1)`, or a
+            list of several, e.g. `[(1, 1, 1), (1, 0, 0)]`.
         plane_offset: Override the automatic choice of `m` above (e.g. `2`
             to draw the second plane of the family instead of the first).
+            Either a single value applied to every plane in `hkl`, or a
+            list matching `hkl` one-to-one.
         show_normal: Draw an arrow along `crystal.Q(hkl)` (the plane
-            normal) from the cell centroid.
+            normal), anchored at that plane's own centroid.
         show_axes_arrows: Draw labelled `a`, `b`, `c` arrows from the
             origin.
-        cell_color, plane_color, normal_color: Line/fill colours.
+        cell_color, normal_color: Line colours.
+        plane_colors: Fill/edge colour(s) for the plane(s). A single colour
+            applied to all planes, a list matching `hkl` one-to-one, or
+            `None` to cycle through the project's standard grain palette.
         elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
         figsize: Figure size in inches (only used when `ax is None`).
         ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
@@ -4816,14 +4829,27 @@ def plot_unit_cell(
 
     Example:
     >>> crystal = crystal_from_cif("Al2O3.cif")
-    >>> plot_unit_cell(crystal, hkl=(1, 0, 4), out_path="al2o3_104.png")
+    >>> plot_unit_cell(crystal, hkl=[(1, 0, 4), (0, 0, 1)], out_path="al2o3.png")
     """
     from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-    h, k, l = (int(x) for x in hkl)
-    if h == 0 and k == 0 and l == 0:
+    hkls = _normalize_hkl_list(hkl)
+    if any(h == 0 and k == 0 and l == 0 for h, k, l in hkls):
         raise ValueError("hkl=(0, 0, 0) does not define a plane")
+
+    n_planes = len(hkls)
+    offsets = plane_offset if isinstance(plane_offset, (list, tuple)) else [plane_offset] * n_planes
+    if len(offsets) != n_planes:
+        raise ValueError("plane_offset list must match the number of hkl planes")
+    if plane_colors is None:
+        colors = [_GRAIN_COLORS[i % len(_GRAIN_COLORS)] for i in range(n_planes)]
+    elif isinstance(plane_colors, str):
+        colors = [plane_colors] * n_planes
+    else:
+        colors = list(plane_colors)
+        if len(colors) != n_planes:
+            raise ValueError("plane_colors list must match the number of hkl planes")
 
     ai = np.array([crystal.a1, crystal.a2, crystal.a3], dtype=float)
     cart_corners = _CELL_CORNERS_FRAC @ ai
@@ -4833,19 +4859,6 @@ def plot_unit_cell(
         for j in range(i + 1, 8)
         if np.sum(_CELL_CORNERS_FRAC[i] != _CELL_CORNERS_FRAC[j]) == 1
     ]
-
-    if plane_offset is not None:
-        offsets_to_try = [plane_offset]
-    else:
-        f_max = max(h, 0) + max(k, 0) + max(l, 0)
-        offsets_to_try = [1, -1] if f_max >= 1 else [-1, 1]
-
-    frac_poly = []
-    for m in offsets_to_try:
-        frac_poly = _hkl_plane_fractional(h, k, l, m)
-        if len(frac_poly) >= 3:
-            break
-    cart_poly = np.array(frac_poly) @ ai if len(frac_poly) >= 3 else None
 
     standalone = ax is None
     if standalone:
@@ -4868,27 +4881,50 @@ def plot_unit_cell(
     ax.scatter(*cart_corners.T, color=cell_color, s=12, alpha=0.8)
 
     legend_handles = []
-    if cart_poly is not None:
+    drew_any_normal = False
+    normal_arrow_len = 0.6 * min(np.linalg.norm(v) for v in ai)
+    for (h, k, l), user_offset, plane_color in zip(hkls, offsets, colors):
+        if user_offset is not None:
+            offsets_to_try = [user_offset]
+        else:
+            f_max = max(h, 0) + max(k, 0) + max(l, 0)
+            offsets_to_try = [1, -1] if f_max >= 1 else [-1, 1]
+
+        frac_poly = []
+        for m in offsets_to_try:
+            frac_poly = _hkl_plane_fractional(h, k, l, m)
+            if len(frac_poly) >= 3:
+                break
+
+        d_hkl = crystal.planeDistance(h, k, l)
+        if len(frac_poly) < 3:
+            print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit "
+                  f"cell for the offsets tried ({offsets_to_try}); pass "
+                  f"plane_offset explicitly to pick a different member of "
+                  f"the family.")
+            continue
+
+        cart_poly = np.array(frac_poly) @ ai
         ax.add_collection3d(Poly3DCollection(
             [cart_poly], facecolor=plane_color, edgecolor=plane_color,
             linewidths=1.2, alpha=0.35,
         ))
         legend_handles.append(
             Line2D([0], [0], color=plane_color, lw=2,
-                   label=f"({h}{k}{l}) plane")
+                   label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
         )
-    else:
-        print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit cell "
-              f"for the offsets tried ({offsets_to_try}); pass plane_offset "
-              f"explicitly to pick a different member of the family.")
 
-    centroid = cart_corners.mean(axis=0)
-    if show_normal:
-        n_hat = crystal.Q(h, k, l)
-        n_hat = n_hat / np.linalg.norm(n_hat)
-        arrow_len = 0.6 * np.linalg.norm(ai[0])
-        ax.quiver(*centroid, *(n_hat * arrow_len), color=normal_color,
-                   linewidth=1.8, arrow_length_ratio=0.15)
+        if show_normal:
+            # Anchored at this plane's own centroid (not the cell centroid)
+            # so the arrow sits flush against the plane it belongs to.
+            plane_centroid = cart_poly.mean(axis=0)
+            n_hat = crystal.Q(h, k, l)
+            n_hat = n_hat / np.linalg.norm(n_hat)
+            ax.quiver(*plane_centroid, *(n_hat * normal_arrow_len),
+                       color=normal_color, linewidth=1.8, arrow_length_ratio=0.15)
+            drew_any_normal = True
+
+    if drew_any_normal:
         legend_handles.append(
             Line2D([0], [0], color=normal_color, lw=2, label="plane normal (Q_hkl)")
         )
@@ -4899,17 +4935,244 @@ def plot_unit_cell(
                       arrow_length_ratio=0.08, alpha=0.9)
             ax.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
 
-    d_hkl = crystal.planeDistance(h, k, l)
     ax.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
     ax.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
     ax.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
-    ax.set_title(
-        f"Unit cell — ({h}{k}{l}) plane, d = {d_hkl:.4f} Å",
-        color=FG, fontsize=10, pad=10,
-    )
+    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
+    ax.set_title(f"Unit cell — {title}", color=FG, fontsize=10, pad=10)
     ax.view_init(elev=elev, azim=azim)
     try:
         ax.set_box_aspect(np.ptp(cart_corners, axis=0))
+    except AttributeError:
+        pass
+
+    if legend_handles:
+        ax.legend(
+            handles=legend_handles, fontsize=7, labelcolor=FG,
+            facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
+        )
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3D UNIT CELL IN THE LAB FRAME
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def plot_unit_cell_in_lab(
+    crystal,
+    U: "np.ndarray",
+    hkl: "tuple[int, int, int] | list[tuple[int, int, int]]" = (1, 1, 1),
+    *,
+    plane_offset: "int | list[int | None] | None" = None,
+    show_normal: bool = True,
+    show_crystal_axes: bool = True,
+    show_lab_axes: bool = True,
+    show_beam: bool = True,
+    cell_color: str = FG,
+    plane_colors: "str | list[str] | None" = None,
+    normal_color: str = COL_DB,
+    beam_color: str = COL_DB,
+    elev: float = 20.0,
+    azim: float = -50.0,
+    figsize: "tuple[float, float]" = (8, 8),
+    ax: "plt.Axes | None" = None,
+    out_path: "str | None" = None,
+):
+    """
+    Like :func:`plot_unit_cell`, but rotates the crystal's unit cell (and
+    `hkl` plane(s)) into the lab frame via the orientation matrix `U`, and
+    adds the lab-frame furniture from :func:`plot_layer_scheme` -- the
+    incident beam and the x/y/z lab axes -- rendered in 3-D instead of a
+    2-D XZ cross-section.
+
+    Lab frame convention (LaueTools / this project, matching
+    `plot_layer_scheme`): x = incident beam direction, z = vertical up,
+    y completes the right-handed frame. `v_lab = U @ v_crystal` for any
+    crystal-frame vector (cell edges, `crystal.Q(hkl)`, etc.) -- the same
+    convention used throughout `nrxrdct.laue.simulation`
+    (e.g. `layer.U @ layer.crystal.Q(h, k, l)`).
+
+    Args:
+        crystal: xrayutilities-compatible crystal object (see `plot_unit_cell`).
+        U: `(3, 3)` orientation matrix rotating crystal-frame vectors into
+            the lab frame.
+        hkl: Miller indices of the plane(s) to draw (single tuple or list).
+        plane_offset, show_normal, plane_colors, normal_color: see
+            `plot_unit_cell`.
+        show_crystal_axes: Draw labelled `a`, `b`, `c` arrows (rotated into
+            the lab frame) from the cell origin.
+        show_lab_axes: Draw the fixed lab-frame x/y/z axes near the cell.
+        show_beam: Draw the incident-beam arrow travelling along +x into
+            the cell.
+        cell_color, beam_color: Line colours.
+        elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
+        figsize: Figure size in inches (only used when `ax is None`).
+        ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
+            (created with `projection='3d'`); `None` creates a new figure.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, ax)`
+
+    Example:
+    >>> U = euler_to_U(10, 20, 30)
+    >>> plot_unit_cell_in_lab(crystal, U, hkl=[(1, 1, 1), (1, 0, 0)])
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    U = np.asarray(U, dtype=float)
+    hkls = _normalize_hkl_list(hkl)
+    if any(h == 0 and k == 0 and l == 0 for h, k, l in hkls):
+        raise ValueError("hkl=(0, 0, 0) does not define a plane")
+
+    n_planes = len(hkls)
+    offsets = plane_offset if isinstance(plane_offset, (list, tuple)) else [plane_offset] * n_planes
+    if len(offsets) != n_planes:
+        raise ValueError("plane_offset list must match the number of hkl planes")
+    if plane_colors is None:
+        colors = [_GRAIN_COLORS[i % len(_GRAIN_COLORS)] for i in range(n_planes)]
+    elif isinstance(plane_colors, str):
+        colors = [plane_colors] * n_planes
+    else:
+        colors = list(plane_colors)
+        if len(colors) != n_planes:
+            raise ValueError("plane_colors list must match the number of hkl planes")
+
+    ai_cry = np.array([crystal.a1, crystal.a2, crystal.a3], dtype=float)
+    ai = ai_cry @ U.T   # rows a1,a2,a3 rotated into the lab frame
+    cart_corners = _CELL_CORNERS_FRAC @ ai
+    edges = [
+        (i, j)
+        for i in range(8)
+        for j in range(i + 1, 8)
+        if np.sum(_CELL_CORNERS_FRAC[i] != _CELL_CORNERS_FRAC[j]) == 1
+    ]
+
+    standalone = ax is None
+    if standalone:
+        fig = plt.figure(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+        ax = fig.add_subplot(111, projection="3d")
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    fig.patch.set_facecolor(BG)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+        pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+
+    for i, j in edges:
+        p, q = cart_corners[i], cart_corners[j]
+        ax.plot(*zip(p, q), color=cell_color, lw=1.2, alpha=0.6)
+    ax.scatter(*cart_corners.T, color=cell_color, s=12, alpha=0.8)
+
+    legend_handles = []
+    drew_any_normal = False
+    normal_arrow_len = 0.6 * min(np.linalg.norm(v) for v in ai)
+    for (h, k, l), user_offset, plane_color in zip(hkls, offsets, colors):
+        if user_offset is not None:
+            offsets_to_try = [user_offset]
+        else:
+            f_max = max(h, 0) + max(k, 0) + max(l, 0)
+            offsets_to_try = [1, -1] if f_max >= 1 else [-1, 1]
+
+        frac_poly = []
+        for m in offsets_to_try:
+            frac_poly = _hkl_plane_fractional(h, k, l, m)
+            if len(frac_poly) >= 3:
+                break
+
+        d_hkl = crystal.planeDistance(h, k, l)
+        if len(frac_poly) < 3:
+            print(f"  Warning: ({h}{k}{l}) plane does not intersect the unit "
+                  f"cell for the offsets tried ({offsets_to_try}); pass "
+                  f"plane_offset explicitly to pick a different member of "
+                  f"the family.")
+            continue
+
+        cart_poly = np.array(frac_poly) @ ai
+        ax.add_collection3d(Poly3DCollection(
+            [cart_poly], facecolor=plane_color, edgecolor=plane_color,
+            linewidths=1.2, alpha=0.35,
+        ))
+        legend_handles.append(
+            Line2D([0], [0], color=plane_color, lw=2,
+                   label=f"({h}{k}{l})  d = {d_hkl:.4f} Å")
+        )
+
+        if show_normal:
+            # Anchored at this plane's own centroid, and rotated by U along
+            # with everything else -- see plot_unit_cell for why the
+            # centroid (not the cell centroid) is the correct anchor.
+            plane_centroid = cart_poly.mean(axis=0)
+            n_hat = U @ crystal.Q(h, k, l)
+            n_hat = n_hat / np.linalg.norm(n_hat)
+            ax.quiver(*plane_centroid, *(n_hat * normal_arrow_len),
+                       color=normal_color, linewidth=1.8, arrow_length_ratio=0.15)
+            drew_any_normal = True
+
+    if drew_any_normal:
+        legend_handles.append(
+            Line2D([0], [0], color=normal_color, lw=2, label="plane normal (Q_hkl)")
+        )
+
+    if show_crystal_axes:
+        for vec, label in zip(ai, ("a", "b", "c")):
+            ax.quiver(0, 0, 0, *vec, color=cell_color, linewidth=1.0,
+                      arrow_length_ratio=0.08, alpha=0.9)
+            ax.text(*(vec * 1.08), label, color=cell_color, fontsize=10)
+
+    # ── Lab furniture: incident beam (+x) and x/y/z axes ──────────────────────
+    # Mirrors the beam arrow / axis triad drawn by plot_layer_scheme, just in
+    # 3-D and anchored relative to the (possibly tilted) cell's own extent.
+    cell_span = np.ptp(cart_corners, axis=0)
+    scale = float(cell_span.max()) if cell_span.max() > 0 else 1.0
+
+    if show_beam:
+        beam_tip = np.array([cart_corners[:, 0].min(), 0.0, 0.0])
+        beam_tail = beam_tip - np.array([0.8 * scale, 0.0, 0.0])
+        ax.quiver(*beam_tail, *(beam_tip - beam_tail), color=beam_color,
+                  linewidth=2.2, arrow_length_ratio=0.18)
+        ax.text(*beam_tail, "incident beam", color=beam_color, fontsize=8,
+                ha="left", va="bottom")
+        legend_handles.append(
+            Line2D([0], [0], color=beam_color, lw=2, label="incident beam (+x)")
+        )
+
+    if show_lab_axes:
+        origin = cart_corners.min(axis=0) - 0.6 * scale
+        ax_len = 0.5 * scale
+        for direction, color, label in (
+            (np.array([1.0, 0.0, 0.0]), "#4fc3f7", "x (beam)"),
+            (np.array([0.0, 1.0, 0.0]), "#88cc88", "y"),
+            (np.array([0.0, 0.0, 1.0]), "#ff9f43", "z (up)"),
+        ):
+            tip = origin + ax_len * direction
+            ax.quiver(*origin, *(tip - origin), color=color, linewidth=2.0,
+                      arrow_length_ratio=0.2)
+            ax.text(*(tip + 0.1 * ax_len * direction), label, color=color,
+                    fontsize=9, fontweight="bold")
+
+    ax.set_xlabel("x  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax.set_ylabel("y  (Å)", color=FG, fontsize=8, labelpad=8)
+    ax.set_zlabel("z  (Å)", color=FG, fontsize=8, labelpad=8)
+    title = ", ".join(f"({h}{k}{l})" for h, k, l in hkls) if n_planes <= 3 else f"{n_planes} planes"
+    ax.set_title(f"Unit cell in lab frame — {title}", color=FG, fontsize=10, pad=10)
+    ax.view_init(elev=elev, azim=azim)
+    try:
+        ax.set_box_aspect(cell_span)
     except AttributeError:
         pass
 

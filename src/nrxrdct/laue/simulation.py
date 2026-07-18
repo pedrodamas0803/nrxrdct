@@ -77,6 +77,8 @@ Full orientation via Bunge ZXZ Euler angles $(\phi_1, \\Phi, \\phi_2)$.
 A Bragg-energy reference table is printed at runtime.
 """
 
+import math
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
@@ -1676,6 +1678,65 @@ def precompute_allowed_hkl(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _harmonic_order(hkl_base, hkl_other):
+    """
+    Integer `n` such that `hkl_other == n * hkl_base`, or `None` if
+    `hkl_other` is not an exact integer multiple of `hkl_base`.
+
+    Used only to *label* entries in `harmonic_hkls` after the fact — the
+    merge in `_merge_or_append_spot` itself never checks this (see its
+    docstring: it merges on pixel coincidence alone, by design, since
+    non-harmonic accidental overlaps are real and physically valid too).
+    """
+    n = None
+    for a_i, b_i in zip(hkl_base, hkl_other):
+        if a_i != 0:
+            if b_i % a_i != 0:
+                return None
+            n = b_i // a_i
+            break
+    if n is None:
+        return None
+    return n if all(b_i == n * a_i for a_i, b_i in zip(hkl_base, hkl_other)) else None
+
+
+def _harmonic_orders_for_group(hkls):
+    """
+    Label every `hkl` in a coincident-pixel group by its integer order `n`
+    relative to the group's own *primitive* direction (GCD-reduced, chosen
+    as whichever member has the smallest reduced magnitude) — not whichever
+    member happened to be enumerated first.
+
+    Comparing pairwise against a fixed "first-seen" reference (the earlier,
+    simpler approach) mislabels groups where the first-enumerated hkl is
+    itself a higher harmonic — e.g. `(-10, 4, 2)` enumerated before
+    `(-5, 2, 1)`: `(-5, 2, 1)` is not an integer multiple of `(-10, 4, 2)`
+    (ratio 1/2), even though `(-10, 4, 2)` obviously *is* the 2nd harmonic
+    of `(-5, 2, 1)`.  Re-deriving the primitive from the whole group avoids
+    that enumeration-order dependence.
+
+    Args:
+        hkls (list of (int, int, int)): One coincident-pixel group's `harmonic_hkls`.
+
+    Returns:
+        list of int or None, same length as `hkls` — each entry's order
+            relative to the group's primitive, or `None` if that entry
+            isn't an exact integer multiple of it (an accidental,
+            non-harmonic overlap).
+    """
+    def _gcd3(h, k, l):
+        g = math.gcd(math.gcd(abs(h), abs(k)), abs(l))
+        return g if g != 0 else 1
+
+    reduced = []
+    for hkl in hkls:
+        g = _gcd3(*hkl)
+        reduced.append(tuple(x // g for x in hkl))
+    prim_idx = min(range(len(hkls)), key=lambda i: sum(x * x for x in reduced[i]))
+    primitive = reduced[prim_idx]
+    return [_harmonic_order(primitive, hkl) for hkl in hkls]
+
+
 def _merge_or_append_spot(spots, seen_pix, pix_key, spot):
     """
     Accumulate a candidate reflection onto whatever already occupies its
@@ -1701,6 +1762,20 @@ def _merge_or_append_spot(spots, seen_pix, pix_key, spot):
     so `sum(spot['harmonic_I_raw']) == spot['I_raw']` always holds and can
     be checked rather than trusted.
 
+    **`harmonic_hkls` is not limited to true (integer-multiple) harmonics.**
+    Since the merge key is pixel coincidence alone, two reflections that
+    accidentally land on the same pixel without one being an integer
+    multiple of the other are merged identically — that is real, correct
+    physics (an undiscriminating detector pixel sums whatever lands on it
+    regardless of *why*), not a bug.  `harmonic_orders` (parallel to
+    `harmonic_hkls`, recomputed for the whole group on every merge via
+    `_harmonic_orders_for_group`) makes the distinction explicit: each
+    entry is its integer order relative to the group's own GCD-reduced
+    primitive direction (not just whichever member was enumerated first —
+    see that function's docstring for why that distinction matters), or
+    `None` if this entry is an accidental (non-integer-ratio) overlap
+    rather than a true harmonic.
+
     Args:
         spots (list of dict): Growing spot list; mutated in place.
         seen_pix (dict): `{(round(xcam), round(ycam)): index into spots}`; mutated in place.
@@ -1715,6 +1790,7 @@ def _merge_or_append_spot(spots, seen_pix, pix_key, spot):
     if i is None:
         spot["n_harmonics"] = 1
         spot["harmonic_hkls"] = [spot["hkl"]]
+        spot["harmonic_orders"] = [1]
         spot["harmonic_F2"] = [spot["F2"]]
         spot["harmonic_I_raw"] = [spot["I_raw"]]
         spots.append(spot)
@@ -1726,6 +1802,7 @@ def _merge_or_append_spot(spots, seen_pix, pix_key, spot):
     existing["I_raw"] += spot["I_raw"]
     existing["n_harmonics"] += 1
     existing["harmonic_hkls"].append(spot["hkl"])
+    existing["harmonic_orders"] = _harmonic_orders_for_group(existing["harmonic_hkls"])
     return False
 
 

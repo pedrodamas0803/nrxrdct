@@ -1239,6 +1239,63 @@ class LayeredCrystal:
         block's layers in order (each listed once, not unrolled by `n_rep`)."""
         return self.buffer_layers + self.layers
 
+    def print_reflections(self, spots, layer=None, *, satellite_order=None,
+                           min_intensity=0.0, max_rows=200):
+        """
+        Print the reflections actually present in a `spots` list for one
+        layer (or every layer), grouped and sorted by intensity.
+
+        Meant as a quick answer to "does hkl=... exist in my spots list for
+        this layer?" before calling something like
+        :func:`~nrxrdct.laue.simulation.simulate_spot_image`, which raises a
+        `ValueError` naming exactly this hkl/layer/satellite_order
+        combination when it can't find a match — this prints the full
+        picture up front instead of discovering it one failed call at a
+        time.
+
+        Args:
+            spots (list[dict]): Output of any `simulate_laue*` function.
+            layer (Layer, str, or None, optional): Which layer to list. `None` (default) lists every layer in
+                `self.all_layers` in turn.
+            satellite_order (int or None, optional): `None` (default) shows every satellite order; pass an int
+                (e.g. `0` for main peaks only) to filter to just that order.
+            min_intensity (float, optional): Only show spots with `spots[i]['intensity']` (normalised 0-1) at or
+                above this value.  Default `0.0` (show everything).
+            max_rows (int, optional): Truncate the printed table per layer after this many rows
+                (still sorted by intensity first, so the brightest survive).
+
+        Returns:
+            None — prints only.
+        """
+        if layer is not None:
+            labels = [layer.label if hasattr(layer, "label") else layer]
+        else:
+            labels = [ly.label for ly in self.all_layers]
+
+        for label in labels:
+            rows = [
+                s for s in spots
+                if s.get("phase_label") == label
+                and (satellite_order is None or s.get("satellite_order", 0) == satellite_order)
+                and s.get("intensity", 1.0) >= min_intensity
+            ]
+            if not rows:
+                print(f"Layer {label!r}: no matching spots in `spots`")
+                continue
+            rows = sorted(rows, key=lambda s: -s.get("intensity", 0.0))
+            print(f"Layer {label!r}: {len(rows)} spot(s)")
+            print(f"  {'hkl':<18}{'order':>7}{'E (eV)':>11}{'intensity':>11}  pix")
+            for r in rows[:max_rows]:
+                hkl_str = str(tuple(int(x) for x in r["hkl"]))
+                order = r.get("satellite_order", 0)
+                E = r.get("E", float("nan"))
+                inten = r.get("intensity", float("nan"))
+                pix = r.get("pix")
+                pix_str = f"({pix[0]:.1f}, {pix[1]:.1f})" if pix is not None else "None"
+                print(f"  {hkl_str:<18}{order:>7}{E:>11.1f}{inten:>11.4f}  {pix_str}")
+            if len(rows) > max_rows:
+                print(f"  ... ({len(rows) - max_rows} more not shown; increase max_rows)")
+
     # ── Structure factor ──────────────────────────────────────────────────────
 
     def structure_factor(self, Q_lab, energy_eV, kf_hat=None):

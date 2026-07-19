@@ -77,8 +77,12 @@ Full orientation via Bunge ZXZ Euler angles $(\phi_1, \\Phi, \\phi_2)$.
 A Bragg-energy reference table is printed at runtime.
 """
 
+import json
 import math
+import os
+import subprocess
 
+import dill as pickle
 import numpy as np
 from scipy.spatial.transform import Rotation
 from scipy.special import kv
@@ -4470,6 +4474,8 @@ def simulate_full_detector_image(
     sigma_h_mrad=0.0,
     sigma_v_mrad=0.0,
     n_div=5,
+    row_start=0,
+    row_end=None,
     verbose=True,
 ):
     """
@@ -4538,6 +4544,14 @@ def simulate_full_detector_image(
         sigma_h_mrad, sigma_v_mrad, n_div : optional
             Incident-beam angular divergence — same meaning and defaults
             (`0.0`, off) as `simulate_spot_image`.
+        row_start, row_end : int, int or None, optional
+            Restrict the computation to a slice `ys_full[row_start:row_end]`
+            of the binned-row grid (`ys_full = arange(bin_px // 2,
+            camera.Nv, bin_px)`) — for splitting a full-frame simulation
+            across multiple jobs (one row chunk per SLURM array task), see
+            :func:`submit_full_detector_image`. Columns (`x0`) are always
+            computed in full; only rows are chunkable. Defaults (`0`,
+            `None`) compute every row, i.e. the whole frame.
         verbose : bool, optional
             Print progress (one line per row-chunk) and a final summary.
 
@@ -4603,7 +4617,8 @@ def simulate_full_detector_image(
         eval_stack = stack
 
     xs = np.arange(bin_px // 2, camera.Nh, bin_px, dtype=float)
-    ys = np.arange(bin_px // 2, camera.Nv, bin_px, dtype=float)
+    ys_full = np.arange(bin_px // 2, camera.Nv, bin_px, dtype=float)
+    ys = ys_full[row_start:row_end]
     XX, YY = np.meshgrid(xs, ys)
     shape = XX.shape
     kf_hat = camera.pixel_to_kf(XX.ravel(), YY.ravel())
@@ -4678,7 +4693,8 @@ def simulate_full_detector_image(
     if verbose:
         print(
             f"  simulate_full_detector_image: grid={shape[1]}x{shape[0]} "
-            f"(bin_px={bin_px})  n_energy={n_energy}  I_max={I_total.max():.3e}"
+            f"(bin_px={bin_px})  n_energy={n_energy}  rows=[{row_start}:{row_end}]  "
+            f"I_max={I_total.max():.3e}"
         )
 
     return {
@@ -4687,6 +4703,248 @@ def simulate_full_detector_image(
         "y0": ys,
         "bin_px": bin_px,
     }
+
+
+def _camera_to_dict(camera) -> dict:
+    return {
+        "dd": float(camera.dd),
+        "xcen": float(camera.xcen),
+        "ycen": float(camera.ycen),
+        "xbet": float(camera.xbet),
+        "xgam": float(camera.xgam),
+        "pixelsize": float(camera.pixel_mm),
+        "n_pix_h": int(camera.Nh),
+        "n_pix_v": int(camera.Nv),
+        "kf_direction": str(camera.kf_direction),
+    }
+
+
+def submit_full_detector_image(
+    base_dir,
+    stack,
+    camera,
+    n_jobs=20,
+    *,
+    bin_px=8,
+    n_energy=101,
+    E_min_eV=E_MIN_eV,
+    E_max_eV=E_MAX_eV,
+    source="bending_magnet",
+    source_kwargs=None,
+    kb_params=BM32_KB,
+    ki_hat=None,
+    structure_model="coherent",
+    darwin=False,
+    exclude_layers=None,
+    sigma_h_mrad=0.0,
+    sigma_v_mrad=0.0,
+    n_div=5,
+    partition="all",
+    time="04:00:00",
+    mem="32G",
+    cpus_per_task=1,
+    python_bin="python",
+    extra_sbatch=None,
+):
+    """
+    Submit :func:`simulate_full_detector_image` to SLURM, split across
+    `n_jobs` independent array jobs by detector row (`row_start`/`row_end`
+    on the binned-row grid — see that function). Every pixel's `Q(E)` is
+    independent of every other pixel, so this is embarrassingly parallel;
+    splitting also caps the peak memory of the big `(n_pixels * n_energy,)`
+    intermediate arrays each job has to hold, which a single unchunked call
+    at high `bin_px`/`n_energy` can blow past easily.
+
+    Each job writes its own row-chunk to `base_dir/chunks/chunk_XXXX.npz`
+    (no shared/concurrent file — safe with any number of simultaneously
+    running jobs). Call :func:`collect_full_detector_image` once every job
+    has finished to stitch the chunks into one HDF5 file.
+
+    Args:
+        base_dir (str): Root processing directory. `chunks/`, `slurm_logs/`,
+            and `job_meta/` are created inside it.
+        stack (LayeredCrystal): The layered structure — pickled once to
+            `job_meta/stack.pkl` and shared by every worker.
+        camera (Camera): Detector geometry.
+        n_jobs (int): Number of SLURM array jobs (row chunks). Default `20`.
+        bin_px, n_energy, E_min_eV, E_max_eV, source, source_kwargs,
+        kb_params, ki_hat, structure_model, darwin, exclude_layers,
+        sigma_h_mrad, sigma_v_mrad, n_div:
+            Forwarded verbatim to `simulate_full_detector_image` on every
+            worker — same meaning/defaults as there.
+        partition, time, mem, cpus_per_task, python_bin, extra_sbatch:
+            Standard SLURM parameters, same convention as
+            `GrainMap.submit_segmentation` etc. `python_bin` should be an
+            absolute interpreter path if you're not relying on `conda
+            activate` inside the job (unreliable in non-interactive batch
+            shells).
+
+    Returns:
+        list of str: SLURM job IDs, one per row chunk.
+    """
+    dirs = {
+        "chunks": os.path.join(base_dir, "chunks"),
+        "slurm_logs": os.path.join(base_dir, "slurm_logs"),
+        "job_meta": os.path.join(base_dir, "job_meta"),
+    }
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
+
+    stack_pkl = os.path.join(dirs["job_meta"], "stack.pkl")
+    with open(stack_pkl, "wb") as fh:
+        pickle.dump(stack, fh)
+
+    n_rows_total = len(np.arange(bin_px // 2, camera.Nv, bin_px))
+    if n_rows_total == 0:
+        raise ValueError("camera.Nv too small for the given bin_px — no rows to simulate.")
+    n_jobs = min(n_jobs, n_rows_total)
+    row_chunks = [
+        (int(c[0]), int(c[-1]) + 1)
+        for c in np.array_split(np.arange(n_rows_total), n_jobs)
+        if len(c) > 0
+    ]
+
+    meta = dict(
+        stack_pkl=stack_pkl,
+        camera=_camera_to_dict(camera),
+        chunks_dir=dirs["chunks"],
+        n_rows_total=n_rows_total,
+        bin_px=bin_px,
+        n_energy=n_energy,
+        E_min_eV=E_min_eV,
+        E_max_eV=E_max_eV,
+        source=source,
+        source_kwargs=source_kwargs,
+        kb_params=kb_params,
+        ki_hat=None if ki_hat is None else list(np.asarray(ki_hat, dtype=float)),
+        structure_model=structure_model,
+        darwin=darwin,
+        exclude_layers=exclude_layers,
+        sigma_h_mrad=sigma_h_mrad,
+        sigma_v_mrad=sigma_v_mrad,
+        n_div=n_div,
+    )
+    meta_path = os.path.join(dirs["job_meta"], "full_detector_image_meta.json")
+    with open(meta_path, "w") as fh:
+        json.dump(meta, fh, indent=2)
+
+    job_ids = []
+    for i, (row_start, row_end) in enumerate(row_chunks):
+        wrap_cmd = (
+            f"{python_bin} -m nrxrdct.laue.workers.slurm_full_detector_image_worker "
+            f"--meta-json {meta_path} --chunk-index {i} "
+            f"--row-start {row_start} --row-end {row_end}"
+        )
+        sbatch_args = [
+            "sbatch",
+            f"--job-name=fdi_{i:04d}",
+            f"--partition={partition}",
+            f"--time={time}",
+            f"--mem={mem}",
+            f"--cpus-per-task={cpus_per_task}",
+            f"--output={os.path.join(dirs['slurm_logs'], f'fdi_{i:04d}_%j.out')}",
+            f"--error={os.path.join(dirs['slurm_logs'], f'fdi_{i:04d}_%j.err')}",
+        ]
+        if extra_sbatch:
+            for k, v in extra_sbatch.items():
+                sbatch_args.append(f"--{k}={v}")
+        sbatch_args += ["--wrap", wrap_cmd]
+
+        result = subprocess.run(sbatch_args, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"sbatch failed for chunk {i}:\n{result.stderr}")
+        job_ids.append(result.stdout.strip().split()[-1])
+
+    print(
+        f"submit_full_detector_image: {len(job_ids)} jobs, "
+        f"{n_rows_total} rows total -> {dirs['chunks']}"
+    )
+    return job_ids
+
+
+def collect_full_detector_image(base_dir, out_h5_path):
+    """
+    Stitch the row-chunk `.npz` files from :func:`submit_full_detector_image`
+    into a single HDF5 file (`'I'`, `'x0'`, `'y0'` datasets + a `'meta'`
+    group with the full run configuration and per-chunk timing).
+
+    Args:
+        base_dir (str): Same `base_dir` passed to `submit_full_detector_image`.
+        out_h5_path (str): Path of the combined HDF5 file to write.
+
+    Returns:
+        dict: `{'I', 'x0', 'y0'}` — the same arrays just written to disk.
+
+    Raises:
+        RuntimeError: If any row chunk is missing (job still running,
+            failed, or never submitted) — names the missing chunk indices
+            and their expected row ranges so you know what to resubmit.
+    """
+    import h5py
+
+    job_meta_dir = os.path.join(base_dir, "job_meta")
+    chunks_dir = os.path.join(base_dir, "chunks")
+    meta_path = os.path.join(job_meta_dir, "full_detector_image_meta.json")
+    with open(meta_path) as fh:
+        meta = json.load(fh)
+
+    n_rows_total = meta["n_rows_total"]
+    bin_px = meta["bin_px"]
+
+    chunk_files = sorted(
+        f for f in os.listdir(chunks_dir) if f.startswith("chunk_") and f.endswith(".npz")
+    )
+    chunks = []
+    for fname in chunk_files:
+        d = np.load(os.path.join(chunks_dir, fname))
+        chunks.append(
+            dict(row_start=int(d["row_start"]), row_end=int(d["row_end"]),
+                 I=d["I"], x0=d["x0"], y0=d["y0"],
+                 elapsed_seconds=float(d["elapsed_seconds"]))
+        )
+    chunks.sort(key=lambda c: c["row_start"])
+
+    covered = np.zeros(n_rows_total, dtype=bool)
+    for c in chunks:
+        covered[c["row_start"]:c["row_end"]] = True
+    if not covered.all():
+        missing_rows = np.flatnonzero(~covered)
+        raise RuntimeError(
+            f"collect_full_detector_image: {len(missing_rows)}/{n_rows_total} "
+            f"rows missing (chunk jobs still running, failed, or not yet "
+            f"submitted) — first few missing row indices: "
+            f"{missing_rows[:10].tolist()}"
+        )
+
+    x0 = chunks[0]["x0"]
+    I = np.concatenate([c["I"] for c in chunks], axis=0)
+    y0 = np.concatenate([c["y0"] for c in chunks], axis=0)
+    total_cpu_seconds = sum(c["elapsed_seconds"] for c in chunks)
+
+    with h5py.File(out_h5_path, "w") as f:
+        f.create_dataset("I", data=I, compression="gzip")
+        f.create_dataset("x0", data=x0, compression="gzip")
+        f.create_dataset("y0", data=y0, compression="gzip")
+
+        mgrp = f.create_group("meta")
+        for key in (
+            "bin_px", "n_energy", "E_min_eV", "E_max_eV", "source",
+            "structure_model", "darwin", "sigma_h_mrad", "sigma_v_mrad",
+            "n_div", "n_rows_total",
+        ):
+            mgrp.attrs[key] = meta[key]
+        mgrp.attrs["exclude_layers"] = json.dumps(meta.get("exclude_layers"))
+        mgrp.attrs["source_kwargs"] = json.dumps(meta.get("source_kwargs"))
+        mgrp.attrs["kb_params"] = json.dumps(meta.get("kb_params"))
+        mgrp.attrs["n_chunks"] = len(chunks)
+        mgrp.attrs["total_worker_cpu_seconds"] = total_cpu_seconds
+
+        cam_grp = mgrp.create_group("camera")
+        for k, v in meta["camera"].items():
+            cam_grp.attrs[k] = v
+
+    print(f"collect_full_detector_image: {len(chunks)} chunks -> {out_h5_path}")
+    return {"I": I, "x0": x0, "y0": y0}
 
 
 def project_to_detector(vol_or_vols, *, pad_px=20, camera=None,

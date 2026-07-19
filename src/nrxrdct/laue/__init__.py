@@ -150,6 +150,8 @@ from .simulation import (
     rod_tangency,
     simulate_spot_image,
     simulate_full_detector_image,
+    submit_full_detector_image,
+    collect_full_detector_image,
     simulate_laue,
     simulate_laue_darwin,
     simulate_laue_stack,
@@ -231,6 +233,8 @@ __all__ = [
     "rod_tangency",
     "simulate_spot_image",
     "simulate_full_detector_image",
+    "submit_full_detector_image",
+    "collect_full_detector_image",
     # Layered structures
     "Layer",
     "LayeredCrystal",

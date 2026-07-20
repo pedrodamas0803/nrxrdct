@@ -6964,6 +6964,10 @@ def plot_rod_tangency(
     arrow_length_px=60,
     image=None,
     pad_px=40,
+    show_profile=False,
+    profile_halfwidth_px=3,
+    profile_step_px=1.0,
+    show_relaxed_buffer=False,
     ax=None,
     figsize=(6.0, 6.0),
     out_path=None,
@@ -7015,16 +7019,56 @@ def plot_rod_tangency(
             `None` (default) shows a plain dark background.
         pad_px (float): Half-size of the cropped window shown, centred on
             the mean of every plotted layer's `pix0`.
+        show_profile (bool): Add a second axis with the intensity
+            extracted from `image` along each layer's own streak direction
+            — a line profile, not just a 2-D overlay.  At each sample
+            point along the rod, `profile_halfwidth_px` pixels are summed
+            on either side *perpendicular* to the streak (i.e. along
+            `perp_dir_px`) via bilinear interpolation
+            (`scipy.ndimage.map_coordinates`), so the profile isn't
+            dominated by single-pixel noise.  Requires `image`; requires
+            `ax=None` (a fresh figure is always created, so the two axes
+            can be laid out side by side).
+        profile_halfwidth_px (int): Lateral integration half-width
+            (pixels) for `show_profile` — e.g. `3` sums 7 pixels
+            (`-3, ..., +3`) perpendicular to the streak at each point
+            along it.  Unused unless `show_profile=True`.
+        profile_step_px (float): Sampling step (pixels) along the streak
+            direction for `show_profile`, from `-arrow_length_px` to
+            `+arrow_length_px` (the same extent as the drawn line).
+            Unused unless `show_profile=True`.
+        show_relaxed_buffer (bool): Mark where the *same* `hkl` would fall
+            using the shallowest buffer layer's own (relaxed/bulk, since
+            `rod_tangency` always evaluates `layer.crystal.Q(h,k,l)` —
+            never strain-corrected) lattice — `stack.buffer_layers[-1]`,
+            the template a repeating block is grown on.  A grey diamond,
+            distinct from every plotted layer's own marker, so you can see
+            at a glance how far a pseudomorphically strained layer's peak
+            has moved from the unstrained template's position for the
+            same nominal reflection.  Skipped (with a note) if that buffer
+            layer's own `hkl` is off-detector, and not duplicated if it's
+            already one of the plotted layers.
         ax (matplotlib.axes.Axes, optional): Draw into an existing axes
-            instead of creating a new figure.
-        figsize: Figure size (ignored if `ax` is given).
+            instead of creating a new figure.  Incompatible with
+            `show_profile=True` (raises).
+        figsize: Figure size (ignored if `ax` is given; when
+            `show_profile=True` this is the size of the *combined*
+            two-panel figure).
         out_path (str or None): Save figure to this path if given.
 
     Returns:
-        ``(fig, ax, infos)`` — `infos` is a list of `rod_tangency`'s own
-        return dicts, one per plotted layer, in the same order as drawn.
+        `show_profile=False` (default): ``(fig, ax, infos)``.
+        `show_profile=True`: ``(fig, (ax, ax_profile), infos)``.
+        `infos` is a list of `rod_tangency`'s own return dicts, one per
+        plotted layer, in the same order as drawn.
     """
     from .simulation import rod_tangency
+
+    if show_profile:
+        if image is None:
+            raise ValueError("show_profile=True requires `image`")
+        if ax is not None:
+            raise ValueError("show_profile=True always creates its own two-panel figure; pass ax=None")
 
     if layer is None or isinstance(layer, str) and layer != "all":
         layers_to_plot = [layer]
@@ -7052,7 +7096,13 @@ def plot_rod_tangency(
     cx = float(np.mean([info["pix0"][0] for info in infos]))
     cy = float(np.mean([info["pix0"][1] for info in infos]))
 
-    if ax is None:
+    ax_profile = None
+    if show_profile:
+        fig = plt.figure(figsize=figsize, facecolor=BG)
+        gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3)
+        ax = fig.add_subplot(gs[0, 0])
+        ax_profile = fig.add_subplot(gs[0, 1])
+    elif ax is None:
         fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
     else:
         fig = ax.figure
@@ -7096,11 +7146,70 @@ def plot_rod_tangency(
             )
         ax.plot(px0, py0, "+", color=color if multi else FG, ms=10, mew=1.4, zorder=5)
 
+        label_off = 8.0 * perp  # small perpendicular offset so text doesn't sit on the marker/line
+        if max_satellites > 0:
+            ax.annotate(
+                "SL0", (px0, py0), xytext=(px0 + label_off[0], py0 + label_off[1]),
+                color=color, fontsize=7, ha="center", va="center", zorder=6,
+            )
+
         for m, sat in info["satellites"].items():
             if m == 0 or sat["pix"] is None or not sat["on_detector"]:
                 continue
             sx, sy = sat["pix"]
-            ax.plot(sx, sy, "o", color=color, ms=4, mfc=color, mec=BG, mew=0.5, zorder=4)
+            ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, zorder=4)
+            ax.annotate(
+                f"SL{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                color=color, fontsize=7, ha="center", va="center", zorder=6,
+            )
+
+        if show_profile:
+            from scipy.ndimage import map_coordinates
+
+            s_vals = np.arange(-arrow_length_px, arrow_length_px + 0.5 * profile_step_px, profile_step_px)
+            center_pts = np.array([px0, py0])[None, :] + s_vals[:, None] * streak[None, :]
+            profile = np.zeros(len(s_vals))
+            for off in range(-profile_halfwidth_px, profile_halfwidth_px + 1):
+                pts = center_pts + off * perp[None, :]
+                coords = np.array([pts[:, 1], pts[:, 0]])  # map_coordinates wants [row, col] = [y, x]
+                profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
+
+            plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
+            ax_profile.plot(s_vals, profile, "-", color=color, lw=1.3, label=plabel)
+
+            for m, sat in info["satellites"].items():
+                if sat["pix"] is None or not sat["on_detector"]:
+                    continue
+                s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
+                if s_vals[0] <= s_m <= s_vals[-1]:
+                    ax_profile.axvline(s_m, color=color, lw=0.8, ls=":", alpha=0.6)
+
+    if show_relaxed_buffer:
+        plotted_labels = {info["layer"] for info in infos}
+        if not stack.buffer_layers:
+            print("  plot_rod_tangency: show_relaxed_buffer skipped — stack has no buffer layers")
+        else:
+            buf_layer = stack.buffer_layers[-1]
+            if buf_layer.label in plotted_labels:
+                print(f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                      f"{buf_layer.label!r} is already one of the plotted layers")
+            else:
+                buf_info = None
+                try:
+                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+                except ValueError as e:
+                    print(f"  plot_rod_tangency: show_relaxed_buffer skipped — {e}")
+                if buf_info is not None and not buf_info["on_detector"]:
+                    print(
+                        f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
+                    )
+                elif buf_info is not None:
+                    bx, by = buf_info["pix0"]
+                    ax.plot(
+                        bx, by, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
+                        label=f"relaxed buffer ({buf_info['layer']})",
+                    )
 
     ax.set_xlim(cx - pad_px, cx + pad_px)
     ax.set_ylim(cy + pad_px, cy - pad_px)
@@ -7118,12 +7227,25 @@ def plot_rod_tangency(
             f"|d(pixel)/d(along)| = {info['dpix_dalong']:.2e} px/Å⁻¹"
         )
     ax.set_title(title, color=FG, fontsize=9, pad=6)
-    fig.tight_layout()
+
+    if show_profile:
+        _ax_style(ax_profile, "")
+        ax_profile.set_xlabel("distance along rod  (px)", color=FG, fontsize=8)
+        ax_profile.set_ylabel(f"intensity  (Σ over ±{profile_halfwidth_px} px lateral)", color=FG, fontsize=8)
+        ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
+        leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+        leg_p.get_frame().set_alpha(0.85)
+        ax_profile.set_title("Measured intensity along streak direction", color=FG, fontsize=9, pad=6)
+
+    if not show_profile:
+        fig.tight_layout()
 
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    if show_profile:
+        return fig, (ax, ax_profile), infos
     return fig, ax, infos
 
 

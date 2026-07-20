@@ -4782,6 +4782,15 @@ def submit_full_detector_image(
     Returns:
         list of str: SLURM job IDs, one per row chunk.
     """
+    mem = str(mem)
+    if mem[-1].upper() not in ("K", "M", "G", "T"):
+        raise ValueError(
+            f"mem={mem!r} has no unit suffix. SLURM's --mem defaults to "
+            f"MEGABYTES when none is given, so mem=64 requests 64 MB (not "
+            f"64 GB) and the job will likely be OOM-killed. Pass a string "
+            f"with an explicit unit, e.g. mem='64G'."
+        )
+
     dirs = {
         "chunks": os.path.join(base_dir, "chunks"),
         "slurm_logs": os.path.join(base_dir, "slurm_logs"),

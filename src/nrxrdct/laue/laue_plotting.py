@@ -7026,15 +7026,22 @@ def plot_rod_tangency(
             on either side *perpendicular* to the streak (i.e. along
             `perp_dir_px`) via bilinear interpolation
             (`scipy.ndimage.map_coordinates`), so the profile isn't
-            dominated by single-pixel noise.  Requires `image`; requires
-            `ax=None` (a fresh figure is always created, so the two axes
-            can be laid out side by side).
+            dominated by single-pixel noise.  The x-axis is `ΔQ` (Å⁻¹)
+            along the rod — each layer's own sampled pixel offsets are
+            divided by *that layer's* `dpix_dalong`, so profiles from
+            layers with different tangency (hence different pixel↔Q
+            scaling) are still directly comparable and satellite spacing
+            reads in physical units.  Satellite orders are labelled
+            (`SL0`, `SL±N`) same as the main axis. Requires `image`;
+            requires `ax=None` (a fresh figure is always created, so the
+            two axes can be laid out side by side).
         profile_halfwidth_px (int): Lateral integration half-width
             (pixels) for `show_profile` — e.g. `3` sums 7 pixels
             (`-3, ..., +3`) perpendicular to the streak at each point
             along it.  Unused unless `show_profile=True`.
-        profile_step_px (float): Sampling step (pixels) along the streak
-            direction for `show_profile`, from `-arrow_length_px` to
+        profile_step_px (float): Sampling step (pixels, along the streak
+            direction in pixel space — converted to Å⁻¹ for display, see
+            `show_profile`) for `show_profile`, from `-arrow_length_px` to
             `+arrow_length_px` (the same extent as the drawn line).
             Unused unless `show_profile=True`.
         show_relaxed_buffer (bool): Mark where the *same* `hkl` would fall
@@ -7174,15 +7181,30 @@ def plot_rod_tangency(
                 coords = np.array([pts[:, 1], pts[:, 0]])  # map_coordinates wants [row, col] = [y, x]
                 profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
 
-            plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
-            ax_profile.plot(s_vals, profile, "-", color=color, lw=1.3, label=plabel)
+            # x-axis in ΔQ (Å⁻¹) along the rod, not raw pixels — each layer has its
+            # own d(pixel)/d(along), so this is what actually makes the axis
+            # comparable across layers with different tangency.
+            q_vals = s_vals / info["dpix_dalong"]
 
+            plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
+            ax_profile.plot(q_vals, profile, "-", color=color, lw=1.3, label=plabel)
+
+            if max_satellites > 0:
+                ax_profile.text(
+                    0.0, 0.95, "SL0", transform=ax_profile.get_xaxis_transform(),
+                    color=color, fontsize=7, ha="center", va="top",
+                )
             for m, sat in info["satellites"].items():
-                if sat["pix"] is None or not sat["on_detector"]:
+                if m == 0 or sat["pix"] is None or not sat["on_detector"]:
                     continue
                 s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                 if s_vals[0] <= s_m <= s_vals[-1]:
-                    ax_profile.axvline(s_m, color=color, lw=0.8, ls=":", alpha=0.6)
+                    q_m = s_m / info["dpix_dalong"]
+                    ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
+                    ax_profile.text(
+                        q_m, 0.95, f"SL{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                        color=color, fontsize=7, ha="center", va="top",
+                    )
 
     if show_relaxed_buffer:
         plotted_labels = {info["layer"] for info in infos}
@@ -7230,7 +7252,7 @@ def plot_rod_tangency(
 
     if show_profile:
         _ax_style(ax_profile, "")
-        ax_profile.set_xlabel("distance along rod  (px)", color=FG, fontsize=8)
+        ax_profile.set_xlabel("ΔQ along rod  (Å⁻¹)", color=FG, fontsize=8)
         ax_profile.set_ylabel(f"intensity  (Σ over ±{profile_halfwidth_px} px lateral)", color=FG, fontsize=8)
         ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
         leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)

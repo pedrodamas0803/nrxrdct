@@ -4325,6 +4325,20 @@ def simulate_spot_image(
             continue
         n_e = len(E_samples)
 
+        # `pinned_with_m` was built against the *window* bounds
+        # (E_center +/- dE_eV) above, before E_samples was clipped to the
+        # *global* [E_min_eV, E_max_eV] range — re-clip here so every pin
+        # used to build _order_segments below actually survives into
+        # E_samples. Otherwise, for a reflection whose window straddles
+        # E_min_eV/E_max_eV, a dropped edge pin leaves mid_E (and hence
+        # boundary_idx via searchsorted) pointing past the end of the
+        # array, and np.arange(start, end + 1) below silently walks one
+        # index out of bounds.
+        if pinned_with_m:
+            pinned_with_m = [
+                (e, m) for e, m in pinned_with_m if E_min_eV <= e <= E_max_eV
+            ]
+
         # Segment the energy axis at the midpoints between consecutive
         # pinned satellite orders, so each order's own contribution to the
         # energy integral can be reported separately — the fix for a wide
@@ -4341,7 +4355,9 @@ def simulate_spot_image(
             pin_E = np.array([e for e, _ in _sorted_pins])
             pin_m = np.array([m for _, m in _sorted_pins])
             mid_E = 0.5 * (pin_E[:-1] + pin_E[1:])
-            boundary_idx = np.searchsorted(E_samples, mid_E)
+            boundary_idx = np.clip(
+                np.searchsorted(E_samples, mid_E), 0, len(E_samples) - 1
+            )
             starts = np.concatenate([[0], boundary_idx])
             ends = np.concatenate([boundary_idx, [len(E_samples) - 1]])
             _order_segments = []

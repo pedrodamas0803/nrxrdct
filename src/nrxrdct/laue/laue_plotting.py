@@ -7032,7 +7032,10 @@ def plot_rod_tangency(
             layers with different tangency (hence different pixel↔Q
             scaling) are still directly comparable and satellite spacing
             reads in physical units.  Satellite orders are labelled
-            (`SL0`, `SL±N`) same as the main axis. Requires `image`;
+            (`SL0`, `SL±N`) same as the main axis.  The y-axis (intensity)
+            is log-scaled, so weak far orders remain visible alongside the
+            main peak — points with zero/negative summed intensity are
+            simply omitted by matplotlib, not an error.  Requires `image`;
             requires `ax=None` (a fresh figure is always created, so the
             two axes can be laid out side by side).
         profile_halfwidth_px (int): Lateral integration half-width
@@ -7254,6 +7257,7 @@ def plot_rod_tangency(
         _ax_style(ax_profile, "")
         ax_profile.set_xlabel("ΔQ along rod  (Å⁻¹)", color=FG, fontsize=8)
         ax_profile.set_ylabel(f"intensity  (Σ over ±{profile_halfwidth_px} px lateral)", color=FG, fontsize=8)
+        ax_profile.set_yscale("log")
         ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
         leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
         leg_p.get_frame().set_alpha(0.85)

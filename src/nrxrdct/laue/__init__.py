@@ -160,6 +160,7 @@ from .simulation import (
     depth_scan_image,
     spectrum_bm,
     spectrum_undulator,
+    spot_LP_and_SE,
     strain_broadening,
     strain_spot_jacobian,
     synchrotron_spectrum,
@@ -206,6 +207,7 @@ __all__ = [
     "strain_broadening",
     # Physics helpers
     "lorentz_pol",
+    "spot_LP_and_SE",
     # Camera / detector
     "Camera",
     "CalibrationResult",

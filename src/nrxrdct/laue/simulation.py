@@ -754,6 +754,59 @@ def _lorentz_pol_vec(tth_deg, energy_eV=None, chi_deg=None):
     return out
 
 
+def spot_LP_and_SE(spots, hkl, chi_deg=None, verbose=True):
+    """Look up a reflection by Miller index and report its LP(2θ) and S(E).
+
+    Searches each spot's primary `'hkl'` first; if not found there, also
+    checks `'harmonic_hkls'` (reflections merged onto the same detector
+    pixel by :func:`_merge_or_append_spot`) and rescales the pixel's stored
+    energy by the harmonic order, since E_n = n * E_1 for hkl' = n*hkl.
+
+    Parameters
+    ----------
+    spots : list of dict
+        Output of :func:`simulate_laue`.
+    hkl : (int, int, int)
+        Miller indices to look up.
+    chi_deg : float, optional
+        Override azimuthal angle passed to :func:`lorentz_pol`; defaults to
+        the spot's own `'chi'`.
+    verbose : bool
+        Print a summary line if True (default).
+
+    Returns
+    -------
+    dict with keys `'hkl'`, `'E'`, `'tth'`, `'chi'`, `'LP'`, `'S'` — or
+    `None` if `hkl` is not present in `spots`.
+    """
+    hkl = tuple(int(x) for x in hkl)
+    for s in spots:
+        if s["hkl"] == hkl:
+            E, tth, chi = s["E"], s["tth"], s["chi"]
+        elif hkl in s.get("harmonic_hkls", []):
+            order = s["harmonic_orders"][s["harmonic_hkls"].index(hkl)]
+            if order is None:
+                continue
+            E, tth, chi = order * s["E"], s["tth"], s["chi"]
+        else:
+            continue
+
+        chi_used = chi_deg if chi_deg is not None else chi
+        LP = lorentz_pol(tth, energy_eV=E, chi_deg=chi_used)
+        S = synchrotron_spectrum(E)
+
+        result = {"hkl": hkl, "E": E, "tth": tth, "chi": chi, "LP": LP, "S": S}
+        if verbose:
+            print(
+                f"hkl={hkl}  E={E:.1f} eV  2θ={tth:.3f}°  chi={chi:.3f}°  "
+                f"LP(2θ)={LP:.5g}   S(E)={S:.5g}"
+            )
+        return result
+
+    if verbose:
+        print(f"hkl={hkl} not found in spots.")
+    return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STRAIN BROADENING

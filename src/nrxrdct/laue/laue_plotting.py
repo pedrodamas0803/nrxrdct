@@ -7019,14 +7019,25 @@ def plot_rod_tangency(
             so its `m=0` peak lands on essentially the same pixel), the
             classic Laue harmonic-overlap reflections excited at `n·E0`.
             Each harmonic's own `m=0` peak (triangle marker, labelled
-            `n2`, `n3`, ...) and satellite comb (if `max_satellites > 0`)
-            are drawn in the same layer colour at reduced alpha, so a
-            harmonic's rod can be compared against the fundamental's —
-            useful since a higher harmonic can fan out to a different
-            streak length/direction even though it starts at (almost)
-            the same spot. Skipped per-harmonic (with a printed note) if
-            unreachable or off-detector; not included in the returned
-            `infos` (those stay fundamental-only).
+            `n2`, `n3`, ...) and satellite comb are drawn in their own
+            colour (cycled through the same palette, offset from the
+            layer's own) at reduced alpha, so a harmonic's rod can be
+            compared against the fundamental's — useful since a higher
+            harmonic can fan out to a different streak length/direction
+            even though it starts at (almost) the same spot. If
+            `max_satellites > 0`, the number of satellite orders solved
+            for each harmonic doubles with every successive harmonic
+            (`max_satellites × 2**(n-1)` for harmonic `n`) — a higher
+            harmonic sits at a larger `|Q|` where the same physical
+            fringe spacing subtends more orders before falling off the
+            detector/energy window, so a fixed count would under-sample
+            it. When `show_profile=True`, each harmonic's `m=0`/satellite
+            pixels
+            are also projected onto the fundamental's own rod axis and
+            drawn as dotted vertical lines on the profile panel, in the
+            same colour as their main-axis markers. Skipped per-harmonic
+            (with a printed note) if unreachable or off-detector; not
+            included in the returned `infos` (those stay fundamental-only).
         arrow_length_px (float): Half-length of the streak-direction line
             (pixels); the perpendicular reference line is drawn at 1/3 of
             this.
@@ -7189,36 +7200,6 @@ def plot_rod_tangency(
                 color=color, fontsize=7, ha="center", va="center", zorder=6,
             )
 
-        if n_harmonics > 1:
-            h0, k0, l0 = info["hkl"]
-            for n in range(2, n_harmonics + 1):
-                try:
-                    hinfo = rod_tangency(
-                        stack, (n * h0, n * k0, n * l0), layer=info["layer"], camera=camera,
-                        ki_hat=ki_hat, max_satellites=max_satellites,
-                    )
-                except ValueError as e:
-                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — {e}")
-                    continue
-                if not hinfo["on_detector"]:
-                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — off-detector")
-                    continue
-                hx, hy = hinfo["pix0"]
-                ax.plot(hx, hy, "^", color=color, alpha=0.4, ms=7, mec=BG, mew=0.5, zorder=3)
-                ax.annotate(
-                    f"n{n}", (hx, hy), xytext=(hx + label_off[0], hy + label_off[1]),
-                    color=color, alpha=0.7, fontsize=7, ha="center", va="center", zorder=3,
-                )
-                for m, sat in hinfo["satellites"].items():
-                    if m == 0 or sat["pix"] is None or not sat["on_detector"]:
-                        continue
-                    sx, sy = sat["pix"]
-                    ax.plot(sx, sy, "o", color=color, alpha=0.4, ms=5, mec=BG, mew=0.4, zorder=2)
-                    ax.annotate(
-                        f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
-                        color=color, alpha=0.7, fontsize=6, ha="center", va="center", zorder=2,
-                    )
-
         if show_profile:
             from scipy.ndimage import map_coordinates
 
@@ -7255,6 +7236,56 @@ def plot_rod_tangency(
                         q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
                         color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                     )
+
+        if n_harmonics > 1:
+            h0, k0, l0 = info["hkl"]
+            for n in range(2, n_harmonics + 1):
+                h_max_sat = max_satellites * (2 ** (n - 1))
+                try:
+                    hinfo = rod_tangency(
+                        stack, (n * h0, n * k0, n * l0), layer=info["layer"], camera=camera,
+                        ki_hat=ki_hat, max_satellites=h_max_sat,
+                    )
+                except ValueError as e:
+                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — {e}")
+                    continue
+                if not hinfo["on_detector"]:
+                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — off-detector")
+                    continue
+                hcolor = _ROD_TANGENCY_PALETTE[(i + n - 1) % len(_ROD_TANGENCY_PALETTE)]
+                hx, hy = hinfo["pix0"]
+                ax.plot(hx, hy, "^", color=hcolor, alpha=0.55, ms=7, mec=BG, mew=0.5, zorder=3)
+                ax.annotate(
+                    f"n{n}", (hx, hy), xytext=(hx + label_off[0], hy + label_off[1]),
+                    color=hcolor, alpha=0.85, fontsize=7, ha="center", va="center", zorder=3,
+                )
+                if show_profile:
+                    hs0 = float(np.dot(np.array(hinfo["pix0"]) - np.array([px0, py0]), streak))
+                    if -arrow_length_px <= hs0 <= arrow_length_px:
+                        hq0 = hs0 / info["dpix_dalong"]
+                        ax_profile.axvline(hq0, color=hcolor, lw=0.8, ls=":", alpha=0.6)
+                        ax_profile.text(
+                            hq0, label_y, f"n{n}", transform=ax_profile.get_xaxis_transform(),
+                            color=hcolor, fontsize=7, ha="center", va="bottom", clip_on=False,
+                        )
+                for m, sat in hinfo["satellites"].items():
+                    if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                        continue
+                    sx, sy = sat["pix"]
+                    ax.plot(sx, sy, "o", color=hcolor, alpha=0.55, ms=5, mec=BG, mew=0.4, zorder=2)
+                    ax.annotate(
+                        f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                        color=hcolor, alpha=0.85, fontsize=6, ha="center", va="center", zorder=2,
+                    )
+                    if show_profile:
+                        hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
+                        if -arrow_length_px <= hs_m <= arrow_length_px:
+                            hq_m = hs_m / info["dpix_dalong"]
+                            ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
+                            ax_profile.text(
+                                hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                                color=hcolor, fontsize=6, ha="center", va="bottom", clip_on=False,
+                            )
 
     if show_relaxed_buffer:
         plotted_labels = {info["layer"] for info in infos}

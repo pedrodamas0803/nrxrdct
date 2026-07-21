@@ -6961,6 +6961,7 @@ def plot_rod_tangency(
     *,
     ki_hat=None,
     max_satellites=0,
+    n_harmonics=1,
     arrow_length_px=60,
     image=None,
     pad_px=40,
@@ -7011,6 +7012,21 @@ def plot_rod_tangency(
         max_satellites (int): Forwarded to `rod_tangency` for every layer —
             `0` (default) shows only the streak-direction line; `> 0` also
             marks each layer's own satellite-order positions.
+        n_harmonics (int): `1` (default) plots only the fundamental `hkl`.
+            `N > 1` also evaluates `rod_tangency` for the harmonic
+            reflections `2·hkl, ..., N·hkl` of every plotted layer — same
+            Q-space direction as the fundamental (`Q_n = n·Q_1` exactly,
+            so its `m=0` peak lands on essentially the same pixel), the
+            classic Laue harmonic-overlap reflections excited at `n·E0`.
+            Each harmonic's own `m=0` peak (triangle marker, labelled
+            `n2`, `n3`, ...) and satellite comb (if `max_satellites > 0`)
+            are drawn in the same layer colour at reduced alpha, so a
+            harmonic's rod can be compared against the fundamental's —
+            useful since a higher harmonic can fan out to a different
+            streak length/direction even though it starts at (almost)
+            the same spot. Skipped per-harmonic (with a printed note) if
+            unreachable or off-detector; not included in the returned
+            `infos` (those stay fundamental-only).
         arrow_length_px (float): Half-length of the streak-direction line
             (pixels); the perpendicular reference line is drawn at 1/3 of
             this.
@@ -7109,7 +7125,7 @@ def plot_rod_tangency(
     ax_profile = None
     if show_profile:
         fig = plt.figure(figsize=figsize, facecolor=BG)
-        gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3)
+        gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3, top=0.8)
         ax = fig.add_subplot(gs[0, 0])
         ax_profile = fig.add_subplot(gs[0, 1])
     elif ax is None:
@@ -7169,9 +7185,39 @@ def plot_rod_tangency(
             sx, sy = sat["pix"]
             ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, zorder=4)
             ax.annotate(
-                f"SL{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                 color=color, fontsize=7, ha="center", va="center", zorder=6,
             )
+
+        if n_harmonics > 1:
+            h0, k0, l0 = info["hkl"]
+            for n in range(2, n_harmonics + 1):
+                try:
+                    hinfo = rod_tangency(
+                        stack, (n * h0, n * k0, n * l0), layer=info["layer"], camera=camera,
+                        ki_hat=ki_hat, max_satellites=max_satellites,
+                    )
+                except ValueError as e:
+                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — {e}")
+                    continue
+                if not hinfo["on_detector"]:
+                    print(f"  plot_rod_tangency: skipping harmonic n={n} of layer {info['layer']!r} — off-detector")
+                    continue
+                hx, hy = hinfo["pix0"]
+                ax.plot(hx, hy, "^", color=color, alpha=0.4, ms=7, mec=BG, mew=0.5, zorder=3)
+                ax.annotate(
+                    f"n{n}", (hx, hy), xytext=(hx + label_off[0], hy + label_off[1]),
+                    color=color, alpha=0.7, fontsize=7, ha="center", va="center", zorder=3,
+                )
+                for m, sat in hinfo["satellites"].items():
+                    if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                        continue
+                    sx, sy = sat["pix"]
+                    ax.plot(sx, sy, "o", color=color, alpha=0.4, ms=5, mec=BG, mew=0.4, zorder=2)
+                    ax.annotate(
+                        f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                        color=color, alpha=0.7, fontsize=6, ha="center", va="center", zorder=2,
+                    )
 
         if show_profile:
             from scipy.ndimage import map_coordinates
@@ -7192,10 +7238,11 @@ def plot_rod_tangency(
             plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
             ax_profile.plot(q_vals, profile, "-", color=color, lw=1.3, label=plabel)
 
+            label_y = 1.03 + 0.07 * i  # stagger per layer, outside the axes proper
             if max_satellites > 0:
                 ax_profile.text(
-                    0.0, 0.95, "SL0", transform=ax_profile.get_xaxis_transform(),
-                    color=color, fontsize=7, ha="center", va="top",
+                    0.0, label_y, "SL0", transform=ax_profile.get_xaxis_transform(),
+                    color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                 )
             for m, sat in info["satellites"].items():
                 if m == 0 or sat["pix"] is None or not sat["on_detector"]:
@@ -7205,8 +7252,8 @@ def plot_rod_tangency(
                     q_m = s_m / info["dpix_dalong"]
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
-                        q_m, 0.95, f"SL{m:+d}", transform=ax_profile.get_xaxis_transform(),
-                        color=color, fontsize=7, ha="center", va="top",
+                        q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                        color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                     )
 
     if show_relaxed_buffer:

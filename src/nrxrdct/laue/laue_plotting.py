@@ -2228,7 +2228,7 @@ def plot_layer_scheme(
         thick_nm = layer.thickness / 10.0
         thick_um = layer.thickness / 1e4
         thick_str = f"{thick_um:.2f} µm" if thick_um >= 0.1 else f"{thick_nm:.1f} nm"
-        label_str = f"{layer.label}\n{thick_str}\n(not to scale)"
+        label_str = f"{layer.label}  {thick_str}  (not to scale)"
 
         if ds >= min_display_frac * DISP_H:
             ax.text(

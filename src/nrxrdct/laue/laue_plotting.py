@@ -31,6 +31,23 @@ COL_SUP = "#ff6633"
 COL_DB = "#ffffaa"
 
 
+def _force_draw(fig):
+    """Force a synchronous canvas draw where possible.
+
+    Interactive widget backends (e.g. ipympl) normally schedule the canvas
+    paint via draw_idle(), which can lose the race against the notebook
+    grabbing the widget for display (seen intermittently on Windows, where
+    comm/idle-loop latency is higher), producing a blank figure until the
+    cell is re-run. A plain draw() forces the paint immediately -- but only
+    works once the canvas has a manager attached (i.e. the figure has
+    already been shown once), so failures here are silently ignored.
+    """
+    try:
+        fig.canvas.draw()
+    except AttributeError:
+        pass
+
+
 def _ax_style(ax, title):
     ax.set_facecolor(BG)
     ax.set_title(title, color=FG, fontsize=9, pad=5)
@@ -1236,6 +1253,7 @@ def plot_layer_contributions(
     if out_path is not None:
         plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Figure -> {out_path}")
+    _force_draw(fig)
     return fig
 
 
@@ -1566,6 +1584,7 @@ def plot_strain_broadening(
                     facecolor=fig.get_facecolor())
         print(f"  Strain broadening plot saved → {out_path}")
 
+    _force_draw(fig)
     return fig
 
 
@@ -1990,6 +2009,8 @@ def plot_measured_vs_simulated(
                     facecolor=fig.get_facecolor())
         print(f"  Measured-vs-simulated plot saved → {out_path}")
 
+    _force_draw(fig)
+
     return fig
 
 
@@ -2078,6 +2099,7 @@ def plot_layer_scheme(
 
     if not has_rep and not has_buf:
         if standalone:
+            _force_draw(fig)
             return fig, ax
         return ax
 
@@ -2290,7 +2312,7 @@ def plot_layer_scheme(
         zorder=5,
     )
     nh_label = (
-        r"$\hat{n}$"
+        "n̂"
         f"  [{nh[0]:+.2f}, {nh[1]:+.2f}, {nh[2]:+.2f}]"
         "\n(stacking direction)"
     )
@@ -2342,7 +2364,7 @@ def plot_layer_scheme(
             fontsize=9, fontweight="bold", ha="center", va="center")
 
     # ── n_hat numeric annotation ──────────────────────────────────────────────
-    nh_str = (f"$\\hat{{n}}$ = [{nh[0]:+.3f},  {nh[1]:+.3f},  {nh[2]:+.3f}]"
+    nh_str = (f"n̂ = [{nh[0]:+.3f},  {nh[1]:+.3f},  {nh[2]:+.3f}]"
               + ("  (XZ projection)" if abs(nh[1]) > 1e-3 else ""))
     ax.text(
         0.5, 0.01, nh_str,
@@ -2383,6 +2405,7 @@ def plot_layer_scheme(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         print(f"  Layer scheme saved → {out_path}")
+    _force_draw(fig)
     return fig, ax
 
 
@@ -2647,6 +2670,8 @@ def plot_laue_stack_spots(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         print(f"  Stack spot map saved → {out_path}")
+    if standalone:
+        _force_draw(fig)
     return fig, ax
 
 
@@ -2976,6 +3001,7 @@ def plot_interactive_tth_chi(
         )
 
     fig.tight_layout()
+    _force_draw(fig)
     return fig, ax
 
 
@@ -3295,6 +3321,7 @@ def plot_tth_chi_overlay(
                     facecolor=fig.get_facecolor())
         print(f"  Overlay saved → {out_path}")
 
+    _force_draw(fig)
     return fig, ax, display
 
 
@@ -3987,6 +4014,7 @@ def plot_hkl_family_classification(
                     facecolor=fig.get_facecolor())
         print(f"  HKL-family classification plot saved -> {out_path}")
 
+    _force_draw(fig)
     return fig, axes
 
 
@@ -4132,6 +4160,7 @@ def plot_segmentation(
     ax.set_title(_title, color=FG, fontsize=9, pad=5)
 
     fig.tight_layout()
+    _force_draw(fig)
     return fig, ax
 
 
@@ -4699,6 +4728,7 @@ def plot_depth_elongation(
                     facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, ax
 
 
@@ -4959,6 +4989,7 @@ def plot_unit_cell(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, ax
 
 
@@ -5423,6 +5454,7 @@ def plot_unit_cell_in_lab(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, (ax_cell, ax_scat)
 
 
@@ -5796,6 +5828,7 @@ def plot_crystals_in_lab(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, (ax_cell, ax_scat)
 
 
@@ -6015,6 +6048,7 @@ def plot_qspace_around_spot(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, ax
 
 
@@ -6188,6 +6222,7 @@ def plot_qspace_on_detector(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, ax
 
 
@@ -6564,6 +6599,7 @@ def plot_qspace_summary(
                     facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, axes
 
 
@@ -6805,6 +6841,7 @@ def plot_detector_projection(
                     facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, axes
 
 
@@ -6947,6 +6984,7 @@ def plot_spot_image(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
     return fig, axes
 
 
@@ -7348,6 +7386,8 @@ def plot_rod_tangency(
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    _force_draw(fig)
+
     if show_profile:
         return fig, (ax, ax_profile), infos
     return fig, ax, infos
@@ -7535,6 +7575,7 @@ def plot_pix_deviation(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
 
+    _force_draw(fig)
     return fig, axes, matched
 
 
@@ -7682,4 +7723,5 @@ def plot_depth_scan_image(
     if out_path is not None:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=BG)
 
+    _force_draw(fig)
     return fig, axes_out

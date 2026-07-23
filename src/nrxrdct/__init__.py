@@ -19,6 +19,10 @@ rietveld
     GSAS-II Rietveld refinement wrappers (:class:`~nrxrdct.rietveld.BaseRefinement`,
     :class:`~nrxrdct.rietveld.InstrumentCalibration`) and pre-built refinement
     dictionary templates.
+visualization
+    Array-agnostic interactive Jupyter widgets, notably
+    :class:`~nrxrdct.visualization.StackViewer` for browsing 2-D/3-D NumPy
+    arrays with live colormap, vmin/vmax, and normalization controls.
 xrdct
     End-to-end powder XRD-CT pipeline: sinogram assembly, ASTRA reconstruction,
     per-voxel GSAS-II refinement via :class:`~nrxrdct.xrdct.ReconstructedVolume`,

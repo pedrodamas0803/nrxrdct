@@ -7070,15 +7070,22 @@ def plot_rod_tangency(
             fringe spacing subtends more orders before falling off the
             detector/energy window, so a fixed count would under-sample
             it. When `show_profile=True`, each harmonic's `m=0`/satellite
-            pixels
-            are also projected onto the fundamental's own rod axis and
-            drawn as dotted vertical lines on the profile panel, in the
-            same colour as their main-axis markers. Skipped per-harmonic
-            (with a printed note) if unreachable or off-detector; not
-            included in the returned `infos` (those stay fundamental-only).
-        arrow_length_px (float): Half-length of the streak-direction line
-            (pixels); the perpendicular reference line is drawn at 1/3 of
-            this.
+            pixels are also projected onto the fundamental's own rod axis
+            and drawn as dotted vertical lines on the profile panel, in
+            the same colour as their main-axis markers. Skipped
+            per-harmonic (with a printed note) if unreachable or
+            off-detector; not included in the returned `infos` (those
+            stay fundamental-only).
+        arrow_length_px (float or (float, float)): Half-length of the
+            streak-direction line (pixels), and (when `show_profile=True`)
+            the extent of the profile's x-axis. A single number (default
+            `60`) draws/samples symmetrically, `±arrow_length_px` from
+            `pix0`. A `(neg, pos)` tuple draws/samples asymmetrically —
+            `neg` pixels against `streak_dir_px` and `pos` pixels along
+            it — e.g. to extend further toward one satellite order than
+            the other, or to frame a `show_relaxed_buffer` marker that
+            sits off to one side. The perpendicular reference line's
+            half-length is `(neg + pos) / 6`.
         image (ndarray, shape (Nv, Nh), optional): Measured or simulated
             detector frame to show cropped behind the arrows, for context.
             `None` (default) shows a plain dark background.
@@ -7109,8 +7116,9 @@ def plot_rod_tangency(
             along it.  Unused unless `show_profile=True`.
         profile_step_px (float): Sampling step (pixels, along the streak
             direction in pixel space — converted to Å⁻¹ for display, see
-            `show_profile`) for `show_profile`, from `-arrow_length_px` to
-            `+arrow_length_px` (the same extent as the drawn line).
+            `show_profile`) for `show_profile`, from `-arrow_length_px[0]`
+            to `+arrow_length_px[1]` (the same extent as the drawn line;
+            symmetric `±arrow_length_px` if a single number was given).
             Unused unless `show_profile=True`.
         show_relaxed_buffer (bool): Mark where the *same* `hkl` would fall
             using the shallowest buffer layer's own (relaxed/bulk, since
@@ -7198,7 +7206,11 @@ def plot_rod_tangency(
             cmap="gray", aspect="equal",
         )
 
-    perp_len = arrow_length_px / 3.0
+    if isinstance(arrow_length_px, (tuple, list)):
+        arrow_neg, arrow_pos = float(arrow_length_px[0]), float(arrow_length_px[1])
+    else:
+        arrow_neg = arrow_pos = float(arrow_length_px)
+    perp_len = (arrow_neg + arrow_pos) / 6.0
     multi = len(infos) > 1
     for i, info in enumerate(infos):
         color = _ROD_TANGENCY_PALETTE[i % len(_ROD_TANGENCY_PALETTE)]
@@ -7208,8 +7220,8 @@ def plot_rod_tangency(
 
         label = f"{info['layer']}  ({info['dpix_dalong']:.1e} px/Å⁻¹)" if multi else "streak direction (d(pixel)/d(along))"
         ax.plot(
-            [px0 - arrow_length_px * streak[0], px0 + arrow_length_px * streak[0]],
-            [py0 - arrow_length_px * streak[1], py0 + arrow_length_px * streak[1]],
+            [px0 - arrow_neg * streak[0], px0 + arrow_pos * streak[0]],
+            [py0 - arrow_neg * streak[1], py0 + arrow_pos * streak[1]],
             "-", color=color, lw=2.5, solid_capstyle="round", label=label,
         )
         if not multi:
@@ -7241,7 +7253,7 @@ def plot_rod_tangency(
         if show_profile:
             from scipy.ndimage import map_coordinates
 
-            s_vals = np.arange(-arrow_length_px, arrow_length_px + 0.5 * profile_step_px, profile_step_px)
+            s_vals = np.arange(-arrow_neg, arrow_pos + 0.5 * profile_step_px, profile_step_px)
             center_pts = np.array([px0, py0])[None, :] + s_vals[:, None] * streak[None, :]
             profile = np.zeros(len(s_vals))
             for off in range(-profile_halfwidth_px, profile_halfwidth_px + 1):
@@ -7299,7 +7311,7 @@ def plot_rod_tangency(
                 )
                 if show_profile:
                     hs0 = float(np.dot(np.array(hinfo["pix0"]) - np.array([px0, py0]), streak))
-                    if -arrow_length_px <= hs0 <= arrow_length_px:
+                    if -arrow_neg <= hs0 <= arrow_pos:
                         hq0 = hs0 / info["dpix_dalong"]
                         ax_profile.axvline(hq0, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                         ax_profile.text(
@@ -7317,7 +7329,7 @@ def plot_rod_tangency(
                     )
                     if show_profile:
                         hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
-                        if -arrow_length_px <= hs_m <= arrow_length_px:
+                        if -arrow_neg <= hs_m <= arrow_pos:
                             hq_m = hs_m / info["dpix_dalong"]
                             ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                             ax_profile.text(

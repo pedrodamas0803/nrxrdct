@@ -82,6 +82,8 @@ nav:
       - nmf: api/nmf.md
     - fluo:
       - fluorescence: api/fluorescence.md
+    - visualization:
+      - stack_viewer: api/visualization/stack_viewer.md
     - rietveld:
       - refinement: api/refinement.md
       - refine_dict: api/refine_dict.md

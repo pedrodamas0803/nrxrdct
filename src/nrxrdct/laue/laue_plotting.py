@@ -7007,6 +7007,7 @@ def plot_rod_tangency(
     profile_halfwidth_px=3,
     profile_step_px=1.0,
     show_relaxed_buffer=False,
+    alpha=0.85,
     ax=None,
     figsize=(6.0, 6.0),
     out_path=None,
@@ -7131,6 +7132,9 @@ def plot_rod_tangency(
             same nominal reflection.  Skipped (with a note) if that buffer
             layer's own `hkl` is off-detector, and not duplicated if it's
             already one of the plotted layers.
+        alpha (float): Opacity applied to each layer's own streak-direction
+            line and satellite-order markers (default `0.85`); harmonics
+            already draw at their own fixed, lower alpha regardless of this.
         ax (matplotlib.axes.Axes, optional): Draw into an existing axes
             instead of creating a new figure.  Incompatible with
             `show_profile=True` (raises).
@@ -7222,7 +7226,7 @@ def plot_rod_tangency(
         ax.plot(
             [px0 - arrow_neg * streak[0], px0 + arrow_pos * streak[0]],
             [py0 - arrow_neg * streak[1], py0 + arrow_pos * streak[1]],
-            "-", color=color, lw=2.5, solid_capstyle="round", label=label,
+            "-", color=color, lw=2.5, alpha=alpha, solid_capstyle="round", label=label,
         )
         if not multi:
             ax.plot(
@@ -7244,7 +7248,7 @@ def plot_rod_tangency(
             if m == 0 or sat["pix"] is None or not sat["on_detector"]:
                 continue
             sx, sy = sat["pix"]
-            ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, zorder=4)
+            ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, alpha=alpha, zorder=4)
             ax.annotate(
                 f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                 color=color, fontsize=7, ha="center", va="center", zorder=6,
@@ -7386,7 +7390,7 @@ def plot_rod_tangency(
         ax_profile.set_xlabel("ΔQ along rod  (Å⁻¹)", color=FG, fontsize=8)
         ax_profile.set_ylabel(f"intensity  (Σ over ±{profile_halfwidth_px} px lateral)", color=FG, fontsize=8)
         ax_profile.set_yscale("log")
-        ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
+        ax_profile.axvline(0.0, color=FG, lw=0.8, ls=":", alpha=0.4)
         leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
         leg_p.get_frame().set_alpha(0.85)
         ax_profile.set_title("Measured intensity along streak direction", color=FG, fontsize=9, pad=6)

@@ -165,10 +165,10 @@ cake, radial, azimuthal = cake_integration(
 ```
 
 The returned `cake` array has shape `(npt_azim, npt_rad)`.  Plot it
-with `plot_integrated_cake` from `nrxrdct.xrdct.visualization`:
+with `plot_integrated_cake` from `nrxrdct.visualization`:
 
 ```python
-from nrxrdct.xrdct.visualization import plot_integrated_cake
+from nrxrdct.visualization import plot_integrated_cake
 plot_integrated_cake(cake, radial, azimuthal)
 ```
 

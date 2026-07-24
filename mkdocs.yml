@@ -84,6 +84,10 @@ nav:
       - fluorescence: api/fluorescence.md
     - visualization:
       - stack_viewer: api/visualization/stack_viewer.md
+      - napari_views: api/visualization/napari_views.md
+      - roi_selection: api/visualization/roi_selection.md
+      - image_plots: api/visualization/image_plots.md
+      - theme: api/visualization/theme.md
     - rietveld:
       - refinement: api/refinement.md
       - refine_dict: api/refine_dict.md

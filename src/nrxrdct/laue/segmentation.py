@@ -96,15 +96,15 @@ import glob
 import os
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.fft as sp_fft
 import scipy.ndimage as ndi
 import skimage as sk
-from matplotlib.patches import Rectangle
 from scipy.optimize import curve_fit
 from scipy.spatial.distance import cdist
+
+from ..visualization import plot_labeled_image  # noqa: F401  (backward-compatible re-export)
 
 # from LaueTools.IOLaueTools import writefile_Peaklist
 
@@ -227,30 +227,6 @@ def label_segmented_image(im_array: np.ndarray, intensity_image=None):
     label_img_rgb = sk.color.label2rgb(label_image, image=intensity_image, bg_label=0)
 
     return label_image, n_labels, label_img_rgb
-
-
-def plot_labeled_image(label_img_rgb, regionprops, cmap="turbo"):
-    """
-    Show labeled image and plot bounding boxes of regionprops.
-"""
-    f, ax = plt.subplots(figsize=(9, 9))
-    ax.imshow(label_img_rgb, cmap=cmap)
-
-    for region in regionprops:
-        minr, minc, maxr, maxc = region.bbox
-
-        rect = Rectangle(
-            (minc - 1, minr - 1),
-            (maxc - minc),
-            (maxr - minr),
-            fill=False,
-            edgecolor="red",
-            linewidth=0.5,
-        )
-        ax.add_patch(rect)
-
-    f.tight_layout()
-    return
 
 
 def measure_peaks(labeled_image, intensity_image):

@@ -294,6 +294,87 @@ class StackStrainFitResult(_ResultMixin):
 
 
 @dataclass
+class StackStrainThicknessFitResult(_ResultMixin):
+    """
+    Result of a simultaneous orientation + per-layer strain + thickness
+    refinement (:func:`fit_strain_thickness_orientation_stack`).
+
+    Same rotation/strain semantics as :class:`StackStrainFitResult`, plus a
+    refined thickness for every layer in `fit_layers` (a subset of
+    `stack.layers` — thickness fitting never touches buffer layers, since
+    they carry no thickness fringes in this model).
+
+    Attributes:
+        R_global ((3, 3) ndarray): Global rotation matrix applied to every layer.
+        rotvec ((3,) ndarray): Rotation vector (radians) for `R_global`.
+        U_layers (list of (3, 3)): Pure rotation part per layer: `R_global @ U0_i`.
+        U0_layers (list of (3, 3)): Starting orientations.
+        U_eff_layers (list of (3, 3)): Effective deformation matrices per layer:
+            `R_global @ U0_i @ (I + ε_i)`.
+        strain_tensors (list of (3, 3)): Symmetric strain tensor per layer in
+            the crystal frame.
+        strain_voigts (list of (6,)): Voigt vector per layer.
+        fit_strain (tuple[str, …]): Strain components that were free parameters.
+        thickness_layers (list of Layer): Layers that were thickness-fit,
+            in `stack.layers` order (subset — buffer layers excluded).
+        thickness0 (list of float): Starting thickness (Å) for each entry
+            of `thickness_layers`.
+        thickness (list of float): Refined thickness (Å) for each entry of
+            `thickness_layers`, already written into the layer objects
+            themselves when `update_stack=True`.
+        thickness_mode ("per_layer" | "shared"): Parametrisation used — see
+            :func:`fit_strain_thickness_orientation_stack`.
+        cost (float): ½ Σ residuals² at convergence.
+        rms_px (float): RMS pixel distance of matched spot pairs.
+        mean_px (float): Mean pixel distance of matched spot pairs.
+        n_matched (int): Matched spots within `max_match_px`.
+        n_obs (int): Observed spots used.
+        n_sim (int): Simulated spots on detector at solution.
+        match_rate (float): `n_matched / n_obs`.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer (OptimizeResult): Raw `scipy.optimize.OptimizeResult`.
+    """
+
+    R_global        : np.ndarray
+    rotvec          : np.ndarray
+    U_layers        : list[np.ndarray]
+    U0_layers       : list[np.ndarray]
+    U_eff_layers    : list[np.ndarray]
+    strain_tensors  : list[np.ndarray]
+    strain_voigts   : list[np.ndarray]
+    fit_strain      : tuple
+    thickness_layers: list = field(repr=False)
+    thickness0      : list[float]
+    thickness       : list[float]
+    thickness_mode  : str
+    cost            : float
+    rms_px          : float
+    mean_px         : float
+    n_matched       : int
+    n_obs           : int
+    n_sim           : int
+    match_rate      : float
+    success         : bool
+    message         : str
+    optimizer       : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw = float(np.degrees(np.linalg.norm(self.rotvec)))
+        dt = [
+            f"{lyr.label}: {t0:.1f}→{t:.1f} Å"
+            for lyr, t0, t in zip(self.thickness_layers, self.thickness0, self.thickness)
+        ]
+        return (
+            f"StackStrainThicknessFitResult [{status}]  "
+            f"rms={self.rms_px:.2f} px  mean={self.mean_px:.2f} px  "
+            f"matched={self.n_matched}/{self.n_obs} ({self.match_rate:.0%})  "
+            f"|δω|={dw:.4f}°  thickness[{self.thickness_mode}]=[{', '.join(dt)}]"
+        )
+
+
+@dataclass
 class MixedFitResult(_ResultMixin):
     """
     Result of a multi-phase orientation refinement (:func:`fit_orientation_mixed`).
@@ -637,6 +718,78 @@ class StackStrainImageRefinementResult(_ResultMixin):
             f"|δω|={dw:.4f}°  "
             f"score={self.score:.1f}  Δscore={gain:+.1f}  "
             f"n_sim={self.n_sim}"
+        )
+
+
+@dataclass
+class StackStrainThicknessImageRefinementResult(_ResultMixin):
+    """
+    Result of image-based strain + thickness + orientation refinement for a
+    layered crystal (:func:`refine_strain_thickness_image_stack`).
+
+    Same semantics as :class:`StackStrainImageRefinementResult`, plus a
+    refined thickness for every layer in `thickness_layers` (a subset of
+    `stack.layers`).  Because the objective is raw image intensity rather
+    than segmented-peak positions, this does not require the satellites to
+    have been individually segmented — only that they are visible (above
+    background) in `image` at their simulated pixel position.
+
+    Attributes:
+        R_global ((3,3) ndarray): Global rotation matrix applied to all layers.
+        rotvec ((3,) ndarray): Rotation vector for `R_global` (radians).
+        U_layers (list of (3,3)): Pure rotation part per layer.
+        U0_layers (list of (3,3)): Starting orientations.
+        U_eff_layers (list of (3,3)): Effective deformation matrices per layer.
+        strain_tensors (list of (3,3)): Per-layer symmetric strain tensor.
+        strain_voigts (list of (6,)): Per-layer Voigt vector.
+        fit_strain (tuple of str): Strain components that were free parameters.
+        thickness_layers (list of Layer): Layers that were thickness-fit.
+        thickness0 (list of float): Starting thickness (Å) per entry of
+            `thickness_layers`.
+        thickness (list of float): Refined thickness (Å) per entry of
+            `thickness_layers`.
+        thickness_mode ("per_layer" | "shared"): Parametrisation used — see
+            :func:`refine_strain_thickness_image_stack`.
+        score (float): Gaussian-weighted pixel score at the refined solution.
+        score0 (float): Score at the starting orientation/strain/thickness.
+        n_sim (int): Total simulated spots on the detector at the solution.
+        success (bool): Optimizer convergence flag.
+        message (str): Optimizer termination message.
+        optimizer: Raw ``scipy.optimize.OptimizeResult`` (not shown in repr).
+"""
+
+    R_global        : np.ndarray
+    rotvec          : np.ndarray
+    U_layers        : list[np.ndarray]
+    U0_layers       : list[np.ndarray]
+    U_eff_layers    : list[np.ndarray]
+    strain_tensors  : list[np.ndarray]
+    strain_voigts   : list[np.ndarray]
+    fit_strain      : tuple
+    thickness_layers: list = field(repr=False)
+    thickness0      : list[float]
+    thickness       : list[float]
+    thickness_mode  : str
+    score           : float
+    score0          : float
+    n_sim           : int
+    success         : bool
+    message         : str
+    optimizer       : object = field(repr=False)
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAILED"
+        dw   = float(np.degrees(np.linalg.norm(self.rotvec)))
+        gain = self.score - self.score0
+        dt = [
+            f"{lyr.label}: {t0:.1f}→{t:.1f} Å"
+            for lyr, t0, t in zip(self.thickness_layers, self.thickness0, self.thickness)
+        ]
+        return (
+            f"StackStrainThicknessImageRefinementResult [{status}]  "
+            f"|δω|={dw:.4f}°  "
+            f"score={self.score:.1f}  Δscore={gain:+.1f}  "
+            f"n_sim={self.n_sim}  thickness[{self.thickness_mode}]=[{', '.join(dt)}]"
         )
 
 
@@ -1005,6 +1158,135 @@ def _strain_to_voigt(strain_vals, fit_strain) -> np.ndarray:
     for val, name in zip(strain_vals, fit_strain):
         voigt[_STRAIN_ALL.index(name)] = float(val)
     return voigt
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Thickness helpers
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Thickness fitting only ever touches `stack.layers` (the repeating-block
+# layers), never `stack.buffer_layers`: `simulate_laue_stack` only builds
+# thickness fringes / superlattice satellites for `stack.layers` (see the
+# "Fringe / satellite wavevectors" section of that function) — a buffer
+# layer's thickness has no effect on the simulated pattern in this model,
+# so fitting it would be optimising a parameter the forward model ignores.
+
+
+def _thickness_groups(
+    stack, mode: str
+) -> tuple[list, list[int], int]:
+    """
+    Map every thickness-fittable layer to a free-parameter group index.
+
+    Args:
+        stack (LayeredCrystal): Stack to inspect.
+        mode ("per_layer" | "shared"): ``"per_layer"`` gives every layer in
+            `stack.layers` its own independent parameter.  ``"shared"``
+            gives every *repeating block* (`stack.blocks`) one parameter,
+            applied identically (as a common multiplicative scale) to every
+            layer in that block — i.e. the block's layers keep their
+            relative thickness ratio fixed while the whole block (and thus
+            its period, main lever arm for `n_rep > 1` superlattice
+            satellites) rescales as one number.
+
+    Returns:
+        fit_layers (list[Layer]): Layers being thickness-fit, in `stack.layers` order.
+        group_of (list[int]): Parameter-group index for each entry of `fit_layers`.
+        n_groups (int): Number of independent thickness parameters.
+    """
+    fit_layers = list(stack.layers)
+    if not fit_layers:
+        raise ValueError(
+            "Stack has no repeating-block layers (`stack.layers` is empty) — "
+            "there is nothing for thickness fitting to act on.  Buffer layers "
+            "(`add_buffer_layer`) never carry thickness fringes in this model."
+        )
+
+    if mode == "per_layer":
+        return fit_layers, list(range(len(fit_layers))), len(fit_layers)
+
+    if mode == "shared":
+        block_of_id = {}
+        for gi, blk in enumerate(stack.blocks):
+            for lyr in blk.layers:
+                block_of_id[id(lyr)] = gi
+        group_of = [block_of_id[id(lyr)] for lyr in fit_layers]
+        return fit_layers, group_of, len(stack.blocks)
+
+    raise ValueError(f"thickness_mode must be 'per_layer' or 'shared', got {mode!r}")
+
+
+def _thickness_value(layer, t0: float, scale: float) -> float:
+    """
+    Physical thickness for `t0 * (1 + scale)`, clamped at one unit cell.
+
+    A hard floor at `layer.d` (rather than a symmetric bound) keeps the
+    parametrisation well-defined for unbounded optimizers (`method='lm'`
+    has no bounds support) without needing extra machinery: it just stops
+    thickness from going non-positive during an exploratory step.
+    """
+    return max(t0 * (1.0 + scale), layer.d)
+
+
+def _apply_thickness(layer, t0: float, scale: float) -> None:
+    """
+    Set *layer* to `_thickness_value(layer, t0, scale)` and recompute
+    `n_cells` to match — the same bookkeeping :class:`Layer.__init__` does,
+    since `scale` bypasses the constructor.
+    """
+    t_new = _thickness_value(layer, t0, scale)
+    layer._thickness = t_new
+    layer.n_cells = max(1, round(t_new / layer.d))
+
+
+def _family_allowed_hkl(stack, families, max_harmonic: int = 1) -> dict:
+    """
+    Build an `allowed_hkl` dict restricted to a set of plane families.
+
+    A "family" is a base `(h, k, l)` direction; the Laue reflections lying
+    on that radial streak are its integer harmonics `m*(h, k, l)`
+    (`m = 1 … max_harmonic`, both signs) — the same convention used by
+    :func:`~nrxrdct.laue.simulation.print_hkl_family`.  Passing the result
+    as `allowed_hkl` to any stack fitter restricts *both* the main Bragg
+    peaks and their satellites to just these families, since
+    `simulate_laue_stack` filters satellite candidates against the same
+    per-crystal `allowed_hkl` set as their parent reflection.
+
+    Args:
+        stack (LayeredCrystal): Stack whose layers are being restricted.
+        families (list[tuple[int,int,int]] or dict[str, list[tuple[int,int,int]]]):
+            Either a flat list of base `(h,k,l)` applied to every crystal in
+            the stack, or a dict keyed by `crystal.name` (mirroring
+            :meth:`LayeredCrystal.set_U`) giving a different family list per
+            material.  Layers whose crystal name is missing from the dict
+            form are excluded entirely (empty allowed-hkl set), not
+            left unfiltered — so only the requested layers contribute to
+            the simulated pattern at all.
+        max_harmonic (int): Highest harmonic order `m` to include.  Default `1`
+            (fundamental reflection only, plus its satellites).
+
+    Returns:
+        dict[int, frozenset[tuple[int,int,int]]]: Keyed by `id(layer.crystal)`, ready to pass as `allowed_hkl`.
+    """
+    if isinstance(families, dict):
+        fam_by_name = families
+    else:
+        fam_list = list(families)
+        fam_by_name = {ly.crystal.name: fam_list for ly in stack.all_layers}
+
+    out: dict[int, frozenset] = {}
+    for layer in stack.all_layers:
+        fams = fam_by_name.get(layer.crystal.name)
+        if not fams:
+            out[id(layer.crystal)] = frozenset()
+            continue
+        hkls = set()
+        for h, k, l in fams:
+            for m in range(1, max_harmonic + 1):
+                hkls.add((m * h, m * k, m * l))
+                hkls.add((-m * h, -m * k, -m * l))
+        out[id(layer.crystal)] = frozenset(hkls)
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1559,6 +1841,135 @@ def laue_strain_stack_residuals(
         strain_vals = params[3 + ii * n_strain : 3 + (ii + 1) * n_strain] * strain_scale
         eps = _strain_matrix(strain_vals, fit_strain)
         layer.U = R @ U0 @ (np.eye(3) + eps)
+
+    _sim_kw = dict(
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        f2_thresh=f2_thresh, kb_params=kb_params,
+        structure_model=structure_model,
+        verbose=False,
+        allowed_hkl=allowed_hkl,
+        correct_depth=correct_depth,
+    )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        spots = simulate_laue_darwin(stack, camera, **_sim_kw)
+    else:
+        spots = simulate_laue_stack(
+            stack, camera, geometry_only=geometry_only, **_sim_kw
+        )
+
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+
+    sim_xy = _extract_sim_xy(spots)
+    if top_n_sim is not None:
+        sim_xy = sim_xy[:top_n_sim]
+
+    return _build_residuals(obs_use, sim_xy, max_match_px)
+
+
+def laue_strain_thickness_stack_residuals(
+    params: np.ndarray,
+    stack,
+    camera,
+    obs_xy: np.ndarray,
+    U0_layers: list[np.ndarray],
+    thickness_layers: list,
+    thickness0: list[float],
+    thickness_groups: list[int],
+    n_thickness_groups: int,
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    thickness_scale: float = 1e-2,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    structure_model: str = "average",
+    max_match_px: float = 30.0,
+    top_n_obs: int | None = None,
+    top_n_sim: int | None = None,
+    geometry_only: bool = False,
+    allowed_hkl=None,
+    correct_depth: bool = False,
+    engine: str = "stack",
+) -> np.ndarray:
+    """
+    Pixel-space residual vector for simultaneous orientation + per-layer
+    strain + layer-thickness refinement of a layered crystal.
+
+    Extends :func:`laue_strain_stack_residuals` with extra parameters that
+    perturb each thickness-fit layer's `thickness` (and hence `n_cells`)
+    directly.  Main-Bragg peak positions constrain orientation/strain as
+    before; the offset of each satellite from its parent main peak — which
+    `simulate_laue_stack` places at `G_hkl + m * (2π / t) * n̂` — is what
+    constrains `t`, so this residual is only informative when `obs_xy`
+    actually contains matched satellite orders (`m ≠ 0`) for the
+    thickness-fit layers.  Restrict `obs_xy` / `allowed_hkl` to the plane
+    families of interest (see :func:`_family_allowed_hkl`) when the full
+    pattern is too crowded to segment satellites reliably everywhere.
+
+    Parameter layout::
+
+        params = [δω_x, δω_y, δω_z,
+                  ε_layer0_0, …, ε_layer0_{n_strain-1}, …,   (per stack.all_layers)
+                  t_group0, …, t_group{n_thickness_groups-1}]
+
+    Total length: ``3 + len(U0_layers) * len(fit_strain) + n_thickness_groups``.
+
+    Args:
+        params (ndarray): See parameter layout above.  Strain and thickness
+            entries are internally multiplied by `strain_scale` /
+            `thickness_scale`; thickness entries are a *fractional* change
+            applied to the corresponding layer's starting thickness.
+        stack (LayeredCrystal): Mutated in-place on every call; always
+            restored by the caller (see :func:`fit_strain_thickness_orientation_stack`).
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2)): Observed pixel positions `[xcam, ycam]`.
+        U0_layers (list of (3, 3)): Base orientation per layer, in
+            `stack.all_layers` order.
+        thickness_layers (list[Layer]): Layers being thickness-fit (subset
+            of `stack.layers`), as returned by :func:`_thickness_groups`.
+        thickness0 (list[float]): Starting thickness (Å) for each entry of
+            `thickness_layers`.
+        thickness_groups (list[int]): Parameter-group index for each entry
+            of `thickness_layers`.
+        n_thickness_groups (int): Number of independent thickness
+            parameters (`len(thickness_layers)` for `'per_layer'`,
+            `len(stack.blocks)` for `'shared'`).
+        fit_strain (tuple of str): Active strain components.
+        strain_scale (float): Internal scale factor for strain parameters.
+        thickness_scale (float): Internal scale factor for thickness
+            parameters — physical fractional change = `param * thickness_scale`.
+            Default `1e-2` (parameter value `1.0` ⇒ 1 % thickness change).
+        correct_depth (bool): Pass ``True`` to depth-correct each spot's
+            pixel position.
+        engine (str): Simulation engine — ``'stack'`` (default, kinematical)
+            or ``'darwin'`` (Darwin primary extinction).
+
+    Returns:
+        residuals ((2 * N_obs_use,) ndarray): Fixed-length interleaved `[Δx, Δy]`.
+    """
+    params = np.asarray(params, dtype=float)
+    n_strain = len(fit_strain)
+    n_layers = len(U0_layers)
+    off_t = 3 + n_layers * n_strain
+    R = Rotation.from_rotvec(params[:3]).as_matrix()
+
+    for ii, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
+        strain_vals = params[3 + ii * n_strain: 3 + (ii + 1) * n_strain] * strain_scale
+        eps = _strain_matrix(strain_vals, fit_strain)
+        layer.U = R @ U0 @ (np.eye(3) + eps)
+
+    if thickness_layers:
+        t_params = params[off_t: off_t + n_thickness_groups] * thickness_scale
+        for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+            _apply_thickness(layer, t0, float(t_params[gi]))
+        stack._update_offsets()
 
     _sim_kw = dict(
         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
@@ -2389,6 +2800,307 @@ def fit_strain_orientation_stack(
         U_eff_layers=U_eff_layers,
         strain_tensors=strain_tensors, strain_voigts=strain_voigts,
         fit_strain=tuple(fit_strain),
+        cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
+        n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
+        match_rate=n_matched / max(N_obs, 1),
+        success=opt.success, message=opt.message, optimizer=opt,
+    )
+
+    if verbose:
+        print(f"  {result}")
+
+    return result
+
+
+def fit_strain_thickness_orientation_stack(
+    stack,
+    camera,
+    obs_xy: np.ndarray,
+    fit_strain: tuple[str, ...] = _STRAIN_ALL,
+    strain_scale: float = 1e-4,
+    thickness_mode: str = "per_layer",
+    thickness_scale: float = 1e-2,
+    families: "list[tuple[int, int, int]] | dict[str, list[tuple[int, int, int]]] | None" = None,
+    max_harmonic: int = 1,
+    E_min_eV: float = E_MIN_eV,
+    E_max_eV: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: dict | None = None,
+    f2_thresh: float = F2_THRESHOLD,
+    kb_params=BM32_KB,
+    structure_model: str = "average",
+    max_match_px: float | list[float] = (15.0, 3.0),
+    top_n_obs: int | None = 300,
+    top_n_sim: int | None = 300,
+    method: str = "lm",
+    ftol: float = 1e-8,
+    xtol: float = 1e-8,
+    gtol: float = 1e-8,
+    max_nfev: int = 2000,
+    update_stack: bool = True,
+    geometry_only: bool = True,
+    correct_depth: bool = False,
+    allowed_hkl=None,
+    verbose: bool = False,
+    engine: str = "stack",
+) -> StackStrainThicknessFitResult:
+    """
+    Simultaneously refine orientation, per-layer lattice strain, and
+    layer thickness for a :class:`~nrxrdct.laue.layers.LayeredCrystal`,
+    using segmented-peak positions — including satellite orders — as the
+    fit target.
+
+    Extends :func:`fit_strain_orientation_stack` with a thickness
+    correction for every layer in `stack.layers` (buffer layers are never
+    thickness-fit — see :func:`_thickness_groups`).  Main Bragg-peak
+    positions constrain orientation/strain, exactly as before; the offset
+    of each matched satellite (`satellite_order != 0`) from its parent peak
+    constrains thickness.  **This means the fit is only informative about
+    thickness if `obs_xy` actually contains satellite spots** — feeding it
+    only order-0 peaks leaves the thickness parameters unconstrained and
+    (for `'per_layer'` mode especially) correlated with strain.
+
+    **Restricting to specific plane families**
+
+    When satellites are hard to segment reliably across the whole pattern,
+    narrow the fit to the handful of families where you *have* identified
+    them, via `families` — a list of base `(h,k,l)` (applied to every
+    crystal) or a `{crystal_name: [(h,k,l), …]}` dict (see
+    :func:`_family_allowed_hkl`).  This restricts what `simulate_laue_stack`
+    enumerates (main peaks *and* satellites) to just those families, so
+    stray simulated spots from unrelated reflections can't steal the
+    Hungarian assignment.  Pass the corresponding **observed** peaks
+    (main + satellites of just those families) as `obs_xy` — this function
+    does not attempt to auto-classify observed peaks by family.
+    `families` and `allowed_hkl` are mutually exclusive.
+
+    **Thickness parametrisation**
+
+    `thickness_mode='per_layer'` (default) gives every layer in
+    `stack.layers` an independent thickness correction.
+    `thickness_mode='shared'` gives every *repeating block*
+    (`stack.blocks`) one correction, applied as a common multiplicative
+    scale to every layer in that block (their relative thickness ratio is
+    preserved) — use this when individual layer thicknesses can't be
+    separated from the observed satellites but the overall period can.
+    Each free thickness parameter is a fractional change relative to the
+    layer's starting thickness, scaled by `thickness_scale` (physical
+    fractional change = `param * thickness_scale`); it is applied inside
+    the residual function by mutating `layer._thickness` and recomputing
+    `layer.n_cells`, then calling `stack._update_offsets()` so cached block
+    z-offsets/periods stay consistent.
+
+    **Staged refinement** works identically to :func:`fit_strain_orientation_stack`:
+    thickness parameters are carried forward across stages exactly like strain.
+
+    Args:
+        stack (LayeredCrystal): Layered structure to fit.  Layer U matrices
+            and thicknesses are used as starting values and optionally
+            updated after convergence.
+        camera (Camera): Detector geometry.
+        obs_xy ((N_obs, 2) ndarray): Observed pixel positions `[xcam, ycam]`,
+            restricted to the plane families being fit if `families` is set.
+        fit_strain (tuple of str): Strain components to refine per layer.
+            Default: all six.
+        strain_scale (float): Internal scale for strain parameters.  Default `1e-4`.
+        thickness_mode ("per_layer" | "shared"): Thickness parametrisation — see above.
+        thickness_scale (float): Internal scale for thickness parameters.  Default `1e-2`.
+        families (list or dict, optional): Plane families to restrict the fit to.  See above.
+        max_harmonic (int): Highest harmonic order to include per family
+            (only used when `families` is set).  Default `1`.
+        E_min_eV, E_max_eV, source, source_kwargs, f2_thresh, kb_params,
+        structure_model, max_match_px, top_n_obs, top_n_sim, method,
+        ftol, xtol, gtol, max_nfev, geometry_only
+            Forwarded to :func:`laue_strain_thickness_stack_residuals` / ``least_squares``.
+        correct_depth (bool): Project each layer's spots from its centre
+            depth rather than the surface.  Default ``False``.
+        allowed_hkl: Pre-computed allowed-hkl dict.  Mutually exclusive
+            with `families`.
+        engine (str): Simulation engine — ``'stack'`` (default) or ``'darwin'``.
+        update_stack (bool): If ``True`` (default), write the refined
+            ``U_eff`` matrices and thicknesses back into `stack.all_layers`
+            / `stack.layers` after convergence.
+        verbose (bool): Print a one-line summary after each stage.
+
+    Returns:
+        StackStrainThicknessFitResult
+    """
+    if families is not None and allowed_hkl is not None:
+        raise ValueError(
+            "families and allowed_hkl are mutually exclusive — families "
+            "builds its own allowed_hkl dict restricted to those plane "
+            "families; pass one or the other."
+        )
+
+    obs_use = np.asarray(obs_xy, dtype=float)
+    if top_n_obs is not None:
+        obs_use = obs_use[:top_n_obs]
+    N_obs = len(obs_use)
+
+    n_layers = len(stack.all_layers)
+    n_strain = len(fit_strain)
+
+    thickness_layers, thickness_groups, n_thickness_groups = _thickness_groups(
+        stack, thickness_mode
+    )
+    thickness0 = [lyr.thickness for lyr in thickness_layers]
+
+    n_params = 3 + n_layers * n_strain + n_thickness_groups
+
+    U0_layers = [layer.U.copy() for layer in stack.all_layers]
+
+    if verbose:
+        print(
+            f"fit_strain_thickness_orientation_stack: {N_obs} observed spots, "
+            f"{n_layers} layers, strain components: {list(fit_strain)}, "
+            f"thickness_mode={thickness_mode!r} ({n_thickness_groups} param"
+            f"{'s' if n_thickness_groups != 1 else ''})"
+        )
+
+    if families is not None:
+        _allowed = _family_allowed_hkl(stack, families, max_harmonic=max_harmonic)
+    elif allowed_hkl is not None:
+        _allowed = allowed_hkl
+    elif geometry_only:
+        _enum_pool = (
+            stack.buffer_layers + stack.layers[:1]
+            if structure_model == "average"
+            else stack.all_layers
+        )
+        _allowed = {
+            id(layer.crystal): precompute_allowed_hkl(
+                layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
+            )
+            for layer in _enum_pool
+        }
+    else:
+        _allowed = None
+
+    _stages = (
+        [float(max_match_px)] if np.isscalar(max_match_px)
+        else [float(v) for v in max_match_px]
+    )
+
+    U0_stage = [U0.copy() for U0 in U0_layers]
+    opt = None
+    _x0 = np.zeros(n_params)
+
+    try:
+        for _si, _px in enumerate(_stages):
+            fun = partial(
+                laue_strain_thickness_stack_residuals,
+                stack=stack, camera=camera, obs_xy=obs_use,
+                U0_layers=U0_stage,
+                thickness_layers=thickness_layers, thickness0=thickness0,
+                thickness_groups=thickness_groups,
+                n_thickness_groups=n_thickness_groups,
+                fit_strain=fit_strain, strain_scale=strain_scale,
+                thickness_scale=thickness_scale,
+                E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                source=source, source_kwargs=source_kwargs,
+                f2_thresh=f2_thresh, kb_params=kb_params,
+                structure_model=structure_model,
+                max_match_px=_px, top_n_obs=None, top_n_sim=top_n_sim,
+                geometry_only=False, allowed_hkl=_allowed,
+                correct_depth=correct_depth, engine=engine,
+            )
+            opt = least_squares(
+                fun, x0=_x0,
+                method=method, ftol=ftol, xtol=xtol, gtol=gtol, max_nfev=max_nfev,
+            )
+            if verbose and len(_stages) > 1:
+                _nm, _rms, _ = _compute_match_stats(opt.fun, _px, N_obs)
+                print(
+                    f"  stage {_si + 1}/{len(_stages)}  px={_px:.1f}:"
+                    f"  matched={_nm}  rms={_rms:.2f} px"
+                )
+            if _si < len(_stages) - 1:
+                R_step = Rotation.from_rotvec(opt.x[:3]).as_matrix()
+                U0_stage = [R_step @ U0 for U0 in U0_stage]
+                # Bake rotation into U0_stage; carry strain + thickness forward.
+                _x0 = np.zeros(n_params)
+                _x0[3:] = opt.x[3:]
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+        for layer, t0 in zip(thickness_layers, thickness0):
+            _apply_thickness(layer, t0, 0.0)
+        stack._update_offsets()
+
+    # Unpack solution.
+    off_t = 3 + n_layers * n_strain
+    R_last = Rotation.from_rotvec(opt.x[:3]).as_matrix()
+    U_layers_final = []
+    U_eff_layers   = []
+    strain_tensors = []
+    strain_voigts  = []
+
+    for ii, U0 in enumerate(U0_stage):
+        strain_vals = opt.x[3 + ii * n_strain: 3 + (ii + 1) * n_strain] * strain_scale
+        eps    = _strain_matrix(strain_vals, fit_strain)
+        U_pure = R_last @ U0
+        U_eff  = U_pure @ (np.eye(3) + eps)
+        U_layers_final.append(U_pure)
+        U_eff_layers.append(U_eff)
+        strain_tensors.append(eps)
+        strain_voigts.append(_strain_to_voigt(strain_vals, fit_strain))
+
+    t_params_final = opt.x[off_t: off_t + n_thickness_groups] * thickness_scale
+    thickness_final = [
+        _thickness_value(lyr, t0, float(t_params_final[gi]))
+        for lyr, t0, gi in zip(thickness_layers, thickness0, thickness_groups)
+    ]
+
+    R_global = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
+
+    if update_stack:
+        for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+            layer.U = U_eff.copy()
+        for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+            _apply_thickness(layer, t0, float(t_params_final[gi]))
+        stack._update_offsets()
+
+    n_matched, rms_px, mean_px = _compute_match_stats(opt.fun, _stages[-1], N_obs)
+
+    # Final simulation for n_sim (state already reflects the solution above).
+    if not update_stack:
+        for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+            layer.U = U_eff.copy()
+        for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+            _apply_thickness(layer, t0, float(t_params_final[gi]))
+        stack._update_offsets()
+
+    _final_kw = dict(
+        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+        source=source, source_kwargs=source_kwargs,
+        f2_thresh=f2_thresh, kb_params=kb_params,
+        structure_model=structure_model, verbose=False,
+        allowed_hkl=_allowed, correct_depth=correct_depth,
+    )
+    if engine == "darwin":
+        from .simulation import simulate_laue_darwin
+        final_spots = simulate_laue_darwin(stack, camera, **_final_kw)
+    else:
+        final_spots = simulate_laue_stack(stack, camera, **_final_kw)
+    n_sim = len(_extract_sim_xy(final_spots))
+
+    if not update_stack:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+        for layer, t0 in zip(thickness_layers, thickness0):
+            _apply_thickness(layer, t0, 0.0)
+        stack._update_offsets()
+
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
+    result = StackStrainThicknessFitResult(
+        R_global=R_global, rotvec=rotvec_total,
+        U_layers=U_layers_final, U0_layers=U0_layers,
+        U_eff_layers=U_eff_layers,
+        strain_tensors=strain_tensors, strain_voigts=strain_voigts,
+        fit_strain=tuple(fit_strain),
+        thickness_layers=thickness_layers,
+        thickness0=thickness0, thickness=thickness_final,
+        thickness_mode=thickness_mode,
         cost=float(opt.cost), rms_px=rms_px, mean_px=mean_px,
         n_matched=n_matched, n_obs=N_obs, n_sim=n_sim,
         match_rate=n_matched / max(N_obs, 1),
@@ -5104,6 +5816,366 @@ def refine_strain_image_stack(
     if update_stack:
         for layer, U_eff in zip(stack.all_layers, U_eff_layers):
             layer.U = U_eff.copy()
+
+    if verbose:
+        print(f"  {out}")
+
+    return out
+
+
+def refine_strain_thickness_image_stack(
+    stack,
+    camera,
+    image: np.ndarray,
+    *,
+    strain0_list: "list[np.ndarray] | None" = None,
+    fit_strain: "tuple[str, ...] | None" = None,
+    thickness_mode: str = "per_layer",
+    thickness_scale: float = 1e-2,
+    max_thickness_frac: "float | list[float] | None" = None,
+    families: "list[tuple[int, int, int]] | dict[str, list[tuple[int, int, int]]] | None" = None,
+    max_harmonic: int = 1,
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    max_angle_deg: float = 0.2,
+    max_shift_px: "float | list[float] | None" = None,
+    strain_scale: float = 1e-4,
+    structure_model: str = "average",
+    method: str = "Powell",
+    options: "dict | None" = None,
+    update_stack: bool = False,
+    correct_depth: bool = False,
+    verbose: bool = False,
+) -> StackStrainThicknessImageRefinementResult:
+    """
+    Post-refine orientation, per-layer strain, **and** layer thickness for a
+    :class:`~nrxrdct.laue.layers.LayeredCrystal` by maximising the total
+    Gaussian-weighted pixel intensity at simulated Laue spot positions
+    (main peaks *and* satellites) — no peak segmentation required.
+
+    Extends :func:`refine_strain_image_stack` with a thickness correction
+    for every layer in `stack.layers` (buffer layers excluded — see
+    :func:`_thickness_groups`).  Because the objective sums raw image
+    intensity under each simulated spot rather than matching segmented peak
+    positions, satellites that are too weak, too close together, or too
+    numerous to segment individually still contribute to the score as long
+    as they are visible above background at their simulated pixel — this is
+    the main reason to prefer this fitter over
+    :func:`fit_strain_thickness_orientation_stack` when satellite
+    segmentation is unreliable.
+
+    **Recommended workflow**
+
+    Run the peak-based fit first (orientation, optionally strain) to get
+    close, then polish thickness — and, optionally, strain — in image
+    space::
+
+        result_peaks = laue.fit_strain_orientation_stack(stack, cam, peaks, ...)
+        result_image = laue.refine_strain_thickness_image_stack(
+            stack, cam, frame,
+            strain0_list=result_peaks.strain_tensors,
+            families=[(0, 0, 2)], allowed_hkl=None, verbose=True,
+        )
+
+    **Restricting to specific plane families**
+
+    Pass `families` (see :func:`_family_allowed_hkl`) to restrict which
+    main peaks *and* satellites are simulated/scored — e.g. when only one
+    or two reflections have a clean, unambiguous satellite series in the
+    image and the rest of the pattern is too crowded to be a reliable
+    thickness signal.  `families` and `allowed_hkl` are mutually exclusive.
+
+    **Thickness parametrisation**
+
+    `thickness_mode='per_layer'` (default) gives every layer in
+    `stack.layers` an independent, bounded thickness correction.
+    `thickness_mode='shared'` gives every repeating block one correction,
+    applied as a common multiplicative scale to every layer in that block
+    (relative thickness ratios preserved) — see
+    :func:`fit_strain_thickness_orientation_stack` for the same trade-off
+    in the peak-based fitter.
+
+    Args:
+        stack (LayeredCrystal): Layered structure.  Layer U matrices and
+            thicknesses are used as starting values.  Always restored to
+            their original state if an exception occurs.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Invalid / gap pixels
+            must be negative (Eiger convention: ``−1``).
+        strain0_list (list of (3,3) or None): Starting strain tensor per
+            layer in ``stack.all_layers`` order.  ``None`` starts every
+            layer from zero strain.
+        fit_strain (tuple of str or None): Strain components to refine.
+            ``None`` refines all six.
+        thickness_mode ("per_layer" | "shared"): Thickness parametrisation — see above.
+        thickness_scale (float): Internal divisor for thickness parameters
+            (physical fractional change = `param * thickness_scale`).
+            Default ``1e-2``.
+        max_thickness_frac (float or list of float, optional): Symmetric
+            bound on each thickness group's fractional change (e.g. ``0.15``
+            ⇒ ±15 %).  A single float applies to every group; a list sets a
+            per-group bound (``None`` entries fall back to the default).
+            Default: ``±15 %`` for every group.
+        families (list or dict, optional): Plane families to restrict
+            simulation/scoring to.  See above.
+        max_harmonic (int): Highest harmonic order per family (only used
+            when `families` is set).  Default ``1``.
+        kernel_sigma (float): σ (pixels) of the Gaussian placed at each
+            simulated spot.  Default ``0.3``.
+        bg_sigma (float): σ (pixels) of the background estimate subtracted
+            before optimisation.  ``0`` to skip.  Default ``251``.
+        E_min, E_max (float): Photon energy range (eV).
+        allowed_hkl: Pre-computed allowed HKL dict keyed by ``id(crystal)``.
+            Mutually exclusive with `families`.
+        max_angle_deg (float): Symmetric bound on each layer's
+            rotation-vector component (degrees).  Default ``0.2``.
+        max_shift_px (float or list of float, optional): Per-layer strain
+            bound, converted via camera geometry.  See
+            :func:`refine_strain_image_stack`.  Default: ``±5 %`` strain.
+        strain_scale (float): Internal divisor for strain parameters.
+            Default ``1e-4``.
+        structure_model (str): ``'average'`` or ``'incoherent'``.
+        method (str): ``scipy.optimize.minimize`` method.  Default ``'Powell'``.
+        options (dict or None): Forwarded to ``minimize`` (merged over
+            defaults ``maxiter=5000``, ``xtol/ftol=1e-7`` for Powell).
+        update_stack (bool): If ``True``, write the refined ``U_eff``
+            matrices and thicknesses back into the stack after convergence.
+        correct_depth (bool): Project each layer's spots from its centre
+            depth rather than the surface.  Default ``False``.
+        verbose (bool): Print a one-line summary after optimisation.
+
+    Returns:
+        StackStrainThicknessImageRefinementResult
+    """
+    if families is not None and allowed_hkl is not None:
+        raise ValueError(
+            "families and allowed_hkl are mutually exclusive — families "
+            "builds its own allowed_hkl dict restricted to those plane "
+            "families; pass one or the other."
+        )
+    if families is not None:
+        allowed_hkl = _family_allowed_hkl(stack, families, max_harmonic=max_harmonic)
+
+    _fit_strain: tuple[str, ...] = (
+        tuple(fit_strain) if fit_strain is not None else _STRAIN_ALL
+    )
+
+    ny, nx = image.shape
+    valid  = image >= 0
+    img    = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    if bg_sigma > 0:
+        smooth = _fft_gauss_convolve(img, bg_sigma)
+        norm   = _fft_gauss_convolve(valid.astype(np.float64), bg_sigma)
+        norm[norm < 1e-6] = 1.0
+        img    = np.clip(img - smooth / norm, 0.0, None)
+        img[~valid] = 0.0
+
+    img_blurred = _fft_gauss_convolve(img, kernel_sigma)
+
+    n_layers = len(stack.all_layers)
+    n_strain = len(_fit_strain)
+    _block   = 3 + n_strain          # params per layer: [δω(3), ε(n_strain)]
+    n_orient_params = n_layers * _block
+
+    thickness_layers, thickness_groups, n_thickness_groups = _thickness_groups(
+        stack, thickness_mode
+    )
+    thickness0 = [lyr.thickness for lyr in thickness_layers]
+
+    n_params = n_orient_params + n_thickness_groups
+
+    U0_layers = [layer.U.copy() for layer in stack.all_layers]
+
+    # Build starting parameter vector from optional prior strain tensors.
+    x0 = np.zeros(n_params)
+    if strain0_list is not None:
+        for ii, eps0 in enumerate(strain0_list):
+            eps0_arr = np.asarray(eps0, dtype=float)
+            for jj, name in enumerate(_fit_strain):
+                x0[ii * _block + 3 + jj] = eps0_arr[_STRAIN_IDX[name]] / strain_scale
+
+    rot_lim = float(np.radians(max_angle_deg))
+
+    _default_lim = 0.05 / strain_scale
+    if max_shift_px is not None:
+        _px_sens = camera.dd / camera.pixel_mm
+        if isinstance(max_shift_px, (int, float)):
+            _per_layer_lim = [float(max_shift_px) / _px_sens / strain_scale] * n_layers
+        else:
+            _per_layer_lim = [
+                _default_lim if v is None else float(v) / _px_sens / strain_scale
+                for v in max_shift_px
+            ]
+    else:
+        _per_layer_lim = [_default_lim] * n_layers
+
+    bounds = []
+    for lim in _per_layer_lim:
+        bounds += [(-rot_lim, rot_lim)] * 3
+        bounds += [(-lim, lim)] * n_strain
+
+    _default_t_lim = 0.15 / thickness_scale
+    if max_thickness_frac is not None:
+        if isinstance(max_thickness_frac, (int, float)):
+            _per_group_t_lim = [float(max_thickness_frac) / thickness_scale] * n_thickness_groups
+        else:
+            _per_group_t_lim = [
+                _default_t_lim if v is None else float(v) / thickness_scale
+                for v in max_thickness_frac
+            ]
+    else:
+        _per_group_t_lim = [_default_t_lim] * n_thickness_groups
+    bounds += [(-lim, lim) for lim in _per_group_t_lim]
+
+    def _score(params: np.ndarray) -> float:
+        for ii, (layer, U0) in enumerate(zip(stack.all_layers, U0_layers)):
+            base = ii * _block
+            R   = Rotation.from_rotvec(params[base : base + 3]).as_matrix()
+            sv  = params[base + 3 : base + _block] * strain_scale
+            eps = _strain_matrix(sv, _fit_strain)
+            layer.U = R @ U0 @ (np.eye(3) + eps)
+
+        t_params = params[n_orient_params : n_orient_params + n_thickness_groups] * thickness_scale
+        for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+            _apply_thickness(layer, t0, float(t_params[gi]))
+        stack._update_offsets()
+
+        spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
+        )
+        if not spots:
+            return 0.0
+
+        pix_arr = np.array([s["pix"] for s in spots], dtype=np.float64)
+        int_arr = np.array([s.get("intensity", 1.0) for s in spots], dtype=np.float64)
+        cols = np.round(pix_arr[:, 0]).astype(np.intp)
+        rows = np.round(pix_arr[:, 1]).astype(np.intp)
+        mask = (rows >= 0) & (rows < ny) & (cols >= 0) & (cols < nx)
+        mask[mask] &= valid[rows[mask], cols[mask]]
+        if not mask.any():
+            return 0.0
+        return float((img_blurred[rows[mask], cols[mask]] * int_arr[mask]).sum())
+
+    score0 = _score(x0)
+
+    if verbose:
+        print(
+            f"refine_strain_thickness_image_stack: score0={score0:.1f}  "
+            f"fit_strain={_fit_strain}  {n_layers} layers (independent rotations)  "
+            f"thickness_mode={thickness_mode!r} ({n_thickness_groups} param"
+            f"{'s' if n_thickness_groups != 1 else ''})  "
+            f"method={method}  max_angle={max_angle_deg}°"
+        )
+
+    opts: dict = {"maxiter": 5000}
+    if method == "Powell":
+        opts.update({"xtol": 1e-7, "ftol": 1e-7})
+    else:
+        opts.update({"gtol": 1e-8})
+    if options:
+        opts.update(options)
+
+    try:
+        result = minimize(
+            lambda p: -_score(p), x0,
+            method=method, bounds=bounds, options=opts,
+        )
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+        for layer, t0 in zip(thickness_layers, thickness0):
+            _apply_thickness(layer, t0, 0.0)
+        stack._update_offsets()
+
+    # Unpack solution.
+    U_layers_final = []
+    U_eff_layers   = []
+    strain_tensors = []
+    strain_voigts  = []
+
+    for ii, U0 in enumerate(U0_layers):
+        base = ii * _block
+        R   = Rotation.from_rotvec(result.x[base : base + 3]).as_matrix()
+        sv  = result.x[base + 3 : base + _block] * strain_scale
+        eps = _strain_matrix(sv, _fit_strain)
+        U_pure = R @ U0
+        U_eff  = U_pure @ (np.eye(3) + eps)
+        U_layers_final.append(U_pure)
+        U_eff_layers.append(U_eff)
+        strain_tensors.append(eps)
+        strain_voigts.append(_strain_to_voigt(sv, _fit_strain))
+
+    t_params_final = result.x[n_orient_params : n_orient_params + n_thickness_groups] * thickness_scale
+    thickness_final = [
+        _thickness_value(lyr, t0, float(t_params_final[gi]))
+        for lyr, t0, gi in zip(thickness_layers, thickness0, thickness_groups)
+    ]
+
+    R_global     = Rotation.from_matrix(U_layers_final[0] @ U0_layers[0].T).as_matrix()
+    rotvec_total = Rotation.from_matrix(R_global).as_rotvec()
+
+    # Count final simulated spots.
+    for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+        layer.U = U_eff.copy()
+    for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+        _apply_thickness(layer, t0, float(t_params_final[gi]))
+    stack._update_offsets()
+    try:
+        final_spots = simulate_laue_stack(
+            stack, camera,
+            E_min_eV=E_min, E_max_eV=E_max,
+            structure_model=structure_model,
+            verbose=False,
+            geometry_only=True,
+            allowed_hkl=allowed_hkl,
+            correct_depth=correct_depth,
+        )
+        n_sim = len(final_spots)
+    finally:
+        for layer, U0 in zip(stack.all_layers, U0_layers):
+            layer.U = U0.copy()
+        for layer, t0 in zip(thickness_layers, thickness0):
+            _apply_thickness(layer, t0, 0.0)
+        stack._update_offsets()
+
+    out = StackStrainThicknessImageRefinementResult(
+        R_global         = R_global,
+        rotvec           = rotvec_total,
+        U_layers         = U_layers_final,
+        U0_layers        = U0_layers,
+        U_eff_layers     = U_eff_layers,
+        strain_tensors   = strain_tensors,
+        strain_voigts    = strain_voigts,
+        fit_strain       = _fit_strain,
+        thickness_layers = thickness_layers,
+        thickness0       = thickness0,
+        thickness        = thickness_final,
+        thickness_mode   = thickness_mode,
+        score            = -float(result.fun),
+        score0           = score0,
+        n_sim            = n_sim,
+        success          = result.success,
+        message          = result.message,
+        optimizer        = result,
+    )
+
+    if update_stack:
+        for layer, U_eff in zip(stack.all_layers, U_eff_layers):
+            layer.U = U_eff.copy()
+        for layer, t0, gi in zip(thickness_layers, thickness0, thickness_groups):
+            _apply_thickness(layer, t0, float(t_params_final[gi]))
+        stack._update_offsets()
 
     if verbose:
         print(f"  {out}")

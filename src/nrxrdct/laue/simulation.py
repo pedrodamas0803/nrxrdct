@@ -2979,10 +2979,11 @@ def simulate_laue_stack(
             f"Λ={stack.bilayer_thickness:.2f} Å  "
             f"N_rep={stack.n_rep}"
         )
-        print(
-            f"  Superlattice satellite 2π/Λ = "
-            f"{2*np.pi/stack.bilayer_thickness:.5f} Å⁻¹"
-        )
+        if stack.bilayer_thickness > 1e-6:
+            print(
+                f"  Superlattice satellite 2π/Λ = "
+                f"{2*np.pi/stack.bilayer_thickness:.5f} Å⁻¹"
+            )
 
     return spots
 

@@ -25,6 +25,7 @@ dependencies = [
 [project.scripts]
 nrxrdct-slurm = "nrxrdct.azimuthal.slurm_integration.cli:main"
 nrxrdct-slurm-recon = "nrxrdct.xrdct.slurm_reconstruction.cli:main"
+nrxrdct-slurm-texture = "nrxrdct.texture.slurm_pole_figures.cli:main"
 
 [project.optional-dependencies]
 laue = [

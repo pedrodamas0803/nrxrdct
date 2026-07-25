@@ -19,6 +19,9 @@ rietveld
     GSAS-II Rietveld refinement wrappers (:class:`~nrxrdct.rietveld.BaseRefinement`,
     :class:`~nrxrdct.rietveld.InstrumentCalibration`) and pre-built refinement
     dictionary templates.
+texture
+    Texture tomography: pole-figure extraction from XRD-CT diffraction images
+    (:mod:`nrxrdct.texture.odf`).
 visualization
     Array-agnostic interactive Jupyter widgets, notably
     :class:`~nrxrdct.visualization.StackViewer` for browsing 2-D/3-D NumPy

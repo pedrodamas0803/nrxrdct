@@ -7043,6 +7043,13 @@ def plot_rod_tangency(
     several satellite orders. Overlay this on a measured/simulated `image`
     to see whether a line's direction tracks a real elongated feature.
 
+    Whenever more than one `m=0` peak is drawn — multiple layers, and/or
+    `n_harmonics > 1` adding harmonic peaks — a white star marks the
+    unweighted average of all those peaks' pixel positions (not shown for
+    a single peak, since it would just duplicate that peak's own `+`
+    marker). Satellite-order dots are not included, only the fundamental
+    `pix0`/harmonic markers.
+
     Args:
         stack, hkl, camera, ki_hat: Forwarded to
             :func:`~nrxrdct.laue.simulation.rod_tangency`.
@@ -7216,6 +7223,7 @@ def plot_rod_tangency(
         arrow_neg = arrow_pos = float(arrow_length_px)
     perp_len = (arrow_neg + arrow_pos) / 6.0
     multi = len(infos) > 1
+    peak_points = []
     for i, info in enumerate(infos):
         color = _ROD_TANGENCY_PALETTE[i % len(_ROD_TANGENCY_PALETTE)]
         px0, py0 = info["pix0"]
@@ -7236,6 +7244,7 @@ def plot_rod_tangency(
                 label="perpendicular (reference axis only)",
             )
         ax.plot(px0, py0, "+", color=color if multi else FG, ms=10, mew=1.4, zorder=5)
+        peak_points.append((px0, py0))
 
         label_off = 8.0 * perp  # small perpendicular offset so text doesn't sit on the marker/line
         if max_satellites > 0:
@@ -7308,6 +7317,7 @@ def plot_rod_tangency(
                     continue
                 hcolor = _ROD_TANGENCY_PALETTE[(i + n - 1) % len(_ROD_TANGENCY_PALETTE)]
                 hx, hy = hinfo["pix0"]
+                peak_points.append((hx, hy))
                 ax.plot(hx, hy, "^", color=hcolor, alpha=0.55, ms=7, mec=BG, mew=0.5, zorder=3)
                 ax.annotate(
                     f"n{n}", (hx, hy), xytext=(hx + label_off[0], hy + label_off[1]),
@@ -7340,6 +7350,14 @@ def plot_rod_tangency(
                                 hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
                                 color=hcolor, fontsize=6, ha="center", va="bottom", clip_on=False,
                             )
+
+    if len(peak_points) > 1:
+        avg_x = float(np.mean([p[0] for p in peak_points]))
+        avg_y = float(np.mean([p[1] for p in peak_points]))
+        ax.plot(
+            avg_x, avg_y, "*", color=FG, ms=14, mec=BG, mew=0.8, zorder=7,
+            label=f"average peak position ({len(peak_points)} peaks)",
+        )
 
     if show_relaxed_buffer:
         plotted_labels = {info["layer"] for info in infos}

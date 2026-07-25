@@ -168,21 +168,18 @@ def _build_kernel_matrix(
     acc = sparse.csr_matrix((n_data, N))
     for m in range(M):
         tree = cKDTree(grid_xyz_variants[m])
-        neighbor_lists = tree.query_ball_point(data_xyz, r=cutoff_chord)
+        neighbor_lists = tree.query_ball_point(data_xyz, r=cutoff_chord, workers=-1)
 
-        rows, cols, vals = [], [], []
-        for j, neighbors in enumerate(neighbor_lists):
-            if not neighbors:
-                continue
-            neighbors = np.asarray(neighbors)
-            dots = np.clip(grid_xyz_variants[m][neighbors] @ data_xyz[j], -1.0, 1.0)
-            angles = np.arccos(dots)
-            weights = np.exp(-(angles ** 2) / (2 * sigma ** 2))
-            rows.extend([j] * len(neighbors))
-            cols.extend(neighbors.tolist())
-            vals.extend(weights.tolist())
+        lengths = np.fromiter((len(nb) for nb in neighbor_lists), dtype=np.int64, count=n_data)
+        if lengths.sum() == 0:
+            continue
+        rows = np.repeat(np.arange(n_data), lengths)
+        cols = np.concatenate([np.asarray(nb, dtype=np.int64) for nb in neighbor_lists if len(nb)])
 
-        acc = acc + sparse.csr_matrix((vals, (rows, cols)), shape=(n_data, N))
+        dots = np.clip(np.einsum("ij,ij->i", grid_xyz_variants[m][cols], data_xyz[rows]), -1.0, 1.0)
+        weights = np.exp(-(np.arccos(dots) ** 2) / (2 * sigma ** 2))
+
+        acc = acc + sparse.csr_matrix((weights, (rows, cols)), shape=(n_data, N))
 
     row_sums = np.asarray(acc.sum(axis=1)).ravel()
     empty_rows = np.where(row_sums == 0)[0]

@@ -55,7 +55,8 @@ def _query_slurm(slurm_ids: list[str]) -> dict[str, str]:
 
 
 def _query_progress(tmp_dir: Path) -> tuple[int, int]:
-    """Return (n_done, n_total) by counting completed .npy files."""
+    """Return (n_done, n_total) by counting scans whose meta file and every
+    requested hkl's .npy file are all present."""
     try:
         meta_sidecar = tmp_dir / "launch_meta.json"
         if not meta_sidecar.exists():
@@ -63,10 +64,11 @@ def _query_progress(tmp_dir: Path) -> tuple[int, int]:
         with open(meta_sidecar) as f:
             launch_meta = json.load(f)
         n_total = len(launch_meta["valid_entries"])
+        hkls = list(launch_meta["hkls"].keys())
         n_done = 0
-        for p in tmp_dir.glob("scan_????.npy"):
-            ii = int(p.stem.split("_")[1])
-            if (tmp_dir / f"scan_{ii:04d}.meta.json").exists():
+        for p in tmp_dir.glob("scan_????.meta.json"):
+            ii = int(p.name.split("_")[1].split(".")[0])
+            if all((tmp_dir / f"scan_{ii:04d}_{hkl}.npy").exists() for hkl in hkls):
                 n_done += 1
         return n_done, n_total
     except Exception:

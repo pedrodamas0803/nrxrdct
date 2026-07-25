@@ -16,9 +16,11 @@ from .odf import (
     assemble_pole_figure_sinogram,
     extract_ring_intensity,
     pole_figure_coordinates,
+    sinogram_to_pole_figure,
 )
 from .odf_inversion import (
     compute_odf,
+    load_pole_figures,
     misorientation_angle_deg,
     orientation_grid,
     recalculate_pole_figure,
@@ -30,9 +32,11 @@ __all__ = [
     "pole_figure_coordinates",
     "assemble_pole_figure_data",
     "assemble_pole_figure_sinogram",
+    "sinogram_to_pole_figure",
     "orientation_grid",
     "misorientation_angle_deg",
     "compute_odf",
+    "load_pole_figures",
     "recalculate_pole_figure",
     "plot_pole_figure",
     "plot_pole_figure_comparison",

@@ -3,7 +3,16 @@ nrxrdct.texture.slurm_pole_figures.launch_jobs
 ------------------------------------------------
 Validates master HDF5 entries, writes a launch_meta.json sidecar into the
 tmp directory, and submits N sbatch jobs that extract pole-figure (chi
-intensity) profiles for one hkl ring.
+intensity) profiles for one or more hkl rings.
+
+Each job cake-integrates every frame **once** and extracts all requested
+rings from that single cake — extracting several hkls costs one pass over
+the raw frames, not one pass per hkl.
+
+All per-job settings (which hkls, backgrounds, integration parameters, ...)
+live in launch_meta.json rather than being passed as sbatch/worker CLI
+arguments, since the worker already reads that file for valid_entries and
+dty_values.
 
 The output HDF5 file is NOT created here — it is assembled by merge() after
 all jobs finish.
@@ -17,10 +26,9 @@ Python API
         output_file = Path("pole_figures.h5"),
         poni_file   = Path("calib.poni"),
         mask_file   = Path("mask.edf"),
-        tth_range   = (4.0, 6.0),
-        hkl_label   = "111",
+        hkls        = {"111": (4.0, 6.0), "200": (7.0, 9.0), "220": (11.0, 13.0)},
         n_jobs      = 8,
-        partition   = "cpu",
+        partition   = "nice",
         conda_env   = "nrxrdct",
     )
 
@@ -28,8 +36,8 @@ CLI
 ---
     nrxrdct-slurm-texture launch --master-file master.h5 --output-file pole_figures.h5 \\
         --poni-file calib.poni --mask-file mask.edf \\
-        --tth-range 4.0,6.0 --hkl-label 111 \\
-        --n-jobs 8 --partition cpu --conda-env nrxrdct
+        --hkls "111:4.0,6.0;200:7.0,9.0;220:11.0,13.0" \\
+        --n-jobs 8 --partition nice --conda-env nrxrdct
 """
 
 from __future__ import annotations
@@ -38,7 +46,7 @@ import json
 import math
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import h5py
 from tqdm import tqdm
@@ -89,16 +97,6 @@ def _submit_job(
     tmp_dir: Path,
     poni_file: Path,
     mask_file: Path,
-    tth_range: Tuple[float, float],
-    hkl_label: str,
-    background_ranges: Optional[Tuple[Tuple[float, float], Tuple[float, float]]],
-    npt_rad: int,
-    npt_azim: int,
-    n_workers: Optional[int],
-    batch_size: int,
-    camera_name: str,
-    monitor_name: str,
-    rotation_motor: str,
     partition: str,
     time: str,
     mem: str,
@@ -109,13 +107,6 @@ def _submit_job(
     log_dir: Path,
 ) -> str:
     indices_str = ",".join(str(i) for i in indices)
-    tth_str = f"{tth_range[0]},{tth_range[1]}"
-    bg_str = (
-        f"{background_ranges[0][0]},{background_ranges[0][1]},"
-        f"{background_ranges[1][0]},{background_ranges[1][1]}"
-        if background_ranges is not None
-        else ""
-    )
     script_path = log_dir / f"job_{job_id:04d}.sh"
     log_out = log_dir / f"job_{job_id:04d}_%j.out"
     log_err = log_dir / f"job_{job_id:04d}_%j.err"
@@ -125,17 +116,7 @@ def _submit_job(
         f'    --tmp-dir            "{tmp_dir}"             \\\n'
         f'    --poni-file          "{poni_file}"           \\\n'
         f'    --mask-file          "{mask_file}"           \\\n'
-        f'    --entry-indices      "{indices_str}"         \\\n'
-        f'    --tth-range          "{tth_str}"             \\\n'
-        f'    --hkl-label          "{hkl_label}"            \\\n'
-        f'    --background-ranges  "{bg_str}"               \\\n'
-        f"    --npt-rad            {npt_rad}               \\\n"
-        f"    --npt-azim           {npt_azim}              \\\n"
-        f"    --batch-size         {batch_size}            \\\n"
-        f'    --camera-name        "{camera_name}"          \\\n'
-        f'    --monitor-name       "{monitor_name}"         \\\n'
-        f'    --rotation-motor     "{rotation_motor}"'
-        + (f"    \\\n    --n-workers          {n_workers}" if n_workers is not None else "")
+        f'    --entry-indices      "{indices_str}"'
     )
 
     if env_activate:
@@ -203,9 +184,8 @@ def launch(
     output_file: Path,
     poni_file: Path,
     mask_file: Path,
-    tth_range: Tuple[float, float],
-    hkl_label: str,
-    background_ranges: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None,
+    hkls: Dict[str, Tuple[float, float]],
+    background_ranges: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None,
     n_jobs: int = 8,
     npt_rad: int = 1000,
     npt_azim: int = 360,
@@ -227,7 +207,12 @@ def launch(
 ) -> dict:
     """
     Validate master file, write launch_meta.json, and submit N SLURM jobs
-    that extract pole-figure profiles for one hkl ring.
+    that extract pole-figure profiles for one or more hkl rings.
+
+    Each worker cake-integrates every frame once and extracts all requested
+    rings from that single cake, so adding more hkls does not multiply the
+    (expensive) integration cost the way calling :func:`launch` once per hkl
+    would.
 
     Workers write results to ``<output_file.parent>/<output_file.stem>_tmp/``.
     Call :func:`nrxrdct.texture.slurm_pole_figures.merge` after all jobs finish
@@ -239,11 +224,13 @@ def launch(
             derive the tmp directory name.
         poni_file (Path): pyFAI ``.poni`` calibration file.
         mask_file (Path): Detector mask file (fabio-readable).
-        tth_range (tuple): ``(low, high)`` 2theta window bracketing the hkl ring.
-        hkl_label (str): Identifier for the ring (e.g. ``"111"``), used as an
+        hkls (dict): Maps hkl label to its ``(low, high)`` 2theta window, e.g.
+            ``{"111": (4.0, 6.0), "200": (7.0, 9.0)}``. Each label becomes an
             HDF5 group name under ``pole_figures/``.
-        background_ranges (tuple, optional): ``((low1, high1), (low2, high2))``
-            flanking 2theta windows for background subtraction (default ``None``).
+        background_ranges (dict, optional): Maps hkl label to
+            ``((low1, high1), (low2, high2))`` flanking 2theta windows for
+            background subtraction. Labels not present get no background
+            subtraction; pass ``None`` (default) to skip it for every hkl.
         n_jobs (int, optional): Number of SLURM jobs to submit (default 8).
         npt_rad (int, optional): Radial bins used internally by CAKE integration
             (default 1000).
@@ -260,7 +247,7 @@ def launch(
             ``instrument/positioners/`` (default ``"dty"``).
         rotation_motor (str, optional): Rotation-motor dataset name under
             ``measurement/`` (default ``"rot"``).
-        partition (str, optional): SLURM partition (default ``"cpu"``).
+        partition (str, optional): SLURM partition (default ``"nice"``).
         time (str, optional): SLURM wall-time limit (default ``"04:00:00"``).
         mem (str, optional): SLURM memory request (default ``"32G"``).
         cpus (int, optional): CPUs per task (default 16).
@@ -271,8 +258,11 @@ def launch(
             (alternative to *env_activate*).
 
     Returns:
-        dict: With keys ``'slurm_ids'``, ``'tmp_dir'``, ``'n_scans'``.
+        dict: With keys ``'slurm_ids'``, ``'tmp_dir'``, ``'n_scans'``, ``'hkls'``.
     """
+    if not hkls:
+        raise ValueError("hkls must contain at least one hkl label.")
+
     master_file = Path(master_file)
     output_file = Path(output_file)
     poni_file = Path(poni_file)
@@ -297,16 +287,16 @@ def launch(
     print("\n" + "=" * 60)
     print("Step 2 — Writing launch metadata")
     print("=" * 60)
+    print(f"  hkls: {list(hkls.keys())}")
     launch_meta = {
         "valid_entries": valid_entries,
         "bad_entries": bad_entries,
         "dty_values": dty_values,
-        "tth_range": list(tth_range),
-        "hkl_label": hkl_label,
+        "hkls": {hkl: list(tth_range) for hkl, tth_range in hkls.items()},
         "background_ranges": (
-            [list(background_ranges[0]), list(background_ranges[1])]
+            {hkl: [list(bg[0]), list(bg[1])] for hkl, bg in background_ranges.items()}
             if background_ranges is not None
-            else None
+            else {}
         ),
         "npt_rad": npt_rad,
         "npt_azim": npt_azim,
@@ -348,16 +338,6 @@ def launch(
             tmp_dir=tmp_dir,
             poni_file=poni_file,
             mask_file=mask_file,
-            tth_range=tth_range,
-            hkl_label=hkl_label,
-            background_ranges=background_ranges,
-            npt_rad=npt_rad,
-            npt_azim=npt_azim,
-            n_workers=n_workers,
-            batch_size=batch_size,
-            camera_name=camera_name,
-            monitor_name=monitor_name,
-            rotation_motor=rotation_motor,
             partition=partition,
             time=time,
             mem=mem,
@@ -381,7 +361,12 @@ def launch(
         f"--output-file {output_file}"
     )
 
-    return {"slurm_ids": slurm_ids, "tmp_dir": tmp_dir, "n_scans": len(valid_entries)}
+    return {
+        "slurm_ids": slurm_ids,
+        "tmp_dir": tmp_dir,
+        "n_scans": len(valid_entries),
+        "hkls": list(hkls.keys()),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -392,7 +377,7 @@ def launch(
 def _build_parser(sub=None):
     import argparse
 
-    desc = "Submit pole-figure extraction across N SLURM jobs"
+    desc = "Submit pole-figure extraction (one or more hkls) across N SLURM jobs"
     p = (
         sub.add_parser("launch", help=desc, description=desc)
         if sub
@@ -403,11 +388,15 @@ def _build_parser(sub=None):
     p.add_argument("--output-file", required=True, type=Path)
     p.add_argument("--poni-file", required=True, type=Path)
     p.add_argument("--mask-file", required=True, type=Path)
-    p.add_argument("--tth-range", required=True, help="low,high 2theta window")
-    p.add_argument("--hkl-label", required=True)
+    p.add_argument(
+        "--hkls", required=True,
+        help='semicolon-separated "label:low,high" entries, '
+             'e.g. "111:4.0,6.0;200:7.0,9.0;220:11.0,13.0"',
+    )
     p.add_argument(
         "--background-ranges", default="",
-        help="low1,high1,low2,high2 flanking windows (omit to skip background subtraction)",
+        help='semicolon-separated "label:low1,high1,low2,high2" entries '
+             '(omit a label to skip background subtraction for it)',
     )
     p.add_argument("--n-jobs", type=int, default=8)
     p.add_argument("--npt-rad", type=int, default=1000)
@@ -428,16 +417,28 @@ def _build_parser(sub=None):
     return p
 
 
-def _parse_tth_range(s: str) -> Tuple[float, float]:
-    lo, hi = (float(x) for x in s.split(","))
-    return (lo, hi)
+def _parse_hkls(s: str) -> Dict[str, Tuple[float, float]]:
+    hkls = {}
+    for entry in s.split(";"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        label, ranges = entry.split(":")
+        lo, hi = (float(x) for x in ranges.split(","))
+        hkls[label] = (lo, hi)
+    return hkls
 
 
-def _parse_background_ranges(s: str):
-    if not s:
-        return None
-    lo1, hi1, lo2, hi2 = (float(x) for x in s.split(","))
-    return ((lo1, hi1), (lo2, hi2))
+def _parse_background_ranges_multi(s: str) -> Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]:
+    result = {}
+    for entry in s.split(";"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        label, ranges = entry.split(":")
+        lo1, hi1, lo2, hi2 = (float(x) for x in ranges.split(","))
+        result[label] = ((lo1, hi1), (lo2, hi2))
+    return result
 
 
 def _cli_launch(args):
@@ -446,9 +447,8 @@ def _cli_launch(args):
         output_file=args.output_file,
         poni_file=args.poni_file,
         mask_file=args.mask_file,
-        tth_range=_parse_tth_range(args.tth_range),
-        hkl_label=args.hkl_label,
-        background_ranges=_parse_background_ranges(args.background_ranges),
+        hkls=_parse_hkls(args.hkls),
+        background_ranges=_parse_background_ranges_multi(args.background_ranges) or None,
         n_jobs=args.n_jobs,
         npt_rad=args.npt_rad,
         npt_azim=args.npt_azim,

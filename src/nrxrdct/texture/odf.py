@@ -26,6 +26,17 @@ increasing towards the horizontal direction. Beamlines differ in where
 chi=0 points and which way it increases; use *chi_offset_deg* and
 *chi_sign* to align the convention with your setup before trusting the
 resulting pole-figure angles.
+
+As a concrete data point (not a substitute for calibrating your own setup):
+pyFAI's own azimuthal-angle convention (``AzimuthalIntegrator.chiArray`` /
+the *azimuthal* axis returned by :func:`~nrxrdct.azimuthal.integration.cake_integration`)
+was verified empirically to be ``chi = atan2(row_offset, col_offset)`` relative
+to the detector's beam-center pixel — i.e. chi=0 along the **horizontal**
+(column) detector axis, not vertical as this module's derivation assumes by
+default. A ``chi_offset_deg`` of roughly 90 (sign depending on your detector's
+row/column handedness) is therefore a more likely starting point than 0 for
+data straight out of ``cake_integration`` — but detector rotation/flip flags
+can shift this per beamline, so verify rather than assume.
 """
 from pathlib import Path
 from typing import Optional, Tuple
@@ -306,7 +317,8 @@ def assemble_pole_figure_sinogram(
     hkl_label: str,
     n_rot: int,
     translation_motor: str = "dty",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    rotation_motor: str = "rot",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Stack per-scan pole-figure profiles written by :func:`assemble_pole_figure_data`
     into a texture-tomography sinogram.
@@ -321,6 +333,9 @@ def assemble_pole_figure_sinogram(
         n_rot (int): Number of rotation steps (sinogram angular dimension).
         translation_motor (str, optional): Name of the translation-motor attribute
             stored on each scan group (default ``"dty"``).
+        rotation_motor (str, optional): Name of the rotation-motor attribute stored
+            on each scan group, used to recover the physical rotation axis for
+            *rot_deg* (default ``"rot"``).
 
     Returns:
         sino (np.ndarray): Pole-figure sinogram of shape ``(n_chi, n_lines, n_rot)``
@@ -328,6 +343,13 @@ def assemble_pole_figure_sinogram(
         azimuthal (np.ndarray): Chi axis of *sino*'s first dimension, in degrees.
         dty (np.ndarray): Translation-motor value for each line of *sino*, sorted
             to match its translation axis.
+        rot_deg (np.ndarray): Rotation angle for each step of *sino*'s rotation
+            axis, in degrees, shape ``(n_rot,)``. Taken from the first scan whose
+            stored rotation array already has length *n_rot* (i.e. needed no
+            padding); if every scan was padded, falls back to
+            ``np.linspace(rot_min, rot_max, n_rot)`` over the observed range and
+            prints a warning, since the true per-step spacing can't be recovered
+            in that case.
     """
     group = f"pole_figures/{hkl_label}"
 
@@ -344,10 +366,82 @@ def assemble_pole_figure_sinogram(
         dty_values = dty_values[order]
 
         sino = np.zeros((len(valid_keys), n_rot, n_chi), dtype=np.float32)
+        rot_deg = None
+        rot_min, rot_max = np.inf, -np.inf
         for ii, scan in enumerate(valid_keys):
-            profiles = hin[f"{group}/{scan}"][:]
+            ds = hin[f"{group}/{scan}"]
+            profiles = ds[:]
+            scan_rot = np.asarray(ds.attrs[rotation_motor], dtype=np.float64)
+            rot_min = min(rot_min, float(scan_rot.min()))
+            rot_max = max(rot_max, float(scan_rot.max()))
+            if rot_deg is None and len(scan_rot) == n_rot:
+                rot_deg = scan_rot
+
             padding_width = calculate_padding_widths_2D(profiles.shape, (n_rot, n_chi))
             sino[ii] = np.pad(profiles, padding_width)
 
+        if rot_deg is None:
+            print(
+                "  ⚠  No scan's rotation array has length n_rot (every scan was "
+                "padded) — falling back to a uniform linspace over the observed "
+                "rotation range, which may not match the true per-step spacing."
+            )
+            rot_deg = np.linspace(rot_min, rot_max, n_rot)
+
     sino = np.rollaxis(sino, 2, 0)
-    return np.rollaxis(sino, 1, 2), azimuthal, dty_values
+    return np.rollaxis(sino, 1, 2), azimuthal, dty_values, rot_deg
+
+
+def sinogram_to_pole_figure(
+    sino: np.ndarray,
+    azimuthal: np.ndarray,
+    rot_deg: np.ndarray,
+    tth_deg: float,
+    line_index: Optional[int] = None,
+    chi_offset_deg: float = 0.0,
+    chi_sign: float = 1.0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convert a pole-figure sinogram into flat pole-figure coordinates, ready for
+    :func:`nrxrdct.texture.odf_inversion.compute_odf`.
+
+    Applies :func:`pole_figure_coordinates` to every ``(chi, rot)`` grid point
+    of *sino* and flattens the result — the direct bridge between
+    :func:`assemble_pole_figure_sinogram`'s output and the bulk ODF fit.
+
+    Args:
+        sino (np.ndarray): Pole-figure sinogram of shape ``(n_chi, n_lines, n_rot)``,
+            as returned by :func:`assemble_pole_figure_sinogram`.
+        azimuthal (np.ndarray): Chi axis, degrees, shape ``(n_chi,)``.
+        rot_deg (np.ndarray): Rotation-angle axis, degrees, shape ``(n_rot,)``.
+        tth_deg (float): 2theta of the hkl ring (e.g. the mean of the
+            ``tth_range`` stored alongside the sinogram).
+        line_index (int, optional): Which translation line (index into *sino*'s
+            second axis) to use. ``None`` (default) averages over all lines,
+            producing one bulk pole figure for the whole scanned cross-section
+            rather than one per line — pass an explicit index for a per-line
+            bulk pole figure instead.
+        chi_offset_deg (float, optional): Forwarded to :func:`pole_figure_coordinates`
+            (default 0.0).
+        chi_sign (float, optional): Forwarded to :func:`pole_figure_coordinates`
+            (default 1.0).
+
+    Returns:
+        alpha_deg (np.ndarray): Polar angles, flat, shape ``(n_chi * n_rot,)``.
+        beta_deg (np.ndarray): Azimuthal angles, flat, same shape as *alpha_deg*.
+        intensity (np.ndarray): Sinogram intensity at each point, same shape.
+    """
+    if line_index is None:
+        intensity_grid = sino.mean(axis=1)  # (n_chi, n_rot)
+    else:
+        intensity_grid = sino[:, line_index, :]  # (n_chi, n_rot)
+
+    chi_grid, omega_grid = np.meshgrid(azimuthal, rot_deg, indexing="ij")
+    alpha_deg, beta_deg = pole_figure_coordinates(
+        tth_deg=tth_deg,
+        chi_deg=chi_grid,
+        omega_deg=omega_grid,
+        chi_offset_deg=chi_offset_deg,
+        chi_sign=chi_sign,
+    )
+    return alpha_deg.ravel(), beta_deg.ravel(), intensity_grid.ravel()

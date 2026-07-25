@@ -14,6 +14,7 @@
 - [HPC / SLURM integration](#hpc--slurm-integration)
 - [GPU support](#gpu-support)
 - [Scanning 3DXRD (s3DXRD)](#scanning-3dxrd-s3dxrd)
+- [Texture tomography](#texture-tomography)
 - [Laue diffraction](#laue-diffraction)
 - [Dependencies](#dependencies)
 - [Acknowledgements](#acknowledgements)
@@ -32,6 +33,7 @@
 | `nrxrdct.fitting` | 1-D peak fitting and NMF decomposition for hyperspectral phase mapping |
 | `nrxrdct.fluo` | XRF sinogram loading, emission line look-up via xraylib, spectral fitting |
 | `nrxrdct.laue` | Self-contained polychromatic (Laue) diffraction pipeline: simulation, segmentation, orientation/strain fitting, grain maps |
+| `nrxrdct.texture` | Pole-figure extraction from XRD-CT diffraction images and WIMV orientation distribution function (ODF) inversion; SLURM pipeline for large datasets |
 | `nrxrdct.utils` | Baseline fitting, powder pattern simulation, circular masking, peak listing from CIF |
 
 ---
@@ -466,6 +468,43 @@ sl.save("s3dxrd_slice.h5")
 ```
 
 See the [Scanning 3DXRD guide](docs/user-guide/s3dxrd.md) for calibration details, the full pipeline stage-by-stage, and how to superpose the result with the powder reconstruction.
+
+---
+
+## Texture tomography
+
+`nrxrdct.texture` reads the same raw frames as azimuthal integration but, for one or more chosen `hkl` rings, keeps the azimuthal (χ) intensity distribution around the ring instead of averaging it away — the raw material for pole figures and, from several pole figures, an orientation distribution function (ODF) via WIMV inversion.
+
+```python
+from pathlib import Path
+import numpy as np
+from nrxrdct.texture import assemble_pole_figure_data, load_pole_figures, compute_odf, plot_pole_figure_comparison, recalculate_pole_figure
+
+output_file = Path("pole_figures.h5")
+rings = {"111": (4.0, 6.0), "200": (7.0, 9.0), "220": (11.0, 13.0)}
+for hkl, tth_range in rings.items():
+    assemble_pole_figure_data(
+        master_file=Path("scan.h5"), output_file=output_file,
+        poni_file=Path("detector.poni"), mask_file=Path("mask.edf"),
+        tth_range=tth_range, hkl_label=hkl,
+    )
+
+pole_figures = load_pole_figures(output_file, hkl_labels=list(rings.keys()), n_rot=901)
+crystal_directions = {
+    "111": np.array([1, 1, 1]) / np.sqrt(3),
+    "200": np.array([1, 0, 0]),
+    "220": np.array([1, 1, 0]) / np.sqrt(2),
+}
+result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, smoothing_deg=7.5, n_iter=10)
+
+alpha, beta, measured = pole_figures["111"]
+recalculated = recalculate_pole_figure(result, crystal_directions["111"], alpha, beta)
+plot_pole_figure_comparison(alpha, beta, measured, recalculated, title="111 pole figure")
+```
+
+A SLURM pipeline (`nrxrdct.texture.slurm_pole_figures`, also as the `nrxrdct-slurm-texture` CLI) distributes pole-figure extraction across a cluster the same way `nrxrdct.azimuthal.slurm_integration` does for powder integration.
+
+See the [Texture Tomography Theory](docs/user-guide/texture_theory.md) guide for the pole-figure/ODF background, diffraction-geometry derivation, and WIMV method, and the [Workflow guide](docs/user-guide/texture_tomography.md) for pipeline stages and calibration notes — in particular, this is a **bulk/per-line** ODF fit (not per-voxel), pole-figure coverage is inherently incomplete with this single-rotation-axis geometry, and the χ=0 detector convention needs calibrating for your beamline.
 
 ---
 

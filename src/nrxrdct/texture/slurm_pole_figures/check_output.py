@@ -1,13 +1,14 @@
 """
 nrxrdct.texture.slurm_pole_figures.check_output
 ---------------------------------------------------
-Verify progress and completeness of the pole-figure extraction pipeline.
+Verify progress and completeness of the pole-figure extraction pipeline,
+across one or more hkls.
 
 Two stages can be checked independently:
 
-1. **Extraction progress** — counts .npy files in the tmp directory
-   (before merge).
-2. **Merge completeness** — counts scan datasets in the output HDF5
+1. **Extraction progress** — counts scans in the tmp directory whose meta
+   file and every requested hkl's .npy file are all present (before merge).
+2. **Merge completeness** — counts scan datasets in the output HDF5, per hkl
    (after merge).
 
 Python API
@@ -15,7 +16,7 @@ Python API
     from nrxrdct.texture.slurm_pole_figures import check
 
     check(tmp_dir=Path("pole_figures_tmp"))
-    check(output_file=Path("pole_figures.h5"), hkl_label="111")
+    check(output_file=Path("pole_figures.h5"), hkl_labels=["111", "200"])
     check(tmp_dir=Path("pole_figures_tmp"), output_file=Path("pole_figures.h5"))
 
 CLI
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Union
 
 import h5py
 
@@ -39,23 +40,27 @@ import h5py
 def check(
     tmp_dir: Optional[Path] = None,
     output_file: Optional[Path] = None,
-    hkl_label: Optional[str] = None,
+    hkl_labels: Optional[Union[str, List[str]]] = None,
 ) -> dict:
     """
-    Verify extraction progress and/or merge completeness.
+    Verify extraction progress and/or merge completeness, across every hkl
+    launched (or an explicit subset via *hkl_labels*).
 
     Args:
         tmp_dir (Path, optional): Tmp directory written by workers. If provided,
-            counts completed .npy files and reports missing indices.
+            counts scans whose meta file and every hkl's .npy file are all
+            present, and reports missing indices.
         output_file (Path, optional): Output HDF5 file. If provided, counts
-            merged scan datasets.
-        hkl_label (str, optional): Ring identifier. Required together with
-            *output_file* unless *tmp_dir* is also given (in which case it is
-            read from launch_meta.json).
+            merged scan datasets per hkl.
+        hkl_labels (str or list of str, optional): Which hkls to check the
+            merge completeness of. Defaults to every hkl found in
+            *tmp_dir*'s launch_meta.json; required (and must be explicit) if
+            only *output_file* is given.
 
     Returns:
-        dict: With keys ``'n_total'``, ``'n_extracted'``, ``'n_merged'``,
-            ``'missing_tmp'``, ``'missing_h5'``.
+        dict: With keys ``'n_total'``, ``'n_extracted'``, ``'missing_tmp'``,
+            and ``'merge'`` — a dict mapping each checked hkl to
+            ``{'n_merged', 'missing_h5'}``.
     """
     if tmp_dir is None and output_file is None:
         raise ValueError("Provide at least one of tmp_dir or output_file.")
@@ -63,10 +68,11 @@ def check(
     result = {
         "n_total": 0,
         "n_extracted": 0,
-        "n_merged": 0,
         "missing_tmp": [],
-        "missing_h5": [],
+        "merge": {},
     }
+
+    hkls_from_meta = None
 
     if tmp_dir is not None:
         tmp_dir = Path(tmp_dir)
@@ -79,14 +85,14 @@ def check(
             launch_meta = json.load(f)
 
         valid_entries = launch_meta["valid_entries"]
-        hkl_label = hkl_label or launch_meta["hkl_label"]
+        hkls_from_meta = list(launch_meta["hkls"].keys())
         n_total = len(valid_entries)
         result["n_total"] = n_total
 
         extracted = set()
-        for p in tmp_dir.glob("scan_????.npy"):
-            ii = int(p.stem.split("_")[1])
-            if (tmp_dir / f"scan_{ii:04d}.meta.json").exists():
+        for meta_path in tmp_dir.glob("scan_????.meta.json"):
+            ii = int(meta_path.name.split("_")[1].split(".")[0])
+            if all((tmp_dir / f"scan_{ii:04d}_{hkl}.npy").exists() for hkl in hkls_from_meta):
                 extracted.add(ii)
 
         missing_tmp = sorted(set(range(n_total)) - extracted)
@@ -94,7 +100,7 @@ def check(
         result["missing_tmp"] = missing_tmp
 
         print(f"\n{'='*60}")
-        print(f"  Extraction progress  ({tmp_dir.name})")
+        print(f"  Extraction progress  ({tmp_dir.name})  [hkls: {hkls_from_meta}]")
         print(f"{'='*60}")
         print(f"  Expected    : {n_total}")
         print(f"  Extracted   : {len(extracted)}")
@@ -106,9 +112,14 @@ def check(
 
     if output_file is not None:
         output_file = Path(output_file)
-        if hkl_label is None:
-            raise ValueError("hkl_label is required when checking output_file directly.")
-        group = f"pole_figures/{hkl_label}"
+
+        labels = hkl_labels if hkl_labels is not None else hkls_from_meta
+        if labels is None:
+            raise ValueError(
+                "hkl_labels is required when checking output_file without tmp_dir."
+            )
+        if isinstance(labels, str):
+            labels = [labels]
 
         if not output_file.exists():
             print(f"\n  ⚠  Output file not found: {output_file}")
@@ -116,42 +127,40 @@ def check(
             return result
 
         with h5py.File(output_file, "r") as hout:
-            if f"motors/dty" not in hout and "motors" not in hout:
-                pass  # motors group name varies with translation_motor; not fatal here
+            for hkl in labels:
+                group = f"pole_figures/{hkl}"
+                n_total = result["n_total"]
 
-            n_total = max(result["n_total"], 0)
-            if group in hout:
-                merged = {
-                    int(key.split("_")[1])
-                    for key in hout[group].keys()
-                    if key.startswith("scan_")
-                }
-            else:
-                merged = set()
+                if group in hout:
+                    merged = {
+                        int(key.split("_")[1])
+                        for key in hout[group].keys()
+                        if key.startswith("scan_")
+                    }
+                else:
+                    merged = set()
 
-            if n_total == 0:
-                n_total = max(merged, default=-1) + 1
-            missing_h5 = sorted(set(range(n_total)) - merged)
+                if n_total == 0:
+                    n_total = max(merged, default=-1) + 1
+                missing_h5 = sorted(set(range(n_total)) - merged)
 
-            result["n_total"] = n_total
-            result["n_merged"] = len(merged)
-            result["missing_h5"] = missing_h5
+                result["merge"][hkl] = {"n_merged": len(merged), "missing_h5": missing_h5}
 
-            has_azimuthal = f"{group}/azimuthal" in hout
-            n_chi = hout[f"{group}/azimuthal"].shape[0] if has_azimuthal else None
+                has_azimuthal = f"{group}/azimuthal" in hout
+                n_chi = hout[f"{group}/azimuthal"].shape[0] if has_azimuthal else None
 
-        print(f"\n{'='*60}")
-        print(f"  Merge completeness    ({output_file.name}) [{group}]")
-        print(f"{'='*60}")
-        print(f"  Expected  : {n_total}")
-        print(f"  Merged    : {len(merged)}")
-        print(f"  Missing   : {len(missing_h5)}")
-        if missing_h5:
-            print(f"  Missing idx : {missing_h5}")
-        else:
-            print(f"  ✓  All scans merged.")
-        if n_chi:
-            print(f"  Azimuthal : {n_chi} bins")
+                print(f"\n{'='*60}")
+                print(f"  Merge completeness    ({output_file.name}) [{group}]")
+                print(f"{'='*60}")
+                print(f"  Expected  : {n_total}")
+                print(f"  Merged    : {len(merged)}")
+                print(f"  Missing   : {len(missing_h5)}")
+                if missing_h5:
+                    print(f"  Missing idx : {missing_h5}")
+                else:
+                    print(f"  ✓  All scans merged.")
+                if n_chi:
+                    print(f"  Azimuthal : {n_chi} bins")
 
     print()
     return result
@@ -177,9 +186,9 @@ def repair(
     """
     Resubmit SLURM jobs for any scans missing from the tmp directory.
 
-    All extraction and SLURM settings are read from launch_meta.json so you
-    don't need to repeat them. Pass **kwargs to override any individual
-    setting (e.g. partition, mem, n_workers).
+    All hkls, extraction settings, and SLURM settings are read from
+    launch_meta.json so you don't need to repeat them. Pass **kwargs to
+    override any individual SLURM setting (e.g. partition, mem).
 
     Args:
         tmp_dir (Path): Tmp directory from the original launch().
@@ -190,7 +199,7 @@ def repair(
         n_jobs (int): Number of repair jobs. Defaults to 1.
         watch (bool): Block until repair jobs finish.
         interval (int): Polling interval in seconds when watch=True.
-        **kwargs: Override any setting from launch_meta (partition, mem, etc.).
+        **kwargs: Override any SLURM setting from launch_meta (partition, mem, etc.).
     """
     from .launch_jobs import _split_indices, _submit_job
 
@@ -198,14 +207,15 @@ def repair(
     with open(tmp_dir / "launch_meta.json") as f:
         lm = json.load(f)
 
-    result = check(tmp_dir=tmp_dir, output_file=output_file, hkl_label=lm["hkl_label"])
+    result = check(tmp_dir=tmp_dir, output_file=output_file)
 
     missing = result["missing_tmp"]
     if not missing:
         print("✓  Nothing to repair — all scans present in tmp dir.")
         return result
 
-    print(f"\n🔧  Repairing {len(missing)} missing scans across {n_jobs} job(s)...")
+    print(f"\n🔧  Repairing {len(missing)} missing scans (hkls: {list(lm['hkls'])}) "
+          f"across {n_jobs} job(s)...")
 
     _master_file = Path(kwargs.pop("master_file", master_file or lm["master_file"]))
     _poni_file = Path(kwargs.pop("poni_file", poni_file or lm["poni_file"]))
@@ -213,24 +223,7 @@ def repair(
     _env_activate = kwargs.pop("env_activate", lm.get("env_activate"))
     _env_activate = Path(_env_activate) if _env_activate else None
 
-    background_ranges = lm.get("background_ranges")
-    background_ranges = (
-        (tuple(background_ranges[0]), tuple(background_ranges[1]))
-        if background_ranges is not None
-        else None
-    )
-
     settings = dict(
-        tth_range=tuple(lm["tth_range"]),
-        hkl_label=lm["hkl_label"],
-        background_ranges=background_ranges,
-        npt_rad=lm.get("npt_rad", 1000),
-        npt_azim=lm.get("npt_azim", 360),
-        n_workers=lm.get("n_workers"),
-        batch_size=lm.get("batch_size", 32),
-        camera_name=lm.get("camera_name", "eiger"),
-        monitor_name=lm.get("monitor_name", "fpico6"),
-        rotation_motor=lm.get("rotation_motor", "rot"),
         partition=lm.get("partition", "nice"),
         time=lm.get("time", "04:00:00"),
         mem=lm.get("mem", "32G"),
@@ -256,16 +249,6 @@ def repair(
             tmp_dir=tmp_dir,
             poni_file=_poni_file,
             mask_file=_mask_file,
-            tth_range=settings["tth_range"],
-            hkl_label=settings["hkl_label"],
-            background_ranges=settings["background_ranges"],
-            npt_rad=settings["npt_rad"],
-            npt_azim=settings["npt_azim"],
-            n_workers=settings["n_workers"],
-            batch_size=settings["batch_size"],
-            camera_name=settings["camera_name"],
-            monitor_name=settings["monitor_name"],
-            rotation_motor=settings["rotation_motor"],
             partition=settings["partition"],
             time=settings["time"],
             mem=settings["mem"],
@@ -303,16 +286,18 @@ def _build_parser(sub=None):
         else argparse.ArgumentParser(description=desc)
     )
     p.add_argument("--tmp-dir", type=Path, default=None,
-                    help="Tmp directory from launch() — checks .npy progress")
+                    help="Tmp directory from launch() — checks extraction progress")
     p.add_argument("--output-file", type=Path, default=None,
                     help="Output HDF5 — checks merge completeness")
-    p.add_argument("--hkl-label", default=None,
-                    help="Required with --output-file if --tmp-dir is not also given")
+    p.add_argument("--hkl-labels", default=None,
+                    help="Comma-separated hkl labels; required with --output-file "
+                         "if --tmp-dir is not also given")
     return p
 
 
 def _cli_check(args):
-    check(tmp_dir=args.tmp_dir, output_file=args.output_file, hkl_label=args.hkl_label)
+    hkl_labels = args.hkl_labels.split(",") if args.hkl_labels else None
+    check(tmp_dir=args.tmp_dir, output_file=args.output_file, hkl_labels=hkl_labels)
 
 
 if __name__ == "__main__":

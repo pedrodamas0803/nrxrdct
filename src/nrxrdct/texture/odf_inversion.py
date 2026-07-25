@@ -33,11 +33,15 @@ vectors in an orthonormal crystal Cartesian frame (this module does not
 parse lattice parameters); for a cubic crystal, ``[h, k, l]`` normalised is
 sufficient, otherwise apply your crystal's B-matrix first.
 """
-from typing import Dict, Tuple
+from pathlib import Path
+from typing import Dict, Optional, Sequence, Tuple
 
+import h5py
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy import sparse
+
+from .odf import assemble_pole_figure_sinogram, sinogram_to_pole_figure
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +207,7 @@ def compute_odf(
     step_deg: float = 10.0,
     smoothing_deg: float = 7.5,
     n_iter: int = 10,
+    fold_hemisphere: bool = False,
 ) -> dict:
     """
     Invert pole-figure data into a discretised ODF via WIMV.
@@ -226,6 +231,19 @@ def compute_odf(
             measured pole directions to grid orientations — effectively the
             angular resolution of the recovered ODF (default 7.5).
         n_iter (int, optional): Number of WIMV iterations (default 10).
+        fold_hemisphere (bool, optional): If ``True``, map every pole direction
+            with ``alpha > 90`` to its antipodal upper-hemisphere equivalent
+            before fitting (Friedel's law), matching how
+            :func:`nrxrdct.texture.texture_plotting.plot_pole_figure` displays
+            data. **Default is False** — folding independently per hkl is
+            mathematically equivalent to conflating orientation ``R`` with its
+            point-inversion ``-R`` across every hkl simultaneously, and WIMV's
+            positivity constraint only sometimes breaks that tie: confirmed by
+            testing to occasionally converge to the ~180°-misoriented "ghost"
+            solution instead of the true orientation, for both single- and
+            multi-hkl fits. Only enable this if you specifically need folded
+            display-style output and have separately verified it doesn't
+            corrupt your fit.
 
     Returns:
         dict: With keys ``'euler_deg'`` (grid, shape ``(N,3)``), ``'R'`` (grid
@@ -247,16 +265,19 @@ def compute_odf(
     kernels = {}
     measured = {}
     for hkl, (alpha_deg, beta_deg, intensity) in pole_figures.items():
-        alpha_f, beta_f = _fold_upper_hemisphere(np.asarray(alpha_deg), np.asarray(beta_deg))
+        alpha_f, beta_f = np.asarray(alpha_deg), np.asarray(beta_deg)
+        if fold_hemisphere:
+            alpha_f, beta_f = _fold_upper_hemisphere(alpha_f, beta_f)
         data_xyz = _alpha_beta_to_xyz(alpha_f, beta_f)
 
         h = np.atleast_2d(crystal_directions[hkl]).astype(np.float64)
         h = h / np.linalg.norm(h, axis=1, keepdims=True)
         grid_xyz_variants = np.einsum("nij,mj->mni", R, h)  # (M, N, 3)
-        alpha_g = np.rad2deg(np.arccos(np.clip(grid_xyz_variants[..., 2], -1.0, 1.0)))
-        beta_g = np.rad2deg(np.arctan2(grid_xyz_variants[..., 1], grid_xyz_variants[..., 0])) % 360.0
-        alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
-        grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
+        if fold_hemisphere:
+            alpha_g = np.rad2deg(np.arccos(np.clip(grid_xyz_variants[..., 2], -1.0, 1.0)))
+            beta_g = np.rad2deg(np.arctan2(grid_xyz_variants[..., 1], grid_xyz_variants[..., 0])) % 360.0
+            alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
+            grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
 
         kernels[hkl] = _build_kernel_matrix(data_xyz, grid_xyz_variants, smoothing_deg)
         measured[hkl] = np.asarray(intensity, dtype=np.float64)
@@ -309,6 +330,7 @@ def recalculate_pole_figure(
     alpha_deg: np.ndarray,
     beta_deg: np.ndarray,
     smoothing_deg: float = 7.5,
+    fold_hemisphere: bool = False,
 ) -> np.ndarray:
     """
     Forward-project the fitted ODF back onto pole-figure coordinates, for
@@ -322,6 +344,9 @@ def recalculate_pole_figure(
         beta_deg (np.ndarray): Azimuthal angles (degrees) at which to evaluate.
         smoothing_deg (float, optional): Kernel width, should match the value
             used in :func:`compute_odf` (default 7.5).
+        fold_hemisphere (bool, optional): Must match the value passed to
+            :func:`compute_odf` when *odf_result* was produced — see the
+            warning in that function's docstring (default ``False``).
 
     Returns:
         np.ndarray: Recalculated pole-figure intensity at each query point,
@@ -333,13 +358,84 @@ def recalculate_pole_figure(
     h = np.atleast_2d(crystal_direction).astype(np.float64)
     h = h / np.linalg.norm(h, axis=1, keepdims=True)
     grid_xyz_variants = np.einsum("nij,mj->mni", R, h)
-    alpha_g = np.rad2deg(np.arccos(np.clip(grid_xyz_variants[..., 2], -1.0, 1.0)))
-    beta_g = np.rad2deg(np.arctan2(grid_xyz_variants[..., 1], grid_xyz_variants[..., 0])) % 360.0
-    alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
-    grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
+    alpha_f, beta_f = np.asarray(alpha_deg), np.asarray(beta_deg)
+    if fold_hemisphere:
+        alpha_g = np.rad2deg(np.arccos(np.clip(grid_xyz_variants[..., 2], -1.0, 1.0)))
+        beta_g = np.rad2deg(np.arctan2(grid_xyz_variants[..., 1], grid_xyz_variants[..., 0])) % 360.0
+        alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
+        grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
+        alpha_f, beta_f = _fold_upper_hemisphere(alpha_f, beta_f)
 
-    alpha_f, beta_f = _fold_upper_hemisphere(np.asarray(alpha_deg), np.asarray(beta_deg))
     query_xyz = _alpha_beta_to_xyz(alpha_f, beta_f)
 
     K = _build_kernel_matrix(query_xyz, grid_xyz_variants, smoothing_deg)
     return K @ f
+
+
+def load_pole_figures(
+    pole_figure_file: Path,
+    hkl_labels: Sequence[str],
+    n_rot: int,
+    line_index: Optional[int] = None,
+    translation_motor: str = "dty",
+    rotation_motor: str = "rot",
+    chi_offset_deg: float = 0.0,
+    chi_sign: float = 1.0,
+    clip_negative: bool = True,
+) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """
+    Build the ``pole_figures`` dict :func:`compute_odf` expects, directly from
+    a merged pole-figure HDF5 file.
+
+    For each hkl, assembles the pole-figure sinogram
+    (:func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram`), reads its
+    stored 2theta window, and converts it to flat pole-figure coordinates
+    (:func:`~nrxrdct.texture.odf.sinogram_to_pole_figure`) — the glue between
+    a file written by :func:`~nrxrdct.texture.odf.assemble_pole_figure_data` /
+    :mod:`nrxrdct.texture.slurm_pole_figures` and :func:`compute_odf`.
+
+    Args:
+        pole_figure_file (Path): HDF5 file written by
+            :func:`~nrxrdct.texture.odf.assemble_pole_figure_data` or
+            :mod:`nrxrdct.texture.slurm_pole_figures`'s ``merge``.
+        hkl_labels (sequence of str): Ring identifiers to load, e.g. ``["111", "200"]``.
+        n_rot (int): Number of rotation steps, forwarded to
+            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram`.
+        line_index (int, optional): Translation line to use; ``None`` (default)
+            averages over all lines into one bulk pole figure for the whole
+            scanned cross-section. Pass an explicit index for a per-line bulk
+            pole figure instead.
+        translation_motor (str, optional): Passed through to
+            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram` (default ``"dty"``).
+        rotation_motor (str, optional): Passed through to
+            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram` (default ``"rot"``).
+        chi_offset_deg (float, optional): Forwarded to
+            :func:`~nrxrdct.texture.odf.pole_figure_coordinates` — verify against
+            your beamline before trusting results (default 0.0).
+        chi_sign (float, optional): Forwarded likewise (default 1.0).
+        clip_negative (bool, optional): Clip negative intensities to zero
+            (default ``True``). Background-subtracted ring intensities can go
+            slightly negative from noise; :func:`compute_odf` assumes
+            non-negative measurements.
+
+    Returns:
+        dict: ``{hkl_label: (alpha_deg, beta_deg, intensity)}``, ready to pass
+            directly as :func:`compute_odf`'s ``pole_figures`` argument.
+    """
+    pole_figures = {}
+    for hkl in hkl_labels:
+        sino, azimuthal, _, rot_deg = assemble_pole_figure_sinogram(
+            pole_figure_file, hkl, n_rot, translation_motor, rotation_motor
+        )
+        with h5py.File(pole_figure_file, "r") as hin:
+            tth_deg = float(np.mean(hin[f"pole_figures/{hkl}/tth_range"][:]))
+
+        alpha, beta, intensity = sinogram_to_pole_figure(
+            sino, azimuthal, rot_deg, tth_deg,
+            line_index=line_index, chi_offset_deg=chi_offset_deg, chi_sign=chi_sign,
+        )
+        if clip_negative:
+            intensity = np.clip(intensity, 0.0, None)
+        pole_figures[hkl] = (alpha, beta, intensity)
+
+    return pole_figures

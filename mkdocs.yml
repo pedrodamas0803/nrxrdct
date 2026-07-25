@@ -65,6 +65,9 @@ nav:
       - Elastic Stress from Strain Maps: user-guide/laue_stress.md
       - Grain Map Merging and Symmetry Reduction: user-guide/laue_grain_map_merge.md
     - Azimuthal Integration: user-guide/azimuthal_integration.md
+    - Texture Tomography:
+      - Theory: user-guide/texture_theory.md
+      - Workflow: user-guide/texture_tomography.md
     - Peak Fitting and NMF: user-guide/fitting.md
     - X-Ray Fluorescence: user-guide/fluorescence.md
     - Rietveld Refinement: user-guide/rietveld.md
@@ -101,6 +104,11 @@ nav:
       - volume: api/volume.md
       - s3dxrd: api/s3dxrd.md
       - slurm_reconstruction: api/slurm_reconstruction.md
+    - texture:
+      - odf: api/texture/odf.md
+      - odf_inversion: api/texture/odf_inversion.md
+      - texture_plotting: api/texture/texture_plotting.md
+      - slurm_pole_figures: api/texture/slurm_pole_figures.md
     - laue:
       - camera: api/laue/camera.md
       - crystal: api/laue/crystal.md

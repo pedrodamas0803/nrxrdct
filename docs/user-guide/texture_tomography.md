@@ -111,7 +111,7 @@ crystal_directions = {
 }
 
 # 4. Invert to an ODF
-result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, smoothing_deg=7.5, n_iter=10)
+result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, n_iter=10)
 
 # 5. QA: compare measured vs. recalculated pole figure for one hkl
 alpha, beta, measured = pole_figures["111"]
@@ -189,15 +189,15 @@ Also available as a CLI: `nrxrdct-slurm-texture launch|monitor|merge|check`.
 from nrxrdct.texture import load_pole_figures, compute_odf
 
 pole_figures = load_pole_figures(output_file, hkl_labels=["111", "200", "220"], n_rot=901)
-result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, smoothing_deg=7.5, n_iter=10)
+result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, n_iter=10)
 ```
 
 | Parameter | Default | Description |
 |---|---|---|
-| `step_deg` | `10.0` | Euler-angle orientation-grid spacing; halving it multiplies grid size (and run time) by ~8 |
-| `smoothing_deg` | `7.5` | Gaussian kernel width — the effective angular resolution of the recovered ODF |
+| `step_deg` | `10.0` | Euler-angle orientation-grid spacing; halving it multiplies grid size (and run time) by ~8. Each pole-figure data point is hard-assigned to its single nearest grid orientation (classical Matthies-Vinel binning), so this is also the effective angular resolution — there is no separate smoothing-width parameter |
 | `n_iter` | `10` | WIMV iterations |
 | `fold_hemisphere` | `False` | See the ghost-ambiguity caveat above — leave off unless you've verified it's safe for your case |
+| `chunk_size` | `4096` | Pole-figure data points processed per batch during kernel construction; bounds peak memory without affecting the result |
 
 `result["f"]` is the fitted ODF value per orientation-grid cell
 (`result["euler_deg"]`), normalised so `sum(f * cell_weight) / sum(cell_weight) == 1`.

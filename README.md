@@ -495,7 +495,7 @@ crystal_directions = {
     "200": np.array([1, 0, 0]),
     "220": np.array([1, 1, 0]) / np.sqrt(2),
 }
-result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, smoothing_deg=7.5, n_iter=10)
+result = compute_odf(pole_figures, crystal_directions, step_deg=10.0, n_iter=10)
 
 alpha, beta, measured = pole_figures["111"]
 recalculated = recalculate_pole_figure(result, crystal_directions["111"], alpha, beta)

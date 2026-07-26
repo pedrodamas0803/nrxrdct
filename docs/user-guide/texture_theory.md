@@ -201,15 +201,23 @@ f^{(n+1)}(g) = f^{(n)}(g) \cdot \exp\!\left[
 \right]
 $$
 
-where $K_h(\hat{y}, g)$ is a Gaussian angular-distance kernel relating a
-measured pole direction $\hat{y}$ to a grid orientation $g$'s implied pole
-$g\hat{h}$ (`smoothing_deg` sets its width — effectively the angular
-resolution of the recovered ODF), and $P_h^{(n)}(\hat{y}) = \sum_g K_h(\hat{y}, g)\,f^{(n)}(g)$
-is the pole figure the current ODF estimate predicts. Grid cells with no
-nearby data (`weight_den == 0` in the implementation) simply keep their
-previous value — coverage gaps degrade gracefully rather than diverging, and
-because the update is purely multiplicative from a non-negative start,
-$f \geq 0$ is guaranteed throughout, unlike an unconstrained harmonic fit.
+where $K_h(\hat{y}, g)$ is a hard nearest-cell indicator — 1 if $g\hat{h}$
+(considering every symmetry-equivalent $\hat{h}$ at once) is the closest grid
+orientation's implied pole to the measured direction $\hat{y}$, else 0 — the
+original Matthies & Vinel binning, rather than a soft/Gaussian correspondence.
+Angular resolution is therefore set purely by the orientation-grid spacing
+(`step_deg`); there is no separate kernel-width parameter, and because every
+data point contributes to exactly one grid cell, there's no wide-radius
+neighbour search whose match count can blow up with grid density or symmetry
+family size — this is what makes the implementation tractable at MTEX-like
+speed without the accuracy cost a truncated Gaussian kernel would carry.
+$P_h^{(n)}(\hat{y}) = \sum_g K_h(\hat{y}, g)\,f^{(n)}(g)$ is the pole figure
+the current ODF estimate predicts (in practice just $f^{(n)}$ evaluated at
+$\hat{y}$'s assigned cell). Grid cells with no nearby data (`weight_den == 0`
+in the implementation) simply keep their previous value — coverage gaps
+degrade gracefully rather than diverging, and because the update is purely
+multiplicative from a non-negative start, $f \geq 0$ is guaranteed
+throughout, unlike an unconstrained harmonic fit.
 
 `recalculate_pole_figure` forward-projects a fitted ODF back through the
 same kernel — always inspect measured vs. recalculated pole figures

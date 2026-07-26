@@ -155,6 +155,7 @@ def _build_kernel_matrix(
     smoothing_deg: float,
     cutoff_sigma: float = 2.0,
     workers: int = -1,
+    chunk_size: int = 4096,
 ) -> sparse.csr_matrix:
     """
     Build the (n_data, n_grid) row-normalised Gaussian correspondence matrix.
@@ -168,9 +169,22 @@ def _build_kernel_matrix(
     returned matrix has shape (n_data, N) exactly as if M were queried
     separately and added together.
 
+    Data points are queried in batches of chunk_size (see below) — the
+    correspondence itself (cutoff radius, weights, normalisation) is
+    unaffected; only how much intermediate match data is held in memory at
+    once changes. Every returned weight is identical regardless of chunk_size.
+
     workers is forwarded to ``cKDTree.query_ball_point`` (-1 uses all cores);
     pass a smaller value when several hkls are being processed concurrently
     to avoid oversubscribing CPU cores.
+
+    chunk_size bounds peak memory: instead of materialising every
+    (data point, matched grid cell) pair across all n_data points at once —
+    which, for a wide smoothing kernel and large symmetry families, can
+    reach many GB — each batch of chunk_size data points is queried,
+    weighted, and folded into the running sparse result before the next
+    batch starts. Lower it if you're still memory-constrained; raise it (or
+    set it >= n_data) to trade memory for fewer, larger vectorised batches.
     """
     n_data = data_xyz.shape[0]
     M, N, _ = grid_xyz_variants.shape
@@ -179,20 +193,28 @@ def _build_kernel_matrix(
 
     grid_flat = grid_xyz_variants.reshape(M * N, 3)
     tree = cKDTree(grid_flat)
-    neighbor_lists = tree.query_ball_point(data_xyz, r=cutoff_chord, workers=workers)
 
-    lengths = np.fromiter((len(nb) for nb in neighbor_lists), dtype=np.int64, count=n_data)
-    if lengths.sum() == 0:
-        acc = sparse.csr_matrix((n_data, N))
-    else:
-        rows = np.repeat(np.arange(n_data), lengths)
+    chunks = []
+    for start in range(0, n_data, chunk_size):
+        batch = data_xyz[start:start + chunk_size]
+        n_batch = batch.shape[0]
+        neighbor_lists = tree.query_ball_point(batch, r=cutoff_chord, workers=workers)
+
+        lengths = np.fromiter((len(nb) for nb in neighbor_lists), dtype=np.int64, count=n_batch)
+        if lengths.sum() == 0:
+            chunks.append(sparse.csr_matrix((n_batch, N)))
+            continue
+
+        rows = np.repeat(np.arange(n_batch), lengths)
         flat_idx = np.concatenate([np.asarray(nb, dtype=np.int64) for nb in neighbor_lists if len(nb)])
         cols = flat_idx % N
 
-        dots = np.clip(np.einsum("ij,ij->i", grid_flat[flat_idx], data_xyz[rows]), -1.0, 1.0)
+        dots = np.clip(np.einsum("ij,ij->i", grid_flat[flat_idx], batch[rows]), -1.0, 1.0)
         weights = np.exp(-(np.arccos(dots) ** 2) / (2 * sigma ** 2))
 
-        acc = sparse.csr_matrix((weights, (rows, cols)), shape=(n_data, N))
+        chunks.append(sparse.csr_matrix((weights, (rows, cols)), shape=(n_batch, N)))
+
+    acc = sparse.vstack(chunks, format="csr") if chunks else sparse.csr_matrix((n_data, N))
 
     row_sums = np.asarray(acc.sum(axis=1)).ravel()
     empty_rows = np.where(row_sums == 0)[0]
@@ -218,6 +240,7 @@ def compute_odf(
     smoothing_deg: float = 7.5,
     n_iter: int = 10,
     fold_hemisphere: bool = False,
+    chunk_size: int = 4096,
 ) -> dict:
     """
     Invert pole-figure data into a discretised ODF via WIMV.
@@ -254,6 +277,10 @@ def compute_odf(
             multi-hkl fits. Only enable this if you specifically need folded
             display-style output and have separately verified it doesn't
             corrupt your fit.
+        chunk_size (int, optional): Forwarded to :func:`_build_kernel_matrix` —
+            bounds peak memory by processing this many pole-figure data points
+            per batch instead of matching all of them against the grid at
+            once; does not affect the fitted result (default 4096).
 
     Returns:
         dict: With keys ``'euler_deg'`` (grid, shape ``(N,3)``), ``'R'`` (grid
@@ -304,7 +331,10 @@ def compute_odf(
 
     if n_jobs == 1:
         kernels = {
-            hkl: _build_kernel_matrix(data_xyz_by_hkl[hkl], grid_variants_by_hkl[hkl], smoothing_deg)
+            hkl: _build_kernel_matrix(
+                data_xyz_by_hkl[hkl], grid_variants_by_hkl[hkl], smoothing_deg,
+                chunk_size=chunk_size,
+            )
             for hkl in hkl_list
         }
     else:
@@ -314,7 +344,7 @@ def compute_odf(
                 hkl: pool.submit(
                     _build_kernel_matrix,
                     data_xyz_by_hkl[hkl], grid_variants_by_hkl[hkl], smoothing_deg,
-                    2.0, inner_workers,
+                    2.0, inner_workers, chunk_size,
                 )
                 for hkl in hkl_list
             }

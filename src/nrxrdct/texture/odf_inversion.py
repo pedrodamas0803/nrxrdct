@@ -33,6 +33,8 @@ vectors in an orthonormal crystal Cartesian frame (this module does not
 parse lattice parameters); for a cubic crystal, ``[h, k, l]`` normalised is
 sufficient, otherwise apply your crystal's B-matrix first.
 """
+import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Dict, Optional, Sequence, Tuple
 
@@ -152,34 +154,45 @@ def _build_kernel_matrix(
     grid_xyz_variants: np.ndarray,
     smoothing_deg: float,
     cutoff_sigma: float = 2.0,
+    workers: int = -1,
 ) -> sparse.csr_matrix:
     """
     Build the (n_data, n_grid) row-normalised Gaussian correspondence matrix.
 
     grid_xyz_variants has shape (M, N, 3) — M symmetry-equivalent crystal
-    directions projected through the same N grid orientations. Columns are
-    summed over M so the returned matrix has shape (n_data, N).
+    directions projected through the same N grid orientations. All M variants
+    are queried against a single KDTree (built over the M*N points at once)
+    and folded back to column index ``n`` via ``flat_index % N``; duplicate
+    (row, col) pairs from different variants landing near the same grid
+    orientation are summed automatically by the sparse constructor, so the
+    returned matrix has shape (n_data, N) exactly as if M were queried
+    separately and added together.
+
+    workers is forwarded to ``cKDTree.query_ball_point`` (-1 uses all cores);
+    pass a smaller value when several hkls are being processed concurrently
+    to avoid oversubscribing CPU cores.
     """
     n_data = data_xyz.shape[0]
     M, N, _ = grid_xyz_variants.shape
     sigma = np.deg2rad(smoothing_deg)
     cutoff_chord = 2 * np.sin(np.deg2rad(cutoff_sigma * smoothing_deg) / 2)
 
-    acc = sparse.csr_matrix((n_data, N))
-    for m in range(M):
-        tree = cKDTree(grid_xyz_variants[m])
-        neighbor_lists = tree.query_ball_point(data_xyz, r=cutoff_chord, workers=-1)
+    grid_flat = grid_xyz_variants.reshape(M * N, 3)
+    tree = cKDTree(grid_flat)
+    neighbor_lists = tree.query_ball_point(data_xyz, r=cutoff_chord, workers=workers)
 
-        lengths = np.fromiter((len(nb) for nb in neighbor_lists), dtype=np.int64, count=n_data)
-        if lengths.sum() == 0:
-            continue
+    lengths = np.fromiter((len(nb) for nb in neighbor_lists), dtype=np.int64, count=n_data)
+    if lengths.sum() == 0:
+        acc = sparse.csr_matrix((n_data, N))
+    else:
         rows = np.repeat(np.arange(n_data), lengths)
-        cols = np.concatenate([np.asarray(nb, dtype=np.int64) for nb in neighbor_lists if len(nb)])
+        flat_idx = np.concatenate([np.asarray(nb, dtype=np.int64) for nb in neighbor_lists if len(nb)])
+        cols = flat_idx % N
 
-        dots = np.clip(np.einsum("ij,ij->i", grid_xyz_variants[m][cols], data_xyz[rows]), -1.0, 1.0)
+        dots = np.clip(np.einsum("ij,ij->i", grid_flat[flat_idx], data_xyz[rows]), -1.0, 1.0)
         weights = np.exp(-(np.arccos(dots) ** 2) / (2 * sigma ** 2))
 
-        acc = acc + sparse.csr_matrix((weights, (rows, cols)), shape=(n_data, N))
+        acc = sparse.csr_matrix((weights, (rows, cols)), shape=(n_data, N))
 
     row_sums = np.asarray(acc.sum(axis=1)).ravel()
     empty_rows = np.where(row_sums == 0)[0]
@@ -259,7 +272,8 @@ def compute_odf(
     euler_deg, R, cell_weight = orientation_grid(step_deg)
     N = euler_deg.shape[0]
 
-    kernels = {}
+    data_xyz_by_hkl = {}
+    grid_variants_by_hkl = {}
     measured = {}
     for hkl, (alpha_deg, beta_deg, intensity) in pole_figures.items():
         alpha_f, beta_f = np.asarray(alpha_deg), np.asarray(beta_deg)
@@ -276,8 +290,35 @@ def compute_odf(
             alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
             grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
 
-        kernels[hkl] = _build_kernel_matrix(data_xyz, grid_xyz_variants, smoothing_deg)
+        data_xyz_by_hkl[hkl] = data_xyz
+        grid_variants_by_hkl[hkl] = grid_xyz_variants
         measured[hkl] = np.asarray(intensity, dtype=np.float64)
+
+    # Kernel building (KDTree query per hkl) is the expensive, independent-per-hkl
+    # step — run it across processes when there's more than one hkl and more than
+    # one CPU available, splitting cores between concurrent hkls so each hkl's
+    # internal cKDTree parallelism (`workers=`) doesn't oversubscribe the machine.
+    hkl_list = list(pole_figures)
+    cpu_count = os.cpu_count() or 1
+    n_jobs = max(1, min(len(hkl_list), cpu_count))
+
+    if n_jobs == 1:
+        kernels = {
+            hkl: _build_kernel_matrix(data_xyz_by_hkl[hkl], grid_variants_by_hkl[hkl], smoothing_deg)
+            for hkl in hkl_list
+        }
+    else:
+        inner_workers = max(1, cpu_count // n_jobs)
+        with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+            futures = {
+                hkl: pool.submit(
+                    _build_kernel_matrix,
+                    data_xyz_by_hkl[hkl], grid_variants_by_hkl[hkl], smoothing_deg,
+                    2.0, inner_workers,
+                )
+                for hkl in hkl_list
+            }
+            kernels = {hkl: fut.result() for hkl, fut in futures.items()}
 
     f = np.ones(N, dtype=np.float64)
     rp_history = []

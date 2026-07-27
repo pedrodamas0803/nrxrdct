@@ -1007,8 +1007,13 @@ def interactive_calibration(
 
     Two columns of sliders appear below the detector view:
 
-    * **Orientation** — incremental rotations around the three crystal axes
-      (same as :func:`interactive_orientation`).
+    * **Orientation** — incremental rotations around the three crystal axes,
+      plus a rotation around a clicked reflection's own plane normal (same
+      as :func:`interactive_orientation`): click a simulated spot to select
+      it, then drag the "rot. [hkl]" slider to spin the crystal about that
+      reflection's axis. Right-click, or "✕ Deselect", clears the selection.
+      Dragging a spot directly (rather than clicking it) instead rotates U
+      so that spot moves under the cursor.
     * **Camera geometry** — additive deltas for `dd`, `xcen`, `ycen`,
       `xbet`, `xgam` relative to the current reference camera.
 
@@ -1194,6 +1199,22 @@ def interactive_calibration(
                            description="Cry [010]  (b)", **_sk_o)
     s_cc = ipw.FloatSlider(value=0.0, min=-c_rot_range_deg,  max=+c_rot_range_deg,
                            description="Cry [001]  (c)", **_sk_o)
+    s_hkl = ipw.FloatSlider(value=0.0, min=-rot_range_deg, max=+rot_range_deg,
+                             description="rot. [—]", disabled=True, **_sk_o)
+
+    # State shared between _do_update and the click handler
+    _selected: list = [None]   # dict with keys: hkl, tth, chi
+
+    _hkl_html = ipw.HTML(
+        "<span style='color:#666;font-style:italic'>click a simulated spot to select it</span>",
+        layout=ipw.Layout(margin="0 0 2px 4px"),
+    )
+    btn_desel = ipw.Button(
+        description="✕ Deselect",
+        button_style="warning",
+        layout=ipw.Layout(width="100px", height="26px"),
+    )
+    btn_desel.on_click(lambda _: _deselect())
 
     # Camera geometry — additive deltas from camera0
     s_dd   = ipw.FloatSlider(value=0.0, min=-dd_range,        max=+dd_range,
@@ -1212,7 +1233,7 @@ def interactive_calibration(
                              step=0.01, readout_format=".3f",
                              description="Δ xgam  (°)", **_sk_c)
 
-    _all_sliders = (s_ca, s_cb, s_cc, s_dd, s_xcen, s_ycen, s_xbet, s_xgam)
+    _all_sliders = (s_ca, s_cb, s_cc, s_hkl, s_dd, s_xcen, s_ycen, s_xbet, s_xgam)
 
     # ── Update loop ───────────────────────────────────────────────────────────
     _updating = [False]
@@ -1230,6 +1251,19 @@ def interactive_calibration(
             ax_lab = U @ cry_ax
             ax_lab /= np.linalg.norm(ax_lab)
             U = Rotation.from_rotvec(np.radians(angle_deg) * ax_lab).as_matrix() @ U
+
+        # Rotation around the selected crystal-plane normal
+        if _selected[0] is not None and s_hkl.value != 0.0:
+            h, k, l = _selected[0]["hkl"]
+            G_cry  = crystal.Q(h, k, l)
+            g_norm = np.linalg.norm(G_cry)
+            if g_norm > 1e-12:
+                ax_hkl = U @ (G_cry / g_norm)
+                ax_hkl /= np.linalg.norm(ax_hkl)
+                U = Rotation.from_rotvec(
+                    np.radians(s_hkl.value) * ax_hkl
+                ).as_matrix() @ U
+
         state.U = U
 
         # Current camera: camera0 + delta sliders
@@ -1285,6 +1319,16 @@ def interactive_calibration(
         sc_obs.set_offsets(obs_disp)
 
         sc_sim.set_offsets(sim_disp if len(sim_disp) else np.empty((0, 2)))
+
+        # Keep selected-spot marker in sync
+        sel_pos = np.empty((0, 2))
+        if _selected[0] is not None and len(sim_disp):
+            sel_hkl = _selected[0]["hkl"]
+            for i, s in enumerate(on_det):
+                if s.get("hkl") == sel_hkl:
+                    sel_pos = sim_disp[i:i + 1]
+                    break
+        sc_sel.set_offsets(sel_pos)
 
         for ln in _lines:
             ln.remove()
@@ -1358,10 +1402,45 @@ def interactive_calibration(
     for s in _all_sliders:
         s.observe(_on_slider, names="value")
 
+    def _deselect() -> None:
+        """Clear the current spot selection and disable the HKL slider."""
+        _selected[0]    = None
+        s_hkl.disabled  = True
+        s_hkl.description = "rot. [—]"
+        _hkl_html.value = (
+            "<span style='color:#666;font-style:italic'>"
+            "click a simulated spot to select it"
+            "</span>"
+        )
+        _updating[0] = True
+        s_hkl.value  = 0.0
+        _updating[0] = False
+        _do_update()
+
+    def _select_spot(idx: int) -> None:
+        """Mark spot *idx* as selected and enable the HKL slider."""
+        od   = _last["on_det"]
+        spot = od[idx]
+        _selected[0] = spot
+        h, k, l = spot["hkl"]
+        _hkl_html.value = (
+            f"<b style='color:#ffff00'>({h:+d} {k:+d} {l:+d})</b>"
+            f"&nbsp;&nbsp;2θ&nbsp;=&nbsp;{spot['tth']:.2f}°"
+            f"&nbsp;&nbsp;χ&nbsp;=&nbsp;{spot['chi']:.2f}°"
+        )
+        s_hkl.description = f"rot. [{h} {k} {l}]"
+        s_hkl.disabled    = False
+        _updating[0] = True
+        s_hkl.value  = 0.0
+        _updating[0] = False
+        _do_update()
+
     # ── Click / drag handlers ─────────────────────────────────────────────────
-    # Pressing and dragging a simulated spot rotates U so that spot moves to the
-    # drop position. Uses state.camera for detector-space kf so the mapping is
-    # consistent with the live (slider-adjusted) view.
+    # A short click selects a simulated spot (enables the HKL rotation slider,
+    # same as interactive_orientation). Pressing and dragging a spot rotates U
+    # so that spot moves to the drop position. Uses state.camera for
+    # detector-space kf so the mapping is consistent with the live
+    # (slider-adjusted) view.
 
     _drag = {
         "active":       False,
@@ -1394,7 +1473,12 @@ def interactive_calibration(
         return int(np.argmin(dx ** 2 + dy ** 2))
 
     def _on_press(event) -> None:
-        if event.inaxes is not ax_det or event.button != 1:
+        if event.inaxes is not ax_det:
+            return
+        if event.button == 3:          # right-click → deselect (always works)
+            _deselect()
+            return
+        if event.button != 1:
             return
         # When the matplotlib toolbar zoom/pan tool is active, left-click events
         # belong to the toolbar — don't treat them as spot drags.
@@ -1433,31 +1517,33 @@ def interactive_calibration(
             _drag["spot_idx"] = None
             return
 
-        if _drag["active"]:
-            if event.xdata is not None and event.ydata is not None:
-                orig = _drag["orig_disp"]
-                drop = np.array([event.xdata, event.ydata])
-                try:
-                    ki       = np.array([1.0, 0.0, 0.0])
-                    q_orig   = _display_to_kf_cal(orig[0], orig[1]) - ki
-                    q_target = _display_to_kf_cal(drop[0],  drop[1]) - ki
-                    n_o, n_t = np.linalg.norm(q_orig), np.linalg.norm(q_target)
-                    if n_o > 1e-10 and n_t > 1e-10:
-                        q_o_hat = q_orig   / n_o
-                        q_t_hat = q_target / n_t
-                        axis    = np.cross(q_o_hat, q_t_hat)
-                        sin_a   = np.linalg.norm(axis)
-                        cos_a   = float(np.clip(
-                            np.dot(q_o_hat, q_t_hat), -1.0, 1.0
-                        ))
-                        if sin_a > 1e-10:
-                            R = Rotation.from_rotvec(
-                                np.arctan2(sin_a, cos_a) * axis / sin_a
-                            ).as_matrix()
-                            state.U0 = R @ state.U
-                            _reset_sliders()
-                except Exception:
-                    pass
+        if not _drag["active"]:
+            # Short click → select the spot
+            _select_spot(_drag["spot_idx"])
+        elif event.xdata is not None and event.ydata is not None:
+            orig = _drag["orig_disp"]
+            drop = np.array([event.xdata, event.ydata])
+            try:
+                ki       = np.array([1.0, 0.0, 0.0])
+                q_orig   = _display_to_kf_cal(orig[0], orig[1]) - ki
+                q_target = _display_to_kf_cal(drop[0],  drop[1]) - ki
+                n_o, n_t = np.linalg.norm(q_orig), np.linalg.norm(q_target)
+                if n_o > 1e-10 and n_t > 1e-10:
+                    q_o_hat = q_orig   / n_o
+                    q_t_hat = q_target / n_t
+                    axis    = np.cross(q_o_hat, q_t_hat)
+                    sin_a   = np.linalg.norm(axis)
+                    cos_a   = float(np.clip(
+                        np.dot(q_o_hat, q_t_hat), -1.0, 1.0
+                    ))
+                    if sin_a > 1e-10:
+                        R = Rotation.from_rotvec(
+                            np.arctan2(sin_a, cos_a) * axis / sin_a
+                        ).as_matrix()
+                        state.U0 = R @ state.U
+                        _reset_sliders()
+            except Exception:
+                pass
 
         sc_drag.set_offsets(np.empty((0, 2)))
         _drag_line.set_data([], [])
@@ -1683,7 +1769,7 @@ def interactive_calibration(
     _col_orient = ipw.VBox(
         [ipw.HTML("<b style='font-size:13px'>Orientation</b>",
                   layout=ipw.Layout(margin="0 0 4px 0")),
-         s_ca, s_cb, s_cc],
+         s_ca, s_cb, s_cc, s_hkl],
         layout=ipw.Layout(width="50%", padding="4px 12px 4px 4px"),
     )
     _col_cam = ipw.VBox(
@@ -1696,6 +1782,8 @@ def interactive_calibration(
     _controls = ipw.VBox([
         ipw.HBox([_col_orient, _col_cam],
                  layout=ipw.Layout(width="100%")),
+        ipw.HBox([_hkl_html, btn_desel],
+                 layout=ipw.Layout(align_items="center", gap="6px")),
         ipw.HBox(
             [btn_reset, btn_setref, btn_accept, btn_fit],
             layout=ipw.Layout(margin="8px 0 6px 0", gap="6px"),

@@ -109,6 +109,37 @@ def dlvp_pole_figure_kernel(cos_angle, kappa: float):
     return (kappa + 1.0) * np.clip((1.0 + np.asarray(cos_angle)) / 2.0, 0.0, None) ** kappa
 
 
+def _build_forward_matrix(
+    data_xyz: np.ndarray,
+    grid_xyz_variants: np.ndarray,
+    kappa: float,
+    chunk_size: int = 4096,
+) -> np.ndarray:
+    """
+    Build the dense ``(n_data, N)`` forward matrix
+    ``A[j,k] = sum_m dlvp_pole_figure_kernel(data_xyz[j] . grid_xyz_variants[m,k], kappa)``,
+    processing *chunk_size* data points at a time.
+
+    A single-shot ``einsum`` over all data points at once materialises a dense
+    ``(n_data, M, N)`` array **twice** (once for the dot products, once for the
+    kernel evaluation before summing over symmetry variants ``M``) — at real
+    pole-figure scale (``n_data`` in the hundreds of thousands once a full
+    sinogram is aggregated) this is tens to hundreds of GB and triggers an
+    instant OOM kill with no Python traceback, confirmed against a real
+    workload during development. Chunking bounds peak memory to
+    ``chunk_size * M * N`` regardless of *n_data*; the result is identical
+    regardless of *chunk_size*.
+    """
+    n_data = data_xyz.shape[0]
+    _, N, _ = grid_xyz_variants.shape
+    A = np.empty((n_data, N), dtype=np.float64)
+    for start in range(0, n_data, chunk_size):
+        end = min(start + chunk_size, n_data)
+        cos_angle = np.einsum("jc,mkc->jmk", data_xyz[start:end], grid_xyz_variants)
+        A[start:end] = dlvp_pole_figure_kernel(cos_angle, kappa).sum(axis=1)
+    return A
+
+
 def kappa_from_halfwidth_deg(halfwidth_deg: float) -> float:
     """
     Convert an SO(3) kernel half-width (the rotation angle, in degrees, at
@@ -139,6 +170,7 @@ def compute_odf_kernel(
     kappa: Optional[float] = None,
     halfwidth_deg: float = 15.0,
     fold_hemisphere: bool = False,
+    chunk_size: int = 4096,
 ) -> dict:
     """
     Fit a smooth, kernel-density ODF to pole-figure data via non-negative
@@ -179,6 +211,10 @@ def compute_odf_kernel(
         fold_hemisphere (bool, optional): See
             :func:`~nrxrdct.texture.odf_inversion.compute_odf`'s docstring —
             same risk, same default (default ``False``).
+        chunk_size (int, optional): Forwarded to :func:`_build_forward_matrix` —
+            bounds peak memory by processing this many pole-figure data points
+            per batch instead of matching all of them against the grid at
+            once; does not affect the fitted result (default 4096).
 
     Returns:
         dict: With keys ``'euler_deg'``, ``'R'``, ``'cell_weight'`` (as
@@ -198,7 +234,6 @@ def compute_odf_kernel(
         kappa = kappa_from_halfwidth_deg(halfwidth_deg)
 
     euler_deg, R, cell_weight = orientation_grid(step_deg)
-    N = euler_deg.shape[0]
 
     A_blocks = []
     b_blocks = []
@@ -217,10 +252,11 @@ def compute_odf_kernel(
             alpha_gf, beta_gf = _fold_upper_hemisphere(alpha_g, beta_g)
             grid_xyz_variants = _alpha_beta_to_xyz(alpha_gf, beta_gf)
 
-        # cos_angle[j, m, k] = data_xyz[j] . grid_xyz_variants[m, k]; sum over
-        # symmetry variants m (see docstring: additive, not nearest-match).
-        cos_angle = np.einsum("jc,mkc->jmk", data_xyz, grid_xyz_variants)
-        A_hkl = dlvp_pole_figure_kernel(cos_angle, kappa).sum(axis=1)  # (n_data, N)
+        # A_hkl[j,k] = sum over symmetry variants m of the pole-figure kernel
+        # between data point j and grid orientation k (additive, not
+        # nearest-match — see docstring); chunked over data points to bound
+        # peak memory (see _build_forward_matrix).
+        A_hkl = _build_forward_matrix(data_xyz, grid_xyz_variants, kappa, chunk_size=chunk_size)
 
         A_blocks.append(A_hkl)
         b_blocks.append(np.asarray(intensity, dtype=np.float64))
@@ -250,6 +286,7 @@ def recalculate_pole_figure_kernel(
     alpha_deg: np.ndarray,
     beta_deg: np.ndarray,
     fold_hemisphere: bool = False,
+    chunk_size: int = 4096,
 ) -> np.ndarray:
     """
     Forward-project a :func:`compute_odf_kernel` fit back onto pole-figure
@@ -263,6 +300,9 @@ def recalculate_pole_figure_kernel(
         beta_deg (np.ndarray): Azimuthal angles (degrees) at which to evaluate.
         fold_hemisphere (bool, optional): Must match the value used to
             produce *odf_result* (default ``False``).
+        chunk_size (int, optional): Forwarded to :func:`_build_forward_matrix` —
+            bounds peak memory when evaluating many query points at once
+            (default 4096).
 
     Returns:
         np.ndarray: Recalculated pole-figure intensity at each query point,
@@ -284,6 +324,5 @@ def recalculate_pole_figure_kernel(
         alpha_f, beta_f = _fold_upper_hemisphere(alpha_f, beta_f)
 
     query_xyz = _alpha_beta_to_xyz(alpha_f, beta_f)
-    cos_angle = np.einsum("jc,mkc->jmk", query_xyz, grid_xyz_variants)
-    A = dlvp_pole_figure_kernel(cos_angle, kappa).sum(axis=1)
+    A = _build_forward_matrix(query_xyz, grid_xyz_variants, kappa, chunk_size=chunk_size)
     return A @ f

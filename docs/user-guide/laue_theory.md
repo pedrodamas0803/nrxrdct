@@ -174,7 +174,11 @@ Henke tables.  *xrayutilities* handles this automatically via
 
 ### 4.2 Lorentz–polarisation factor
 
-For an **unpolarised** beam the Lorentz–polarisation (LP) factor is
+#### 4.2.1 Monochromatic, rotating-crystal formula
+
+For a **monochromatic** beam and a rotating (powder/single-crystal
+diffractometer) geometry, the classic unpolarised Lorentz–polarisation (LP)
+factor is
 
 $$
 LP(2\theta) = \frac{1 + \cos^2 2\theta}{2\sin^2\theta\cos\theta}
@@ -183,11 +187,63 @@ $$
 This accounts for:
 
 - **Lorentz factor** $1/\sin^2\theta\cos\theta$ — the time a reciprocal-lattice
-  point spends intersecting the Ewald sphere (here it is absorbed into the
-  angular width of the white-beam window);
+  point spends intersecting the Ewald sphere;
 - **Polarisation factor** $(1+\cos^2 2\theta)/2$ — for an unpolarised incident
   beam the scattered intensity is reduced by the projection of the polarisation
   onto the scattering plane.
+
+This form does not apply to white-beam Laue: there is no crystal rotation, and
+a synchrotron source is strongly **linearly polarised**, not unpolarised.
+
+#### 4.2.2 Polychromatic Laue formula (synchrotron)
+
+For a **stationary crystal** in a **polychromatic** (white) beam, each
+reflection $hkl$ diffracts a single wavelength $\lambda_{hkl} = hc/E_{hkl}$
+(§3.2), so the Lorentz factor takes a different form, and the polarisation
+factor should reflect the source's actual polarisation state rather than an
+unpolarised average:
+
+$$
+\boxed{
+LP(2\theta) = P(2\theta,\chi)\,\frac{\lambda_{hkl}^2}{\sin 2\theta}
+}
+$$
+
+**Polarisation factor for a horizontally-polarised synchrotron source.**
+Synchrotron radiation from a bending magnet or insertion device is emitted
+in the orbit plane and is (to a very good approximation, on-axis) fully
+linearly polarised with the electric field horizontal, i.e. along the lab
+$y$-axis (§5.1). For this polarisation state the exact polarisation factor is
+
+$$
+P(2\theta,\chi) = 1 - \sin^2(2\theta)\,\sin^2(\chi)
+$$
+
+where $\chi$ is the azimuthal angle of the diffracted beam defined in §6.2
+($\chi = 0$ in the vertical plane, $\chi = 90°$ in the horizontal plane). $P$
+ranges from $\cos^2 2\theta$ for spots scattering in the horizontal plane
+(fully suppressed, matching the classical dipole-radiation pattern for
+in-plane scattering of horizontally-polarised light) up to $1$ for spots in
+the vertical plane (scattering perpendicular to the polarisation direction,
+unaffected).
+
+**Unpolarised approximation.** When $\chi$ is not known or not needed (e.g.
+integrated powder-like intensities averaged over azimuth), the azimuthal
+average of $P$ recovers the familiar unpolarised form
+
+$$
+\langle P\rangle_\chi = \frac{1+\cos^2 2\theta}{2}
+$$
+
+This average is adequate when spots are distributed symmetrically over the
+full azimuthal range, but can be wrong by up to ~30% for an individual spot
+near the horizontal or vertical plane — for a Laue pattern, where each spot
+sits at its own fixed $\chi$, the exact per-spot formula should be preferred.
+
+Both forms are implemented in `nrxrdct.laue.simulation.lorentz_pol`
+(`chi_deg` supplied → exact horizontal-polarisation formula; omitted →
+unpolarised average; `energy_eV` omitted entirely → falls back to the
+monochromatic rotating-crystal formula of §4.2.1).
 
 ### 4.3 Synchrotron source spectrum
 
@@ -652,5 +708,6 @@ analytically.
 | Photon energy | $E = hc/\lambda \approx 12398\,\text{eV}/\lambda[\text{Å}]$ |
 | Bragg angle | $\sin\theta = \lvert\mathbf{G}\rvert\lambda/(4\pi)$ |
 | Scattering angle | $2\theta = \arccos(\hat{k}_i\cdot\hat{k}_f)$ |
-| LP factor (unpolarised) | $LP = (1+\cos^2 2\theta)/(2\sin^2\theta\cos\theta)$ |
+| LP factor (monochromatic, unpolarised) | $LP = (1+\cos^2 2\theta)/(2\sin^2\theta\cos\theta)$ |
+| LP factor (Laue, synchrotron, horizontal pol.) | $LP = \left[1-\sin^2(2\theta)\sin^2\chi\right]\lambda_{hkl}^2/\sin 2\theta$ |
 | BM critical energy (ESRF) | $E_c \approx 0.665\,B[\text{T}]\,(E_e[\text{GeV}])^2\,\text{keV}$ |

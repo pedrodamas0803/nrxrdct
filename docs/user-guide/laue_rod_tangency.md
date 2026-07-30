@@ -43,6 +43,14 @@ Energy and pixel position are **both** functions of the single parameter
 $t$ — they co-vary together as you move along the rod. That coupling is the
 whole story of this page.
 
+Note that nothing here depends on which crystallographic plane $\hat{n}$
+corresponds to: `rod_tangency` only ever consumes `layer.n_hat` and the
+resolved repeat period, both already generic in `Layer`/`LayeredCrystal` (see
+the [layered-structures guide, §5.1](laue_layered_structures.md#51-non-c-axis-stacking-m-plane-and-other-growth-planes)
+for how $\hat{n}$ and $d$ are set up correctly for a non-$c$-axis growth
+surface such as hexagonal m-plane). Once those are right, everything below
+applies unchanged.
+
 ---
 
 ## 2. The tangency Jacobian

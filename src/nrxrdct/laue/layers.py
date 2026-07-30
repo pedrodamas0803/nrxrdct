@@ -41,6 +41,15 @@ $$
 \\mathbf{G}_\\text{lab} = U\\,\\mathbf{G}_\\text{crystal}
 $$
 
+`orientation_along_z` builds $U$ from a real-space zone axis `[uvw]`;
+`orientation_along_plane` builds it from a Miller **plane** `(hkl)` instead --
+required for any growth surface whose normal is not parallel to the
+same-index real-space direction, which is always true away from cubic
+crystals and hexagonal `c`-axis growth (in particular, hexagonal m-plane and
+a-plane growth). See that function's docstring and the "Non-`c`-axis /
+m-plane stacking" section of the layered-structures user guide for the
+underlying geometry.
+
 The OR between two phases A and B is specified by two direction pairs
 (primary and secondary), defining a rotation $R_\\text{OR}$ such that
 $U_B = R_\\text{OR}\\,U_A$.
@@ -117,23 +126,47 @@ def crystal_to_cartesian(uvw, crystal):
     return A.T @ np.array(uvw, dtype=float)
 
 
-def orientation_along_z(zone_axis_crystal, crystal, up_crystal=None):
+def plane_normal_cartesian(hkl, crystal):
     """
-    Build a 3×3 orientation matrix U that places the crystal direction
-    `zone_axis_crystal` along the lab +z axis (stacking direction).
+    Cartesian direction of the reciprocal-lattice vector $\\mathbf{G}_{hkl}$ —
+    i.e. the **normal to the `(hkl)` lattice-plane family** — as opposed to
+    :func:`crystal_to_cartesian`, which converts a *real-space* direction
+    `[uvw]`.
 
-    Optionally align `up_crystal` as close as possible to lab +x.
+    These two are only parallel for the same index triple in an orthogonal
+    (e.g. cubic) system.  In a non-orthogonal system (hexagonal, monoclinic,
+    triclinic) they generally differ: for example in a hexagonal lattice the
+    real-space direction `[1,0,0]` (an a-axis) is **not** normal to the
+    `(1,0,0)`-type prism ("m") plane — the m-plane normal is instead parallel
+    to the real-space `<11-20>`-type ("a") direction, a 30° rotation away in
+    the basal plane. Use this function (via :func:`orientation_along_plane`)
+    whenever the growth/stacking direction is specified as a Miller **plane**
+    `(hkl)` rather than a zone axis `[uvw]` — in particular for any non-`c`-axis
+    hexagonal growth such as m-plane or a-plane GaN.
 
     Args:
-        zone_axis_crystal (array-like): Miller direction [uvw] in the crystal frame
+        hkl (array-like, shape (3,)): Miller indices `(h, k, l)` of the plane family.
         crystal (xu.materials.Crystal):
-        up_crystal (array-like, optional): secondary alignment direction
 
     Returns:
-        U (ndarray, shape (3,3)): orientation matrix  (G_lab = U @ G_crystal)
+        G (ndarray, shape (3,)): Un-normalised Cartesian reciprocal vector (Å⁻¹); caller
+            normalises if only the direction is needed.
 """
-    b = crystal_to_cartesian(zone_axis_crystal, crystal)
-    b /= np.linalg.norm(b)
+    b1, b2, b3 = crystal.lattice._bi  # reciprocal vectors, Å⁻¹ (2π convention)
+    h, k, l = (float(x) for x in hkl)
+    return h * np.asarray(b1) + k * np.asarray(b2) + l * np.asarray(b3)
+
+
+def _orient_axis_to_z(target_cart, crystal, up_crystal=None):
+    """
+    Shared Rodrigues-rotation core of :func:`orientation_along_z` and
+    :func:`orientation_along_plane`: build `U` placing the Cartesian direction
+    `target_cart` (already expressed in the crystal's Cartesian frame) along
+    lab +z, optionally twisting about z so `up_crystal` (a real-space `[uvw]`
+    direction) comes as close as possible to lab +x.
+"""
+    b = np.asarray(target_cart, dtype=float)
+    b = b / np.linalg.norm(b)
     z = np.array([0.0, 0.0, 1.0])
 
     ax = np.cross(b, z)
@@ -158,6 +191,79 @@ def orientation_along_z(zone_axis_crystal, crystal, up_crystal=None):
         else:
             U = R1
     return U
+
+
+def orientation_along_z(zone_axis_crystal, crystal, up_crystal=None):
+    """
+    Build a 3×3 orientation matrix U that places the crystal **direction**
+    `zone_axis_crystal` (real-space `[uvw]`) along the lab +z axis (stacking
+    direction).
+
+    Optionally align `up_crystal` as close as possible to lab +x.
+
+    !!! warning
+        `zone_axis_crystal` is a real-space direction, not a plane normal.
+        For cubic crystals and for `c`-axis hexagonal growth (`[0001]`) the
+        two coincide, but for any other non-orthogonal-lattice growth plane
+        (e.g. hexagonal m-plane or a-plane) they do **not** — use
+        :func:`orientation_along_plane` instead when the growth surface is
+        specified by Miller plane indices `(hkl)`.
+
+    Args:
+        zone_axis_crystal (array-like): Miller direction [uvw] in the crystal frame
+        crystal (xu.materials.Crystal):
+        up_crystal (array-like, optional): secondary alignment direction
+
+    Returns:
+        U (ndarray, shape (3,3)): orientation matrix  (G_lab = U @ G_crystal)
+"""
+    b = crystal_to_cartesian(zone_axis_crystal, crystal)
+    return _orient_axis_to_z(b, crystal, up_crystal)
+
+
+def orientation_along_plane(hkl, crystal, up_crystal=None):
+    """
+    Build a 3×3 orientation matrix U that places the **normal of the `(hkl)`
+    lattice-plane family** — the physically correct growth/stacking-direction
+    convention for epitaxial films, since the sample surface is parallel to
+    those planes — along the lab +z axis.
+
+    Unlike :func:`orientation_along_z`, which aligns a real-space **direction**
+    `[uvw]`, this aligns the **reciprocal** vector $\\mathbf{G}_{hkl}$ (via
+    :func:`plane_normal_cartesian`). The two functions agree for cubic
+    crystals and for hexagonal `c`-axis (`(0001)`) growth, but differ for any
+    other hexagonal growth plane — most notably the non-polar **m-plane**
+    `{1,0,-1,0}` and **a-plane** `{1,1,-2,0}` orientations used for
+    polarization-optimised III-nitride devices, where the plane normal is a
+    30°-rotated real-space direction relative to the same-index `[uvw]`.
+
+    Use this whenever the stacking/growth surface is specified as a Miller
+    plane rather than a zone axis — in particular, always for non-`c`-axis
+    hexagonal stacking. Pass the resulting `U` (or `U @ [0, 0, 1]`, its own
+    growth direction in the crystal frame) as `stacking_direction` /
+    `n_hat` when building a :class:`LayeredCrystal`.
+
+    Args:
+        hkl (array-like, shape (3,)): Miller indices `(h, k, l)` of the plane parallel to the
+            growth surface (e.g. `(1, 0, 0)` for the hexagonal m-plane, using
+            the 3-index convention — drop the redundant `i = -(h+k)` index of
+            the 4-index Miller-Bravais `(h k i l)` notation).
+        crystal (xu.materials.Crystal):
+        up_crystal (array-like, optional): secondary alignment direction (a real-space `[uvw]`), rotated
+            about z to align as closely as possible with lab +x — e.g. pass
+            the in-plane `c`-axis `[0, 0, 1]` for m-plane GaN to fix the
+            azimuthal reference.
+
+    Returns:
+        U (ndarray, shape (3,3)): orientation matrix  (G_lab = U @ G_crystal)
+
+    Example:
+    >>> # m-plane GaN: (10-10) surface, c-axis in-plane along lab x
+    >>> U_GaN_mplane = orientation_along_plane([1, 0, 0], GaN, up_crystal=[0, 0, 1])
+    >>> n_hat = U_GaN_mplane @ np.array([1.0, 0.0, 0.0])  # growth dir, crystal frame ∥ lab z
+"""
+    G = plane_normal_cartesian(hkl, crystal)
+    return _orient_axis_to_z(G, crystal, up_crystal)
 
 
 def _or_from_two_pairs(v1_A, v2_A, v1_B, v2_B):
@@ -350,6 +456,98 @@ def d_spacing_hkl(crystal, h, k, l):
     return float(2 * np.pi / np.linalg.norm(G))
 
 
+def shortest_lattice_vector(direction, crystal, max_index=8, tol=1e-6):
+    """
+    Shortest real-space Bravais lattice vector exactly parallel to `direction`,
+    found by an exhaustive search over small integer combinations of the
+    crystal's primitive direct-lattice vectors.
+
+    **Why this is needed (and why a per-axis projection is not enough).**
+    :meth:`Layer`'s coherent structure-factor sum treats the whole stack as
+    `N` identical copies of the *same* unit-cell structure factor
+    `F_uc(Q_cry)`, translated by a scalar step `d` along the stacking
+    direction `n_hat`. That 1-D geometric-series model is only exact when
+    `n_hat` is parallel to an actual lattice translation `T`: only then does
+    stepping by `d = |T|` regenerate an *identical* atomic arrangement each
+    time, so the same `F_uc` legitimately applies to every step.
+
+    For an orthogonal lattice (cubic, tetragonal, orthorhombic) or for
+    hexagonal `c`-axis growth, that translation happens to be one of the
+    primitive vectors themselves (`a1`, `a2`, or `a3`), which is why simply
+    projecting each one onto `n_hat` and keeping the shortest — the original
+    heuristic used here — worked. It is **not** true in general: for a
+    hexagonal **m-plane** normal (`{1,0,-1,0}`), for instance, the shortest
+    lattice vector parallel to it is `2·a1 + a2` (length `a√3`), a *combination*
+    of primitives that the old per-vector heuristic could never find — and its
+    length is twice the bare interplanar spacing `d_spacing_hkl` of that plane
+    family (wurtzite has 2 formula units per cell, so consecutive `(10-10)`
+    planes are not identical; only every *second* one is). Using the bare
+    `d_hkl` there would silently impose a spurious extra periodicity — half
+    the true repeat — corrupting the satellite spacing and systematic
+    absences. Searching combinations, not just single vectors, is what makes
+    this general.
+
+    Not every direction has such a lattice vector within reach: `n_hat` may be
+    genuinely incommensurate with the lattice (e.g. many semipolar planes,
+    where the real/reciprocal correspondence depends on `a/c` and need not
+    close on a short integer vector). This function returns `(None, None)` in
+    that case rather than guessing — the caller (:class:`Layer`) turns that
+    into a `ValueError` asking for an explicit `d_spacing`.
+
+    Args:
+        direction (array-like, shape (3,)): Target direction, in the **same Cartesian frame** as the crystal's
+            direct lattice (i.e. the crystal frame — pass `U.T @ n_hat_lab`
+            when starting from a lab-frame stacking direction). Need not be
+            normalised.
+        crystal (xu.materials.Crystal):
+        max_index (int, optional): Search integer coefficients `p, q, r` in `[-max_index, max_index]`
+            for `T = p*a1 + q*a2 + r*a3`. Default `8` comfortably covers m-/a-plane
+            hexagonal growth (needs `|p|,|q| ≤ 2`) and all low-index cubic
+            directions; raise it only for deliberately high-index growth
+            planes.
+        tol (float, optional): Relative tolerance on `|cos(angle)| = 1` used to accept a
+            candidate `T` as parallel to `direction`. Default `1e-6`.
+
+    Returns:
+        T (ndarray, shape (3,), or None): Shortest matching lattice vector (Å), or `None` if none was found
+            within `max_index`.
+        length (float or None): `|T|` (Å), or `None` if no match was found. This is the physically
+            correct stacking repeat `d` to use for `add_layer(..., d_spacing=length)`.
+
+    Example:
+    >>> # m-plane GaN: shortest lattice vector along the (10-10) normal
+    >>> U = orientation_along_plane([1, 0, 0], GaN)
+    >>> n_hat_crystal = U.T @ (U @ np.array([1.0, 0.0, 0.0]))  # = [1,0,0] here
+    >>> T, d = shortest_lattice_vector(n_hat_crystal, GaN)
+    >>> d, d_spacing_hkl(GaN, 1, 0, 0)   # d == 2x the bare (10-10) spacing
+    (5.527..., 2.763...)
+"""
+    lat = crystal.lattice
+    A = np.asarray(lat._ai, dtype=float)  # rows: a1, a2, a3
+    d_hat = np.asarray(direction, dtype=float)
+    d_hat = d_hat / np.linalg.norm(d_hat)
+
+    best_T = None
+    best_len = np.inf
+    idx = range(-int(max_index), int(max_index) + 1)
+    for p in idx:
+        for q in idx:
+            for r in idx:
+                if p == 0 and q == 0 and r == 0:
+                    continue
+                T = p * A[0] + q * A[1] + r * A[2]
+                length = float(np.linalg.norm(T))
+                if length < 1e-8 or length >= best_len:
+                    continue
+                cos_ang = abs(float(np.dot(T, d_hat))) / length
+                if abs(cos_ang - 1.0) < tol:
+                    best_T = T
+                    best_len = length
+    if best_T is None:
+        return None, None
+    return best_T, best_len
+
+
 def pseudomorphic_d_spacing(
     crystal_film,
     a_substrate,
@@ -526,7 +724,14 @@ class Layer:
         mounting and is used to correct the Beer-Lambert absorption depth
         when `absorption_limit=True`.
         d_spacing (float, optional): Repeat distance along the stacking direction (Å).
-            If `None`, computed as the primitive lattice repeat along `n_hat`.
+            If `None`, found automatically via
+            `shortest_lattice_vector(U.T @ n_hat, crystal)` -- the length of
+            the shortest real lattice translation parallel to the stacking
+            direction (not simply an interplanar spacing `d_hkl`: for m-plane
+            hexagonal growth in particular these differ by a factor of 2,
+            see that function's docstring). Raises `ValueError` if no such
+            lattice vector is found within its default search range, in
+            which case pass `d_spacing` explicitly.
         label (str, optional): name for this layer
         absorption_limit (bool, optional): When ``True``, the effective
             thickness used in the structure-factor sum is capped at the
@@ -577,24 +782,31 @@ class Layer:
         if d_spacing is not None:
             self.d = float(d_spacing)
         else:
-            # Find the primitive real-space repeat along the stacking direction
-            # n_hat.  The geometric sum uses phase φ = (Q · n_hat) · d, so d
-            # must equal the smallest positive projection of any lattice vector
-            # onto n_hat.
-            #
-            # This is correct for any stacking orientation:
-            #   [001] stacking (n_hat = Z):   d = c_param
-            #   [110] stacking (n_hat = U@[110]):  d = a/√2  for cubic
-            #   U from Laue indexation + growth dir [001]:
-            #       n_hat = U @ [0,0,1],  d = projection of c onto n_hat
-            lat = crystal.lattice
-            proj = []
-            for vec in lat._ai:  # rows: a1, a2, a3
-                v_lab = self.U @ np.asarray(vec, dtype=float)
-                p = abs(float(np.dot(v_lab, self.n_hat)))
-                if p > 1e-6:
-                    proj.append(p)
-            self.d = min(proj) if proj else lat.c
+            # Find the real-space repeat along the stacking direction n_hat:
+            # the geometric sum uses phase φ = (Q · n_hat) · d, so d must be
+            # the length of the *shortest actual lattice translation* parallel
+            # to n_hat -- only then does each step reproduce an identical
+            # atomic arrangement, so the same F_uc legitimately applies to
+            # every step (see shortest_lattice_vector's docstring for why a
+            # single-primitive-vector projection is not enough in general,
+            # e.g. for a hexagonal m-plane normal, which is parallel to
+            # 2*a1+a2 rather than any individual a_i).
+            n_hat_crystal = self.U.T @ self.n_hat
+            T, length = shortest_lattice_vector(n_hat_crystal, crystal)
+            if T is None:
+                raise ValueError(
+                    f"Layer {self.label!r}: no real lattice vector of "
+                    f"{crystal.name} within ±8 primitive-cell steps is "
+                    f"parallel to the stacking direction n_hat={self.n_hat}. "
+                    f"This growth direction may be crystallographically "
+                    f"irrational for this lattice (e.g. a semipolar plane), "
+                    f"or need a larger search range -- pass d_spacing "
+                    f"explicitly (e.g. from d_spacing_hkl, if a single "
+                    f"interplanar spacing is physically the right repeat "
+                    f"here), or call shortest_lattice_vector(n_hat_crystal, "
+                    f"crystal, max_index=...) yourself with a larger range."
+                )
+            self.d = length
 
         self._thickness = float(thickness)
         self.n_cells = max(1, round(self._thickness / self.d))

@@ -89,9 +89,12 @@ from .layers import (
     or_kurdjumov_sachs,
     or_nishiyama_wassermann,
     or_pitsch,
+    orientation_along_plane,
     orientation_along_z,
+    plane_normal_cartesian,
     pseudomorphic_d_spacing,
     nitride_elastic_constants,
+    shortest_lattice_vector,
 )
 from .segmentation import (
     auto_init_gaussian_mixture_global,
@@ -247,6 +250,9 @@ __all__ = [
     "LayeredCrystal",
     "combine_stacks",
     "orientation_along_z",
+    "orientation_along_plane",
+    "plane_normal_cartesian",
+    "shortest_lattice_vector",
     "or_from_directions",
     "or_kurdjumov_sachs",
     "or_nishiyama_wassermann",

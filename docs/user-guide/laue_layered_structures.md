@@ -549,7 +549,15 @@ It is used for:
 - Computing $N = t/d$ (the number of unit cells from the physical thickness);
 - The phase increment $\phi = Q_n d$ in the geometric sum.
 
-`d_spacing_hkl(crystal, h, k, l)` computes the interplanar spacing of the
+Every unit cell in a `Layer` is assumed to contribute the **same** structure
+factor $F_\text{uc}(\mathbf{Q}_\text{cry})$, evaluated once. That is only
+correct if stepping by $d$ along $\hat{n}$ is a genuine **lattice
+translation** — i.e. it reproduces an identical atomic arrangement each time.
+$d$ is therefore *not*, in general, the same thing as an interplanar spacing
+$d_{hkl}$; see [Section 5.1](#51-non-c-axis-stacking-m-plane-and-other-growth-planes)
+for why they can differ by an integer factor.
+
+`d_spacing_hkl(crystal, h, k, l)` computes the bare interplanar spacing of the
 $(hkl)$ family using the reciprocal lattice directly:
 
 $$
@@ -557,13 +565,104 @@ d_{hkl} = \frac{2\pi}{|\mathbf{G}_{hkl}|}
 = \frac{2\pi}{|h\,\mathbf{b}_1 + k\,\mathbf{b}_2 + l\,\mathbf{b}_3|}
 $$
 
-This is valid for any crystal system.  For $c$-axis growth the relevant
-repeat is the $d_{0002}$ spacing ($= c/2$ for a 2-atom hexagonal primitive
-cell, or $c$ if the structure factor of 0001 is non-zero).
+This is valid for any crystal system, and is the correct stacking $d$ for
+$c$-axis wurtzite growth ($d_{0002} = c/2$) and any orthogonal-lattice growth
+plane where the plane normal happens to be parallel to a single primitive
+lattice vector.
 
 If `d_spacing` is not supplied to `add_layer`, the `Layer` class finds $d$
-automatically by projecting each direct-lattice basis vector onto $\hat{n}$
-and taking the shortest non-zero projection.
+automatically via `shortest_lattice_vector(U.T @ n_hat, crystal)`: an
+exhaustive search over small integer combinations
+$T = p\,\mathbf{a}_1 + q\,\mathbf{a}_2 + r\,\mathbf{a}_3$ of the direct-lattice
+basis for the **shortest one parallel to** $\hat{n}$, using $d=|T|$. This
+generalises the older "project each primitive vector individually" heuristic,
+which only found $T$ when it happened to be a single $\mathbf{a}_i$ (true for
+cubic axes and hexagonal $c$-axis growth, but not in general — see below). It
+raises `ValueError` if no such $T$ exists within its search range, i.e. if
+$\hat{n}$ is not a lattice-commensurate direction for this crystal (some
+semipolar planes) — in that case supply `d_spacing` explicitly.
+
+### 5.1 Non-`c`-axis stacking: m-plane and other growth planes
+
+For a **hexagonal m-plane** film (surface normal along the prism-plane family
+$\{1,0,\bar{1},0\}$ — the 3-index equivalent used throughout this module is
+$(1,0,0)$), the shortest lattice vector parallel to the growth direction is
+**not** a primitive vector but the combination
+
+$$
+\mathbf{T} = 2\mathbf{a}_1 + \mathbf{a}_2, \qquad |\mathbf{T}| = a\sqrt{3}
+$$
+
+— exactly **twice** the bare interplanar spacing $d_{(1,0,0)} = a\sqrt{3}/2$
+returned by `d_spacing_hkl`. This is not a numerical curiosity: wurtzite has
+two formula units per conventional cell, so translating by one bare
+$d_{(1,0,0)}$ step does **not** reproduce an identical atomic plane — only
+every *second* step does. Using $d_{(1,0,0)}$ directly as the stacking
+repeat would impose a spurious periodicity at half the true repeat,
+corrupting satellite spacing and systematic absences for that reflection.
+`shortest_lattice_vector` finds $\mathbf{T}$ (not just $d_{hkl}$) precisely to
+avoid this.
+
+This is a special case of a more general geometric fact: in a **non-orthogonal**
+lattice (hexagonal, monoclinic, triclinic), a plane normal $(hkl)$ is in
+general **not parallel** to the real-space direction $[hkl]$ of the same
+indices — they coincide only in orthogonal (cubic, tetragonal, orthorhombic)
+systems, or for the hexagonal $c$-axis (where $[0001] \parallel (0001)^*$
+regardless of $a/c$). For the m-plane, the real-space $[1,0,0]$ direction is
+actually parallel to the **a-plane** normal $\{1,1,\bar{2},0\}$ instead — a
+30° rotation away from the m-plane normal in the basal plane:
+
+```python
+>>> import numpy as np
+>>> np.dot(orientation_along_z([1,0,0], GaN)[:, 0],
+...        orientation_along_plane([1,0,0], GaN)[:, 0])
+0.8660...   # cos(30°)
+```
+
+Concretely, for m-plane (or any non-`c`-axis hexagonal, or generally
+non-cubic) growth:
+
+1. **Build $U$ with `orientation_along_plane`, not `orientation_along_z`.**
+   `orientation_along_z([1,0,0], GaN)` places the *a-axis real-space
+   direction* along the stacking axis — the wrong surface for an m-plane
+   film. `orientation_along_plane((1,0,0), GaN)` places the *reciprocal*
+   $\mathbf{G}_{(1,0,0)}$ — the actual m-plane normal — along $\hat{n}$
+   instead, by aligning `plane_normal_cartesian(hkl, crystal)` rather than
+   `crystal_to_cartesian(uvw, crystal)`.
+2. **Let `Layer` find $d$ automatically**, or pass it explicitly via
+   `shortest_lattice_vector` if you need to inspect it first — do **not**
+   pass `d_spacing_hkl(...)` directly for a non-orthogonal-lattice growth
+   plane, since (as above) it can silently be a submultiple of the true
+   repeat.
+
+```python
+import numpy as np
+import xrayutilities as xu
+import nrxrdct.laue as laue
+
+GaN = xu.materials.GaN
+
+# m-plane surface normal along lab z; in-plane c-axis fixed along lab x
+U_GaN = laue.orientation_along_plane([1, 0, 0], GaN, up_crystal=[0, 0, 1])
+n_hat = U_GaN @ np.array([1.0, 0.0, 0.0])   # growth dir, crystal frame -> lab z
+
+stack = laue.LayeredCrystal(name='m-plane GaN', stacking_direction=n_hat)
+stack.add_buffer_layer(GaN, U_GaN, thickness=5000.0, label='GaN m-plane substrate')
+# d auto-resolves to a*sqrt(3) ~= 5.524 A here, not d_spacing_hkl(GaN,1,0,0) ~= 2.762 A
+```
+
+If `shortest_lattice_vector` cannot find a lattice-parallel translation within
+its default search range (most likely for a semipolar plane, where the
+real/reciprocal correspondence depends on $a/c$ and need not close on a short
+integer vector), `Layer` raises a `ValueError` naming the failing `n_hat`
+rather than silently returning an incorrect $d$ — pass `d_spacing` by hand in
+that case.
+
+Once $U$ and $\hat{n}$ are set up this way, every other part of the model —
+`structure_factor`, superlattice satellites, absorption depth, and rod
+tangency (see the [Rod Tangency](laue_rod_tangency.md) page) — is unchanged:
+they all consume `n_hat` and the resolved period generically and do not need
+to know which plane it came from.
 
 ---
 
@@ -614,6 +713,26 @@ where $\hat{n}_\text{crystal}$ is the growth direction in the crystal frame
 (e.g. $[001]$ for $c$-axis wurtzite).  Pass this vector as
 `stacking_direction` when constructing a `LayeredCrystal` from a Laue-indexed
 $U$.
+
+### 6.4 Building $U$ for a general growth plane
+
+`orientation_along_z(zone_axis_crystal, crystal)` and
+`orientation_along_plane(hkl, crystal)` both return a $U$ placing something
+along lab $z$, but a **different** something:
+
+| Function | Aligns to lab $z$ | Correct when |
+|---|---|---|
+| `orientation_along_z` | real-space direction $[uvw]$ | cubic (any $[uvw]$); hexagonal $c$-axis $[0001]$ |
+| `orientation_along_plane` | reciprocal plane normal $\mathbf{G}_{hkl}$ | any crystal system, any growth plane |
+
+They agree only when $[uvw]$ (same indices as `hkl`) happens to be parallel
+to $\mathbf{G}_{hkl}$ — true in orthogonal lattices, and true for hexagonal
+$(0001)$, but **not** true for hexagonal m-plane / a-plane growth (see
+[Section 5.1](#51-non-c-axis-stacking-m-plane-and-other-growth-planes)). Use
+`orientation_along_plane` whenever the growth surface is specified by Miller
+plane indices rather than a zone axis — which is the physically natural way
+to specify an epitaxial growth surface in the first place, since the surface
+*is* parallel to the $(hkl)$ planes, not necessarily to the $[hkl]$ direction.
 
 ---
 

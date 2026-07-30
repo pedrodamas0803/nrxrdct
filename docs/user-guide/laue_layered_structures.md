@@ -508,9 +508,102 @@ The scalar biaxial formula is valid for:
 It is **not valid** for semipolar hexagonal orientations (e.g. $[10\bar{1}3]$,
 $[11\bar{2}2]$) or off-axis cubic growth, where the in-plane strain is
 anisotropic and requires rotating the full stiffness tensor into the growth
-frame.  `pseudomorphic_d_spacing` raises `ValueError` for these cases.
+frame.  `pseudomorphic_d_spacing` raises `ValueError` for these cases —
+**except** when `growth_dir` is left at its default `(0,0,1)`: that trivially
+passes the $c$-axis check regardless of what direction the layer is actually
+stacked along, so it silently returns a $c$-axis strain answer unrelated to
+the real growth direction rather than raising. Always pass `growth_dir`
+explicitly for anything other than default $c$-axis growth.
 
-### 4.9 Worked example — In$_{0.20}$Ga$_{0.80}$N on GaN
+### 4.9 Non-polar (m-plane/a-plane) pseudomorphic strain
+
+Non-polar hexagonal growth — m-plane `{1,0,-1,0}` or a-plane `{1,1,-2,0}` —
+needs a genuinely different formula, not a rotated version of the $c$-axis
+one, and `pseudomorphic_d_spacing`/`add_pseudomorphic_layer` cannot be reused
+for it (see the warning above). `pseudomorphic_d_spacing_nonpolar` /
+`add_pseudomorphic_layer_nonpolar` implement the correct version.
+
+**Why the scalar formula fails here.** $\varepsilon_\perp = -2(C_{13}/C_{33})\varepsilon_\parallel$
+relies on the two in-plane directions of a $c$-axis film being elastically
+*identical* — both are $a$-type directions, related by the hexagonal basal
+plane's transverse isotropy, so a single mismatch strain and a single ratio
+suffice. A non-polar growth surface breaks that: its two in-plane directions
+are $c$ itself (elastic constants $C_{13}$, $C_{33}$) and the *other*
+remaining in-plane $a$-type direction (elastic constants $C_{11}$, $C_{12}$,
+$C_{13}$) — not equivalent, so each generally has a different mismatch
+strain and pulls on the free surface with a different coefficient.
+
+**The correct formula.** Because hexagonal elastic stiffness is transversely
+isotropic about $c$, the growth normal itself (an $a$-type direction) and the
+in-plane $a$-type direction share the same $(C_{11}, C_{12})$ pair, with
+$C_{13}$ coupling each to $c$ — so, unlike a truly semipolar direction, no
+stiffness-tensor rotation is needed here, just a different combination of
+the same five hexagonal constants. Solving $\sigma_\perp = 0$ in this local
+frame:
+
+$$
+\boxed{
+\varepsilon_\perp = -\frac{C_{12}\,\varepsilon_a + C_{13}\,\varepsilon_c}{C_{11}}
+}
+\qquad
+\varepsilon_a = \frac{a_\text{sub} - a_\text{film}}{a_\text{film}},
+\qquad
+\varepsilon_c = \frac{c_\text{sub} - c_\text{film}}{c_\text{film}}
+$$
+
+Both substrate lattice parameters are needed — the growth surface contains
+*both* the $a$- and $c$-type in-plane directions, so both are independently
+lattice-matched to the template. This is why `pseudomorphic_d_spacing_nonpolar`
+takes `c_substrate` in addition to `a_substrate`, and `C11`, `C12`, `C13`
+instead of just `C13`, `C33`.
+
+**Bulk repeat.** `d_bulk` along the growth normal comes from
+`shortest_lattice_vector`, not `d_spacing_hkl` — see
+[Section 5.1](#51-non-c-axis-stacking-m-plane-and-other-growth-planes) for
+why these differ (a factor of 2 for GaN's m-plane).
+
+```python
+GaN   = xu.materials.GaN
+InGaN = xu.materials.Alloy(GaN, InN, 0.10)   # In0.10Ga0.90N
+
+c_GaN   = laue.nitride_elastic_constants('GaN')
+c_InGaN = laue.nitride_elastic_constants('InN', x=0.10, end_material='GaN')
+
+U_GaN = laue.orientation_along_plane([0, 1, 0], GaN, up_crystal=[0, 0, 1])
+n_hat = U_GaN @ np.array([0.0, 1.0, 0.0])
+
+stack = laue.LayeredCrystal(name='m-plane MQW', stacking_direction=n_hat)
+stack.add_buffer_layer(GaN, U_GaN, thickness=20000.0, label='GaN core')
+
+stack.add_pseudomorphic_layer_nonpolar(
+    InGaN, U_GaN, thickness=60.0,
+    a_substrate=GaN.lattice.a, c_substrate=GaN.lattice.c,
+    C11=c_InGaN['C11'], C12=c_InGaN['C12'], C13=c_InGaN['C13'],
+    growth_hkl=(0, 1, 0), label='InGaN QW')
+stack.add_pseudomorphic_layer_nonpolar(
+    GaN, U_GaN, thickness=80.0,
+    a_substrate=GaN.lattice.a, c_substrate=GaN.lattice.c,
+    C11=c_GaN['C11'], C12=c_GaN['C12'], C13=c_GaN['C13'],
+    growth_hkl=(0, 1, 0), label='GaN barrier')
+stack.set_repetitions(15)
+# eps_a = -0.0110  eps_c = -0.0099  eps_perp = +0.0070  d_strained = 5.6241 A
+```
+
+`growth_hkl` must match whichever specific `{1,0,-1,0}`-family member is
+physically correct for *this* `U` — there are 6 symmetry-equivalent choices
+around the hexagonal cross-section (see
+[Section 6.4](#64-building-u-for-a-general-growth-plane)); nothing here
+infers which one your crystal/orientation actually uses.
+
+Note that this computes the **idealized fully-coherent** (zero-relaxation)
+strain — the same assumption `add_pseudomorphic_layer` already makes for
+$c$-axis growth (Section 4.6). Real core–shell nanowires typically relax
+substantially *more* than an equivalent planar film of the same nominal
+thickness, since the free lateral wire surfaces allow elastic relaxation a
+flat substrate does not; measured strain can therefore come out well below
+this idealized estimate.
+
+### 4.10 Worked example — In$_{0.20}$Ga$_{0.80}$N on GaN
 
 ```python
 import xrayutilities as xu
@@ -663,6 +756,13 @@ Once $U$ and $\hat{n}$ are set up this way, every other part of the model —
 tangency (see the [Rod Tangency](laue_rod_tangency.md) page) — is unchanged:
 they all consume `n_hat` and the resolved period generically and do not need
 to know which plane it came from.
+
+One part is **not** unchanged: pseudomorphically strained layers on a
+non-`c`-axis surface (m-plane, a-plane) need
+`add_pseudomorphic_layer_nonpolar`, not `add_pseudomorphic_layer` — the two
+in-plane directions of such a surface are elastically inequivalent, which
+needs a different formula entirely, not just a different `growth_dir`. See
+[Section 4.9](#49-non-polar-m-planea-plane-pseudomorphic-strain).
 
 ---
 

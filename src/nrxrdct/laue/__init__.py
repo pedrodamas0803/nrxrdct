@@ -93,6 +93,7 @@ from .layers import (
     orientation_along_z,
     plane_normal_cartesian,
     pseudomorphic_d_spacing,
+    pseudomorphic_d_spacing_nonpolar,
     nitride_elastic_constants,
     shortest_lattice_vector,
 )
@@ -260,6 +261,7 @@ __all__ = [
     "or_pitsch",
     "d_spacing_hkl",
     "pseudomorphic_d_spacing",
+    "pseudomorphic_d_spacing_nonpolar",
     "nitride_elastic_constants",
     # Grain map (raster micro-Laue)
     "GrainMap",

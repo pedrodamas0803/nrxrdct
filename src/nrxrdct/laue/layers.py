@@ -666,6 +666,148 @@ def pseudomorphic_d_spacing(
     return float(d_strained), float(eps_par), float(eps_perp)
 
 
+def pseudomorphic_d_spacing_nonpolar(
+    crystal_film,
+    a_substrate,
+    c_substrate,
+    C11: float,
+    C12: float,
+    C13: float,
+    growth_hkl=(1, 0, 0),
+):
+    """
+    Out-of-plane (growth-normal) repeat distance for a pseudomorphic film
+    grown on a **non-polar hexagonal** surface -- the m-plane `{1,0,-1,0}`
+    or a-plane `{1,1,-2,0}` family (more generally, any prism-plane growth
+    direction, i.e. any direction perpendicular to `c`).
+
+    **Why `pseudomorphic_d_spacing` cannot be reused here.** That function's
+    scalar formula $\\varepsilon_\\perp = -2(C_{13}/C_{33})\\varepsilon_\\parallel$
+    relies on hexagonal elastic stiffness being *transversely isotropic*
+    about `c`: for `c`-axis growth both in-plane directions are elastically
+    identical `a`-type directions, so a single mismatch strain
+    $\\varepsilon_\\parallel$ (and a single ratio $C_{13}/C_{33}$) suffices.
+    Non-polar growth breaks that symmetry: its two in-plane directions are
+    **not** equivalent -- one is `c` itself (elastic constants $C_{13}$,
+    $C_{33}$), the other is the remaining in-plane `a`-type direction
+    (elastic constants $C_{11}$, $C_{12}$, $C_{13}$) -- so the mismatch
+    strain along each is generally different, and each pulls on the free
+    surface with a different coefficient. Calling `pseudomorphic_d_spacing`
+    with a non-`c`-axis `growth_dir` for a hexagonal crystal raises
+    `ValueError` for exactly this reason; leaving `growth_dir` at its default
+    `(0,0,1)` instead silently computes a *c*-axis strain answer that has
+    nothing to do with the actual (non-polar) growth direction -- neither is
+    usable, hence this separate function.
+
+    **Derivation.** Because hexagonal elastic stiffness is transversely
+    isotropic about `c`, *any* direction in the basal plane is elastically
+    equivalent to any other -- so the growth normal (an `a`-type direction)
+    and the in-plane `a`-type direction retained in the surface share the
+    same $(C_{11}, C_{12})$ pair, with $C_{13}$ coupling each to `c`.
+    Writing Hooke's law in this local frame with the free-surface condition
+    $\\sigma_{\\perp} = 0$:
+
+    $$
+    \\boxed{
+    \\varepsilon_\\perp = -\\frac{C_{12}\\,\\varepsilon_a + C_{13}\\,\\varepsilon_c}{C_{11}}
+    }
+    \\qquad
+    \\varepsilon_a = \\frac{a_\\text{sub} - a_\\text{film}}{a_\\text{film}},
+    \\qquad
+    \\varepsilon_c = \\frac{c_\\text{sub} - c_\\text{film}}{c_\\text{film}}
+    $$
+
+    Unlike the `c`-axis case, **both** substrate lattice parameters enter
+    (the surface contains both the `a`- and `c`-type in-plane directions),
+    and no stiffness-tensor rotation is needed -- transverse isotropy makes
+    this formula valid for *any* basal-plane-normal growth direction, not
+    just the specific `growth_hkl` passed.
+
+    The bulk (unstrained) repeat `d_bulk` along the growth normal is found
+    via :func:`shortest_lattice_vector` -- **not** `d_spacing_hkl` -- since
+    for a non-orthogonal lattice the shortest lattice-vector repeat along a
+    prism-plane normal is generally a multiple of the bare interplanar
+    spacing (for GaN m-plane, exactly 2×; see that function's docstring).
+
+    Args:
+        crystal_film (xu.materials.Crystal): Bulk (relaxed) film crystal.
+        a_substrate (float): or  xu.materials.Crystal
+            In-plane `a`-parameter of the template (Å), or a Crystal whose
+            `.lattice.a` is used.
+        c_substrate (float): or  xu.materials.Crystal
+            In-plane `c`-parameter of the template (Å), or a Crystal whose
+            `.lattice.c` is used. Required because, unlike `c`-axis growth,
+            the `c`-direction lies *in* a non-polar growth surface and is
+            therefore also lattice-matched to the substrate.
+        C11, C12, C13 (float): Elastic stiffness constants (GPa or Pa, any consistent unit).
+        growth_hkl (array-like (3,), optional): Miller **plane** indices of the growth surface (default `(1,0,0)`,
+            the hexagonal m-plane in the 3-index convention). Must be
+            perpendicular to `c` (any prism-plane family); passing a
+            direction with a nonzero `c`-component raises `ValueError`, since
+            that would be a genuinely semipolar direction requiring a full
+            stiffness-tensor rotation this function does not perform.
+            Aligned via :func:`plane_normal_cartesian`, so this is the
+            reciprocal plane normal, not a real-space `[uvw]` direction --
+            use whichever specific family member (e.g. `(1,0,0)` vs
+            `(0,1,0)`) matches your own indexed/measured orientation
+            convention, as with :func:`orientation_along_plane`.
+
+    Returns:
+        d_strained (float): Strained repeat along `growth_hkl`'s normal (Å). Pass directly as
+            `d_spacing` to :meth:`LayeredCrystal.add_layer`.
+        eps_a (float): In-plane strain along the `a`-type direction (positive = tensile).
+        eps_c (float): In-plane strain along `c` (positive = tensile).
+        eps_perp (float): Out-of-plane (growth-normal) strain.
+
+    Example:
+    >>> d, eps_a, eps_c, eps_perp = pseudomorphic_d_spacing_nonpolar(
+    ...     InGaN, a_substrate=GaN.lattice.a, c_substrate=GaN.lattice.c,
+    ...     C11=c['C11'], C12=c['C12'], C13=c['C13'], growth_hkl=(0, 1, 0))
+"""
+    if hasattr(a_substrate, "lattice"):
+        a_sub = float(a_substrate.lattice.a)
+    else:
+        a_sub = float(a_substrate)
+    if hasattr(c_substrate, "lattice"):
+        c_sub = float(c_substrate.lattice.c)
+    else:
+        c_sub = float(c_substrate)
+
+    a_film = float(crystal_film.lattice.a)
+    c_film = float(crystal_film.lattice.c)
+
+    g_cart = plane_normal_cartesian(growth_hkl, crystal_film)
+    g_hat = g_cart / np.linalg.norm(g_cart)
+
+    c_axis = np.array([0.0, 0.0, 1.0])
+    if abs(float(np.dot(g_hat, c_axis))) > 1e-3:
+        raise ValueError(
+            f"pseudomorphic_d_spacing_nonpolar: growth_hkl={tuple(growth_hkl)} is "
+            f"not perpendicular to c -- this function only covers basal-plane-"
+            f"normal (prism-plane, e.g. m-plane/a-plane) growth, where transverse "
+            f"isotropy makes the strain response independent of azimuth. A "
+            f"genuinely semipolar direction (nonzero c-component) needs a full "
+            f"stiffness-tensor rotation, which this function does not perform."
+        )
+
+    T, d_bulk = shortest_lattice_vector(g_hat, crystal_film)
+    if T is None:
+        raise ValueError(
+            f"pseudomorphic_d_spacing_nonpolar: no real lattice vector of "
+            f"{crystal_film.name} within shortest_lattice_vector's default "
+            f"search range is parallel to growth_hkl={tuple(growth_hkl)}'s "
+            f"normal -- pass a lower-index growth_hkl, or call "
+            f"shortest_lattice_vector yourself with a larger max_index."
+        )
+
+    eps_a = (a_sub - a_film) / a_film
+    eps_c = (c_sub - c_film) / c_film
+    eps_perp = -(C12 * eps_a + C13 * eps_c) / C11
+    d_strained = d_bulk * (1.0 + eps_perp)
+
+    return float(d_strained), float(eps_a), float(eps_c), float(eps_perp)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # VECTORISED GEOMETRIC SERIES (shared by the *_batch structure-factor methods)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1284,6 +1426,72 @@ class LayeredCrystal:
         lbl = label or crystal.name
         print(
             f"  {lbl}: ε_∥ = {eps_par:+.4f}  ε_⊥ = {eps_perp:+.4f}"
+            f"  d_bulk → {d_strained / (1 + eps_perp):.4f} Å"
+            f"  d_strained = {d_strained:.4f} Å"
+        )
+        return self.add_layer(crystal, U, thickness, d_spacing=d_strained, label=lbl)
+
+    def add_pseudomorphic_layer_nonpolar(
+        self,
+        crystal,
+        U,
+        thickness,
+        a_substrate,
+        c_substrate,
+        C11: float,
+        C12: float,
+        C13: float,
+        growth_hkl=(1, 0, 0),
+        label=None,
+    ):
+        """
+        Append a pseudomorphically strained layer grown on a **non-polar**
+        hexagonal surface (m-plane `{1,0,-1,0}` or a-plane `{1,1,-2,0}`) to
+        the repeating unit.
+
+        Equivalent to calling :func:`pseudomorphic_d_spacing_nonpolar` then
+        :meth:`add_layer` with the computed `d_spacing` -- see that
+        function's docstring for the full derivation and for why
+        :meth:`add_pseudomorphic_layer` (the `c`-axis version) cannot be
+        reused here: non-polar growth strains **two** elastically
+        inequivalent in-plane directions (`c` itself, and the remaining
+        in-plane `a`-type direction) differently, so it needs both
+        substrate lattice parameters and three stiffness constants
+        (`C11`, `C12`, `C13`), not one parameter and two constants
+        (`C13`, `C33`).
+
+        Args:
+            crystal (xu.materials.Crystal): Bulk (relaxed) film crystal.
+            U ((3,3) ndarray): Orientation matrix for this layer -- from :func:`orientation_along_plane`
+                (or a fitted Laue orientation), **not** `orientation_along_z`.
+            thickness (float): Physical thickness of the layer in Å.
+            a_substrate, c_substrate (float): or  xu.materials.Crystal
+                In-plane `a`- and `c`-parameters of the template (Å), or
+                Crystals whose `.lattice.a` / `.lattice.c` are used.
+            C11, C12, C13 (float): Elastic stiffness constants (GPa).
+            growth_hkl (array-like (3,), optional): Miller **plane** indices of the growth surface (default `(1,0,0)`).
+                Must match whichever specific `{1,0,-1,0}`-family member is
+                physically correct for *this* `U` -- there are 6
+                symmetry-equivalent choices around the hexagonal cross-section,
+                and nothing here can infer which one your crystal/orientation
+                actually uses; check against known geometry as needed (e.g.
+                comparing against a known substrate-contact facet) before
+                trusting a default.
+            label (str, optional):
+
+        Returns:
+            self  (for method chaining)
+
+        Note:
+        The strain values are printed on addition so you can verify the
+        mismatch.
+"""
+        d_strained, eps_a, eps_c, eps_perp = pseudomorphic_d_spacing_nonpolar(
+            crystal, a_substrate, c_substrate, C11, C12, C13, growth_hkl
+        )
+        lbl = label or crystal.name
+        print(
+            f"  {lbl}: ε_a = {eps_a:+.4f}  ε_c = {eps_c:+.4f}  ε_⊥ = {eps_perp:+.4f}"
             f"  d_bulk → {d_strained / (1 + eps_perp):.4f} Å"
             f"  d_strained = {d_strained:.4f} Å"
         )

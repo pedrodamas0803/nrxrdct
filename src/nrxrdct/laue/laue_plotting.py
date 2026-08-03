@@ -7291,9 +7291,15 @@ def plot_rod_tangency(
             for m, sat in info["satellites"].items():
                 if m == 0 or sat["pix"] is None or not sat["on_detector"]:
                     continue
+                # Window check stays in raw pixel space (s_vals is the sampled
+                # range); the plotted position uses the *exact* physical ΔQ
+                # for this order (m·2π/period), not s_m/dpix_dalong — that
+                # divides a pixel offset by a slope valid only near m=0, which
+                # silently drifts for higher orders since the pixel↔Q map is
+                # nonlinear (same elastic condition as rod_tangency itself).
                 s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                 if s_vals[0] <= s_m <= s_vals[-1]:
-                    q_m = s_m / info["dpix_dalong"]
+                    q_m = m * (2.0 * np.pi / info["period"])
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
                         q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
@@ -7342,9 +7348,12 @@ def plot_rod_tangency(
                         color=hcolor, alpha=0.85, fontsize=6, ha="center", va="center", zorder=2,
                     )
                     if show_profile:
+                        # Same fix as the fundamental's satellites above: use the
+                        # harmonic's own exact ΔQ (m·2π/period), not a pixel
+                        # offset rescaled by the fundamental's local dpix_dalong.
                         hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                         if -arrow_neg <= hs_m <= arrow_pos:
-                            hq_m = hs_m / info["dpix_dalong"]
+                            hq_m = m * (2.0 * np.pi / hinfo["period"])
                             ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                             ax_profile.text(
                                 hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),

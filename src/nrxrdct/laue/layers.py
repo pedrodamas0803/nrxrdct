@@ -96,6 +96,7 @@ print(f'|F(Q)| = {abs(F):.4f} e.u.')
 ```
 """
 
+import dill
 import numpy as np
 import xrayutilities as xu
 from scipy.spatial.transform import Rotation
@@ -2220,6 +2221,57 @@ class LayeredCrystal:
             f"  = {self.total_thickness/10:.2f} nm"
         )
         print(f"  {'─'*W}")
+
+    def save(self, path: str) -> None:
+        """
+        Save this stack to *path* via `dill`, so it can be reloaded later
+        instead of rebuilt from scratch -- resuming a session where you left
+        off, or handing a hand-tuned/fitted stack to
+        :class:`~nrxrdct.laue.layered_map.LayeredMap` as the starting-point
+        orientation for a per-pixel map (`LayeredMap(stack=..., ...)`)
+        without re-running the notebook cells that built it.
+
+        Round-trips everything: every layer's material (`xu.materials.Crystal`
+        / `Alloy`), orientation `U`, thickness, resolved `d`-spacing, `n_hat`,
+        label, and absorption settings, plus the block/repetition structure
+        and buffer layers -- the exact same mechanism already used internally
+        by `LayeredMap` to ship a stack to local worker processes (see
+        `layered_map._serialize_stack`), just to a permanent path instead of
+        a temp file.
+
+        Args:
+            path (str): Destination file path (any extension; `.pkl` by convention).
+
+        Example:
+        >>> stack.save('gan_mplane_stack.pkl')
+        >>> # ...later, or in a different session...
+        >>> stack = LayeredCrystal.load('gan_mplane_stack.pkl')
+        >>> lmap = LayeredMap(ny=21, nx=21, stack=stack, h5_path='scan.h5')
+"""
+        with open(path, "wb") as fh:
+            dill.dump(self, fh)
+        print(f"LayeredCrystal '{self.name}' saved -> {path!r}", flush=True)
+
+    @classmethod
+    def load(cls, path: str) -> "LayeredCrystal":
+        """
+        Load a stack previously saved with :meth:`save`.
+
+        Args:
+            path (str): Path to a file written by :meth:`save`.
+
+        Returns:
+            LayeredCrystal: the restored stack, with every layer's material, orientation,
+            thickness, and block structure intact.
+"""
+        with open(path, "rb") as fh:
+            stack = dill.load(fh)
+        if not isinstance(stack, cls):
+            raise TypeError(
+                f"{path!r} does not contain a LayeredCrystal "
+                f"(got {type(stack).__name__})"
+            )
+        return stack
 
     def plot_lattice_parameter(
         self,

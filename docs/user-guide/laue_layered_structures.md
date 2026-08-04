@@ -1112,6 +1112,40 @@ for blk in stack.blocks:
 flat_stack = laue.combine_stacks([stack])
 ```
 
+### 10.3 Saving and reloading a stack
+
+`LayeredCrystal.save`/`.load` persist a whole stack (materials, orientations,
+thicknesses, resolved `d`-spacings, block/repetition structure, buffer
+layers) to a single file via `dill` — the same mechanism `LayeredMap`
+already uses internally to ship a stack to local worker processes (see
+[Section 7](#7-absorption-corrections-two-beam-path-and-overlying-layers)'s
+neighbour, `layered_map._serialize_stack`), just to a permanent path instead
+of a temp file:
+
+```python
+stack.save('gan_mplane_stack.pkl')
+
+# ...resume later, or in a different session/notebook...
+stack = laue.LayeredCrystal.load('gan_mplane_stack.pkl')
+```
+
+This is the natural hand-off into a per-pixel map: build (and validate) one
+stack by hand for a representative pixel — orientation, non-polar
+pseudomorphic strain, everything from Sections 4–6 — save it once, then reuse
+it as the starting-point orientation for every pixel in a
+[`LayeredMap`](../api/laue/layered_map.md):
+
+```python
+stack = laue.LayeredCrystal.load('gan_mplane_stack.pkl')
+lmap = laue.LayeredMap(ny=21, nx=21, stack=stack, h5_path='scan.h5')
+lmap.run_orientation_local(camera, seg_dir='seg/', out_dir='ubs/')
+```
+
+`LayeredMap.save`/`.load` (its own, separate persistence) only stores
+per-pixel numeric arrays, not the stack itself — `LayeredMap.load(path, stack=...)`
+still expects a `stack` argument, which is exactly what
+`LayeredCrystal.load` is for.
+
 ---
 
 ## References

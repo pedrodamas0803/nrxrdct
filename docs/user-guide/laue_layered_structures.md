@@ -834,6 +834,36 @@ plane indices rather than a zone axis — which is the physically natural way
 to specify an epitaxial growth surface in the first place, since the surface
 *is* parallel to the $(hkl)$ planes, not necessarily to the $[hkl]$ direction.
 
+### 6.5 Adjusting orientation after the fact — `rotate`
+
+`LayeredCrystal.rotate(angle_deg, axis, frame='lab', layers=None)` nudges one
+or more layers' `U` by a small rotation without rebuilding the stack —
+useful for exploring whether a residual misorientation between measured and
+simulated patterns is explained by a rotation about a specific axis. It
+supports two, differently-composed, conventions:
+
+| `frame` | `axis` is expressed in | Applied as | Physical meaning |
+|---|---|---|---|
+| `'lab'` (default) | the lab frame | $U_\text{new} = R(\hat{n})\,U$ | rotating the *sample* about a fixed external axis (e.g. vertical, or the beam) |
+| `'crystal'` | each selected layer's own crystal frame | $U_\text{new} = U\,R(\hat{n})$ | twisting the *lattice* about its own crystallographic axis, independent of the layer's absolute orientation |
+
+Because `frame='crystal'` composes on the right, applying it to several
+layers that already have *different* `U` (e.g. an independently fitted core
+and shell) twists each about *its own* `c`, not about one shared lab
+direction — exactly what you want when probing a possible relative twist
+between them:
+
+```python
+# Nudge only the shell by 0.05° about its own c-axis and re-check the fit
+stack.rotate(0.05, [0, 0, 1], frame='crystal', layers='InGaN QW')
+```
+
+`layers` accepts `None` (every layer, the default), a single `Layer`/label,
+or a list of either — same resolution rule as `print_reflections`. For a
+permanent reassignment rather than an incremental nudge, use
+`LayeredCrystal.set_U` instead; `rotate` composes onto whatever `U` a layer
+already has.
+
 ---
 
 ## 7. Absorption corrections — two-beam path and overlying layers

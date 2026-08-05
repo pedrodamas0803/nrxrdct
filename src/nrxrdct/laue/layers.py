@@ -1555,6 +1555,90 @@ class LayeredCrystal:
                 layer.U = U_mat.copy()
         return self
 
+    def _resolve_layers(self, layers):
+        """Normalise the `layers` argument shared by :meth:`rotate` and
+        friends into a list of `Layer` objects: `None` -> every layer in
+        `self.all_layers`; a single `Layer` or label `str`; or a list mixing
+        either. Raises `ValueError` naming the available labels on a bad
+        match, same convention as :func:`~nrxrdct.laue.simulation.rod_tangency`.
+"""
+        if layers is None:
+            return list(self.all_layers)
+        items = layers if isinstance(layers, (list, tuple)) else [layers]
+        resolved = []
+        for item in items:
+            if isinstance(item, str):
+                match = next((ly for ly in self.all_layers if ly.label == item), None)
+                if match is None:
+                    available = [ly.label for ly in self.all_layers]
+                    raise ValueError(f"no layer labeled {item!r}; available labels: {available}")
+                resolved.append(match)
+            else:
+                resolved.append(item)
+        return resolved
+
+    def rotate(self, angle_deg, axis, frame: str = "lab", layers=None) -> "LayeredCrystal":
+        """
+        Rotate one or more layers' orientation matrices by `angle_deg` about
+        `axis`, in either the lab frame or each layer's own crystal frame.
+
+        The two frames compose differently and answer different questions:
+
+        - **`frame='lab'`** (default) -- `axis` is a direction in the **lab
+          frame** (e.g. vertical `[0,0,1]`, the beam `[1,0,0]`, or any other
+          measured lab-frame direction such as a wire's own long axis).
+          Applied as `U_new = R(axis) @ U` -- physically, rotating the
+          sample itself on the diffractometer about a fixed external axis.
+          Same convention as
+          :func:`~nrxrdct.laue.simulation.rotate_U_about_axis`, generalised
+          from `'x'/'y'/'z'` to an arbitrary vector.
+        - **`frame='crystal'`** -- `axis` is a direction in **each selected
+          layer's own crystal frame** (e.g. `c = [0,0,1]`; for a Miller
+          *plane* normal rather than a real-space direction, convert first
+          with :func:`plane_normal_cartesian`). Applied as
+          `U_new = U @ R(axis)` -- physically, twisting the lattice about
+          its own crystallographic axis, independent of the layer's
+          absolute orientation. Because this composes on the right, applying
+          it to several layers with *different* `U` (e.g. an independently
+          fitted core and shell) twists each one about *its own* `c`, not
+          about a shared lab direction.
+
+        A common diagnostic use: probing whether a small residual
+        misorientation between an independently refined core and shell is
+        consistent with a genuine c-axis twisting moment (rather than a
+        fitting artifact) -- e.g. nudging just the shell by a fraction of a
+        degree about its own `c` and re-comparing against the measured
+        pattern::
+
+            stack.rotate(0.05, [0, 0, 1], frame='crystal', layers='InGaN QW')
+
+        Args:
+            angle_deg (float): Rotation angle in degrees (right-hand rule about `axis`).
+            axis (array-like (3,)): Rotation axis. Interpreted per `frame`; need not be
+                pre-normalised.
+            frame (`'lab'` or `'crystal'`, optional): Which frame `axis` is expressed in. Default `'lab'`.
+            layers (Layer, str, list, or None, optional): Which layer(s) to rotate. `None` (default) rotates every
+                layer in `self.all_layers`. A single `Layer` object or label
+                string, or a list of either, restricts to those layers.
+
+        Returns:
+            self  (for method chaining)
+"""
+        if frame not in ("lab", "crystal"):
+            raise ValueError(f"frame must be 'lab' or 'crystal', got {frame!r}")
+
+        ax = np.asarray(axis, dtype=float)
+        ax_norm = np.linalg.norm(ax)
+        if ax_norm < 1e-12:
+            raise ValueError(f"axis must be nonzero, got {axis}")
+        ax = ax / ax_norm
+
+        R = Rotation.from_rotvec(np.radians(float(angle_deg)) * ax).as_matrix()
+
+        for layer in self._resolve_layers(layers):
+            layer.U = (R @ layer.U) if frame == "lab" else (layer.U @ R)
+        return self
+
     def _update_offsets(self):
         """Recompute cumulative z-offsets for buffer layers and every repeating block."""
         # Buffer layers: z = 0 at deepest point, increasing toward surface

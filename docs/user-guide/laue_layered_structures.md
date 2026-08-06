@@ -106,19 +106,56 @@ where:
   stacking repeat distance;
 - $N$ — the number of unit cells in the layer; $Nd = t$ is the physical thickness.
 
-Because the positions are collinear along $\hat{n}$, the sum depends only on
-$Q_n = \mathbf{Q}\cdot\hat{n}$:
+**Why only the out-of-plane component enters.** Split $\mathbf{Q}$ into
+components parallel and perpendicular to the stacking direction,
+$\mathbf{Q} = Q_n\,\hat n + \mathbf{Q}_\perp$. Every unit-cell position is, by
+construction, purely along $\hat n$ ($\mathbf{R}_n = (z_0+nd)\,\hat n$, with no
+component in the plane of the layer), so
 
 $$
-\sum_{n=0}^{N-1} e^{\,i n Q_n d}
-= \begin{cases}
+\mathbf{Q}\cdot\mathbf{R}_n
+= \left(Q_n\,\hat n + \mathbf{Q}_\perp\right)\cdot\mathbf{R}_n
+= Q_n\,(z_0+nd) + \underbrace{\mathbf{Q}_\perp\cdot\mathbf{R}_n}_{=\,0}
+$$
+
+The in-plane part $\mathbf{Q}_\perp$ has nothing to dot into — it drops out of
+every term identically, regardless of its magnitude or direction — leaving a
+phase that depends on $Q_n$ alone:
+
+$$
+\sum_{n=0}^{N-1} e^{\,i\mathbf{Q}\cdot\mathbf{R}_n}
+= e^{\,iQ_nz_0}\sum_{n=0}^{N-1} e^{\,i n Q_n d}
+= e^{\,iQ_nz_0}\begin{cases}
   N & Q_n d \equiv 0 \pmod{2\pi} \\[4pt]
   \dfrac{1 - e^{\,i N Q_n d}}{1 - e^{\,i Q_n d}} & \text{otherwise}
 \end{cases}
 $$
 
 The squared modulus of this sum is the **Laue interference function** (see the
-[Thin-Film Satellites](laue_thin_film_satellites.md) page for its fringe structure).
+[Thin-Film Satellites](laue_thin_film_satellites.md) page for its fringe
+structure) — it is what fixes the *shape* of the fringe/satellite comb
+relative to the parent Bragg peak: how many orders exist, their relative
+spacing along $\hat n$, and their relative intensities.
+
+**What this does *not* determine: whether a given order shows up as a spot.**
+$Q_n$ alone fixes the comb's internal structure, but each order $m$ still
+corresponds to a full 3D vector $\mathbf{G}_\text{sat}^{(m)} = \mathbf{G}_{hkl}
++ \Delta q_n^{(m)}\,\hat n_\text{lab}$ (Thin-Film Satellites §2), and it is
+*that* vector — not just $\Delta q_n^{(m)}$ in isolation — that has to satisfy
+the Laue condition inside the white-beam energy window and land on the active
+detector area to actually be observed. Both of those checks depend on how
+$\hat n_\text{lab}$ is oriented relative to the incident beam $\hat k_i$, not
+just on the size of $\Delta q_n^{(m)}$: the same $|\Delta q_n^{(m)}|$ can
+correspond to a large or small shift in selected energy, and a large or small
+shift in detector pixel, depending on that orientation — this is exactly the
+"rod tangency" behaviour derived in the
+[Rod Tangency](laue_rod_tangency.md#2-the-tangency-jacobian) page. So a
+period/layer thin enough to give a rich fringe comb in $Q_n$ can still show
+only one or two orders on the detector (or none) if the geometry happens to
+sweep most of that comb out of the accessible energy range or off the active
+area — "how many fringes exist" (§1, purely a function of $Q_n$) and "how many
+you can actually see" (a function of the full geometry) are genuinely
+different questions.
 
 ### 2.2 Full stack structure factor
 
@@ -276,12 +313,17 @@ the *intra-period* phases are averaged out.
 **Physical interpretation.** $S_\text{rep}$ still peaks sharply at
 $Q_n\Lambda = 2\pi m$, so satellite spots appear at exactly the same detector
 positions as in the coherent model.  What changes is the amplitude at each
-satellite: instead of depending on the layer *ordering* within the period
-(which creates strong intensity asymmetry between $+m$ and $-m$ satellites),
+satellite: instead of depending on the layer *ordering* within the period,
 every satellite order carries an amplitude proportional to
 $F_\text{unit}^\text{avg}$ evaluated at that $\mathbf{Q}$.  The result is the
 *structural envelope* — the maximum intensity each satellite order could carry
-if all unit cells in the period scattered in phase.
+if all unit cells in the period scattered in phase. One consequence worth
+flagging explicitly: averaging away the intra-period phases also averages
+away the $+m$/$-m$ intensity asymmetry that the ordering produces in the
+coherent model (§3.4) — `'average'` mode predicts a satellite comb that is
+symmetric about the parent peak (up to the slow $\mathbf Q$-dependence of
+$F_{\text{uc},j}$ itself), so it will not reproduce an asymmetry seen in real
+data even though it gets the satellite *positions* exactly right.
 
 **Effect of strain.** The strained $d$-spacing from
 `add_pseudomorphic_layer` enters through
@@ -312,6 +354,67 @@ sub-lattices.
 | $S_\text{rep}$ inter-period sum | yes | yes |
 | Buffer layer depth phases | yes | yes |
 | Absorption corrections | same | same |
+
+---
+
+### 3.4 Satellite intensity asymmetry ($+m$ vs. $-m$)
+
+Real superlattice patterns are almost never symmetric: the $+m$ and $-m$
+satellites around a given Bragg peak typically have different intensities.
+Three distinct mechanisms contribute, and it matters which one dominates
+because they call for different diagnostics.
+
+**1. Real-space asymmetry of the period (structural, requires `'coherent'`
+mode).** $S_\text{rep}$ itself is a symmetric comb — it only depends on the
+period $\Lambda$, not on what's inside it — but it is weighted by the
+envelope $F_\text{unit}(\mathbf{Q})$, the structure factor of *one period*
+(§2.2). A period built as QW-then-barrier (rather than QW centred inside the
+barrier) is not a symmetric motif, so $|F_\text{unit}(\Delta q_n)|^2$ is
+generically **not an even function of $\Delta q_n$** — this is the "layer
+ordering" effect already flagged in §3.1/§3.2. It is only visible with
+`structure_model='coherent'`, since `'average'` discards exactly the
+intra-period phases that carry it (§3.2).
+
+**2. Strain-shifted envelope (structural, sign set by the Poisson response).**
+A pseudomorphic layer's own $d_\text{strained}\neq d_\text{barrier}$
+([§4.5](#45-effect-on-the-diffraction-pattern)), so its single-layer
+thickness-fringe envelope is centred not at $\Delta q_n=0$ but offset by
+$\Delta Q_n \approx -2\pi\varepsilon_\perp/d_\text{sub}$. Since the strained
+layer (e.g. the QW) usually dominates the modulation contrast, this shifts
+$F_\text{unit}$'s peak toward one side of the comb and suppresses the other —
+so **the sign of $\varepsilon_\perp$
+([§4.3](#43-out-of-plane-poisson-response)) predicts which side ($+m$ or
+$-m$) should be enhanced**, and that prediction is directly checkable against
+`pseudomorphic_d_spacing`'s output for the layer in question.
+
+**3. Instrumental weighting (polychromatic only — absent in a monochromatic
+rocking curve).** In a monochromatic scan every point along the comb is
+measured at the same fixed wavelength, so mechanisms 1–2 are the whole story.
+In white-beam Laue each satellite order self-selects its own photon energy
+via the Laue condition ([Theory §3.2](laue_theory.md#32-the-laue-condition-and-wavelength-selection)),
+so $+m$ and $-m$ orders sit at *different* energies either side of the parent
+reflection's $E_0$ and pick up different weights from
+$S_\text{eff}(E)=S_\text{source}(E)\times R_\text{KB}(E)$
+([Theory §4.3–4.4](laue_theory.md#43-synchrotron-source-spectrum)) and from
+the energy-dependent Laue LP factor
+([Theory §4.2.2](laue_theory.md#422-polychromatic-laue-formula-synchrotron)).
+None of this depends on the crystal at all — it is a purely geometric/source
+effect, and it is amplified for reflections close to
+[tangency](laue_rod_tangency.md#2-the-tangency-jacobian), where a small
+$\Delta q_n$ step produces a large swing in selected energy and therefore a
+large swing in $S_\text{eff}(E)$.
+
+**Disentangling them.** Mechanisms 1–2 are sample properties; mechanism 3 is
+not. To check whether an observed asymmetry is physically meaningful (and
+consistent with the predicted strain sign) rather than an artefact of the
+source spectrum or KB cutoff, normalise the measured or simulated intensities
+by $S_\text{eff}(E_m)\times LP(2\theta_m,\chi_m)$ at each satellite's own
+selected energy before comparing $+m$ to $-m$ — both factors are already
+implemented (`spectrum_bm`/`spectrum_undulator`/`kb_reflectivity` and
+`lorentz_pol`). If the asymmetry survives normalisation and its sign matches
+the predicted $\varepsilon_\perp$, it is structural; if it shrinks or
+reverses, it was mostly instrumental, and worth rechecking against that
+reflection's tangency.
 
 ---
 
@@ -592,7 +695,7 @@ stack.set_repetitions(15)
 `growth_hkl` must match whichever specific `{1,0,-1,0}`-family member is
 physically correct for *this* `U` — there are 6 symmetry-equivalent choices
 around the hexagonal cross-section (see
-[Section 6.4](#64-building-u-for-a-general-growth-plane)); nothing here
+[Section 6.2](#62-building-u-for-a-general-growth-plane)); nothing here
 infers which one your crystal/orientation actually uses.
 
 Note that this computes the **idealized fully-coherent** (zero-relaxation)
@@ -768,40 +871,18 @@ needs a different formula entirely, not just a different `growth_dir`. See
 
 ## 6. Coordinate frames and orientation matrix
 
-### 6.1 Lab frame
-
-The `nrxrdct.laue` lab frame (LaueTools LT frame) has:
-
-| Axis | Direction |
-|---|---|
-| $x$ | along the incident beam |
-| $z$ | vertical up |
-| $y$ | $y = z \times x$ (horizontal) |
-
-### 6.2 Crystal frame and $U$ matrix
-
-The orientation matrix $U$ is a $3\times3$ rotation that maps crystal-frame
-vectors to the lab frame:
-
-$$
-\mathbf{G}_\text{lab} = U\,\mathbf{G}_\text{crystal}
-\qquad
-\mathbf{Q}_\text{crystal} = U^T\,\mathbf{Q}_\text{lab}
-$$
-
-$U$ can be obtained in two ways:
-
-1. **`euler_to_U(phi1, Phi, phi2, sample_tilt_deg)`** — from Bunge ZXZ Euler
-   angles describing the crystal orientation relative to the sample surface,
-   plus the sample tilt on the diffractometer.
-2. **`U_from_matstarlab(matstarlab)`** — from a LaueTools refined `matstarlab`
-   9-element array (already in the lab frame).
+The lab frame, the crystal-to-lab orientation matrix $U$, and how it is
+obtained (`euler_to_U`, `U_from_matstarlab`) are defined once, for the whole
+`nrxrdct.laue` package, in
+[Theory §5](laue_theory.md#5-coordinate-frames-and-orientation-matrix). What
+follows here is specific to a `LayeredCrystal` stack: how the stacking
+direction and per-layer orientation relate to that shared $U$.
 
 For a stack where all layers share the same crystallographic orientation (e.g.
 epitaxial GaN / InGaN both grown along $c$), all layers share the **same** $U$.
 The strained $d$-spacing (not the $U$ matrix) encodes the tetragonal distortion.
 
-### 6.3 Stacking direction
+### 6.1 Stacking direction
 
 The stacking direction in the lab frame is
 
@@ -814,7 +895,7 @@ where $\hat{n}_\text{crystal}$ is the growth direction in the crystal frame
 `stacking_direction` when constructing a `LayeredCrystal` from a Laue-indexed
 $U$.
 
-### 6.4 Building $U$ for a general growth plane
+### 6.2 Building $U$ for a general growth plane
 
 `orientation_along_z(zone_axis_crystal, crystal)` and
 `orientation_along_plane(hkl, crystal)` both return a $U$ placing something
@@ -834,7 +915,7 @@ plane indices rather than a zone axis — which is the physically natural way
 to specify an epitaxial growth surface in the first place, since the surface
 *is* parallel to the $(hkl)$ planes, not necessarily to the $[hkl]$ direction.
 
-### 6.5 Adjusting orientation after the fact — `rotate`
+### 6.3 Adjusting orientation after the fact — `rotate`
 
 `LayeredCrystal.rotate(angle_deg, axis, frame='lab', layers=None, inplace=True)`
 nudges one or more layers' `U` by a small rotation without rebuilding the

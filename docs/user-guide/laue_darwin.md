@@ -100,8 +100,7 @@ The Darwin correction reduces it to the physically correct saturation level.
 ## 4. Absorption corrections — two-beam path and overlying layers
 
 In addition to primary extinction, **photoelectric absorption** limits the
-effective depth and attenuates the amplitude from each layer.  Three effects are
-modelled.
+effective depth and attenuates the amplitude from each layer.
 
 ### 4.1 Linear absorption coefficient
 
@@ -115,131 +114,51 @@ $$
 The corresponding maximum number of contributing unit cells is
 $N_\text{abs} = t_\text{abs} / d$.
 
-### 4.2 Two-beam effective depth
+### 4.2 Two-beam depth and overlying-layer attenuation
 
-The incident beam and the diffracted beam both travel obliquely through each
-layer.  The one-beam estimate uses only the incident angle:
+Both the two-beam effective-depth correction (incident *and* diffracted path
+through a layer) and the overlying-layer transmission factor $T_\text{above}$
+(a photon must also cross every shallower layer twice) are geometric
+absorption effects, independent of the Darwin extinction model — they apply
+identically whether the underlying amplitude comes from
+`simulate_laue_stack` or `simulate_laue_darwin`. They are derived once, in
+[Layered Structures §7](laue_layered_structures.md#7-absorption-corrections-two-beam-path-and-overlying-layers).
 
-$$
-N_\text{abs}^\text{1-beam} = \frac{\cos\alpha_\text{in}}{\mu\,d}
-$$
-
-The **two-beam** correction used by the simulation accounts for both legs:
-
-$$
-\boxed{
-N_\text{abs} = \frac{\cos\alpha_\text{in}\,\cos\alpha_\text{out}}
-                     {\mu\,d\;(\cos\alpha_\text{in} + \cos\alpha_\text{out})}
-}
-$$
-
-$$
-\cos\alpha_\text{in}  = |\hat{n}\cdot\hat{x}|, \qquad
-\cos\alpha_\text{out} = |\hat{n}\cdot\hat{k}_f|
-$$
-
-Because $\hat{k}_f$ is spot-specific, this correction is evaluated per spot.
-For a symmetric geometry ($\alpha_\text{in} = \alpha_\text{out}$) the two-beam
-result is exactly half the one-beam value.  For near-grazing exit the reduction
-is much larger.
-
-The combined Darwin + absorption limit becomes
+The only Darwin-specific step is combining that absorption limit with the
+extinction limit from §3: the simulation caps the effective number of
+coherently scattering unit cells at whichever is smaller,
 
 $$
 N_\text{eff}^\text{final} = \min\!\left(N_\text{eff}^\text{Darwin},\; N_\text{abs}\right)
 $$
 
-### 4.3 Overlying-layer attenuation
-
-A photon scattered from a buffer layer must also pass through all **shallower
-layers** (other buffer layers and the MQW block) on the exit path.  Each
-overlying layer of thickness $t_j$ and attenuation coefficient $\mu_j$
-contributes a transmission factor
-
-$$
-T_j = \exp\!\left[
-  -\mu_j\, t_j \left(\frac{1}{\cos\alpha_\text{in}} + \frac{1}{\cos\alpha_\text{out}}\right)
-\right]
-$$
-
-The amplitude from buffer layer $i$ is therefore scaled by
-
-$$
-T_\text{above}^{(i)} = T_\text{MQW} \times \prod_{j > i} T_j
-$$
-
-The product runs over all buffer layers shallower than $i$ and
-$T_\text{MQW}$ is the transmission through the full MQW block.  The total
-buffer structure factor becomes
-
-$$
-F_\text{buf}(\mathbf{G}) = \sum_i T_\text{above}^{(i)}\; F_i^{\text{uc}}\, N_\text{eff,i}\,
-e^{\,i Q_n z_i}
-$$
-
-The MQW block sits at the top of the stack and receives no $T_\text{above}$
-correction.
-
-!!! note
-    Repeating MQW layers have individual thicknesses always much
-    smaller than $t_\text{abs}$, so no absorption depth cap is applied to them.
-    The $T_\text{above}$ overlying-layer factor still modulates the amplitude
-    from deeper buffer layers as described above.
+so a layer can be limited by extinction, by absorption, or by both.
 
 ---
 
 ## 5. Coherent multilayer sum
 
 Like `simulate_laue_stack`, `simulate_laue_darwin` sums all layer amplitudes
-**coherently**.  The coherence preserves superlattice satellites and thickness
-fringes.  For a stack of buffer layers plus $N_\text{rep}$ repetitions of a
-bilayer unit, the total diffracted amplitude is
-
-$$
-F_\text{total}(\mathbf{G}) = F_\text{buffer}(\mathbf{G})
-+ e^{\,i Q_n z_\text{buf}}\, F_\text{unit}(\mathbf{G})\, S_\text{rep}(Q_n \Lambda)
-$$
-
-where
-
-$$
-F_\text{buffer}(\mathbf{G}) = \sum_j F_j^{\text{uc}} N_\text{eff,j}\, e^{\,i Q_n z_j}
-$$
-
-$$
-F_\text{unit}(\mathbf{G}) = \sum_j F_j^{\text{uc}} N_\text{eff,j}\, e^{\,i Q_n z_j^\text{rel}}
-$$
-
-$$
-S_\text{rep}(Q_n \Lambda) =
-\frac{1 - e^{\,i N_\text{rep} Q_n \Lambda}}{1 - e^{\,i Q_n \Lambda}}
-$$
-
-Here $Q_n = \mathbf{G}\cdot\hat{n}$ is the component of the reciprocal-lattice vector
-along the stacking direction $\hat{n}$, $z_j$ is the absolute depth of each layer,
-$z_j^\text{rel}$ is the relative depth within one bilayer period, and $\Lambda$ is the
-bilayer period.
-
-The structure of the sum is identical to the kinematical case in
-`simulate_laue_stack` — the **only difference** is that each layer's $N$ is replaced
-by its Darwin-corrected $N_\text{eff}$.
+**coherently**, preserving superlattice satellites and thickness fringes. The
+sum has exactly the structure derived in
+[Layered Structures §2.2](laue_layered_structures.md#22-full-stack-structure-factor)
+— $F_\text{total} = F_\text{buffer} + e^{iQ_nz_\text{buf}}F_\text{unit}S_\text{rep}(Q_n\Lambda)$
+— with one substitution: every layer's unit-cell count $N$ is replaced by its
+Darwin-corrected $N_\text{eff}$ (§3) wherever it enters $F_\text{buffer}$,
+$F_\text{unit}$, or the per-layer amplitude. Nothing else about the
+kinematical derivation changes.
 
 ---
 
 ## 6. Superlattice satellites in the Darwin model
 
-Satellite peak positions are determined purely by geometry (the Laue condition),
-not by the diffraction model.  `simulate_laue_darwin` therefore probes the same
-satellite wavevectors as `simulate_laue_stack`:
-
-$$
-\mathbf{G}_\text{sat}^{(m)} = \mathbf{G}_{hkl}
-+ \left(|m| + \tfrac{1}{2}\right)\operatorname{sgn}(m)\,
-\frac{2\pi}{t}\,\hat{n}
-$$
-
-for both per-layer thickness fringes ($t = $ layer thickness) and superlattice
-satellites ($t = \Lambda$, only when $N_\text{rep} > 1$).
+Satellite peak positions are determined purely by geometry (the Laue
+condition), not by the diffraction model, so `simulate_laue_darwin` probes
+the exact same satellite wavevectors $\mathbf{G}_\text{sat}^{(m)}$ as
+`simulate_laue_stack` — see
+[Thin-Film Satellites §2](laue_thin_film_satellites.md#2-satellite-positions-in-the-lab-frame)
+for the formula, which covers both per-layer thickness fringes and
+superlattice satellites.
 
 The key difference from `simulate_laue_stack` is in the **amplitude** at each
 satellite $\mathbf{G}_\text{sat}$: the Darwin-corrected $N_\text{eff}$ is

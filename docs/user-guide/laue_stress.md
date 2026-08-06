@@ -25,23 +25,10 @@ where $C_{ijkl}$ is the **fourth-rank elastic stiffness tensor**.
 
 ### What Laue diffraction can and cannot access
 
-White-beam (polychromatic) Laue diffraction measures the **directions** of
-diffracted beams, not their wavelengths.  Spot positions are determined by the
-crystal orientation and the *shape* of the unit cell — how the lattice vectors
-tilt and shear relative to one another.  A uniform scaling of all d-spacings
-(i.e. a purely hydrostatic strain) leaves every spot angle unchanged and is
-therefore **invisible** to Laue.
-
-The full strain tensor decomposes as:
-
-$$
-\boldsymbol{\varepsilon} = \boldsymbol{\varepsilon}_\text{dev}
-  + \underbrace{\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{hydrostatic — unobservable}}
-$$
-
-Only the **deviatoric** part $\boldsymbol{\varepsilon}_\text{dev}$ (traceless,
-five independent components) is reliably determined.  Consequently, the stress
-computed here is the **deviatoric stress**:
+White-beam Laue is sensitive only to the **deviatoric** part of the strain
+tensor, not the hydrostatic (volume-changing) part — see
+[Strain Analysis — the hydrostatic blind spot](laue_strain.md#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot)
+for why. Consequently, the stress computed here is the **deviatoric stress**:
 
 $$
 \boxed{\boldsymbol{\sigma}_\text{dev} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{dev}}
@@ -165,7 +152,7 @@ sig = gmap.stress_voigt(
     grain=gi_merged,   # grain slot index
     cij=None,          # optional explicit (6,6) stiffness matrix in GPa
     frame="crystal",   # "crystal" | "lab" | "sample"
-    sample_tilt_deg=-40.0,
+    sample_tilt_deg=40.0,
     sample_tilt_axis="y",
 )
 # sig shape: (ny, nx, 6)  —  GPa, code ordering [s_xx,s_yy,s_zz,s_xy,s_xz,s_yz]
@@ -185,7 +172,7 @@ true (inaccessible) pressure.
 |---|---|
 | `"crystal"` | Stress components in the crystal coordinate system (same frame as the fitted strain). |
 | `"lab"` | Rotated to the lab frame via $\boldsymbol{\sigma}_\text{lab} = \mathbf{U}\,\boldsymbol{\sigma}_\text{crystal}\,\mathbf{U}^T$. |
-| `"sample"` | Lab frame further rotated by `sample_tilt_deg` about `sample_tilt_axis` (default −40° about $Y$). |
+| `"sample"` | Lab frame further rotated by `sample_tilt_deg` about `sample_tilt_axis` (default +40° about $Y$). |
 
 The transformation between frames follows the standard second-rank tensor
 rotation law.  See [Strain Analysis — Reference frames](laue_strain.md#reference-frames)
@@ -413,26 +400,15 @@ biaxial = (sig[..., 0] - sig[..., 2]) * 1e3   # (σ_xx − σ_zz) in MPa
 
 ### Hydrostatic stress is unconstrained
 
-White-beam Laue diffraction cannot measure the **hydrostatic** part of the
-strain tensor (see [Strain Analysis — Hydrostatic blind spot](laue_strain.md#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot)).
-`stress_voigt` explicitly uses `strain_tensor_deviatoric` (trace exactly zero)
-as input, so the returned stress tensor is purely deviatoric: its trace is zero
-by construction and carries no information about the true hydrostatic pressure.
-
-Concretely:
-
-* **Shear stresses** $\sigma_{xy}$, $\sigma_{xz}$, $\sigma_{yz}$ are the most
-  reliable outputs — they are directly proportional to the corresponding shear
-  strain components, which *are* measurable.
-* **Von Mises stress** is the recommended scalar summary — it is a tensor
-  invariant, physically meaningful, and immune to the missing pressure.
-* **Differences** of normal stresses (e.g. $\sigma_{xx} - \sigma_{zz}$) are
-  reliable — they probe the deviatoric part.
-* **Individual** normal stresses should be read as values relative to an
-  unknown offset $P$ (the true hydrostatic pressure), not as absolute
-  normal stresses.  Do not interpret them as the full Cauchy normal stress
-  unless the hydrostatic component is constrained by an independent measurement
-  (e.g. monochromatic XRD with a calibrated reference).
+`stress_voigt` uses `strain_tensor_deviatoric` (trace exactly zero) as input,
+so the returned stress tensor is purely deviatoric by construction and
+carries no information about the true hydrostatic pressure — see the
+reliability-by-component table in §1 for which quantities that leaves safe to
+interpret directly (shear stresses, stress differences, von Mises) versus
+relative-only (individual normal stresses). Do not read an individual normal
+stress as the full Cauchy normal stress unless the hydrostatic component is
+constrained by an independent measurement (e.g. monochromatic XRD with a
+calibrated reference).
 
 ### Elastic constants must match the crystal frame
 

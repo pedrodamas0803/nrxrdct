@@ -486,15 +486,20 @@ curve, sharpening the cutoff.
 ```python
 # BM32 / ESRF defaults
 BM32_KB = dict(
-    material        = 'Rh',       # Rhodium coating
-    grazing_angle_mrad = 2.5,     # 2.5 mrad ≈ 0.143°
+    material        = 'Ir',       # Iridium coating
+    grazing_angle_mrad = 2.8,     # 2.8 mrad ≈ 0.160°
     n_mirrors       = 2,          # HFM + VFM
     roughness_ang   = 3.0,        # 3 Å RMS roughness
 )
 ```
 
-The Rh $L$-edge is at $\sim 3$ keV (outside the useful range) and the $K$-edge
-at $\sim 23$ keV introduces a small jump in reflectivity near the cutoff.
+Any absorption edge of the coating that falls inside the useful bandpass
+(e.g. an Ir $L$-edge) shows up as a small jump in $R_\text{KB}(E)$ rather than
+a smooth curve; `kb_reflectivity` picks this up automatically through
+`xrayutilities`' tabulated $\delta,\beta$, so it does not need to be hard-coded
+here. The values above are the current `BM32_KB` defaults in
+`nrxrdct.laue.simulation` — check that module directly if you need the exact
+numbers, since beamline mirror coatings and grazing angles do get retuned.
 
 #### 4.4.5 Effective spectral weight
 
@@ -506,14 +511,20 @@ S_\text{eff}(E) = S_\text{source}(E) \times R_\text{KB}(E)
 }
 $$
 
-For BM32 with bending-magnet source ($E_c = 20$ keV), Rh mirrors at 2.5 mrad,
-and a 3 Å roughness, the effective bandpass is approximately **5–22 keV**:
+For BM32 with a bending-magnet source ($E_c = 20$ keV) and the current
+`BM32_KB` defaults (Ir mirrors at 2.8 mrad, 3 Å roughness), the effective
+bandpass is set by the same two competing effects, just at whatever cutoff
+those numbers currently produce:
 
-- Below 5 keV: detector sensitivity drops and the mirror reflectivity is high
-  but the source flux is low.
-- Above ~22 keV: the Rh mirror cutoff ($\theta_c \approx \theta_m$ at ~22 keV
-  for 2.5 mrad) and the exponential tail of the BM spectrum jointly suppress
-  the flux.
+- At low energy: detector sensitivity drops even though the mirror
+  reflectivity is near unity and the source flux is still rising.
+- At high energy: the mirror cutoff ($\theta_c \approx \theta_m$) and the
+  exponential tail of the BM spectrum jointly suppress the flux.
+
+Because $\theta_c$ (and therefore the cutoff energy) depends on both the
+coating material and the grazing angle, re-tuning either one shifts the
+bandpass — call `kb_reflectivity` with the current `BM32_KB` values to get
+the exact numbers rather than assuming a fixed range.
 
 | Contribution | Shape | Controls |
 |---|---|---|
@@ -562,6 +573,21 @@ U = R_z(\varphi_1)\,R_x(\Phi)\,R_z(\varphi_2)
 $$
 
 The columns of $U$ are the crystal basis vectors expressed in lab coordinates.
+This $U_\text{sample}$ describes the crystal relative to the **sample
+surface** frame; `euler_to_U(phi1, Phi, phi2, sample_tilt_deg)` folds in the
+sample-to-lab rotation needed when the surface itself is tilted on the
+diffractometer:
+
+$$
+U = R_y(+\,\text{sample\_tilt\_deg})\,U_\text{sample}
+$$
+
+Positive `sample_tilt_deg` tilts the sample's front edge downward into the
+beam — the standard reflection geometry — and the default **+40°** is what
+every strain/stress reference-frame transform in
+[Strain Analysis](laue_strain.md#reference-frames) and
+[Elastic Stress](laue_stress.md) assumes unless `sample_tilt_deg` is
+overridden.
 
 ### 5.3 `matstarlab` convention
 
@@ -684,19 +710,26 @@ It has 5 independent components (a traceless symmetric $3\times3$ tensor).
 
 ### 8.2 Peak-shift Jacobian
 
-The shift in the $(2\theta, \chi)$ position of spot $hkl$ due to a small
-deviatoric strain $\delta\varepsilon'$ is
+The shift in the detector pixel position of spot $hkl$ due to a small strain
+increment $\delta\varepsilon$ is
 
 $$
-\begin{pmatrix}\delta(2\theta)\\\delta\chi\end{pmatrix}
-= J_{hkl}\,\delta\varepsilon'_\text{Voigt}
+\begin{pmatrix}\delta x_\text{cam}\\\delta y_\text{cam}\end{pmatrix}
+= J_{hkl}\,\delta\varepsilon_\text{Voigt}
 $$
 
-where $J_{hkl}$ is a $2\times5$ Jacobian matrix that depends on $\mathbf{G}_{hkl}$
-and the detector geometry.  With enough spots ($\geq 3$ independent reflections)
-the 5-component deviatoric strain tensor can be extracted by least-squares.
-The function `strain_spot_jacobian` in `nrxrdct.laue` computes $J_{hkl}$
-analytically.
+where $J_{hkl}$ is a $2\times6$ Jacobian evaluated by finite differences over
+all six Voigt strain components. Because a pure hydrostatic strain rescales
+$\lvert\mathbf{G}\rvert$ without changing its direction (§8.1), the isotropic
+combination of columns of $J_{hkl}$ contributes (near-)zero pixel shift — the
+$2\times6$ matrix is only ever rank $\leq 5$ in practice, which is the
+Jacobian expressing the same blind spot derived above rather than a separate
+assumption. With enough spots ($\geq 3$ independent reflections) the
+deviatoric strain can be extracted by least-squares. `strain_spot_jacobian`
+in `nrxrdct.laue` computes $J_{hkl}$ this way; see
+[Strain Analysis](laue_strain.md) for how `fit_strain_orientation` uses the
+same physics in its full nonlinear fitting model, including which strain
+components to hold fixed.
 
 ---
 
@@ -711,3 +744,41 @@ analytically.
 | LP factor (monochromatic, unpolarised) | $LP = (1+\cos^2 2\theta)/(2\sin^2\theta\cos\theta)$ |
 | LP factor (Laue, synchrotron, horizontal pol.) | $LP = \left[1-\sin^2(2\theta)\sin^2\chi\right]\lambda_{hkl}^2/\sin 2\theta$ |
 | BM critical energy (ESRF) | $E_c \approx 0.665\,B[\text{T}]\,(E_e[\text{GeV}])^2\,\text{keV}$ |
+
+---
+
+## References
+
+**Textbooks — general X-ray diffraction**
+
+- Warren, B. E. *X-Ray Diffraction.* Dover Publications, New York, 1990. (Unabridged reprint of the 1969 Addison-Wesley edition.) Chapters 1–4 cover kinematical scattering, the structure factor, systematic absences, and the Lorentz–polarisation factor — the canonical reference for §1–4.
+- Als-Nielsen, J. & McMorrow, D. *Elements of Modern X-ray Physics*, 2nd ed. Wiley, Chichester, 2011. ISBN 978-0-470-97395-0. Chapters 1–3 derive scattering amplitudes, anomalous dispersion, and the Ewald sphere construction.
+- Authier, A. *Dynamical Theory of X-Ray Diffraction.* Oxford University Press, Oxford, 2001. ISBN 978-0-19-855960-2. Chapter 1 reviews the kinematical (Born) limit used throughout `nrxrdct.laue`.
+- Cullity, B. D. & Stock, S. R. *Elements of X-Ray Diffraction*, 3rd ed. Pearson/Prentice Hall, Upper Saddle River NJ, 2001. ISBN 978-0-201-61091-0. A pedagogical introduction to Bragg's law, the reciprocal lattice, and systematic absences.
+- Hammond, C. *The Basics of Crystallography and Diffraction*, 4th ed. Oxford University Press, Oxford, 2015. ISBN 978-0-19-873868-8. Covers direct and reciprocal lattices, Laue and powder methods, and the gnomonic projection (§7.1).
+
+**Synchrotron radiation and source spectra**
+
+- Kim, K.-J. Characteristics of synchrotron radiation. *AIP Conf. Proc.* **184**, 565–632 (1989). DOI: [10.1063/1.38046](https://doi.org/10.1063/1.38046). Derives the on-axis bending-magnet / wiggler spectral flux formula (`spectrum_bm`) used in §4.3.
+- Attwood, D. *Soft X-Rays and Extreme Ultraviolet Radiation.* Cambridge University Press, Cambridge, 1999. ISBN 978-0-521-02997-1. Chapter 5 covers synchrotron radiation characteristics, critical energy, and undulator harmonics.
+
+**KB mirrors and X-ray optics**
+
+- Kirkpatrick, P. & Baez, A. V. Formation of optical images by X-rays. *J. Opt. Soc. Am.* **38**, 766–774 (1948). DOI: [10.1364/JOSA.38.000766](https://doi.org/10.1364/JOSA.38.000766). The original KB mirror geometry (§4.4).
+- Névot, L. & Croce, P. Caractérisation des surfaces par réflexion rasante de rayons X. *Rev. Phys. Appl.* **15**, 761–779 (1980). DOI: [10.1051/rphysap:01980001503076100](https://doi.org/10.1051/rphysap:01980001503076100). Introduces the roughness damping factor used in `kb_reflectivity`.
+- Parratt, L. G. Surface studies of solids by total reflection of X-rays. *Phys. Rev.* **95**, 359–369 (1954). DOI: [10.1103/PhysRev.95.359](https://doi.org/10.1103/PhysRev.95.359). Fresnel reflectivity near the critical angle — the basis of the single-mirror reflectivity calculation.
+
+**White-beam Laue diffraction and LaueTools**
+
+- Robach, O., Micha, J.-S., Ulrich, O. & Gergaud, P. Full local elastic strain tensor from Laue microdiffraction. *J. Appl. Cryst.* **44**, 688–696 (2011). DOI: [10.1107/S0021889811003099](https://doi.org/10.1107/S0021889811003099). Describes the LaueTools framework: frame conventions, detector calibration, and the `matstarlab` orientation representation used throughout `nrxrdct.laue`.
+- Chung, J.-S. & Ice, G. E. Automated indexing for texture and strain measurement with broad-bandpass x-ray microbeams. *J. Appl. Phys.* **86**, 5249–5255 (1999). DOI: [10.1063/1.371507](https://doi.org/10.1063/1.371507). Introduces the inter-spot angle matching strategy for automated Laue indexing (§7.2).
+- Ice, G. E., Budai, J. D. & Pang, J. W. L. The race to X-ray microbeam and nanobeam science. *Science* **334**, 1234–1239 (2011). DOI: [10.1126/science.1202366](https://doi.org/10.1126/science.1202366). Reviews white-beam Laue microdiffraction for strain and orientation mapping.
+
+**Strain analysis from Laue patterns**
+
+- Tamura, N. *et al.* Scanning X-ray microdiffraction with submicrometer white beam for strain/stress and orientation mapping in thin films. *J. Synchrotron Rad.* **10**, 137–143 (2003). DOI: [10.1107/S0909049502021362](https://doi.org/10.1107/S0909049502021362). Describes deviatoric strain determination from Laue peak-shift Jacobians (§8.2) and the insensitivity to hydrostatic strain.
+- Barabash, R. I. & Ice, G. E. (eds.) *Strain and Dislocation Gradients from Diffraction.* Imperial College Press, London, 2014. ISBN 978-1-908979-62-9. Comprehensive treatment of deviatoric vs. hydrostatic strain separation.
+
+**Anomalous scattering (form factors)**
+
+- Henke, B. L., Gullikson, E. M. & Davis, J. C. X-ray interactions: photoabsorption, scattering, transmission, and reflection at E = 50–30,000 eV, Z = 1–92. *At. Data Nucl. Data Tables* **54**, 181–342 (1993). DOI: [10.1006/adnd.1993.1013](https://doi.org/10.1006/adnd.1993.1013). Tabulated $f'(E)$, $f''(E)$ used by xrayutilities and referenced in §1.1 and §4.1.

@@ -836,11 +836,11 @@ to specify an epitaxial growth surface in the first place, since the surface
 
 ### 6.5 Adjusting orientation after the fact — `rotate`
 
-`LayeredCrystal.rotate(angle_deg, axis, frame='lab', layers=None)` nudges one
-or more layers' `U` by a small rotation without rebuilding the stack —
-useful for exploring whether a residual misorientation between measured and
-simulated patterns is explained by a rotation about a specific axis. It
-supports two, differently-composed, conventions:
+`LayeredCrystal.rotate(angle_deg, axis, frame='lab', layers=None, inplace=True)`
+nudges one or more layers' `U` by a small rotation without rebuilding the
+stack — useful for exploring whether a residual misorientation between
+measured and simulated patterns is explained by a rotation about a specific
+axis. It supports two, differently-composed, conventions:
 
 | `frame` | `axis` is expressed in | Applied as | Physical meaning |
 |---|---|---|---|
@@ -851,12 +851,26 @@ Because `frame='crystal'` composes on the right, applying it to several
 layers that already have *different* `U` (e.g. an independently fitted core
 and shell) twists each about *its own* `c`, not about one shared lab
 direction — exactly what you want when probing a possible relative twist
-between them:
+between them.
+
+By default (`inplace=True`) `rotate` mutates this stack's layers directly and
+returns `self`, matching every other stack-building method (`add_layer`,
+`set_U`, ...). Pass `inplace=False` to try a rotation without touching the
+original — it applies the rotation to a `copy()` of the stack instead and
+returns that copy, leaving `stack` completely untouched:
 
 ```python
-# Nudge only the shell by 0.05° about its own c-axis and re-check the fit
-stack.rotate(0.05, [0, 0, 1], frame='crystal', layers='InGaN QW')
+# Try nudging only the shell by 0.05° about its own c-axis, without
+# disturbing the stack you're comparing it against:
+trial = stack.rotate(0.05, [0, 0, 1], frame='crystal',
+                      layers='InGaN QW', inplace=False)
+# stack is unchanged; simulate/compare using `trial` instead.
 ```
+
+`LayeredCrystal.copy()` (used internally by `inplace=False`) is also useful
+standalone — a `dill`-based deep copy (same mechanism as `save`/`load`) whose
+layers are entirely independent objects, so mutating the copy never affects
+the original.
 
 `layers` accepts `None` (every layer, the default), a single `Layer`/label,
 or a list of either — same resolution rule as `print_reflections`. For a

@@ -1577,7 +1577,7 @@ class LayeredCrystal:
                 resolved.append(item)
         return resolved
 
-    def rotate(self, angle_deg, axis, frame: str = "lab", layers=None) -> "LayeredCrystal":
+    def rotate(self, angle_deg, axis, frame: str = "lab", layers=None, inplace: bool = True) -> "LayeredCrystal":
         """
         Rotate one or more layers' orientation matrices by `angle_deg` about
         `axis`, in either the lab frame or each layer's own crystal frame.
@@ -1608,9 +1608,11 @@ class LayeredCrystal:
         consistent with a genuine c-axis twisting moment (rather than a
         fitting artifact) -- e.g. nudging just the shell by a fraction of a
         degree about its own `c` and re-comparing against the measured
-        pattern::
+        pattern, without disturbing the original stack::
 
-            stack.rotate(0.05, [0, 0, 1], frame='crystal', layers='InGaN QW')
+            trial = stack.rotate(0.05, [0, 0, 1], frame='crystal',
+                                  layers='InGaN QW', inplace=False)
+            # stack is untouched; compare trial's simulated pattern instead.
 
         Args:
             angle_deg (float): Rotation angle in degrees (right-hand rule about `axis`).
@@ -1620,9 +1622,16 @@ class LayeredCrystal:
             layers (Layer, str, list, or None, optional): Which layer(s) to rotate. `None` (default) rotates every
                 layer in `self.all_layers`. A single `Layer` object or label
                 string, or a list of either, restricts to those layers.
+            inplace (bool, optional): `True` (default) mutates this stack's layers directly and returns
+                `self` -- matches every other stack-building method
+                (`add_layer`, `set_U`, ...). `False` leaves this stack
+                completely untouched and applies the rotation to a
+                :meth:`copy` instead, returning that copy -- use this to try
+                a rotation without losing the original.
 
         Returns:
-            self  (for method chaining)
+            LayeredCrystal: `self` if `inplace=True` (the default); otherwise a new, independently
+            mutable copy with the rotation applied.
 """
         if frame not in ("lab", "crystal"):
             raise ValueError(f"frame must be 'lab' or 'crystal', got {frame!r}")
@@ -1635,9 +1644,29 @@ class LayeredCrystal:
 
         R = Rotation.from_rotvec(np.radians(float(angle_deg)) * ax).as_matrix()
 
-        for layer in self._resolve_layers(layers):
+        target = self if inplace else self.copy()
+        for layer in target._resolve_layers(layers):
             layer.U = (R @ layer.U) if frame == "lab" else (layer.U @ R)
-        return self
+        return target
+
+    def copy(self) -> "LayeredCrystal":
+        """
+        Return an independent deep copy of this stack -- every layer's
+        material, orientation, thickness, and the block/buffer structure are
+        duplicated, so mutating the copy (e.g. via :meth:`rotate`, `set_U`,
+        or reassigning `layer.U` directly) never affects the original, and
+        vice versa.
+
+        Implemented as a `dill` round-trip (the same mechanism as
+        :meth:`save`/:meth:`load`) rather than `copy.deepcopy`, since it is
+        already proven to correctly duplicate the `xu.materials.Crystal` /
+        `Alloy` objects each layer holds.
+
+        Returns:
+            LayeredCrystal: a new instance, `==` in content but `is not` this stack (nor is any of
+            its layers `is` a layer of this stack).
+"""
+        return dill.loads(dill.dumps(self))
 
     def _update_offsets(self):
         """Recompute cumulative z-offsets for buffer layers and every repeating block."""

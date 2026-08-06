@@ -7293,13 +7293,18 @@ def plot_rod_tangency(
                     continue
                 # Window check stays in raw pixel space (s_vals is the sampled
                 # range); the plotted position uses the *exact* physical ΔQ
-                # for this order (m·2π/period), not s_m/dpix_dalong — that
-                # divides a pixel offset by a slope valid only near m=0, which
-                # silently drifts for higher orders since the pixel↔Q map is
-                # nonlinear (same elastic condition as rod_tangency itself).
+                # for this order, not s_m/dpix_dalong — that divides a pixel
+                # offset by a slope valid only near m=0, which silently
+                # drifts for higher orders since the pixel↔Q map is nonlinear
+                # (same elastic condition as rod_tangency itself). Must use
+                # the same frac(m) convention rod_tangency solved `sat["pix"]`
+                # at, or this line lands next to the marker/feature instead
+                # of on it: integer m for true superlattice peaks, m±0.5 for
+                # a single layer's own (zero-at-integer-m) thickness fringes.
                 s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                 if s_vals[0] <= s_m <= s_vals[-1]:
-                    q_m = m * (2.0 * np.pi / info["period"])
+                    frac_m = float(m) if info["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
+                    q_m = frac_m * (2.0 * np.pi / info["period"])
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
                         q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
@@ -7349,11 +7354,14 @@ def plot_rod_tangency(
                     )
                     if show_profile:
                         # Same fix as the fundamental's satellites above: use the
-                        # harmonic's own exact ΔQ (m·2π/period), not a pixel
-                        # offset rescaled by the fundamental's local dpix_dalong.
+                        # harmonic's own exact ΔQ, not a pixel offset rescaled by
+                        # the fundamental's local dpix_dalong -- and the same
+                        # is_superlattice-dependent frac(m) rod_tangency used to
+                        # solve `sat["pix"]` for *this* harmonic.
                         hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                         if -arrow_neg <= hs_m <= arrow_pos:
-                            hq_m = m * (2.0 * np.pi / hinfo["period"])
+                            hfrac_m = float(m) if hinfo["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
+                            hq_m = hfrac_m * (2.0 * np.pi / hinfo["period"])
                             ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                             ax_profile.text(
                                 hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),

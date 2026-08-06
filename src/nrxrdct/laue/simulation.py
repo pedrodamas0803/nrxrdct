@@ -3713,12 +3713,27 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         max_satellites : int, optional
             `0` (default) — only `pix0`/`E0` (the `m=0` main peak) are
             computed.  Set to `N > 0` to also solve the exact elastic
-            condition at `G0 + m·(2π/Λ)·n_hat` for `m = -N, ..., N` (the
-            same discrete satellite comb `qspace_around_spot` pins), and
-            project each to a pixel — see `'satellites'` below.  `Λ` is
-            `layer`'s own repeating block's period if it belongs to one
-            with `n_rep > 1`, else `layer.thickness`, matching
-            `qspace_around_spot`'s own fallback.
+            condition at each order's *bright* position for `m = -N, ..., N`
+            and project it to a pixel — see `'satellites'` below.  Two
+            different physical cases share this labelling:
+
+            * **`layer` belongs to a repeating block with `n_rep > 1`**
+              (`Λ` = that block's period) — the superlattice geometric
+              factor `S_rep` has true principal maxima at *integer*
+              `Qn·Λ = 2π·m`, so order `m` is probed at exactly
+              `G0 + m·(2π/Λ)·n_hat`. This is the same comb
+              `qspace_around_spot`'s `pin_satellites` pins.
+            * **`layer` is not part of a repeating block** (`Λ` =
+              `layer.thickness`) — a single finite layer's own
+              thickness-interference function is instead exactly *zero* at
+              those same integer positions; the observable bright fringes
+              sit near the half-integer positions `(|m|+½)` in between (see
+              the Thin-Film Satellites theory page). Order `m` is probed at
+              `G0 + (m ± 0.5)·(2π/Λ)·n_hat`, the same convention
+              `simulate_laue_stack` uses for its own candidate spots, so the
+              marked positions line up with what an actual simulated
+              exposure would show. See `'is_superlattice'` below to tell
+              which case applied.
 
     Returns:
     dict with keys:
@@ -3744,10 +3759,16 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         `'on_detector'` : bool — whether `pix0` actually lands on `camera`.
         `'period'` : float or None — the `Λ` (Å) used for the satellite
             comb, or `None` if `max_satellites=0`.
+        `'is_superlattice'` : bool — whether `layer` belongs to a repeating
+            block with `n_rep > 1` (`period` = block period, integer-`m`
+            probing) rather than being treated as an isolated finite layer
+            (`period` = `layer.thickness`, half-integer probing). Always
+            computed, independent of `max_satellites`.
         `'satellites'` : dict `{m: {'pix', 'E', 'on_detector'}}` for
             `m = -max_satellites, ..., max_satellites` (`m=0` duplicates
-            `pix0`/`E0`); `'pix'`/`'E'` are `None` where `m` doesn't
-            satisfy the elastic condition.  Empty when `max_satellites=0`.
+            `pix0`/`E0`); `'pix'`/`'E'` are `None` where the probed position
+            doesn't satisfy the elastic condition.  Empty when
+            `max_satellites=0`.
 
     Example:
     >>> info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam)
@@ -3814,14 +3835,16 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         streak_dir = np.array([1.0, 0.0])
     perp_dir = np.array([-streak_dir[1], streak_dir[0]])
 
+    stack._update_offsets()
+    owning_block = None
+    if layer not in stack.buffer_layers:
+        owning_block = next((blk for blk in stack._blocks if layer in blk.layers), None)
+    is_superlattice = owning_block is not None and owning_block.n_rep > 1 and owning_block._period > 1e-6
+
     period = None
     satellites = {}
     if max_satellites > 0:
-        stack._update_offsets()
-        owning_block = None
-        if layer not in stack.buffer_layers:
-            owning_block = next((blk for blk in stack._blocks if layer in blk.layers), None)
-        if owning_block is not None and owning_block.n_rep > 1 and owning_block._period > 1e-6:
+        if is_superlattice:
             period = float(owning_block._period)
         elif getattr(layer, "thickness", 0.0) > 1e-6:
             period = float(layer.thickness)
@@ -3832,7 +3855,17 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
             if m == 0:
                 satellites[0] = {"pix": (float(pix0[0]), float(pix0[1])), "E": E0, "on_detector": on_det0}
                 continue
-            res_m = _solve(G0 + m * q_fringe * n_hat)
+            # Superlattice satellites (S_rep, owning_block.n_rep > 1) are true
+            # bright peaks at integer m*(2π/Λ) -- probe m directly. A single
+            # (non-repeating) layer's own thickness-interference function is
+            # instead exactly *zero* at integer m*(2π/t); the observable
+            # bright fringes sit near the half-integer positions in between,
+            # same convention simulate_laue_stack uses for its own candidate
+            # spots (see the `frac = m ± 0.5` comment there) -- match it here
+            # so the marked positions line up with what an actual simulated
+            # spot would show.
+            frac = float(m) if is_superlattice else (m + 0.5 if m > 0 else m - 0.5)
+            res_m = _solve(G0 + frac * q_fringe * n_hat)
             satellites[m] = (
                 {"pix": (float(res_m[1][0]), float(res_m[1][1])), "E": res_m[0], "on_detector": res_m[2]}
                 if res_m is not None
@@ -3849,6 +3882,7 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         "dpix_dalong": jac_mag,
         "on_detector": on_det0,
         "period": period,
+        "is_superlattice": is_superlattice,
         "satellites": satellites,
     }
 

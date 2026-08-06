@@ -155,7 +155,7 @@ info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam, max_satell
 # {'hkl': (1, 0, 5), 'layer': 'GaN buffer', 'pix0': (643.8, 354.6),
 #  'E0': 5252.2, 'streak_dir_px': array([0.71, 0.70]),
 #  'perp_dir_px': array([-0.70, 0.71]), 'dpix_dalong': 259.8,
-#  'on_detector': True, 'period': 54000.0,
+#  'on_detector': True, 'period': 54000.0, 'is_superlattice': False,
 #  'satellites': {-3: {...}, ..., 0: {...}, ..., 3: {...}}}
 
 # layer='all' compares the *same* hkl across every layer in the stack —
@@ -186,15 +186,40 @@ fig, ax, infos = plot_rod_tangency(
   instrumental resolution); small ⇒ compact spot, orders likely blended
   together.
 * **`satellites`** (when `max_satellites > 0`) — each layer's own discrete
-  comb of order positions along its streak, at that layer's own period
-  (its own repeating block's period if it belongs to one, else its own
-  thickness) — drawn as small dots along the streak line. Comparing this
-  across layers shows directly whether two layers' satellite combs would
-  overlap, interleave, or sit well apart on the detector.
+  comb of order positions along its streak, drawn as small dots along the
+  streak line. Comparing this across layers shows directly whether two
+  layers' satellite combs would overlap, interleave, or sit well apart on
+  the detector. Order `m` is placed at the *observable bright* position, not
+  a naive `m·(2π/period)` grid — which one that means depends on
+  `is_superlattice`:
+
+    * **`is_superlattice=True`** (`layer` belongs to a repeating block with
+      `n_rep>1`, `period` = that block's period $\Lambda$) — the
+      superlattice geometric factor has true principal maxima at *integer*
+      $m$, so order $m$ sits at exactly $G_0 + m\,(2\pi/\Lambda)\,\hat n$
+      ([Thin-Film Satellites §3](laue_thin_film_satellites.md#3-layered-superlattice-structures)).
+    * **`is_superlattice=False`** (`layer` is not part of a repeating block,
+      `period` = that layer's own physical thickness $t$ — the "GaN buffer"
+      example above) — a single finite layer's thickness-interference
+      function is instead exactly *zero* at those same integer positions;
+      the observable bright fringes sit near the half-integer positions
+      $(|m|+\tfrac12)$ in between
+      ([Thin-Film Satellites §1](laue_thin_film_satellites.md#zeros-between-bragg-peaks)).
+      Order $m$ is placed at $G_0 + (m\pm0.5)\,(2\pi/t)\,\hat n$ — the same
+      convention `simulate_laue_stack` uses for its own candidate spots, so
+      the dots line up with what an actual simulated exposure (or a
+      measured image) would show, rather than sitting on the layer's own
+      dark fringes.
 
 This is pure geometry (no structure factor, no spectrum) — a cheap way to
 screen candidate reflections, or compare layers, before committing to the
-much more expensive tools below.
+much more expensive tools below. The `satellites` positions are therefore an
+*approximate* guide to where bright features should fall (exact for the
+superlattice case; the usual few-percent half-integer approximation — see
+Thin-Film Satellites §1 — for a single layer's own thickness fringes), useful
+directly for overlaying on a measured detector frame via `plot_rod_tangency`'s
+`image=` argument to check candidate reflections against experimental data
+before running a full simulation.
 
 ---
 

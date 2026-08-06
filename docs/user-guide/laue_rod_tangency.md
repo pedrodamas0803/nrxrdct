@@ -173,9 +173,18 @@ fig, ax, infos = plot_rod_tangency(
 # on-detector are skipped with a printed note rather than raising.
 ```
 
-* **`streak_dir_px`** — unit vector, the direction the rod actually traces
-  on the detector (drawn as a coloured line, one colour per layer when
-  comparing several). This is the physically meaningful output.
+* **`streak_dir_px`** — unit vector, the *local* direction the rod traces on
+  the detector at `along=0` (a two-point finite difference of the Jacobian
+  in §2). Since the pixel↔Q map is nonlinear, this is only the rod's tangent
+  at the reflection itself — the true rod generally curves away from that
+  straight line over a non-negligible range. `plot_rod_tangency` therefore
+  does *not* draw a straight segment through `streak_dir_px`: it samples the
+  exact trajectory with `rod_positions(stack, hkl, layer, along=..., camera=...)`
+  (the same per-point elastic-condition solve as `rod_tangency`'s own
+  `satellites`, vectorised over an array of `along` values) for both the
+  overlaid line and the `show_profile` intensity panel, so both track the
+  real curved feature and stay exactly aligned with the satellite dots —
+  and with each other — everywhere, not just near the `m=0` peak.
 * **`perp_dir_px`** — a plain 90°-rotated reference axis (drawn dashed
   only in single-layer mode) for visual scale; the streak's *width* comes
   from off-rod structure-factor decay and instrumental broadening, not

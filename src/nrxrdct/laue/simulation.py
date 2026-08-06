@@ -3887,6 +3887,89 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
     }
 
 
+def rod_positions(stack, hkl, layer=None, *, along, camera, ki_hat=None):
+    """
+    Exact pixel/energy position of a reflection's rod at an array of `along`
+    (ΔQ, Å⁻¹) offsets from `G0 = layer.U @ layer.crystal.Q(*hkl)` along
+    `layer.n_hat` -- the same per-point elastic-condition solve
+    `rod_tangency` uses for `pix0` and its satellite orders, vectorised over
+    `along` instead of evaluated at one or a few discrete points.
+
+    `rod_tangency`'s own `streak_dir_px` is only the *local* (linear)
+    approximation to this at `along=0` -- since the pixel↔Q map is
+    nonlinear, the true rod generally curves away from that straight line as
+    `|along|` grows. Use this function (not `pix0 + along*streak_dir_px`)
+    whenever a plot or fit needs the rod's actual trajectory over a
+    non-negligible range, e.g. to draw a faithful streak overlay or to
+    extract an intensity profile whose sample points and x-axis both stay
+    exact far from `along=0` -- see `plot_rod_tangency`'s `show_profile`.
+
+    Args:
+        stack, hkl, layer, camera, ki_hat: Same meaning as in
+            :func:`rod_tangency`.
+        along : array-like (N,)
+            ΔQ offsets (Å⁻¹) from `G0` along `layer.n_hat`, positive and
+            negative freely mixed (not required to be sorted or symmetric).
+
+    Returns:
+    dict with keys:
+
+        `'along'` : the input array, as float64.
+        `'pix'` : ndarray (N, 2) — `(xcam, ycam)`; `NaN` where that `along`
+            does not satisfy the elastic (backward) condition.
+        `'E'` : ndarray (N,) — energy (eV); `NaN` where unreachable.
+        `'on_detector'` : ndarray (N,) bool — whether `pix` lands on
+            `camera`'s active area (`False`, not just unreachable, also
+            where the elastic condition itself fails).
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if camera is None:
+        raise ValueError("camera is required")
+
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        layer = stack.layers[0]
+    elif isinstance(layer, str):
+        match = next((ly for ly in stack.all_layers if ly.label == layer), None)
+        if match is None:
+            available = [ly.label for ly in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+        layer = match
+
+    h, k, l = (int(x) for x in hkl)
+    G0 = layer.U @ layer.crystal.Q(h, k, l)
+    n_hat = np.asarray(layer.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+
+    along = np.asarray(along, dtype=float)
+    Q = G0[None, :] + along[:, None] * n_hat[None, :]  # (N, 3)
+
+    kdG = Q @ ki
+    Gm2 = np.einsum("ij,ij->i", Q, Q)
+    valid = (kdG < 0) & (Gm2 > 1e-30)
+
+    E = np.full(along.shape, np.nan)
+    pix = np.full((len(along), 2), np.nan)
+    on_det = np.zeros(along.shape, dtype=bool)
+
+    if np.any(valid):
+        lam = -4.0 * np.pi * kdG[valid] / Gm2[valid]
+        E[valid] = HC / lam
+        km = 2.0 * np.pi / lam
+        kf = ki[None, :] * km[:, None] + Q[valid]
+        kf /= np.linalg.norm(kf, axis=1, keepdims=True)
+        p, od = camera.project_batch(kf)
+        pix[valid] = p
+        on_det[valid] = od
+
+    return {"along": along, "pix": pix, "E": E, "on_detector": on_det}
+
+
 def simulate_spot_image(
     stack,
     spots,

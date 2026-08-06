@@ -7084,50 +7084,60 @@ def plot_rod_tangency(
             per-harmonic (with a printed note) if unreachable or
             off-detector; not included in the returned `infos` (those
             stay fundamental-only).
-        arrow_length_px (float or (float, float)): Half-length of the
-            streak-direction line (pixels), and (when `show_profile=True`)
-            the extent of the profile's x-axis. A single number (default
-            `60`) draws/samples symmetrically, `±arrow_length_px` from
-            `pix0`. A `(neg, pos)` tuple draws/samples asymmetrically —
-            `neg` pixels against `streak_dir_px` and `pos` pixels along
-            it — e.g. to extend further toward one satellite order than
-            the other, or to frame a `show_relaxed_buffer` marker that
-            sits off to one side. The perpendicular reference line's
-            half-length is `(neg + pos) / 6`.
+        arrow_length_px (float or (float, float)): Approximate half-length
+            of the streak-direction line (pixels), and (when
+            `show_profile=True`) of the profile's sampled extent. A single
+            number (default `60`) draws/samples symmetrically,
+            `±arrow_length_px` from `pix0`. A `(neg, pos)` tuple
+            draws/samples asymmetrically — `neg` pixels against
+            `streak_dir_px` and `pos` pixels along it — e.g. to extend
+            further toward one satellite order than the other, or to frame
+            a `show_relaxed_buffer` marker that sits off to one side. The
+            perpendicular reference line's half-length is `(neg + pos) / 6`.
+            Internally converted to a `ΔQ` extent via the local
+            `dpix_dalong` at `along=0` and then sampled *exactly* along the
+            true rod (`rod_positions`) — since the pixel↔Q map is generally
+            nonlinear, the drawn line's actual on-detector pixel length can
+            differ somewhat from `arrow_length_px` (this is the trade-off
+            for the line and its satellite dots agreeing everywhere, not
+            just near `along=0`).
         image (ndarray, shape (Nv, Nh), optional): Measured or simulated
             detector frame to show cropped behind the arrows, for context.
             `None` (default) shows a plain dark background.
         pad_px (float): Half-size of the cropped window shown, centred on
             the mean of every plotted layer's `pix0`.
         show_profile (bool): Add a second axis with the intensity
-            extracted from `image` along each layer's own streak direction
-            — a line profile, not just a 2-D overlay.  At each sample
-            point along the rod, `profile_halfwidth_px` pixels are summed
-            on either side *perpendicular* to the streak (i.e. along
-            `perp_dir_px`) via bilinear interpolation
+            extracted from `image` along each layer's own rod — a line
+            profile, not just a 2-D overlay. Sample points are the *exact*
+            rod trajectory (`rod_positions`, not a straight pixel-space line
+            through `streak_dir_px`), so the sampled path tracks a curved
+            rod instead of drifting off it away from `along=0`. At each
+            sample point, `profile_halfwidth_px` pixels are summed on
+            either side *perpendicular* to the local streak direction (i.e.
+            along `perp_dir_px`) via bilinear interpolation
             (`scipy.ndimage.map_coordinates`), so the profile isn't
-            dominated by single-pixel noise.  The x-axis is `ΔQ` (Å⁻¹)
-            along the rod — each layer's own sampled pixel offsets are
-            divided by *that layer's* `dpix_dalong`, so profiles from
-            layers with different tangency (hence different pixel↔Q
-            scaling) are still directly comparable and satellite spacing
-            reads in physical units.  Satellite orders are labelled
-            (`SL0`, `SL±N`) same as the main axis.  The y-axis (intensity)
-            is log-scaled, so weak far orders remain visible alongside the
-            main peak — points with zero/negative summed intensity are
-            simply omitted by matplotlib, not an error.  Requires `image`;
-            requires `ax=None` (a fresh figure is always created, so the
-            two axes can be laid out side by side).
+            dominated by single-pixel noise. The x-axis is the exact `ΔQ`
+            (Å⁻¹) each sample point was solved at — not a linear
+            pixel-offset/`dpix_dalong` rescaling — so it stays correct far
+            from `along=0` and lines up exactly with the satellite markers,
+            which are solved the same way. `dpix_dalong` is only used to
+            pick a sampling range/step from `arrow_length_px`/
+            `profile_step_px` (both given in pixels for convenience); it
+            does not affect where samples actually land. Satellite orders
+            are labelled (`SL0`, `SL±N`) same as the main axis. The y-axis
+            (intensity) is log-scaled, so weak far orders remain visible
+            alongside the main peak — points with zero/negative summed
+            intensity are simply omitted by matplotlib, not an error.
+            Requires `image`; requires `ax=None` (a fresh figure is always
+            created, so the two axes can be laid out side by side).
         profile_halfwidth_px (int): Lateral integration half-width
             (pixels) for `show_profile` — e.g. `3` sums 7 pixels
-            (`-3, ..., +3`) perpendicular to the streak at each point
-            along it.  Unused unless `show_profile=True`.
-        profile_step_px (float): Sampling step (pixels, along the streak
-            direction in pixel space — converted to Å⁻¹ for display, see
-            `show_profile`) for `show_profile`, from `-arrow_length_px[0]`
-            to `+arrow_length_px[1]` (the same extent as the drawn line;
-            symmetric `±arrow_length_px` if a single number was given).
-            Unused unless `show_profile=True`.
+            (`-3, ..., +3`) perpendicular to the local streak direction at
+            each point along the rod. Unused unless `show_profile=True`.
+        profile_step_px (float): Approximate sampling step (pixels, via the
+            local `dpix_dalong` — see `show_profile`) for `show_profile`,
+            over the same extent as `arrow_length_px`. Unused unless
+            `show_profile=True`.
         show_relaxed_buffer (bool): Mark where the *same* `hkl` would fall
             using the shallowest buffer layer's own (relaxed/bulk, since
             `rod_tangency` always evaluates `layer.crystal.Q(h,k,l)` —
@@ -7156,7 +7166,7 @@ def plot_rod_tangency(
         `infos` is a list of `rod_tangency`'s own return dicts, one per
         plotted layer, in the same order as drawn.
     """
-    from .simulation import rod_tangency
+    from .simulation import rod_tangency, rod_positions
 
     if show_profile:
         if image is None:
@@ -7230,10 +7240,23 @@ def plot_rod_tangency(
         streak = info["streak_dir_px"]
         perp = info["perp_dir_px"]
 
+        # The true rod is only a straight line in pixel space to first order
+        # (streak/dpix_dalong are the local Jacobian at along=0); for a
+        # non-negligible extent it generally curves, same as the discrete
+        # satellite dots below (already solved exactly, not off this line).
+        # Sample it exactly with rod_positions instead of drawing the naive
+        # 2-point straight segment, so the line tracks where those dots (and
+        # the profile panel, further below) actually are.
+        jac_mag_i = info["dpix_dalong"]
+        along_neg = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
+        along_pos = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
+        along_line = np.linspace(-along_neg, along_pos, 81)
+        rp_line = rod_positions(stack, hkl, layer=info["layer"], along=along_line, camera=camera, ki_hat=ki_hat)
+        line_pix = rp_line["pix"]
+
         label = f"{info['layer']}  ({info['dpix_dalong']:.1e} px/Å⁻¹)" if multi else "streak direction (d(pixel)/d(along))"
         ax.plot(
-            [px0 - arrow_neg * streak[0], px0 + arrow_pos * streak[0]],
-            [py0 - arrow_neg * streak[1], py0 + arrow_pos * streak[1]],
+            line_pix[:, 0], line_pix[:, 1],
             "-", color=color, lw=2.5, alpha=alpha, solid_capstyle="round", label=label,
         )
         if not multi:
@@ -7266,18 +7289,29 @@ def plot_rod_tangency(
         if show_profile:
             from scipy.ndimage import map_coordinates
 
-            s_vals = np.arange(-arrow_neg, arrow_pos + 0.5 * profile_step_px, profile_step_px)
-            center_pts = np.array([px0, py0])[None, :] + s_vals[:, None] * streak[None, :]
-            profile = np.zeros(len(s_vals))
+            # Sample the image along the *exact* rod trajectory (rod_positions),
+            # not a straight pixel-space line through px0 in the streak
+            # direction — that direction is only the local (along=0) Jacobian,
+            # and the true pixel↔Q map is nonlinear, so a straight line drifts
+            # off the real (generally curved) feature away from the centre.
+            # Using the same `along` (ΔQ) array both to pick the sample points
+            # and as the plotted x-axis (no separate pixel→Q rescaling) keeps
+            # this panel exactly consistent with the satellite markers below,
+            # which are already solved exactly at their own `along` values.
+            along_step = profile_step_px / jac_mag_i if jac_mag_i > 1e-12 else profile_step_px
+            along_neg_p = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
+            along_pos_p = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
+            q_vals = np.arange(-along_neg_p, along_pos_p + 0.5 * along_step, along_step)
+
+            rp_prof = rod_positions(stack, hkl, layer=info["layer"], along=q_vals, camera=camera, ki_hat=ki_hat)
+            center_pts = rp_prof["pix"]  # (N, 2); NaN rows -> gaps in the line/sum below
+
+            profile = np.zeros(len(q_vals))
             for off in range(-profile_halfwidth_px, profile_halfwidth_px + 1):
                 pts = center_pts + off * perp[None, :]
                 coords = np.array([pts[:, 1], pts[:, 0]])  # map_coordinates wants [row, col] = [y, x]
-                profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
-
-            # x-axis in ΔQ (Å⁻¹) along the rod, not raw pixels — each layer has its
-            # own d(pixel)/d(along), so this is what actually makes the axis
-            # comparable across layers with different tangency.
-            q_vals = s_vals / info["dpix_dalong"]
+                with np.errstate(invalid="ignore"):
+                    profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
 
             plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
             ax_profile.plot(q_vals, profile, "-", color=color, lw=1.3, label=plabel)
@@ -7291,20 +7325,14 @@ def plot_rod_tangency(
             for m, sat in info["satellites"].items():
                 if m == 0 or sat["pix"] is None or not sat["on_detector"]:
                     continue
-                # Window check stays in raw pixel space (s_vals is the sampled
-                # range); the plotted position uses the *exact* physical ΔQ
-                # for this order, not s_m/dpix_dalong — that divides a pixel
-                # offset by a slope valid only near m=0, which silently
-                # drifts for higher orders since the pixel↔Q map is nonlinear
-                # (same elastic condition as rod_tangency itself). Must use
-                # the same frac(m) convention rod_tangency solved `sat["pix"]`
-                # at, or this line lands next to the marker/feature instead
-                # of on it: integer m for true superlattice peaks, m±0.5 for
-                # a single layer's own (zero-at-integer-m) thickness fringes.
-                s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
-                if s_vals[0] <= s_m <= s_vals[-1]:
-                    frac_m = float(m) if info["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
-                    q_m = frac_m * (2.0 * np.pi / info["period"])
+                # Same frac(m) rod_tangency solved `sat["pix"]` at: integer m
+                # for true superlattice peaks, m±0.5 for a single layer's own
+                # (zero-at-integer-m) thickness fringes. Window check is now
+                # directly in ΔQ (q_vals' own extent), matching how q_vals
+                # itself was sampled above -- no more pixel/Q unit mixing.
+                frac_m = float(m) if info["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
+                q_m = frac_m * (2.0 * np.pi / info["period"])
+                if q_vals[0] <= q_m <= q_vals[-1]:
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
                         q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),

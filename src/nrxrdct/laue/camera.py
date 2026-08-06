@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import dataclass
 
 import numpy as np
@@ -754,10 +755,13 @@ class Camera:
                 used for the single whole-image blur:
 
             * **float** *(default)*  — fixed width, used directly.
-            * **callable** `f(tth_deg) → float`  — evaluated per spot as a
-              function of 2θ, then averaged across all spots to obtain the
-              single σ used for the whole-image blur.  Pass the `'model'`
-              callable returned by :func:`~nrxrdct.laue.estimate_instrument_broadening`.
+            * **callable** `f(tth_deg) → float` or `f(tth_deg, chi_deg) → float`
+              — evaluated per spot as a function of 2θ (and, if the callable
+              accepts a second positional argument, χ — auto-detected via
+              its signature; requires the `'chi'` key on each spot), then
+              averaged across all spots to obtain the single σ used for the
+              whole-image blur.  Pass the `'model'` callable returned by
+              :func:`~nrxrdct.laue.estimate_instrument_broadening`.
             * **dict** — the full result dict from
               :func:`~nrxrdct.laue.estimate_instrument_broadening`; the
               `'model'` key is extracted automatically and handled as above.
@@ -782,6 +786,13 @@ class Camera:
             _model = None
             _fixed_sigma = float(sigma_pix)
 
+        _model_uses_chi = False
+        if _model is not None:
+            try:
+                _model_uses_chi = len(inspect.signature(_model).parameters) >= 2
+            except (TypeError, ValueError):
+                _model_uses_chi = False
+
         upsample = int(upsample)
         if upsample < 1:
             raise ValueError("upsample must be >= 1")
@@ -794,7 +805,10 @@ class Camera:
             if s.get("pix") is None:
                 continue
 
-            sigma = _model(s["tth"]) if _model is not None else _fixed_sigma
+            if _model is not None:
+                sigma = _model(s["tth"], s["chi"]) if _model_uses_chi else _model(s["tth"])
+            else:
+                sigma = _fixed_sigma
             if not (sigma > 0):
                 continue
 

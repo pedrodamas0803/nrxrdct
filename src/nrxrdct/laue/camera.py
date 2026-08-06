@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 import numpy as np
+import scipy.fft as sp_fft
+import scipy.ndimage as ndi
 
 DD = 85.475  # dd    (mm)
 XCEN = 1040.26  # xcen  (pixels)
@@ -12,6 +14,13 @@ N_PIX_H = 2018  # framedim[0]
 N_PIX_V = 2016  # framedim[1]
 KF_DIRECTION = "Z>0"  # kf_direction from calibration file
 SPOT_SIGMA_PIX = 2
+
+
+def _fft_gauss_convolve(arr: np.ndarray, sigma: float) -> np.ndarray:
+    """FFT-based Gaussian convolution (O(N log N), same kernel as gaussian_background)."""
+    f = sp_fft.fft2(arr, workers=-1)
+    ndi.fourier_gaussian(f, sigma=sigma, output=f)
+    return sp_fft.ifft2(f, workers=-1).real
 
 
 @dataclass
@@ -725,32 +734,42 @@ class Camera:
         noisy = gen.poisson(np.maximum(lam, 0)).astype(np.float32)
         return noisy
 
-    def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=False, normalize=False):
+    def render(self, spots, sigma_pix=SPOT_SIGMA_PIX, log_scale=False, normalize=False, upsample=4):
         """
         Render a synthetic detector image (float32, shape Nv x Nh).
 
-        Each spot is drawn as an isotropic 2-D Gaussian weighted by `I_raw`
-        (the un-normalised kinematical intensity).  By default the image is
-        returned in raw intensity units with no scaling applied.
+        Each spot's raw intensity (`I_raw`) is deposited at its nearest pixel
+        on an *upsampled* grid (`upsample` sub-pixels per detector pixel),
+        which recovers sub-pixel spot placement; the assembled upsampled
+        image is then blurred once with an isotropic Gaussian and binned
+        back down to the native detector resolution.  By default the image
+        is returned in raw intensity units with no scaling applied.
 
         Args:
             spots (list of dicts): Spot list from any `simulate_laue*` function.
                 Required keys: `'pix'` (xcam, ycam), `'I_raw'`.
                 The key `'tth'` (degrees) is required when *sigma_pix* is a
                 callable or a broadening result dict.
-            sigma_pix (float | callable | dict): Controls the Gaussian σ (pixels) for each spot:
+            sigma_pix (float | callable | dict): Controls the Gaussian σ (pixels)
+                used for the single whole-image blur:
 
-            * **float** *(default)*  — fixed width for every spot.
-            * **callable** `f(tth_deg) → float`  — per-spot width as a
-              function of 2θ.  Pass the `'model'` callable returned by
-              :func:`~nrxrdct.laue.estimate_instrument_broadening`.
+            * **float** *(default)*  — fixed width, used directly.
+            * **callable** `f(tth_deg) → float`  — evaluated per spot as a
+              function of 2θ, then averaged across all spots to obtain the
+              single σ used for the whole-image blur.  Pass the `'model'`
+              callable returned by :func:`~nrxrdct.laue.estimate_instrument_broadening`.
             * **dict** — the full result dict from
               :func:`~nrxrdct.laue.estimate_instrument_broadening`; the
-              `'model'` key is extracted automatically.
+              `'model'` key is extracted automatically and handled as above.
 
             log_scale (bool): Apply `log1p` compression before returning (default `False`).
             normalize (bool): Divide by the image maximum after all other processing
                 (default `False`).
+            upsample (int): Sub-pixel refinement factor (default `4`).  Spot
+                positions are binned onto a grid `upsample` times finer than
+                the detector before blurring, then the result is summed back
+                down to native resolution.  `1` disables the sub-pixel
+                refinement (spots snap to the nearest native pixel).
 """
         # Resolve broadening model
         if isinstance(sigma_pix, dict):
@@ -763,7 +782,14 @@ class Camera:
             _model = None
             _fixed_sigma = float(sigma_pix)
 
-        img = np.zeros((self.Nv, self.Nh), dtype=np.float64)
+        upsample = int(upsample)
+        if upsample < 1:
+            raise ValueError("upsample must be >= 1")
+        Nv_up, Nh_up = self.Nv * upsample, self.Nh * upsample
+
+        img_up = np.zeros((Nv_up, Nh_up), dtype=np.float64)
+        sigmas = []
+        rows, cols, weights = [], [], []
         for s in spots:
             if s.get("pix") is None:
                 continue
@@ -773,15 +799,22 @@ class Camera:
                 continue
 
             c, r = s["pix"]  # xcam, ycam
-            ci, ri = int(round(c)), int(round(r))
-            margin = int(5 * sigma) + 1
-            c0, c1 = max(0, ci - margin), min(self.Nh, ci + margin + 1)
-            r0, r1 = max(0, ri - margin), min(self.Nv, ri + margin + 1)
-            if c0 >= c1 or r0 >= r1:
+            ci, ri = int(round(c * upsample)), int(round(r * upsample))
+            if not (0 <= ci < Nh_up and 0 <= ri < Nv_up):
                 continue
-            yy, xx = np.mgrid[r0:r1, c0:c1]
-            gauss = np.exp(-((xx - c) ** 2 + (yy - r) ** 2) / (2 * sigma ** 2))
-            img[r0:r1, c0:c1] += s["I_raw"] * gauss
+
+            sigmas.append(sigma)
+            rows.append(ri)
+            cols.append(ci)
+            weights.append(s["I_raw"])
+
+        if rows:
+            np.add.at(img_up, (rows, cols), weights)
+            sigma_avg = float(np.mean(sigmas))
+            if sigma_avg > 0:
+                img_up = _fft_gauss_convolve(img_up, sigma_avg * upsample)
+
+        img = img_up.reshape(self.Nv, upsample, self.Nh, upsample).sum(axis=(1, 3))
 
         if log_scale:
             img = np.log1p(img)

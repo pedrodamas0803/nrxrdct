@@ -799,6 +799,10 @@ class Camera:
                 continue
 
             c, r = s["pix"]  # xcam, ycam
+            I_raw = s["I_raw"]
+            if not (np.isfinite(c) and np.isfinite(r) and np.isfinite(I_raw)):
+                continue
+
             ci, ri = int(round(c * upsample)), int(round(r * upsample))
             if not (0 <= ci < Nh_up and 0 <= ri < Nv_up):
                 continue
@@ -806,15 +810,16 @@ class Camera:
             sigmas.append(sigma)
             rows.append(ri)
             cols.append(ci)
-            weights.append(s["I_raw"])
+            weights.append(I_raw)
 
         if rows:
             np.add.at(img_up, (rows, cols), weights)
             sigma_avg = float(np.mean(sigmas))
             if sigma_avg > 0:
-                img_up = _fft_gauss_convolve(img_up, sigma_avg * upsample)
+                img_up = np.clip(_fft_gauss_convolve(img_up, sigma_avg * upsample), 0.0, None)
 
         img = img_up.reshape(self.Nv, upsample, self.Nh, upsample).sum(axis=(1, 3))
+        img = np.nan_to_num(img, nan=0.0, posinf=0.0, neginf=0.0)
 
         if log_scale:
             img = np.log1p(img)

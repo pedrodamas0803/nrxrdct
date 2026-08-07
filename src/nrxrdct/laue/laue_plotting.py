@@ -7541,14 +7541,15 @@ def plot_rod_tangency_harmonics(
     profile_step_px=1.0,
     show_relaxed_buffer=False,
     alpha=0.9,
-    panel_size=(3.4, 3.4),
+    figsize=None,
     out_path=None,
 ):
     """
     Small-multiples comparison of a reflection's harmonics — one panel per
     harmonic order `n·hkl` (`n = 1, ..., n_harmonics`), each with its own
-    cropped image, rod overlay, and (when `image` is given) intensity
-    profile, arranged in a grid that wraps after `ncols` columns.
+    cropped image + rod overlay side by side with its own intensity profile
+    (when `image` is given), arranged in a grid that wraps after `ncols`
+    harmonics per row.
 
     `plot_rod_tangency(..., n_harmonics=N)` overlays every harmonic onto one
     shared panel — compact, but colour-coding `N` rods and satellite combs
@@ -7566,28 +7567,42 @@ def plot_rod_tangency_harmonics(
         stack, hkl, layer, camera, ki_hat: Same meaning as
             :func:`~nrxrdct.laue.simulation.rod_tangency`; `layer` must be a
             single layer/label/`None`, not `'all'` or a list.
-        n_harmonics (int): Number of orders to show, `n = 1, ..., n_harmonics`
-            (`n=1` is the fundamental `hkl` itself). Harmonics that are
-            unreachable (elastic condition fails) or land off-detector are
-            skipped with a printed note rather than raising, same as
-            `plot_rod_tangency`'s `n_harmonics` — the panel grid simply has
-            fewer panels than requested in that case.
+        n_harmonics (int or list of int): Either a count — orders
+            `n = 1, ..., n_harmonics` (`n=1` is the fundamental `hkl`
+            itself) — or an explicit list of the specific orders to show,
+            e.g. `[1, 3, 5]`, when you only want a few rather than every
+            consecutive one. Harmonics that are unreachable (elastic
+            condition fails) or land off-detector are skipped with a
+            printed note rather than raising, same as `plot_rod_tangency`'s
+            `n_harmonics` — the panel grid simply has fewer panels than
+            requested in that case.
         max_satellites (int): Forwarded to `rod_tangency` for `n=1`; scaled
             as `max_satellites * 2**(n-1)` for `n > 1`, same reasoning as
             `plot_rod_tangency` (a higher harmonic sits at larger `|Q|`
             where the same physical fringe spacing subtends more orders).
         ncols (int): Panel columns before wrapping to a new row.
-        arrow_length_px, pad_px: Same meaning as in `plot_rod_tangency`,
-            applied independently to every panel (each panel is centred and
-            cropped on *its own* `pix0`, not a shared window).
+        arrow_length_px (float or (float, float)): Sets the `ΔQ` window
+            shown by the *first successfully displayed* harmonic (converted
+            via that harmonic's own `dpix_dalong`, same as
+            `plot_rod_tangency`) — every other panel then shows that exact
+            same `ΔQ` window (not its own, generally larger or smaller, one)
+            so panels are directly comparable in physical units, not just in
+            pixels. Practically: each panel's rod line/profile covers less
+            of its own crop window at higher harmonics, since the same `ΔQ`
+            span maps to fewer pixels there (`dpix_dalong` shrinks with
+            harmonic order) — that shrinkage *is* the comparison.
+        pad_px: Same meaning as in `plot_rod_tangency`, applied independently
+            to every panel (each panel is centred and cropped on *its own*
+            `pix0`, not a shared window) — unlike the `ΔQ` extent, the pixel
+            crop size itself is not forced to match across panels.
         image (ndarray, optional): Measured/simulated detector frame shown
             cropped behind each panel's overlay, and sampled for the profile
             row if `show_profile` ends up `True`. `None` (default) shows a
             plain dark background and skips profiles regardless of
             `show_profile`.
-        show_profile (bool or None): `None` (default) shows a profile row
-            under each image panel when `image` is given, and omits it
-            entirely (rather than empty panels) when `image` is `None`.
+        show_profile (bool or None): `None` (default) shows an intensity
+            profile beside each image panel when `image` is given, and omits
+            it entirely (rather than empty panels) when `image` is `None`.
             Force `True`/`False` to override either way; forcing `True`
             without `image` draws a placeholder "no `image` provided" panel.
         profile_halfwidth_px, profile_step_px: Same meaning as in
@@ -7599,9 +7614,12 @@ def plot_rod_tangency_harmonics(
             same name. No-op if `layer` already *is* that buffer layer.
         alpha (float): Opacity for each panel's streak line and satellite
             markers.
-        panel_size ((float, float)): Approximate `(width, height)` inches
-            per panel; the overall figure scales with `ncols`/`nrows` (and
-            grows taller per panel when `show_profile` is active).
+        figsize ((float, float) or None): Size of the *combined* figure,
+            inches. `None` (default) auto-scales from a fixed per-harmonic
+            panel size and `ncols`/`nrows` (wider per harmonic when
+            `show_profile` is active, since the profile sits beside the
+            image rather than under it); pass an explicit `(width, height)`
+            to override that and fix the overall figure size directly.
         out_path (str or None): Save the combined figure to this path if
             given.
 
@@ -7622,8 +7640,16 @@ def plot_rod_tangency_harmonics(
         )
 
     h0, k0, l0 = (int(x) for x in hkl)
+
+    if isinstance(n_harmonics, (list, tuple, np.ndarray)):
+        harmonic_orders = sorted({int(n) for n in n_harmonics})
+        if any(n < 1 for n in harmonic_orders):
+            raise ValueError(f"n_harmonics list entries must be >= 1, got {n_harmonics}")
+    else:
+        harmonic_orders = list(range(1, int(n_harmonics) + 1))
+
     harmonics = []
-    for n in range(1, n_harmonics + 1):
+    for n in harmonic_orders:
         h_max_sat = max_satellites if n == 1 else max_satellites * (2 ** (n - 1))
         try:
             info = rod_tangency(
@@ -7640,7 +7666,7 @@ def plot_rod_tangency_harmonics(
         harmonics.append(info)
     if not harmonics:
         raise ValueError(
-            f"hkl={(h0, k0, l0)} lands on-detector for none of the {n_harmonics} requested harmonics"
+            f"hkl={(h0, k0, l0)} lands on-detector for none of the requested harmonics {harmonic_orders}"
         )
 
     if show_profile is None:
@@ -7660,20 +7686,42 @@ def plot_rod_tangency_harmonics(
         arrow_neg = arrow_pos = float(arrow_length_px)
     perp_len = (arrow_neg + arrow_pos) / 6.0
 
+    # Shared ΔQ window, fixed by the *first successfully displayed* harmonic
+    # (arrow_length_px converted through *its* dpix_dalong) -- every other
+    # panel is drawn and sampled over this exact same along_neg/along_pos in
+    # Å⁻¹, not its own (generally different) window from its own
+    # dpix_dalong. Without this, panels only agree in pixel extent, and
+    # since dpix_dalong varies a lot with harmonic order, "the same pixel
+    # window" is a different physical Q-window each time -- not actually
+    # comparable. rod_positions works directly in ΔQ, so sharing this range
+    # is just reusing the same along_neg/along_pos for every panel below.
+    ref_jac = harmonics[0]["dpix_dalong"]
+    along_neg = arrow_neg / ref_jac if ref_jac > 1e-12 else arrow_neg
+    along_pos = arrow_pos / ref_jac if ref_jac > 1e-12 else arrow_pos
+
     n_panels = len(harmonics)
     ncols_eff = max(1, min(ncols, n_panels))
     nrows = int(np.ceil(n_panels / ncols_eff))
-    panel_w, panel_h = panel_size
+    panel_w, panel_h = 3.4, 3.4  # fixed per-harmonic auto-scaling unit; override via `figsize`
 
     if show_profile:
-        fig = plt.figure(figsize=(panel_w * ncols_eff, panel_h * 1.55 * nrows), facecolor=BG)
-        gs = mgridspec.GridSpec(
-            nrows * 2, ncols_eff, figure=fig, height_ratios=[3, 1.3] * nrows,
-            hspace=0.7, wspace=0.4, top=0.88,
+        # Image and profile sit side by side per harmonic. Nested GridSpec:
+        # an outer grid of harmonic "slots" (loose spacing, so different
+        # harmonics read as visually separate groups) each split into a
+        # tight inner (image, profile) pair -- a single flat GridSpec with
+        # one wspace applied to every column gap can't distinguish "within a
+        # pair" from "between harmonics", which just reads as uniform,
+        # wasted whitespace everywhere.
+        auto_figsize = (panel_w * 1.55 * ncols_eff, panel_h * nrows)
+        fig = plt.figure(figsize=figsize or auto_figsize, facecolor=BG)
+        outer_gs = mgridspec.GridSpec(
+            nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.45,
+            top=0.85, left=0.04, right=0.98, bottom=0.16,
         )
     else:
-        fig = plt.figure(figsize=(panel_w * ncols_eff, panel_h * nrows), facecolor=BG)
-        gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.35, top=0.85)
+        auto_figsize = (panel_w * ncols_eff, panel_h * nrows)
+        fig = plt.figure(figsize=figsize or auto_figsize, facecolor=BG)
+        outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.35, top=0.85)
 
     fig.suptitle(
         f"hkl={(h0, k0, l0)}  ({harmonics[0]['layer']})  — harmonics n=1..{n_harmonics}",
@@ -7686,8 +7734,15 @@ def plot_rod_tangency_harmonics(
         color = _ROD_TANGENCY_PALETTE[idx % len(_ROD_TANGENCY_PALETTE)]
         hkl_n = info["hkl"]
 
-        ax = fig.add_subplot(gs[2 * row, col] if show_profile else gs[row, col])
-        ax_p = fig.add_subplot(gs[2 * row + 1, col]) if show_profile else None
+        if show_profile:
+            inner_gs = mgridspec.GridSpecFromSubplotSpec(
+                1, 2, subplot_spec=outer_gs[row, col], width_ratios=[1.3, 1], wspace=0.12,
+            )
+            ax = fig.add_subplot(inner_gs[0, 0])
+            ax_p = fig.add_subplot(inner_gs[0, 1])
+        else:
+            ax = fig.add_subplot(outer_gs[row, col])
+            ax_p = None
         _ax_style(ax, "")
         ax.set_xlabel("xcam (px)", color=FG, fontsize=7)
         ax.set_ylabel("ycam (px)", color=FG, fontsize=7)
@@ -7704,9 +7759,10 @@ def plot_rod_tangency_harmonics(
             patch = img_arr[y0:y1, x0:x1]
             ax.imshow(np.log1p(patch), origin="upper", extent=[x0, x1, y1, y0], cmap="gray", aspect="equal")
 
-        # Exact curved rod (same reasoning as plot_rod_tangency's own line).
-        along_neg = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
-        along_pos = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
+        # Exact curved rod (same reasoning as plot_rod_tangency's own line),
+        # sampled over the *shared* along_neg/along_pos (fixed once above
+        # from the first displayed harmonic), not this panel's own -- that's
+        # what makes different harmonics' panels directly comparable.
         along_line = np.linspace(-along_neg, along_pos, 81)
         rp_line = rod_positions(stack, hkl_n, layer=info["layer"], along=along_line, camera=camera, ki_hat=ki_hat)
         line_pix = rp_line["pix"]
@@ -7771,11 +7827,13 @@ def plot_rod_tangency_harmonics(
 
         # Exact rod sampling for the profile, same reasoning as
         # plot_rod_tangency's own show_profile (curved trajectory + exact ΔQ
-        # x-axis, not a straight pixel-space line + linear rescale).
+        # x-axis, not a straight pixel-space line + linear rescale) -- over
+        # the *shared* along_neg/along_pos so every panel's x-axis covers
+        # the same physical ΔQ window. Sampling density (along_step) still
+        # adapts to this panel's own dpix_dalong, so a harmonic whose rod
+        # moves fewer pixels per unit ΔQ isn't over- or under-sampled.
         along_step = profile_step_px / jac_mag_i if jac_mag_i > 1e-12 else profile_step_px
-        along_neg_p = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
-        along_pos_p = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
-        q_vals = np.arange(-along_neg_p, along_pos_p + 0.5 * along_step, along_step)
+        q_vals = np.arange(-along_neg, along_pos + 0.5 * along_step, along_step)
         rp_prof = rod_positions(stack, hkl_n, layer=info["layer"], along=q_vals, camera=camera, ki_hat=ki_hat)
         center_pts = rp_prof["pix"]
         profile = np.zeros(len(q_vals))
@@ -7789,6 +7847,10 @@ def plot_rod_tangency_harmonics(
         ax_p.set_yscale("log")
         ax_p.set_xlabel("ΔQ (Å⁻¹)", color=FG, fontsize=6.5)
         ax_p.axvline(0.0, color=FG, lw=0.6, ls=":", alpha=0.4)
+        ax_p.set_xlim(-along_neg, along_pos)  # enforce identical window across all panels
+        # Y-ticks on the right: the profile sits immediately right of its own
+        # image panel, so left-side tick labels would overlap the image.
+        ax_p.yaxis.tick_right()
 
         for m, sat in info["satellites"].items():
             if sat["pix"] is None or not sat["on_detector"]:
@@ -7804,7 +7866,7 @@ def plot_rod_tangency_harmonics(
                 ax_p.axvline(buf_q, color="#9ca3af", lw=0.6, ls=":", alpha=0.5)
 
     fig.text(
-        0.5, 0.005,
+        0.5, 0.01,
         "+ / SL0 = exact hkl position    ○ = satellite order (label = m)    "
         + ("◇ = relaxed buffer    " if show_relaxed_buffer else "")
         + "dashed = perpendicular reference axis",

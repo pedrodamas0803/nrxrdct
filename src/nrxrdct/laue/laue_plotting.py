@@ -7277,12 +7277,22 @@ def plot_rod_tangency(
             )
 
         for m, sat in info["satellites"].items():
-            if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+            if sat["pix"] is None or not sat["on_detector"]:
+                continue
+            if m == 0 and abs(sat["along"]) < 1e-9:
+                # Coincides with the "SL0"/"+" marker already drawn above
+                # (always true when is_superlattice=False; only true for
+                # is_superlattice=True if G0 happens to be exactly
+                # commensurate with the block period).
                 continue
             sx, sy = sat["pix"]
             ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, alpha=alpha, zorder=4)
+            # m=0 here means "the true comb peak nearest hkl", offset from
+            # the exact-hkl "SL0" marker -- label "0", not "+0", so it isn't
+            # mistaken for the +1 order.
+            mlabel = "0" if m == 0 else f"{m:+d}"
             ax.annotate(
-                f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                mlabel, (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                 color=color, fontsize=7, ha="center", va="center", zorder=6,
             )
 
@@ -7323,19 +7333,21 @@ def plot_rod_tangency(
                     color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                 )
             for m, sat in info["satellites"].items():
-                if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                if sat["pix"] is None or not sat["on_detector"]:
                     continue
-                # Same frac(m) rod_tangency solved `sat["pix"]` at: integer m
-                # for true superlattice peaks, m±0.5 for a single layer's own
-                # (zero-at-integer-m) thickness fringes. Window check is now
-                # directly in ΔQ (q_vals' own extent), matching how q_vals
-                # itself was sampled above -- no more pixel/Q unit mixing.
-                frac_m = float(m) if info["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
-                q_m = frac_m * (2.0 * np.pi / info["period"])
+                if m == 0 and abs(sat["along"]) < 1e-9:
+                    continue  # coincides with "SL0" already drawn at 0.0 above
+                # Use rod_tangency's own exact `along` for this order directly
+                # -- it already accounts for is_superlattice's comb-anchoring
+                # (nearest true tooth, not naively at G0) and the m±0.5
+                # bright-fringe offset for a single layer; recomputing it here
+                # from `m`/`period` alone would silently drop that anchoring.
+                q_m = sat["along"]
+                mlabel = "0" if m == 0 else f"{m:+d}"
                 if q_vals[0] <= q_m <= q_vals[-1]:
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
-                        q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                        q_m, label_y, mlabel, transform=ax_profile.get_xaxis_transform(),
                         color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                     )
 
@@ -7372,27 +7384,35 @@ def plot_rod_tangency(
                             color=hcolor, fontsize=7, ha="center", va="bottom", clip_on=False,
                         )
                 for m, sat in hinfo["satellites"].items():
-                    if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                    if sat["pix"] is None or not sat["on_detector"]:
                         continue
+                    if m == 0 and abs(sat["along"]) < 1e-9:
+                        continue  # coincides with the "n{n}" marker already drawn above
                     sx, sy = sat["pix"]
                     ax.plot(sx, sy, "o", color=hcolor, alpha=0.55, ms=5, mec=BG, mew=0.4, zorder=2)
+                    mlabel = "0" if m == 0 else f"{m:+d}"
                     ax.annotate(
-                        f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                        mlabel, (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                         color=hcolor, alpha=0.85, fontsize=6, ha="center", va="center", zorder=2,
                     )
                     if show_profile:
-                        # Same fix as the fundamental's satellites above: use the
-                        # harmonic's own exact ΔQ, not a pixel offset rescaled by
-                        # the fundamental's local dpix_dalong -- and the same
-                        # is_superlattice-dependent frac(m) rod_tangency used to
-                        # solve `sat["pix"]` for *this* harmonic.
+                        # Window check stays an approximate pixel-space
+                        # projection onto the *fundamental's* streak (placing
+                        # a harmonic's own comb, generally at a different
+                        # absolute Q, onto the fundamental's exact curved-rod
+                        # axis is a harder "nearest point on that curve"
+                        # problem not solved here) -- but the plotted value
+                        # itself is rod_tangency's own exact `along` for this
+                        # harmonic satellite (already correctly comb-anchored
+                        # for is_superlattice=True, same fix as the
+                        # fundamental's satellites above), not a recomputed
+                        # m/period formula that would silently drop that.
                         hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                         if -arrow_neg <= hs_m <= arrow_pos:
-                            hfrac_m = float(m) if hinfo["is_superlattice"] else (m + 0.5 if m > 0 else m - 0.5)
-                            hq_m = hfrac_m * (2.0 * np.pi / hinfo["period"])
+                            hq_m = sat["along"]
                             ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                             ax_profile.text(
-                                hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                                hq_m, label_y, mlabel, transform=ax_profile.get_xaxis_transform(),
                                 color=hcolor, fontsize=6, ha="center", va="bottom", clip_on=False,
                             )
 

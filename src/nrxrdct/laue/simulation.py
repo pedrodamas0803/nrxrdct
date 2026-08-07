@@ -3719,10 +3719,20 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
 
             * **`layer` belongs to a repeating block with `n_rep > 1`**
               (`Λ` = that block's period) — the superlattice geometric
-              factor `S_rep` has true principal maxima at *integer*
-              `Qn·Λ = 2π·m`, so order `m` is probed at exactly
-              `G0 + m·(2π/Λ)·n_hat`. This is the same comb
-              `qspace_around_spot`'s `pin_satellites` pins.
+              factor `S_rep` has true principal maxima on the *absolute*
+              comb `Qn = 2π·ell/Λ` (integer `ell`), which has nothing to do
+              with `hkl` — `G0` only lands on a comb tooth if it happens to
+              be exactly commensurate with `Λ`, which is generally false
+              (e.g. for a strained sublattice, or whenever `Λ` isn't an
+              integer multiple of this `hkl`'s own d-spacing). Order `m` is
+              therefore probed at `G0 + [2π·(ell0+m)/Λ − Gn]·n_hat`, where
+              `ell0 = round(Gn·Λ/2π)` is the comb tooth nearest `G0` and
+              `Gn = G0·n_hat` — the same anchoring
+              `qspace_around_spot`'s `pin_satellites` already uses. Note
+              this means `satellites[0]` is **not** guaranteed to equal
+              `pix0`/`E0` in this case — it is the nearest *true* comb peak,
+              which is generally offset from the exact `hkl` position by a
+              fixed fraction of `2π/Λ`.
             * **`layer` is not part of a repeating block** (`Λ` =
               `layer.thickness`) — a single finite layer's own
               thickness-interference function is instead exactly *zero* at
@@ -3760,15 +3770,19 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
         `'period'` : float or None — the `Λ` (Å) used for the satellite
             comb, or `None` if `max_satellites=0`.
         `'is_superlattice'` : bool — whether `layer` belongs to a repeating
-            block with `n_rep > 1` (`period` = block period, integer-`m`
-            probing) rather than being treated as an isolated finite layer
-            (`period` = `layer.thickness`, half-integer probing). Always
-            computed, independent of `max_satellites`.
-        `'satellites'` : dict `{m: {'pix', 'E', 'on_detector'}}` for
-            `m = -max_satellites, ..., max_satellites` (`m=0` duplicates
-            `pix0`/`E0`); `'pix'`/`'E'` are `None` where the probed position
-            doesn't satisfy the elastic condition.  Empty when
-            `max_satellites=0`.
+            block with `n_rep > 1` (`period` = block period, comb anchored
+            to its nearest true tooth) rather than being treated as an
+            isolated finite layer (`period` = `layer.thickness`, half-integer
+            probing, `m=0` always exactly `along=0`). Always computed,
+            independent of `max_satellites`.
+        `'satellites'` : dict `{m: {'pix', 'E', 'on_detector', 'along'}}`
+            for `m = -max_satellites, ..., max_satellites`. `'along'` is the
+            exact ΔQ (Å⁻¹, along `n_hat` from `G0`) order `m` was solved at —
+            **not** necessarily `m·(2π/period)`, see `max_satellites` above.
+            `m=0` duplicates `pix0`/`E0` when `is_superlattice=False`, but
+            generally does *not* when `is_superlattice=True` (see above).
+            `'pix'`/`'E'` are `None` where the probed position doesn't
+            satisfy the elastic condition. Empty when `max_satellites=0`.
 
     Example:
     >>> info = rod_tangency(stack, (1, 0, 5), layer='GaN buffer', camera=cam)
@@ -3846,30 +3860,58 @@ def rod_tangency(stack, hkl, layer=None, camera=None, *, ki_hat=None, d_along=1e
     if max_satellites > 0:
         if is_superlattice:
             period = float(owning_block._period)
+
+            # S_rep's true principal maxima sit on an *absolute* Q-space
+            # comb, Qn = 2*pi*ell/period for integer ell -- this comb has
+            # nothing to do with any particular hkl, so G0 (this layer's own
+            # reciprocal-lattice point for the requested hkl) only happens to
+            # coincide with a comb tooth if it is exactly commensurate with
+            # `period`, which is not generally true (e.g. G0 for a strained
+            # sublattice, or simply period not being an integer multiple of
+            # this hkl's own d-spacing). Anchor order 0 at the *nearest* true
+            # comb tooth instead of naively at G0, same reasoning
+            # qspace_around_spot's pin_satellites already relies on
+            # (`m_center = round(Gn*Lambda/2pi)`) -- otherwise every labelled
+            # order is offset from the real peaks by the same fixed
+            # fractional-period phase error, which can land arbitrarily close
+            # to the valleys between them (observed: +0.41 of a period for a
+            # worked InGaN/GaN example).
+            Gn = float(G0 @ n_hat)
+            ell0 = round(Gn * period / (2.0 * np.pi))
+
+            def _along(m):
+                return 2.0 * np.pi * (ell0 + m) / period - Gn
         elif getattr(layer, "thickness", 0.0) > 1e-6:
             period = float(layer.thickness)
+            q_fringe = 2.0 * np.pi / period
+
+            # A single (non-repeating) layer's own thickness-interference
+            # function is exactly *zero* at integer m*(2π/t) around its own
+            # G0 -- no commensurability ambiguity here, since G0 is that
+            # layer's own exact reciprocal-lattice point by construction, so
+            # m=0 is unambiguously along=0. The observable bright fringes
+            # sit near the half-integer positions in between, same
+            # convention simulate_laue_stack uses for its own candidate
+            # spots (see the `frac = m ± 0.5` comment there) -- match it
+            # here so the marked positions line up with what an actual
+            # simulated spot would show.
+            def _along(m):
+                return 0.0 if m == 0 else (m + 0.5 if m > 0 else m - 0.5) * q_fringe
         else:
             period = 0.01 * float(np.linalg.norm(G0))
-        q_fringe = 2.0 * np.pi / period
+            q_fringe = 2.0 * np.pi / period
+
+            def _along(m):
+                return 0.0 if m == 0 else (m + 0.5 if m > 0 else m - 0.5) * q_fringe
+
         for m in range(-max_satellites, max_satellites + 1):
-            if m == 0:
-                satellites[0] = {"pix": (float(pix0[0]), float(pix0[1])), "E": E0, "on_detector": on_det0}
-                continue
-            # Superlattice satellites (S_rep, owning_block.n_rep > 1) are true
-            # bright peaks at integer m*(2π/Λ) -- probe m directly. A single
-            # (non-repeating) layer's own thickness-interference function is
-            # instead exactly *zero* at integer m*(2π/t); the observable
-            # bright fringes sit near the half-integer positions in between,
-            # same convention simulate_laue_stack uses for its own candidate
-            # spots (see the `frac = m ± 0.5` comment there) -- match it here
-            # so the marked positions line up with what an actual simulated
-            # spot would show.
-            frac = float(m) if is_superlattice else (m + 0.5 if m > 0 else m - 0.5)
-            res_m = _solve(G0 + frac * q_fringe * n_hat)
+            along_m = _along(m)
+            res_m = _solve(G0 + along_m * n_hat)
             satellites[m] = (
-                {"pix": (float(res_m[1][0]), float(res_m[1][1])), "E": res_m[0], "on_detector": res_m[2]}
+                {"pix": (float(res_m[1][0]), float(res_m[1][1])), "E": res_m[0],
+                 "on_detector": res_m[2], "along": along_m}
                 if res_m is not None
-                else {"pix": None, "E": None, "on_detector": False}
+                else {"pix": None, "E": None, "on_detector": False, "along": along_m}
             )
 
     return {

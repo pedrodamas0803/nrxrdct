@@ -7148,7 +7148,14 @@ def plot_rod_tangency(
             has moved from the unstrained template's position for the
             same nominal reflection.  Skipped (with a note) if that buffer
             layer's own `hkl` is off-detector, and not duplicated if it's
-            already one of the plotted layers.
+            already one of the plotted layers. When `show_profile=True`, also
+            marked (`"buf"`, dotted grey line, same styling as the diamond)
+            on every plotted layer's own profile axis — an *approximate*
+            marker, since the buffer's own rod generally doesn't coincide
+            with a strained layer's rod at all (that's the point of this
+            option), so its pixel position is projected onto each layer's
+            local streak direction rather than given an exact ΔQ, the same
+            approximation used for the harmonic overlay markers.
         alpha (float): Opacity applied to each layer's own streak-direction
             line and satellite-order markers (default `0.85`); harmonics
             already draw at their own fixed, lower alpha regardless of this.
@@ -7234,6 +7241,32 @@ def plot_rod_tangency(
     perp_len = (arrow_neg + arrow_pos) / 6.0
     multi = len(infos) > 1
     peak_points = []
+
+    # Resolved once, up front, so the per-layer loop below can also mark it
+    # on each layer's own profile-panel axis (not just the left/image panel,
+    # where it's drawn further down after the loop).
+    buf_info = None
+    if show_relaxed_buffer:
+        plotted_labels = {info["layer"] for info in infos}
+        if not stack.buffer_layers:
+            print("  plot_rod_tangency: show_relaxed_buffer skipped — stack has no buffer layers")
+        else:
+            buf_layer = stack.buffer_layers[-1]
+            if buf_layer.label in plotted_labels:
+                print(f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                      f"{buf_layer.label!r} is already one of the plotted layers")
+            else:
+                try:
+                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+                except ValueError as e:
+                    print(f"  plot_rod_tangency: show_relaxed_buffer skipped — {e}")
+                if buf_info is not None and not buf_info["on_detector"]:
+                    print(
+                        f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
+                    )
+                    buf_info = None
+
     for i, info in enumerate(infos):
         color = _ROD_TANGENCY_PALETTE[i % len(_ROD_TANGENCY_PALETTE)]
         px0, py0 = info["pix0"]
@@ -7351,6 +7384,24 @@ def plot_rod_tangency(
                         color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                     )
 
+            if buf_info is not None:
+                # Same approximate projection as the harmonic markers below:
+                # the relaxed buffer's own G0 generally sits off *this*
+                # layer's rod entirely (that's the whole point -- showing how
+                # far a strained layer's peak has moved from the unstrained
+                # template), so there is no exact ΔQ "along this rod" for it.
+                # Project its pixel position onto the local streak direction
+                # as a readable approximation, same grey styling as the
+                # left-panel diamond.
+                buf_s = float(np.dot(np.array(buf_info["pix0"]) - np.array([px0, py0]), streak))
+                if -arrow_neg <= buf_s <= arrow_pos:
+                    buf_q = buf_s / jac_mag_i if jac_mag_i > 1e-12 else buf_s
+                    ax_profile.axvline(buf_q, color="#9ca3af", lw=0.8, ls=":", alpha=0.6)
+                    ax_profile.text(
+                        buf_q, label_y, "buf", transform=ax_profile.get_xaxis_transform(),
+                        color="#9ca3af", fontsize=7, ha="center", va="bottom", clip_on=False,
+                    )
+
         if n_harmonics > 1:
             h0, k0, l0 = info["hkl"]
             for n in range(2, n_harmonics + 1):
@@ -7424,32 +7475,12 @@ def plot_rod_tangency(
             label=f"average peak position ({len(peak_points)} peaks)",
         )
 
-    if show_relaxed_buffer:
-        plotted_labels = {info["layer"] for info in infos}
-        if not stack.buffer_layers:
-            print("  plot_rod_tangency: show_relaxed_buffer skipped — stack has no buffer layers")
-        else:
-            buf_layer = stack.buffer_layers[-1]
-            if buf_layer.label in plotted_labels:
-                print(f"  plot_rod_tangency: show_relaxed_buffer skipped — "
-                      f"{buf_layer.label!r} is already one of the plotted layers")
-            else:
-                buf_info = None
-                try:
-                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
-                except ValueError as e:
-                    print(f"  plot_rod_tangency: show_relaxed_buffer skipped — {e}")
-                if buf_info is not None and not buf_info["on_detector"]:
-                    print(
-                        f"  plot_rod_tangency: show_relaxed_buffer skipped — "
-                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
-                    )
-                elif buf_info is not None:
-                    bx, by = buf_info["pix0"]
-                    ax.plot(
-                        bx, by, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
-                        label=f"relaxed buffer ({buf_info['layer']})",
-                    )
+    if buf_info is not None:
+        bx, by = buf_info["pix0"]
+        ax.plot(
+            bx, by, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
+            label=f"relaxed buffer ({buf_info['layer']})",
+        )
 
     ax.set_xlim(cx - pad_px, cx + pad_px)
     ax.set_ylim(cy + pad_px, cy - pad_px)

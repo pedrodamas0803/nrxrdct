@@ -7617,6 +7617,13 @@ def _plot_rod_tangency_multi(
 
     fig.suptitle(suptitle, color=FG, fontsize=10)
 
+    # Image panels are linked via sharex/sharey (matplotlib's native axis
+    # linking): every panel shows the exact same absolute pixel window, set
+    # once from the first (reference) panel below, rather than each panel
+    # independently centring pad_px on its own pix0. Linked axes always stay
+    # in sync -- zooming/panning one moves all of them together too.
+    ref_ax = None
+
     for idx, panel in enumerate(panels):
         info = panel["info"]
         hkl_n = panel["hkl"]
@@ -7627,11 +7634,13 @@ def _plot_rod_tangency_multi(
             inner_gs = mgridspec.GridSpecFromSubplotSpec(
                 1, 2, subplot_spec=outer_gs[row, col], width_ratios=[1.3, 1], wspace=0.12,
             )
-            ax = fig.add_subplot(inner_gs[0, 0])
+            ax = fig.add_subplot(inner_gs[0, 0], sharex=ref_ax, sharey=ref_ax)
             ax_p = fig.add_subplot(inner_gs[0, 1])
         else:
-            ax = fig.add_subplot(outer_gs[row, col])
+            ax = fig.add_subplot(outer_gs[row, col], sharex=ref_ax, sharey=ref_ax)
             ax_p = None
+        if ref_ax is None:
+            ref_ax = ax
         _ax_style(ax, "")
         ax.set_xlabel("xcam (px)", color=FG, fontsize=7)
         ax.set_ylabel("ycam (px)", color=FG, fontsize=7)
@@ -7694,8 +7703,13 @@ def _plot_rod_tangency_multi(
             bx, by = buf_info["pix0"]
             ax.plot(bx, by, "D", color="#9ca3af", ms=7, mfc="none", mew=1.4, zorder=6)
 
-        ax.set_xlim(px0 - pad_px, px0 + pad_px)
-        ax.set_ylim(py0 + pad_px, py0 - pad_px)
+        if ax is ref_ax:
+            # Sets the view for every linked panel at once (sharex/sharey);
+            # only do this once, from the reference panel's own pix0 -- a
+            # later panel's pix0 (generally different) would otherwise just
+            # re-centre the whole shared view on itself.
+            ax.set_xlim(px0 - pad_px, px0 + pad_px)
+            ax.set_ylim(py0 + pad_px, py0 - pad_px)
         ax.set_aspect("equal")
         ax.set_title(panel["title"], color=color, fontsize=8, pad=4)
 

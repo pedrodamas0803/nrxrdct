@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Scanning 3DXRD (s3DXRD) - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Scanning 3DXRD (s3DXRD)";
+        var mkdocs_page_input_path = "user-guide/s3dxrd.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" >XRD-CT</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Scanning 3DXRD (s3DXRD)</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-why-this-exists">1. Why this exists</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#design-notes">Design notes</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-calibration">2. Calibration</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-quick-example">3. Quick example</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-stage-by-stage">4. Stage-by-stage</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#41-segmentation-segment_slice">4.1 Segmentation — segment_slice</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#42-columnfile-assembly-build_columnfile">4.2 Columnfile assembly — build_columnfile</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#43-point-by-point-indexing-index_slice">4.3 Point-by-point indexing — index_slice</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#44-superposing-with-the-powder-reconstruction-combine_with_powder">4.4 Superposing with the powder reconstruction — combine_with_powder</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-see-also">5. See also</a>
+    </li>
+    </ul>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">XRD-CT</li>
+      <li class="breadcrumb-item active">Scanning 3DXRD (s3DXRD)</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/s3dxrd.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="scanning-3dxrd-s3dxrd">Scanning 3DXRD (s3DXRD)<a class="headerlink" href="#scanning-3dxrd-s3dxrd" title="Permanent link">&para;</a></h1>
+<p>This page describes <code>nrxrdct.xrdct.s3dxrd</code>, which recovers a per-voxel
+single-crystal orientation map from the same spotty diffraction images used
+for XRD-CT powder integration, using the scanning-3DXRD (s3DXRD)
+point-by-point method.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: install the optional <code>xrdct</code> extra to get
+<a href="https://github.com/FABLE-3DXRD/ImageD11">ImageD11</a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>xrdct<span class="w">        </span><span class="c1"># with uv</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nrxrdct[xrdct]&quot;</span><span class="w"> </span><span class="c1"># with pip</span>
+</code></pre></div>
+<p>You'll also need an ImageD11 <code>.par</code> parameter file (detector geometry +
+unit cell) — see <a href="#2-calibration">Calibration</a> below if you only have a
+pyFAI <code>.poni</code> file. See <a href="../azimuthal_integration/">Azimuthal Integration</a>
+and <a href="../quickstart/">Quickstart</a> for the powder side of the pipeline this
+module reuses.</p>
+</blockquote>
+<hr />
+<h2 id="1-why-this-exists">1. Why this exists<a class="headerlink" href="#1-why-this-exists" title="Permanent link">&para;</a></h2>
+<p>Azimuthal integration collapses each detector frame into a 1-D powder
+pattern, treating Bragg spots from single-crystal grains as noise to be
+averaged or filtered away (<code>integrate_powder_parallel(..., remove_spots=True)</code>).
+The scanning-3DXRD method reads the <em>same</em> raw frames but does the opposite:
+it segments the Bragg spots and indexes them point-by-point across the
+scanned rotation/translation grid, recovering a single-crystal orientation
+(a UBI matrix) at every pixel of the sample cross-section — the same
+cross-section that <code>nrxrdct.xrdct.reconstruction.reconstruct_slice</code>
+reconstructs from the powder signal.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Raw 2-D frames (same master_file as azimuthal integration)
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    │
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ▼  segment_slice()        — per-frame Bragg-spot centroids
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    │
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    ▼  build_columnfile()     — assemble peaks + diffraction geometry
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    │
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    ▼  index_slice()          — point-by-point indexing (per-pixel UBI)
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    │
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    ▼  combine_with_powder()  — powder slice + orientation map, one file
+</code></pre></div>
+<p>Each stage writes its output to disk, so any step can be re-run
+independently — matching the design of the rest of the XRD-CT pipeline
+(see <a href="../workflow/">Typical Workflow</a>).</p>
+<h3 id="design-notes">Design notes<a class="headerlink" href="#design-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>No <code>ImageD11.sinograms.dataset.DataSet</code>.</strong> ImageD11's own dataset class
+  assumes an ESRF Bliss <code>{dataroot}/{sample}/{sample}_{dset}/...</code> folder
+  layout. This module instead reads the same single <code>master_file</code> +
+  <code>poni</code>/<code>mask</code> convention used by <code>nrxrdct.azimuthal.integration</code>, and
+  drives ImageD11's lower-level segmentation, columnfile, and
+  point-by-point primitives directly.</li>
+<li><strong>No spline/distortion correction.</strong> Peak positions are used as raw pixel
+  coordinates, appropriate for pixel-array detectors such as Eiger.</li>
+<li><strong>Resumable, fault-tolerant segmentation.</strong> <code>segment_slice</code> writes each
+  scan to disk as soon as it's segmented (skip-if-already-done) and
+  isolates per-scan failures instead of aborting the whole slice —
+  matching <code>integrate_powder_parallel</code>.</li>
+<li><strong><code>dty</code> alignment.</strong> Every segmented peak carries its own scan's <code>dty</code>
+  value rather than relying on positional order, so a scan skipped anywhere
+  in the middle of the sequence can't silently misalign the translation
+  axis (<code>assemble_sinogram</code> was fixed to follow the same convention — see
+  <a href="../workflow/">Typical Workflow</a>).</li>
+</ul>
+<hr />
+<h2 id="2-calibration">2. Calibration<a class="headerlink" href="#2-calibration" title="Permanent link">&para;</a></h2>
+<p>Indexing needs an ImageD11 <code>.par</code> file, which is independent of the <code>.poni</code>
+file used for azimuthal integration — the two packages describe detector
+geometry with incompatible conventions (order of rotations vs. distance
+correction, sign conventions, axis ordering).</p>
+<p>If you don't already have an independently-calibrated <code>.par</code> file,
+<code>poni_to_par</code> converts one from your existing <code>.poni</code>, following the
+closed-form conversion documented at
+<a href="https://pyfai.readthedocs.io/en/stable/geometry_conversion.html">pyfai.readthedocs.io/en/stable/geometry_conversion.html</a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">poni_to_par</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">poni_to_par</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="s2">&quot;detector.par&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">cell_params</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="s2">&quot;cell__a&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">&quot;cell__b&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">&quot;cell__c&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">&quot;cell_alpha&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">&quot;cell_beta&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">&quot;cell_gamma&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="s2">&quot;cell_lattice_[P,A,B,C,I,F,R]&quot;</span><span class="p">:</span> <span class="mi">225</span><span class="p">,</span>  <span class="c1"># 225 = F, e.g. FCC</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="p">},</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cell_params</code></td>
+<td><code>None</code></td>
+<td>Unit cell dict (<code>cell__a/b/c</code>, <code>cell_alpha/beta/gamma</code>, <code>cell_lattice_[...]</code>); omit to write geometry only</td>
+</tr>
+<tr>
+<td><code>o11</code>, <code>o12</code>, <code>o21</code>, <code>o22</code></td>
+<td><code>1, 0, 0, -1</code></td>
+<td>Detector flip matrix — pyFAI's documented default for "no additional flip"</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Two things this conversion does <em>not</em> derive from the <code>.poni</code> file:</strong></p>
+<ol>
+<li><strong>The detector flip matrix.</strong> The default is correct <em>if</em> the frames
+   used to calibrate the <code>.poni</code> were read with the same row/column
+   orientation as the frames <code>segment_scan</code> reads — true by construction
+   here, since both read <code>{entry}/measurement/{camera_name}</code> from the same
+   master file. If your <code>.poni</code> came from frames read or transposed
+   differently, override <code>o11</code>/<code>o12</code>/<code>o21</code>/<code>o22</code>.</li>
+<li><strong>Sample/rotation-axis parameters with no PONI equivalent</strong> (<code>chi</code>,
+   <code>wedge</code>, <code>t_x</code>, <code>t_y</code>, <code>t_z</code>) — written as ImageD11 defaults (<code>0.0</code>).</li>
+</ol>
+<p>Always verify the converted <code>.par</code> against a few known reflections before
+trusting it for real indexing — a wrong flip or sign produces
+plausible-looking but incorrect orientations.</p>
+<hr />
+<h2 id="3-quick-example">3. Quick example<a class="headerlink" href="#3-quick-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3DXRDSlice</span><span class="p">,</span> <span class="n">SegmentationOptions</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sl</span> <span class="o">=</span> <span class="n">S3DXRDSlice</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">&quot;mask.edf&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">par_file</span><span class="o">=</span><span class="s2">&quot;detector.par&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;sample1&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">sl</span><span class="o">.</span><span class="n">segment</span><span class="p">(</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="n">SegmentationOptions</span><span class="p">(</span><span class="n">cut</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">pixels_in_spot</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">sl</span><span class="o">.</span><span class="n">build_columnfile</span><span class="p">()</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">sl</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;grains.txt&quot;</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">sl</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;s3dxrd_slice.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="nb">print</span><span class="p">(</span><span class="n">sl</span><span class="p">)</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># S3DXRDSlice(sample=&#39;sample1&#39;, IndexingResult(phase=None, symmetry=&#39;cubic&#39;, indexed 812/1024 pixels))</span>
+</code></pre></div>
+<p><code>sl.indexing.best_ubi</code> is the per-pixel UBI matrix, shape <code>(NI, NJ, 3, 3)</code>
+(NaN where no grain was indexed); <code>sl.indexing.best_nuniq</code> /
+<code>best_npks</code> give the match quality at each pixel.</p>
+<hr />
+<h2 id="4-stage-by-stage">4. Stage-by-stage<a class="headerlink" href="#4-stage-by-stage" title="Permanent link">&para;</a></h2>
+<h3 id="41-segmentation-segment_slice">4.1 Segmentation — <code>segment_slice</code><a class="headerlink" href="#41-segmentation-segment_slice" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">segment_slice</span><span class="p">,</span> <span class="n">SegmentationOptions</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">results</span> <span class="o">=</span> <span class="n">segment_slice</span><span class="p">(</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">output_file</span><span class="o">=</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">&quot;mask.edf&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">options</span><span class="o">=</span><span class="n">SegmentationOptions</span><span class="p">(</span><span class="n">cut</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">howmany</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span> <span class="n">pixels_in_spot</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">camera_name</span><span class="o">=</span><span class="s2">&quot;eiger&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">translation_motor</span><span class="o">=</span><span class="s2">&quot;dty&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">rotation_motor</span><span class="o">=</span><span class="s2">&quot;rot&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
+</code></pre></div>
+<p>Reads the same raw frames as <code>integrate_powder_parallel</code>, but segments
+Bragg-spot peaks (via ImageD11's connected-pixel labelling and moment
+centroids) instead of azimuthally averaging them away. Each scan is
+written to <code>output_file</code> under <code>segmented/scan_XXXX</code> as soon as it's
+segmented; a scan already present is skipped, and a scan that fails to
+read or segment is skipped with a warning rather than aborting the run.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cut</code></td>
+<td><code>1.0</code></td>
+<td>Minimum pixel intensity kept on first pass</td>
+</tr>
+<tr>
+<td><code>howmany</code></td>
+<td><code>100000</code></td>
+<td>Maximum pixels kept per frame</td>
+</tr>
+<tr>
+<td><code>pixels_in_spot</code></td>
+<td><code>3</code></td>
+<td>Minimum connected-pixel count for a Bragg spot</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-columnfile-assembly-build_columnfile">4.2 Columnfile assembly — <code>build_columnfile</code><a class="headerlink" href="#42-columnfile-assembly-build_columnfile" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_columnfile</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">colf</span> <span class="o">=</span> <span class="n">build_columnfile</span><span class="p">(</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span> <span class="n">par_file</span><span class="o">=</span><span class="s2">&quot;detector.par&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># colf.tth, colf.eta, colf.ds, colf.gx/gy/gz now available</span>
+</code></pre></div>
+<p>Assembles all segmented peaks across the slice into a single ImageD11
+columnfile and computes full diffraction geometry (2θ, η, d-spacing,
+g-vectors) via the supplied <code>.par</code> file.</p>
+<h3 id="43-point-by-point-indexing-index_slice">4.3 Point-by-point indexing — <code>index_slice</code><a class="headerlink" href="#43-point-by-point-indexing-index_slice" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">index_slice</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">index_slice</span><span class="p">(</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">colf</span><span class="p">,</span> <span class="s2">&quot;detector.par&quot;</span><span class="p">,</span> <span class="s2">&quot;grains.txt&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span> <span class="n">hkl_tol</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">gridstep</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">)</span>
+</code></pre></div>
+<p>For every <code>(i, j)</code> pixel of the sample cross-section, finds the
+single-crystal orientation(s) consistent with the Bragg peaks whose
+sinusoidal trajectory in <code>(omega, dty)</code> space passes through it — the
+scanning-3DXRD method (Henningsson &amp; Hall).</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>symmetry</code></td>
+<td><code>"cubic"</code></td>
+<td>Crystal symmetry</td>
+</tr>
+<tr>
+<td><code>hkl_tol</code></td>
+<td><code>0.05</code></td>
+<td>HKL matching tolerance</td>
+</tr>
+<tr>
+<td><code>ds_tol</code></td>
+<td><code>0.005</code></td>
+<td>d-spacing tolerance for ring assignment</td>
+</tr>
+<tr>
+<td><code>gmax</code></td>
+<td><code>5</code></td>
+<td>Max candidate grains kept per pixel</td>
+</tr>
+<tr>
+<td><code>gridstep</code></td>
+<td><code>1</code></td>
+<td>Sampling step of the <code>(i, j)</code> grid</td>
+</tr>
+<tr>
+<td><code>n_procs</code></td>
+<td>all cores</td>
+<td>Worker processes for indexing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-superposing-with-the-powder-reconstruction-combine_with_powder">4.4 Superposing with the powder reconstruction — <code>combine_with_powder</code><a class="headerlink" href="#44-superposing-with-the-powder-reconstruction-combine_with_powder" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">combine_with_powder</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">combine_with_powder</span><span class="p">(</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;s3dxrd_slice.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">reconstruction_file</span><span class="o">=</span><span class="s2">&quot;reconstruction.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">tth_index</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">pixel_size_mm</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>Copies the powder (ASTRA) reconstruction of one 2θ channel into the same
+HDF5 file as the s3DXRD orientation map, under <code>powder/</code> and <code>s3dxrd/</code>
+respectively — so the powder background and single-crystal grain map for
+the same slice live side by side in one file.</p>
+<hr />
+<h2 id="5-see-also">5. See also<a class="headerlink" href="#5-see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../azimuthal_integration/">Azimuthal Integration</a> — the powder side of
+  the pipeline, reading the same raw frames.</li>
+<li><a href="../workflow/">Typical Workflow</a> — sinogram assembly and tomographic
+  reconstruction of the powder signal.</li>
+<li><a href="../../api/s3dxrd/">API reference</a> for the full function/class docstrings.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../gpu/" class="btn btn-neutral float-left" title="GPU Support"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_theory/" class="btn btn-neutral float-right" title="Diffraction and Laue Theory">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../gpu/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_theory/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

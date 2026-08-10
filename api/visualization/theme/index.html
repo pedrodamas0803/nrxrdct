@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../../img/favicon.ico" />
+    <title>theme - nrxrdct</title>
+    <link rel="stylesheet" href="../../../css/theme.css" />
+    <link rel="stylesheet" href="../../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "theme";
+        var mkdocs_page_input_path = "api/visualization/theme.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../../utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >visualization</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">theme</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.visualization.theme">theme</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.visualization.theme.switch_to_dark_mode">switch_to_dark_mode</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.visualization.theme.switch_to_light_mode">switch_to_light_mode</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../texture/slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">visualization</li>
+      <li class="breadcrumb-item active">theme</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/visualization/theme.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="theme">theme<a class="headerlink" href="#theme" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="nrxrdct.visualization.theme" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.visualization.theme</span>
+
+
+<a href="#nrxrdct.visualization.theme" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Global light/dark theme switch for nrxrdct's visualization tools.</p>
+<p>The interactive widgets in this package (:class:<code>~nrxrdct.visualization.StackViewer</code>,
+:class:<code>~nrxrdct.visualization.ZProfilePlot</code>, the napari/Jupyter profile
+viewers) default to a dark theme suited to on-screen exploration. Call
+:func:<code>switch_to_light_mode</code> before generating figures intended for a
+publication, report, or slide deck.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.visualization.theme.switch_to_dark_mode" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">switch_to_dark_mode</span>
+
+
+<a href="#nrxrdct.visualization.theme.switch_to_dark_mode" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">switch_to_dark_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Switch matplotlib and nrxrdct's visualization widgets back to the
+default dark theme used for interactive exploration.</p>
+<p>See :func:<code>switch_to_light_mode</code> for details on scope and timing.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/visualization/theme.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">switch_to_dark_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Switch matplotlib and nrxrdct&#39;s visualization widgets back to the</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    default dark theme used for interactive exploration.</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">    See :func:`switch_to_light_mode` for details on scope and timing.</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_DARK_RC</span><span class="p">)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">&quot;dark&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.visualization.theme.switch_to_light_mode" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">switch_to_light_mode</span>
+
+
+<a href="#nrxrdct.visualization.theme.switch_to_light_mode" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">switch_to_light_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Switch matplotlib and nrxrdct's visualization widgets to a light theme.</p>
+<p>Updates <code>matplotlib.pyplot.rcParams</code> — so plain <code>plt.subplots()</code>-based
+plots (e.g. :func:<code>~nrxrdct.visualization.plot_integrated_cake</code>,
+:func:<code>~nrxrdct.visualization.plot_labeled_image</code>, or your own notebook
+cells) render on a white background — and the internal palette used by
+:class:<code>~nrxrdct.visualization.StackViewer</code> and the napari/Jupyter
+profile viewers.</p>
+<p>Only figures created <em>after</em> calling this pick up the new theme; it does
+not repaint widgets that are already displayed.</p>
+
+
+<details class="example" open>
+  <summary>Example</summary>
+  <blockquote>
+<blockquote>
+<blockquote>
+<p>from nrxrdct.visualization import switch_to_light_mode, StackViewer
+switch_to_light_mode()
+viewer = StackViewer(volume)  # renders light, ready for a figure export</p>
+</blockquote>
+</blockquote>
+</blockquote>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/visualization/theme.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="k">def</span><span class="w"> </span><span class="nf">switch_to_light_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    Switch matplotlib and nrxrdct&#39;s visualization widgets to a light theme.</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    Updates ``matplotlib.pyplot.rcParams`` — so plain ``plt.subplots()``-based</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">    plots (e.g. :func:`~nrxrdct.visualization.plot_integrated_cake`,</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">    :func:`~nrxrdct.visualization.plot_labeled_image`, or your own notebook</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    cells) render on a white background — and the internal palette used by</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    :class:`~nrxrdct.visualization.StackViewer` and the napari/Jupyter</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    profile viewers.</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">    Only figures created *after* calling this pick up the new theme; it does</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    not repaint widgets that are already displayed.</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">    Example:</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        &gt;&gt;&gt; from nrxrdct.visualization import switch_to_light_mode, StackViewer</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">        &gt;&gt;&gt; switch_to_light_mode()</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        &gt;&gt;&gt; viewer = StackViewer(volume)  # renders light, ready for a figure export</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_LIGHT_RC</span><span class="p">)</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">&quot;light&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../image_plots/" class="btn btn-neutral float-left" title="image_plots"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../../refinement/" class="btn btn-neutral float-right" title="refinement">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../image_plots/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../../refinement/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../../..";</script>
+    <script src="../../../js/theme_extra.js"></script>
+    <script src="../../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Workflow - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Workflow";
+        var mkdocs_page_input_path = "user-guide/texture_tomography.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Texture Tomography</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Workflow</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-why-this-exists">1. Why this exists</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#design-notes">Design notes</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-quick-example">2. Quick example</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-stage-by-stage">3. Stage-by-stage</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#31-pole-figure-extraction-nrxrdcttextureodf">3.1 Pole-figure extraction — nrxrdct.texture.odf</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#32-hpc-distribution-nrxrdcttextureslurm_pole_figures">3.2 HPC distribution — nrxrdct.texture.slurm_pole_figures</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#33-odf-inversion-nrxrdcttextureodf_inversion">3.3 ODF inversion — nrxrdct.texture.odf_inversion</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#34-plotting-qa-nrxrdcttexturetexture_plotting">3.4 Plotting / QA — nrxrdct.texture.texture_plotting</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-see-also">4. See also</a>
+    </li>
+    </ul>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Texture Tomography</li>
+      <li class="breadcrumb-item active">Workflow</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/texture_tomography.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="texture-tomography">Texture tomography<a class="headerlink" href="#texture-tomography" title="Permanent link">&para;</a></h1>
+<p>This page describes <code>nrxrdct.texture</code>, which extracts pole-figure data from
+the same diffraction images used by the XRD-CT pipeline and inverts it into
+an orientation distribution function (ODF), instead of the scalar
+density/phase maps <code>nrxrdct.xrdct</code> produces.</p>
+<blockquote>
+<p><strong>Prerequisite</strong>: see <a href="../texture_theory/">Texture Tomography Theory</a> for
+the pole-figure/ODF background, the diffraction-geometry derivation, and —
+importantly — the coverage and uniqueness caveats referenced throughout
+this page. See <a href="../azimuthal_integration/">Azimuthal Integration</a> and
+<a href="../quickstart/">Quickstart</a> for the powder side of the pipeline this
+module reuses.</p>
+</blockquote>
+<hr />
+<h2 id="1-why-this-exists">1. Why this exists<a class="headerlink" href="#1-why-this-exists" title="Permanent link">&para;</a></h2>
+<p>Azimuthal integration collapses each detector frame into a 1-D powder
+pattern; scanning-3DXRD (<a href="../s3dxrd/">s3DXRD</a>) segments and indexes Bragg
+spots grain-by-grain. Texture tomography sits between the two: it reads the
+same raw frames but, for one or more chosen <code>hkl</code> rings, keeps the
+<strong>azimuthal (χ) intensity distribution</strong> around the ring instead of either
+averaging it away or indexing individual spots — the raw material a pole
+figure (and, from several pole figures, an ODF) is built from.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Raw 2-D frames (same master_file as azimuthal integration / s3dxrd)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ▼  assemble_pole_figure_data() / nrxrdct.texture.slurm_pole_figures  — per-frame ring extraction
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │                                                                       -&gt; pole_figures/&lt;hkl&gt;/scan_XXXX
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    ▼  assemble_pole_figure_sinogram()  — stack into (n_chi, n_lines, n_rot) sinogram
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    ▼  load_pole_figures()              — convert to (alpha, beta, intensity) pole-figure points
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    ▼  compute_odf()                    — WIMV inversion -&gt; discretised ODF
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ▼  plot_pole_figure() / plot_pole_figure_comparison()  — visualise / QA the fit
+</code></pre></div>
+<p>Each stage writes/returns data independently, matching the rest of the
+XRD-CT pipeline (see <a href="../workflow/">Typical Workflow</a>).</p>
+<h3 id="design-notes">Design notes<a class="headerlink" href="#design-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Bulk / per-line only.</strong> Every ODF <code>compute_odf</code> produces aggregates (or,
+  with <code>line_index</code> set, uses one line of) the <em>entire</em> beam path through
+  the sample — it is not a per-voxel reconstruction. See
+  <a href="../texture_theory/#6-beyond-bulk-per-voxel-reconstruction-experimental-not-shipped">Theory §6</a>
+  for why per-voxel reconstruction is a substantially harder, unsolved
+  problem in this package.</li>
+<li><strong>Incomplete pole-figure coverage by construction.</strong> The single vertical
+  rotation axis (no tilt) only ever sweeps a <em>curve</em> on the pole sphere per
+  <code>hkl</code>, not a full hemisphere — combine several <code>hkl</code> rings to build up
+  coverage. See <a href="../texture_theory/#5-coverage-why-wimv-not-the-harmonic-method">Theory §5</a>.</li>
+<li><strong>χ = 0 direction needs calibration.</strong> <code>pole_figure_coordinates</code> assumes χ
+  is measured from the vertical detector axis; verify against your own setup
+  via <code>chi_offset_deg</code>/<code>chi_sign</code> — pyFAI's own default was empirically
+  found to differ from this assumption. See
+  <a href="../texture_theory/#calibration-where-is-χ--0">Theory §3</a>.</li>
+<li><strong>Hemisphere folding defaults off.</strong> <code>compute_odf</code>'s <code>fold_hemisphere</code>
+  parameter defaults to <code>False</code> because folding was found, during
+  development, to occasionally converge to a ~180°-misoriented "ghost"
+  solution instead of the true orientation. See
+  <a href="../texture_theory/#4-friedels-law-and-the-ghost-ambiguity">Theory §4</a>.</li>
+</ul>
+<hr />
+<h2 id="2-quick-example">2. Quick example<a class="headerlink" href="#2-quick-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.texture</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">assemble_pole_figure_data</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">load_pole_figures</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">compute_odf</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">plot_pole_figure_comparison</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">recalculate_pole_figure</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">master_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/sample_master.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">poni_file</span>   <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/detector.poni&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">mask_file</span>   <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/mask.edf&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/pole_figures.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># 1. Extract pole-figure data for each hkl ring you want (repeat per hkl;</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1">#    or submit via nrxrdct.texture.slurm_pole_figures for a full dataset)</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">rings</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;111&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">),</span> <span class="s2">&quot;200&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">),</span> <span class="s2">&quot;220&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">11.0</span><span class="p">,</span> <span class="mf">13.0</span><span class="p">)}</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">tth_range</span> <span class="ow">in</span> <span class="n">rings</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">assemble_pole_figure_data</span><span class="p">(</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>        <span class="n">master_file</span><span class="o">=</span><span class="n">master_file</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">,</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>        <span class="n">poni_file</span><span class="o">=</span><span class="n">poni_file</span><span class="p">,</span> <span class="n">mask_file</span><span class="o">=</span><span class="n">mask_file</span><span class="p">,</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>        <span class="n">tth_range</span><span class="o">=</span><span class="n">tth_range</span><span class="p">,</span> <span class="n">hkl_label</span><span class="o">=</span><span class="n">hkl</span><span class="p">,</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="p">)</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="c1"># 2. Convert the merged file into compute_odf&#39;s input format</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="n">pole_figures</span> <span class="o">=</span> <span class="n">load_pole_figures</span><span class="p">(</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="n">pole_figure_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">,</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="n">hkl_labels</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">rings</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="n">n_rot</span><span class="o">=</span><span class="mi">901</span><span class="p">,</span>          <span class="c1"># rotation steps per scan line</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    <span class="n">line_index</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>    <span class="c1"># None = aggregate all lines into one bulk pole figure</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="p">)</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="c1"># 3. Crystal directions (cubic example: normalised [h,k,l])</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="n">crystal_directions</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    <span class="s2">&quot;111&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    <span class="s2">&quot;200&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]),</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="s2">&quot;220&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="p">}</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="c1"># 4. Invert to an ODF</span>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="n">result</span> <span class="o">=</span> <span class="n">compute_odf</span><span class="p">(</span><span class="n">pole_figures</span><span class="p">,</span> <span class="n">crystal_directions</span><span class="p">,</span> <span class="n">step_deg</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">n_iter</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="c1"># 5. QA: compare measured vs. recalculated pole figure for one hkl</span>
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">measured</span> <span class="o">=</span> <span class="n">pole_figures</span><span class="p">[</span><span class="s2">&quot;111&quot;</span><span class="p">]</span>
+<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="n">recalculated</span> <span class="o">=</span> <span class="n">recalculate_pole_figure</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">crystal_directions</span><span class="p">[</span><span class="s2">&quot;111&quot;</span><span class="p">],</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
+<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="n">plot_pole_figure_comparison</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">measured</span><span class="p">,</span> <span class="n">recalculated</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;111 pole figure&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="3-stage-by-stage">3. Stage-by-stage<a class="headerlink" href="#3-stage-by-stage" title="Permanent link">&para;</a></h2>
+<h3 id="31-pole-figure-extraction-nrxrdcttextureodf">3.1 Pole-figure extraction — <code>nrxrdct.texture.odf</code><a class="headerlink" href="#31-pole-figure-extraction-nrxrdcttextureodf" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.texture</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_ring_intensity</span><span class="p">,</span> <span class="n">assemble_pole_figure_data</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">assemble_pole_figure_data</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="n">master_file</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="n">poni_file</span><span class="p">,</span> <span class="n">mask_file</span><span class="o">=</span><span class="n">mask_file</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">tth_range</span><span class="o">=</span><span class="p">(</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">),</span> <span class="n">hkl_label</span><span class="o">=</span><span class="s2">&quot;111&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">background_ranges</span><span class="o">=</span><span class="p">((</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.8</span><span class="p">),</span> <span class="p">(</span><span class="mf">6.2</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">)),</span>  <span class="c1"># optional flanking-window background subtraction</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>Mirrors <code>nrxrdct.azimuthal.integration.integrate_powder_parallel</code> (same
+master-file layout, entry validation) but cake-integrates each frame and
+reduces it to an azimuthal (χ) intensity profile via
+<code>extract_ring_intensity</code>, instead of a 1-D powder pattern. Results are
+appended to <code>output_file</code> under <code>pole_figures/&lt;hkl_label&gt;/scan_XXXX</code>; a
+partially-completed run resumes automatically (scans already present are
+skipped).</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tth_range</code></td>
+<td>required</td>
+<td><code>(low, high)</code> 2θ window bracketing the <code>hkl</code> ring</td>
+</tr>
+<tr>
+<td><code>hkl_label</code></td>
+<td>required</td>
+<td>Ring identifier, used as an HDF5 group name</td>
+</tr>
+<tr>
+<td><code>background_ranges</code></td>
+<td><code>None</code></td>
+<td>Flanking 2θ windows for background subtraction</td>
+</tr>
+<tr>
+<td><code>npt_azim</code></td>
+<td><code>360</code></td>
+<td>Number of azimuthal (χ) bins</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-hpc-distribution-nrxrdcttextureslurm_pole_figures">3.2 HPC distribution — <code>nrxrdct.texture.slurm_pole_figures</code><a class="headerlink" href="#32-hpc-distribution-nrxrdcttextureslurm_pole_figures" title="Permanent link">&para;</a></h3>
+<p>For a full dataset, <code>assemble_pole_figure_data</code> is too slow to run on one
+machine — distribute it across SLURM the same way as the powder pipeline
+(see <a href="../slurm/">SLURM / HPC Integration</a>). Unlike the single-hkl
+<code>assemble_pole_figure_data</code> above, <code>launch()</code> accepts <strong>any number of hkls
+in one call</strong> — each worker cake-integrates every frame once and extracts
+every requested ring from that single cake, so extracting several hkls costs
+one pass over the raw frames, not one pass per hkl:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.texture.slurm_pole_figures</span><span class="w"> </span><span class="kn">import</span> <span class="n">launch</span><span class="p">,</span> <span class="n">monitor</span><span class="p">,</span> <span class="n">merge</span><span class="p">,</span> <span class="n">check</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">launch</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="n">master_file</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">poni_file</span><span class="o">=</span><span class="n">poni_file</span><span class="p">,</span> <span class="n">mask_file</span><span class="o">=</span><span class="n">mask_file</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">hkls</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;111&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">),</span> <span class="s2">&quot;200&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">),</span> <span class="s2">&quot;220&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">11.0</span><span class="p">,</span> <span class="mf">13.0</span><span class="p">)},</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">n_jobs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">partition</span><span class="o">=</span><span class="s2">&quot;nice&quot;</span><span class="p">,</span> <span class="n">conda_env</span><span class="o">=</span><span class="s2">&quot;nrxrdct&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">monitor</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;slurm_ids&quot;</span><span class="p">],</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;tmp_dir&quot;</span><span class="p">],</span> <span class="n">watch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">merge</span><span class="p">(</span><span class="n">tmp_dir</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;tmp_dir&quot;</span><span class="p">],</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">)</span>          <span class="c1"># writes every hkl</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">check</span><span class="p">(</span><span class="n">tmp_dir</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;tmp_dir&quot;</span><span class="p">],</span> <span class="n">output_file</span><span class="o">=</span><span class="n">output_file</span><span class="p">)</span>          <span class="c1"># checks every hkl by default</span>
+</code></pre></div>
+<p>Workers stream frames in batches and write per-scan tmp files (never the
+final HDF5 directly, avoiding concurrent-write corruption); <code>merge</code> is the
+sole, single-process writer of the final file. <code>repair()</code> resubmits any
+scans found missing by <code>check()</code>, re-reading all settings from the
+<code>launch_meta.json</code> sidecar so nothing needs repeating.</p>
+<p>Also available as a CLI: <code>nrxrdct-slurm-texture launch|monitor|merge|check</code>.</p>
+<h3 id="33-odf-inversion-nrxrdcttextureodf_inversion">3.3 ODF inversion — <code>nrxrdct.texture.odf_inversion</code><a class="headerlink" href="#33-odf-inversion-nrxrdcttextureodf_inversion" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.texture</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_pole_figures</span><span class="p">,</span> <span class="n">compute_odf</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">pole_figures</span> <span class="o">=</span> <span class="n">load_pole_figures</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">hkl_labels</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;111&quot;</span><span class="p">,</span> <span class="s2">&quot;200&quot;</span><span class="p">,</span> <span class="s2">&quot;220&quot;</span><span class="p">],</span> <span class="n">n_rot</span><span class="o">=</span><span class="mi">901</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">compute_odf</span><span class="p">(</span><span class="n">pole_figures</span><span class="p">,</span> <span class="n">crystal_directions</span><span class="p">,</span> <span class="n">step_deg</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">n_iter</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>step_deg</code></td>
+<td><code>10.0</code></td>
+<td>Euler-angle orientation-grid spacing; halving it multiplies grid size (and run time) by ~8. Each pole-figure data point is hard-assigned to its single nearest grid orientation (classical Matthies-Vinel binning), so this is also the effective angular resolution — there is no separate smoothing-width parameter</td>
+</tr>
+<tr>
+<td><code>n_iter</code></td>
+<td><code>10</code></td>
+<td>WIMV iterations</td>
+</tr>
+<tr>
+<td><code>fold_hemisphere</code></td>
+<td><code>False</code></td>
+<td>See the ghost-ambiguity caveat above — leave off unless you've verified it's safe for your case</td>
+</tr>
+<tr>
+<td><code>chunk_size</code></td>
+<td><code>4096</code></td>
+<td>Pole-figure data points processed per batch during kernel construction; bounds peak memory without affecting the result</td>
+</tr>
+</tbody>
+</table>
+<p><code>result["f"]</code> is the fitted ODF value per orientation-grid cell
+(<code>result["euler_deg"]</code>), normalised so <code>sum(f * cell_weight) / sum(cell_weight) == 1</code>.
+<code>result["rp_history"]</code> tracks the per-iteration relative pole-figure
+residual for convergence checking — but see
+<a href="../texture_theory/#6-beyond-bulk-per-voxel-reconstruction-experimental-not-shipped">Theory §6</a>
+before assuming a low residual alone proves the global optimum was found.</p>
+<h3 id="34-plotting-qa-nrxrdcttexturetexture_plotting">3.4 Plotting / QA — <code>nrxrdct.texture.texture_plotting</code><a class="headerlink" href="#34-plotting-qa-nrxrdcttexturetexture_plotting" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.texture</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_pole_figure</span><span class="p">,</span> <span class="n">plot_pole_figure_comparison</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">plot_pole_figure</span><span class="p">(</span><span class="n">alpha_deg</span><span class="p">,</span> <span class="n">beta_deg</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;111&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">plot_pole_figure_comparison</span><span class="p">(</span><span class="n">alpha_deg</span><span class="p">,</span> <span class="n">beta_deg</span><span class="p">,</span> <span class="n">measured</span><span class="p">,</span> <span class="n">recalculated</span><span class="p">)</span>
+</code></pre></div>
+<p>Both render a standard equal-area (Schmidt) upper-hemisphere projection,
+folding any <code>alpha &gt; 90°</code> points onto their antipodal equivalent for
+display (Friedel's law) — display-time folding only; this is unrelated to,
+and does not re-introduce, the fit-time ghost-ambiguity risk in §3.3.</p>
+<hr />
+<h2 id="4-see-also">4. See also<a class="headerlink" href="#4-see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../texture_theory/">Texture Tomography Theory</a> — pole figures, ODFs, the
+  diffraction-geometry derivation, WIMV, and the ghost/coverage caveats.</li>
+<li><a href="../azimuthal_integration/">Azimuthal Integration</a> — the powder side of the
+  pipeline, reading the same raw frames.</li>
+<li><a href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a> — grain-resolved orientation mapping
+  from the same raw frames, a different technique for a related question.</li>
+<li>API reference: <a href="../../api/texture/odf/">odf</a>,
+  <a href="../../api/texture/odf_inversion/">odf_inversion</a>,
+  <a href="../../api/texture/texture_plotting/">texture_plotting</a>,
+  <a href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../texture_theory/" class="btn btn-neutral float-left" title="Theory"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../fitting/" class="btn btn-neutral float-right" title="Peak Fitting and NMF">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../texture_theory/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../fitting/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

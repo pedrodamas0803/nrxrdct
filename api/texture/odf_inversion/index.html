@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../../img/favicon.ico" />
+    <title>odf_inversion - nrxrdct</title>
+    <link rel="stylesheet" href="../../../css/theme.css" />
+    <link rel="stylesheet" href="../../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "odf_inversion";
+        var mkdocs_page_input_path = "api/texture/odf_inversion.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../../utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >texture</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../odf/">odf</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">odf_inversion</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.texture.odf_inversion">odf_inversion</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion--orientation-convention">Orientation convention</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion.compute_odf">compute_odf</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion.load_pole_figures">load_pole_figures</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion.misorientation_angle_deg">misorientation_angle_deg</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion.orientation_grid">orientation_grid</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf_inversion.recalculate_pole_figure">recalculate_pole_figure</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">texture</li>
+      <li class="breadcrumb-item active">odf_inversion</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/texture/odf_inversion.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="odf_inversion">odf_inversion<a class="headerlink" href="#odf_inversion" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="nrxrdct.texture.odf_inversion" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.texture.odf_inversion</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>ODF inversion from pole-figure data (WIMV method).</p>
+<p>Inverts one or more pole figures (from :mod:<code>nrxrdct.texture.odf</code>) into a
+discretised orientation distribution function (ODF) on a grid of Bunge Euler
+angles, using the WIMV algorithm (Matthies &amp; Vinel, 1982): an iterative,
+multiplicative correction scheme that is the standard choice in texture
+analysis whenever pole-figure coverage is incomplete, because it degrades
+gracefully over uncovered regions and — unlike a literal generalised
+spherical-harmonic fit — guarantees a non-negative ODF by construction.</p>
+<p>This is the natural next step after single-rotation-axis pole-figure
+extraction: a fixed vertical rotation axis with no tilt only ever sweeps a
+<em>curve</em> on the pole sphere per hkl (see the coverage caveat in
+:mod:<code>nrxrdct.texture.odf</code>), so pole-figure coverage here is inherently
+incomplete — the reason WIMV rather than the harmonic method is used.</p>
+<h4 id="nrxrdct.texture.odf_inversion--orientation-convention">Orientation convention<a class="headerlink" href="#nrxrdct.texture.odf_inversion--orientation-convention" title="Permanent link">&para;</a></h4>
+<p>Orientations are represented as rotation matrices mapping a crystal-frame
+vector to the sample frame, <code>v_sample = R @ v_crystal</code>, parametrised by
+Bunge-style Euler angles (phi1, Phi, phi2) via</p>
+<div class="highlight"><pre><span></span><code>R(phi1, Phi, phi2) = Rz(phi1) @ Rx(Phi) @ Rz(phi2)
+</code></pre></div>
+<p>This is one of several conventions in use across texture software (Bunge,
+Roe, Kocks differ, and even "Bunge" implementations disagree on axis order
+and active/passive sense) — verify against your reference before comparing
+Euler angles quantitatively with another package.</p>
+<p>Crystal directions passed to :func:<code>compute_odf</code> must already be unit
+vectors in an orthonormal crystal Cartesian frame (this module does not
+parse lattice parameters); for a cubic crystal, <code>[h, k, l]</code> normalised is
+sufficient, otherwise apply your crystal's B-matrix first.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf_inversion.compute_odf" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">compute_odf</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion.compute_odf" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_odf</span><span class="p">(</span><span class="n">pole_figures</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]],</span> <span class="n">crystal_directions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">step_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">fold_hemisphere</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Invert pole-figure data into a discretised ODF via WIMV.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>pole_figures</code></b>
+                  (<code><span title="dict">dict</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Maps hkl label to <code>(alpha_deg, beta_deg, intensity)</code>,
+each a 1-D array of equal length — measured pole-figure points, e.g.
+built from :func:<code>nrxrdct.texture.odf.pole_figure_coordinates</code> applied
+to a merged pole-figure sinogram. Intensities should be non-negative
+(background-subtracted, as from :func:<code>extract_ring_intensity</code>, may
+need clipping at zero first).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>crystal_directions</code></b>
+                  (<code><span title="dict">dict</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Maps the same hkl labels to unit vector(s) in
+an orthonormal crystal Cartesian frame — shape <code>(3,)</code> for a single
+direction, or <code>(M, 3)</code> to include symmetry-equivalent directions of
+the same <code>{hkl}</code> family (the pole figure is then treated as
+covering all M equivalents, standard practice for a <code>{hkl}</code>
+pole figure).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>step_deg</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>10.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Euler-angle grid spacing passed to
+:func:<code>orientation_grid</code> (default 10.0). Each pole-figure data
+point is assigned (via :func:<code>_build_kernel_matrix</code>'s hard
+nearest-cell binning) to its single nearest grid orientation, so
+this is now the only angular-resolution knob — there is no
+separate smoothing width.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>n_iter</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>10</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Number of WIMV iterations (default 10).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>fold_hemisphere</code></b>
+                  (<code><span title="bool">bool</span></code>, default:
+                      <code>False</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>If <code>True</code>, map every pole direction
+with <code>alpha &gt; 90</code> to its antipodal upper-hemisphere equivalent
+before fitting (Friedel's law), matching how
+:func:<code>nrxrdct.texture.texture_plotting.plot_pole_figure</code> displays
+data. <strong>Default is False</strong> — folding independently per hkl is
+mathematically equivalent to conflating orientation <code>R</code> with its
+point-inversion <code>-R</code> across every hkl simultaneously, and WIMV's
+positivity constraint only sometimes breaks that tie: confirmed by
+testing to occasionally converge to the ~180°-misoriented "ghost"
+solution instead of the true orientation, for both single- and
+multi-hkl fits. Only enable this if you specifically need folded
+display-style output and have separately verified it doesn't
+corrupt your fit.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chunk_size</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>4096</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Forwarded to :func:<code>_build_kernel_matrix</code> —
+bounds peak memory by processing this many pole-figure data points
+per batch instead of matching all of them against the grid at
+once; does not affect the fitted result (default 4096).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>dict</code></b>(                  <code><span title="dict">dict</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>With keys <code>'euler_deg'</code> (grid, shape <code>(N,3)</code>), <code>'R'</code> (grid
+rotation matrices, shape <code>(N,3,3)</code>), <code>'cell_weight'</code> (shape
+<code>(N,)</code>), <code>'f'</code> (fitted ODF value per grid cell, shape <code>(N,)</code>,
+normalised so <code>sum(f * cell_weight) / sum(cell_weight) == 1</code>),
+and <code>'rp_history'</code> (list of per-iteration relative pole-figure
+error, for convergence checking).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf_inversion.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span>
+<span class="normal"><a href="#__codelineno-0-229">229</a></span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span>
+<span class="normal"><a href="#__codelineno-0-241">241</a></span>
+<span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_odf</span><span class="p">(</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a>    <span class="n">pole_figures</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="n">crystal_directions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="n">step_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>    <span class="n">n_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>    <span class="n">fold_hemisphere</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">,</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">    Invert pole-figure data into a discretised ODF via WIMV.</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">        pole_figures (dict): Maps hkl label to ``(alpha_deg, beta_deg, intensity)``,</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">            each a 1-D array of equal length — measured pole-figure points, e.g.</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">            built from :func:`nrxrdct.texture.odf.pole_figure_coordinates` applied</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">            to a merged pole-figure sinogram. Intensities should be non-negative</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">            (background-subtracted, as from :func:`extract_ring_intensity`, may</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">            need clipping at zero first).</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">        crystal_directions (dict): Maps the same hkl labels to unit vector(s) in</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">            an orthonormal crystal Cartesian frame — shape ``(3,)`` for a single</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">            direction, or ``(M, 3)`` to include symmetry-equivalent directions of</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">            the same ``{hkl}`` family (the pole figure is then treated as</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">            covering all M equivalents, standard practice for a ``{hkl}``</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">            pole figure).</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">        step_deg (float, optional): Euler-angle grid spacing passed to</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">            :func:`orientation_grid` (default 10.0). Each pole-figure data</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">            point is assigned (via :func:`_build_kernel_matrix`&#39;s hard</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">            nearest-cell binning) to its single nearest grid orientation, so</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">            this is now the only angular-resolution knob — there is no</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">            separate smoothing width.</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">        n_iter (int, optional): Number of WIMV iterations (default 10).</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">        fold_hemisphere (bool, optional): If ``True``, map every pole direction</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            with ``alpha &gt; 90`` to its antipodal upper-hemisphere equivalent</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            before fitting (Friedel&#39;s law), matching how</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">            :func:`nrxrdct.texture.texture_plotting.plot_pole_figure` displays</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">            data. **Default is False** — folding independently per hkl is</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">            mathematically equivalent to conflating orientation ``R`` with its</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            point-inversion ``-R`` across every hkl simultaneously, and WIMV&#39;s</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">            positivity constraint only sometimes breaks that tie: confirmed by</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">            testing to occasionally converge to the ~180°-misoriented &quot;ghost&quot;</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">            solution instead of the true orientation, for both single- and</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">            multi-hkl fits. Only enable this if you specifically need folded</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">            display-style output and have separately verified it doesn&#39;t</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">            corrupt your fit.</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">        chunk_size (int, optional): Forwarded to :func:`_build_kernel_matrix` —</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">            bounds peak memory by processing this many pole-figure data points</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">            per batch instead of matching all of them against the grid at</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">            once; does not affect the fitted result (default 4096).</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">        dict: With keys ``&#39;euler_deg&#39;`` (grid, shape ``(N,3)``), ``&#39;R&#39;`` (grid</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">            rotation matrices, shape ``(N,3,3)``), ``&#39;cell_weight&#39;`` (shape</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">            ``(N,)``), ``&#39;f&#39;`` (fitted ODF value per grid cell, shape ``(N,)``,</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">            normalised so ``sum(f * cell_weight) / sum(cell_weight) == 1``),</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">            and ``&#39;rp_history&#39;`` (list of per-iteration relative pole-figure</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="sd">            error, for convergence checking).</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">pole_figures</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span><span class="n">crystal_directions</span><span class="p">):</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>            <span class="sa">f</span><span class="s2">&quot;pole_figures and crystal_directions must cover the same hkl labels; &quot;</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>            <span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">pole_figures</span><span class="p">)</span><span class="si">}</span><span class="s2"> vs </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">crystal_directions</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="p">)</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="n">euler_deg</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">cell_weight</span> <span class="o">=</span> <span class="n">orientation_grid</span><span class="p">(</span><span class="n">step_deg</span><span class="p">)</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="n">N</span> <span class="o">=</span> <span class="n">euler_deg</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="n">data_xyz_by_hkl</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="n">grid_variants_by_hkl</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="n">measured</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="p">(</span><span class="n">alpha_deg</span><span class="p">,</span> <span class="n">beta_deg</span><span class="p">,</span> <span class="n">intensity</span><span class="p">)</span> <span class="ow">in</span> <span class="n">pole_figures</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>        <span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">alpha_deg</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">beta_deg</span><span class="p">)</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>        <span class="k">if</span> <span class="n">fold_hemisphere</span><span class="p">:</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>            <span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span> <span class="o">=</span> <span class="n">_fold_upper_hemisphere</span><span class="p">(</span><span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span><span class="p">)</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="n">data_xyz</span> <span class="o">=</span> <span class="n">_alpha_beta_to_xyz</span><span class="p">(</span><span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span><span class="p">)</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">crystal_directions</span><span class="p">[</span><span class="n">hkl</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="n">h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="n">grid_xyz_variants</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;nij,mj-&gt;mni&quot;</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>  <span class="c1"># (M, N, 3)</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="k">if</span> <span class="n">fold_hemisphere</span><span class="p">:</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>            <span class="n">alpha_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)))</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>            <span class="n">beta_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span> <span class="o">%</span> <span class="mf">360.0</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>            <span class="n">alpha_gf</span><span class="p">,</span> <span class="n">beta_gf</span> <span class="o">=</span> <span class="n">_fold_upper_hemisphere</span><span class="p">(</span><span class="n">alpha_g</span><span class="p">,</span> <span class="n">beta_g</span><span class="p">)</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>            <span class="n">grid_xyz_variants</span> <span class="o">=</span> <span class="n">_alpha_beta_to_xyz</span><span class="p">(</span><span class="n">alpha_gf</span><span class="p">,</span> <span class="n">beta_gf</span><span class="p">)</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="n">data_xyz_by_hkl</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_xyz</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="n">grid_variants_by_hkl</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">=</span> <span class="n">grid_xyz_variants</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="n">measured</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">intensity</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="c1"># Nearest-cell binning (a single k=1 KDTree query per hkl, internally</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="c1"># thread-parallel via workers=-1) is cheap enough that splitting hkls</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="c1"># across processes no longer pays for its own overhead — verified up to</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>    <span class="c1"># 500k data points / 186k grid cells / 48-fold symmetry, where per-process</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>    <span class="c1"># spawn and array-pickling cost matched or exceeded the serial runtime.</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>    <span class="n">kernels</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="n">hkl</span><span class="p">:</span> <span class="n">_build_kernel_matrix</span><span class="p">(</span><span class="n">data_xyz_by_hkl</span><span class="p">[</span><span class="n">hkl</span><span class="p">],</span> <span class="n">grid_variants_by_hkl</span><span class="p">[</span><span class="n">hkl</span><span class="p">],</span> <span class="n">chunk_size</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">)</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="k">for</span> <span class="n">hkl</span> <span class="ow">in</span> <span class="n">pole_figures</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="p">}</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="n">f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="n">rp_history</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_iter</span><span class="p">):</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>        <span class="n">log_ratio_num</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>        <span class="n">weight_den</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>        <span class="n">sse</span><span class="p">,</span> <span class="n">ssm</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>        <span class="k">for</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">K</span> <span class="ow">in</span> <span class="n">kernels</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>            <span class="n">predicted</span> <span class="o">=</span> <span class="n">K</span> <span class="o">@</span> <span class="n">f</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>            <span class="n">predicted_safe</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">predicted</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">predicted</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a>            <span class="n">ratio</span> <span class="o">=</span> <span class="n">measured</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">/</span> <span class="n">predicted_safe</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>            <span class="n">valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ratio</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">ratio</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>            <span class="n">log_ratio_num</span> <span class="o">+=</span> <span class="n">K</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">ratio</span><span class="p">[</span><span class="n">valid</span><span class="p">])</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>            <span class="n">weight_den</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">K</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>            <span class="n">sse</span> <span class="o">+=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nansum</span><span class="p">((</span><span class="n">predicted</span> <span class="o">-</span> <span class="n">measured</span><span class="p">[</span><span class="n">hkl</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>            <span class="n">ssm</span> <span class="o">+=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">measured</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="n">correction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="n">has_support</span> <span class="o">=</span> <span class="n">weight_den</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="n">correction</span><span class="p">[</span><span class="n">has_support</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">log_ratio_num</span><span class="p">[</span><span class="n">has_support</span><span class="p">]</span> <span class="o">/</span> <span class="n">weight_den</span><span class="p">[</span><span class="n">has_support</span><span class="p">])</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="n">f</span> <span class="o">=</span> <span class="n">f</span> <span class="o">*</span> <span class="n">correction</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="n">rp</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sse</span> <span class="o">/</span> <span class="n">ssm</span><span class="p">))</span> <span class="k">if</span> <span class="n">ssm</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">rp_history</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rp</span><span class="p">)</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  WIMV iter </span><span class="si">{</span><span class="n">it</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">n_iter</span><span class="si">}</span><span class="s2">: Rp = </span><span class="si">{</span><span class="n">rp</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="n">norm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">f</span> <span class="o">*</span> <span class="n">cell_weight</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">cell_weight</span><span class="p">)</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">if</span> <span class="n">norm</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">f</span> <span class="o">=</span> <span class="n">f</span> <span class="o">/</span> <span class="n">norm</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a>        <span class="s2">&quot;euler_deg&quot;</span><span class="p">:</span> <span class="n">euler_deg</span><span class="p">,</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a>        <span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="n">R</span><span class="p">,</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>        <span class="s2">&quot;cell_weight&quot;</span><span class="p">:</span> <span class="n">cell_weight</span><span class="p">,</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="s2">&quot;f&quot;</span><span class="p">:</span> <span class="n">f</span><span class="p">,</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>        <span class="s2">&quot;rp_history&quot;</span><span class="p">:</span> <span class="n">rp_history</span><span class="p">,</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>    <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf_inversion.load_pole_figures" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">load_pole_figures</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion.load_pole_figures" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_pole_figures</span><span class="p">(</span><span class="n">pole_figure_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">hkl_labels</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">line_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;rot&#39;</span><span class="p">,</span> <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">clip_negative</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Build the <code>pole_figures</code> dict :func:<code>compute_odf</code> expects, directly from
+a merged pole-figure HDF5 file.</p>
+<p>For each hkl, assembles the pole-figure sinogram
+(:func:<code>~nrxrdct.texture.odf.assemble_pole_figure_sinogram</code>), reads its
+stored 2theta window, and converts it to flat pole-figure coordinates
+(:func:<code>~nrxrdct.texture.odf.sinogram_to_pole_figure</code>) — the glue between
+a file written by :func:<code>~nrxrdct.texture.odf.assemble_pole_figure_data</code> /
+:mod:<code>nrxrdct.texture.slurm_pole_figures</code> and :func:<code>compute_odf</code>.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>pole_figure_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>HDF5 file written by
+:func:<code>~nrxrdct.texture.odf.assemble_pole_figure_data</code> or
+:mod:<code>nrxrdct.texture.slurm_pole_figures</code>'s <code>merge</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>hkl_labels</code></b>
+                  (<code>sequence of str</code>)
+              –
+              <div class="doc-md-description">
+                <p>Ring identifiers to load, e.g. <code>["111", "200"]</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>n_rot</code></b>
+                  (<code><span title="int">int</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Number of rotation steps, forwarded to
+:func:<code>~nrxrdct.texture.odf.assemble_pole_figure_sinogram</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>line_index</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>None</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Translation line to use; <code>None</code> (default)
+averages over all lines into one bulk pole figure for the whole
+scanned cross-section. Pass an explicit index for a per-line bulk
+pole figure instead.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>translation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;dty&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Passed through to
+:func:<code>~nrxrdct.texture.odf.assemble_pole_figure_sinogram</code> (default <code>"dty"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>rotation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;rot&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Passed through to
+:func:<code>~nrxrdct.texture.odf.assemble_pole_figure_sinogram</code> (default <code>"rot"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_offset_deg</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>0.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Forwarded to
+:func:<code>~nrxrdct.texture.odf.pole_figure_coordinates</code> — verify against
+your beamline before trusting results (default 0.0).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_sign</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>1.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Forwarded likewise (default 1.0).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>clip_negative</code></b>
+                  (<code><span title="bool">bool</span></code>, default:
+                      <code>True</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Clip negative intensities to zero
+(default <code>True</code>). Background-subtracted ring intensities can go
+slightly negative from noise; :func:<code>compute_odf</code> assumes
+non-negative measurements.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>dict</code></b>(                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]</code>
+)              –
+              <div class="doc-md-description">
+                <p><code>{hkl_label: (alpha_deg, beta_deg, intensity)}</code>, ready to pass
+directly as :func:<code>compute_odf</code>'s <code>pole_figures</code> argument.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf_inversion.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#__codelineno-0-392">392</a></span>
+<span class="normal"><a href="#__codelineno-0-393">393</a></span>
+<span class="normal"><a href="#__codelineno-0-394">394</a></span>
+<span class="normal"><a href="#__codelineno-0-395">395</a></span>
+<span class="normal"><a href="#__codelineno-0-396">396</a></span>
+<span class="normal"><a href="#__codelineno-0-397">397</a></span>
+<span class="normal"><a href="#__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#__codelineno-0-400">400</a></span>
+<span class="normal"><a href="#__codelineno-0-401">401</a></span>
+<span class="normal"><a href="#__codelineno-0-402">402</a></span>
+<span class="normal"><a href="#__codelineno-0-403">403</a></span>
+<span class="normal"><a href="#__codelineno-0-404">404</a></span>
+<span class="normal"><a href="#__codelineno-0-405">405</a></span>
+<span class="normal"><a href="#__codelineno-0-406">406</a></span>
+<span class="normal"><a href="#__codelineno-0-407">407</a></span>
+<span class="normal"><a href="#__codelineno-0-408">408</a></span>
+<span class="normal"><a href="#__codelineno-0-409">409</a></span>
+<span class="normal"><a href="#__codelineno-0-410">410</a></span>
+<span class="normal"><a href="#__codelineno-0-411">411</a></span>
+<span class="normal"><a href="#__codelineno-0-412">412</a></span>
+<span class="normal"><a href="#__codelineno-0-413">413</a></span>
+<span class="normal"><a href="#__codelineno-0-414">414</a></span>
+<span class="normal"><a href="#__codelineno-0-415">415</a></span>
+<span class="normal"><a href="#__codelineno-0-416">416</a></span>
+<span class="normal"><a href="#__codelineno-0-417">417</a></span>
+<span class="normal"><a href="#__codelineno-0-418">418</a></span>
+<span class="normal"><a href="#__codelineno-0-419">419</a></span>
+<span class="normal"><a href="#__codelineno-0-420">420</a></span>
+<span class="normal"><a href="#__codelineno-0-421">421</a></span>
+<span class="normal"><a href="#__codelineno-0-422">422</a></span>
+<span class="normal"><a href="#__codelineno-0-423">423</a></span>
+<span class="normal"><a href="#__codelineno-0-424">424</a></span>
+<span class="normal"><a href="#__codelineno-0-425">425</a></span>
+<span class="normal"><a href="#__codelineno-0-426">426</a></span>
+<span class="normal"><a href="#__codelineno-0-427">427</a></span>
+<span class="normal"><a href="#__codelineno-0-428">428</a></span>
+<span class="normal"><a href="#__codelineno-0-429">429</a></span>
+<span class="normal"><a href="#__codelineno-0-430">430</a></span>
+<span class="normal"><a href="#__codelineno-0-431">431</a></span>
+<span class="normal"><a href="#__codelineno-0-432">432</a></span>
+<span class="normal"><a href="#__codelineno-0-433">433</a></span>
+<span class="normal"><a href="#__codelineno-0-434">434</a></span>
+<span class="normal"><a href="#__codelineno-0-435">435</a></span>
+<span class="normal"><a href="#__codelineno-0-436">436</a></span>
+<span class="normal"><a href="#__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#__codelineno-0-449">449</a></span>
+<span class="normal"><a href="#__codelineno-0-450">450</a></span>
+<span class="normal"><a href="#__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-389" name="__codelineno-0-389"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_pole_figures</span><span class="p">(</span>
+<a id="__codelineno-0-390" name="__codelineno-0-390"></a>    <span class="n">pole_figure_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-391" name="__codelineno-0-391"></a>    <span class="n">hkl_labels</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<a id="__codelineno-0-392" name="__codelineno-0-392"></a>    <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<a id="__codelineno-0-393" name="__codelineno-0-393"></a>    <span class="n">line_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-394" name="__codelineno-0-394"></a>    <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;dty&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-395" name="__codelineno-0-395"></a>    <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;rot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a>    <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a>    <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a>    <span class="n">clip_negative</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a><span class="sd">    Build the ``pole_figures`` dict :func:`compute_odf` expects, directly from</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="sd">    a merged pole-figure HDF5 file.</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="sd">    For each hkl, assembles the pole-figure sinogram</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="sd">    (:func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram`), reads its</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a><span class="sd">    stored 2theta window, and converts it to flat pole-figure coordinates</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a><span class="sd">    (:func:`~nrxrdct.texture.odf.sinogram_to_pole_figure`) — the glue between</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a><span class="sd">    a file written by :func:`~nrxrdct.texture.odf.assemble_pole_figure_data` /</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><span class="sd">    :mod:`nrxrdct.texture.slurm_pole_figures` and :func:`compute_odf`.</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="sd">        pole_figure_file (Path): HDF5 file written by</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">            :func:`~nrxrdct.texture.odf.assemble_pole_figure_data` or</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">            :mod:`nrxrdct.texture.slurm_pole_figures`&#39;s ``merge``.</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">        hkl_labels (sequence of str): Ring identifiers to load, e.g. ``[&quot;111&quot;, &quot;200&quot;]``.</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        n_rot (int): Number of rotation steps, forwarded to</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram`.</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">        line_index (int, optional): Translation line to use; ``None`` (default)</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">            averages over all lines into one bulk pole figure for the whole</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">            scanned cross-section. Pass an explicit index for a per-line bulk</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">            pole figure instead.</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">        translation_motor (str, optional): Passed through to</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram` (default ``&quot;dty&quot;``).</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">        rotation_motor (str, optional): Passed through to</span>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">            :func:`~nrxrdct.texture.odf.assemble_pole_figure_sinogram` (default ``&quot;rot&quot;``).</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">        chi_offset_deg (float, optional): Forwarded to</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">            :func:`~nrxrdct.texture.odf.pole_figure_coordinates` — verify against</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">            your beamline before trusting results (default 0.0).</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">        chi_sign (float, optional): Forwarded likewise (default 1.0).</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">        clip_negative (bool, optional): Clip negative intensities to zero</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">            (default ``True``). Background-subtracted ring intensities can go</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">            slightly negative from noise; :func:`compute_odf` assumes</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">            non-negative measurements.</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">        dict: ``{hkl_label: (alpha_deg, beta_deg, intensity)}``, ready to pass</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">            directly as :func:`compute_odf`&#39;s ``pole_figures`` argument.</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a>    <span class="n">pole_figures</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a>    <span class="k">for</span> <span class="n">hkl</span> <span class="ow">in</span> <span class="n">hkl_labels</span><span class="p">:</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a>        <span class="n">sino</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">rot_deg</span> <span class="o">=</span> <span class="n">assemble_pole_figure_sinogram</span><span class="p">(</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a>            <span class="n">pole_figure_file</span><span class="p">,</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">,</span> <span class="n">rotation_motor</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>        <span class="p">)</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">pole_figure_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a>            <span class="n">tth_deg</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;pole_figures/</span><span class="si">{</span><span class="n">hkl</span><span class="si">}</span><span class="s2">/tth_range&quot;</span><span class="p">][:]))</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a>        <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">sinogram_to_pole_figure</span><span class="p">(</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a>            <span class="n">sino</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">,</span> <span class="n">rot_deg</span><span class="p">,</span> <span class="n">tth_deg</span><span class="p">,</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a>            <span class="n">line_index</span><span class="o">=</span><span class="n">line_index</span><span class="p">,</span> <span class="n">chi_offset_deg</span><span class="o">=</span><span class="n">chi_offset_deg</span><span class="p">,</span> <span class="n">chi_sign</span><span class="o">=</span><span class="n">chi_sign</span><span class="p">,</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="p">)</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>        <span class="k">if</span> <span class="n">clip_negative</span><span class="p">:</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a>            <span class="n">intensity</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">intensity</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>        <span class="n">pole_figures</span><span class="p">[</span><span class="n">hkl</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">intensity</span><span class="p">)</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>    <span class="k">return</span> <span class="n">pole_figures</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf_inversion.misorientation_angle_deg" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">misorientation_angle_deg</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion.misorientation_angle_deg" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">misorientation_angle_deg</span><span class="p">(</span><span class="n">R1</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">R2</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Angle (degrees) of the relative rotation between two orientation matrices.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>R1</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Rotation matrix, shape <code>(3, 3)</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>R2</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Rotation matrix, shape <code>(3, 3)</code>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>float</code></b>(                  <code><span title="float">float</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Misorientation angle in degrees, in <code>[0, 180]</code>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf_inversion.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#__codelineno-0-120">120</a></span>
+<span class="normal"><a href="#__codelineno-0-121">121</a></span>
+<span class="normal"><a href="#__codelineno-0-122">122</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="k">def</span><span class="w"> </span><span class="nf">misorientation_angle_deg</span><span class="p">(</span><span class="n">R1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">R2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="sd">    Angle (degrees) of the relative rotation between two orientation matrices.</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a>
+<a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="sd">        R1 (np.ndarray): Rotation matrix, shape ``(3, 3)``.</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">        R2 (np.ndarray): Rotation matrix, shape ``(3, 3)``.</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">        float: Misorientation angle in degrees, in ``[0, 180]``.</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="n">dR</span> <span class="o">=</span> <span class="n">R1</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">R2</span>
+<a id="__codelineno-0-121" name="__codelineno-0-121"></a>    <span class="n">cos_angle</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">dR</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+<a id="__codelineno-0-122" name="__codelineno-0-122"></a>    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cos_angle</span><span class="p">)))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf_inversion.orientation_grid" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">orientation_grid</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion.orientation_grid" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">orientation_grid</span><span class="p">(</span><span class="n">step_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Build a regular grid of orientations in Bunge Euler space.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>step_deg</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>10.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Grid spacing in degrees along each Euler
+angle (default 10.0). Cell count scales as <code>(360/step)^2 * (180/step)</code>,
+so halving <em>step_deg</em> multiplies the grid size (and run time) by ~8.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>euler_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Grid orientations as <code>(phi1, Phi, phi2)</code> in
+degrees, shape <code>(N, 3)</code>.</p>
+              </div>
+            </li>
+            <li>
+<b><code>R</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Rotation matrices for each grid orientation, mapping
+crystal-frame to sample-frame vectors, shape <code>(N, 3, 3)</code>.</p>
+              </div>
+            </li>
+            <li>
+<b><code>cell_weight</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Relative SO(3) (Haar-measure) volume of each
+cell, proportional to <code>sin(Phi)</code>, shape <code>(N,)</code>. Use these as
+weights when averaging or normalising the ODF over the grid.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf_inversion.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">orientation_grid</span><span class="p">(</span><span class="n">step_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    Build a regular grid of orientations in Bunge Euler space.</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        step_deg (float, optional): Grid spacing in degrees along each Euler</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            angle (default 10.0). Cell count scales as ``(360/step)^2 * (180/step)``,</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">            so halving *step_deg* multiplies the grid size (and run time) by ~8.</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        euler_deg (np.ndarray): Grid orientations as ``(phi1, Phi, phi2)`` in</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            degrees, shape ``(N, 3)``.</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        R (np.ndarray): Rotation matrices for each grid orientation, mapping</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            crystal-frame to sample-frame vectors, shape ``(N, 3, 3)``.</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">        cell_weight (np.ndarray): Relative SO(3) (Haar-measure) volume of each</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">            cell, proportional to ``sin(Phi)``, shape ``(N,)``. Use these as</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">            weights when averaging or normalising the ODF over the grid.</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">phi1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">360.0</span><span class="p">,</span> <span class="n">step_deg</span><span class="p">)</span> <span class="o">+</span> <span class="n">step_deg</span> <span class="o">/</span> <span class="mi">2</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="n">Phi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">180.0</span><span class="p">,</span> <span class="n">step_deg</span><span class="p">)</span> <span class="o">+</span> <span class="n">step_deg</span> <span class="o">/</span> <span class="mi">2</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="n">phi2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">360.0</span><span class="p">,</span> <span class="n">step_deg</span><span class="p">)</span> <span class="o">+</span> <span class="n">step_deg</span> <span class="o">/</span> <span class="mi">2</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="n">P1</span><span class="p">,</span> <span class="n">PH</span><span class="p">,</span> <span class="n">P2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">phi1</span><span class="p">,</span> <span class="n">Phi</span><span class="p">,</span> <span class="n">phi2</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">euler_deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">P1</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">PH</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">P2</span><span class="o">.</span><span class="n">ravel</span><span class="p">()],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">cell_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="n">euler_deg</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">R</span> <span class="o">=</span> <span class="n">_euler_to_matrix</span><span class="p">(</span><span class="n">euler_deg</span><span class="p">)</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="k">return</span> <span class="n">euler_deg</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">cell_weight</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf_inversion.recalculate_pole_figure" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">recalculate_pole_figure</span>
+
+
+<a href="#nrxrdct.texture.odf_inversion.recalculate_pole_figure" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">recalculate_pole_figure</span><span class="p">(</span><span class="n">odf_result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">crystal_direction</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">alpha_deg</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">beta_deg</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">fold_hemisphere</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Forward-project the fitted ODF back onto pole-figure coordinates, for
+comparison against the original measured pole figure (quality check).</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>odf_result</code></b>
+                  (<code><span title="dict">dict</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Output of :func:<code>compute_odf</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>crystal_direction</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Unit vector(s) in the crystal frame,
+shape <code>(3,)</code> or <code>(M, 3)</code> (same convention as in :func:<code>compute_odf</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>alpha_deg</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Polar angles (degrees) at which to evaluate.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>beta_deg</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Azimuthal angles (degrees) at which to evaluate.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>fold_hemisphere</code></b>
+                  (<code><span title="bool">bool</span></code>, default:
+                      <code>False</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Must match the value passed to
+:func:<code>compute_odf</code> when <em>odf_result</em> was produced — see the
+warning in that function's docstring (default <code>False</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+              –
+              <div class="doc-md-description">
+                <p>np.ndarray: Recalculated pole-figure intensity at each query point,
+same shape as <em>alpha_deg</em>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf_inversion.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#__codelineno-0-350">350</a></span>
+<span class="normal"><a href="#__codelineno-0-351">351</a></span>
+<span class="normal"><a href="#__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#__codelineno-0-353">353</a></span>
+<span class="normal"><a href="#__codelineno-0-354">354</a></span>
+<span class="normal"><a href="#__codelineno-0-355">355</a></span>
+<span class="normal"><a href="#__codelineno-0-356">356</a></span>
+<span class="normal"><a href="#__codelineno-0-357">357</a></span>
+<span class="normal"><a href="#__codelineno-0-358">358</a></span>
+<span class="normal"><a href="#__codelineno-0-359">359</a></span>
+<span class="normal"><a href="#__codelineno-0-360">360</a></span>
+<span class="normal"><a href="#__codelineno-0-361">361</a></span>
+<span class="normal"><a href="#__codelineno-0-362">362</a></span>
+<span class="normal"><a href="#__codelineno-0-363">363</a></span>
+<span class="normal"><a href="#__codelineno-0-364">364</a></span>
+<span class="normal"><a href="#__codelineno-0-365">365</a></span>
+<span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#__codelineno-0-376">376</a></span>
+<span class="normal"><a href="#__codelineno-0-377">377</a></span>
+<span class="normal"><a href="#__codelineno-0-378">378</a></span>
+<span class="normal"><a href="#__codelineno-0-379">379</a></span>
+<span class="normal"><a href="#__codelineno-0-380">380</a></span>
+<span class="normal"><a href="#__codelineno-0-381">381</a></span>
+<span class="normal"><a href="#__codelineno-0-382">382</a></span>
+<span class="normal"><a href="#__codelineno-0-383">383</a></span>
+<span class="normal"><a href="#__codelineno-0-384">384</a></span>
+<span class="normal"><a href="#__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#__codelineno-0-386">386</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="k">def</span><span class="w"> </span><span class="nf">recalculate_pole_figure</span><span class="p">(</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a>    <span class="n">odf_result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a>    <span class="n">crystal_direction</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>    <span class="n">alpha_deg</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a>    <span class="n">beta_deg</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a>    <span class="n">fold_hemisphere</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">    Forward-project the fitted ODF back onto pole-figure coordinates, for</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">    comparison against the original measured pole figure (quality check).</span>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">        odf_result (dict): Output of :func:`compute_odf`.</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">        crystal_direction (np.ndarray): Unit vector(s) in the crystal frame,</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a><span class="sd">            shape ``(3,)`` or ``(M, 3)`` (same convention as in :func:`compute_odf`).</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">        alpha_deg (np.ndarray): Polar angles (degrees) at which to evaluate.</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a><span class="sd">        beta_deg (np.ndarray): Azimuthal angles (degrees) at which to evaluate.</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a><span class="sd">        fold_hemisphere (bool, optional): Must match the value passed to</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a><span class="sd">            :func:`compute_odf` when *odf_result* was produced — see the</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a><span class="sd">            warning in that function&#39;s docstring (default ``False``).</span>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="sd">        np.ndarray: Recalculated pole-figure intensity at each query point,</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a><span class="sd">            same shape as *alpha_deg*.</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>    <span class="n">R</span> <span class="o">=</span> <span class="n">odf_result</span><span class="p">[</span><span class="s2">&quot;R&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>    <span class="n">f</span> <span class="o">=</span> <span class="n">odf_result</span><span class="p">[</span><span class="s2">&quot;f&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>    <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">crystal_direction</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>    <span class="n">h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a>    <span class="n">grid_xyz_variants</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;nij,mj-&gt;mni&quot;</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>    <span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">alpha_deg</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">beta_deg</span><span class="p">)</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a>    <span class="k">if</span> <span class="n">fold_hemisphere</span><span class="p">:</span>
+<a id="__codelineno-0-377" name="__codelineno-0-377"></a>        <span class="n">alpha_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)))</span>
+<a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">beta_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">grid_xyz_variants</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span> <span class="o">%</span> <span class="mf">360.0</span>
+<a id="__codelineno-0-379" name="__codelineno-0-379"></a>        <span class="n">alpha_gf</span><span class="p">,</span> <span class="n">beta_gf</span> <span class="o">=</span> <span class="n">_fold_upper_hemisphere</span><span class="p">(</span><span class="n">alpha_g</span><span class="p">,</span> <span class="n">beta_g</span><span class="p">)</span>
+<a id="__codelineno-0-380" name="__codelineno-0-380"></a>        <span class="n">grid_xyz_variants</span> <span class="o">=</span> <span class="n">_alpha_beta_to_xyz</span><span class="p">(</span><span class="n">alpha_gf</span><span class="p">,</span> <span class="n">beta_gf</span><span class="p">)</span>
+<a id="__codelineno-0-381" name="__codelineno-0-381"></a>        <span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span> <span class="o">=</span> <span class="n">_fold_upper_hemisphere</span><span class="p">(</span><span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span><span class="p">)</span>
+<a id="__codelineno-0-382" name="__codelineno-0-382"></a>
+<a id="__codelineno-0-383" name="__codelineno-0-383"></a>    <span class="n">query_xyz</span> <span class="o">=</span> <span class="n">_alpha_beta_to_xyz</span><span class="p">(</span><span class="n">alpha_f</span><span class="p">,</span> <span class="n">beta_f</span><span class="p">)</span>
+<a id="__codelineno-0-384" name="__codelineno-0-384"></a>
+<a id="__codelineno-0-385" name="__codelineno-0-385"></a>    <span class="n">K</span> <span class="o">=</span> <span class="n">_build_kernel_matrix</span><span class="p">(</span><span class="n">query_xyz</span><span class="p">,</span> <span class="n">grid_xyz_variants</span><span class="p">)</span>
+<a id="__codelineno-0-386" name="__codelineno-0-386"></a>    <span class="k">return</span> <span class="n">K</span> <span class="o">@</span> <span class="n">f</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../odf/" class="btn btn-neutral float-left" title="odf"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../texture_plotting/" class="btn btn-neutral float-right" title="texture_plotting">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../odf/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../texture_plotting/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../../..";</script>
+    <script src="../../../js/theme_extra.js"></script>
+    <script src="../../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

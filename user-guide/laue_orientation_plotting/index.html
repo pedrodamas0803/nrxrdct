@@ -61,21 +61,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
     <ul class="current">
                 <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
                 </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
-                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -131,6 +131,14 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
@@ -173,6 +181,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -197,7 +219,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -458,7 +494,7 @@ the coordinate system in which that direction is defined:</p>
 </tbody>
 </table>
 <p>The sample frame is related to the lab frame by a rotation of <code>sample_tilt_deg</code>
-degrees about <code>sample_tilt_axis</code> (default −40° about Y).  Specifying
+degrees about <code>sample_tilt_axis</code> (default +40° about Y).  Specifying
 <code>frame="sample"</code> and <code>axis="z"</code> therefore asks <em>"which crystal direction is
 parallel to the sample surface normal?"</em></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Which crystal direction is parallel to the lab Z axis?</span>
@@ -472,7 +508,7 @@ parallel to the sample surface normal?"</em></p>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Which crystal direction is parallel to the sample surface normal?</span>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span>
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">axis</span><span class="o">=</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span>
@@ -551,7 +587,7 @@ Y axes.</p>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Scatter in the sample frame</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_scatter</span><span class="p">(</span>
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
 </code></pre></div>
 <hr />
@@ -582,7 +618,7 @@ Y axes.</p>
 </tr>
 </tbody>
 </table>
-<p>The sample tilt defaults to −40° about the lab Y axis, which is the standard
+<p>The sample tilt defaults to +40° about the lab Y axis, which is the standard
 incidence geometry at many Laue micro-diffraction beamlines.  Override with
 <code>sample_tilt_deg</code> and <code>sample_tilt_axis</code> on any plot method.</p>
 <hr />

@@ -61,6 +61,8 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
@@ -145,17 +147,17 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#9-quick-reference-key-equations">9. Quick-reference: key equations</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#references">References</a>
+    </li>
     </ul>
                 </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
-                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -172,6 +174,14 @@
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
                   </li>
@@ -215,6 +225,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -239,7 +263,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -438,19 +476,63 @@ using the energy-dependent anomalous form factors <span class="arithmatex">\(f'(
 Henke tables.  <em>xrayutilities</em> handles this automatically via
 <code>crystal.StructureFactor(G, en=E)</code>.</p>
 <h3 id="42-lorentzpolarisation-factor">4.2 Lorentz–polarisation factor<a class="headerlink" href="#42-lorentzpolarisation-factor" title="Permanent link">&para;</a></h3>
-<p>For an <strong>unpolarised</strong> beam the Lorentz–polarisation (LP) factor is</p>
+<h4 id="421-monochromatic-rotating-crystal-formula">4.2.1 Monochromatic, rotating-crystal formula<a class="headerlink" href="#421-monochromatic-rotating-crystal-formula" title="Permanent link">&para;</a></h4>
+<p>For a <strong>monochromatic</strong> beam and a rotating (powder/single-crystal
+diffractometer) geometry, the classic unpolarised Lorentz–polarisation (LP)
+factor is</p>
 <div class="arithmatex">\[
 LP(2\theta) = \frac{1 + \cos^2 2\theta}{2\sin^2\theta\cos\theta}
 \]</div>
 <p>This accounts for:</p>
 <ul>
 <li><strong>Lorentz factor</strong> <span class="arithmatex">\(1/\sin^2\theta\cos\theta\)</span> — the time a reciprocal-lattice
-  point spends intersecting the Ewald sphere (here it is absorbed into the
-  angular width of the white-beam window);</li>
+  point spends intersecting the Ewald sphere;</li>
 <li><strong>Polarisation factor</strong> <span class="arithmatex">\((1+\cos^2 2\theta)/2\)</span> — for an unpolarised incident
   beam the scattered intensity is reduced by the projection of the polarisation
   onto the scattering plane.</li>
 </ul>
+<p>This form does not apply to white-beam Laue: there is no crystal rotation, and
+a synchrotron source is strongly <strong>linearly polarised</strong>, not unpolarised.</p>
+<h4 id="422-polychromatic-laue-formula-synchrotron">4.2.2 Polychromatic Laue formula (synchrotron)<a class="headerlink" href="#422-polychromatic-laue-formula-synchrotron" title="Permanent link">&para;</a></h4>
+<p>For a <strong>stationary crystal</strong> in a <strong>polychromatic</strong> (white) beam, each
+reflection <span class="arithmatex">\(hkl\)</span> diffracts a single wavelength <span class="arithmatex">\(\lambda_{hkl} = hc/E_{hkl}\)</span>
+(§3.2), so the Lorentz factor takes a different form, and the polarisation
+factor should reflect the source's actual polarisation state rather than an
+unpolarised average:</p>
+<div class="arithmatex">\[
+\boxed{
+LP(2\theta) = P(2\theta,\chi)\,\frac{\lambda_{hkl}^2}{\sin 2\theta}
+}
+\]</div>
+<p><strong>Polarisation factor for a horizontally-polarised synchrotron source.</strong>
+Synchrotron radiation from a bending magnet or insertion device is emitted
+in the orbit plane and is (to a very good approximation, on-axis) fully
+linearly polarised with the electric field horizontal, i.e. along the lab
+<span class="arithmatex">\(y\)</span>-axis (§5.1). For this polarisation state the exact polarisation factor is</p>
+<div class="arithmatex">\[
+P(2\theta,\chi) = 1 - \sin^2(2\theta)\,\sin^2(\chi)
+\]</div>
+<p>where <span class="arithmatex">\(\chi\)</span> is the azimuthal angle of the diffracted beam defined in §6.2
+(<span class="arithmatex">\(\chi = 0\)</span> in the vertical plane, <span class="arithmatex">\(\chi = 90°\)</span> in the horizontal plane). <span class="arithmatex">\(P\)</span>
+ranges from <span class="arithmatex">\(\cos^2 2\theta\)</span> for spots scattering in the horizontal plane
+(fully suppressed, matching the classical dipole-radiation pattern for
+in-plane scattering of horizontally-polarised light) up to <span class="arithmatex">\(1\)</span> for spots in
+the vertical plane (scattering perpendicular to the polarisation direction,
+unaffected).</p>
+<p><strong>Unpolarised approximation.</strong> When <span class="arithmatex">\(\chi\)</span> is not known or not needed (e.g.
+integrated powder-like intensities averaged over azimuth), the azimuthal
+average of <span class="arithmatex">\(P\)</span> recovers the familiar unpolarised form</p>
+<div class="arithmatex">\[
+\langle P\rangle_\chi = \frac{1+\cos^2 2\theta}{2}
+\]</div>
+<p>This average is adequate when spots are distributed symmetrically over the
+full azimuthal range, but can be wrong by up to ~30% for an individual spot
+near the horizontal or vertical plane — for a Laue pattern, where each spot
+sits at its own fixed <span class="arithmatex">\(\chi\)</span>, the exact per-spot formula should be preferred.</p>
+<p>Both forms are implemented in <code>nrxrdct.laue.simulation.lorentz_pol</code>
+(<code>chi_deg</code> supplied → exact horizontal-polarisation formula; omitted →
+unpolarised average; <code>energy_eV</code> omitted entirely → falls back to the
+monochromatic rotating-crystal formula of §4.2.1).</p>
 <h3 id="43-synchrotron-source-spectrum">4.3 Synchrotron source spectrum<a class="headerlink" href="#43-synchrotron-source-spectrum" title="Permanent link">&para;</a></h3>
 <p>The effective flux weight <span class="arithmatex">\(S(E)\)</span> applied to each Laue spot is the product of
 the source spectrum and the KB mirror transmission:</p>
@@ -682,14 +764,19 @@ R_\text{KB}(E) = R_\text{single}(E)^{n_\text{mirrors}}
 curve, sharpening the cutoff.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># BM32 / ESRF defaults</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">BM32_KB</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">material</span>        <span class="o">=</span> <span class="s1">&#39;Rh&#39;</span><span class="p">,</span>       <span class="c1"># Rhodium coating</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">grazing_angle_mrad</span> <span class="o">=</span> <span class="mf">2.5</span><span class="p">,</span>     <span class="c1"># 2.5 mrad ≈ 0.143°</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">material</span>        <span class="o">=</span> <span class="s1">&#39;Ir&#39;</span><span class="p">,</span>       <span class="c1"># Iridium coating</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">grazing_angle_mrad</span> <span class="o">=</span> <span class="mf">2.8</span><span class="p">,</span>     <span class="c1"># 2.8 mrad ≈ 0.160°</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">n_mirrors</span>       <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>          <span class="c1"># HFM + VFM</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">roughness_ang</span>   <span class="o">=</span> <span class="mf">3.0</span><span class="p">,</span>        <span class="c1"># 3 Å RMS roughness</span>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
 </code></pre></div>
-<p>The Rh <span class="arithmatex">\(L\)</span>-edge is at <span class="arithmatex">\(\sim 3\)</span> keV (outside the useful range) and the <span class="arithmatex">\(K\)</span>-edge
-at <span class="arithmatex">\(\sim 23\)</span> keV introduces a small jump in reflectivity near the cutoff.</p>
+<p>Any absorption edge of the coating that falls inside the useful bandpass
+(e.g. an Ir <span class="arithmatex">\(L\)</span>-edge) shows up as a small jump in <span class="arithmatex">\(R_\text{KB}(E)\)</span> rather than
+a smooth curve; <code>kb_reflectivity</code> picks this up automatically through
+<code>xrayutilities</code>' tabulated <span class="arithmatex">\(\delta,\beta\)</span>, so it does not need to be hard-coded
+here. The values above are the current <code>BM32_KB</code> defaults in
+<code>nrxrdct.laue.simulation</code> — check that module directly if you need the exact
+numbers, since beamline mirror coatings and grazing angles do get retuned.</p>
 <h4 id="445-effective-spectral-weight">4.4.5 Effective spectral weight<a class="headerlink" href="#445-effective-spectral-weight" title="Permanent link">&para;</a></h4>
 <p>Combining source and mirrors:</p>
 <div class="arithmatex">\[
@@ -697,15 +784,20 @@ at <span class="arithmatex">\(\sim 23\)</span> keV introduces a small jump in re
 S_\text{eff}(E) = S_\text{source}(E) \times R_\text{KB}(E)
 }
 \]</div>
-<p>For BM32 with bending-magnet source (<span class="arithmatex">\(E_c = 20\)</span> keV), Rh mirrors at 2.5 mrad,
-and a 3 Å roughness, the effective bandpass is approximately <strong>5–22 keV</strong>:</p>
+<p>For BM32 with a bending-magnet source (<span class="arithmatex">\(E_c = 20\)</span> keV) and the current
+<code>BM32_KB</code> defaults (Ir mirrors at 2.8 mrad, 3 Å roughness), the effective
+bandpass is set by the same two competing effects, just at whatever cutoff
+those numbers currently produce:</p>
 <ul>
-<li>Below 5 keV: detector sensitivity drops and the mirror reflectivity is high
-  but the source flux is low.</li>
-<li>Above ~22 keV: the Rh mirror cutoff (<span class="arithmatex">\(\theta_c \approx \theta_m\)</span> at ~22 keV
-  for 2.5 mrad) and the exponential tail of the BM spectrum jointly suppress
-  the flux.</li>
+<li>At low energy: detector sensitivity drops even though the mirror
+  reflectivity is near unity and the source flux is still rising.</li>
+<li>At high energy: the mirror cutoff (<span class="arithmatex">\(\theta_c \approx \theta_m\)</span>) and the
+  exponential tail of the BM spectrum jointly suppress the flux.</li>
 </ul>
+<p>Because <span class="arithmatex">\(\theta_c\)</span> (and therefore the cutoff energy) depends on both the
+coating material and the grazing angle, re-tuning either one shifts the
+bandpass — call <code>kb_reflectivity</code> with the current <code>BM32_KB</code> values to get
+the exact numbers rather than assuming a fixed range.</p>
 <table>
 <thead>
 <tr>
@@ -780,7 +872,20 @@ Euler angles <span class="arithmatex">\((\varphi_1, \Phi, \varphi_2)\)</span>:</
 <div class="arithmatex">\[
 U = R_z(\varphi_1)\,R_x(\Phi)\,R_z(\varphi_2)
 \]</div>
-<p>The columns of <span class="arithmatex">\(U\)</span> are the crystal basis vectors expressed in lab coordinates.</p>
+<p>The columns of <span class="arithmatex">\(U\)</span> are the crystal basis vectors expressed in lab coordinates.
+This <span class="arithmatex">\(U_\text{sample}\)</span> describes the crystal relative to the <strong>sample
+surface</strong> frame; <code>euler_to_U(phi1, Phi, phi2, sample_tilt_deg)</code> folds in the
+sample-to-lab rotation needed when the surface itself is tilted on the
+diffractometer:</p>
+<div class="arithmatex">\[
+U = R_y(+\,\text{sample\_tilt\_deg})\,U_\text{sample}
+\]</div>
+<p>Positive <code>sample_tilt_deg</code> tilts the sample's front edge downward into the
+beam — the standard reflection geometry — and the default <strong>+40°</strong> is what
+every strain/stress reference-frame transform in
+<a href="../laue_strain/#reference-frames">Strain Analysis</a> and
+<a href="../laue_stress/">Elastic Stress</a> assumes unless <code>sample_tilt_deg</code> is
+overridden.</p>
 <h3 id="53-matstarlab-convention">5.3 <code>matstarlab</code> convention<a class="headerlink" href="#53-matstarlab-convention" title="Permanent link">&para;</a></h3>
 <p>LaueTools stores orientations as the <strong><span class="arithmatex">\(3\times3\)</span> matrix of reciprocal basis
 vectors in lab coordinates</strong>, flattened to a 9-element array in the order
@@ -901,17 +1006,24 @@ on the detector.</p>
 \]</div>
 <p>It has 5 independent components (a traceless symmetric <span class="arithmatex">\(3\times3\)</span> tensor).</p>
 <h3 id="82-peak-shift-jacobian">8.2 Peak-shift Jacobian<a class="headerlink" href="#82-peak-shift-jacobian" title="Permanent link">&para;</a></h3>
-<p>The shift in the <span class="arithmatex">\((2\theta, \chi)\)</span> position of spot <span class="arithmatex">\(hkl\)</span> due to a small
-deviatoric strain <span class="arithmatex">\(\delta\varepsilon'\)</span> is</p>
+<p>The shift in the detector pixel position of spot <span class="arithmatex">\(hkl\)</span> due to a small strain
+increment <span class="arithmatex">\(\delta\varepsilon\)</span> is</p>
 <div class="arithmatex">\[
-\begin{pmatrix}\delta(2\theta)\\\delta\chi\end{pmatrix}
-= J_{hkl}\,\delta\varepsilon'_\text{Voigt}
+\begin{pmatrix}\delta x_\text{cam}\\\delta y_\text{cam}\end{pmatrix}
+= J_{hkl}\,\delta\varepsilon_\text{Voigt}
 \]</div>
-<p>where <span class="arithmatex">\(J_{hkl}\)</span> is a <span class="arithmatex">\(2\times5\)</span> Jacobian matrix that depends on <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>
-and the detector geometry.  With enough spots (<span class="arithmatex">\(\geq 3\)</span> independent reflections)
-the 5-component deviatoric strain tensor can be extracted by least-squares.
-The function <code>strain_spot_jacobian</code> in <code>nrxrdct.laue</code> computes <span class="arithmatex">\(J_{hkl}\)</span>
-analytically.</p>
+<p>where <span class="arithmatex">\(J_{hkl}\)</span> is a <span class="arithmatex">\(2\times6\)</span> Jacobian evaluated by finite differences over
+all six Voigt strain components. Because a pure hydrostatic strain rescales
+<span class="arithmatex">\(\lvert\mathbf{G}\rvert\)</span> without changing its direction (§8.1), the isotropic
+combination of columns of <span class="arithmatex">\(J_{hkl}\)</span> contributes (near-)zero pixel shift — the
+<span class="arithmatex">\(2\times6\)</span> matrix is only ever rank <span class="arithmatex">\(\leq 5\)</span> in practice, which is the
+Jacobian expressing the same blind spot derived above rather than a separate
+assumption. With enough spots (<span class="arithmatex">\(\geq 3\)</span> independent reflections) the
+deviatoric strain can be extracted by least-squares. <code>strain_spot_jacobian</code>
+in <code>nrxrdct.laue</code> computes <span class="arithmatex">\(J_{hkl}\)</span> this way; see
+<a href="../laue_strain/">Strain Analysis</a> for how <code>fit_strain_orientation</code> uses the
+same physics in its full nonlinear fitting model, including which strain
+components to hold fixed.</p>
 <hr />
 <h2 id="9-quick-reference-key-equations">9. Quick-reference: key equations<a class="headerlink" href="#9-quick-reference-key-equations" title="Permanent link">&para;</a></h2>
 <table>
@@ -939,8 +1051,12 @@ analytically.</p>
 <td><span class="arithmatex">\(2\theta = \arccos(\hat{k}_i\cdot\hat{k}_f)\)</span></td>
 </tr>
 <tr>
-<td>LP factor (unpolarised)</td>
+<td>LP factor (monochromatic, unpolarised)</td>
 <td><span class="arithmatex">\(LP = (1+\cos^2 2\theta)/(2\sin^2\theta\cos\theta)\)</span></td>
+</tr>
+<tr>
+<td>LP factor (Laue, synchrotron, horizontal pol.)</td>
+<td><span class="arithmatex">\(LP = \left[1-\sin^2(2\theta)\sin^2\chi\right]\lambda_{hkl}^2/\sin 2\theta\)</span></td>
 </tr>
 <tr>
 <td>BM critical energy (ESRF)</td>
@@ -948,12 +1064,48 @@ analytically.</p>
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<p><strong>Textbooks — general X-ray diffraction</strong></p>
+<ul>
+<li>Warren, B. E. <em>X-Ray Diffraction.</em> Dover Publications, New York, 1990. (Unabridged reprint of the 1969 Addison-Wesley edition.) Chapters 1–4 cover kinematical scattering, the structure factor, systematic absences, and the Lorentz–polarisation factor — the canonical reference for §1–4.</li>
+<li>Als-Nielsen, J. &amp; McMorrow, D. <em>Elements of Modern X-ray Physics</em>, 2nd ed. Wiley, Chichester, 2011. ISBN 978-0-470-97395-0. Chapters 1–3 derive scattering amplitudes, anomalous dispersion, and the Ewald sphere construction.</li>
+<li>Authier, A. <em>Dynamical Theory of X-Ray Diffraction.</em> Oxford University Press, Oxford, 2001. ISBN 978-0-19-855960-2. Chapter 1 reviews the kinematical (Born) limit used throughout <code>nrxrdct.laue</code>.</li>
+<li>Cullity, B. D. &amp; Stock, S. R. <em>Elements of X-Ray Diffraction</em>, 3rd ed. Pearson/Prentice Hall, Upper Saddle River NJ, 2001. ISBN 978-0-201-61091-0. A pedagogical introduction to Bragg's law, the reciprocal lattice, and systematic absences.</li>
+<li>Hammond, C. <em>The Basics of Crystallography and Diffraction</em>, 4th ed. Oxford University Press, Oxford, 2015. ISBN 978-0-19-873868-8. Covers direct and reciprocal lattices, Laue and powder methods, and the gnomonic projection (§7.1).</li>
+</ul>
+<p><strong>Synchrotron radiation and source spectra</strong></p>
+<ul>
+<li>Kim, K.-J. Characteristics of synchrotron radiation. <em>AIP Conf. Proc.</em> <strong>184</strong>, 565–632 (1989). DOI: <a href="https://doi.org/10.1063/1.38046">10.1063/1.38046</a>. Derives the on-axis bending-magnet / wiggler spectral flux formula (<code>spectrum_bm</code>) used in §4.3.</li>
+<li>Attwood, D. <em>Soft X-Rays and Extreme Ultraviolet Radiation.</em> Cambridge University Press, Cambridge, 1999. ISBN 978-0-521-02997-1. Chapter 5 covers synchrotron radiation characteristics, critical energy, and undulator harmonics.</li>
+</ul>
+<p><strong>KB mirrors and X-ray optics</strong></p>
+<ul>
+<li>Kirkpatrick, P. &amp; Baez, A. V. Formation of optical images by X-rays. <em>J. Opt. Soc. Am.</em> <strong>38</strong>, 766–774 (1948). DOI: <a href="https://doi.org/10.1364/JOSA.38.000766">10.1364/JOSA.38.000766</a>. The original KB mirror geometry (§4.4).</li>
+<li>Névot, L. &amp; Croce, P. Caractérisation des surfaces par réflexion rasante de rayons X. <em>Rev. Phys. Appl.</em> <strong>15</strong>, 761–779 (1980). DOI: <a href="https://doi.org/10.1051/rphysap:01980001503076100">10.1051/rphysap:01980001503076100</a>. Introduces the roughness damping factor used in <code>kb_reflectivity</code>.</li>
+<li>Parratt, L. G. Surface studies of solids by total reflection of X-rays. <em>Phys. Rev.</em> <strong>95</strong>, 359–369 (1954). DOI: <a href="https://doi.org/10.1103/PhysRev.95.359">10.1103/PhysRev.95.359</a>. Fresnel reflectivity near the critical angle — the basis of the single-mirror reflectivity calculation.</li>
+</ul>
+<p><strong>White-beam Laue diffraction and LaueTools</strong></p>
+<ul>
+<li>Robach, O., Micha, J.-S., Ulrich, O. &amp; Gergaud, P. Full local elastic strain tensor from Laue microdiffraction. <em>J. Appl. Cryst.</em> <strong>44</strong>, 688–696 (2011). DOI: <a href="https://doi.org/10.1107/S0021889811003099">10.1107/S0021889811003099</a>. Describes the LaueTools framework: frame conventions, detector calibration, and the <code>matstarlab</code> orientation representation used throughout <code>nrxrdct.laue</code>.</li>
+<li>Chung, J.-S. &amp; Ice, G. E. Automated indexing for texture and strain measurement with broad-bandpass x-ray microbeams. <em>J. Appl. Phys.</em> <strong>86</strong>, 5249–5255 (1999). DOI: <a href="https://doi.org/10.1063/1.371507">10.1063/1.371507</a>. Introduces the inter-spot angle matching strategy for automated Laue indexing (§7.2).</li>
+<li>Ice, G. E., Budai, J. D. &amp; Pang, J. W. L. The race to X-ray microbeam and nanobeam science. <em>Science</em> <strong>334</strong>, 1234–1239 (2011). DOI: <a href="https://doi.org/10.1126/science.1202366">10.1126/science.1202366</a>. Reviews white-beam Laue microdiffraction for strain and orientation mapping.</li>
+</ul>
+<p><strong>Strain analysis from Laue patterns</strong></p>
+<ul>
+<li>Tamura, N. <em>et al.</em> Scanning X-ray microdiffraction with submicrometer white beam for strain/stress and orientation mapping in thin films. <em>J. Synchrotron Rad.</em> <strong>10</strong>, 137–143 (2003). DOI: <a href="https://doi.org/10.1107/S0909049502021362">10.1107/S0909049502021362</a>. Describes deviatoric strain determination from Laue peak-shift Jacobians (§8.2) and the insensitivity to hydrostatic strain.</li>
+<li>Barabash, R. I. &amp; Ice, G. E. (eds.) <em>Strain and Dislocation Gradients from Diffraction.</em> Imperial College Press, London, 2014. ISBN 978-1-908979-62-9. Comprehensive treatment of deviatoric vs. hydrostatic strain separation.</li>
+</ul>
+<p><strong>Anomalous scattering (form factors)</strong></p>
+<ul>
+<li>Henke, B. L., Gullikson, E. M. &amp; Davis, J. C. X-ray interactions: photoabsorption, scattering, transmission, and reflection at E = 50–30,000 eV, Z = 1–92. <em>At. Data Nucl. Data Tables</em> <strong>54</strong>, 181–342 (1993). DOI: <a href="https://doi.org/10.1006/adnd.1993.1013">10.1006/adnd.1993.1013</a>. Tabulated <span class="arithmatex">\(f'(E)\)</span>, <span class="arithmatex">\(f''(E)\)</span> used by xrayutilities and referenced in §1.1 and §4.1.</li>
+</ul>
               
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../gpu/" class="btn btn-neutral float-left" title="GPU Support"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../laue_theory_refs/" class="btn btn-neutral float-right" title="Laue Theory References">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../s3dxrd/" class="btn btn-neutral float-left" title="Scanning 3DXRD (s3DXRD)"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_thin_film_satellites/" class="btn btn-neutral float-right" title="Thin-Film Satellites">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -980,10 +1132,10 @@ analytically.</p>
         </span>
     
     
-      <span><a href="../gpu/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../s3dxrd/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../laue_theory_refs/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../laue_thin_film_satellites/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>

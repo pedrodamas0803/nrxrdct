@@ -61,13 +61,13 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
     <ul class="current">
                 <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
                 </li>
                 <li class="toctree-l2 current"><a class="reference internal current" href="#">Thin-Film Satellites</a>
     <ul class="current">
@@ -95,13 +95,15 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#6-implementation-in-simulate_laue_stack">6. Implementation in simulate_laue_stack</a>
     </li>
+    <li class="toctree-l3"><a class="reference internal" href="#references">References</a>
+    </li>
     </ul>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -118,6 +120,14 @@
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
                   </li>
@@ -161,6 +171,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -185,7 +209,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -277,23 +315,95 @@ e^{\,i(N-1)\varphi/2}
 \Delta q_n \equiv (\mathbf{Q} - \mathbf{G}_{hkl})\cdot\hat{n}
 = \frac{2\pi m}{t}, \qquad m = \pm 1,\pm 2,\ldots
 \]</div>
+<p><strong>Why these are exact zeros, not just small.</strong> <span class="arithmatex">\(F_\text{slab}\)</span> is a sum of <span class="arithmatex">\(N\)</span>
+unit-length phasors, one per unit cell, with phasor <span class="arithmatex">\(n\)</span> pointing in direction
+<span class="arithmatex">\(n\varphi\)</span> (its position along <span class="arithmatex">\(\hat n\)</span> is <span class="arithmatex">\(nd\)</span>, so its phase is <span class="arithmatex">\(\mathbf
+Q\cdot nd\,\hat n = n\varphi\)</span>). At the Bragg condition <span class="arithmatex">\(\varphi = 2\pi\ell\)</span>
+every phasor points the same way, so they add tip-to-tail in a straight line
+and reach the maximum possible length <span class="arithmatex">\(N\)</span> — hence <span class="arithmatex">\(|F_\text{slab}|^2=N^2\)</span>.
+Move <span class="arithmatex">\(\varphi\)</span> away from that condition and successive phasors are rotated
+a little further from their neighbour, so the chain starts to curl into an
+arc instead of a straight line, and the resultant (the chord closing the
+arc) shortens. It closes all the way to a point — the phasors return exactly
+to where they started, cancelling completely — whenever the chain completes
+a whole number of turns over its <span class="arithmatex">\(N\)</span> steps without that number being a
+multiple of <span class="arithmatex">\(N\)</span> itself. That is exactly the condition <span class="arithmatex">\(N\varphi = 2\pi(N\ell + m)\)</span>
+with <span class="arithmatex">\(m\not\equiv 0\pmod N\)</span>, i.e. <span class="arithmatex">\(\varphi = 2\pi\ell + 2\pi m/N\)</span>: the <span class="arithmatex">\(N\)</span>
+phasors sit at the <span class="arithmatex">\(N\)</span> evenly-spaced vertices of a closed regular polygon
+(the <span class="arithmatex">\(N\)</span>-th roots of unity, rotated by <span class="arithmatex">\(2\pi\ell\)</span>), and any set of <span class="arithmatex">\(N\)</span>
+equally-spaced unit vectors around a full circle sums to zero by symmetry —
+each vector is exactly cancelled by the one diametrically opposite it (or,
+for odd <span class="arithmatex">\(N\)</span>, by the vector sum of its neighbours). This is the same
+root-of-unity cancellation behind the sharp dark fringes of an <span class="arithmatex">\(N\)</span>-slit
+optical diffraction grating, since <span class="arithmatex">\(F_\text{slab}\)</span> has the identical
+finite-geometric-series form <span class="arithmatex">\(\sum_n e^{in\varphi}\)</span>.</p>
+<p>Between two such zeros the phasor chain traces only a fraction of a full
+turn, so it doesn't close — there is always some nonzero net chord — which
+is why intensity revives into the side maxima described next. It never
+revives anywhere near <span class="arithmatex">\(N^2\)</span>, though: even at the best-case angle between two
+zeros the chain has curled through the better part of a full turn, so the
+chord stays short compared to the fully-aligned <span class="arithmatex">\(N\)</span>-phasor line at a true
+Bragg peak. That is the geometric reason side-maximum intensities are
+suppressed by roughly <span class="arithmatex">\(1/m^2\)</span> relative to the Bragg peak (worked out below),
+not just "smaller by some amount."</p>
 <blockquote>
-<p><strong>Important:</strong> these integer-<span class="arithmatex">\(m\)</span> positions are <em>dark</em> fringes (zeros), <strong>not</strong>
-the observable bright fringes.</p>
+<p><strong>Important:</strong> the integer-<span class="arithmatex">\(m\)</span> positions above are <em>dark</em> fringes (zeros),
+<strong>not</strong> the observable bright fringes — don't mistake <span class="arithmatex">\(\Delta q_n = 2\pi/t\)</span>
+for the first visible satellite. The actual bright fringes sit at the
+half-integer-ish positions derived next, offset from these zeros by about
+half a fringe spacing.</p>
 </blockquote>
 <h3 id="side-maxima-observable-thickness-fringes">Side maxima (observable thickness fringes)<a class="headerlink" href="#side-maxima-observable-thickness-fringes" title="Permanent link">&para;</a></h3>
-<p>The subsidiary maxima of <span class="arithmatex">\(\sin^2(N\varphi/2)/\sin^2(\varphi/2)\)</span> occur
-between consecutive zeros.  For large <span class="arithmatex">\(N\)</span> they converge to the
-<em>half-integer</em> positions</p>
+<p>Between two zeros the phasor chain no longer closes into a symmetric,
+cancelling polygon — it sweeps through only part of a full turn, so there is
+always some nonzero leftover chord. That chord vanishes at both zeros
+bounding the lobe and necessarily peaks somewhere in between: that peak is
+the observable fringe.</p>
+<p><strong>Where, exactly.</strong> Differentiating <span class="arithmatex">\(\sin^2(N\varphi/2)/\sin^2(\varphi/2)\)</span>
+and setting the result to zero gives the exact extremum condition
+<span class="arithmatex">\(N\tan(\varphi/2) = \tan(N\varphi/2)\)</span> — the classical diffraction-grating
+equation for subsidiary maxima. The fringes of interest sit at small
+<span class="arithmatex">\(\varphi \propto 1/N\)</span> for <span class="arithmatex">\(N\gg1\)</span>, so <span class="arithmatex">\(\sin(\varphi/2)\approx\varphi/2\)</span> and,
+writing <span class="arithmatex">\(u \equiv N\varphi/2\)</span>, the interference function collapses onto the
+<strong>sinc² function</strong></p>
+<div class="arithmatex">\[
+\left|F_\text{slab}\right|^2 \approx \left|f_\text{cell}\right|^2 N^2
+\left(\frac{\sin u}{u}\right)^{\!2}
+\]</div>
+<p>— exactly the Fraunhofer diffraction pattern of a single slit of length <span class="arithmatex">\(t\)</span>,
+since <span class="arithmatex">\(N\)</span> discrete unit cells blur into a continuous slab in this limit. Its
+subsidiary maxima solve <span class="arithmatex">\(\tan u = u\)</span>, a transcendental equation with a fixed,
+<span class="arithmatex">\(N\)</span>-independent set of roots; the first nontrivial one is
+<span class="arithmatex">\(u_1 \approx 4.4934\,\text{rad} = 1.4303\,\pi\)</span>, giving</p>
 <div class="arithmatex">\[
 \boxed{
 \Delta q_n \approx \left(|m| + \tfrac{1}{2}\right)\frac{2\pi}{t},
 \qquad m = \pm 1, \pm 2, \ldots
 }
 \]</div>
-<p>The first side maximum (<span class="arithmatex">\(|m|=1\)</span>) lies at <span class="arithmatex">\(\approx 1.43\,(2\pi/t)\)</span>
-(converging toward <span class="arithmatex">\(1.5\,(2\pi/t)\)</span> for large <span class="arithmatex">\(N\)</span>).</p>
-<p>The intensity of the <span class="arithmatex">\(m\)</span>-th side maximum relative to the Bragg peak is</p>
+<p>as a <strong>rough</strong> guide (exact only in the limit <span class="arithmatex">\(|m|\to\infty\)</span>), with the first
+side maximum (<span class="arithmatex">\(|m|=1\)</span>) actually at <span class="arithmatex">\(u_1/\pi \times (2\pi/t) \approx
+1.4303\,(2\pi/t)\)</span> rather than <span class="arithmatex">\(1.5\,(2\pi/t)\)</span>.</p>
+<p>This 5% undershoot is <strong>not</strong> a finite-<span class="arithmatex">\(N\)</span> artefact that disappears for
+thicker layers: <span class="arithmatex">\(u_1\)</span> is already the <span class="arithmatex">\(N\to\infty\)</span> limit, so the first fringe
+sits at <span class="arithmatex">\(1.4303\,(2\pi/t)\)</span> for essentially any <span class="arithmatex">\(N\)</span> of practical interest —
+numerically <span class="arithmatex">\(1.451\)</span> at <span class="arithmatex">\(N=5\)</span>, <span class="arithmatex">\(1.435\)</span> at <span class="arithmatex">\(N=10\)</span>, <span class="arithmatex">\(1.4303\)</span> by <span class="arithmatex">\(N\approx100\)</span>,
+unchanged beyond that. It happens because the half-integer rule assumes
+<span class="arithmatex">\(\sin^2(\varphi/2)\)</span> is flat across one lobe and maximises the numerator
+alone; since that envelope is smaller on the side of the lobe nearer the
+Bragg peak, the true maximum is pulled toward that side. What <em>does</em> make the
+half-integer rule accurate is going to <strong>higher fringe order</strong> <span class="arithmatex">\(m\)</span> at fixed
+<span class="arithmatex">\(N\)</span>, not larger <span class="arithmatex">\(N\)</span> at fixed order — the roots of <span class="arithmatex">\(\tan u = u\)</span> approach
+<span class="arithmatex">\((m+\tfrac12)\pi\)</span> as <span class="arithmatex">\(m\)</span> grows (<span class="arithmatex">\(m=2\)</span>: <span class="arithmatex">\(2.459\)</span>; <span class="arithmatex">\(m=10\)</span>: <span class="arithmatex">\(10.49\)</span>; <span class="arithmatex">\(m=50\)</span>:
+<span class="arithmatex">\(50.498\)</span>, in units of <span class="arithmatex">\(2\pi/t\)</span>). Use the boxed formula to locate roughly
+where a higher-order fringe (<span class="arithmatex">\(|m|\gtrsim 3\)</span>) should be; use <span class="arithmatex">\(1.4303\,(2\pi/t)\)</span>
+for the first fringe specifically if the exact position matters.</p>
+<p>The intensity of the <span class="arithmatex">\(m\)</span>-th side maximum relative to the Bragg peak follows
+from the same sinc² approximation: at the extremum <span class="arithmatex">\(u_m\)</span>, <span class="arithmatex">\(\sin^2u_m =
+u_m^2/(1+u_m^2) \to 1\)</span> for the <span class="arithmatex">\(u_m\gg1\)</span> fringes, so
+<span class="arithmatex">\(|F_\text{slab}(u_m)|^2 \approx |f_\text{cell}|^2 N^2/u_m^2\)</span>, while the Bragg
+peak itself is <span class="arithmatex">\(|F_\text{slab}(0)|^2=N^2|f_\text{cell}|^2\)</span>. Approximating
+<span class="arithmatex">\(u_m\approx(|m|+\tfrac12)\pi\)</span> gives</p>
 <div class="arithmatex">\[
 \frac{|F_\text{sat}|^2}{|F_\text{Bragg}|^2}
 \approx \frac{4}{\pi^2(2|m|+1)^2} \approx
@@ -423,16 +533,41 @@ not suppressed.</p>
 <li><strong>Structure factor</strong> — evaluate <span class="arithmatex">\(|F_\text{stack}(\mathbf{G}_\text{sat})|^2\)</span>
    using either the full coherent sum or the average-period model depending on
    <code>structure_model</code>; apply relaxed threshold for <span class="arithmatex">\(m \neq 0\)</span>.</li>
-<li><strong>Intensity</strong> — <span class="arithmatex">\(I \propto |F|^2 \times LP(2\theta) \times S(E)\)</span>, where
-   <span class="arithmatex">\(LP\)</span> is the Lorentz–polarisation factor and <span class="arithmatex">\(S(E)\)</span> is the synchrotron
-   spectrum.</li>
+<li><strong>Intensity</strong> — <span class="arithmatex">\(I \propto |F|^2 \times LP(2\theta) \times S(E)\)</span>, using the
+   Laue LP factor and synchrotron spectrum derived in
+   <a href="../laue_theory/#4-spot-intensity">Theory §4</a>.</li>
 </ol>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<p><strong>Textbooks</strong></p>
+<ul>
+<li>Warren, B. E. <em>X-Ray Diffraction.</em> Dover Publications, New York, 1990. (Unabridged reprint of the 1969 Addison-Wesley edition.) Chapter 3 derives the Laue interference function and the positions and intensities of subsidiary maxima between Bragg peaks — the canonical reference for §1.</li>
+<li>Als-Nielsen, J. &amp; McMorrow, D. <em>Elements of Modern X-ray Physics</em>, 2nd ed. Wiley, Chichester, 2011. ISBN 978-0-470-97395-0. Chapter 3 derives the single-slab structure factor and the thin-film fringe spacing.</li>
+<li>Authier, A. <em>Dynamical Theory of X-Ray Diffraction.</em> Oxford University Press, Oxford, 2001. ISBN 978-0-19-855960-2. Chapter 1 covers the kinematical (Born) limit used throughout <code>simulate_laue_stack</code>.</li>
+<li>Guinier, A. <em>X-Ray Diffraction in Crystals, Imperfect Crystals, and Amorphous Bodies.</em> Dover Publications, New York, 1994. (Reprint of the 1963 W. H. Freeman edition.) A comprehensive account of the geometric-series structure factor and its relation to crystal size and shape.</li>
+</ul>
+<p><strong>Superlattice satellites and multilayer X-ray diffraction</strong></p>
+<ul>
+<li>Segmüller, A. &amp; Blakeslee, A. E. X-ray diffraction from one-dimensional superlattices in GaAs<span class="arithmatex">\(_{1-x}\)</span>P<span class="arithmatex">\(_x\)</span> crystals. <em>J. Appl. Crystallogr.</em> <strong>6</strong>, 19–24 (1973). DOI: <a href="https://doi.org/10.1107/S0021889873008228">10.1107/S0021889873008228</a>. Seminal paper demonstrating superlattice satellites in compound semiconductors and relating satellite spacing to the bilayer period <span class="arithmatex">\(\Lambda\)</span>.</li>
+<li>Bartels, W. J., Hornstra, J. &amp; Lobeek, D. J. W. X-ray diffraction of multilayers and superlattices. <em>Acta Cryst.</em> <strong>A42</strong>, 539–545 (1986). DOI: <a href="https://doi.org/10.1107/S0108767386098768">10.1107/S0108767386098768</a>. Derives the kinematical structure factor for a periodic bilayer stack and the selection rules for superlattice satellites.</li>
+<li>Fullerton, E. E., Schuller, I. K., Vanderstraeten, H. &amp; Bruynseraede, Y. Structural refinement of superlattices from x-ray diffraction. <em>Phys. Rev. B</em> <strong>45</strong>, 9292–9310 (1992). DOI: <a href="https://doi.org/10.1103/PhysRevB.45.9292">10.1103/PhysRevB.45.9292</a>. A complete kinematical model for fitting satellite intensities and extracting individual layer thicknesses and interface roughness.</li>
+</ul>
+<p><strong>White-beam Laue diffraction and LaueTools</strong></p>
+<ul>
+<li>Robach, O., Micha, J.-S., Ulrich, O. &amp; Gergaud, P. Full local elastic strain tensor from Laue microdiffraction. <em>J. Appl. Cryst.</em> <strong>44</strong>, 688–696 (2011). DOI: <a href="https://doi.org/10.1107/S0021889811003099">10.1107/S0021889811003099</a>. Describes the LaueTools framework (frame conventions, calibration parameters, indexation) on which <code>nrxrdct.laue</code> is built.</li>
+<li>Chung, J.-S. &amp; Ice, G. E. Automated indexing for texture and strain measurement with broad-bandpass x-ray microbeams. <em>J. Appl. Phys.</em> <strong>86</strong>, 5249–5255 (1999). DOI: <a href="https://doi.org/10.1063/1.371507">10.1063/1.371507</a>. Introduces the orientation-matrix conventions (LT frame, <code>matstarlab</code>) used by LaueTools and this package.</li>
+</ul>
+<p><strong>GaN / III-nitride thin films</strong></p>
+<ul>
+<li>Metzger, T. H. <em>et al.</em> X-ray diffraction study of InGaN/GaN superlattices on GaN/(0001) sapphire. <em>Phil. Mag. A</em> <strong>77</strong>, 1013–1025 (1998). DOI: <a href="https://doi.org/10.1080/01418619808221234">10.1080/01418619808221234</a>. Reports thickness fringes and superlattice satellites from InGaN/GaN multilayers grown along <span class="arithmatex">\([0001]\)</span> — directly analogous to the structures modelled by <code>simulate_laue_stack</code>.</li>
+<li>Vickers, M. E. <em>et al.</em> Determination of InGaN layer thicknesses in InGaN/GaN quantum well structures by x-ray reflectometry and scattering. <em>J. Appl. Phys.</em> <strong>94</strong>, 1559–1566 (2003). DOI: <a href="https://doi.org/10.1063/1.1586996">10.1063/1.1586996</a>. Demonstrates extraction of quantum-well thicknesses from fringe spacing, providing experimental validation of the <span class="arithmatex">\(2\pi/t\)</span> fringe-period formula.</li>
+</ul>
               
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="../laue_theory_refs/" class="btn btn-neutral float-left" title="Laue Theory References"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../laue_thin_film_satellites_refs/" class="btn btn-neutral float-right" title="Thin-Film Satellite References">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../laue_theory/" class="btn btn-neutral float-left" title="Diffraction and Laue Theory"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_layered_structures/" class="btn btn-neutral float-right" title="Layered Structures">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -459,10 +594,10 @@ not suppressed.</p>
         </span>
     
     
-      <span><a href="../laue_theory_refs/" style="color: #fcfcfc">&laquo; Previous</a></span>
+      <span><a href="../laue_theory/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../laue_thin_film_satellites_refs/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../laue_layered_structures/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>

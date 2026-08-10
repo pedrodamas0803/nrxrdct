@@ -1,0 +1,1917 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../../img/favicon.ico" />
+    <title>odf - nrxrdct</title>
+    <link rel="stylesheet" href="../../../css/theme.css" />
+    <link rel="stylesheet" href="../../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "odf";
+        var mkdocs_page_input_path = "api/texture/odf.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../../user-guide/texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../user-guide/powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../../utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >texture</a>
+    <ul class="current">
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">odf</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#nrxrdct.texture.odf">odf</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf--diffraction-geometry-convention">Diffraction geometry convention</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf.assemble_pole_figure_data">assemble_pole_figure_data</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf.assemble_pole_figure_sinogram">assemble_pole_figure_sinogram</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf.extract_ring_intensity">extract_ring_intensity</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf.pole_figure_coordinates">pole_figure_coordinates</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#nrxrdct.texture.odf.sinogram_to_pole_figure">sinogram_to_pole_figure</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">API Reference</li>
+          <li class="breadcrumb-item">texture</li>
+      <li class="breadcrumb-item active">odf</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/api/texture/odf.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="odf">odf<a class="headerlink" href="#odf" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="nrxrdct.texture.odf" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">nrxrdct.texture.odf</span>
+
+
+<a href="#nrxrdct.texture.odf" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Pole-figure extraction for texture tomography.</p>
+<p>This is the texture-tomography analogue of :mod:<code>nrxrdct.xrdct.sinogram</code>:
+instead of assembling a powder (2theta) sinogram, it extracts azimuthal
+(chi) intensity profiles around a chosen hkl Debye-Scherrer ring from
+cake-integrated diffraction images acquired by the same XRD-CT scan
+(:class:<code>nrxrdct.xrdct.parameters.Scan</code>, :mod:<code>nrxrdct.azimuthal.integration</code>),
+and converts scan geometry (2theta, chi, sample rotation) into pole-figure
+coordinates on the sample's orientation sphere.</p>
+<p>This module stops at pole-figure data: it does not invert pole figures into
+an orientation distribution function (ODF). The output is the per-scan-
+position raw material an ODF inversion (harmonic series, WIMV, ...) would
+consume, analogous to how :func:<code>nrxrdct.xrdct.sinogram.assemble_sinogram</code>
+produces the sinogram that :func:<code>nrxrdct.xrdct.reconstruction.reconstruct_slice</code>
+later consumes.</p>
+<h4 id="nrxrdct.texture.odf--diffraction-geometry-convention">Diffraction geometry convention<a class="headerlink" href="#nrxrdct.texture.odf--diffraction-geometry-convention" title="Permanent link">&para;</a></h4>
+<p>:func:<code>pole_figure_coordinates</code> assumes a single vertical rotation axis
+(the XRD-CT <code>rot</code> motor) and a horizontal incident beam, with the
+azimuthal (chi) angle of :func:<code>~nrxrdct.azimuthal.integration.cake_integration</code>
+measured from the vertical (rotation-axis) direction on the detector,
+increasing towards the horizontal direction. Beamlines differ in where
+chi=0 points and which way it increases; use <em>chi_offset_deg</em> and
+<em>chi_sign</em> to align the convention with your setup before trusting the
+resulting pole-figure angles.</p>
+<p>As a concrete data point (not a substitute for calibrating your own setup):
+pyFAI's own azimuthal-angle convention (<code>AzimuthalIntegrator.chiArray</code> /
+the <em>azimuthal</em> axis returned by :func:<code>~nrxrdct.azimuthal.integration.cake_integration</code>)
+was verified empirically to be <code>chi = atan2(row_offset, col_offset)</code> relative
+to the detector's beam-center pixel — i.e. chi=0 along the <strong>horizontal</strong>
+(column) detector axis, not vertical as this module's derivation assumes by
+default. A <code>chi_offset_deg</code> of roughly 90 (sign depending on your detector's
+row/column handedness) is therefore a more likely starting point than 0 for
+data straight out of <code>cake_integration</code> — but detector rotation/flip flags
+can shift this per beamline, so verify rather than assume.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf.assemble_pole_figure_data" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">assemble_pole_figure_data</span>
+
+
+<a href="#nrxrdct.texture.odf.assemble_pole_figure_data" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">assemble_pole_figure_data</span><span class="p">(</span><span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">tth_range</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">hkl_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">background_ranges</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">npt_rad</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">npt_azim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">360</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">camera_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;eiger&#39;</span><span class="p">,</span> <span class="n">monitor_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;fpico6&#39;</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;rot&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract per-frame pole-figure (chi-intensity) profiles for one hkl ring
+from a raw XRD-CT master file, in parallel.</p>
+<p>Mirrors :func:<code>nrxrdct.azimuthal.integration.integrate_powder_parallel</code>
+(same master-file layout, entry validation, and monitor normalisation) but
+cake-integrates each frame and reduces it to an azimuthal intensity
+profile via :func:<code>extract_ring_intensity</code>, instead of a 1-D powder
+pattern. Results are appended to <em>output_file</em> under
+<code>pole_figures/&lt;hkl_label&gt;/scan_XXXX</code>; scans already present are skipped,
+so a failed run can be resumed by calling this function again.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>master_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the master HDF5 file containing all scan entries.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>output_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the output HDF5 file.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>poni_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the PONI calibration file.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>mask_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the mask file (fabio-readable).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>tth_range</code></b>
+                  (<code><span title="tuple">tuple</span></code>)
+              –
+              <div class="doc-md-description">
+                <p><code>(low, high)</code> 2theta window bracketing the hkl ring,
+passed to :func:<code>extract_ring_intensity</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>hkl_label</code></b>
+                  (<code><span title="str">str</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Identifier for the ring being extracted (e.g. <code>"111"</code>),
+used as an HDF5 group name under <code>pole_figures/</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>background_ranges</code></b>
+                  (<code><span title="tuple">tuple</span></code>, default:
+                      <code>None</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Flanking 2theta windows passed to
+:func:<code>extract_ring_intensity</code> for background subtraction
+(default <code>None</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>npt_rad</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>1000</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Number of radial bins used internally by
+:func:<code>~nrxrdct.azimuthal.integration.cake_integration</code> (default 1000).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>npt_azim</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>360</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Number of azimuthal (chi) bins (default 360).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>n_workers</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>16</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Number of parallel cake-integration threads
+(default 16).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>camera_name</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;eiger&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Detector dataset name under <code>measurement/</code>
+(default <code>"eiger"</code>). Change this to match your beamline.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>monitor_name</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;fpico6&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Monitor/ion-chamber dataset name under
+<code>measurement/</code> used for normalisation (default <code>"fpico6"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>translation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;dty&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Translation-motor name read from
+<code>instrument/positioners/</code> in each entry (default <code>"dty"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>rotation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;rot&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Rotation-motor dataset name under
+<code>measurement/</code> (default <code>"rot"</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#__codelineno-0-166">166</a></span>
+<span class="normal"><a href="#__codelineno-0-167">167</a></span>
+<span class="normal"><a href="#__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span>
+<span class="normal"><a href="#__codelineno-0-175">175</a></span>
+<span class="normal"><a href="#__codelineno-0-176">176</a></span>
+<span class="normal"><a href="#__codelineno-0-177">177</a></span>
+<span class="normal"><a href="#__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#__codelineno-0-179">179</a></span>
+<span class="normal"><a href="#__codelineno-0-180">180</a></span>
+<span class="normal"><a href="#__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#__codelineno-0-183">183</a></span>
+<span class="normal"><a href="#__codelineno-0-184">184</a></span>
+<span class="normal"><a href="#__codelineno-0-185">185</a></span>
+<span class="normal"><a href="#__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span>
+<span class="normal"><a href="#__codelineno-0-229">229</a></span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span>
+<span class="normal"><a href="#__codelineno-0-241">241</a></span>
+<span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="k">def</span><span class="w"> </span><span class="nf">assemble_pole_figure_data</span><span class="p">(</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a>    <span class="n">master_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a>    <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a>    <span class="n">poni_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a>    <span class="n">mask_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a>    <span class="n">tth_range</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a>    <span class="n">hkl_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a>    <span class="n">background_ranges</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a>    <span class="n">npt_rad</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a>    <span class="n">npt_azim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">360</span><span class="p">,</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a>    <span class="n">n_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a>    <span class="n">camera_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;eiger&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a>    <span class="n">monitor_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fpico6&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a>    <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;dty&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a>    <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;rot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">    Extract per-frame pole-figure (chi-intensity) profiles for one hkl ring</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">    from a raw XRD-CT master file, in parallel.</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">    Mirrors :func:`nrxrdct.azimuthal.integration.integrate_powder_parallel`</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">    (same master-file layout, entry validation, and monitor normalisation) but</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">    cake-integrates each frame and reduces it to an azimuthal intensity</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">    profile via :func:`extract_ring_intensity`, instead of a 1-D powder</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">    pattern. Results are appended to *output_file* under</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">    ``pole_figures/&lt;hkl_label&gt;/scan_XXXX``; scans already present are skipped,</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">    so a failed run can be resumed by calling this function again.</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">        master_file (Path): Path to the master HDF5 file containing all scan entries.</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">        output_file (Path): Path to the output HDF5 file.</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">        poni_file (Path): Path to the PONI calibration file.</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">        mask_file (Path): Path to the mask file (fabio-readable).</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">        tth_range (tuple): ``(low, high)`` 2theta window bracketing the hkl ring,</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">            passed to :func:`extract_ring_intensity`.</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">        hkl_label (str): Identifier for the ring being extracted (e.g. ``&quot;111&quot;``),</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">            used as an HDF5 group name under ``pole_figures/``.</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">        background_ranges (tuple, optional): Flanking 2theta windows passed to</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">            :func:`extract_ring_intensity` for background subtraction</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">            (default ``None``).</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">        npt_rad (int, optional): Number of radial bins used internally by</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">            :func:`~nrxrdct.azimuthal.integration.cake_integration` (default 1000).</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">        npt_azim (int, optional): Number of azimuthal (chi) bins (default 360).</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">        n_workers (int, optional): Number of parallel cake-integration threads</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">            (default 16).</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">        camera_name (str, optional): Detector dataset name under ``measurement/``</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">            (default ``&quot;eiger&quot;``). Change this to match your beamline.</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">        monitor_name (str, optional): Monitor/ion-chamber dataset name under</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">            ``measurement/`` used for normalisation (default ``&quot;fpico6&quot;``).</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="sd">        translation_motor (str, optional): Translation-motor name read from</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">            ``instrument/positioners/`` in each entry (default ``&quot;dty&quot;``).</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">        rotation_motor (str, optional): Rotation-motor dataset name under</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">            ``measurement/`` (default ``&quot;rot&quot;``).</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="n">fabio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">mask_file</span><span class="p">)</span><span class="o">.</span><span class="n">data</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reading entries from master file...&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="n">valid_entries</span><span class="p">,</span> <span class="n">bad_entries</span><span class="p">,</span> <span class="n">dty_values</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">master_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>        <span class="n">all_entries</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">hin</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">all_entries</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Validating entries&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>            <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>                <span class="n">_</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/measurement/</span><span class="si">{</span><span class="n">camera_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a>                <span class="n">_</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/measurement/</span><span class="si">{</span><span class="n">monitor_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a>                <span class="n">dty</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/instrument/positioners/</span><span class="si">{</span><span class="n">translation_motor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">][()])</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a>                <span class="n">valid_entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>                <span class="n">dty_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dty</span><span class="p">)</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>            <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ⚠  Entry </span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2"> missing expected dataset (</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">) — skipping&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>                <span class="n">bad_entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">valid_entries</span><span class="p">)</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_entries</span><span class="p">)</span><span class="si">}</span><span class="s2"> entries OK&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="k">if</span> <span class="n">bad_entries</span><span class="p">:</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠  Skipping </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">bad_entries</span><span class="p">)</span><span class="si">}</span><span class="s2"> incomplete entries: </span><span class="si">{</span><span class="n">bad_entries</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>    <span class="n">group</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;pole_figures/</span><span class="si">{</span><span class="n">hkl_label</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="k">if</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/azimuthal&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a>            <span class="n">azimuthal_axis</span> <span class="o">=</span> <span class="o">-</span><span class="mf">180.0</span> <span class="o">+</span> <span class="p">(</span><span class="mf">360.0</span> <span class="o">/</span> <span class="n">npt_azim</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">npt_azim</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a>            <span class="n">hout</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/azimuthal&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">azimuthal_axis</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a>            <span class="n">hout</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/tth_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">tth_range</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a>        <span class="k">if</span> <span class="sa">f</span><span class="s2">&quot;motors/</span><span class="si">{</span><span class="n">translation_motor</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a>            <span class="n">hout</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;motors/</span><span class="si">{</span><span class="n">translation_motor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dty_values</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">process_frame</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a>        <span class="n">cake</span><span class="p">,</span> <span class="n">radial</span><span class="p">,</span> <span class="n">azimuthal</span> <span class="o">=</span> <span class="n">cake_integration</span><span class="p">(</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a>            <span class="n">image</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">poni_file</span><span class="p">),</span> <span class="n">npt_rad</span><span class="o">=</span><span class="n">npt_rad</span><span class="p">,</span> <span class="n">npt_azim</span><span class="o">=</span><span class="n">npt_azim</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a>        <span class="p">)</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>        <span class="n">_</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">extract_ring_intensity</span><span class="p">(</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>            <span class="n">cake</span><span class="p">,</span> <span class="n">radial</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">,</span> <span class="n">tth_range</span><span class="p">,</span> <span class="n">background_ranges</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="p">)</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="k">return</span> <span class="n">intensity</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="k">for</span> <span class="n">ii</span><span class="p">,</span> <span class="n">entry</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">valid_entries</span><span class="p">):</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>        <span class="n">scan_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;scan_</span><span class="si">{</span><span class="n">ii</span><span class="si">:</span><span class="s2">04d</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="n">group_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">scan_name</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>            <span class="k">if</span> <span class="n">group_path</span> <span class="ow">in</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Skipping </span><span class="si">{</span><span class="n">scan_name</span><span class="si">}</span><span class="s2"> (already done)&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>                <span class="k">continue</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="se">\n</span><span class="s2">Processing </span><span class="si">{</span><span class="n">scan_name</span><span class="si">}</span><span class="s2"> — entry </span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">  [</span><span class="si">{</span><span class="n">ii</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">valid_entries</span><span class="p">)</span><span class="si">}</span><span class="s2">]</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="p">)</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>        <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>            <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">master_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>                <span class="n">images</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/measurement/</span><span class="si">{</span><span class="n">camera_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">][:]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>                <span class="n">monitor</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/measurement/</span><span class="si">{</span><span class="n">monitor_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">][:]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>                <span class="n">rot</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">/measurement/</span><span class="si">{</span><span class="n">rotation_motor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">][:]</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ✗ Failed to read entry </span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2"> — skipping&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="k">continue</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="k">if</span> <span class="n">rot</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">rot</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>            <span class="n">images</span> <span class="o">=</span> <span class="n">images</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>            <span class="n">monitor</span> <span class="o">=</span> <span class="n">monitor</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>            <span class="n">rot</span> <span class="o">=</span> <span class="n">rot</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>        <span class="n">n_frames</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="n">profiles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">n_frames</span><span class="p">,</span> <span class="n">npt_azim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">n_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">process_frame</span><span class="p">,</span> <span class="n">images</span><span class="p">[</span><span class="n">jj</span><span class="p">]):</span> <span class="n">jj</span> <span class="k">for</span> <span class="n">jj</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_frames</span><span class="p">)}</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>            <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="n">n_frames</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="n">scan_name</span><span class="p">):</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>                <span class="n">jj</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">future</span><span class="p">]</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>                <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>                    <span class="n">intensity</span> <span class="o">=</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>                    <span class="n">profiles</span><span class="p">[</span><span class="n">jj</span><span class="p">]</span> <span class="o">=</span> <span class="n">intensity</span> <span class="o">/</span> <span class="n">monitor</span><span class="p">[</span><span class="n">jj</span><span class="p">]</span> <span class="k">if</span> <span class="n">monitor</span><span class="p">[</span><span class="n">jj</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">intensity</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ✗ Frame </span><span class="si">{</span><span class="n">jj</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>                    <span class="n">profiles</span><span class="p">[</span><span class="n">jj</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hout</span><span class="p">:</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>            <span class="n">ds</span> <span class="o">=</span> <span class="n">hout</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>                <span class="n">group_path</span><span class="p">,</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>                <span class="n">data</span><span class="o">=</span><span class="n">profiles</span><span class="p">,</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>                <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;gzip&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>                <span class="n">compression_opts</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>                <span class="n">chunks</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">npt_azim</span><span class="p">),</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>            <span class="p">)</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>            <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;entry&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entry</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>            <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">translation_motor</span><span class="p">]</span> <span class="o">=</span> <span class="n">dty_values</span><span class="p">[</span><span class="n">ii</span><span class="p">]</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>            <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;source&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">master_file</span><span class="p">)</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>            <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">rotation_motor</span><span class="p">]</span> <span class="o">=</span> <span class="n">rot</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf.assemble_pole_figure_sinogram" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">assemble_pole_figure_sinogram</span>
+
+
+<a href="#nrxrdct.texture.odf.assemble_pole_figure_sinogram" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">assemble_pole_figure_sinogram</span><span class="p">(</span><span class="n">pole_figure_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">hkl_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;dty&#39;</span><span class="p">,</span> <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;rot&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Stack per-scan pole-figure profiles written by :func:<code>assemble_pole_figure_data</code>
+into a texture-tomography sinogram.</p>
+<p>Mirrors :func:<code>nrxrdct.xrdct.sinogram.assemble_sinogram</code>: scans are sorted by
+the recorded <em>translation_motor</em> value (not file order, for the same reason
+documented there) and zero-padded along the rotation axis to <em>n_rot</em>.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>pole_figure_file</code></b>
+                  (<code><span title="pathlib.Path">Path</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>HDF5 file written by :func:<code>assemble_pole_figure_data</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>hkl_label</code></b>
+                  (<code><span title="str">str</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Ring identifier passed to :func:<code>assemble_pole_figure_data</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>n_rot</code></b>
+                  (<code><span title="int">int</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Number of rotation steps (sinogram angular dimension).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>translation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;dty&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Name of the translation-motor attribute
+stored on each scan group (default <code>"dty"</code>).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>rotation_motor</code></b>
+                  (<code><span title="str">str</span></code>, default:
+                      <code>&#39;rot&#39;</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Name of the rotation-motor attribute stored
+on each scan group, used to recover the physical rotation axis for
+<em>rot_deg</em> (default <code>"rot"</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>sino</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Pole-figure sinogram of shape <code>(n_chi, n_lines, n_rot)</code>
+as <code>float32</code>, where <code>n_chi</code> is the number of azimuthal bins.</p>
+              </div>
+            </li>
+            <li>
+<b><code>azimuthal</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Chi axis of <em>sino</em>'s first dimension, in degrees.</p>
+              </div>
+            </li>
+            <li>
+<b><code>dty</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Translation-motor value for each line of <em>sino</em>, sorted
+to match its translation axis.</p>
+              </div>
+            </li>
+            <li>
+<b><code>rot_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Rotation angle for each step of <em>sino</em>'s rotation
+axis, in degrees, shape <code>(n_rot,)</code>. Taken from the first scan whose
+stored rotation array already has length <em>n_rot</em> (i.e. needed no
+padding); if every scan was padded, falls back to
+<code>np.linspace(rot_min, rot_max, n_rot)</code> over the observed range and
+prints a warning, since the true per-step spacing can't be recovered
+in that case.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#__codelineno-0-350">350</a></span>
+<span class="normal"><a href="#__codelineno-0-351">351</a></span>
+<span class="normal"><a href="#__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#__codelineno-0-353">353</a></span>
+<span class="normal"><a href="#__codelineno-0-354">354</a></span>
+<span class="normal"><a href="#__codelineno-0-355">355</a></span>
+<span class="normal"><a href="#__codelineno-0-356">356</a></span>
+<span class="normal"><a href="#__codelineno-0-357">357</a></span>
+<span class="normal"><a href="#__codelineno-0-358">358</a></span>
+<span class="normal"><a href="#__codelineno-0-359">359</a></span>
+<span class="normal"><a href="#__codelineno-0-360">360</a></span>
+<span class="normal"><a href="#__codelineno-0-361">361</a></span>
+<span class="normal"><a href="#__codelineno-0-362">362</a></span>
+<span class="normal"><a href="#__codelineno-0-363">363</a></span>
+<span class="normal"><a href="#__codelineno-0-364">364</a></span>
+<span class="normal"><a href="#__codelineno-0-365">365</a></span>
+<span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#__codelineno-0-376">376</a></span>
+<span class="normal"><a href="#__codelineno-0-377">377</a></span>
+<span class="normal"><a href="#__codelineno-0-378">378</a></span>
+<span class="normal"><a href="#__codelineno-0-379">379</a></span>
+<span class="normal"><a href="#__codelineno-0-380">380</a></span>
+<span class="normal"><a href="#__codelineno-0-381">381</a></span>
+<span class="normal"><a href="#__codelineno-0-382">382</a></span>
+<span class="normal"><a href="#__codelineno-0-383">383</a></span>
+<span class="normal"><a href="#__codelineno-0-384">384</a></span>
+<span class="normal"><a href="#__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#__codelineno-0-386">386</a></span>
+<span class="normal"><a href="#__codelineno-0-387">387</a></span>
+<span class="normal"><a href="#__codelineno-0-388">388</a></span>
+<span class="normal"><a href="#__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#__codelineno-0-392">392</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="k">def</span><span class="w"> </span><span class="nf">assemble_pole_figure_sinogram</span><span class="p">(</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>    <span class="n">pole_figure_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>    <span class="n">hkl_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="n">n_rot</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="n">translation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;dty&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="n">rotation_motor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;rot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">    Stack per-scan pole-figure profiles written by :func:`assemble_pole_figure_data`</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">    into a texture-tomography sinogram.</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">    Mirrors :func:`nrxrdct.xrdct.sinogram.assemble_sinogram`: scans are sorted by</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">    the recorded *translation_motor* value (not file order, for the same reason</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    documented there) and zero-padded along the rotation axis to *n_rot*.</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">        pole_figure_file (Path): HDF5 file written by :func:`assemble_pole_figure_data`.</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">        hkl_label (str): Ring identifier passed to :func:`assemble_pole_figure_data`.</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">        n_rot (int): Number of rotation steps (sinogram angular dimension).</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">        translation_motor (str, optional): Name of the translation-motor attribute</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">            stored on each scan group (default ``&quot;dty&quot;``).</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">        rotation_motor (str, optional): Name of the rotation-motor attribute stored</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">            on each scan group, used to recover the physical rotation axis for</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a><span class="sd">            *rot_deg* (default ``&quot;rot&quot;``).</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">        sino (np.ndarray): Pole-figure sinogram of shape ``(n_chi, n_lines, n_rot)``</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">            as ``float32``, where ``n_chi`` is the number of azimuthal bins.</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">        azimuthal (np.ndarray): Chi axis of *sino*&#39;s first dimension, in degrees.</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">        dty (np.ndarray): Translation-motor value for each line of *sino*, sorted</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">            to match its translation axis.</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">        rot_deg (np.ndarray): Rotation angle for each step of *sino*&#39;s rotation</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">            axis, in degrees, shape ``(n_rot,)``. Taken from the first scan whose</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">            stored rotation array already has length *n_rot* (i.e. needed no</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">            padding); if every scan was padded, falls back to</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">            ``np.linspace(rot_min, rot_max, n_rot)`` over the observed range and</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">            prints a warning, since the true per-step spacing can&#39;t be recovered</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">            in that case.</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="n">group</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;pole_figures/</span><span class="si">{</span><span class="n">hkl_label</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a>    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">pole_figure_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hin</span><span class="p">:</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a>        <span class="n">azimuthal</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/azimuthal&quot;</span><span class="p">][:]</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a>        <span class="n">n_chi</span> <span class="o">=</span> <span class="n">azimuthal</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a>        <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hin</span><span class="p">[</span><span class="n">group</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;scan_&quot;</span><span class="p">)]</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a>        <span class="n">dty_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a>            <span class="p">[</span><span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">translation_motor</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">]</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>        <span class="p">)</span>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="n">order</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">dty_values</span><span class="p">)</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a>        <span class="n">valid_keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">order</span><span class="p">]</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="n">dty_values</span> <span class="o">=</span> <span class="n">dty_values</span><span class="p">[</span><span class="n">order</span><span class="p">]</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>        <span class="n">sino</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">valid_keys</span><span class="p">),</span> <span class="n">n_rot</span><span class="p">,</span> <span class="n">n_chi</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">rot_deg</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="n">rot_min</span><span class="p">,</span> <span class="n">rot_max</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>        <span class="k">for</span> <span class="n">ii</span><span class="p">,</span> <span class="n">scan</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">valid_keys</span><span class="p">):</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>            <span class="n">ds</span> <span class="o">=</span> <span class="n">hin</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">group</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">scan</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>            <span class="n">profiles</span> <span class="o">=</span> <span class="n">ds</span><span class="p">[:]</span>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a>            <span class="n">scan_rot</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">rotation_motor</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>            <span class="n">rot_min</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">rot_min</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">scan_rot</span><span class="o">.</span><span class="n">min</span><span class="p">()))</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a>            <span class="n">rot_max</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">rot_max</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">scan_rot</span><span class="o">.</span><span class="n">max</span><span class="p">()))</span>
+<a id="__codelineno-0-377" name="__codelineno-0-377"></a>            <span class="k">if</span> <span class="n">rot_deg</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">scan_rot</span><span class="p">)</span> <span class="o">==</span> <span class="n">n_rot</span><span class="p">:</span>
+<a id="__codelineno-0-378" name="__codelineno-0-378"></a>                <span class="n">rot_deg</span> <span class="o">=</span> <span class="n">scan_rot</span>
+<a id="__codelineno-0-379" name="__codelineno-0-379"></a>
+<a id="__codelineno-0-380" name="__codelineno-0-380"></a>            <span class="n">padding_width</span> <span class="o">=</span> <span class="n">calculate_padding_widths_2D</span><span class="p">(</span><span class="n">profiles</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="p">(</span><span class="n">n_rot</span><span class="p">,</span> <span class="n">n_chi</span><span class="p">))</span>
+<a id="__codelineno-0-381" name="__codelineno-0-381"></a>            <span class="n">sino</span><span class="p">[</span><span class="n">ii</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">profiles</span><span class="p">,</span> <span class="n">padding_width</span><span class="p">)</span>
+<a id="__codelineno-0-382" name="__codelineno-0-382"></a>
+<a id="__codelineno-0-383" name="__codelineno-0-383"></a>        <span class="k">if</span> <span class="n">rot_deg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-384" name="__codelineno-0-384"></a>            <span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-0-385" name="__codelineno-0-385"></a>                <span class="s2">&quot;  ⚠  No scan&#39;s rotation array has length n_rot (every scan was &quot;</span>
+<a id="__codelineno-0-386" name="__codelineno-0-386"></a>                <span class="s2">&quot;padded) — falling back to a uniform linspace over the observed &quot;</span>
+<a id="__codelineno-0-387" name="__codelineno-0-387"></a>                <span class="s2">&quot;rotation range, which may not match the true per-step spacing.&quot;</span>
+<a id="__codelineno-0-388" name="__codelineno-0-388"></a>            <span class="p">)</span>
+<a id="__codelineno-0-389" name="__codelineno-0-389"></a>            <span class="n">rot_deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">rot_min</span><span class="p">,</span> <span class="n">rot_max</span><span class="p">,</span> <span class="n">n_rot</span><span class="p">)</span>
+<a id="__codelineno-0-390" name="__codelineno-0-390"></a>
+<a id="__codelineno-0-391" name="__codelineno-0-391"></a>    <span class="n">sino</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rollaxis</span><span class="p">(</span><span class="n">sino</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-0-392" name="__codelineno-0-392"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">rollaxis</span><span class="p">(</span><span class="n">sino</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">azimuthal</span><span class="p">,</span> <span class="n">dty_values</span><span class="p">,</span> <span class="n">rot_deg</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf.extract_ring_intensity" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">extract_ring_intensity</span>
+
+
+<a href="#nrxrdct.texture.odf.extract_ring_intensity" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_ring_intensity</span><span class="p">(</span><span class="n">cake</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">radial</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">tth_range</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">background_ranges</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract the azimuthal (chi) intensity profile of one hkl ring from a
+cake-integrated image.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>cake</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>2-D CAKE image of shape <code>(npt_azim, npt_rad)</code>, as
+returned by :func:<code>nrxrdct.azimuthal.integration.cake_integration</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>radial</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Radial (2theta) axis of <em>cake</em>, shape <code>(npt_rad,)</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>azimuthal</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Azimuthal (chi) axis of <em>cake</em> in degrees, shape
+<code>(npt_azim,)</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>tth_range</code></b>
+                  (<code><span title="tuple">tuple</span></code>)
+              –
+              <div class="doc-md-description">
+                <p><code>(low, high)</code> 2theta window bracketing the hkl ring.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>background_ranges</code></b>
+                  (<code><span title="tuple">tuple</span></code>, default:
+                      <code>None</code>
+)
+              –
+              <div class="doc-md-description">
+                <p><code>((low1, high1), (low2, high2))</code> pair
+of flanking 2theta windows used to estimate a per-chi-bin background,
+which is subtracted from the ring intensity. Pass <code>None</code> to skip
+background subtraction (default <code>None</code>).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>azimuthal</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>The input <em>azimuthal</em> axis, unchanged.</p>
+              </div>
+            </li>
+            <li>
+<b><code>intensity</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Ring intensity per azimuthal bin, shape <code>(npt_azim,)</code>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Raises:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+                  <code><span title="ValueError">ValueError</span></code>
+              –
+              <div class="doc-md-description">
+                <p>If <em>tth_range</em> (or <em>background_ranges</em>) does not overlap <em>radial</em>.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-54"> 54</a></span>
+<span class="normal"><a href="#__codelineno-0-55"> 55</a></span>
+<span class="normal"><a href="#__codelineno-0-56"> 56</a></span>
+<span class="normal"><a href="#__codelineno-0-57"> 57</a></span>
+<span class="normal"><a href="#__codelineno-0-58"> 58</a></span>
+<span class="normal"><a href="#__codelineno-0-59"> 59</a></span>
+<span class="normal"><a href="#__codelineno-0-60"> 60</a></span>
+<span class="normal"><a href="#__codelineno-0-61"> 61</a></span>
+<span class="normal"><a href="#__codelineno-0-62"> 62</a></span>
+<span class="normal"><a href="#__codelineno-0-63"> 63</a></span>
+<span class="normal"><a href="#__codelineno-0-64"> 64</a></span>
+<span class="normal"><a href="#__codelineno-0-65"> 65</a></span>
+<span class="normal"><a href="#__codelineno-0-66"> 66</a></span>
+<span class="normal"><a href="#__codelineno-0-67"> 67</a></span>
+<span class="normal"><a href="#__codelineno-0-68"> 68</a></span>
+<span class="normal"><a href="#__codelineno-0-69"> 69</a></span>
+<span class="normal"><a href="#__codelineno-0-70"> 70</a></span>
+<span class="normal"><a href="#__codelineno-0-71"> 71</a></span>
+<span class="normal"><a href="#__codelineno-0-72"> 72</a></span>
+<span class="normal"><a href="#__codelineno-0-73"> 73</a></span>
+<span class="normal"><a href="#__codelineno-0-74"> 74</a></span>
+<span class="normal"><a href="#__codelineno-0-75"> 75</a></span>
+<span class="normal"><a href="#__codelineno-0-76"> 76</a></span>
+<span class="normal"><a href="#__codelineno-0-77"> 77</a></span>
+<span class="normal"><a href="#__codelineno-0-78"> 78</a></span>
+<span class="normal"><a href="#__codelineno-0-79"> 79</a></span>
+<span class="normal"><a href="#__codelineno-0-80"> 80</a></span>
+<span class="normal"><a href="#__codelineno-0-81"> 81</a></span>
+<span class="normal"><a href="#__codelineno-0-82"> 82</a></span>
+<span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
+<span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
+<span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
+<span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
+<span class="normal"><a href="#__codelineno-0-87"> 87</a></span>
+<span class="normal"><a href="#__codelineno-0-88"> 88</a></span>
+<span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
+<span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
+<span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
+<span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
+<span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#__codelineno-0-104">104</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_ring_intensity</span><span class="p">(</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="n">cake</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="n">radial</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="n">azimuthal</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">tth_range</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="n">background_ranges</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Extract the azimuthal (chi) intensity profile of one hkl ring from a</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    cake-integrated image.</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">        cake (np.ndarray): 2-D CAKE image of shape ``(npt_azim, npt_rad)``, as</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">            returned by :func:`nrxrdct.azimuthal.integration.cake_integration`.</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        radial (np.ndarray): Radial (2theta) axis of *cake*, shape ``(npt_rad,)``.</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        azimuthal (np.ndarray): Azimuthal (chi) axis of *cake* in degrees, shape</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            ``(npt_azim,)``.</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">        tth_range (tuple): ``(low, high)`` 2theta window bracketing the hkl ring.</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">        background_ranges (tuple, optional): ``((low1, high1), (low2, high2))`` pair</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">            of flanking 2theta windows used to estimate a per-chi-bin background,</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            which is subtracted from the ring intensity. Pass ``None`` to skip</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            background subtraction (default ``None``).</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">        azimuthal (np.ndarray): The input *azimuthal* axis, unchanged.</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        intensity (np.ndarray): Ring intensity per azimuthal bin, shape ``(npt_azim,)``.</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">        ValueError: If *tth_range* (or *background_ranges*) does not overlap *radial*.</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">tth_range</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="n">peak_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">radial</span> <span class="o">&gt;=</span> <span class="n">lo</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">radial</span> <span class="o">&lt;=</span> <span class="n">hi</span><span class="p">)</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">peak_mask</span><span class="p">):</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a>            <span class="sa">f</span><span class="s2">&quot;tth_range </span><span class="si">{</span><span class="n">tth_range</span><span class="si">}</span><span class="s2"> does not overlap radial axis &quot;</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a>            <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">radial</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">radial</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">]&quot;</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a>        <span class="p">)</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="n">intensity</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">cake</span><span class="p">[:,</span> <span class="n">peak_mask</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="k">if</span> <span class="n">background_ranges</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a>        <span class="p">(</span><span class="n">blo1</span><span class="p">,</span> <span class="n">bhi1</span><span class="p">),</span> <span class="p">(</span><span class="n">blo2</span><span class="p">,</span> <span class="n">bhi2</span><span class="p">)</span> <span class="o">=</span> <span class="n">background_ranges</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="n">bg_mask</span> <span class="o">=</span> <span class="p">((</span><span class="n">radial</span> <span class="o">&gt;=</span> <span class="n">blo1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">radial</span> <span class="o">&lt;=</span> <span class="n">bhi1</span><span class="p">))</span> <span class="o">|</span> <span class="p">((</span><span class="n">radial</span> <span class="o">&gt;=</span> <span class="n">blo2</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">radial</span> <span class="o">&lt;=</span> <span class="n">bhi2</span><span class="p">))</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">bg_mask</span><span class="p">):</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>                <span class="sa">f</span><span class="s2">&quot;background_ranges </span><span class="si">{</span><span class="n">background_ranges</span><span class="si">}</span><span class="s2"> do not overlap radial axis &quot;</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>                <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">radial</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">radial</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">]&quot;</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>            <span class="p">)</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="n">background</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">cake</span><span class="p">[:,</span> <span class="n">bg_mask</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="n">intensity</span> <span class="o">=</span> <span class="n">intensity</span> <span class="o">-</span> <span class="n">background</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="k">return</span> <span class="n">azimuthal</span><span class="p">,</span> <span class="n">intensity</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf.pole_figure_coordinates" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">pole_figure_coordinates</span>
+
+
+<a href="#nrxrdct.texture.odf.pole_figure_coordinates" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">pole_figure_coordinates</span><span class="p">(</span><span class="n">tth_deg</span><span class="p">,</span> <span class="n">chi_deg</span><span class="p">,</span> <span class="n">omega_deg</span><span class="p">,</span> <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert diffraction-geometry angles into pole-figure coordinates.</p>
+<p>Assumes a vertical rotation axis, a horizontal incident beam, and <em>chi</em>
+measured from the vertical (rotation-axis) direction as described in this
+module's docstring. <em>tth_deg</em>, <em>chi_deg</em>, and <em>omega_deg</em> may be scalars or
+arrays that broadcast together (e.g. a 1-D <em>chi_deg</em> array combined with a
+scalar <em>omega_deg</em> for one frame, or a 2-D grid built from
+<code>np.meshgrid(chi_deg, omega_deg)</code> for a full scan).</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>tth_deg</code></b>
+                  (<code><span title="float">float</span> or <span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Full scattering angle 2theta of the hkl
+ring, in degrees.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_deg</code></b>
+                  (<code><span title="float">float</span> or <span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Azimuthal angle on the detector, in degrees,
+as returned by :func:<code>nrxrdct.azimuthal.integration.cake_integration</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>omega_deg</code></b>
+                  (<code><span title="float">float</span> or <span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Sample rotation angle (the XRD-CT <code>rot</code>
+motor) at which the frame was acquired, in degrees.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_offset_deg</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>0.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Additive correction (degrees) aligning
+this beamline's chi=0 direction with the convention assumed here
+(default 0.0).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_sign</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>1.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p><code>+1</code> or <code>-1</code>, flips the sense in which chi
+increases if it runs opposite to the assumed convention (default 1.0).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>alpha_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Polar angle from the rotation axis, in <code>[0, 180]</code>
+degrees, same broadcast shape as the inputs.</p>
+              </div>
+            </li>
+            <li>
+<b><code>beta_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Azimuthal angle about the rotation axis, in
+<code>[0, 360)</code> degrees, same broadcast shape as the inputs.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#__codelineno-0-120">120</a></span>
+<span class="normal"><a href="#__codelineno-0-121">121</a></span>
+<span class="normal"><a href="#__codelineno-0-122">122</a></span>
+<span class="normal"><a href="#__codelineno-0-123">123</a></span>
+<span class="normal"><a href="#__codelineno-0-124">124</a></span>
+<span class="normal"><a href="#__codelineno-0-125">125</a></span>
+<span class="normal"><a href="#__codelineno-0-126">126</a></span>
+<span class="normal"><a href="#__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#__codelineno-0-128">128</a></span>
+<span class="normal"><a href="#__codelineno-0-129">129</a></span>
+<span class="normal"><a href="#__codelineno-0-130">130</a></span>
+<span class="normal"><a href="#__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#__codelineno-0-134">134</a></span>
+<span class="normal"><a href="#__codelineno-0-135">135</a></span>
+<span class="normal"><a href="#__codelineno-0-136">136</a></span>
+<span class="normal"><a href="#__codelineno-0-137">137</a></span>
+<span class="normal"><a href="#__codelineno-0-138">138</a></span>
+<span class="normal"><a href="#__codelineno-0-139">139</a></span>
+<span class="normal"><a href="#__codelineno-0-140">140</a></span>
+<span class="normal"><a href="#__codelineno-0-141">141</a></span>
+<span class="normal"><a href="#__codelineno-0-142">142</a></span>
+<span class="normal"><a href="#__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#__codelineno-0-145">145</a></span>
+<span class="normal"><a href="#__codelineno-0-146">146</a></span>
+<span class="normal"><a href="#__codelineno-0-147">147</a></span>
+<span class="normal"><a href="#__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#__codelineno-0-152">152</a></span>
+<span class="normal"><a href="#__codelineno-0-153">153</a></span>
+<span class="normal"><a href="#__codelineno-0-154">154</a></span>
+<span class="normal"><a href="#__codelineno-0-155">155</a></span>
+<span class="normal"><a href="#__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="k">def</span><span class="w"> </span><span class="nf">pole_figure_coordinates</span><span class="p">(</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="n">tth_deg</span><span class="p">,</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">chi_deg</span><span class="p">,</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">omega_deg</span><span class="p">,</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a>    <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">    Convert diffraction-geometry angles into pole-figure coordinates.</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">    Assumes a vertical rotation axis, a horizontal incident beam, and *chi*</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">    measured from the vertical (rotation-axis) direction as described in this</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    module&#39;s docstring. *tth_deg*, *chi_deg*, and *omega_deg* may be scalars or</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120"></a><span class="sd">    arrays that broadcast together (e.g. a 1-D *chi_deg* array combined with a</span>
+<a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">    scalar *omega_deg* for one frame, or a 2-D grid built from</span>
+<a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">    ``np.meshgrid(chi_deg, omega_deg)`` for a full scan).</span>
+<a id="__codelineno-0-123" name="__codelineno-0-123"></a>
+<a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">        tth_deg (float or np.ndarray): Full scattering angle 2theta of the hkl</span>
+<a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">            ring, in degrees.</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">        chi_deg (float or np.ndarray): Azimuthal angle on the detector, in degrees,</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            as returned by :func:`nrxrdct.azimuthal.integration.cake_integration`.</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">        omega_deg (float or np.ndarray): Sample rotation angle (the XRD-CT ``rot``</span>
+<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">            motor) at which the frame was acquired, in degrees.</span>
+<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">        chi_offset_deg (float, optional): Additive correction (degrees) aligning</span>
+<a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">            this beamline&#39;s chi=0 direction with the convention assumed here</span>
+<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">            (default 0.0).</span>
+<a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">        chi_sign (float, optional): ``+1`` or ``-1``, flips the sense in which chi</span>
+<a id="__codelineno-0-135" name="__codelineno-0-135"></a><span class="sd">            increases if it runs opposite to the assumed convention (default 1.0).</span>
+<a id="__codelineno-0-136" name="__codelineno-0-136"></a>
+<a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">        alpha_deg (np.ndarray): Polar angle from the rotation axis, in ``[0, 180]``</span>
+<a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">            degrees, same broadcast shape as the inputs.</span>
+<a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">        beta_deg (np.ndarray): Azimuthal angle about the rotation axis, in</span>
+<a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">            ``[0, 360)`` degrees, same broadcast shape as the inputs.</span>
+<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a>    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">tth_deg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span>
+<a id="__codelineno-0-144" name="__codelineno-0-144"></a>    <span class="n">chi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="n">chi_sign</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">chi_deg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="o">+</span> <span class="n">chi_offset_deg</span><span class="p">)</span>
+<a id="__codelineno-0-145" name="__codelineno-0-145"></a>    <span class="n">omega</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">omega_deg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">))</span>
+<a id="__codelineno-0-146" name="__codelineno-0-146"></a>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a>    <span class="c1"># Scattering-vector direction in the lab frame (beam along +x, rotation</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a>    <span class="c1"># axis +z); see the geometry derivation in this module&#39;s docstring.</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a>    <span class="n">qx</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a>    <span class="n">qy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">chi</span><span class="p">)</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a>    <span class="n">qz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">chi</span><span class="p">)</span>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a>
+<a id="__codelineno-0-153" name="__codelineno-0-153"></a>    <span class="c1"># Rotate by -omega about the rotation axis (z) to express the pole in the</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a>    <span class="c1"># sample-fixed frame.</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a>    <span class="n">qx_s</span> <span class="o">=</span> <span class="n">qx</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">omega</span><span class="p">)</span> <span class="o">+</span> <span class="n">qy</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">omega</span><span class="p">)</span>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a>    <span class="n">qy_s</span> <span class="o">=</span> <span class="o">-</span><span class="n">qx</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">omega</span><span class="p">)</span> <span class="o">+</span> <span class="n">qy</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">omega</span><span class="p">)</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="n">qz_s</span> <span class="o">=</span> <span class="n">qz</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a>    <span class="n">alpha_deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">qz_s</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)))</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a>    <span class="n">beta_deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">qy_s</span><span class="p">,</span> <span class="n">qx_s</span><span class="p">))</span> <span class="o">%</span> <span class="mf">360.0</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a>    <span class="k">return</span> <span class="n">alpha_deg</span><span class="p">,</span> <span class="n">beta_deg</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nrxrdct.texture.odf.sinogram_to_pole_figure" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">sinogram_to_pole_figure</span>
+
+
+<a href="#nrxrdct.texture.odf.sinogram_to_pole_figure" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">sinogram_to_pole_figure</span><span class="p">(</span><span class="n">sino</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">rot_deg</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">tth_deg</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">line_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert a pole-figure sinogram into flat pole-figure coordinates, ready for
+:func:<code>nrxrdct.texture.odf_inversion.compute_odf</code>.</p>
+<p>Applies :func:<code>pole_figure_coordinates</code> to every <code>(chi, rot)</code> grid point
+of <em>sino</em> and flattens the result — the direct bridge between
+:func:<code>assemble_pole_figure_sinogram</code>'s output and the bulk ODF fit.</p>
+
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>sino</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Pole-figure sinogram of shape <code>(n_chi, n_lines, n_rot)</code>,
+as returned by :func:<code>assemble_pole_figure_sinogram</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>azimuthal</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Chi axis, degrees, shape <code>(n_chi,)</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>rot_deg</code></b>
+                  (<code><span title="numpy.ndarray">ndarray</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Rotation-angle axis, degrees, shape <code>(n_rot,)</code>.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>tth_deg</code></b>
+                  (<code><span title="float">float</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>2theta of the hkl ring (e.g. the mean of the
+<code>tth_range</code> stored alongside the sinogram).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>line_index</code></b>
+                  (<code><span title="int">int</span></code>, default:
+                      <code>None</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Which translation line (index into <em>sino</em>'s
+second axis) to use. <code>None</code> (default) averages over all lines,
+producing one bulk pole figure for the whole scanned cross-section
+rather than one per line — pass an explicit index for a per-line
+bulk pole figure instead.</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_offset_deg</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>0.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Forwarded to :func:<code>pole_figure_coordinates</code>
+(default 0.0).</p>
+              </div>
+            </li>
+            <li>
+              <b><code>chi_sign</code></b>
+                  (<code><span title="float">float</span></code>, default:
+                      <code>1.0</code>
+)
+              –
+              <div class="doc-md-description">
+                <p>Forwarded to :func:<code>pole_figure_coordinates</code>
+(default 1.0).</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>alpha_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Polar angles, flat, shape <code>(n_chi * n_rot,)</code>.</p>
+              </div>
+            </li>
+            <li>
+<b><code>beta_deg</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Azimuthal angles, flat, same shape as <em>alpha_deg</em>.</p>
+              </div>
+            </li>
+            <li>
+<b><code>intensity</code></b>(                  <code><span title="numpy.ndarray">ndarray</span></code>
+)              –
+              <div class="doc-md-description">
+                <p>Sinogram intensity at each point, same shape.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nrxrdct/texture/odf.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-395">395</a></span>
+<span class="normal"><a href="#__codelineno-0-396">396</a></span>
+<span class="normal"><a href="#__codelineno-0-397">397</a></span>
+<span class="normal"><a href="#__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#__codelineno-0-400">400</a></span>
+<span class="normal"><a href="#__codelineno-0-401">401</a></span>
+<span class="normal"><a href="#__codelineno-0-402">402</a></span>
+<span class="normal"><a href="#__codelineno-0-403">403</a></span>
+<span class="normal"><a href="#__codelineno-0-404">404</a></span>
+<span class="normal"><a href="#__codelineno-0-405">405</a></span>
+<span class="normal"><a href="#__codelineno-0-406">406</a></span>
+<span class="normal"><a href="#__codelineno-0-407">407</a></span>
+<span class="normal"><a href="#__codelineno-0-408">408</a></span>
+<span class="normal"><a href="#__codelineno-0-409">409</a></span>
+<span class="normal"><a href="#__codelineno-0-410">410</a></span>
+<span class="normal"><a href="#__codelineno-0-411">411</a></span>
+<span class="normal"><a href="#__codelineno-0-412">412</a></span>
+<span class="normal"><a href="#__codelineno-0-413">413</a></span>
+<span class="normal"><a href="#__codelineno-0-414">414</a></span>
+<span class="normal"><a href="#__codelineno-0-415">415</a></span>
+<span class="normal"><a href="#__codelineno-0-416">416</a></span>
+<span class="normal"><a href="#__codelineno-0-417">417</a></span>
+<span class="normal"><a href="#__codelineno-0-418">418</a></span>
+<span class="normal"><a href="#__codelineno-0-419">419</a></span>
+<span class="normal"><a href="#__codelineno-0-420">420</a></span>
+<span class="normal"><a href="#__codelineno-0-421">421</a></span>
+<span class="normal"><a href="#__codelineno-0-422">422</a></span>
+<span class="normal"><a href="#__codelineno-0-423">423</a></span>
+<span class="normal"><a href="#__codelineno-0-424">424</a></span>
+<span class="normal"><a href="#__codelineno-0-425">425</a></span>
+<span class="normal"><a href="#__codelineno-0-426">426</a></span>
+<span class="normal"><a href="#__codelineno-0-427">427</a></span>
+<span class="normal"><a href="#__codelineno-0-428">428</a></span>
+<span class="normal"><a href="#__codelineno-0-429">429</a></span>
+<span class="normal"><a href="#__codelineno-0-430">430</a></span>
+<span class="normal"><a href="#__codelineno-0-431">431</a></span>
+<span class="normal"><a href="#__codelineno-0-432">432</a></span>
+<span class="normal"><a href="#__codelineno-0-433">433</a></span>
+<span class="normal"><a href="#__codelineno-0-434">434</a></span>
+<span class="normal"><a href="#__codelineno-0-435">435</a></span>
+<span class="normal"><a href="#__codelineno-0-436">436</a></span>
+<span class="normal"><a href="#__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-395" name="__codelineno-0-395"></a><span class="k">def</span><span class="w"> </span><span class="nf">sinogram_to_pole_figure</span><span class="p">(</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a>    <span class="n">sino</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a>    <span class="n">azimuthal</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a>    <span class="n">rot_deg</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a>    <span class="n">tth_deg</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="n">line_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="n">chi_offset_deg</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a>    <span class="n">chi_sign</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="sd">    Convert a pole-figure sinogram into flat pole-figure coordinates, ready for</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a><span class="sd">    :func:`nrxrdct.texture.odf_inversion.compute_odf`.</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a><span class="sd">    Applies :func:`pole_figure_coordinates` to every ``(chi, rot)`` grid point</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><span class="sd">    of *sino* and flattens the result — the direct bridge between</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a><span class="sd">    :func:`assemble_pole_figure_sinogram`&#39;s output and the bulk ODF fit.</span>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">        sino (np.ndarray): Pole-figure sinogram of shape ``(n_chi, n_lines, n_rot)``,</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">            as returned by :func:`assemble_pole_figure_sinogram`.</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">        azimuthal (np.ndarray): Chi axis, degrees, shape ``(n_chi,)``.</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        rot_deg (np.ndarray): Rotation-angle axis, degrees, shape ``(n_rot,)``.</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">        tth_deg (float): 2theta of the hkl ring (e.g. the mean of the</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">            ``tth_range`` stored alongside the sinogram).</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">        line_index (int, optional): Which translation line (index into *sino*&#39;s</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">            second axis) to use. ``None`` (default) averages over all lines,</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">            producing one bulk pole figure for the whole scanned cross-section</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">            rather than one per line — pass an explicit index for a per-line</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">            bulk pole figure instead.</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">        chi_offset_deg (float, optional): Forwarded to :func:`pole_figure_coordinates`</span>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">            (default 0.0).</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">        chi_sign (float, optional): Forwarded to :func:`pole_figure_coordinates`</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">            (default 1.0).</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">        alpha_deg (np.ndarray): Polar angles, flat, shape ``(n_chi * n_rot,)``.</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">        beta_deg (np.ndarray): Azimuthal angles, flat, same shape as *alpha_deg*.</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">        intensity (np.ndarray): Sinogram intensity at each point, same shape.</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a>    <span class="k">if</span> <span class="n">line_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a>        <span class="n">intensity_grid</span> <span class="o">=</span> <span class="n">sino</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (n_chi, n_rot)</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a>        <span class="n">intensity_grid</span> <span class="o">=</span> <span class="n">sino</span><span class="p">[:,</span> <span class="n">line_index</span><span class="p">,</span> <span class="p">:]</span>  <span class="c1"># (n_chi, n_rot)</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a>    <span class="n">chi_grid</span><span class="p">,</span> <span class="n">omega_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">azimuthal</span><span class="p">,</span> <span class="n">rot_deg</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a>    <span class="n">alpha_deg</span><span class="p">,</span> <span class="n">beta_deg</span> <span class="o">=</span> <span class="n">pole_figure_coordinates</span><span class="p">(</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a>        <span class="n">tth_deg</span><span class="o">=</span><span class="n">tth_deg</span><span class="p">,</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a>        <span class="n">chi_deg</span><span class="o">=</span><span class="n">chi_grid</span><span class="p">,</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>        <span class="n">omega_deg</span><span class="o">=</span><span class="n">omega_grid</span><span class="p">,</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>        <span class="n">chi_offset_deg</span><span class="o">=</span><span class="n">chi_offset_deg</span><span class="p">,</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a>        <span class="n">chi_sign</span><span class="o">=</span><span class="n">chi_sign</span><span class="p">,</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>    <span class="p">)</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a>    <span class="k">return</span> <span class="n">alpha_deg</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">beta_deg</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">intensity_grid</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../../slurm_reconstruction/" class="btn btn-neutral float-left" title="slurm_reconstruction"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../odf_inversion/" class="btn btn-neutral float-right" title="odf_inversion">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../../slurm_reconstruction/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../odf_inversion/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../../..";</script>
+    <script src="../../../js/theme_extra.js"></script>
+    <script src="../../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -61,21 +61,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
                 </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
-                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -113,6 +113,14 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#5-output-units">5. Output units</a>
     </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
@@ -157,6 +165,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -181,7 +203,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -457,8 +493,8 @@ texture information:</p>
 <a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="p">)</span>
 </code></pre></div>
 <p>The returned <code>cake</code> array has shape <code>(npt_azim, npt_rad)</code>.  Plot it
-with <code>plot_integrated_cake</code> from <code>nrxrdct.xrdct.visualization</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_integrated_cake</span>
+with <code>plot_integrated_cake</code> from <code>nrxrdct.visualization</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_integrated_cake</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plot_integrated_cake</span><span class="p">(</span><span class="n">cake</span><span class="p">,</span> <span class="n">radial</span><span class="p">,</span> <span class="n">azimuthal</span><span class="p">)</span>
 </code></pre></div>
 <hr />
@@ -543,7 +579,7 @@ using a <code>ProcessPoolExecutor</code>:</p>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
         <a href="../laue_grain_map_merge/" class="btn btn-neutral float-left" title="Grain Map Merging and Symmetry Reduction"><span class="icon icon-circle-arrow-left"></span> Previous</a>
-        <a href="../fitting/" class="btn btn-neutral float-right" title="Peak Fitting and NMF">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../texture_theory/" class="btn btn-neutral float-right" title="Theory">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -573,7 +609,7 @@ using a <code>ProcessPoolExecutor</code>:</p>
       <span><a href="../laue_grain_map_merge/" style="color: #fcfcfc">&laquo; Previous</a></span>
     
     
-      <span><a href="../fitting/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="../texture_theory/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>

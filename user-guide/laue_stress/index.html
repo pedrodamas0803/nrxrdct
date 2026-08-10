@@ -61,21 +61,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
     <ul class="current">
                 <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
                 </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
-                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -143,6 +143,14 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
@@ -185,6 +193,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -209,7 +231,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -286,20 +322,10 @@ related by the <strong>generalised Hooke's law</strong>:</p>
 \]</div>
 <p>where <span class="arithmatex">\(C_{ijkl}\)</span> is the <strong>fourth-rank elastic stiffness tensor</strong>.</p>
 <h3 id="what-laue-diffraction-can-and-cannot-access">What Laue diffraction can and cannot access<a class="headerlink" href="#what-laue-diffraction-can-and-cannot-access" title="Permanent link">&para;</a></h3>
-<p>White-beam (polychromatic) Laue diffraction measures the <strong>directions</strong> of
-diffracted beams, not their wavelengths.  Spot positions are determined by the
-crystal orientation and the <em>shape</em> of the unit cell — how the lattice vectors
-tilt and shear relative to one another.  A uniform scaling of all d-spacings
-(i.e. a purely hydrostatic strain) leaves every spot angle unchanged and is
-therefore <strong>invisible</strong> to Laue.</p>
-<p>The full strain tensor decomposes as:</p>
-<div class="arithmatex">\[
-\boldsymbol{\varepsilon} = \boldsymbol{\varepsilon}_\text{dev}
-  + \underbrace{\tfrac{1}{3}\operatorname{tr}(\boldsymbol{\varepsilon})\,\mathbf{I}}_{\text{hydrostatic — unobservable}}
-\]</div>
-<p>Only the <strong>deviatoric</strong> part <span class="arithmatex">\(\boldsymbol{\varepsilon}_\text{dev}\)</span> (traceless,
-five independent components) is reliably determined.  Consequently, the stress
-computed here is the <strong>deviatoric stress</strong>:</p>
+<p>White-beam Laue is sensitive only to the <strong>deviatoric</strong> part of the strain
+tensor, not the hydrostatic (volume-changing) part — see
+<a href="../laue_strain/#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Strain Analysis — the hydrostatic blind spot</a>
+for why. Consequently, the stress computed here is the <strong>deviatoric stress</strong>:</p>
 <div class="arithmatex">\[
 \boxed{\boldsymbol{\sigma}_\text{dev} = \mathbf{C} : \boldsymbol{\varepsilon}_\text{dev}}
 \]</div>
@@ -454,7 +480,7 @@ values, pass a <code>(6, 6)</code> array directly:</p>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>   <span class="c1"># grain slot index</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">cij</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>          <span class="c1"># optional explicit (6,6) stiffness matrix in GPa</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>   <span class="c1"># &quot;crystal&quot; | &quot;lab&quot; | &quot;sample&quot;</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">40.0</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># sig shape: (ny, nx, 6)  —  GPa, code ordering [s_xx,s_yy,s_zz,s_xy,s_xz,s_yz]</span>
@@ -484,7 +510,7 @@ true (inaccessible) pressure.</p>
 </tr>
 <tr>
 <td><code>"sample"</code></td>
-<td>Lab frame further rotated by <code>sample_tilt_deg</code> about <code>sample_tilt_axis</code> (default −40° about <span class="arithmatex">\(Y\)</span>).</td>
+<td>Lab frame further rotated by <code>sample_tilt_deg</code> about <code>sample_tilt_axis</code> (default +40° about <span class="arithmatex">\(Y\)</span>).</td>
 </tr>
 </tbody>
 </table>
@@ -724,26 +750,15 @@ Use <code>scale=1.0</code> for GPa.</p>
 <hr />
 <h2 id="8-important-caveats">8. Important caveats<a class="headerlink" href="#8-important-caveats" title="Permanent link">&para;</a></h2>
 <h3 id="hydrostatic-stress-is-unconstrained">Hydrostatic stress is unconstrained<a class="headerlink" href="#hydrostatic-stress-is-unconstrained" title="Permanent link">&para;</a></h3>
-<p>White-beam Laue diffraction cannot measure the <strong>hydrostatic</strong> part of the
-strain tensor (see <a href="../laue_strain/#limitation-of-polychromatic-laue-the-hydrostatic-blind-spot">Strain Analysis — Hydrostatic blind spot</a>).
-<code>stress_voigt</code> explicitly uses <code>strain_tensor_deviatoric</code> (trace exactly zero)
-as input, so the returned stress tensor is purely deviatoric: its trace is zero
-by construction and carries no information about the true hydrostatic pressure.</p>
-<p>Concretely:</p>
-<ul>
-<li><strong>Shear stresses</strong> <span class="arithmatex">\(\sigma_{xy}\)</span>, <span class="arithmatex">\(\sigma_{xz}\)</span>, <span class="arithmatex">\(\sigma_{yz}\)</span> are the most
-  reliable outputs — they are directly proportional to the corresponding shear
-  strain components, which <em>are</em> measurable.</li>
-<li><strong>Von Mises stress</strong> is the recommended scalar summary — it is a tensor
-  invariant, physically meaningful, and immune to the missing pressure.</li>
-<li><strong>Differences</strong> of normal stresses (e.g. <span class="arithmatex">\(\sigma_{xx} - \sigma_{zz}\)</span>) are
-  reliable — they probe the deviatoric part.</li>
-<li><strong>Individual</strong> normal stresses should be read as values relative to an
-  unknown offset <span class="arithmatex">\(P\)</span> (the true hydrostatic pressure), not as absolute
-  normal stresses.  Do not interpret them as the full Cauchy normal stress
-  unless the hydrostatic component is constrained by an independent measurement
-  (e.g. monochromatic XRD with a calibrated reference).</li>
-</ul>
+<p><code>stress_voigt</code> uses <code>strain_tensor_deviatoric</code> (trace exactly zero) as input,
+so the returned stress tensor is purely deviatoric by construction and
+carries no information about the true hydrostatic pressure — see the
+reliability-by-component table in §1 for which quantities that leaves safe to
+interpret directly (shear stresses, stress differences, von Mises) versus
+relative-only (individual normal stresses). Do not read an individual normal
+stress as the full Cauchy normal stress unless the hydrostatic component is
+constrained by an independent measurement (e.g. monochromatic XRD with a
+calibrated reference).</p>
 <h3 id="elastic-constants-must-match-the-crystal-frame">Elastic constants must match the crystal frame<a class="headerlink" href="#elastic-constants-must-match-the-crystal-frame" title="Permanent link">&para;</a></h3>
 <p>The stiffness matrix <span class="arithmatex">\(\mathbf{C}\)</span> must be expressed in the same coordinate
 system as the strain tensor — i.e. the <strong>crystal frame</strong> as defined by the

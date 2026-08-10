@@ -61,21 +61,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
     </ul>
                   </li>
                   <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
     <ul class="current">
                 <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
                 </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_theory_refs/">Laue Theory References</a>
-                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites_refs/">Thin-Film Satellite References</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
                 </li>
@@ -165,6 +165,14 @@
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
@@ -207,6 +215,20 @@
                 </li>
     </ul>
                   </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
                   <li class="toctree-l1"><a class="reference internal" >rietveld</a>
     <ul>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
@@ -231,7 +253,21 @@
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
                 </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
                 <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
                 </li>
     </ul>
                   </li>
@@ -450,7 +486,9 @@ rotation:</p>
 <h3 id="sample-frame">Sample frame<a class="headerlink" href="#sample-frame" title="Permanent link">&para;</a></h3>
 <p>The <strong>sample frame</strong> accounts for the physical orientation of the sample on the
 diffractometer.  In the default configuration it is related to the lab frame by a
-rotation <span class="arithmatex">\(\mathbf{R}_s\)</span> of <span class="arithmatex">\(-40°\)</span> about the lab <span class="arithmatex">\(Y\)</span> axis (the sample tilt):</p>
+rotation <span class="arithmatex">\(\mathbf{R}_s\)</span> of <span class="arithmatex">\(+40°\)</span> about the lab <span class="arithmatex">\(Y\)</span> axis (the sample tilt,
+same <code>sample_tilt_deg</code> sign convention as <code>euler_to_U</code> — see
+<a href="../laue_theory/#52-crystal-frame-and-orientation-matrix-u">Theory §5.2</a>):</p>
 <div class="arithmatex">\[
 \mathbf{r}_\text{sample} = \mathbf{R}_s\,\mathbf{r}_\text{lab}
 \]</div>
@@ -573,12 +611,12 @@ rotation <span class="arithmatex">\(\mathbf{R}_s\)</span> of <span class="arithm
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Lab frame</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;lab&quot;</span><span class="p">)</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Sample frame (−40° about Y by default)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Sample frame (+40° about Y by default)</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">)</span>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Custom tilt</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_strain_component</span><span class="p">(</span><span class="s2">&quot;e_zz&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;sample&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                           <span class="n">sample_tilt_deg</span><span class="o">=-</span><span class="mf">35.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                           <span class="n">sample_tilt_deg</span><span class="o">=</span><span class="mf">35.0</span><span class="p">,</span> <span class="n">sample_tilt_axis</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                           <span class="n">motor_x</span><span class="o">=</span><span class="s2">&quot;pz&quot;</span><span class="p">,</span> <span class="n">motor_y</span><span class="o">=</span><span class="s2">&quot;py&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>                           <span class="n">motor_units</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pz&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span> <span class="s2">&quot;py&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">})</span>
 </code></pre></div>
@@ -592,12 +630,13 @@ apply the rotation manually:</p>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Lab frame (vectorised)</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">eps_lab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;...ik,...kl,...jl-&gt;...ij&quot;</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">U</span><span class="p">)</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Custom rotation R applied on top of the lab frame</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">R</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">spatial</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">Rotation</span><span class="o">.</span><span class="n">from_euler</span><span class="p">(</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="o">-</span><span class="mi">40</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">eps_custom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;ik,...kl,jl-&gt;...ij&quot;</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">eps_lab</span><span class="p">,</span> <span class="n">R</span><span class="p">)</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Extract a component</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">e_zz_custom</span> <span class="o">=</span> <span class="n">eps_custom</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>   <span class="c1"># (ny, nx)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Custom rotation R applied on top of the lab frame (matches the default</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># sample tilt; pass a different angle for a genuinely custom frame)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">R</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">spatial</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">Rotation</span><span class="o">.</span><span class="n">from_euler</span><span class="p">(</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">eps_custom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;ik,...kl,jl-&gt;...ij&quot;</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">eps_lab</span><span class="p">,</span> <span class="n">R</span><span class="p">)</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Extract a component</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">e_zz_custom</span> <span class="o">=</span> <span class="n">eps_custom</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>   <span class="c1"># (ny, nx)</span>
 </code></pre></div>
 <hr />
 <h2 id="practical-notes">Practical notes<a class="headerlink" href="#practical-notes" title="Permanent link">&para;</a></h2>

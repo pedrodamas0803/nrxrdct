@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Rod Tangency and Per-Pixel Simulation - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Rod Tangency and Per-Pixel Simulation";
+        var mkdocs_page_input_path = "user-guide/laue_rod_tangency.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Laue Diffraction</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Rod Tangency and Per-Pixel Simulation</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-refresher-the-rod-is-a-line-in-q-space">1. Refresher — the rod is a line in Q-space</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-the-tangency-jacobian">2. The tangency Jacobian</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#why-tangency">Why "tangency"</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-why-this-controls-how-many-satellite-spots-you-actually-see">3. Why this controls how many satellite spots you actually see</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-diagnosing-tangency-rod_tangency-plot_rod_tangency">4. Diagnosing tangency: rod_tangency / plot_rod_tangency</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-per-pixel-forward-simulation-simulate_spot_image">5. Per-pixel forward simulation: simulate_spot_image</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#51-anchoring-to-the-exact-reflection-g_lab">5.1 Anchoring to the exact reflection (G_lab)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#52-deep-buffer-layers-isolate_layer">5.2 Deep buffer layers: isolate_layer</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#53-de_evn_energy-and-destructive-interference">5.3 dE_eV/n_energy and destructive interference</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#54-i_satellites-max_satellite_order">5.4 I_satellites / max_satellite_order</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#55-beam-divergence-sigma_h_mrad-sigma_v_mrad-n_div">5.5 Beam divergence (sigma_h_mrad, sigma_v_mrad, n_div)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-whole-frame-version-simulate_full_detector_image">6. Whole-frame version: simulate_full_detector_image</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-bookkeeping-print_reflections-and-harmonic_orders">7. Bookkeeping: print_reflections and harmonic_orders</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-practical-recipes">8. Practical recipes</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#9-summary-of-gotchas">9. Summary of gotchas</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Texture Tomography</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_theory/">Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Laue Diffraction</li>
+      <li class="breadcrumb-item active">Rod Tangency and Per-Pixel Simulation</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/laue_rod_tangency.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="rod-tangency-and-per-pixel-forward-simulation">Rod tangency and per-pixel forward simulation<a class="headerlink" href="#rod-tangency-and-per-pixel-forward-simulation" title="Permanent link">&para;</a></h1>
+<p>This page answers a specific question: <strong>why do some reflections show
+several distinct, resolvable superlattice satellite spots, while others show
+only one blurred spot or an elongated streak?</strong> The short answer is
+<em>tangency</em> — how a reflection's superlattice rod happens to sit relative to
+the Ewald sphere at your particular detector geometry — and this page
+derives that, then documents the toolchain built around it:
+<code>rod_tangency</code>, <code>simulate_spot_image</code>, <code>simulate_full_detector_image</code>, and a
+few smaller bookkeeping additions (<code>LayeredCrystal.print_reflections</code>,
+<code>harmonic_orders</code>).</p>
+<p>This builds directly on
+<a href="../laue_thin_film_satellites/">Thin-Film Satellites</a>, which derives the
+satellite positions themselves (§1–3) and touches on detector displacement
+direction (§4) — read that first if the rod/satellite construction itself
+is unfamiliar. This page picks up from there and asks a question that page
+doesn't: <em>given the rod exists, why does it look the way it does on my
+detector?</em></p>
+<hr />
+<h2 id="1-refresher-the-rod-is-a-line-in-q-space">1. Refresher — the rod is a line in Q-space<a class="headerlink" href="#1-refresher-the-rod-is-a-line-in-q-space" title="Permanent link">&para;</a></h2>
+<p>A repeating block with period <span class="arithmatex">\(\Lambda\)</span> and <span class="arithmatex">\(N_\text{rep}\)</span> repetitions
+produces satellites at</p>
+<div class="arithmatex">\[
+\mathbf{Q}(t) = \mathbf{G}_{hkl} + t\,\hat{n}, \qquad t = m\,\frac{2\pi}{\Lambda}
+\ \ (m = 0, \pm1, \pm2, \ldots)
+\]</div>
+<p>i.e. a discrete comb of points along a <strong>line</strong> through <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>
+in the growth direction <span class="arithmatex">\(\hat{n}\)</span> — "the rod." Each point on this line
+satisfies the elastic (Laue) condition at its own photon energy:</p>
+<div class="arithmatex">\[
+\lambda(t) = -\frac{4\pi\,\hat{k}_i \cdot \mathbf{Q}(t)}{|\mathbf{Q}(t)|^2},
+\qquad E(t) = \frac{hc}{\lambda(t)}
+\]</div>
+<p>Energy and pixel position are <strong>both</strong> functions of the single parameter
+<span class="arithmatex">\(t\)</span> — they co-vary together as you move along the rod. That coupling is the
+whole story of this page.</p>
+<p>Note that nothing here depends on which crystallographic plane <span class="arithmatex">\(\hat{n}\)</span>
+corresponds to: <code>rod_tangency</code> only ever consumes <code>layer.n_hat</code> and the
+resolved repeat period, both already generic in <code>Layer</code>/<code>LayeredCrystal</code> (see
+the <a href="../laue_layered_structures/#51-non-c-axis-stacking-m-plane-and-other-growth-planes">layered-structures guide, §5.1</a>
+for how <span class="arithmatex">\(\hat{n}\)</span> and <span class="arithmatex">\(d\)</span> are set up correctly for a non-<span class="arithmatex">\(c\)</span>-axis growth
+surface such as hexagonal m-plane). Once those are right, everything below
+applies unchanged.</p>
+<hr />
+<h2 id="2-the-tangency-jacobian">2. The tangency Jacobian<a class="headerlink" href="#2-the-tangency-jacobian" title="Permanent link">&para;</a></h2>
+<p>Define <span class="arithmatex">\(\mathbf{k}_f(t) = \hat{k}_i\,k(t) + \mathbf{Q}(t)\)</span> (normalised),
+projected onto the detector via the camera geometry to get a pixel
+<span class="arithmatex">\(\mathbf{p}(t) = (x_\text{cam}(t), y_\text{cam}(t))\)</span>. The quantity that
+matters is the <strong>Jacobian</strong></p>
+<div class="arithmatex">\[
+\left.\frac{d\mathbf{p}}{dt}\right|_{t=0}
+\]</div>
+<p>— how far the pixel moves on the detector per unit reciprocal-space step
+along the rod. This is exactly what <code>rod_tangency</code> estimates, by a
+central finite difference: solve the elastic condition at
+<span class="arithmatex">\(\mathbf{Q}(\pm\delta)\)</span>, project both to pixels, and divide by <span class="arithmatex">\(2\delta\)</span>.</p>
+<blockquote>
+<p><strong>A wrong way to compute this (and why it's wrong).</strong> An earlier version
+of this tool computed <span class="arithmatex">\(\partial Q_n/\partial(\text{pixel})\)</span> at a <em>fixed</em>
+energy instead — i.e. "if my beam couldn't change energy at all, which
+pixel direction keeps <span class="arithmatex">\(\mathbf{Q}\cdot\hat n\)</span> unchanged?" That's a
+real, well-defined direction, but it isn't the rod: the rod's own
+parametrisation lets energy move too. The two directions can differ by
+tens of degrees. This was caught by cross-checking the predicted angle
+against <code>qspace_around_spot</code>'s own computed pixel positions (fitting a
+line through them) for two different reflections — a good reminder to
+verify a <em>geometric</em> quantity against an independently-computed one
+before trusting it, the same way <code>harmonic_hkls</code>/<code>I_satellites</code> were
+checked against reconstruction identities elsewhere on this page.</p>
+</blockquote>
+<h3 id="why-tangency">Why "tangency"<a class="headerlink" href="#why-tangency" title="Permanent link">&para;</a></h3>
+<p>If the rod happens to run nearly parallel to the local Ewald-sphere surface
+at <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span> (a near-tangency condition), a <em>tiny</em> change in photon
+energy sweeps through a large arc of <span class="arithmatex">\(\mathbf{k}_f\)</span> directions — so
+<span class="arithmatex">\(|d\mathbf{p}/dt|\)</span> is <strong>large</strong>: the rod maps to a long streak on the
+detector. If the rod instead cuts across the Ewald sphere steeply, a
+<span class="arithmatex">\(t\)</span>-step needs comparatively little help from energy to stay on-shell, and
+<span class="arithmatex">\(|d\mathbf{p}/dt|\)</span> is <strong>small</strong>: the whole comb of satellite orders stays
+compressed into a tight cluster of pixels.</p>
+<p>This is purely a function of <span class="arithmatex">\(\hat n\)</span>, <span class="arithmatex">\(\mathbf{G}_{hkl}\)</span>, <span class="arithmatex">\(\hat k_i\)</span>, and
+the camera geometry — nothing about intensity enters. Two reflections from
+the <em>same</em> superlattice period can have wildly different <span class="arithmatex">\(|d\mathbf p/dt|\)</span>
+simply because they sit at different points on the Ewald sphere.</p>
+<hr />
+<h2 id="3-why-this-controls-how-many-satellite-spots-you-actually-see">3. Why this controls how many satellite spots you actually <em>see</em><a class="headerlink" href="#3-why-this-controls-how-many-satellite-spots-you-actually-see" title="Permanent link">&para;</a></h2>
+<p>The satellite comb is spaced by <span class="arithmatex">\(\Delta t = 2\pi/\Lambda\)</span> in <span class="arithmatex">\(t\)</span>. Via the
+Jacobian, consecutive orders land on the detector separated by
+approximately</p>
+<div class="arithmatex">\[
+\Delta p_\text{orders} \;\approx\; \left|\frac{d\mathbf p}{dt}\right|
+\cdot \frac{2\pi}{\Lambda}
+\]</div>
+<p>Whether two adjacent orders show up as <strong>separate, resolvable spots</strong> or
+<strong>blur into one feature</strong> depends on how this spacing compares to whatever
+<em>smears</em> an individual order's own footprint on the detector:</p>
+<ul>
+<li>The intrinsic coherence width of the <span class="arithmatex">\(S_\text{rep}\)</span> peak itself
+  (<span class="arithmatex">\(\approx \Delta t / N_\text{rep}\)</span> — narrower than the spacing by a
+  factor of <span class="arithmatex">\(N_\text{rep}\)</span>, so essentially never the limiting factor for a
+  superlattice with more than a few repeats);</li>
+<li>Real instrumental broadening — beam divergence, detector point-spread,
+  pixel binning — which is roughly a <em>fixed</em> number of pixels, largely
+  independent of <span class="arithmatex">\(|d\mathbf p/dt|\)</span>.</li>
+</ul>
+<p>Because the instrumental smearing doesn't scale with the Jacobian while
+<span class="arithmatex">\(\Delta p_\text{orders}\)</span> does, <strong>a large <span class="arithmatex">\(|d\mathbf p/dt|\)</span> (near-tangency)
+pushes the satellite orders apart faster than it blurs any individual
+one</strong> — so a reflection sitting near tangency is the one where you're most
+likely to resolve several distinct satellite spots (a "beads on a string"
+pattern along the streak direction). A reflection far from tangency
+compresses the <em>same</em> physical set of orders into a pixel cluster smaller
+than the instrumental resolution, so they overlap into what looks like a
+single spot — even though, in reciprocal space, just as many orders are
+present and contributing.</p>
+<p>This is also the direct explanation for the streak-vs-blur confusion worked
+through interactively while building this: with <code>dE_eV</code> wide enough to
+integrate several periods (needed for correct destructive-interference
+contrast — see §5), a near-tangent reflection's per-pixel image looked like
+a single uniform stripe. Splitting the same data by satellite order
+(<code>I_satellites</code>, §5) revealed the "beads" directly — each order individually
+compact, just displaced along the tangency direction, with a real,
+substantial intensity envelope decay between them (a factor of ~170× was
+measured between adjacent orders in one worked example).</p>
+<hr />
+<h2 id="4-diagnosing-tangency-rod_tangency-plot_rod_tangency">4. Diagnosing tangency: <code>rod_tangency</code> / <code>plot_rod_tangency</code><a class="headerlink" href="#4-diagnosing-tangency-rod_tangency-plot_rod_tangency" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="kn">import</span> <span class="n">rod_tangency</span><span class="p">,</span> <span class="n">plot_rod_tangency</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">info</span> <span class="o">=</span> <span class="n">rod_tangency</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layer</span><span class="o">=</span><span class="s1">&#39;GaN buffer&#39;</span><span class="p">,</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span> <span class="n">max_satellites</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># {&#39;hkl&#39;: (1, 0, 5), &#39;layer&#39;: &#39;GaN buffer&#39;, &#39;pix0&#39;: (643.8, 354.6),</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1">#  &#39;E0&#39;: 5252.2, &#39;streak_dir_px&#39;: array([0.71, 0.70]),</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">#  &#39;perp_dir_px&#39;: array([-0.70, 0.71]), &#39;dpix_dalong&#39;: 259.8,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">#  &#39;on_detector&#39;: True, &#39;period&#39;: 54000.0,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">#  &#39;satellites&#39;: {-3: {...}, ..., 0: {...}, ..., 3: {...}}}</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># layer=&#39;all&#39; compares the *same* hkl across every layer in the stack —</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># useful since a strained layer&#39;s G0 (hence pix0/E0/streak direction) can</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># differ measurably from an unstrained one even for &quot;the same&quot; hkl label</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">plot_rod_tangency</span><span class="p">(</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layer</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">max_satellites</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>        <span class="c1"># mark each layer&#39;s own satellite-order positions</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">image</span><span class="o">=</span><span class="n">measured_frame</span><span class="p">,</span>    <span class="c1"># optional — overlay on a real/simulated frame</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">arrow_length_px</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># infos is always a list (one dict per plotted layer, `rod_tangency`&#39;s own</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1"># return format) — even for a single layer, so `infos[0][&#39;dpix_dalong&#39;]`</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># rather than `info[&#39;dpix_dalong&#39;]`. Layers whose hkl doesn&#39;t land</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># on-detector are skipped with a printed note rather than raising.</span>
+</code></pre></div>
+<ul>
+<li><strong><code>streak_dir_px</code></strong> — unit vector, the direction the rod actually traces
+  on the detector (drawn as a coloured line, one colour per layer when
+  comparing several). This is the physically meaningful output.</li>
+<li><strong><code>perp_dir_px</code></strong> — a plain 90°-rotated reference axis (drawn dashed
+  only in single-layer mode) for visual scale; the streak's <em>width</em> comes
+  from off-rod structure-factor decay and instrumental broadening, not
+  from anything this function derives.</li>
+<li><strong><code>dpix_dalong</code></strong> (px / Å⁻¹) — the number to actually compare across
+  candidate <code>hkl</code> <em>or</em> across layers. Large ⇒ elongated streak, satellite
+  orders likely resolvable as separate spots (given fine enough
+  instrumental resolution); small ⇒ compact spot, orders likely blended
+  together.</li>
+<li><strong><code>satellites</code></strong> (when <code>max_satellites &gt; 0</code>) — each layer's own discrete
+  comb of order positions along its streak, at that layer's own period
+  (its own repeating block's period if it belongs to one, else its own
+  thickness) — drawn as small dots along the streak line. Comparing this
+  across layers shows directly whether two layers' satellite combs would
+  overlap, interleave, or sit well apart on the detector.</li>
+</ul>
+<p>This is pure geometry (no structure factor, no spectrum) — a cheap way to
+screen candidate reflections, or compare layers, before committing to the
+much more expensive tools below.</p>
+<hr />
+<h2 id="5-per-pixel-forward-simulation-simulate_spot_image">5. Per-pixel forward simulation: <code>simulate_spot_image</code><a class="headerlink" href="#5-per-pixel-forward-simulation-simulate_spot_image" title="Permanent link">&para;</a></h2>
+<p>Where <code>simulate_laue_stack</code> (and friends) work by <em>enumerating candidate
+hkl</em> and checking each against the elastic condition and an intensity
+threshold, <code>simulate_spot_image</code> inverts the direction: it starts from real
+detector pixels around one already-indexed reflection and asks what <code>Q</code>
+a photon of a given energy would need to have, for every pixel in a small
+window:</p>
+<div class="arithmatex">\[
+\mathbf{Q}(E) = k(E)\,(\hat k_f(\text{pixel}) - \hat k_i)
+\]</div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">simulate_spot_image</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">spots</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s1">&#39;GaN buffer&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">structure_model</span><span class="o">=</span><span class="s1">&#39;average&#39;</span><span class="p">,</span> <span class="n">darwin</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">isolate_layer</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sapphire&#39;</span><span class="p">],</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">sigma_h_mrad</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">sigma_v_mrad</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">max_satellite_order</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">plot_spot_image</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">exp_image</span><span class="o">=</span><span class="n">measured_frame</span><span class="p">)</span>
+</code></pre></div>
+<p>A handful of subtleties turned out to matter a great deal in practice:</p>
+<h3 id="51-anchoring-to-the-exact-reflection-g_lab">5.1 Anchoring to the exact reflection (<code>G_lab</code>)<a class="headerlink" href="#51-anchoring-to-the-exact-reflection-g_lab" title="Permanent link">&para;</a></h3>
+<p>Reconstructing <span class="arithmatex">\(\mathbf{Q}\)</span> from a <em>stored</em> pixel position via
+<code>Camera.pixel_to_kf</code> carries a tiny (~<span class="arithmatex">\(10^{-5}\)</span> Å⁻¹) round-trip precision
+error — utterly negligible geometrically, but every buried layer's
+coherent phase is <span class="arithmatex">\(e^{i Q_n z_0}\)</span> with <span class="arithmatex">\(z_0\)</span> up to hundreds of thousands of
+Å for a deep substrate, so <span class="arithmatex">\(\Delta Q_n \cdot z_0\)</span> can be many radians. The
+fix: anchor to the <strong>exact</strong> <span class="arithmatex">\(\mathbf{Q}\)</span> (<code>spots[i]['G_lab']</code>, the value
+<code>simulate_laue_stack</code> itself used — not recomputed from
+<code>layer.crystal.Q(h,k,l)</code>, which silently ignores any pseudomorphic strain
+correction) and apply the same small correction across the sampled window.</p>
+<h3 id="52-deep-buffer-layers-isolate_layer">5.2 Deep buffer layers: <code>isolate_layer</code><a class="headerlink" href="#52-deep-buffer-layers-isolate_layer" title="Permanent link">&para;</a></h3>
+<p>Even with exact anchoring, a coherent sum across a stack that includes a
+deep substrate is often <strong>numerically unresolvable</strong>: the cross-term phase
+between two widely-separated layers oscillates faster than any realistic
+pixel/energy sampling can track, so the image looks flat/featureless not
+because there's no signal, but because the phase is effectively
+randomised at every sampled point except the exact anchor. <code>isolate_layer</code>
+builds a reduced stand-in stack (reusing the same <code>Layer</code> objects, so
+<code>absorption_limit</code>/<code>d_spacing</code>/<code>n_cells</code> are preserved exactly) that drops
+the offending cross-terms:</p>
+<ul>
+<li><code>isolate_layer=True</code> — keep only the reflecting layer (or its own
+  repeating block).</li>
+<li><code>isolate_layer=['Sapphire', ...]</code> — exclude specific buffer layers by
+  label, keeping everything else (including cross-terms between layers
+  that are physically close together and may genuinely interfere
+  constructively — often what actually produces a real, sharp measured
+  peak).</li>
+</ul>
+<p>Works with both <code>darwin=False</code> and <code>darwin=True</code>.</p>
+<h3 id="53-de_evn_energy-and-destructive-interference">5.3 <code>dE_eV</code>/<code>n_energy</code> and destructive interference<a class="headerlink" href="#53-de_evn_energy-and-destructive-interference" title="Permanent link">&para;</a></h3>
+<p>A repeating block's <span class="arithmatex">\(S_\text{rep}\)</span> term oscillates in energy at a fixed
+pixel — real destructive interference, not noise. A <code>dE_eV</code> window
+narrower than a few oscillation periods <em>underestimates</em> the true
+peak-to-background contrast, because it only samples part of one
+rise/fall rather than full periods including their minima (measured:
+roughly 2× more dynamic range going from a 150 eV to a 500 eV half-width
+before plateauing, in one worked case). <code>pin_satellites=True</code> (default)
+separately guarantees the exact fringe-peak energies are inserted into the
+sampling grid regardless of <code>n_energy</code> — fixing "missing a peak entirely,"
+which is a different failure mode from "window too narrow to judge
+contrast." Both matter; neither substitutes for the other.</p>
+<h3 id="54-i_satellites-max_satellite_order">5.4 <code>I_satellites</code> / <code>max_satellite_order</code><a class="headerlink" href="#54-i_satellites-max_satellite_order" title="Permanent link">&para;</a></h3>
+<p>Summing every satellite order that falls inside a (necessarily wide)
+<code>dE_eV</code> blends them into one flat-looking total — most pixels in the
+window end up integrating over the <em>same</em> few dominant orders rather than
+each showing "its own." <code>I_satellites</code> (populated when there's exactly one
+relevant repeating block) reports each order's own contribution
+separately; <code>max_satellite_order</code> caps how many actually get summed into
+<code>I</code>/<code>I_harmonics</code> in the first place (e.g. <code>0</code> keeps only the main peak —
+measured ~12× better dynamic range than an unlimited sum in one case).</p>
+<h3 id="55-beam-divergence-sigma_h_mrad-sigma_v_mrad-n_div">5.5 Beam divergence (<code>sigma_h_mrad</code>, <code>sigma_v_mrad</code>, <code>n_div</code>)<a class="headerlink" href="#55-beam-divergence-sigma_h_mrad-sigma_v_mrad-n_div" title="Permanent link">&para;</a></h3>
+<p>With zero divergence, a Bragg reflection is a true delta function in
+angle — there is nothing broader than that to resolve, and an isolated
+single layer's own image can look flat even after fixing everything in
+§5.1–§5.4, simply because a delta-function beam implies a delta-function
+response. A real measured spot's finite size mostly comes from convolving
+that intrinsic response with the source's actual angular divergence
+(same convention as <code>beam_divergence_ellipses</code>: typical BM32/ESRF values
+are 2–3 mrad horizontal, 0.2–0.5 mrad vertical).</p>
+<hr />
+<h2 id="6-whole-frame-version-simulate_full_detector_image">6. Whole-frame version: <code>simulate_full_detector_image</code><a class="headerlink" href="#6-whole-frame-version-simulate_full_detector_image" title="Permanent link">&para;</a></h2>
+<p>The pixel-space sibling of <code>simulate_spot_image</code> with <strong>no</strong> <code>hkl</code>
+dependence at all — every (binned) pixel sweeps the full white-beam
+window and integrates directly, with no candidate enumeration, no
+<code>f2_thresh</code>, no satellite bookkeeping:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">simulate_full_detector_image</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">cam</span><span class="p">,</span> <span class="n">bin_px</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">exclude_layers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sapphire&#39;</span><span class="p">],</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">structure_model</span><span class="o">=</span><span class="s1">&#39;average&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log1p</span><span class="p">(</span><span class="n">img</span><span class="p">[</span><span class="s1">&#39;I&#39;</span><span class="p">]),</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>           <span class="n">extent</span><span class="o">=</span><span class="p">[</span><span class="n">img</span><span class="p">[</span><span class="s1">&#39;x0&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">img</span><span class="p">[</span><span class="s1">&#39;x0&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">img</span><span class="p">[</span><span class="s1">&#39;y0&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">img</span><span class="p">[</span><span class="s1">&#39;y0&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]])</span>
+</code></pre></div>
+<p>There is no anchoring correction here (unlike <code>simulate_spot_image</code>,
+nothing external is being matched — every pixel's <span class="arithmatex">\(\mathbf{Q}(E)\)</span> is
+simply computed fresh) and no <code>pin_satellites</code> equivalent (there is no
+known reflection to derive an exact peak energy from), so a narrow Bragg
+peak can be aliased away entirely between energy samples. Treat this as an
+overview/screening tool — a way to see the broad intensity landscape and
+spot candidate regions — not a substitute for <code>simulate_spot_image</code> once
+you know where to look.</p>
+<hr />
+<h2 id="7-bookkeeping-print_reflections-and-harmonic_orders">7. Bookkeeping: <code>print_reflections</code> and <code>harmonic_orders</code><a class="headerlink" href="#7-bookkeeping-print_reflections-and-harmonic_orders" title="Permanent link">&para;</a></h2>
+<p><strong><code>LayeredCrystal.print_reflections(spots, layer=None, *, satellite_order=None, ...)</code></strong>
+prints what's actually in a <code>spots</code> list for a layer — hkl, satellite
+order, energy, intensity, pixel — sorted by intensity. <code>simulate_spot_image</code>
+raises a <code>ValueError</code> naming the exact hkl/layer/<code>satellite_order</code>
+combination it couldn't find (and, when something with that hkl/layer
+exists at a <em>different</em> order, says so directly) — this is the fast way to
+check what's available before hitting that error.</p>
+<p><strong><code>harmonic_orders</code></strong> (parallel to <code>harmonic_hkls</code> on every merged spot)
+labels each coincident-pixel entry with its integer order relative to the
+group's own GCD-reduced primitive direction, or <code>None</code> if it's a genuine
+accidental (non-integer-ratio) overlap rather than a true harmonic.
+Non-integer ratios among <code>harmonic_hkls</code> are <em>expected</em> — the merge in
+<code>_merge_or_append_spot</code> is keyed on pixel coincidence alone, by design,
+since an undiscriminating detector pixel sums whatever lands on it
+regardless of <em>why</em> (real harmonic or accidental overlap are both real
+physics). The order is derived from the whole group's primitive, not
+whichever reflection happened to be enumerated first — comparing pairwise
+against a fixed first-seen reference mislabels groups where the
+first-enumerated hkl is itself a higher harmonic (e.g. <code>(-10,4,2)</code>
+enumerated before <code>(-5,2,1)</code>, its true 1× fundamental).</p>
+<hr />
+<h2 id="8-practical-recipes">8. Practical recipes<a class="headerlink" href="#8-practical-recipes" title="Permanent link">&para;</a></h2>
+<p><strong>Screen candidate reflections for tangency before simulating anything:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">for</span> <span class="n">hkl</span> <span class="ow">in</span> <span class="n">candidate_hkls</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">info</span> <span class="o">=</span> <span class="n">rod_tangency</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="n">layer</span><span class="p">,</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">hkl</span><span class="p">,</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;dpix_dalong&#39;</span><span class="p">])</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># pick the smallest dpix_dalong for a compact-spot comparison,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># the largest for a streak/satellite-rich comparison</span>
+</code></pre></div>
+<p><strong>Compare where the same hkl lands for every layer in the stack (e.g. to
+see whether a strained layer's satellite comb overlaps an unstrained
+one's):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">plot_rod_tangency</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span> <span class="n">max_satellites</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">infos</span><span class="p">:</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;layer&#39;</span><span class="p">],</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;pix0&#39;</span><span class="p">],</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;dpix_dalong&#39;</span><span class="p">])</span>
+</code></pre></div>
+<p><strong>Check what's actually indexed before calling <code>simulate_spot_image</code>:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">stack</span><span class="o">.</span><span class="n">print_reflections</span><span class="p">(</span><span class="n">spots</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s1">&#39;GaN buffer&#39;</span><span class="p">,</span> <span class="n">satellite_order</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Image one known reflection, robust to a deep substrate:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">simulate_spot_image</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">spots</span><span class="p">,</span> <span class="n">hkl</span><span class="p">,</span> <span class="n">camera</span><span class="o">=</span><span class="n">cam</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="n">layer</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">isolate_layer</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sapphire&#39;</span><span class="p">],</span> <span class="n">structure_model</span><span class="o">=</span><span class="s1">&#39;average&#39;</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">dE_eV</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">pin_satellites</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_satellite_order</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
+</code></pre></div>
+<p><strong>See which satellite order dominates where:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">arr</span> <span class="ow">in</span> <span class="n">img</span><span class="p">[</span><span class="s1">&#39;I_satellites&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">arr</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+</code></pre></div>
+<hr />
+<h2 id="9-summary-of-gotchas">9. Summary of gotchas<a class="headerlink" href="#9-summary-of-gotchas" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Image is flat/featureless everywhere</td>
+<td>Deep-buffer coherent phase numerically unresolvable</td>
+<td><code>isolate_layer</code></td>
+</tr>
+<tr>
+<td>Image is flat even after isolating the layer</td>
+<td>Zero beam divergence ⇒ true delta-function response</td>
+<td><code>sigma_h_mrad</code>/<code>sigma_v_mrad</code></td>
+</tr>
+<tr>
+<td>Peak intensity looks lower than expected</td>
+<td><code>dE_eV</code> too narrow — misses destructive-interference minima</td>
+<td>widen <code>dE_eV</code> (span several periods)</td>
+</tr>
+<tr>
+<td>Peak position is right but intensity is ~0</td>
+<td>Narrow <code>S_rep</code> resonance missed by uniform energy sampling</td>
+<td><code>pin_satellites=True</code> (default)</td>
+</tr>
+<tr>
+<td>One uniform streak instead of distinct spots</td>
+<td>Summing many satellite orders together</td>
+<td><code>I_satellites</code>, <code>max_satellite_order</code></td>
+</tr>
+<tr>
+<td>"Reflection doesn't exist" but you can see it</td>
+<td>Wrong <code>satellite_order</code> requested</td>
+<td><code>stack.print_reflections(...)</code>, then pass the right <code>satellite_order</code></td>
+</tr>
+<tr>
+<td>Non-integer <code>n</code> in a harmonic group</td>
+<td>Expected — pixel-coincidence merge includes accidental overlaps</td>
+<td>check <code>harmonic_orders</code>, <code>None</code> means accidental</td>
+</tr>
+<tr>
+<td>Predicted streak angle doesn't match a real streak</td>
+<td>Confirm you're on the current <code>rod_tangency</code> (uses <code>d(pixel)/d(along)</code>, not a fixed-energy gradient)</td>
+<td>cross-check against <code>qspace_around_spot</code>'s own pixel positions if unsure</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../laue_darwin/" class="btn btn-neutral float-left" title="Darwin Model (Thick Layers)"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../laue_segmentation/" class="btn btn-neutral float-right" title="Spot Segmentation">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../laue_darwin/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../laue_segmentation/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

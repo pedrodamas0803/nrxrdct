@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Theory - nrxrdct</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+        <link href="../../css/custom.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Theory";
+        var mkdocs_page_input_path = "user-guide/texture_theory.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> nrxrdct
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User Guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" >XRD-CT</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../quickstart/">Quickstart</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../workflow/">Typical Workflow</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../slurm/">SLURM / HPC Integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../gpu/">GPU Support</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../s3dxrd/">Scanning 3DXRD (s3DXRD)</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Laue Diffraction</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_theory/">Diffraction and Laue Theory</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_thin_film_satellites/">Thin-Film Satellites</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_layered_structures/">Layered Structures</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_darwin/">Darwin Model (Thick Layers)</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_rod_tangency/">Rod Tangency and Per-Pixel Simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_segmentation/">Spot Segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_orientation_plotting/">Orientation Plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_strain/">Strain Analysis</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_image_refinement/">Image-Based Refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_stress/">Elastic Stress from Strain Maps</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../laue_grain_map_merge/">Grain Map Merging and Symmetry Reduction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../azimuthal_integration/">Azimuthal Integration</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" >Texture Tomography</a>
+    <ul class="current">
+                <li class="toctree-l2 current"><a class="reference internal current" href="#">Theory</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#1-texture-and-the-orientation-distribution-function">1. Texture and the orientation distribution function</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-pole-figures">2. Pole figures</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-diffraction-geometry-from-2-to-pole-figure-coordinates">3. Diffraction geometry: from (2θ, χ, ω) to pole-figure coordinates</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#calibration-where-is-0">Calibration: where is χ = 0?</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-friedels-law-and-the-ghost-ambiguity">4. Friedel's law and the "ghost" ambiguity</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-coverage-why-wimv-not-the-harmonic-method">5. Coverage: why WIMV, not the harmonic method</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#6-beyond-bulk-per-voxel-reconstruction-experimental-not-shipped">6. Beyond bulk: per-voxel reconstruction (experimental, not shipped)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#7-references">7. References</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#8-see-also">8. See also</a>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../texture_tomography/">Workflow</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fitting/">Peak Fitting and NMF</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../fluorescence/">X-Ray Fluorescence</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../rietveld/">Rietveld Refinement</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../powder/">Powder Simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../examples/slurm_pipeline/">SLURM Pipeline</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">API Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/utils/">utils</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../api/powder/">powder</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >azimuthal</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/integration/">integration</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_integration/">slurm_integration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fitting</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/peakfit/">peakfit</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/nmf/">nmf</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >fluo</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/fluorescence/">fluorescence</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >visualization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/stack_viewer/">stack_viewer</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/napari_views/">napari_views</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/roi_selection/">roi_selection</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/image_plots/">image_plots</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/theme/">theme</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >rietveld</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refinement/">refinement</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/refine_dict/">refine_dict</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >xrdct</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/io/">io</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/parameters/">parameters</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/preprocessing/">preprocessing</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/sinogram/">sinogram</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/reconstruction/">reconstruction</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/visualization/">visualization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/volume/">volume</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/s3dxrd/">s3dxrd</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/slurm_reconstruction/">slurm_reconstruction</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >texture</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf/">odf</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/odf_inversion/">odf_inversion</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/texture_plotting/">texture_plotting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/texture/slurm_pole_figures/">slurm_pole_figures</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >laue</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/camera/">camera</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/crystal/">crystal</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/simulation/">simulation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layers/">layers</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/segmentation/">segmentation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/fitting/">fitting</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/map/">map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/layered_map/">layered_map</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/beamline/">beamline</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/interactive/">interactive</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../../api/laue/plotting/">plotting</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">nrxrdct</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User Guide</li>
+          <li class="breadcrumb-item">Texture Tomography</li>
+      <li class="breadcrumb-item active">Theory</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pedrodamas0803/nrxrdct/edit/main/docs/user-guide/texture_theory.md">Edit on nrxrdct</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="texture-tomography-theory">Texture tomography theory<a class="headerlink" href="#texture-tomography-theory" title="Permanent link">&para;</a></h1>
+<p>This page covers the theoretical foundations behind <code>nrxrdct.texture</code>: what
+crystallographic texture and pole figures are, how a pole figure relates to
+the orientation distribution function (ODF), the diffraction geometry used
+to convert single-rotation-axis XRD-CT scan data into pole-figure
+coordinates, the WIMV inversion method, and — importantly — the coverage and
+uniqueness limitations that come with this specific instrument geometry.</p>
+<hr />
+<h2 id="1-texture-and-the-orientation-distribution-function">1. Texture and the orientation distribution function<a class="headerlink" href="#1-texture-and-the-orientation-distribution-function" title="Permanent link">&para;</a></h2>
+<p>A polycrystalline sample is a collection of grains, each with its own
+crystal orientation relative to the sample (lab) frame. <strong>Texture</strong> is any
+statistical tendency for those orientations to cluster around preferred
+values rather than being uniformly random.</p>
+<p>An orientation is a proper rotation <span class="arithmatex">\(g \in SO(3)\)</span> mapping a crystal-frame
+vector to the sample frame, <span class="arithmatex">\(\mathbf{v}_\text{sample} = g\,\mathbf{v}_\text{crystal}\)</span>.
+The <strong>orientation distribution function</strong> (ODF) <span class="arithmatex">\(f(g)\)</span> is the volume
+fraction of material with orientation in <span class="arithmatex">\([g, g+dg]\)</span>, normalised over the
+Haar (rotation-invariant) measure of <span class="arithmatex">\(SO(3)\)</span>:</p>
+<div class="arithmatex">\[
+\int_{SO(3)} f(g)\,dg = 1
+\]</div>
+<p><code>nrxrdct.texture.odf_inversion</code> parametrises <span class="arithmatex">\(g\)</span> by Bunge-style Euler angles
+<span class="arithmatex">\((\varphi_1, \Phi, \varphi_2)\)</span>:</p>
+<div class="arithmatex">\[
+g(\varphi_1, \Phi, \varphi_2) = R_z(\varphi_1)\,R_x(\Phi)\,R_z(\varphi_2)
+\]</div>
+<div class="admonition warning">
+<p class="admonition-title">Convention risk</p>
+<p>This is <em>one</em> of several conventions in use across texture software
+(Bunge, Roe, Kocks differ; even "Bunge" implementations disagree on axis
+order and active/passive sense). Don't compare Euler angles quantitatively
+against another package without checking.</p>
+</div>
+<p>The volume element on <span class="arithmatex">\(SO(3)\)</span> in these coordinates carries a <span class="arithmatex">\(\sin\Phi\)</span>
+weight — <code>orientation_grid</code> returns this as <code>cell_weight</code>, used both to
+normalise the fitted ODF and (if you resample or average <code>f</code>) to correctly
+weight each grid cell.</p>
+<hr />
+<h2 id="2-pole-figures">2. Pole figures<a class="headerlink" href="#2-pole-figures" title="Permanent link">&para;</a></h2>
+<p>A <strong>pole figure</strong> for a given lattice plane family <span class="arithmatex">\(\{hkl\}\)</span> plots, for
+every direction <span class="arithmatex">\(\hat{y}\)</span> on the unit sphere (the "pole figure" itself), the
+volume fraction of grains whose <span class="arithmatex">\(hkl\)</span>-plane normal points along <span class="arithmatex">\(\hat{y}\)</span> in
+the sample frame. It is a 2-D projection of the 3-D ODF: many different
+orientations can share the same <span class="arithmatex">\(hkl\)</span>-pole direction (they differ only by a
+rotation about <span class="arithmatex">\(\hat{y}\)</span>), so the pole figure is a <strong>fiber-averaged</strong>
+(marginalised) view of <span class="arithmatex">\(f(g)\)</span>:</p>
+<div class="arithmatex">\[
+P_h(\hat{y}) = \frac{1}{2\pi}\oint f(g)\,d\varphi
+\qquad\text{where } g \text{ ranges over all rotations mapping } \hat{h}\to\hat{y}
+\]</div>
+<p>A single pole figure under-determines <span class="arithmatex">\(f(g)\)</span> — this is why
+<a href="../../api/texture/odf_inversion/"><code>compute_odf</code></a> needs pole figures from
+<strong>several independent <code>hkl</code> families</strong> (<code>crystal_directions</code> in the API),
+not just one.</p>
+<hr />
+<h2 id="3-diffraction-geometry-from-2-to-pole-figure-coordinates">3. Diffraction geometry: from (2θ, χ, ω) to pole-figure coordinates<a class="headerlink" href="#3-diffraction-geometry-from-2-to-pole-figure-coordinates" title="Permanent link">&para;</a></h2>
+<p><code>nrxrdct.texture.odf</code> extracts, for one <code>hkl</code> ring, the Debye-Scherrer ring
+intensity as a function of the detector azimuthal angle χ
+(<code>extract_ring_intensity</code>, via <code>cake_integration</code>) at every sample rotation
+angle ω (the XRD-CT <code>rot</code> motor). <code>pole_figure_coordinates</code> converts each
+<span class="arithmatex">\((2\theta, \chi, \omega)\)</span> triple into a pole direction in the sample frame.</p>
+<p><strong>Lab frame.</strong> Incident beam along <span class="arithmatex">\(+x\)</span>, rotation axis (vertical) along
+<span class="arithmatex">\(+z\)</span>. For a ring point at azimuth <span class="arithmatex">\(\chi\)</span> (measured from the vertical
+detector axis in this derivation — see the calibration note below) and
+Bragg angle <span class="arithmatex">\(\theta = \tfrac12(2\theta)\)</span>, the diffracted beam is</p>
+<div class="arithmatex">\[
+\hat{k}_f = (\cos 2\theta,\ \sin 2\theta \sin\chi,\ \sin 2\theta \cos\chi)
+\]</div>
+<p>with <span class="arithmatex">\(\hat{k}_i = (1,0,0)\)</span>. The scattering vector <span class="arithmatex">\(\mathbf{Q} = \hat{k}_f - \hat{k}_i\)</span>
+bisects <span class="arithmatex">\(-\hat{k}_i\)</span> and <span class="arithmatex">\(\hat{k}_f\)</span>; working out its normalised direction
+gives, in the <strong>lab frame</strong>:</p>
+<div class="arithmatex">\[
+\hat{Q}_\text{lab} = (-\sin\theta,\ \cos\theta\sin\chi,\ \cos\theta\cos\chi)
+\]</div>
+<p>Note the <span class="arithmatex">\(x\)</span>-component depends only on <span class="arithmatex">\(\theta\)</span> (i.e. only on which <code>hkl</code>
+ring), <strong>not</strong> on <span class="arithmatex">\(\chi\)</span> — every point on a given Debye-Scherrer ring shares
+the same projection onto the beam axis. This is the reason a single
+rotation axis gives <em>incomplete</em> pole-figure coverage (§5 below): a
+sample-frame pole is only ever swept onto the ring at the specific rotation
+angles <span class="arithmatex">\(\omega\)</span> where this <span class="arithmatex">\(x\)</span>-projection constraint can be satisfied at
+all, not at every <span class="arithmatex">\(\omega\)</span>.</p>
+<p><strong>Sample frame.</strong> Rotating by <span class="arithmatex">\(-\omega\)</span> about <span class="arithmatex">\(z\)</span> (undoing the sample
+rotation) gives the pole direction in the sample-fixed frame:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\hat{Q}_{x,\text{sample}} &amp;= -\sin\theta\cos\omega + \cos\theta\sin\chi\sin\omega \\
+\hat{Q}_{y,\text{sample}} &amp;= \ \ \sin\theta\sin\omega + \cos\theta\sin\chi\cos\omega \\
+\hat{Q}_{z,\text{sample}} &amp;= \cos\theta\cos\chi
+\end{aligned}
+\]</div>
+<p>converted to polar/azimuthal pole-figure coordinates:</p>
+<div class="arithmatex">\[
+\alpha = \arccos\!\left(\hat{Q}_{z,\text{sample}}\right), \qquad
+\beta = \operatorname{atan2}\!\left(\hat{Q}_{y,\text{sample}},\ \hat{Q}_{x,\text{sample}}\right)
+\]</div>
+<h3 id="calibration-where-is-0">Calibration: where is χ = 0?<a class="headerlink" href="#calibration-where-is-0" title="Permanent link">&para;</a></h3>
+<p>This derivation assumes χ = 0 lies along the <strong>vertical</strong> (rotation-axis)
+detector direction. Beamlines and pyFAI both differ in where χ = 0 actually
+points and which way it increases — <code>pole_figure_coordinates</code> exposes
+<code>chi_offset_deg</code> and <code>chi_sign</code> to align the assumed convention with reality.</p>
+<p>As a concrete, empirically-verified data point: pyFAI's own azimuthal-angle
+convention (<code>AzimuthalIntegrator.chiArray</code> / the <code>azimuthal</code> axis returned
+by <code>cake_integration</code>) was checked directly and found to be
+<span class="arithmatex">\(\chi_\text{pyFAI} = \operatorname{atan2}(\text{row offset}, \text{col offset})\)</span>
+relative to the beam-center pixel — i.e. <strong>χ = 0 along the horizontal
+(column) detector axis</strong>, not vertical as this derivation assumes by
+default. A <code>chi_offset_deg</code> around 90° (sign depending on your detector's
+row/column handedness) is a more likely starting point than 0 for data
+straight out of <code>cake_integration</code> — but detector rotation/flip settings
+vary by beamline, so verify rather than assume.</p>
+<hr />
+<h2 id="4-friedels-law-and-the-ghost-ambiguity">4. Friedel's law and the "ghost" ambiguity<a class="headerlink" href="#4-friedels-law-and-the-ghost-ambiguity" title="Permanent link">&para;</a></h2>
+<p>X-ray diffraction obeys <strong>Friedel's law</strong>: in the kinematic approximation
+(negligible anomalous dispersion), the intensity at <span class="arithmatex">\(\mathbf{Q}\)</span> equals the
+intensity at <span class="arithmatex">\(-\mathbf{Q}\)</span>. For pole figures this means a real, physically
+present companion reflection can appear at the antipodal point of any
+measured pole.</p>
+<p>It is tempting to exploit this by folding every measured pole direction
+with <span class="arithmatex">\(\alpha &gt; 90°\)</span> onto its antipode (<span class="arithmatex">\(\alpha \to 180° - \alpha\)</span>,
+<span class="arithmatex">\(\beta \to \beta + 180°\)</span>) before fitting — useful for <em>displaying</em> a pole
+figure on a single upper-hemisphere disk
+(<code>nrxrdct.texture.texture_plotting.plot_pole_figure</code> does exactly this).</p>
+<p><strong>This is not safe to do before fitting an ODF.</strong> Folding every <code>hkl</code>'s pole
+directions independently is mathematically equivalent to conflating
+orientation <span class="arithmatex">\(R\)</span> with its point-inversion <span class="arithmatex">\(-R\)</span> (an improper rotation, i.e.
+<span class="arithmatex">\(R\)</span> combined with spatial inversion) <strong>simultaneously across every <code>hkl</code></strong> —
+because <span class="arithmatex">\(-R\hat{h} = -(R\hat{h})\)</span> for <em>every</em> crystal direction <span class="arithmatex">\(\hat{h}\)</span> at
+once, folding maps the true solution and this "ghost" solution onto
+identical data for all <code>hkl</code> families together, not just one.</p>
+<p>This is a specific instance of the well-known <strong>ghost phenomenon</strong> in
+pole-figure-based texture analysis (Friedel's law makes certain harmonic
+coefficients of <span class="arithmatex">\(f(g)\)</span> unrecoverable from X-ray pole figures alone). WIMV's
+non-negativity constraint is known to suppress ghosts better than a literal
+harmonic-series fit, but testing during development confirmed it does not
+always break the tie — occasionally converging to the ~180°-misoriented
+ghost solution instead of the true orientation, for both single- and
+multi-<code>hkl</code> fits.</p>
+<p><strong>Consequence:</strong> <code>compute_odf</code> and <code>recalculate_pole_figure</code> default to
+<code>fold_hemisphere=False</code>. Only enable folding if you specifically need
+folded, display-style output and have independently verified it doesn't
+corrupt your fit.</p>
+<hr />
+<h2 id="5-coverage-why-wimv-not-the-harmonic-method">5. Coverage: why WIMV, not the harmonic method<a class="headerlink" href="#5-coverage-why-wimv-not-the-harmonic-method" title="Permanent link">&para;</a></h2>
+<p>A single vertical rotation axis with no tilt only ever sweeps a <strong>curve</strong> on
+the pole sphere per <code>hkl</code> (§3: the beam-axis projection constraint pins
+down <span class="arithmatex">\(\theta\)</span> but leaves only a 1-parameter family in <span class="arithmatex">\(\chi,\omega\)</span>
+jointly satisfying it) — not the near-complete hemisphere coverage that
+classical texture-goniometry inversion methods (including the harmonic
+series expansion) assume. Combining several <code>hkl</code> rings (different <span class="arithmatex">\(\theta\)</span>,
+hence different curves) can partially fill the sphere, and crystal symmetry
+(passing multiple symmetry-equivalent directions per <code>hkl</code> family to
+<code>compute_odf</code>'s <code>crystal_directions</code>) helps further, but achievable ODF
+resolution is fundamentally limited by how much coverage your geometry
+allows — there is no tilt stage in this pipeline to fill it in.</p>
+<p><strong>WIMV</strong> (Matthies &amp; Vinel, 1982) is the standard choice under incomplete
+coverage: an iterative, multiplicative correction scheme,</p>
+<div class="arithmatex">\[
+f^{(n+1)}(g) = f^{(n)}(g) \cdot \exp\!\left[
+\frac{\sum_{h,\hat{y}} K_h(\hat{y}, g)\,\ln\!\left(P_h^\text{meas}(\hat{y}) \,/\, P_h^{(n)}(\hat{y})\right)}
+     {\sum_{h,\hat{y}} K_h(\hat{y}, g)}
+\right]
+\]</div>
+<p>where <span class="arithmatex">\(K_h(\hat{y}, g)\)</span> is a hard nearest-cell indicator — 1 if <span class="arithmatex">\(g\hat{h}\)</span>
+(considering every symmetry-equivalent <span class="arithmatex">\(\hat{h}\)</span> at once) is the closest grid
+orientation's implied pole to the measured direction <span class="arithmatex">\(\hat{y}\)</span>, else 0 — the
+original Matthies &amp; Vinel binning, rather than a soft/Gaussian correspondence.
+Angular resolution is therefore set purely by the orientation-grid spacing
+(<code>step_deg</code>); there is no separate kernel-width parameter, and because every
+data point contributes to exactly one grid cell, there's no wide-radius
+neighbour search whose match count can blow up with grid density or symmetry
+family size — this is what makes the implementation tractable at MTEX-like
+speed without the accuracy cost a truncated Gaussian kernel would carry.
+<span class="arithmatex">\(P_h^{(n)}(\hat{y}) = \sum_g K_h(\hat{y}, g)\,f^{(n)}(g)\)</span> is the pole figure
+the current ODF estimate predicts (in practice just <span class="arithmatex">\(f^{(n)}\)</span> evaluated at
+<span class="arithmatex">\(\hat{y}\)</span>'s assigned cell). Grid cells with no nearby data (<code>weight_den == 0</code>
+in the implementation) simply keep their previous value — coverage gaps
+degrade gracefully rather than diverging, and because the update is purely
+multiplicative from a non-negative start, <span class="arithmatex">\(f \geq 0\)</span> is guaranteed
+throughout, unlike an unconstrained harmonic fit.</p>
+<p><code>recalculate_pole_figure</code> forward-projects a fitted ODF back through the
+same kernel — always inspect measured vs. recalculated pole figures
+(<code>plot_pole_figure_comparison</code>) before trusting a fit; nothing about the
+<code>rp_history</code> convergence trace guarantees the <em>global</em> optimum was found
+(§6 discusses a concrete failure mode).</p>
+<hr />
+<h2 id="6-beyond-bulk-per-voxel-reconstruction-experimental-not-shipped">6. Beyond bulk: per-voxel reconstruction (experimental, not shipped)<a class="headerlink" href="#6-beyond-bulk-per-voxel-reconstruction-experimental-not-shipped" title="Permanent link">&para;</a></h2>
+<p>Everything above describes a <strong>bulk</strong> or <strong>per-line</strong> ODF: one fit
+aggregating (or per translation line) the entire beam path through the
+sample, exactly analogous to how a normal XRD-CT sinogram is a line
+integral before tomographic reconstruction. Recovering a genuinely
+<strong>per-voxel</strong> ODF — the texture-tomography analogue of reconstructing a 2-D
+density map — turns out to be a substantially harder problem, explored but
+<strong>not implemented</strong> in this package. The forward model couples a spatial
+Radon operator with the WIMV kernel:</p>
+<div class="arithmatex">\[
+I(h, \omega, \delta, \chi) = \sum_{v \in \text{ray}(\omega,\delta)} \text{pathlength}(v) \sum_g K_h(\hat{y}, g)\,f_v(g)
+\]</div>
+<p>(unknowns <span class="arithmatex">\(f_v(g)\)</span> per voxel <span class="arithmatex">\(v\)</span> <em>and</em> orientation cell <span class="arithmatex">\(g\)</span> — the two
+operators aren't separable, because the kernel depends on <span class="arithmatex">\(\omega\)</span>, exactly
+the axis tomography integrates over). Prototyping during development found:</p>
+<ul>
+<li>A <strong>discrete orientation-grid density per voxel</strong> (the direct analogue of
+  bulk WIMV, extended per-voxel) is underdetermined: the aggregate data fit
+  improves monotonically over iterations, but per-voxel accuracy does not —
+  voxels can drift to wrong solutions even as the global residual keeps
+  improving, because many spatially-incoherent per-voxel assignments explain
+  the same projected data equally well.</li>
+<li>A <strong>single dominant orientation per voxel</strong> (far fewer unknowns, fit via
+  Gauss–Seidel coordinate descent) reliably recovers interior, single-grain
+  voxels, but is structurally unreliable for voxels sitting exactly on a
+  grain boundary — a genuine partial-volume effect (a ray through a boundary
+  voxel also passes through neighbouring, differently-oriented voxels), not
+  a fixable bug, confirmed independently by two different algorithms failing
+  at the <em>same</em> physical locations.</li>
+</ul>
+<p>Closing this out properly would need an explicit per-voxel orientation-
+<em>mixture</em> model at boundaries — a substantially larger undertaking than
+either prototype. Treat any future per-voxel texture-tomography feature in
+this package as building on this open problem, not a solved one.</p>
+<hr />
+<h2 id="7-references">7. References<a class="headerlink" href="#7-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>H.-J. Bunge, <em>Texture Analysis in Materials Science</em>, Butterworths, 1982.</li>
+<li>S. Matthies, G. W. Vinel, "On the reproduction of the orientation
+  distribution function of texturized samples from reduced pole figures
+  using the conception of a conditional ghost correction", <em>Phys. Status
+  Solidi B</em> <strong>112</strong>, K111 (1982) — the WIMV method.</li>
+<li>U. F. Kocks, C. N. Tomé, H.-R. Wenk, <em>Texture and Anisotropy</em>, Cambridge
+  University Press, 1998 — general reference for pole figures, ODFs, and the
+  ghost phenomenon.</li>
+</ul>
+<h2 id="8-see-also">8. See also<a class="headerlink" href="#8-see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../texture_tomography/">Texture Tomography Workflow</a> — practical usage,
+  pipeline stages, and API examples.</li>
+<li><a href="../../api/texture/odf/">API reference</a> for the full function docstrings.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../azimuthal_integration/" class="btn btn-neutral float-left" title="Azimuthal Integration"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../texture_tomography/" class="btn btn-neutral float-right" title="Workflow">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pedrodamas0803/nrxrdct" class="fa fa-code-fork" style="color: #fcfcfc"> nrxrdct</a>
+        </span>
+    
+    
+      <span><a href="../azimuthal_integration/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../texture_tomography/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

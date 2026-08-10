@@ -418,7 +418,7 @@ measured between adjacent orders in one worked example).</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># {&#39;hkl&#39;: (1, 0, 5), &#39;layer&#39;: &#39;GaN buffer&#39;, &#39;pix0&#39;: (643.8, 354.6),</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1">#  &#39;E0&#39;: 5252.2, &#39;streak_dir_px&#39;: array([0.71, 0.70]),</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">#  &#39;perp_dir_px&#39;: array([-0.70, 0.71]), &#39;dpix_dalong&#39;: 259.8,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">#  &#39;on_detector&#39;: True, &#39;period&#39;: 54000.0,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">#  &#39;on_detector&#39;: True, &#39;period&#39;: 54000.0, &#39;is_superlattice&#39;: False,</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">#  &#39;satellites&#39;: {-3: {...}, ..., 0: {...}, ..., 3: {...}}}</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># layer=&#39;all&#39; compares the *same* hkl across every layer in the stack —</span>
@@ -436,9 +436,18 @@ measured between adjacent orders in one worked example).</p>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># on-detector are skipped with a printed note rather than raising.</span>
 </code></pre></div>
 <ul>
-<li><strong><code>streak_dir_px</code></strong> — unit vector, the direction the rod actually traces
-  on the detector (drawn as a coloured line, one colour per layer when
-  comparing several). This is the physically meaningful output.</li>
+<li><strong><code>streak_dir_px</code></strong> — unit vector, the <em>local</em> direction the rod traces on
+  the detector at <code>along=0</code> (a two-point finite difference of the Jacobian
+  in §2). Since the pixel↔Q map is nonlinear, this is only the rod's tangent
+  at the reflection itself — the true rod generally curves away from that
+  straight line over a non-negligible range. <code>plot_rod_tangency</code> therefore
+  does <em>not</em> draw a straight segment through <code>streak_dir_px</code>: it samples the
+  exact trajectory with <code>rod_positions(stack, hkl, layer, along=..., camera=...)</code>
+  (the same per-point elastic-condition solve as <code>rod_tangency</code>'s own
+  <code>satellites</code>, vectorised over an array of <code>along</code> values) for both the
+  overlaid line and the <code>show_profile</code> intensity panel, so both track the
+  real curved feature and stay exactly aligned with the satellite dots —
+  and with each other — everywhere, not just near the <code>m=0</code> peak.</li>
 <li><strong><code>perp_dir_px</code></strong> — a plain 90°-rotated reference axis (drawn dashed
   only in single-layer mode) for visual scale; the streak's <em>width</em> comes
   from off-rod structure-factor decay and instrumental broadening, not
@@ -448,16 +457,44 @@ measured between adjacent orders in one worked example).</p>
   orders likely resolvable as separate spots (given fine enough
   instrumental resolution); small ⇒ compact spot, orders likely blended
   together.</li>
-<li><strong><code>satellites</code></strong> (when <code>max_satellites &gt; 0</code>) — each layer's own discrete
-  comb of order positions along its streak, at that layer's own period
-  (its own repeating block's period if it belongs to one, else its own
-  thickness) — drawn as small dots along the streak line. Comparing this
-  across layers shows directly whether two layers' satellite combs would
-  overlap, interleave, or sit well apart on the detector.</li>
+<li>
+<p><strong><code>satellites</code></strong> (when <code>max_satellites &gt; 0</code>) — each layer's own discrete
+  comb of order positions along its streak, drawn as small dots along the
+  streak line. Comparing this across layers shows directly whether two
+  layers' satellite combs would overlap, interleave, or sit well apart on
+  the detector. Order <code>m</code> is placed at the <em>observable bright</em> position, not
+  a naive <code>m·(2π/period)</code> grid — which one that means depends on
+  <code>is_superlattice</code>:</p>
+<ul>
+<li><strong><code>is_superlattice=True</code></strong> (<code>layer</code> belongs to a repeating block with
+  <code>n_rep&gt;1</code>, <code>period</code> = that block's period <span class="arithmatex">\(\Lambda\)</span>) — the
+  superlattice geometric factor has true principal maxima at <em>integer</em>
+  <span class="arithmatex">\(m\)</span>, so order <span class="arithmatex">\(m\)</span> sits at exactly <span class="arithmatex">\(G_0 + m\,(2\pi/\Lambda)\,\hat n\)</span>
+  (<a href="../laue_thin_film_satellites/#3-layered-superlattice-structures">Thin-Film Satellites §3</a>).</li>
+<li><strong><code>is_superlattice=False</code></strong> (<code>layer</code> is not part of a repeating block,
+  <code>period</code> = that layer's own physical thickness <span class="arithmatex">\(t\)</span> — the "GaN buffer"
+  example above) — a single finite layer's thickness-interference
+  function is instead exactly <em>zero</em> at those same integer positions;
+  the observable bright fringes sit near the half-integer positions
+  <span class="arithmatex">\((|m|+\tfrac12)\)</span> in between
+  (<a href="../laue_thin_film_satellites/#zeros-between-bragg-peaks">Thin-Film Satellites §1</a>).
+  Order <span class="arithmatex">\(m\)</span> is placed at <span class="arithmatex">\(G_0 + (m\pm0.5)\,(2\pi/t)\,\hat n\)</span> — the same
+  convention <code>simulate_laue_stack</code> uses for its own candidate spots, so
+  the dots line up with what an actual simulated exposure (or a
+  measured image) would show, rather than sitting on the layer's own
+  dark fringes.</li>
+</ul>
+</li>
 </ul>
 <p>This is pure geometry (no structure factor, no spectrum) — a cheap way to
 screen candidate reflections, or compare layers, before committing to the
-much more expensive tools below.</p>
+much more expensive tools below. The <code>satellites</code> positions are therefore an
+<em>approximate</em> guide to where bright features should fall (exact for the
+superlattice case; the usual few-percent half-integer approximation — see
+Thin-Film Satellites §1 — for a single layer's own thickness fringes), useful
+directly for overlaying on a measured detector frame via <code>plot_rod_tangency</code>'s
+<code>image=</code> argument to check candidate reflections against experimental data
+before running a full simulation.</p>
 <hr />
 <h2 id="5-per-pixel-forward-simulation-simulate_spot_image">5. Per-pixel forward simulation: <code>simulate_spot_image</code><a class="headerlink" href="#5-per-pixel-forward-simulation-simulate_spot_image" title="Permanent link">&para;</a></h2>
 <p>Where <code>simulate_laue_stack</code> (and friends) work by <em>enumerating candidate

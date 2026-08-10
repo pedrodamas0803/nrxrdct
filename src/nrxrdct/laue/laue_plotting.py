@@ -7084,50 +7084,60 @@ def plot_rod_tangency(
             per-harmonic (with a printed note) if unreachable or
             off-detector; not included in the returned `infos` (those
             stay fundamental-only).
-        arrow_length_px (float or (float, float)): Half-length of the
-            streak-direction line (pixels), and (when `show_profile=True`)
-            the extent of the profile's x-axis. A single number (default
-            `60`) draws/samples symmetrically, `±arrow_length_px` from
-            `pix0`. A `(neg, pos)` tuple draws/samples asymmetrically —
-            `neg` pixels against `streak_dir_px` and `pos` pixels along
-            it — e.g. to extend further toward one satellite order than
-            the other, or to frame a `show_relaxed_buffer` marker that
-            sits off to one side. The perpendicular reference line's
-            half-length is `(neg + pos) / 6`.
+        arrow_length_px (float or (float, float)): Approximate half-length
+            of the streak-direction line (pixels), and (when
+            `show_profile=True`) of the profile's sampled extent. A single
+            number (default `60`) draws/samples symmetrically,
+            `±arrow_length_px` from `pix0`. A `(neg, pos)` tuple
+            draws/samples asymmetrically — `neg` pixels against
+            `streak_dir_px` and `pos` pixels along it — e.g. to extend
+            further toward one satellite order than the other, or to frame
+            a `show_relaxed_buffer` marker that sits off to one side. The
+            perpendicular reference line's half-length is `(neg + pos) / 6`.
+            Internally converted to a `ΔQ` extent via the local
+            `dpix_dalong` at `along=0` and then sampled *exactly* along the
+            true rod (`rod_positions`) — since the pixel↔Q map is generally
+            nonlinear, the drawn line's actual on-detector pixel length can
+            differ somewhat from `arrow_length_px` (this is the trade-off
+            for the line and its satellite dots agreeing everywhere, not
+            just near `along=0`).
         image (ndarray, shape (Nv, Nh), optional): Measured or simulated
             detector frame to show cropped behind the arrows, for context.
             `None` (default) shows a plain dark background.
         pad_px (float): Half-size of the cropped window shown, centred on
             the mean of every plotted layer's `pix0`.
         show_profile (bool): Add a second axis with the intensity
-            extracted from `image` along each layer's own streak direction
-            — a line profile, not just a 2-D overlay.  At each sample
-            point along the rod, `profile_halfwidth_px` pixels are summed
-            on either side *perpendicular* to the streak (i.e. along
-            `perp_dir_px`) via bilinear interpolation
+            extracted from `image` along each layer's own rod — a line
+            profile, not just a 2-D overlay. Sample points are the *exact*
+            rod trajectory (`rod_positions`, not a straight pixel-space line
+            through `streak_dir_px`), so the sampled path tracks a curved
+            rod instead of drifting off it away from `along=0`. At each
+            sample point, `profile_halfwidth_px` pixels are summed on
+            either side *perpendicular* to the local streak direction (i.e.
+            along `perp_dir_px`) via bilinear interpolation
             (`scipy.ndimage.map_coordinates`), so the profile isn't
-            dominated by single-pixel noise.  The x-axis is `ΔQ` (Å⁻¹)
-            along the rod — each layer's own sampled pixel offsets are
-            divided by *that layer's* `dpix_dalong`, so profiles from
-            layers with different tangency (hence different pixel↔Q
-            scaling) are still directly comparable and satellite spacing
-            reads in physical units.  Satellite orders are labelled
-            (`SL0`, `SL±N`) same as the main axis.  The y-axis (intensity)
-            is log-scaled, so weak far orders remain visible alongside the
-            main peak — points with zero/negative summed intensity are
-            simply omitted by matplotlib, not an error.  Requires `image`;
-            requires `ax=None` (a fresh figure is always created, so the
-            two axes can be laid out side by side).
+            dominated by single-pixel noise. The x-axis is the exact `ΔQ`
+            (Å⁻¹) each sample point was solved at — not a linear
+            pixel-offset/`dpix_dalong` rescaling — so it stays correct far
+            from `along=0` and lines up exactly with the satellite markers,
+            which are solved the same way. `dpix_dalong` is only used to
+            pick a sampling range/step from `arrow_length_px`/
+            `profile_step_px` (both given in pixels for convenience); it
+            does not affect where samples actually land. Satellite orders
+            are labelled (`SL0`, `SL±N`) same as the main axis. The y-axis
+            (intensity) is log-scaled, so weak far orders remain visible
+            alongside the main peak — points with zero/negative summed
+            intensity are simply omitted by matplotlib, not an error.
+            Requires `image`; requires `ax=None` (a fresh figure is always
+            created, so the two axes can be laid out side by side).
         profile_halfwidth_px (int): Lateral integration half-width
             (pixels) for `show_profile` — e.g. `3` sums 7 pixels
-            (`-3, ..., +3`) perpendicular to the streak at each point
-            along it.  Unused unless `show_profile=True`.
-        profile_step_px (float): Sampling step (pixels, along the streak
-            direction in pixel space — converted to Å⁻¹ for display, see
-            `show_profile`) for `show_profile`, from `-arrow_length_px[0]`
-            to `+arrow_length_px[1]` (the same extent as the drawn line;
-            symmetric `±arrow_length_px` if a single number was given).
-            Unused unless `show_profile=True`.
+            (`-3, ..., +3`) perpendicular to the local streak direction at
+            each point along the rod. Unused unless `show_profile=True`.
+        profile_step_px (float): Approximate sampling step (pixels, via the
+            local `dpix_dalong` — see `show_profile`) for `show_profile`,
+            over the same extent as `arrow_length_px`. Unused unless
+            `show_profile=True`.
         show_relaxed_buffer (bool): Mark where the *same* `hkl` would fall
             using the shallowest buffer layer's own (relaxed/bulk, since
             `rod_tangency` always evaluates `layer.crystal.Q(h,k,l)` —
@@ -7138,7 +7148,14 @@ def plot_rod_tangency(
             has moved from the unstrained template's position for the
             same nominal reflection.  Skipped (with a note) if that buffer
             layer's own `hkl` is off-detector, and not duplicated if it's
-            already one of the plotted layers.
+            already one of the plotted layers. When `show_profile=True`, also
+            marked (`"buf"`, dotted grey line, same styling as the diamond)
+            on every plotted layer's own profile axis — an *approximate*
+            marker, since the buffer's own rod generally doesn't coincide
+            with a strained layer's rod at all (that's the point of this
+            option), so its pixel position is projected onto each layer's
+            local streak direction rather than given an exact ΔQ, the same
+            approximation used for the harmonic overlay markers.
         alpha (float): Opacity applied to each layer's own streak-direction
             line and satellite-order markers (default `0.85`); harmonics
             already draw at their own fixed, lower alpha regardless of this.
@@ -7156,7 +7173,7 @@ def plot_rod_tangency(
         `infos` is a list of `rod_tangency`'s own return dicts, one per
         plotted layer, in the same order as drawn.
     """
-    from .simulation import rod_tangency
+    from .simulation import rod_tangency, rod_positions
 
     if show_profile:
         if image is None:
@@ -7224,16 +7241,55 @@ def plot_rod_tangency(
     perp_len = (arrow_neg + arrow_pos) / 6.0
     multi = len(infos) > 1
     peak_points = []
+
+    # Resolved once, up front, so the per-layer loop below can also mark it
+    # on each layer's own profile-panel axis (not just the left/image panel,
+    # where it's drawn further down after the loop).
+    buf_info = None
+    if show_relaxed_buffer:
+        plotted_labels = {info["layer"] for info in infos}
+        if not stack.buffer_layers:
+            print("  plot_rod_tangency: show_relaxed_buffer skipped — stack has no buffer layers")
+        else:
+            buf_layer = stack.buffer_layers[-1]
+            if buf_layer.label in plotted_labels:
+                print(f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                      f"{buf_layer.label!r} is already one of the plotted layers")
+            else:
+                try:
+                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+                except ValueError as e:
+                    print(f"  plot_rod_tangency: show_relaxed_buffer skipped — {e}")
+                if buf_info is not None and not buf_info["on_detector"]:
+                    print(
+                        f"  plot_rod_tangency: show_relaxed_buffer skipped — "
+                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
+                    )
+                    buf_info = None
+
     for i, info in enumerate(infos):
         color = _ROD_TANGENCY_PALETTE[i % len(_ROD_TANGENCY_PALETTE)]
         px0, py0 = info["pix0"]
         streak = info["streak_dir_px"]
         perp = info["perp_dir_px"]
 
+        # The true rod is only a straight line in pixel space to first order
+        # (streak/dpix_dalong are the local Jacobian at along=0); for a
+        # non-negligible extent it generally curves, same as the discrete
+        # satellite dots below (already solved exactly, not off this line).
+        # Sample it exactly with rod_positions instead of drawing the naive
+        # 2-point straight segment, so the line tracks where those dots (and
+        # the profile panel, further below) actually are.
+        jac_mag_i = info["dpix_dalong"]
+        along_neg = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
+        along_pos = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
+        along_line = np.linspace(-along_neg, along_pos, 81)
+        rp_line = rod_positions(stack, hkl, layer=info["layer"], along=along_line, camera=camera, ki_hat=ki_hat)
+        line_pix = rp_line["pix"]
+
         label = f"{info['layer']}  ({info['dpix_dalong']:.1e} px/Å⁻¹)" if multi else "streak direction (d(pixel)/d(along))"
         ax.plot(
-            [px0 - arrow_neg * streak[0], px0 + arrow_pos * streak[0]],
-            [py0 - arrow_neg * streak[1], py0 + arrow_pos * streak[1]],
+            line_pix[:, 0], line_pix[:, 1],
             "-", color=color, lw=2.5, alpha=alpha, solid_capstyle="round", label=label,
         )
         if not multi:
@@ -7254,30 +7310,51 @@ def plot_rod_tangency(
             )
 
         for m, sat in info["satellites"].items():
-            if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+            if sat["pix"] is None or not sat["on_detector"]:
+                continue
+            if m == 0 and abs(sat["along"]) < 1e-9:
+                # Coincides with the "SL0"/"+" marker already drawn above
+                # (always true when is_superlattice=False; only true for
+                # is_superlattice=True if G0 happens to be exactly
+                # commensurate with the block period).
                 continue
             sx, sy = sat["pix"]
             ax.plot(sx, sy, "o", color=color, ms=6, mfc=color, mec=BG, mew=0.6, alpha=alpha, zorder=4)
+            # m=0 here means "the true comb peak nearest hkl", offset from
+            # the exact-hkl "SL0" marker -- label "0", not "+0", so it isn't
+            # mistaken for the +1 order.
+            mlabel = "0" if m == 0 else f"{m:+d}"
             ax.annotate(
-                f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                mlabel, (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                 color=color, fontsize=7, ha="center", va="center", zorder=6,
             )
 
         if show_profile:
             from scipy.ndimage import map_coordinates
 
-            s_vals = np.arange(-arrow_neg, arrow_pos + 0.5 * profile_step_px, profile_step_px)
-            center_pts = np.array([px0, py0])[None, :] + s_vals[:, None] * streak[None, :]
-            profile = np.zeros(len(s_vals))
+            # Sample the image along the *exact* rod trajectory (rod_positions),
+            # not a straight pixel-space line through px0 in the streak
+            # direction — that direction is only the local (along=0) Jacobian,
+            # and the true pixel↔Q map is nonlinear, so a straight line drifts
+            # off the real (generally curved) feature away from the centre.
+            # Using the same `along` (ΔQ) array both to pick the sample points
+            # and as the plotted x-axis (no separate pixel→Q rescaling) keeps
+            # this panel exactly consistent with the satellite markers below,
+            # which are already solved exactly at their own `along` values.
+            along_step = profile_step_px / jac_mag_i if jac_mag_i > 1e-12 else profile_step_px
+            along_neg_p = arrow_neg / jac_mag_i if jac_mag_i > 1e-12 else arrow_neg
+            along_pos_p = arrow_pos / jac_mag_i if jac_mag_i > 1e-12 else arrow_pos
+            q_vals = np.arange(-along_neg_p, along_pos_p + 0.5 * along_step, along_step)
+
+            rp_prof = rod_positions(stack, hkl, layer=info["layer"], along=q_vals, camera=camera, ki_hat=ki_hat)
+            center_pts = rp_prof["pix"]  # (N, 2); NaN rows -> gaps in the line/sum below
+
+            profile = np.zeros(len(q_vals))
             for off in range(-profile_halfwidth_px, profile_halfwidth_px + 1):
                 pts = center_pts + off * perp[None, :]
                 coords = np.array([pts[:, 1], pts[:, 0]])  # map_coordinates wants [row, col] = [y, x]
-                profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
-
-            # x-axis in ΔQ (Å⁻¹) along the rod, not raw pixels — each layer has its
-            # own d(pixel)/d(along), so this is what actually makes the axis
-            # comparable across layers with different tangency.
-            q_vals = s_vals / info["dpix_dalong"]
+                with np.errstate(invalid="ignore"):
+                    profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
 
             plabel = f"{info['layer']}" if multi else "measured (± " + f"{profile_halfwidth_px} px lateral sum)"
             ax_profile.plot(q_vals, profile, "-", color=color, lw=1.3, label=plabel)
@@ -7289,21 +7366,40 @@ def plot_rod_tangency(
                     color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
                 )
             for m, sat in info["satellites"].items():
-                if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                if sat["pix"] is None or not sat["on_detector"]:
                     continue
-                # Window check stays in raw pixel space (s_vals is the sampled
-                # range); the plotted position uses the *exact* physical ΔQ
-                # for this order (m·2π/period), not s_m/dpix_dalong — that
-                # divides a pixel offset by a slope valid only near m=0, which
-                # silently drifts for higher orders since the pixel↔Q map is
-                # nonlinear (same elastic condition as rod_tangency itself).
-                s_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
-                if s_vals[0] <= s_m <= s_vals[-1]:
-                    q_m = m * (2.0 * np.pi / info["period"])
+                if m == 0 and abs(sat["along"]) < 1e-9:
+                    continue  # coincides with "SL0" already drawn at 0.0 above
+                # Use rod_tangency's own exact `along` for this order directly
+                # -- it already accounts for is_superlattice's comb-anchoring
+                # (nearest true tooth, not naively at G0) and the m±0.5
+                # bright-fringe offset for a single layer; recomputing it here
+                # from `m`/`period` alone would silently drop that anchoring.
+                q_m = sat["along"]
+                mlabel = "0" if m == 0 else f"{m:+d}"
+                if q_vals[0] <= q_m <= q_vals[-1]:
                     ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
                     ax_profile.text(
-                        q_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                        q_m, label_y, mlabel, transform=ax_profile.get_xaxis_transform(),
                         color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
+                    )
+
+            if buf_info is not None:
+                # Same approximate projection as the harmonic markers below:
+                # the relaxed buffer's own G0 generally sits off *this*
+                # layer's rod entirely (that's the whole point -- showing how
+                # far a strained layer's peak has moved from the unstrained
+                # template), so there is no exact ΔQ "along this rod" for it.
+                # Project its pixel position onto the local streak direction
+                # as a readable approximation, same grey styling as the
+                # left-panel diamond.
+                buf_s = float(np.dot(np.array(buf_info["pix0"]) - np.array([px0, py0]), streak))
+                if -arrow_neg <= buf_s <= arrow_pos:
+                    buf_q = buf_s / jac_mag_i if jac_mag_i > 1e-12 else buf_s
+                    ax_profile.axvline(buf_q, color="#9ca3af", lw=0.8, ls=":", alpha=0.6)
+                    ax_profile.text(
+                        buf_q, label_y, "buf", transform=ax_profile.get_xaxis_transform(),
+                        color="#9ca3af", fontsize=7, ha="center", va="bottom", clip_on=False,
                     )
 
         if n_harmonics > 1:
@@ -7339,24 +7435,35 @@ def plot_rod_tangency(
                             color=hcolor, fontsize=7, ha="center", va="bottom", clip_on=False,
                         )
                 for m, sat in hinfo["satellites"].items():
-                    if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                    if sat["pix"] is None or not sat["on_detector"]:
                         continue
+                    if m == 0 and abs(sat["along"]) < 1e-9:
+                        continue  # coincides with the "n{n}" marker already drawn above
                     sx, sy = sat["pix"]
                     ax.plot(sx, sy, "o", color=hcolor, alpha=0.55, ms=5, mec=BG, mew=0.4, zorder=2)
+                    mlabel = "0" if m == 0 else f"{m:+d}"
                     ax.annotate(
-                        f"{m:+d}", (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                        mlabel, (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
                         color=hcolor, alpha=0.85, fontsize=6, ha="center", va="center", zorder=2,
                     )
                     if show_profile:
-                        # Same fix as the fundamental's satellites above: use the
-                        # harmonic's own exact ΔQ (m·2π/period), not a pixel
-                        # offset rescaled by the fundamental's local dpix_dalong.
+                        # Window check stays an approximate pixel-space
+                        # projection onto the *fundamental's* streak (placing
+                        # a harmonic's own comb, generally at a different
+                        # absolute Q, onto the fundamental's exact curved-rod
+                        # axis is a harder "nearest point on that curve"
+                        # problem not solved here) -- but the plotted value
+                        # itself is rod_tangency's own exact `along` for this
+                        # harmonic satellite (already correctly comb-anchored
+                        # for is_superlattice=True, same fix as the
+                        # fundamental's satellites above), not a recomputed
+                        # m/period formula that would silently drop that.
                         hs_m = float(np.dot(np.array(sat["pix"]) - np.array([px0, py0]), streak))
                         if -arrow_neg <= hs_m <= arrow_pos:
-                            hq_m = m * (2.0 * np.pi / hinfo["period"])
+                            hq_m = sat["along"]
                             ax_profile.axvline(hq_m, color=hcolor, lw=0.8, ls=":", alpha=0.6)
                             ax_profile.text(
-                                hq_m, label_y, f"{m:+d}", transform=ax_profile.get_xaxis_transform(),
+                                hq_m, label_y, mlabel, transform=ax_profile.get_xaxis_transform(),
                                 color=hcolor, fontsize=6, ha="center", va="bottom", clip_on=False,
                             )
 
@@ -7368,32 +7475,12 @@ def plot_rod_tangency(
             label=f"average peak position ({len(peak_points)} peaks)",
         )
 
-    if show_relaxed_buffer:
-        plotted_labels = {info["layer"] for info in infos}
-        if not stack.buffer_layers:
-            print("  plot_rod_tangency: show_relaxed_buffer skipped — stack has no buffer layers")
-        else:
-            buf_layer = stack.buffer_layers[-1]
-            if buf_layer.label in plotted_labels:
-                print(f"  plot_rod_tangency: show_relaxed_buffer skipped — "
-                      f"{buf_layer.label!r} is already one of the plotted layers")
-            else:
-                buf_info = None
-                try:
-                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
-                except ValueError as e:
-                    print(f"  plot_rod_tangency: show_relaxed_buffer skipped — {e}")
-                if buf_info is not None and not buf_info["on_detector"]:
-                    print(
-                        f"  plot_rod_tangency: show_relaxed_buffer skipped — "
-                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
-                    )
-                elif buf_info is not None:
-                    bx, by = buf_info["pix0"]
-                    ax.plot(
-                        bx, by, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
-                        label=f"relaxed buffer ({buf_info['layer']})",
-                    )
+    if buf_info is not None:
+        bx, by = buf_info["pix0"]
+        ax.plot(
+            bx, by, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
+            label=f"relaxed buffer ({buf_info['layer']})",
+        )
 
     ax.set_xlim(cx - pad_px, cx + pad_px)
     ax.set_ylim(cy + pad_px, cy - pad_px)
@@ -7434,6 +7521,572 @@ def plot_rod_tangency(
     if show_profile:
         return fig, (ax, ax_profile), infos
     return fig, ax, infos
+
+
+def _plot_rod_tangency_multi(
+    stack,
+    panels,
+    camera,
+    *,
+    ki_hat=None,
+    ncols=3,
+    arrow_length_px=60,
+    image=None,
+    pad_px=40,
+    show_profile=None,
+    profile_halfwidth_px=3,
+    profile_step_px=1.0,
+    show_relaxed_buffer=False,
+    alpha=0.9,
+    figsize=None,
+    out_path=None,
+    suptitle="",
+    caller_name="plot_rod_tangency_multi",
+):
+    """
+    Shared small-multiples grid engine behind `plot_rod_tangency_harmonics`
+    and `plot_rod_tangency_blocks` — not part of the public API.
+
+    `panels` is a list of dicts, each `{'hkl', 'layer', 'info', 'title'}`:
+    `'info'` is an already-computed `rod_tangency` result, `'hkl'`/`'layer'`
+    are what it was computed with (needed again here to resample the exact
+    rod via `rod_positions`), `'title'` is the per-panel heading text. What
+    varies panel to panel (harmonic order, which block, ...) is entirely the
+    caller's concern — this function only knows how to lay out and draw a
+    list of already-resolved `rod_tangency` results consistently, sharing
+    one ΔQ window (fixed by `panels[0]`) across all of them so panels are
+    directly comparable in physical units, not just in pixels.
+    """
+    from .simulation import rod_tangency, rod_positions
+    from scipy.ndimage import map_coordinates
+
+    if not panels:
+        raise ValueError(f"{caller_name}: no panels to plot")
+
+    if show_profile is None:
+        show_profile = image is not None
+    img_arr = np.asarray(image, dtype=float) if image is not None else None
+
+    buf_layer = None
+    if show_relaxed_buffer:
+        if not stack.buffer_layers:
+            print(f"  {caller_name}: show_relaxed_buffer skipped — stack has no buffer layers")
+        else:
+            buf_layer = stack.buffer_layers[-1]
+
+    if isinstance(arrow_length_px, (tuple, list)):
+        arrow_neg, arrow_pos = float(arrow_length_px[0]), float(arrow_length_px[1])
+    else:
+        arrow_neg = arrow_pos = float(arrow_length_px)
+    perp_len = (arrow_neg + arrow_pos) / 6.0
+
+    # Shared ΔQ window, fixed by the *first* panel (arrow_length_px converted
+    # through *its* dpix_dalong) -- every other panel is drawn and sampled
+    # over this exact same along_neg/along_pos in Å⁻¹, not its own (generally
+    # different) window from its own dpix_dalong. Without this, panels only
+    # agree in pixel extent, and since dpix_dalong can vary a lot panel to
+    # panel, "the same pixel window" is a different physical Q-window each
+    # time -- not actually comparable. rod_positions works directly in ΔQ,
+    # so sharing this range is just reusing along_neg/along_pos below.
+    ref_jac = panels[0]["info"]["dpix_dalong"]
+    along_neg = arrow_neg / ref_jac if ref_jac > 1e-12 else arrow_neg
+    along_pos = arrow_pos / ref_jac if ref_jac > 1e-12 else arrow_pos
+
+    n_panels = len(panels)
+    ncols_eff = max(1, min(ncols, n_panels))
+    nrows = int(np.ceil(n_panels / ncols_eff))
+    panel_w, panel_h = 3.4, 3.4  # fixed per-panel auto-scaling unit; override via `figsize`
+
+    if show_profile:
+        # Image and profile sit side by side per panel. Nested GridSpec: an
+        # outer grid of panel "slots" (loose spacing, so different panels
+        # read as visually separate groups) each split into a tight inner
+        # (image, profile) pair -- a single flat GridSpec with one wspace
+        # applied to every column gap can't distinguish "within a pair" from
+        # "between panels", which just reads as uniform, wasted whitespace.
+        auto_figsize = (panel_w * 1.55 * ncols_eff, panel_h * nrows)
+        fig = plt.figure(figsize=figsize or auto_figsize, facecolor=BG)
+        outer_gs = mgridspec.GridSpec(
+            nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.45,
+            top=0.85, left=0.04, right=0.98, bottom=0.16,
+        )
+    else:
+        auto_figsize = (panel_w * ncols_eff, panel_h * nrows)
+        fig = plt.figure(figsize=figsize or auto_figsize, facecolor=BG)
+        outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.35, top=0.85)
+
+    fig.suptitle(suptitle, color=FG, fontsize=10)
+
+    # Image panels are linked via sharex/sharey (matplotlib's native axis
+    # linking): every panel shows the exact same absolute pixel window, set
+    # once from the first (reference) panel below, rather than each panel
+    # independently centring pad_px on its own pix0. Linked axes always stay
+    # in sync -- zooming/panning one moves all of them together too.
+    ref_ax = None
+
+    for idx, panel in enumerate(panels):
+        info = panel["info"]
+        hkl_n = panel["hkl"]
+        row, col = divmod(idx, ncols_eff)
+        color = _ROD_TANGENCY_PALETTE[idx % len(_ROD_TANGENCY_PALETTE)]
+
+        if show_profile:
+            inner_gs = mgridspec.GridSpecFromSubplotSpec(
+                1, 2, subplot_spec=outer_gs[row, col], width_ratios=[1.3, 1], wspace=0.12,
+            )
+            ax = fig.add_subplot(inner_gs[0, 0], sharex=ref_ax, sharey=ref_ax)
+            ax_p = fig.add_subplot(inner_gs[0, 1])
+        else:
+            ax = fig.add_subplot(outer_gs[row, col], sharex=ref_ax, sharey=ref_ax)
+            ax_p = None
+        if ref_ax is None:
+            ref_ax = ax
+        _ax_style(ax, "")
+        ax.set_xlabel("xcam (px)", color=FG, fontsize=7)
+        ax.set_ylabel("ycam (px)", color=FG, fontsize=7)
+
+        px0, py0 = info["pix0"]
+        streak = info["streak_dir_px"]
+        perp = info["perp_dir_px"]
+        jac_mag_i = info["dpix_dalong"]
+
+        if img_arr is not None:
+            Ny, Nx = img_arr.shape
+            x0 = max(int(px0 - pad_px), 0); x1 = min(int(px0 + pad_px), Nx)
+            y0 = max(int(py0 - pad_px), 0); y1 = min(int(py0 + pad_px), Ny)
+            patch = img_arr[y0:y1, x0:x1]
+            ax.imshow(np.log1p(patch), origin="upper", extent=[x0, x1, y1, y0], cmap="gray", aspect="equal")
+
+        # Exact curved rod (same reasoning as plot_rod_tangency's own line),
+        # sampled over the *shared* along_neg/along_pos (fixed once above
+        # from the first panel), not this panel's own -- that's what makes
+        # different panels directly comparable.
+        along_line = np.linspace(-along_neg, along_pos, 81)
+        rp_line = rod_positions(stack, hkl_n, layer=info["layer"], along=along_line, camera=camera, ki_hat=ki_hat)
+        line_pix = rp_line["pix"]
+        ax.plot(line_pix[:, 0], line_pix[:, 1], "-", color=color, lw=2.2, alpha=alpha, solid_capstyle="round")
+        ax.plot(
+            [px0 - perp_len * perp[0], px0 + perp_len * perp[0]],
+            [py0 - perp_len * perp[1], py0 + perp_len * perp[1]],
+            "--", color=COL_BCC, lw=1.0, alpha=0.6,
+        )
+        ax.plot(px0, py0, "+", color=FG, ms=9, mew=1.3, zorder=5)
+
+        label_off = 7.0 * perp
+        if info["satellites"]:
+            ax.annotate(
+                "SL0", (px0, py0), xytext=(px0 + label_off[0], py0 + label_off[1]),
+                color=color, fontsize=6.5, ha="center", va="center", zorder=6,
+            )
+            for m, sat in info["satellites"].items():
+                if sat["pix"] is None or not sat["on_detector"]:
+                    continue
+                if m == 0 and abs(sat["along"]) < 1e-9:
+                    continue
+                sx, sy = sat["pix"]
+                ax.plot(sx, sy, "o", color=color, ms=5, mfc=color, mec=BG, mew=0.5, alpha=alpha, zorder=4)
+                mlabel = "0" if m == 0 else f"{m:+d}"
+                ax.annotate(
+                    mlabel, (sx, sy), xytext=(sx + label_off[0], sy + label_off[1]),
+                    color=color, fontsize=6.5, ha="center", va="center", zorder=6,
+                )
+
+        buf_info = None
+        if buf_layer is not None and buf_layer.label != info["layer"]:
+            try:
+                buf_info = rod_tangency(stack, hkl_n, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+            except ValueError:
+                buf_info = None
+            if buf_info is not None and not buf_info["on_detector"]:
+                buf_info = None
+        if buf_info is not None:
+            bx, by = buf_info["pix0"]
+            ax.plot(bx, by, "D", color="#9ca3af", ms=7, mfc="none", mew=1.4, zorder=6)
+
+        if ax is ref_ax:
+            # Sets the view for every linked panel at once (sharex/sharey);
+            # only do this once, from the reference panel's own pix0 -- a
+            # later panel's pix0 (generally different) would otherwise just
+            # re-centre the whole shared view on itself.
+            ax.set_xlim(px0 - pad_px, px0 + pad_px)
+            ax.set_ylim(py0 + pad_px, py0 - pad_px)
+        ax.set_aspect("equal")
+        ax.set_title(panel["title"], color=color, fontsize=8, pad=4)
+
+        if ax_p is None:
+            continue
+        _ax_style(ax_p, "")
+        ax_p.tick_params(labelsize=6)
+        if img_arr is None:
+            ax_p.axis("off")
+            ax_p.text(
+                0.5, 0.5, "no `image` provided", color=FG, fontsize=7, alpha=0.5,
+                ha="center", va="center", transform=ax_p.transAxes,
+            )
+            continue
+
+        # Exact rod sampling for the profile, same reasoning as
+        # plot_rod_tangency's own show_profile (curved trajectory + exact ΔQ
+        # x-axis, not a straight pixel-space line + linear rescale) -- over
+        # the *shared* along_neg/along_pos so every panel's x-axis covers
+        # the same physical ΔQ window. Sampling density (along_step) still
+        # adapts to this panel's own dpix_dalong, so a panel whose rod moves
+        # fewer pixels per unit ΔQ isn't over- or under-sampled.
+        along_step = profile_step_px / jac_mag_i if jac_mag_i > 1e-12 else profile_step_px
+        q_vals = np.arange(-along_neg, along_pos + 0.5 * along_step, along_step)
+        rp_prof = rod_positions(stack, hkl_n, layer=info["layer"], along=q_vals, camera=camera, ki_hat=ki_hat)
+        center_pts = rp_prof["pix"]
+        profile = np.zeros(len(q_vals))
+        for off in range(-profile_halfwidth_px, profile_halfwidth_px + 1):
+            pts = center_pts + off * perp[None, :]
+            coords = np.array([pts[:, 1], pts[:, 0]])
+            with np.errstate(invalid="ignore"):
+                profile += map_coordinates(img_arr, coords, order=1, mode="nearest")
+
+        ax_p.plot(q_vals, profile, "-", color=color, lw=1.1)
+        ax_p.set_yscale("log")
+        ax_p.set_xlabel("ΔQ (Å⁻¹)", color=FG, fontsize=6.5)
+        ax_p.axvline(0.0, color=FG, lw=0.6, ls=":", alpha=0.4)
+        ax_p.set_xlim(-along_neg, along_pos)  # enforce identical window across all panels
+        # Y-ticks on the right: the profile sits immediately right of its own
+        # image panel, so left-side tick labels would overlap the image.
+        ax_p.yaxis.tick_right()
+
+        for m, sat in info["satellites"].items():
+            if sat["pix"] is None or not sat["on_detector"]:
+                continue
+            q_m = sat["along"]
+            if q_vals[0] <= q_m <= q_vals[-1]:
+                ax_p.axvline(q_m, color=color, lw=0.6, ls=":", alpha=0.5)
+
+        if buf_info is not None:
+            buf_s = float(np.dot(np.array(buf_info["pix0"]) - np.array([px0, py0]), streak))
+            if -arrow_neg <= buf_s <= arrow_pos:
+                buf_q = buf_s / jac_mag_i if jac_mag_i > 1e-12 else buf_s
+                ax_p.axvline(buf_q, color="#9ca3af", lw=0.6, ls=":", alpha=0.5)
+
+    fig.text(
+        0.5, 0.01,
+        "+ / SL0 = exact hkl position    ○ = satellite order (label = m)    "
+        + ("◇ = relaxed buffer    " if show_relaxed_buffer else "")
+        + "dashed = perpendicular reference axis",
+        color=FG, fontsize=7, alpha=0.6, ha="center", va="bottom",
+    )
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    _force_draw(fig)
+    return fig
+
+
+def plot_rod_tangency_harmonics(
+    stack,
+    hkl,
+    layer=None,
+    camera=None,
+    *,
+    ki_hat=None,
+    n_harmonics=3,
+    max_satellites=0,
+    ncols=3,
+    arrow_length_px=60,
+    image=None,
+    pad_px=40,
+    show_profile=None,
+    profile_halfwidth_px=3,
+    profile_step_px=1.0,
+    show_relaxed_buffer=False,
+    alpha=0.9,
+    figsize=None,
+    out_path=None,
+):
+    """
+    Small-multiples comparison of a reflection's harmonics — one panel per
+    harmonic order `n·hkl`, each with its own cropped image + rod overlay
+    side by side with its own intensity profile (when `image` is given),
+    arranged in a grid that wraps after `ncols` harmonics per row.
+
+    `plot_rod_tangency(..., n_harmonics=N)` overlays every harmonic onto one
+    shared panel — compact, but colour-coding `N` rods and satellite combs
+    together gets hard to read past 2–3 orders. This instead gives each
+    harmonic its own panel, so differences in streak direction,
+    `dpix_dalong`, and satellite spacing are visible by scanning across
+    panels rather than by disentangling colours. See also
+    `plot_rod_tangency_blocks`, the same idea varying by repeating block
+    instead of by harmonic order.
+
+    Unlike `plot_rod_tangency`, `layer` here must resolve to a single layer
+    — this function compares harmonics of *one* reflection/layer, not
+    layers of one reflection; use `plot_rod_tangency` (optionally with
+    `layer='all'`) for the latter.
+
+    Args:
+        stack, hkl, layer, camera, ki_hat: Same meaning as
+            :func:`~nrxrdct.laue.simulation.rod_tangency`; `layer` must be a
+            single layer/label/`None`, not `'all'` or a list.
+        n_harmonics (int or list of int): Either a count — orders
+            `n = 1, ..., n_harmonics` (`n=1` is the fundamental `hkl`
+            itself) — or an explicit list of the specific orders to show,
+            e.g. `[1, 3, 5]`, when you only want a few rather than every
+            consecutive one. Harmonics that are unreachable (elastic
+            condition fails) or land off-detector are skipped with a
+            printed note rather than raising, same as `plot_rod_tangency`'s
+            `n_harmonics` — the panel grid simply has fewer panels than
+            requested in that case.
+        max_satellites (int): Forwarded to `rod_tangency` for `n=1`; scaled
+            as `max_satellites * 2**(n-1)` for `n > 1`, same reasoning as
+            `plot_rod_tangency` (a higher harmonic sits at larger `|Q|`
+            where the same physical fringe spacing subtends more orders).
+        ncols (int): Panel columns before wrapping to a new row.
+        arrow_length_px (float or (float, float)): Sets the `ΔQ` window
+            shown by the *first successfully displayed* harmonic (converted
+            via that harmonic's own `dpix_dalong`, same as
+            `plot_rod_tangency`) — every other panel then shows that exact
+            same `ΔQ` window (not its own, generally larger or smaller, one)
+            so panels are directly comparable in physical units, not just in
+            pixels. Practically: each panel's rod line/profile covers less
+            of its own crop window at higher harmonics, since the same `ΔQ`
+            span maps to fewer pixels there (`dpix_dalong` shrinks with
+            harmonic order) — that shrinkage *is* the comparison.
+        pad_px: Same meaning as in `plot_rod_tangency`, applied independently
+            to every panel (each panel is centred and cropped on *its own*
+            `pix0`, not a shared window) — unlike the `ΔQ` extent, the pixel
+            crop size itself is not forced to match across panels.
+        image (ndarray, optional): Measured/simulated detector frame shown
+            cropped behind each panel's overlay, and sampled for the profile
+            row if `show_profile` ends up `True`. `None` (default) shows a
+            plain dark background and skips profiles regardless of
+            `show_profile`.
+        show_profile (bool or None): `None` (default) shows an intensity
+            profile beside each image panel when `image` is given, and omits
+            it entirely (rather than empty panels) when `image` is `None`.
+            Force `True`/`False` to override either way; forcing `True`
+            without `image` draws a placeholder "no `image` provided" panel.
+        profile_halfwidth_px, profile_step_px: Same meaning as in
+            `plot_rod_tangency`.
+        show_relaxed_buffer (bool): Mark (grey diamond on the image panel,
+            grey dotted line on the profile panel) where the shallowest
+            buffer layer's own *n*-th harmonic would fall, for each panel's
+            own `n` — same purpose as `plot_rod_tangency`'s option of the
+            same name. No-op if `layer` already *is* that buffer layer.
+        alpha (float): Opacity for each panel's streak line and satellite
+            markers.
+        figsize ((float, float) or None): Size of the *combined* figure,
+            inches. `None` (default) auto-scales from a fixed per-harmonic
+            panel size and `ncols`/`nrows` (wider per harmonic when
+            `show_profile` is active, since the profile sits beside the
+            image rather than under it); pass an explicit `(width, height)`
+            to override that and fix the overall figure size directly.
+        out_path (str or None): Save the combined figure to this path if
+            given.
+
+    Returns:
+        `(fig, infos)` — `infos` is the list of `rod_tangency` return dicts
+        actually plotted (skipped harmonics excluded), each with an added
+        `'harmonic_n'` key recording which order it is.
+    """
+    from .simulation import rod_tangency
+
+    if isinstance(layer, (list, tuple)) or (isinstance(layer, str) and layer == "all"):
+        raise ValueError(
+            "plot_rod_tangency_harmonics compares harmonics of one layer/reflection, "
+            "not multiple layers -- pass a single layer/label/None, or use "
+            "plot_rod_tangency(..., layer=..., n_harmonics=...) for overlaying "
+            "several layers and/or harmonics onto one shared panel instead."
+        )
+
+    h0, k0, l0 = (int(x) for x in hkl)
+
+    if isinstance(n_harmonics, (list, tuple, np.ndarray)):
+        harmonic_orders = sorted({int(n) for n in n_harmonics})
+        if any(n < 1 for n in harmonic_orders):
+            raise ValueError(f"n_harmonics list entries must be >= 1, got {n_harmonics}")
+    else:
+        harmonic_orders = list(range(1, int(n_harmonics) + 1))
+
+    harmonics = []
+    for n in harmonic_orders:
+        h_max_sat = max_satellites if n == 1 else max_satellites * (2 ** (n - 1))
+        try:
+            info = rod_tangency(
+                stack, (n * h0, n * k0, n * l0), layer=layer, camera=camera,
+                ki_hat=ki_hat, max_satellites=h_max_sat,
+            )
+        except ValueError as e:
+            print(f"  plot_rod_tangency_harmonics: skipping n={n} — {e}")
+            continue
+        if not info["on_detector"]:
+            print(f"  plot_rod_tangency_harmonics: skipping n={n} — hkl={info['hkl']} is off-detector")
+            continue
+        info["harmonic_n"] = n
+        harmonics.append(info)
+    if not harmonics:
+        raise ValueError(
+            f"hkl={(h0, k0, l0)} lands on-detector for none of the requested harmonics {harmonic_orders}"
+        )
+
+    panels = [
+        {
+            "hkl": info["hkl"],
+            "layer": info["layer"],
+            "info": info,
+            "title": (
+                f"n={info['harmonic_n']}   E0={info['E0']:.0f} eV\n"
+                f"|d(pix)/d(along)|={info['dpix_dalong']:.2e} px/Å⁻¹"
+            ),
+        }
+        for info in harmonics
+    ]
+    suptitle = f"hkl={(h0, k0, l0)}  ({harmonics[0]['layer']})  — harmonics n={harmonic_orders}"
+
+    fig = _plot_rod_tangency_multi(
+        stack, panels, camera, ki_hat=ki_hat, ncols=ncols, arrow_length_px=arrow_length_px,
+        image=image, pad_px=pad_px, show_profile=show_profile,
+        profile_halfwidth_px=profile_halfwidth_px, profile_step_px=profile_step_px,
+        show_relaxed_buffer=show_relaxed_buffer, alpha=alpha, figsize=figsize,
+        out_path=out_path, suptitle=suptitle, caller_name="plot_rod_tangency_harmonics",
+    )
+    return fig, harmonics
+
+
+def plot_rod_tangency_blocks(
+    stack,
+    hkl,
+    camera=None,
+    *,
+    ki_hat=None,
+    blocks=None,
+    max_satellites=0,
+    ncols=3,
+    arrow_length_px=60,
+    image=None,
+    pad_px=40,
+    show_profile=None,
+    profile_halfwidth_px=3,
+    profile_step_px=1.0,
+    show_relaxed_buffer=False,
+    alpha=0.9,
+    figsize=None,
+    out_path=None,
+):
+    """
+    Small-multiples comparison of one reflection's satellite comb across the
+    stack's different repeating blocks of pseudomorphic layers — one panel
+    per block (`stack.blocks`), each computed from that block's own period
+    and its first layer. Useful for a multi-section device stack (e.g. a
+    defect-filtering superlattice, an active region, and a cladding section
+    stacked on top of each other — see Layered Structures §1.1/§10.2) to see
+    at a glance how the satellite comb (spacing, streak direction, intensity
+    envelope) differs from one repeating section to the next for the *same*
+    nominal reflection.
+
+    Same visual design and shared-ΔQ-window reasoning as
+    `plot_rod_tangency_harmonics` — see that function's docstring. The only
+    thing that differs panel to panel here is *which block's* period/layer
+    was used to compute the rod, not harmonic order (`hkl` is identical for
+    every panel, unlike there).
+
+    Args:
+        stack, hkl, camera, ki_hat: Same meaning as
+            :func:`~nrxrdct.laue.simulation.rod_tangency`.
+        blocks (list of int, list of str, or None): Which of `stack.blocks`
+            to show. `None` (default) shows all of them, bottom to top. A
+            list of integers indexes `stack.blocks` directly. A list of
+            strings selects, for each entry, the first block containing a
+            layer with that label — convenient for naming a block by one of
+            its layers (e.g. `blocks=['QW']`) rather than its position,
+            which shifts if the stack is edited. Blocks that are unreachable
+            or land off-detector for `hkl` are skipped with a printed note
+            rather than raising.
+        max_satellites (int): Forwarded to `rod_tangency` unchanged for
+            every block — no harmonic-order rescaling here, since `hkl`
+            itself is the same for every panel.
+        ncols, arrow_length_px, pad_px, image, show_profile,
+        profile_halfwidth_px, profile_step_px, show_relaxed_buffer, alpha,
+        figsize, out_path: Same meaning as in `plot_rod_tangency_harmonics`.
+
+    Returns:
+        `(fig, infos)` — `infos` is the list of `rod_tangency` return dicts
+        actually plotted, each with added `'block_index'` (its index into
+        `stack.blocks`), `'block_layers'` (labels of every layer in that
+        block, bottom to top), and `'block_n_rep'` keys, and using that
+        block's first layer as `layer`.
+    """
+    from .simulation import rod_tangency
+
+    stack_blocks = stack.blocks
+    if not stack_blocks:
+        raise ValueError("plot_rod_tangency_blocks: stack has no repeating blocks (stack.blocks is empty)")
+
+    if blocks is None:
+        block_indices = list(range(len(stack_blocks)))
+    else:
+        block_indices = []
+        for b in blocks:
+            if isinstance(b, str):
+                idx = next(
+                    (i for i, blk in enumerate(stack_blocks) if any(lyr.label == b for lyr in blk.layers)),
+                    None,
+                )
+                if idx is None:
+                    raise ValueError(f"no block contains a layer labeled {b!r}")
+                block_indices.append(idx)
+            else:
+                idx = int(b)
+                if not (0 <= idx < len(stack_blocks)):
+                    raise ValueError(f"block index {idx} out of range (stack has {len(stack_blocks)} blocks)")
+                block_indices.append(idx)
+        block_indices = sorted(set(block_indices))
+
+    h0, k0, l0 = (int(x) for x in hkl)
+    block_hits = []
+    for idx in block_indices:
+        block = stack_blocks[idx]
+        rep_layer = block.layers[0]
+        try:
+            info = rod_tangency(
+                stack, (h0, k0, l0), layer=rep_layer, camera=camera,
+                ki_hat=ki_hat, max_satellites=max_satellites,
+            )
+        except ValueError as e:
+            print(f"  plot_rod_tangency_blocks: skipping block {idx} ({rep_layer.label!r}) — {e}")
+            continue
+        if not info["on_detector"]:
+            print(f"  plot_rod_tangency_blocks: skipping block {idx} ({rep_layer.label!r}) — off-detector")
+            continue
+        info["block_index"] = idx
+        info["block_layers"] = [lyr.label for lyr in block.layers]
+        info["block_n_rep"] = block.n_rep
+        block_hits.append(info)
+    if not block_hits:
+        raise ValueError(
+            f"hkl={(h0, k0, l0)} lands on-detector for none of the requested blocks {block_indices}"
+        )
+
+    panels = [
+        {
+            "hkl": info["hkl"],
+            "layer": info["layer"],
+            "info": info,
+            "title": (
+                f"block {info['block_index']}: {'+'.join(info['block_layers'])} ×{info['block_n_rep']}\n"
+                f"E0={info['E0']:.0f} eV   |d(pix)/d(along)|={info['dpix_dalong']:.2e} px/Å⁻¹"
+            ),
+        }
+        for info in block_hits
+    ]
+    suptitle = f"hkl={(h0, k0, l0)}  — blocks {[info['block_index'] for info in block_hits]}"
+
+    fig = _plot_rod_tangency_multi(
+        stack, panels, camera, ki_hat=ki_hat, ncols=ncols, arrow_length_px=arrow_length_px,
+        image=image, pad_px=pad_px, show_profile=show_profile,
+        profile_halfwidth_px=profile_halfwidth_px, profile_step_px=profile_step_px,
+        show_relaxed_buffer=show_relaxed_buffer, alpha=alpha, figsize=figsize,
+        out_path=out_path, suptitle=suptitle, caller_name="plot_rod_tangency_blocks",
+    )
+    return fig, block_hits
 
 
 # ─────────────────────────────────────────────────────────────────────────────

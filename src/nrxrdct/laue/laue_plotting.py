@@ -3316,6 +3316,130 @@ def warp_rod_to_qspace(
     return warped_flat.reshape(n_perp, n_par), q_par_ax, q_perp_ax, info
 
 
+def plot_rod_qspace_warp(
+    stack,
+    hkl,
+    image,
+    layer=None,
+    camera=None,
+    *,
+    ki_hat=None,
+    q_par_range=None,
+    q_perp_range=None,
+    n_par: int = 300,
+    n_perp: int = 300,
+    half_size_px: float = 40.0,
+    perp_probe_px: float = 5.0,
+    interp_order: int = 1,
+    max_satellites: int = 0,
+    log_scale: bool = True,
+    cmap: str = "inferno",
+    ax=None,
+    figsize=(6.5, 5.5),
+    out_path=None,
+):
+    """
+    Display the `(q_parallel, q_perp)` warp of a reflection's local image
+    patch produced by :func:`warp_rod_to_qspace`.
+
+    A crosshair marks the reflection's own `G0` (`q_par=q_perp=0` by
+    construction). With `max_satellites > 0`, the discrete satellite comb
+    (same one `rod_tangency`/`plot_rod_tangency` compute) is also marked —
+    each satellite lies exactly on the `q_par` axis at `q_perp=0`, since by
+    construction `Q_m = G0 + m·(2π/Λ)·n̂` has no `ê⊥` component; only orders
+    that are on-detector are shown.
+
+    Args:
+        stack, hkl, camera, ki_hat, layer: Forwarded to
+            :func:`warp_rod_to_qspace` (and, for satellites, to
+            :func:`~nrxrdct.laue.simulation.rod_tangency`).
+        image (ndarray, shape (Nv, Nh)): Detector frame to warp and display.
+        q_par_range, q_perp_range, n_par, n_perp, half_size_px,
+            perp_probe_px, interp_order: Forwarded to
+            :func:`warp_rod_to_qspace`.
+        max_satellites (int): `0` (default) shows only the crosshair at
+            `G0`. `> 0` also marks that many satellite orders on either
+            side (see above).
+        log_scale (bool): Apply `log1p` scaling to the warped image before
+            display.
+        cmap (str): Matplotlib colormap.
+        ax (matplotlib.axes.Axes, optional): Draw into existing axes
+            instead of creating a new figure.
+        figsize: Figure size (ignored if `ax` is given).
+        out_path (str or None): Save figure to this path if given.
+
+    Returns:
+        `(fig, ax, warped, q_par_ax, q_perp_ax, info)` — the last four are
+        :func:`warp_rod_to_qspace`'s own outputs, unchanged.
+    """
+    from .simulation import rod_tangency
+
+    warped, q_par_ax, q_perp_ax, info = warp_rod_to_qspace(
+        stack, hkl, image, layer=layer, camera=camera, ki_hat=ki_hat,
+        q_par_range=q_par_range, q_perp_range=q_perp_range,
+        n_par=n_par, n_perp=n_perp, half_size_px=half_size_px,
+        perp_probe_px=perp_probe_px, interp_order=interp_order,
+    )
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
+    else:
+        fig = ax.figure
+    _ax_style(ax, "")
+
+    display = np.where(np.isnan(warped), 0.0, warped)
+    if log_scale and display.max() > 0:
+        display = np.log1p(display / display.max() * 1000.0)
+    display[np.isnan(warped)] = np.nan
+
+    extent = [q_par_ax[0], q_par_ax[-1], q_perp_ax[0], q_perp_ax[-1]]
+    im = ax.imshow(
+        display, origin="lower", aspect="auto", extent=extent,
+        cmap=cmap, interpolation="nearest",
+    )
+    cb = fig.colorbar(im, ax=ax, pad=0.02, fraction=0.045)
+    cb.set_label("log intensity" if log_scale else "intensity", color=FG, fontsize=8)
+    cb.ax.tick_params(colors="#7788aa", labelsize=7)
+
+    ax.plot(0.0, 0.0, "+", color=FG, ms=10, mew=1.4, zorder=5)
+    ax.annotate(
+        "SL0" if max_satellites > 0 else "G0", (0.0, 0.0), xytext=(8, 8),
+        textcoords="offset points", color=FG, fontsize=7, zorder=6,
+    )
+
+    if max_satellites > 0:
+        sat_info = rod_tangency(
+            stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat,
+            max_satellites=max_satellites,
+        )
+        period = sat_info["period"]
+        if period:
+            q_fringe = 2.0 * np.pi / period
+            for m, sat in sat_info["satellites"].items():
+                if m == 0 or sat["pix"] is None or not sat["on_detector"]:
+                    continue
+                q_m = m * q_fringe
+                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                    ax.plot(q_m, 0.0, "o", color=COL_SUP, ms=6, mec=BG, mew=0.6, zorder=4)
+                    ax.annotate(
+                        f"{m:+d}", (q_m, 0.0), xytext=(0, 8), textcoords="offset points",
+                        color=COL_SUP, fontsize=7, ha="center", zorder=6,
+                    )
+
+    ax.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+    ax.set_ylabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
+    ax.set_title(
+        f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV",
+        color=FG, fontsize=9, pad=6,
+    )
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    return fig, ax, warped, q_par_ax, q_perp_ax, info
+
+
 def plot_tth_chi_overlay(
     image,
     camera,

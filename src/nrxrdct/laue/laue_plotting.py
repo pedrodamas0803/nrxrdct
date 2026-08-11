@@ -3337,6 +3337,8 @@ def plot_rod_qspace_warp(
     interp_order: int = 1,
     max_satellites: int = 0,
     show_relaxed_buffer: bool = False,
+    show_profile: bool = False,
+    profile_halfwidth_bins: int = 3,
     log_scale: bool = True,
     cmap: str = "inferno",
     ax=None,
@@ -3387,6 +3389,23 @@ def plot_rod_qspace_warp(
             position (see above). Skipped (with a printed note) if the
             stack has no buffer layers, the buffer layer is the one being
             plotted, or its own `hkl` is unreachable/off-detector.
+        show_profile (bool): Add a second axis with the intensity along
+            `q_parallel`, integrated over `±profile_halfwidth_bins` grid
+            columns around `q_perp=0` — the same kind of 1-D line profile
+            `plot_rod_tangency`'s own `show_profile` adds, except read
+            directly off the already-computed warp instead of re-sampling
+            the raw image (no separate lateral-integration pass needed,
+            since the warp *is* already gridded in physical `q` units).
+            The y-axis (intensity) is log-scaled, same reasoning as
+            `plot_rod_tangency`: weak far orders stay visible alongside
+            the main peak. Satellite orders are labelled the same way as
+            the main axis (`SL0`, `±N`) when `max_satellites > 0`.
+            Requires `ax=None` (a fresh two-panel figure is always
+            created).
+        profile_halfwidth_bins (int): Lateral integration half-width, in
+            `q_perp` **grid columns** (not Å⁻¹) — e.g. `3` sums 7 columns
+            (`-3, ..., +3`) around the column nearest `q_perp=0`. Unused
+            unless `show_profile=True`.
         log_scale (bool): Apply `log1p` scaling to the warped image before
             display.
         cmap (str): Matplotlib colormap.
@@ -3396,12 +3415,17 @@ def plot_rod_qspace_warp(
         out_path (str or None): Save figure to this path if given.
 
     Returns:
-        `(fig, ax, warped, q_par_ax, q_perp_ax, info)` — the last four are
+        `show_profile=False` (default): `(fig, ax, warped, q_par_ax, q_perp_ax, info)`.
+        `show_profile=True`: `(fig, (ax, ax_profile), warped, q_par_ax, q_perp_ax, info)`.
+        `warped`/`q_par_ax`/`q_perp_ax`/`info` are always
         :func:`warp_rod_to_qspace`'s own outputs, unchanged (in particular
         `warped` is still shape `(n_perp, n_par)`; only the *display* is
         transposed to put `q_parallel` on the vertical axis).
     """
     from .simulation import rod_tangency
+
+    if show_profile and ax is not None:
+        raise ValueError("show_profile=True always creates its own two-panel figure; pass ax=None")
 
     warped, q_par_ax, q_perp_ax, info = warp_rod_to_qspace(
         stack, hkl, image, layer=layer, camera=camera, ki_hat=ki_hat,
@@ -3410,7 +3434,13 @@ def plot_rod_qspace_warp(
         perp_probe_px=perp_probe_px, interp_order=interp_order,
     )
 
-    if ax is None:
+    ax_profile = None
+    if show_profile:
+        fig = plt.figure(figsize=figsize, facecolor=BG)
+        gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3, top=0.8)
+        ax = fig.add_subplot(gs[0, 0])
+        ax_profile = fig.add_subplot(gs[0, 1])
+    elif ax is None:
         fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
     else:
         fig = ax.figure
@@ -3437,6 +3467,7 @@ def plot_rod_qspace_warp(
         textcoords="offset points", color=FG, fontsize=7, zorder=6,
     )
 
+    sat_info = None
     if max_satellites > 0:
         sat_info = rod_tangency(
             stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat,
@@ -3490,10 +3521,47 @@ def plot_rod_qspace_warp(
         color=FG, fontsize=9, pad=6,
     )
 
+    if show_profile:
+        iperp0 = int(np.argmin(np.abs(q_perp_ax)))
+        lo = max(iperp0 - profile_halfwidth_bins, 0)
+        hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
+        profile = np.nansum(warped[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
+
+        _ax_style(ax_profile, "")
+        ax_profile.plot(
+            q_par_ax, profile, "-", color=COL_SUP, lw=1.3,
+            label="measured (± " + f"{profile_halfwidth_bins} bins lateral)",
+        )
+        ax_profile.set_yscale("log")
+        ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
+        ax_profile.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+        ax_profile.set_ylabel(
+            f"intensity  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
+        )
+
+        if sat_info is not None:
+            for m, sat in sat_info["satellites"].items():
+                if sat["pix"] is None or not sat["on_detector"]:
+                    continue
+                q_m = sat["along"]
+                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                    ax_profile.axvline(q_m, color=COL_SUP, lw=0.8, ls=":", alpha=0.6)
+                    ax_profile.text(
+                        q_m, 1.02, "SL0" if m == 0 else f"{m:+d}",
+                        transform=ax_profile.get_xaxis_transform(),
+                        color=COL_SUP, fontsize=7, ha="center", va="bottom", clip_on=False,
+                    )
+
+        leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+        leg_p.get_frame().set_alpha(0.85)
+        ax_profile.set_title("Warped intensity along q_parallel", color=FG, fontsize=9, pad=20)
+
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
+    if show_profile:
+        return fig, (ax, ax_profile), warped, q_par_ax, q_perp_ax, info
     return fig, ax, warped, q_par_ax, q_perp_ax, info
 
 

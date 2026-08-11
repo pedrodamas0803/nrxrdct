@@ -3185,9 +3185,12 @@ def warp_rod_to_qspace(
             the output columns.
         q_perp_ax (ndarray, shape (n_perp,)): `q_perp` values (Å⁻¹) of the
             output rows.
-        info (dict): `hkl`, `layer`, `E0`, `pix0`, `n_hat` (3,), `perp_hat`
+        info (dict): `hkl`, `layer`, `E0`, `pix0`, `G0` (3,, the Q-space
+            point pixel/E were computed from), `n_hat` (3,), `perp_hat`
             (3,, the `ê⊥` used), `dpix_dalong`, `dpix_dperp` — for axis
-            labelling/titling by the caller.
+            labelling/titling, or projecting other Q-space points into
+            this same `(q_par, q_perp)` frame via
+            `((Q - G0) @ n_hat, (Q - G0) @ perp_hat)`.
     """
     from scipy.ndimage import map_coordinates
     from .simulation import rod_tangency, HC, KI_HAT
@@ -3307,6 +3310,7 @@ def warp_rod_to_qspace(
         "layer": info0["layer"],
         "E0": info0["E0"],
         "pix0": info0["pix0"],
+        "G0": G0,
         "n_hat": n_hat,
         "perp_hat": perp_hat,
         "dpix_dalong": info0["dpix_dalong"],
@@ -3332,6 +3336,7 @@ def plot_rod_qspace_warp(
     perp_probe_px: float = 5.0,
     interp_order: int = 1,
     max_satellites: int = 0,
+    show_relaxed_buffer: bool = False,
     log_scale: bool = True,
     cmap: str = "inferno",
     ax=None,
@@ -3340,26 +3345,48 @@ def plot_rod_qspace_warp(
 ):
     """
     Display the `(q_parallel, q_perp)` warp of a reflection's local image
-    patch produced by :func:`warp_rod_to_qspace`.
+    patch produced by :func:`warp_rod_to_qspace`. `q_parallel` is the
+    vertical axis, `q_perp` the horizontal one.
 
     A crosshair marks the reflection's own `G0` (`q_par=q_perp=0` by
-    construction). With `max_satellites > 0`, the discrete satellite comb
-    (same one `rod_tangency`/`plot_rod_tangency` compute) is also marked —
-    each satellite lies exactly on the `q_par` axis at `q_perp=0`, since by
-    construction `Q_m = G0 + m·(2π/Λ)·n̂` has no `ê⊥` component; only orders
-    that are on-detector are shown.
+    construction, always labelled `G0`). With `max_satellites > 0`, the
+    discrete satellite comb (same one `rod_tangency`/`plot_rod_tangency`
+    compute, `m = -max_satellites, ..., max_satellites` including `m=0`)
+    is also marked, each at its own exact `sat['along']` position from
+    `rod_tangency` — **not** naively `m·(2π/Λ)`; for a true superlattice
+    (`is_superlattice=True`) the comb is anchored to the nearest real
+    `Sₙ` maximum, and for an isolated finite layer it's probed at
+    half-integer positions (`rod_tangency`'s own docstring explains why).
+    Every satellite (including `m=0`, the nearest comb tooth) lies exactly
+    on the `q_par` axis at `q_perp=0` by construction (`along·n̂` has no
+    `ê⊥` component) — note this "0th satellite" position can differ
+    slightly from `G0` itself for a true superlattice, which is why it's
+    marked separately from the `G0` crosshair rather than assumed
+    identical to it.
+
+    With `show_relaxed_buffer=True`, the same `hkl`'s position using the
+    shallowest buffer layer's own (relaxed/bulk) lattice is also marked —
+    a grey diamond, same convention as `plot_rod_tangency`'s own
+    `show_relaxed_buffer` — projected into *this* layer's `(q_par, q_perp)`
+    frame via `((G0_buffer - G0) @ n_hat, (G0_buffer - G0) @ perp_hat)`, so
+    it shows how far the strained layer's peak has moved from the
+    unstrained template, directly in physical Q units rather than pixels.
 
     Args:
         stack, hkl, camera, ki_hat, layer: Forwarded to
-            :func:`warp_rod_to_qspace` (and, for satellites, to
-            :func:`~nrxrdct.laue.simulation.rod_tangency`).
+            :func:`warp_rod_to_qspace` (and, for satellites/the relaxed
+            buffer, to :func:`~nrxrdct.laue.simulation.rod_tangency`).
         image (ndarray, shape (Nv, Nh)): Detector frame to warp and display.
         q_par_range, q_perp_range, n_par, n_perp, half_size_px,
             perp_probe_px, interp_order: Forwarded to
             :func:`warp_rod_to_qspace`.
         max_satellites (int): `0` (default) shows only the crosshair at
             `G0`. `> 0` also marks that many satellite orders on either
-            side (see above).
+            side, plus `m=0` (see above).
+        show_relaxed_buffer (bool): Mark the same `hkl`'s relaxed-buffer
+            position (see above). Skipped (with a printed note) if the
+            stack has no buffer layers, the buffer layer is the one being
+            plotted, or its own `hkl` is unreachable/off-detector.
         log_scale (bool): Apply `log1p` scaling to the warped image before
             display.
         cmap (str): Matplotlib colormap.
@@ -3370,7 +3397,9 @@ def plot_rod_qspace_warp(
 
     Returns:
         `(fig, ax, warped, q_par_ax, q_perp_ax, info)` — the last four are
-        :func:`warp_rod_to_qspace`'s own outputs, unchanged.
+        :func:`warp_rod_to_qspace`'s own outputs, unchanged (in particular
+        `warped` is still shape `(n_perp, n_par)`; only the *display* is
+        transposed to put `q_parallel` on the vertical axis).
     """
     from .simulation import rod_tangency
 
@@ -3391,8 +3420,9 @@ def plot_rod_qspace_warp(
     if log_scale and display.max() > 0:
         display = np.log1p(display / display.max() * 1000.0)
     display[np.isnan(warped)] = np.nan
+    display = display.T  # (n_perp, n_par) -> (n_par, n_perp): rows=q_par, cols=q_perp
 
-    extent = [q_par_ax[0], q_par_ax[-1], q_perp_ax[0], q_perp_ax[-1]]
+    extent = [q_perp_ax[0], q_perp_ax[-1], q_par_ax[0], q_par_ax[-1]]
     im = ax.imshow(
         display, origin="lower", aspect="auto", extent=extent,
         cmap=cmap, interpolation="nearest",
@@ -3403,7 +3433,7 @@ def plot_rod_qspace_warp(
 
     ax.plot(0.0, 0.0, "+", color=FG, ms=10, mew=1.4, zorder=5)
     ax.annotate(
-        "SL0" if max_satellites > 0 else "G0", (0.0, 0.0), xytext=(8, 8),
+        "G0", (0.0, 0.0), xytext=(8, 8),
         textcoords="offset points", color=FG, fontsize=7, zorder=6,
     )
 
@@ -3412,22 +3442,49 @@ def plot_rod_qspace_warp(
             stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat,
             max_satellites=max_satellites,
         )
-        period = sat_info["period"]
-        if period:
-            q_fringe = 2.0 * np.pi / period
-            for m, sat in sat_info["satellites"].items():
-                if m == 0 or sat["pix"] is None or not sat["on_detector"]:
-                    continue
-                q_m = m * q_fringe
-                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
-                    ax.plot(q_m, 0.0, "o", color=COL_SUP, ms=6, mec=BG, mew=0.6, zorder=4)
-                    ax.annotate(
-                        f"{m:+d}", (q_m, 0.0), xytext=(0, 8), textcoords="offset points",
-                        color=COL_SUP, fontsize=7, ha="center", zorder=6,
-                    )
+        for m, sat in sat_info["satellites"].items():
+            if sat["pix"] is None or not sat["on_detector"]:
+                continue
+            q_m = sat["along"]
+            if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                ax.plot(0.0, q_m, "o", color=COL_SUP, ms=6, mec=BG, mew=0.6, zorder=4)
+                ax.annotate(
+                    "SL0" if m == 0 else f"{m:+d}", (0.0, q_m), xytext=(8, 0),
+                    textcoords="offset points", color=COL_SUP, fontsize=7, va="center", zorder=6,
+                )
 
-    ax.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
-    ax.set_ylabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
+    if show_relaxed_buffer:
+        if not stack.buffer_layers:
+            print("  plot_rod_qspace_warp: show_relaxed_buffer skipped — stack has no buffer layers")
+        elif stack.buffer_layers[-1].label == info["layer"]:
+            print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
+                  f"{info['layer']!r} is already the plotted layer")
+        else:
+            buf_layer = stack.buffer_layers[-1]
+            try:
+                buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+            except ValueError as e:
+                buf_info = None
+                print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — {e}")
+            if buf_info is not None and not buf_info["on_detector"]:
+                print(
+                    f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
+                    f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
+                )
+            elif buf_info is not None:
+                h, k, l = info["hkl"]
+                G0_buf = buf_layer.U @ buf_layer.crystal.Q(h, k, l)
+                dQ = G0_buf - info["G0"]
+                q_par_buf = float(np.dot(dQ, info["n_hat"]))
+                q_perp_buf = float(np.dot(dQ, info["perp_hat"]))
+                ax.plot(
+                    q_perp_buf, q_par_buf, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
+                    label=f"relaxed buffer ({buf_info['layer']})",
+                )
+                ax.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+
+    ax.set_xlabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
+    ax.set_ylabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
     ax.set_title(
         f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV",
         color=FG, fontsize=9, pad=6,

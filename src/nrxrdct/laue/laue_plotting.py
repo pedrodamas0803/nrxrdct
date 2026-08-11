@@ -3108,6 +3108,214 @@ def warp_image_to_tth_chi(
     return warped_flat.reshape(n_chi, n_tth), tth_ax, chi_ax
 
 
+def warp_rod_to_qspace(
+    stack,
+    hkl,
+    image,
+    layer=None,
+    camera=None,
+    *,
+    ki_hat=None,
+    q_par_range=None,
+    q_perp_range=None,
+    n_par: int = 300,
+    n_perp: int = 300,
+    half_size_px: float = 40.0,
+    perp_probe_px: float = 5.0,
+    interp_order: int = 1,
+):
+    """
+    Remap a detector image from pixel space into a (q_parallel, q_perp)
+    grid centred on one reflection's rod — the reciprocal-space analogue of
+    :func:`warp_image_to_tth_chi`, but anchored to
+    :func:`~nrxrdct.laue.simulation.rod_tangency`'s own rod geometry
+    instead of instrument angles.
+
+    For each output grid point `Q = G0 + q_par·n̂ + q_perp·ê⊥`, the *exact*
+    elastic condition is solved (same formula `rod_tangency`/
+    `qspace_around_spot` use for the satellite comb — energy and pixel
+    co-vary, not held fixed) to get the `(E, pixel)` that would actually
+    produce that `Q`, and `image` is bilinear-sampled there. So every
+    output point corresponds to a real, physically achievable photon in
+    the white beam, not a local-linear approximation.
+
+    `n̂` is `rod_tangency`'s own rod direction (the layer's stacking-axis
+    reciprocal vector) — this *is* `q_parallel`, same physical quantity
+    already shown as the streak direction in `plot_rod_tangency`. `ê⊥`
+    ("q_perp") is a Q-space unit vector, orthogonalised against `n̂`, chosen
+    so that a small step along it backprojects (at fixed `E0`) onto
+    `rod_tangency`'s own `perp_dir_px` — i.e. this warp's two axes line up
+    with the streak/perpendicular lines already drawn by `plot_rod_tangency`,
+    rather than introducing a second, unrelated convention. (Q-space
+    orthogonal to `n̂` is technically a 2-D subspace; this pins down the one
+    in-plane direction that matches the existing display convention.)
+
+    Args:
+        stack, hkl, camera, ki_hat: Forwarded to
+            :func:`~nrxrdct.laue.simulation.rod_tangency`.
+        image (ndarray, shape (Nv, Nh)): Detector frame (measured or
+            simulated) to warp.
+        layer: Single layer/label/`None` — see `rod_tangency` (`None`
+            defaults to `stack.layers[0]`).
+        q_par_range, q_perp_range ((float, float), optional): Output range
+            in Å⁻¹, `(min, max)`, centred on `G0`. Default (`None`):
+            `±half_size_px / dpix_dalong` for `q_par`, and the analogous
+            `±half_size_px / dpix_dperp` for `q_perp` (`dpix_dperp` found
+            the same way `rod_tangency` finds `dpix_dalong` — a two-point
+            finite difference — but stepping along `ê⊥` instead of `n̂`) —
+            i.e. by default both axes cover roughly the same *pixel*
+            extent around `pix0`, just expressed in each direction's own
+            physical Q scale.
+        n_par, n_perp (int): Output grid size along each axis.
+        half_size_px (float): Half-window (pixels) used to auto-derive
+            `q_par_range`/`q_perp_range` when not given explicitly. Unused
+            if both ranges are given.
+        perp_probe_px (float): Pixel step used to bootstrap `ê⊥` (see
+            above) — small enough to stay a good local approximation of
+            `perp_dir_px`, large enough to avoid floating-point noise.
+        interp_order (int): Interpolation order passed to
+            :func:`scipy.ndimage.map_coordinates` (0=nearest, 1=bilinear
+            (default), 3=cubic).
+
+    Returns:
+        warped (ndarray, shape (n_perp, n_par)): Remapped image. `NaN`
+            where the output point has no elastic solution (`Q·k̂i ≥ 0`)
+            or falls outside the detector.
+        q_par_ax (ndarray, shape (n_par,)): `q_parallel` values (Å⁻¹) of
+            the output columns.
+        q_perp_ax (ndarray, shape (n_perp,)): `q_perp` values (Å⁻¹) of the
+            output rows.
+        info (dict): `hkl`, `layer`, `E0`, `pix0`, `n_hat` (3,), `perp_hat`
+            (3,, the `ê⊥` used), `dpix_dalong`, `dpix_dperp` — for axis
+            labelling/titling by the caller.
+    """
+    from scipy.ndimage import map_coordinates
+    from .simulation import rod_tangency, HC, KI_HAT
+
+    if camera is None:
+        raise ValueError("camera is required")
+
+    info0 = rod_tangency(stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat)
+    if not info0["on_detector"]:
+        raise ValueError(f"hkl={info0['hkl']} is off-detector for layer {info0['layer']!r}")
+
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        ly = stack.layers[0]
+    elif isinstance(layer, str):
+        ly = next((l for l in stack.all_layers if l.label == layer), None)
+        if ly is None:
+            available = [l.label for l in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+    else:
+        ly = layer
+
+    h, k, l = info0["hkl"]
+    G0 = ly.U @ ly.crystal.Q(h, k, l)
+    n_hat = np.asarray(ly.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+    ki = ki / np.linalg.norm(ki)
+
+    def _solve(Q):
+        """Exact elastic condition at Q -- same formula as rod_tangency/qspace_around_spot."""
+        kdG = float(Q @ ki)
+        Gm2 = float(Q @ Q)
+        if kdG >= 0:
+            return None
+        lam = -4.0 * np.pi * kdG / Gm2
+        E = HC / lam
+        km = 2.0 * np.pi / lam
+        kf = ki * km + Q
+        kf /= np.linalg.norm(kf)
+        pix, on_det = camera.project_batch(kf[None, :])
+        return float(E), pix[0].copy(), bool(on_det[0])
+
+    # ── ê⊥: the Q-space direction that, at fixed E0, backprojects onto
+    # rod_tangency's own perp_dir_px — ties this warp's axes to the same
+    # streak/perpendicular convention plot_rod_tangency already draws.
+    px0, py0 = info0["pix0"]
+    perp_px = info0["perp_dir_px"]
+    kf_probe_hat = camera.pixel_to_kf(
+        np.array([px0 + perp_probe_px * perp_px[0]]),
+        np.array([py0 + perp_probe_px * perp_px[1]]),
+    )[0]
+    lam0 = HC / info0["E0"]
+    k0 = 2.0 * np.pi / lam0
+    Q_probe = k0 * (kf_probe_hat - ki)
+    dQ_perp = Q_probe - G0
+    dQ_perp -= np.dot(dQ_perp, n_hat) * n_hat  # orthogonalise against n_hat
+    perp_hat = dQ_perp / np.linalg.norm(dQ_perp)
+
+    # ── dpix_dperp, the transverse analogue of rod_tangency's dpix_dalong,
+    # for auto-ranging q_perp the same way q_par is auto-ranged.
+    d_step = 1e-4
+    res_plus = _solve(G0 + d_step * perp_hat)
+    res_minus = _solve(G0 - d_step * perp_hat)
+    if res_plus is not None and res_minus is not None:
+        dpix_dperp = float(np.linalg.norm(res_plus[1] - res_minus[1]) / (2.0 * d_step))
+    else:
+        raise ValueError("could not evaluate d(pixel)/d(q_perp) near this reflection")
+
+    if q_par_range is None:
+        q_par_half = half_size_px / info0["dpix_dalong"]
+        q_par_range = (-q_par_half, q_par_half)
+    if q_perp_range is None:
+        q_perp_half = half_size_px / dpix_dperp
+        q_perp_range = (-q_perp_half, q_perp_half)
+
+    q_par_ax = np.linspace(q_par_range[0], q_par_range[1], n_par)
+    q_perp_ax = np.linspace(q_perp_range[0], q_perp_range[1], n_perp)
+
+    # ── Output grid, in Q-space ──────────────────────────────────────────────
+    QPAR, QPERP = np.meshgrid(q_par_ax, q_perp_ax)  # shape (n_perp, n_par)
+    Q_flat = (
+        G0[None, :]
+        + QPAR.ravel()[:, None] * n_hat[None, :]
+        + QPERP.ravel()[:, None] * perp_hat[None, :]
+    )
+
+    # ── Vectorised exact elastic solve (same formula as `_solve` above) ──────
+    kdG = Q_flat @ ki
+    Gm2 = np.sum(Q_flat**2, axis=1)
+    elastic_ok = kdG < 0
+    Gm2_safe = np.where(elastic_ok, Gm2, 1.0)
+    kdG_safe = np.where(elastic_ok, kdG, -1.0)
+    lam = -4.0 * np.pi * kdG_safe / Gm2_safe
+    km = 2.0 * np.pi / lam
+    kf = ki[None, :] * km[:, None] + Q_flat
+    kf_norm = np.linalg.norm(kf, axis=1)
+    kf_norm_safe = np.where(kf_norm > 1e-12, kf_norm, 1.0)
+    kf_hat = kf / kf_norm_safe[:, None]
+
+    pix, on_det = camera.project_batch(kf_hat)
+    valid = elastic_ok & on_det & np.isfinite(pix[:, 0]) & np.isfinite(pix[:, 1])
+
+    coords = np.array([
+        np.where(valid, pix[:, 1], 0.0),  # row = ycam
+        np.where(valid, pix[:, 0], 0.0),  # col = xcam
+    ])
+    warped_flat = map_coordinates(
+        np.asarray(image, dtype=np.float64), coords, order=interp_order, mode="constant", cval=0.0
+    )
+    warped_flat = np.where(valid, warped_flat, np.nan)
+
+    info = {
+        "hkl": info0["hkl"],
+        "layer": info0["layer"],
+        "E0": info0["E0"],
+        "pix0": info0["pix0"],
+        "n_hat": n_hat,
+        "perp_hat": perp_hat,
+        "dpix_dalong": info0["dpix_dalong"],
+        "dpix_dperp": dpix_dperp,
+    }
+
+    return warped_flat.reshape(n_perp, n_par), q_par_ax, q_perp_ax, info
+
+
 def plot_tth_chi_overlay(
     image,
     camera,

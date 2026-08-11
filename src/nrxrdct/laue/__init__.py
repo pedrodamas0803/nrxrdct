@@ -80,6 +80,7 @@ from .laue_plotting import (
     plot_unit_cell,
     plot_unit_cell_in_lab,
     warp_image_to_tth_chi,
+    warp_rod_to_qspace,
 )
 from .layers import (
     Layer,
@@ -347,6 +348,7 @@ __all__ = [
     "plot_unit_cell",
     "plot_unit_cell_in_lab",
     "warp_image_to_tth_chi",
+    "warp_rod_to_qspace",
     # Segmentation
     "auto_init_gaussian_mixture_global",
     "convert_spotsfile2peaklist",

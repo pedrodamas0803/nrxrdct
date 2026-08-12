@@ -3387,7 +3387,7 @@ def plot_rod_qspace_warp(
     half_size_px: float = 40.0,
     perp_probe_px: float = 5.0,
     interp_order: int = 1,
-    max_satellites: int = 0,
+    max_satellites=0,
     show_relaxed_buffer: bool = False,
     show_profile: bool = False,
     profile_halfwidth_bins: int = 3,
@@ -3478,9 +3478,19 @@ def plot_rod_qspace_warp(
         q_par_range, q_perp_range, n_par, n_perp, half_size_px,
             perp_probe_px, interp_order: Forwarded to
             :func:`warp_rod_to_qspace`, same for every layer.
-        max_satellites (int): `0` (default) shows only the crosshair at
-            `G0`. `> 0` also marks that many satellite orders on either
-            side, plus `m=0` (see above).
+        max_satellites (int or (int, int)): `0` (default) shows only the
+            crosshair at `G0`. A single `int > 0` marks that many satellite
+            orders on either side, plus `m=0` (see above), same as before.
+            A `(neg, pos)` tuple marks an independent count on each side of
+            the branch — `neg` orders for `m < 0`, `pos` orders for
+            `m > 0` — for a rod whose comb is meaningfully asymmetric (e.g.
+            `is_superlattice=False`'s half-integer probing already isn't
+            symmetric about `m=0`) or when you only care about one
+            direction. `m=0` is always shown regardless of either count
+            (it isn't "on a side"). Internally still solves
+            `rod_tangency` once for `max(neg, pos)` orders and only
+            displays the requested side counts, so this is purely a
+            display filter, not a cheaper/more expensive computation.
         show_relaxed_buffer (bool): Mark the same `hkl`'s relaxed-buffer
             position on every panel (see above). Skipped per-panel (with a
             printed note) if the stack has no buffer layers, the buffer
@@ -3545,6 +3555,12 @@ def plot_rod_qspace_warp(
         per plotted layer, in the same order as `axes`/`img_axes`.
     """
     from .simulation import rod_tangency
+
+    if isinstance(max_satellites, (tuple, list)):
+        max_sat_neg, max_sat_pos = int(max_satellites[0]), int(max_satellites[1])
+    else:
+        max_sat_neg = max_sat_pos = int(max_satellites)
+    max_sat_request = max(max_sat_neg, max_sat_pos)  # how many rod_tangency solves for; display is filtered below
 
     if layer is None or isinstance(layer, str) and layer != "all":
         layers_to_plot = [layer]
@@ -3666,12 +3682,14 @@ def plot_rod_qspace_warp(
         )
 
         sat_info = None
-        if max_satellites > 0:
+        if max_sat_request > 0:
             sat_info = rod_tangency(
                 stack, hkl, layer=info["layer"], camera=camera, ki_hat=ki_hat,
-                max_satellites=max_satellites,
+                max_satellites=max_sat_request,
             )
             for m, sat in sat_info["satellites"].items():
+                if m < -max_sat_neg or m > max_sat_pos:
+                    continue
                 if sat["pix"] is None or not sat["on_detector"]:
                     continue
                 q_m = sat["along"]
@@ -3713,8 +3731,8 @@ def plot_rod_qspace_warp(
                     leg = ax_i.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
                     leg.get_frame().set_alpha(0.85)
 
-        ax_i.set_xlabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
-        ax_i.set_ylabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+        ax_i.set_xlabel(r"$q_\perp$  (Å⁻¹)", color=FG, fontsize=8)
+        ax_i.set_ylabel(r"$q_\parallel$  (Å⁻¹)", color=FG, fontsize=8)
         title = f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV"
         if multi:
             title += f"  |{info['dpix_dalong']:.1e} px/Å⁻¹"
@@ -3741,12 +3759,14 @@ def plot_rod_qspace_warp(
                     label="measured (± " + f"{profile_halfwidth_bins} bins lateral)",
                 )
                 ax_p.set_yscale("log")
-                ax_p.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+                ax_p.set_xlabel(r"$q_\parallel$  (Å⁻¹)", color=FG, fontsize=8)
                 ax_p.set_ylabel(
                     f"intensity  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
                 )
                 if sat_info is not None:
                     for m, sat in sat_info["satellites"].items():
+                        if m < -max_sat_neg or m > max_sat_pos:
+                            continue
                         if sat["pix"] is None or not sat["on_detector"]:
                             continue
                         q_m = sat["along"]
@@ -3759,7 +3779,7 @@ def plot_rod_qspace_warp(
                             )
                 leg_p = ax_p.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
                 leg_p.get_frame().set_alpha(0.85)
-                ax_p.set_title("Warped intensity along q_parallel", color=FG, fontsize=9, pad=20)
+                ax_p.set_title(r"Warped intensity along $q_\parallel$", color=FG, fontsize=9, pad=20)
             else:
                 # Several layers/blocks: compact per-panel profile -- no legend
                 # (colour + the paired image panel's own title already identify
@@ -3771,10 +3791,12 @@ def plot_rod_qspace_warp(
                 ax_p.plot(q_par_ax, profile, "-", color=color, lw=1.1)
                 ax_p.set_yscale("log")
                 ax_p.tick_params(labelsize=6)
-                ax_p.set_xlabel("q_parallel (Å⁻¹)", color=FG, fontsize=6.5)
+                ax_p.set_xlabel(r"$q_\parallel$ (Å⁻¹)", color=FG, fontsize=6.5)
                 ax_p.yaxis.tick_right()
                 if sat_info is not None:
                     for m, sat in sat_info["satellites"].items():
+                        if m < -max_sat_neg or m > max_sat_pos:
+                            continue
                         if sat["pix"] is None or not sat["on_detector"]:
                             continue
                         q_m = sat["along"]

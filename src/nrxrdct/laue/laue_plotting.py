@@ -3345,6 +3345,33 @@ def _block_representative_layers(stack):
     return list(stack.buffer_layers[1:]) + [blk.layers[0] for blk in stack._blocks if blk.layers]
 
 
+def _estimate_baseline(x, y, edge_frac=0.12, min_pts=4):
+    """
+    Linear background estimate for a 1-D profile, extrapolated from its own
+    two edges rather than fit to the whole curve — robust to a real central
+    peak/satellites dominating a least-squares fit, since only the border
+    samples (presumably off the reflection) are used at all.
+
+    Takes the median `y` (and `x`) over the first/last `max(min_pts, edge_frac
+    * len(y))` samples on each side, then returns the straight line through
+    those two `(x, y)` points, evaluated over the *entire* `x` — i.e. a
+    tilted baseline, not just a flat offset, in case the background level
+    genuinely differs pixel-window to pixel-window between one edge and the
+    other. Falls back to a flat line at the shared value if both edges land
+    on the same `x` (degenerate `x`, e.g. a single-point profile).
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    n = len(y)
+    k = min(max(min_pts, int(round(n * edge_frac))), n // 2) if n >= 2 * min_pts else max(1, n // 2)
+    left_x, left_y = np.nanmedian(x[:k]), np.nanmedian(y[:k])
+    right_x, right_y = np.nanmedian(x[-k:]), np.nanmedian(y[-k:])
+    if not np.isfinite(right_x - left_x) or abs(right_x - left_x) < 1e-12:
+        return np.full_like(y, np.nanmean([left_y, right_y]))
+    slope = (right_y - left_y) / (right_x - left_x)
+    return left_y + slope * (x - left_x)
+
+
 def plot_rod_qspace_warp(
     stack,
     hkl,
@@ -3476,8 +3503,12 @@ def plot_rod_qspace_warp(
             as dotted lines only, no text labels/legend) — a single shared
             profile axis across several layers/blocks becomes a tangle of
             overlapping lines and stacked labels fast, so each one gets its
-            own instead. Requires `ax=None` (a fresh figure is always
-            created).
+            own instead. Every profile also gets a dashed baseline (see
+            :func:`_estimate_baseline`) — a straight line through the
+            median level at each edge of the `q_parallel` window,
+            extrapolated across the whole profile — as a visual reference
+            for the background level the peak/satellites sit on. Requires
+            `ax=None` (a fresh figure is always created).
         profile_halfwidth_bins (int): Lateral integration half-width, in
             `q_perp` **grid columns** (not Å⁻¹) — e.g. `3` sums 7 columns
             (`-3, ..., +3`) around the column nearest `q_perp=0`. Unused
@@ -3577,11 +3608,19 @@ def plot_rod_qspace_warp(
         nrows = int(np.ceil(n_img_panels / ncols_eff))
         if show_profile:
             fig = plt.figure(figsize=(figsize[0] * 1.7 * ncols_eff, figsize[1] * nrows), facecolor=BG)
-            outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.45, top=0.88)
+            outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.7, wspace=0.45, top=0.88)
         else:
             fig = plt.figure(figsize=(figsize[0] * ncols_eff, figsize[1] * nrows), facecolor=BG)
             outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.35, top=0.9)
 
+        # Image panels are linked via sharex/sharey (matplotlib's native axis
+        # linking): every panel shows the exact same absolute (q_perp, q_par)
+        # window, set once from the first (reference) panel after the drawing
+        # loop below, rather than each panel independently autoscaling to its
+        # own (generally different) q-range. Linked axes always stay in sync --
+        # zooming/panning one moves all of them together too. Same reasoning
+        # `_plot_rod_tangency_multi` already uses for its own pixel-space grid.
+        ref_img_ax = None
         img_axes, profile_axes = [], []
         for idx in range(n_img_panels):
             row, col = divmod(idx, ncols_eff)
@@ -3589,11 +3628,15 @@ def plot_rod_qspace_warp(
                 inner_gs = mgridspec.GridSpecFromSubplotSpec(
                     1, 2, subplot_spec=outer_gs[row, col], width_ratios=[1.3, 1], wspace=0.12,
                 )
-                img_axes.append(fig.add_subplot(inner_gs[0, 0]))
+                ax_img = fig.add_subplot(inner_gs[0, 0], sharex=ref_img_ax, sharey=ref_img_ax)
+                img_axes.append(ax_img)
                 profile_axes.append(fig.add_subplot(inner_gs[0, 1]))
             else:
-                img_axes.append(fig.add_subplot(outer_gs[row, col]))
+                ax_img = fig.add_subplot(outer_gs[row, col], sharex=ref_img_ax, sharey=ref_img_ax)
+                img_axes.append(ax_img)
                 profile_axes.append(None)
+            if ref_img_ax is None:
+                ref_img_ax = ax_img
 
     for idx, (ax_i, res) in enumerate(zip(img_axes, results)):
         warped, q_par_ax, q_perp_ax, info = res["warped"], res["q_par_ax"], res["q_perp_ax"], res["info"]
@@ -3683,11 +3726,16 @@ def plot_rod_qspace_warp(
             lo = max(iperp0 - profile_halfwidth_bins, 0)
             hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
             profile = np.nansum(warped[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
+            baseline = _estimate_baseline(q_par_ax, profile)
 
             _ax_style(ax_p, "")
             ax_p.axvline(0.0, color=FG, lw=0.8 if not multi else 0.6, alpha=0.4)
             if not multi:
                 # Single layer: spacious, fully-labelled profile, as before.
+                ax_p.plot(
+                    q_par_ax, baseline, "--", color=FG, lw=1.0, alpha=0.5,
+                    label="baseline (extrapolated from edges)",
+                )
                 ax_p.plot(
                     q_par_ax, profile, "-", color=color, lw=1.3,
                     label="measured (± " + f"{profile_halfwidth_bins} bins lateral)",
@@ -3713,10 +3761,13 @@ def plot_rod_qspace_warp(
                 leg_p.get_frame().set_alpha(0.85)
                 ax_p.set_title("Warped intensity along q_parallel", color=FG, fontsize=9, pad=20)
             else:
-                # Several layers/blocks: compact per-panel profile, no per-satellite
-                # text labels (dotted lines only) and no legend, since colour +
-                # the paired image panel's own title already identify it -- text
-                # labels here are exactly what got "messy" with one shared axis.
+                # Several layers/blocks: compact per-panel profile -- no legend
+                # (colour + the paired image panel's own title already identify
+                # it), but satellite orders still get a small label each, since
+                # each panel now has its own profile axis, not one shared one --
+                # the earlier "messy" overlap was several *layers'* labels
+                # competing for the same axis, not labels within one panel.
+                ax_p.plot(q_par_ax, baseline, "--", color=FG, lw=0.7, alpha=0.4)
                 ax_p.plot(q_par_ax, profile, "-", color=color, lw=1.1)
                 ax_p.set_yscale("log")
                 ax_p.tick_params(labelsize=6)
@@ -3729,6 +3780,20 @@ def plot_rod_qspace_warp(
                         q_m = sat["along"]
                         if q_par_ax[0] <= q_m <= q_par_ax[-1]:
                             ax_p.axvline(q_m, color=color, lw=0.6, ls=":", alpha=0.5)
+                            ax_p.text(
+                                q_m, 1.02, "SL0" if m == 0 else f"{m:+d}",
+                                transform=ax_p.get_xaxis_transform(),
+                                color=color, fontsize=5.5, ha="center", va="bottom", clip_on=False,
+                            )
+
+    if multi:
+        # Fix the shared (linked) view once, from the first panel's own
+        # window -- must happen after every panel's imshow() above, or a
+        # later panel's own autoscale would just re-centre the shared view
+        # on itself.
+        ref_q_par_ax, ref_q_perp_ax = results[0]["q_par_ax"], results[0]["q_perp_ax"]
+        img_axes[0].set_xlim(ref_q_perp_ax[0], ref_q_perp_ax[-1])
+        img_axes[0].set_ylim(ref_q_par_ax[0], ref_q_par_ax[-1])
 
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())

@@ -3322,31 +3322,27 @@ def warp_rod_to_qspace(
 
 def _block_representative_layers(stack):
     """
-    One representative `Layer` per physical block, same enumeration
-    `simulate_laue_stack`'s `structure_model="average"` uses for its own G
-    vectors: every buffer layer *except the substrate* (each already
-    non-repeating, i.e. its own block), plus each repeating block's own
-    *first* layer — not every individual sub-layer (e.g. the well vs
-    barrier of an MQW), since in the average picture the whole block
-    shares one effective diffraction geometry. The substrate
-    (`stack.buffer_layers[0]`, the deepest/first-added buffer layer) is
-    dropped — it's typically a dissimilar material (e.g. sapphire under a
-    GaN template) whose own reflections aren't useful alongside the film's.
-    Deduplicated by `(crystal.name, rounded U)`, matching
-    `simulate_laue_stack`'s own `seen_combos` dedup, so a buffer that is
-    literally the same crystal+orientation as the first repeating layer
-    (e.g. a GaN buffer under a GaN/InGaN block) isn't listed twice.
+    One representative `Layer` per physical block: every buffer layer
+    *except the substrate* (each already non-repeating, i.e. its own
+    block), plus each repeating block's own *first* layer — not every
+    individual sub-layer (e.g. the well vs barrier of an MQW), since a
+    block's rod/satellite geometry is governed by its own period, which is
+    the same regardless of which of its sub-layers is used to anchor `G0`.
+    The substrate (`stack.buffer_layers[0]`, the deepest/first-added
+    buffer layer) is dropped — it's typically a dissimilar material (e.g.
+    sapphire under a GaN template) whose own reflections aren't useful
+    alongside the film's.
+
+    **No crystal+orientation dedup** (unlike `simulate_laue_stack`'s own
+    `structure_model="average"` G-vector enumeration, which this otherwise
+    mirrors): different blocks routinely share the same base material
+    (e.g. two GaN-based blocks with different superlattice periods) and
+    would collapse into one panel under that dedup, silently hiding blocks
+    with a genuinely different satellite comb (`rod_tangency`'s `period`
+    depends on the *block*, not the representative layer's crystal/`U`) —
+    exactly the comparison this plot exists to show.
     """
-    candidates = list(stack.buffer_layers[1:]) + [blk.layers[0] for blk in stack._blocks if blk.layers]
-    seen = []
-    out = []
-    for ly in candidates:
-        key = (ly.crystal.name, tuple(np.round(ly.U, 4).ravel()))
-        if key in seen:
-            continue
-        seen.append(key)
-        out.append(ly)
-    return out
+    return list(stack.buffer_layers[1:]) + [blk.layers[0] for blk in stack._blocks if blk.layers]
 
 
 def plot_rod_qspace_warp(
@@ -3384,13 +3380,15 @@ def plot_rod_qspace_warp(
     means something different here: **one panel per block**, not per
     individual `Layer`. Concretely, `'all'` resolves to
     `stack.buffer_layers[1:] + [blk.layers[0] for blk in stack._blocks]`
-    (deduplicated by crystal+orientation) — the same enumeration
-    `simulate_laue_stack`'s `structure_model="average"` uses for its own G
-    vectors, minus the substrate (`stack.buffer_layers[0]`, typically a
-    dissimilar material not worth a panel of its own — see
-    :func:`_block_representative_layers`). Sub-layers within
-    one repeating block (e.g. the well vs barrier of an MQW) share one
-    effective diffraction geometry in that average picture, so plotting
+    — every buffer layer except the substrate (`stack.buffer_layers[0]`,
+    typically a dissimilar material not worth a panel of its own), plus
+    each repeating block's own first layer, with **no** crystal+orientation
+    dedup — different blocks routinely share a base material but have
+    different periods/satellite combs, and deduping on crystal+`U` alone
+    would silently hide that (see :func:`_block_representative_layers`).
+    Sub-layers within one repeating block (e.g. the well vs barrier of an
+    MQW) share one effective diffraction geometry in that average picture,
+    so plotting
     every individual sub-layer would just repeat near-identical panels for
     layers that were never treated as independently coherent to begin
     with; pass an explicit list of specific `Layer`/labels instead if you

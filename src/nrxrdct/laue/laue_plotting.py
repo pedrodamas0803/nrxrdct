@@ -3320,6 +3320,35 @@ def warp_rod_to_qspace(
     return warped_flat.reshape(n_perp, n_par), q_par_ax, q_perp_ax, info
 
 
+def _block_representative_layers(stack):
+    """
+    One representative `Layer` per physical block, same enumeration
+    `simulate_laue_stack`'s `structure_model="average"` uses for its own G
+    vectors: every buffer layer *except the substrate* (each already
+    non-repeating, i.e. its own block), plus each repeating block's own
+    *first* layer — not every individual sub-layer (e.g. the well vs
+    barrier of an MQW), since in the average picture the whole block
+    shares one effective diffraction geometry. The substrate
+    (`stack.buffer_layers[0]`, the deepest/first-added buffer layer) is
+    dropped — it's typically a dissimilar material (e.g. sapphire under a
+    GaN template) whose own reflections aren't useful alongside the film's.
+    Deduplicated by `(crystal.name, rounded U)`, matching
+    `simulate_laue_stack`'s own `seen_combos` dedup, so a buffer that is
+    literally the same crystal+orientation as the first repeating layer
+    (e.g. a GaN buffer under a GaN/InGaN block) isn't listed twice.
+    """
+    candidates = list(stack.buffer_layers[1:]) + [blk.layers[0] for blk in stack._blocks if blk.layers]
+    seen = []
+    out = []
+    for ly in candidates:
+        key = (ly.crystal.name, tuple(np.round(ly.U, 4).ravel()))
+        if key in seen:
+            continue
+        seen.append(key)
+        out.append(ly)
+    return out
+
+
 def plot_rod_qspace_warp(
     stack,
     hkl,
@@ -3350,19 +3379,32 @@ def plot_rod_qspace_warp(
     patch produced by :func:`warp_rod_to_qspace`. `q_parallel` is the
     vertical axis, `q_perp` the horizontal one.
 
-    `layer` accepts the same forms as `plot_rod_tangency`'s own `layer`
-    argument, so the **same** `hkl` can be compared across every layer in
-    the stack at once — a single `Layer`/label/`None` (default), a list of
-    them, or `'all'` (every `stack.all_layers`). Unlike `plot_rod_tangency`,
-    though, the layers can't be overlaid on one shared image: each layer's
-    own `(q_par, q_perp)` frame is anchored to its *own* `G0`/`n̂`/`ê⊥`
-    (generally at a different pixel, energy, and even tangency direction),
-    so instead one panel per layer is drawn side by side, in a figure that
-    scales with the number of layers plotted (`figsize` is treated as the
-    size of *one* panel, not the whole figure — the actual figure is
-    `n_cols * figsize[0]` wide). Layers that are unreachable or fall
-    entirely off-detector are skipped with a printed note, same as
-    `plot_rod_tangency`.
+    `layer` accepts a single `Layer`/label/`None` (default), or a list of
+    them, same as `plot_rod_tangency`'s own `layer` argument — but `'all'`
+    means something different here: **one panel per block**, not per
+    individual `Layer`. Concretely, `'all'` resolves to
+    `stack.buffer_layers[1:] + [blk.layers[0] for blk in stack._blocks]`
+    (deduplicated by crystal+orientation) — the same enumeration
+    `simulate_laue_stack`'s `structure_model="average"` uses for its own G
+    vectors, minus the substrate (`stack.buffer_layers[0]`, typically a
+    dissimilar material not worth a panel of its own — see
+    :func:`_block_representative_layers`). Sub-layers within
+    one repeating block (e.g. the well vs barrier of an MQW) share one
+    effective diffraction geometry in that average picture, so plotting
+    every individual sub-layer would just repeat near-identical panels for
+    layers that were never treated as independently coherent to begin
+    with; pass an explicit list of specific `Layer`/labels instead if you
+    do want individual sub-layers compared side by side.
+
+    However resolved, the layers can't be overlaid on one shared image
+    (unlike `plot_rod_tangency`): each layer's own `(q_par, q_perp)` frame
+    is anchored to its *own* `G0`/`n̂`/`ê⊥` (generally at a different pixel,
+    energy, and even tangency direction), so instead one panel per layer is
+    drawn side by side, in a figure that scales with the number of layers
+    plotted (`figsize` is treated as the size of *one* panel, not the whole
+    figure — the actual figure is `n_cols * figsize[0]` wide). Layers that
+    are unreachable or fall entirely off-detector are skipped with a
+    printed note, same as `plot_rod_tangency`.
 
     A crosshair marks each panel's own `G0` (`q_par=q_perp=0` by
     construction, always labelled `G0`). With `max_satellites > 0`, the
@@ -3460,7 +3502,7 @@ def plot_rod_qspace_warp(
     if layer is None or isinstance(layer, str) and layer != "all":
         layers_to_plot = [layer]
     elif isinstance(layer, str) and layer == "all":
-        layers_to_plot = list(stack.all_layers)
+        layers_to_plot = _block_representative_layers(stack)
     elif isinstance(layer, (list, tuple)):
         layers_to_plot = list(layer)
     else:

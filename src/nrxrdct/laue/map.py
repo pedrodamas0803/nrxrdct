@@ -4320,6 +4320,188 @@ class GrainMap:
         fig.canvas.mpl_connect("button_press_event", _on_click)
         return fig, (ax_map, ax_det)
 
+    def plot_hkl_mosaic(
+        self,
+        crystal,
+        camera,
+        hkl: tuple,
+        *,
+        grain: int = 0,
+        half_window_x: int = 20,
+        half_window_y: int = 20,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 27000.0,
+        gap_px: int = 2,
+        cmap: str = "gray",
+        log_scale: bool = True,
+        figsize: "tuple | None" = None,
+        out_path: "str | None" = None,
+    ) -> tuple:
+        """
+        Mosaic of one (h, k, l) reflection across the raster scan.
+
+        For every map pixel, the detector position of *hkl* is simulated from
+        the fitted orientation matrix (`self.U[grain]`), and a window of the
+        raw detector image centred on that position is extracted. Windows are
+        tiled on the same `(iy, ix)` grid as the scan, so spot shape,
+        intensity, and position can be compared across the map at a glance.
+
+        Args:
+            crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
+            camera (Camera): Detector geometry.
+            hkl (tuple of int): Miller indices `(h, k, l)` of the reflection to extract.
+            grain (int): Grain slot whose fitted `U` matrices are used. Default `0`.
+            half_window_x, half_window_y (int): Half-width / half-height, in pixels, of the
+                window extracted around the simulated spot position. Each
+                extracted tile is `(2*half_window_y + 1, 2*half_window_x + 1)`.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the image
+                stack (e.g. `'1.1/measurement/det'`). Mutually exclusive with
+                *tiff_dir*; supply exactly one.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files, sorted by
+                embedded number and mapped to 0-based frame indices. Mutually
+                exclusive with *h5_dataset*.
+            E_min_eV, E_max_eV (float): Energy range used to simulate the reflection's
+                position. Defaults `5000` / `27000` eV.
+            gap_px (int): NaN-filled gap, in pixels, inserted between neighbouring tiles
+                so the grid stays visible. Default `2`.
+            cmap (str): Colormap for the mosaic. Default `"gray"`.
+            log_scale (bool): Display `log1p` of the extracted intensity. Default `True`.
+            figsize (tuple or None): Figure size. `None` (default) scales with the mosaic
+                size.
+            out_path (str or None): If given, save the figure to this path.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+            mosaic ((ny*(th+gap)-gap, nx*(tw+gap)-gap) ndarray): The assembled tile grid
+                (`th = 2*half_window_y+1`, `tw = 2*half_window_x+1`), `NaN`
+                wherever a tile — or part of it — could not be extracted
+                (unfitted pixel, reflection off-detector / not excited, or
+                image unavailable).
+"""
+        from .simulation import simulate_laue
+
+        if (h5_dataset is None) == (tiff_dir is None):
+            raise ValueError(
+                "plot_hkl_mosaic: supply exactly one of h5_dataset or tiff_dir"
+            )
+
+        hkl = tuple(int(v) for v in hkl)
+        half_window_x = int(half_window_x)
+        half_window_y = int(half_window_y)
+        tile_h = 2 * half_window_y + 1
+        tile_w = 2 * half_window_x + 1
+
+        # ── image loader (same convention as inspect_frame / reindex_frame) ────
+        _tiff_index: "list | None" = None
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            nonlocal _tiff_index
+            if tiff_dir is not None:
+                if _tiff_index is None:
+                    pat   = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.search(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda x: x[0])
+                    _tiff_index = [p for _, p in files]
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            else:
+                if self.h5_path is None:
+                    return None
+                try:
+                    with h5py.File(self.h5_path, "r") as f:
+                        if h5_dataset not in f:
+                            return None
+                        ds = f[h5_dataset]
+                        if frame_idx >= ds.shape[0]:
+                            return None
+                        return ds[frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+
+        # ── assemble mosaic ──────────────────────────────────────────────────
+        mosaic = np.full(
+            (self.ny * (tile_h + gap_px) - gap_px, self.nx * (tile_w + gap_px) - gap_px),
+            np.nan,
+        )
+        n_found = 0
+        for iy in range(self.ny):
+            for ix in range(self.nx):
+                U = self.U[grain, iy, ix]
+                if np.any(np.isnan(U)):
+                    continue
+                try:
+                    spots = simulate_laue(crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV)
+                except Exception:
+                    continue
+                spot = next(
+                    (s for s in spots if tuple(s["hkl"]) == hkl and s.get("pix") is not None),
+                    None,
+                )
+                if spot is None:
+                    continue
+
+                image = _load_image(self.frame_index(iy, ix))
+                if image is None:
+                    continue
+
+                xc, yc = spot["pix"]
+                xc, yc = int(round(xc)), int(round(yc))
+                nv_im, nh_im = image.shape
+
+                y0, y1 = yc - half_window_y, yc + half_window_y + 1
+                x0, x1 = xc - half_window_x, xc + half_window_x + 1
+                sy0, sy1 = max(y0, 0), min(y1, nv_im)
+                sx0, sx1 = max(x0, 0), min(x1, nh_im)
+                if sy0 >= sy1 or sx0 >= sx1:
+                    continue
+
+                tile = np.full((tile_h, tile_w), np.nan)
+                tile[sy0 - y0: sy1 - y0, sx0 - x0: sx1 - x0] = image[sy0:sy1, sx0:sx1]
+
+                ry0 = iy * (tile_h + gap_px)
+                rx0 = ix * (tile_w + gap_px)
+                mosaic[ry0:ry0 + tile_h, rx0:rx0 + tile_w] = tile
+                n_found += 1
+
+        # ── figure ────────────────────────────────────────────────────────────
+        if figsize is None:
+            figsize = (
+                float(np.clip(2 + self.nx * tile_w / 40, 4, 20)),
+                float(np.clip(2 + self.ny * tile_h / 40, 4, 20)),
+            )
+
+        fig, ax = plt.subplots(figsize=figsize)
+        disp = np.log1p(np.clip(mosaic, 0, None)) if log_scale else mosaic
+        im = ax.imshow(disp, cmap=cmap, interpolation="nearest", origin="upper")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(
+            f"hkl = {hkl}  —  grain {grain + 1}  —  "
+            f"{n_found}/{self.ny * self.nx} tiles found  "
+            f"(±{half_window_x} × ±{half_window_y} px)",
+            fontsize=10,
+        )
+        fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02,
+                     label="log(1 + I)" if log_scale else "I")
+        fig.tight_layout()
+
+        if out_path is not None:
+            fig.savefig(out_path, dpi=150)
+
+        return fig, ax, mosaic
+
     def reindex_frame(
         self,
         crystal,

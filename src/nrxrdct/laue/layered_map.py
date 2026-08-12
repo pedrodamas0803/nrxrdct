@@ -1910,6 +1910,247 @@ class LayeredMap:
         )
         return fig, axes
 
+    def plot_hkl_mosaic(
+        self,
+        camera,
+        hkl: tuple,
+        *,
+        layer: "int | str | None" = None,
+        use_eff: bool = True,
+        half_window_x: int = 20,
+        half_window_y: int = 20,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        E_min_eV: float = 5_000.0,
+        E_max_eV: float = 27_000.0,
+        f2_thresh: float = 1e-4,
+        gap_px: int = 2,
+        cmap: str = "gray",
+        log_scale: bool = True,
+        figsize: "tuple | None" = None,
+        out_path: "str | None" = None,
+    ) -> tuple:
+        """
+        Mosaic of one (h, k, l) reflection across the raster scan.
+
+        For every map pixel, the stack's fitted orientations (`U_eff`, or `U`
+        where strain is unavailable) are temporarily applied to `self.stack`
+        and the detector position of *hkl* is simulated. A window of the raw
+        detector image centred on that position is extracted and the windows
+        are tiled on the same `(iy, ix)` grid as the scan, so spot shape,
+        intensity, and position can be compared across the map at a glance.
+
+        Because several layers can diffract the same nominal `hkl` at
+        slightly different positions (main peak vs. pseudomorphic /
+        relaxed satellites), pass *layer* to disambiguate — otherwise the
+        brightest matching spot at each pixel is used, which can silently
+        jump between layers across the map.
+
+        Args:
+            camera (Camera): Detector geometry.
+            hkl (tuple of int): Miller indices `(h, k, l)` of the reflection to extract.
+            layer (int, str, or None): Which layer's version of *hkl* to track — an index
+                into `self.stack.all_layers` / `self.layer_labels`, or a
+                layer label directly. `None` (default) takes the brightest
+                matching spot regardless of originating layer.
+            use_eff (bool): Use `U_eff` (strained) when available, falling back to `U`.
+                Default `True`.
+            half_window_x, half_window_y (int): Half-width / half-height, in pixels, of the
+                window extracted around the simulated spot position. Each
+                extracted tile is `(2*half_window_y + 1, 2*half_window_x + 1)`.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the image
+                stack. Mutually exclusive with *tiff_dir*; supply exactly one.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files, sorted by
+                embedded number and mapped to 0-based frame indices. Mutually
+                exclusive with *h5_dataset*.
+            E_min_eV, E_max_eV (float): Energy range used to simulate the reflection's
+                position. Defaults `5000` / `27000` eV.
+            f2_thresh (float): Structure-factor threshold forwarded to
+                `precompute_allowed_hkl`. Default `1e-4`.
+            gap_px (int): NaN-filled gap, in pixels, inserted between neighbouring tiles
+                so the grid stays visible. Default `2`.
+            cmap (str): Colormap for the mosaic. Default `"gray"`.
+            log_scale (bool): Display `log1p` of the extracted intensity. Default `True`.
+            figsize (tuple or None): Figure size. `None` (default) scales with the mosaic
+                size.
+            out_path (str or None): If given, save the figure to this path.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+            mosaic ((ny*(th+gap)-gap, nx*(tw+gap)-gap) ndarray): The assembled tile grid
+                (`th = 2*half_window_y+1`, `tw = 2*half_window_x+1`), `NaN`
+                wherever a tile — or part of it — could not be extracted
+                (unfitted pixel, reflection off-detector / not excited for
+                the requested layer, or image unavailable).
+"""
+        import re
+        from .simulation import simulate_laue_stack, precompute_allowed_hkl
+
+        if (h5_dataset is None) == (tiff_dir is None):
+            raise ValueError(
+                "plot_hkl_mosaic: supply exactly one of h5_dataset or tiff_dir"
+            )
+
+        hkl = tuple(int(v) for v in hkl)
+        half_window_x = int(half_window_x)
+        half_window_y = int(half_window_y)
+        tile_h = 2 * half_window_y + 1
+        tile_w = 2 * half_window_x + 1
+
+        layer_label: "str | None" = None
+        if layer is not None:
+            if isinstance(layer, str):
+                layer_label = layer
+            else:
+                li = int(layer)
+                if not (0 <= li < self.n_layers):
+                    raise ValueError(
+                        f"layer index {li} out of range (0 - {self.n_layers - 1})"
+                    )
+                layer_label = self.layer_labels[li]
+
+        # Precompute allowed HKL per unique crystal (same as inspect_frame / reindex_frame).
+        allowed_hkl: dict = {}
+        for _layer in self.stack.all_layers:
+            _cid = id(_layer.crystal)
+            if _cid not in allowed_hkl:
+                allowed_hkl[_cid] = precompute_allowed_hkl(
+                    _layer.crystal, E_max_eV=E_max_eV, f2_thresh=f2_thresh
+                )
+
+        U_src = self.U_eff if (use_eff and not np.all(np.isnan(self.U_eff))) else self.U
+
+        # ── image loader (same convention as reindex_frame) ────────────────────
+        _tiff_index: "list | None" = None
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            nonlocal _tiff_index
+            if tiff_dir is not None:
+                if _tiff_index is None:
+                    pat   = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.search(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda x: x[0])
+                    _tiff_index = [p for _, p in files]
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+            else:
+                if self.h5_path is None:
+                    return None
+                try:
+                    with h5py.File(self.h5_path, "r") as f:
+                        if h5_dataset not in f:
+                            return None
+                        ds = f[h5_dataset]
+                        if frame_idx >= ds.shape[0]:
+                            return None
+                        return ds[frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+
+        # ── assemble mosaic ──────────────────────────────────────────────────
+        mosaic = np.full(
+            (self.ny * (tile_h + gap_px) - gap_px, self.nx * (tile_w + gap_px) - gap_px),
+            np.nan,
+        )
+        n_found = 0
+        saved_U = [l.U.copy() for l in self.stack.all_layers]
+        try:
+            for iy in range(self.ny):
+                for ix in range(self.nx):
+                    u_here = U_src[:, iy, ix]
+                    if np.all(np.isnan(u_here)):
+                        continue
+
+                    for li, lyr in enumerate(self.stack.all_layers):
+                        lyr.U = (
+                            saved_U[li].copy() if np.any(np.isnan(u_here[li]))
+                            else u_here[li].copy()
+                        )
+
+                    try:
+                        spots = simulate_laue_stack(
+                            self.stack, camera,
+                            E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                            geometry_only=True,
+                            allowed_hkl=allowed_hkl,
+                            verbose=False,
+                        )
+                    except Exception:
+                        continue
+
+                    spot = next(
+                        (s for s in spots
+                         if tuple(s["hkl"]) == hkl and s.get("pix") is not None
+                         and (layer_label is None or s.get("phase_label") == layer_label)),
+                        None,
+                    )
+                    if spot is None:
+                        continue
+
+                    image = _load_image(self.frame_index(iy, ix))
+                    if image is None:
+                        continue
+
+                    xc, yc = spot["pix"]
+                    xc, yc = int(round(xc)), int(round(yc))
+                    nv_im, nh_im = image.shape
+
+                    y0, y1 = yc - half_window_y, yc + half_window_y + 1
+                    x0, x1 = xc - half_window_x, xc + half_window_x + 1
+                    sy0, sy1 = max(y0, 0), min(y1, nv_im)
+                    sx0, sx1 = max(x0, 0), min(x1, nh_im)
+                    if sy0 >= sy1 or sx0 >= sx1:
+                        continue
+
+                    tile = np.full((tile_h, tile_w), np.nan)
+                    tile[sy0 - y0: sy1 - y0, sx0 - x0: sx1 - x0] = image[sy0:sy1, sx0:sx1]
+
+                    ry0 = iy * (tile_h + gap_px)
+                    rx0 = ix * (tile_w + gap_px)
+                    mosaic[ry0:ry0 + tile_h, rx0:rx0 + tile_w] = tile
+                    n_found += 1
+        finally:
+            for lyr, U0 in zip(self.stack.all_layers, saved_U):
+                lyr.U = U0
+
+        # ── figure ────────────────────────────────────────────────────────────
+        if figsize is None:
+            figsize = (
+                float(np.clip(2 + self.nx * tile_w / 40, 4, 20)),
+                float(np.clip(2 + self.ny * tile_h / 40, 4, 20)),
+            )
+
+        fig, ax = plt.subplots(figsize=figsize)
+        disp = np.log1p(np.clip(mosaic, 0, None)) if log_scale else mosaic
+        im = ax.imshow(disp, cmap=cmap, interpolation="nearest", origin="upper")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        layer_txt = f"  —  layer {layer_label!r}" if layer_label is not None else ""
+        ax.set_title(
+            f"hkl = {hkl}{layer_txt}  —  "
+            f"{n_found}/{self.ny * self.nx} tiles found  "
+            f"(±{half_window_x} × ±{half_window_y} px)",
+            fontsize=10,
+        )
+        fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02,
+                     label="log(1 + I)" if log_scale else "I")
+        fig.tight_layout()
+
+        if out_path is not None:
+            fig.savefig(out_path, dpi=150)
+
+        return fig, ax, mosaic
+
     def reindex_frame(
         self,
         camera,

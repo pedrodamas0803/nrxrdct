@@ -3350,7 +3350,21 @@ def plot_rod_qspace_warp(
     patch produced by :func:`warp_rod_to_qspace`. `q_parallel` is the
     vertical axis, `q_perp` the horizontal one.
 
-    A crosshair marks the reflection's own `G0` (`q_par=q_perp=0` by
+    `layer` accepts the same forms as `plot_rod_tangency`'s own `layer`
+    argument, so the **same** `hkl` can be compared across every layer in
+    the stack at once — a single `Layer`/label/`None` (default), a list of
+    them, or `'all'` (every `stack.all_layers`). Unlike `plot_rod_tangency`,
+    though, the layers can't be overlaid on one shared image: each layer's
+    own `(q_par, q_perp)` frame is anchored to its *own* `G0`/`n̂`/`ê⊥`
+    (generally at a different pixel, energy, and even tangency direction),
+    so instead one panel per layer is drawn side by side, in a figure that
+    scales with the number of layers plotted (`figsize` is treated as the
+    size of *one* panel, not the whole figure — the actual figure is
+    `n_cols * figsize[0]` wide). Layers that are unreachable or fall
+    entirely off-detector are skipped with a printed note, same as
+    `plot_rod_tangency`.
+
+    A crosshair marks each panel's own `G0` (`q_par=q_perp=0` by
     construction, always labelled `G0`). With `max_satellites > 0`, the
     discrete satellite comb (same one `rod_tangency`/`plot_rod_tangency`
     compute, `m = -max_satellites, ..., max_satellites` including `m=0`)
@@ -3367,29 +3381,40 @@ def plot_rod_qspace_warp(
     identical to it.
 
     With `show_relaxed_buffer=True`, the same `hkl`'s position using the
-    shallowest buffer layer's own (relaxed/bulk) lattice is also marked —
-    a grey diamond, same convention as `plot_rod_tangency`'s own
-    `show_relaxed_buffer` — projected into *this* layer's `(q_par, q_perp)`
-    frame via `((G0_buffer - G0) @ n_hat, (G0_buffer - G0) @ perp_hat)`, so
-    it shows how far the strained layer's peak has moved from the
-    unstrained template, directly in physical Q units rather than pixels.
+    shallowest buffer layer's own (relaxed/bulk) lattice is also marked, on
+    every panel — a grey diamond, same convention as `plot_rod_tangency`'s
+    own `show_relaxed_buffer` — projected into *that* layer's own
+    `(q_par, q_perp)` frame via
+    `((G0_buffer - G0) @ n_hat, (G0_buffer - G0) @ perp_hat)`, so it shows
+    how far each layer's peak has moved from the unstrained template,
+    directly in physical Q units rather than pixels.
+
+    With `show_profile=True`, one shared profile axis is added (not one
+    per layer) — every plotted layer's own intensity-along-`q_parallel`
+    line (see `profile_halfwidth_bins` below) is overlaid there in its own
+    colour, satellite orders included, so the profiles line up directly
+    comparable the same way `plot_rod_tangency`'s own `show_profile`
+    overlays multiple layers' streak profiles on one shared axis.
 
     Args:
-        stack, hkl, camera, ki_hat, layer: Forwarded to
-            :func:`warp_rod_to_qspace` (and, for satellites/the relaxed
-            buffer, to :func:`~nrxrdct.laue.simulation.rod_tangency`).
+        stack, hkl, camera, ki_hat: Forwarded to :func:`warp_rod_to_qspace`
+            (and, for satellites/the relaxed buffer, to
+            :func:`~nrxrdct.laue.simulation.rod_tangency`).
+        layer: Single layer/label/`None` (default `stack.layers[0]`), a
+            list of them, or `'all'` — see above.
         image (ndarray, shape (Nv, Nh)): Detector frame to warp and display.
         q_par_range, q_perp_range, n_par, n_perp, half_size_px,
             perp_probe_px, interp_order: Forwarded to
-            :func:`warp_rod_to_qspace`.
+            :func:`warp_rod_to_qspace`, same for every layer.
         max_satellites (int): `0` (default) shows only the crosshair at
             `G0`. `> 0` also marks that many satellite orders on either
             side, plus `m=0` (see above).
         show_relaxed_buffer (bool): Mark the same `hkl`'s relaxed-buffer
-            position (see above). Skipped (with a printed note) if the
-            stack has no buffer layers, the buffer layer is the one being
-            plotted, or its own `hkl` is unreachable/off-detector.
-        show_profile (bool): Add a second axis with the intensity along
+            position on every panel (see above). Skipped per-panel (with a
+            printed note) if the stack has no buffer layers, the buffer
+            layer is the one being plotted, or its own `hkl` is
+            unreachable/off-detector.
+        show_profile (bool): Add one shared axis with the intensity along
             `q_parallel`, integrated over `±profile_halfwidth_bins` grid
             columns around `q_perp=0` — the same kind of 1-D line profile
             `plot_rod_tangency`'s own `show_profile` adds, except read
@@ -3400,8 +3425,7 @@ def plot_rod_qspace_warp(
             `plot_rod_tangency`: weak far orders stay visible alongside
             the main peak. Satellite orders are labelled the same way as
             the main axis (`SL0`, `±N`) when `max_satellites > 0`.
-            Requires `ax=None` (a fresh two-panel figure is always
-            created).
+            Requires `ax=None` (a fresh figure is always created).
         profile_halfwidth_bins (int): Lateral integration half-width, in
             `q_perp` **grid columns** (not Å⁻¹) — e.g. `3` sums 7 columns
             (`-3, ..., +3`) around the column nearest `q_perp=0`. Unused
@@ -3409,160 +3433,219 @@ def plot_rod_qspace_warp(
         log_scale (bool): Apply `log1p` scaling to the warped image before
             display.
         cmap (str): Matplotlib colormap.
-        ax (matplotlib.axes.Axes, optional): Draw into existing axes
-            instead of creating a new figure.
-        figsize: Figure size (ignored if `ax` is given).
+        ax (matplotlib.axes.Axes, optional): Draw into an existing axes
+            instead of creating a new figure. Only valid for a single
+            layer with `show_profile=False`; raises otherwise.
+        figsize: Size of *one* panel (ignored if `ax` is given) — see
+            above for how the overall figure size scales with panel count.
         out_path (str or None): Save figure to this path if given.
 
     Returns:
-        `show_profile=False` (default): `(fig, ax, warped, q_par_ax, q_perp_ax, info)`.
-        `show_profile=True`: `(fig, (ax, ax_profile), warped, q_par_ax, q_perp_ax, info)`.
-        `warped`/`q_par_ax`/`q_perp_ax`/`info` are always
-        :func:`warp_rod_to_qspace`'s own outputs, unchanged (in particular
-        `warped` is still shape `(n_perp, n_par)`; only the *display* is
-        transposed to put `q_parallel` on the vertical axis).
+        Single layer, `show_profile=False` (default, and the only
+        backward-compatible case with a plain single-`Axes` return):
+        `(fig, ax, warped, q_par_ax, q_perp_ax, info)`.
+
+        Single layer, `show_profile=True`:
+        `(fig, (ax, ax_profile), warped, q_par_ax, q_perp_ax, info)`.
+
+        Multiple layers (list or `'all'`, however many actually succeed):
+        `(fig, axes, results)`, where `axes` is `img_axes` (a list, one
+        per plotted layer) or `(img_axes, ax_profile)` when
+        `show_profile=True`, and `results` is a list of
+        `{'layer', 'warped', 'q_par_ax', 'q_perp_ax', 'info'}` dicts, one
+        per plotted layer, in the same order as `axes`/`img_axes`.
     """
     from .simulation import rod_tangency
 
-    if show_profile and ax is not None:
-        raise ValueError("show_profile=True always creates its own two-panel figure; pass ax=None")
-
-    warped, q_par_ax, q_perp_ax, info = warp_rod_to_qspace(
-        stack, hkl, image, layer=layer, camera=camera, ki_hat=ki_hat,
-        q_par_range=q_par_range, q_perp_range=q_perp_range,
-        n_par=n_par, n_perp=n_perp, half_size_px=half_size_px,
-        perp_probe_px=perp_probe_px, interp_order=interp_order,
-    )
-
-    ax_profile = None
-    if show_profile:
-        fig = plt.figure(figsize=figsize, facecolor=BG)
-        gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3, top=0.8)
-        ax = fig.add_subplot(gs[0, 0])
-        ax_profile = fig.add_subplot(gs[0, 1])
-    elif ax is None:
-        fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
+    if layer is None or isinstance(layer, str) and layer != "all":
+        layers_to_plot = [layer]
+    elif isinstance(layer, str) and layer == "all":
+        layers_to_plot = list(stack.all_layers)
+    elif isinstance(layer, (list, tuple)):
+        layers_to_plot = list(layer)
     else:
-        fig = ax.figure
-    _ax_style(ax, "")
+        layers_to_plot = [layer]
 
-    display = np.where(np.isnan(warped), 0.0, warped)
-    if log_scale and display.max() > 0:
-        display = np.log1p(display / display.max() * 1000.0)
-    display[np.isnan(warped)] = np.nan
-    display = display.T  # (n_perp, n_par) -> (n_par, n_perp): rows=q_par, cols=q_perp
-
-    extent = [q_perp_ax[0], q_perp_ax[-1], q_par_ax[0], q_par_ax[-1]]
-    im = ax.imshow(
-        display, origin="lower", aspect="auto", extent=extent,
-        cmap=cmap, interpolation="nearest",
-    )
-    cb = fig.colorbar(im, ax=ax, pad=0.02, fraction=0.045)
-    cb.set_label("log intensity" if log_scale else "intensity", color=FG, fontsize=8)
-    cb.ax.tick_params(colors="#7788aa", labelsize=7)
-
-    ax.plot(0.0, 0.0, "+", color=FG, ms=10, mew=1.4, zorder=5)
-    ax.annotate(
-        "G0", (0.0, 0.0), xytext=(8, 8),
-        textcoords="offset points", color=FG, fontsize=7, zorder=6,
-    )
-
-    sat_info = None
-    if max_satellites > 0:
-        sat_info = rod_tangency(
-            stack, hkl, layer=layer, camera=camera, ki_hat=ki_hat,
-            max_satellites=max_satellites,
+    multi = len(layers_to_plot) > 1
+    if (multi or show_profile) and ax is not None:
+        raise ValueError(
+            "multiple layers and/or show_profile=True always create their own figure; pass ax=None"
         )
-        for m, sat in sat_info["satellites"].items():
-            if sat["pix"] is None or not sat["on_detector"]:
-                continue
-            q_m = sat["along"]
-            if q_par_ax[0] <= q_m <= q_par_ax[-1]:
-                ax.plot(0.0, q_m, "o", color=COL_SUP, ms=6, mec=BG, mew=0.6, zorder=4)
-                ax.annotate(
-                    "SL0" if m == 0 else f"{m:+d}", (0.0, q_m), xytext=(8, 0),
-                    textcoords="offset points", color=COL_SUP, fontsize=7, va="center", zorder=6,
-                )
 
-    if show_relaxed_buffer:
-        if not stack.buffer_layers:
-            print("  plot_rod_qspace_warp: show_relaxed_buffer skipped — stack has no buffer layers")
-        elif stack.buffer_layers[-1].label == info["layer"]:
-            print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
-                  f"{info['layer']!r} is already the plotted layer")
-        else:
-            buf_layer = stack.buffer_layers[-1]
-            try:
-                buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
-            except ValueError as e:
-                buf_info = None
-                print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — {e}")
-            if buf_info is not None and not buf_info["on_detector"]:
-                print(
-                    f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
-                    f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
-                )
-            elif buf_info is not None:
-                h, k, l = info["hkl"]
-                G0_buf = buf_layer.U @ buf_layer.crystal.Q(h, k, l)
-                dQ = G0_buf - info["G0"]
-                q_par_buf = float(np.dot(dQ, info["n_hat"]))
-                q_perp_buf = float(np.dot(dQ, info["perp_hat"]))
-                ax.plot(
-                    q_perp_buf, q_par_buf, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
-                    label=f"relaxed buffer ({buf_info['layer']})",
-                )
-                ax.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+    results = []
+    for ly in layers_to_plot:
+        try:
+            warped, q_par_ax, q_perp_ax, info = warp_rod_to_qspace(
+                stack, hkl, image, layer=ly, camera=camera, ki_hat=ki_hat,
+                q_par_range=q_par_range, q_perp_range=q_perp_range,
+                n_par=n_par, n_perp=n_perp, half_size_px=half_size_px,
+                perp_probe_px=perp_probe_px, interp_order=interp_order,
+            )
+        except ValueError as e:
+            print(f"  plot_rod_qspace_warp: skipping layer {ly!r} — {e}")
+            continue
+        results.append(
+            {"layer": info["layer"], "warped": warped, "q_par_ax": q_par_ax, "q_perp_ax": q_perp_ax, "info": info}
+        )
+    if not results:
+        raise ValueError(f"hkl={tuple(int(x) for x in hkl)} could not be warped for any of the requested layers")
 
-    ax.set_xlabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
-    ax.set_ylabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
-    ax.set_title(
-        f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV",
-        color=FG, fontsize=9, pad=6,
-    )
+    multi = len(results) > 1  # a requested layer may have been skipped, revisit after the fact
+    n_img_panels = len(results)
+
+    if n_img_panels == 1 and not show_profile and ax is not None:
+        fig = ax.figure
+        img_axes = [ax]
+        ax_profile = None
+    else:
+        n_cols = n_img_panels + (1 if show_profile else 0)
+        fig, axes_arr = plt.subplots(
+            1, n_cols, figsize=(figsize[0] * n_cols, figsize[1]), facecolor=BG,
+        )
+        axes_arr = np.atleast_1d(axes_arr)
+        img_axes = list(axes_arr[:n_img_panels])
+        ax_profile = axes_arr[-1] if show_profile else None
+        profile_top = max(0.8 - 0.05 * (len(results) - 1), 0.6)
+        fig.subplots_adjust(wspace=0.4, top=profile_top if show_profile else 0.9)
+
+    for idx, (ax_i, res) in enumerate(zip(img_axes, results)):
+        warped, q_par_ax, q_perp_ax, info = res["warped"], res["q_par_ax"], res["q_perp_ax"], res["info"]
+        color = _ROD_TANGENCY_PALETTE[idx % len(_ROD_TANGENCY_PALETTE)] if multi else COL_SUP
+
+        _ax_style(ax_i, "")
+
+        display = np.where(np.isnan(warped), 0.0, warped)
+        if log_scale and display.max() > 0:
+            display = np.log1p(display / display.max() * 1000.0)
+        display[np.isnan(warped)] = np.nan
+        display = display.T  # (n_perp, n_par) -> (n_par, n_perp): rows=q_par, cols=q_perp
+
+        extent = [q_perp_ax[0], q_perp_ax[-1], q_par_ax[0], q_par_ax[-1]]
+        im = ax_i.imshow(
+            display, origin="lower", aspect="auto", extent=extent,
+            cmap=cmap, interpolation="nearest",
+        )
+        cb = fig.colorbar(im, ax=ax_i, pad=0.02, fraction=0.045)
+        cb.set_label("log intensity" if log_scale else "intensity", color=FG, fontsize=8)
+        cb.ax.tick_params(colors="#7788aa", labelsize=7)
+
+        ax_i.plot(0.0, 0.0, "+", color=FG, ms=10, mew=1.4, zorder=5)
+        ax_i.annotate(
+            "G0", (0.0, 0.0), xytext=(8, 8),
+            textcoords="offset points", color=FG, fontsize=7, zorder=6,
+        )
+
+        sat_info = None
+        if max_satellites > 0:
+            sat_info = rod_tangency(
+                stack, hkl, layer=info["layer"], camera=camera, ki_hat=ki_hat,
+                max_satellites=max_satellites,
+            )
+            for m, sat in sat_info["satellites"].items():
+                if sat["pix"] is None or not sat["on_detector"]:
+                    continue
+                q_m = sat["along"]
+                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                    ax_i.plot(0.0, q_m, "o", color=color, ms=6, mec=BG, mew=0.6, zorder=4)
+                    ax_i.annotate(
+                        "SL0" if m == 0 else f"{m:+d}", (0.0, q_m), xytext=(8, 0),
+                        textcoords="offset points", color=color, fontsize=7, va="center", zorder=6,
+                    )
+        res["sat_info"] = sat_info
+
+        if show_relaxed_buffer:
+            if not stack.buffer_layers:
+                print("  plot_rod_qspace_warp: show_relaxed_buffer skipped — stack has no buffer layers")
+            elif stack.buffer_layers[-1].label == info["layer"]:
+                print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
+                      f"{info['layer']!r} is already the plotted layer")
+            else:
+                buf_layer = stack.buffer_layers[-1]
+                try:
+                    buf_info = rod_tangency(stack, hkl, layer=buf_layer, camera=camera, ki_hat=ki_hat)
+                except ValueError as e:
+                    buf_info = None
+                    print(f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — {e}")
+                if buf_info is not None and not buf_info["on_detector"]:
+                    print(
+                        f"  plot_rod_qspace_warp: show_relaxed_buffer skipped — "
+                        f"hkl={buf_info['hkl']} is off-detector for buffer layer {buf_info['layer']!r}"
+                    )
+                elif buf_info is not None:
+                    h, k, l = info["hkl"]
+                    G0_buf = buf_layer.U @ buf_layer.crystal.Q(h, k, l)
+                    dQ = G0_buf - info["G0"]
+                    q_par_buf = float(np.dot(dQ, info["n_hat"]))
+                    q_perp_buf = float(np.dot(dQ, info["perp_hat"]))
+                    ax_i.plot(
+                        q_perp_buf, q_par_buf, "D", color="#9ca3af", ms=8, mfc="none", mew=1.6, zorder=6,
+                        label=f"relaxed buffer ({buf_info['layer']})",
+                    )
+                    leg = ax_i.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+                    leg.get_frame().set_alpha(0.85)
+
+        ax_i.set_xlabel("q_perp  (Å⁻¹)", color=FG, fontsize=8)
+        ax_i.set_ylabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+        title = f"hkl={info['hkl']}  ({info['layer']})  E0={info['E0']:.0f} eV"
+        if multi:
+            title += f"  |{info['dpix_dalong']:.1e} px/Å⁻¹"
+        ax_i.set_title(title, color=FG, fontsize=9, pad=6)
 
     if show_profile:
-        iperp0 = int(np.argmin(np.abs(q_perp_ax)))
-        lo = max(iperp0 - profile_halfwidth_bins, 0)
-        hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
-        profile = np.nansum(warped[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
-
         _ax_style(ax_profile, "")
-        ax_profile.plot(
-            q_par_ax, profile, "-", color=COL_SUP, lw=1.3,
-            label="measured (± " + f"{profile_halfwidth_bins} bins lateral)",
-        )
+        for idx, res in enumerate(results):
+            warped, q_par_ax, q_perp_ax = res["warped"], res["q_par_ax"], res["q_perp_ax"]
+            color = _ROD_TANGENCY_PALETTE[idx % len(_ROD_TANGENCY_PALETTE)] if multi else COL_SUP
+
+            iperp0 = int(np.argmin(np.abs(q_perp_ax)))
+            lo = max(iperp0 - profile_halfwidth_bins, 0)
+            hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
+            profile = np.nansum(warped[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
+
+            plabel = res["layer"] if multi else "measured (± " + f"{profile_halfwidth_bins} bins lateral)"
+            ax_profile.plot(q_par_ax, profile, "-", color=color, lw=1.3, label=plabel)
+
+            sat_info = res.get("sat_info")
+            if sat_info is not None:
+                for m, sat in sat_info["satellites"].items():
+                    if sat["pix"] is None or not sat["on_detector"]:
+                        continue
+                    q_m = sat["along"]
+                    if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                        ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
+                        ax_profile.text(
+                            q_m, 1.02 + 0.06 * idx, "SL0" if m == 0 else f"{m:+d}",
+                            transform=ax_profile.get_xaxis_transform(),
+                            color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
+                        )
+
         ax_profile.set_yscale("log")
         ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
         ax_profile.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
         ax_profile.set_ylabel(
             f"intensity  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
         )
-
-        if sat_info is not None:
-            for m, sat in sat_info["satellites"].items():
-                if sat["pix"] is None or not sat["on_detector"]:
-                    continue
-                q_m = sat["along"]
-                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
-                    ax_profile.axvline(q_m, color=COL_SUP, lw=0.8, ls=":", alpha=0.6)
-                    ax_profile.text(
-                        q_m, 1.02, "SL0" if m == 0 else f"{m:+d}",
-                        transform=ax_profile.get_xaxis_transform(),
-                        color=COL_SUP, fontsize=7, ha="center", va="bottom", clip_on=False,
-                    )
-
         leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
         leg_p.get_frame().set_alpha(0.85)
-        ax_profile.set_title("Warped intensity along q_parallel", color=FG, fontsize=9, pad=20)
+        ax_profile.set_title(
+            "Warped intensity along q_parallel", color=FG, fontsize=9, pad=20 + 12 * (len(results) - 1)
+        )
+
+    for res in results:
+        res.pop("sat_info", None)
 
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         print(f"  Saved → {out_path}")
 
-    if show_profile:
-        return fig, (ax, ax_profile), warped, q_par_ax, q_perp_ax, info
-    return fig, ax, warped, q_par_ax, q_perp_ax, info
+    if not multi:
+        r0 = results[0]
+        if show_profile:
+            return fig, (img_axes[0], ax_profile), r0["warped"], r0["q_par_ax"], r0["q_perp_ax"], r0["info"]
+        return fig, img_axes[0], r0["warped"], r0["q_par_ax"], r0["q_perp_ax"], r0["info"]
+
+    axes_ret = (img_axes, ax_profile) if show_profile else img_axes
+    return fig, axes_ret, results
 
 
 def plot_tth_chi_overlay(

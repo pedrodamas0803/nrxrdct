@@ -3364,6 +3364,7 @@ def plot_rod_qspace_warp(
     show_relaxed_buffer: bool = False,
     show_profile: bool = False,
     profile_halfwidth_bins: int = 3,
+    ncols: int = 3,
     log_scale: bool = True,
     cmap: str = "inferno",
     ax=None,
@@ -3398,11 +3399,15 @@ def plot_rod_qspace_warp(
     (unlike `plot_rod_tangency`): each layer's own `(q_par, q_perp)` frame
     is anchored to its *own* `G0`/`n̂`/`ê⊥` (generally at a different pixel,
     energy, and even tangency direction), so instead one panel per layer is
-    drawn side by side, in a figure that scales with the number of layers
-    plotted (`figsize` is treated as the size of *one* panel, not the whole
-    figure — the actual figure is `n_cols * figsize[0]` wide). Layers that
-    are unreachable or fall entirely off-detector are skipped with a
-    printed note, same as `plot_rod_tangency`.
+    drawn in a small-multiples grid — same `ncols` idea as
+    `plot_rod_tangency_blocks`/`plot_rod_tangency_harmonics` — that wraps to
+    a new row after `ncols` panels, in a figure that scales with the number
+    of rows/columns actually used (`figsize` is treated as the size of *one*
+    panel, not the whole figure). The shared profile panel, if
+    `show_profile=True`, occupies one more grid slot at the end (after every
+    image panel), not a separate row of its own. Layers that are
+    unreachable or fall entirely off-detector are skipped with a printed
+    note, same as `plot_rod_tangency`.
 
     A crosshair marks each panel's own `G0` (`q_par=q_perp=0` by
     construction, always labelled `G0`). With `max_satellites > 0`, the
@@ -3454,22 +3459,33 @@ def plot_rod_qspace_warp(
             printed note) if the stack has no buffer layers, the buffer
             layer is the one being plotted, or its own `hkl` is
             unreachable/off-detector.
-        show_profile (bool): Add one shared axis with the intensity along
-            `q_parallel`, integrated over `±profile_halfwidth_bins` grid
-            columns around `q_perp=0` — the same kind of 1-D line profile
-            `plot_rod_tangency`'s own `show_profile` adds, except read
-            directly off the already-computed warp instead of re-sampling
-            the raw image (no separate lateral-integration pass needed,
-            since the warp *is* already gridded in physical `q` units).
-            The y-axis (intensity) is log-scaled, same reasoning as
-            `plot_rod_tangency`: weak far orders stay visible alongside
-            the main peak. Satellite orders are labelled the same way as
-            the main axis (`SL0`, `±N`) when `max_satellites > 0`.
-            Requires `ax=None` (a fresh figure is always created).
+        show_profile (bool): Add, for every panel, a paired axis with the
+            intensity along `q_parallel`, integrated over
+            `±profile_halfwidth_bins` grid columns around `q_perp=0` — the
+            same kind of 1-D line profile `plot_rod_tangency`'s own
+            `show_profile` adds, except read directly off the
+            already-computed warp instead of re-sampling the raw image (no
+            separate lateral-integration pass needed, since the warp *is*
+            already gridded in physical `q` units). The y-axis (intensity)
+            is log-scaled, same reasoning as `plot_rod_tangency`: weak far
+            orders stay visible alongside the main peak. For a single
+            layer, the profile is a spacious axis of its own with full
+            `SL0`/`±N` satellite labels and a legend, same as before; for
+            multiple layers/blocks, each panel gets its own *compact*
+            profile beside it (small ticks on the right, satellite orders
+            as dotted lines only, no text labels/legend) — a single shared
+            profile axis across several layers/blocks becomes a tangle of
+            overlapping lines and stacked labels fast, so each one gets its
+            own instead. Requires `ax=None` (a fresh figure is always
+            created).
         profile_halfwidth_bins (int): Lateral integration half-width, in
             `q_perp` **grid columns** (not Å⁻¹) — e.g. `3` sums 7 columns
             (`-3, ..., +3`) around the column nearest `q_perp=0`. Unused
             unless `show_profile=True`.
+        ncols (int): For multiple layers/blocks only — panel columns before
+            wrapping to a new row, same idea as `plot_rod_tangency_blocks`/
+            `plot_rod_tangency_harmonics`'s own `ncols`. Unused for a
+            single layer (always one row).
         log_scale (bool): Apply `log1p` scaling to the warped image before
             display.
         cmap (str): Matplotlib colormap.
@@ -3490,8 +3506,10 @@ def plot_rod_qspace_warp(
 
         Multiple layers (list or `'all'`, however many actually succeed):
         `(fig, axes, results)`, where `axes` is `img_axes` (a list, one
-        per plotted layer) or `(img_axes, ax_profile)` when
-        `show_profile=True`, and `results` is a list of
+        per plotted layer) when `show_profile=False`, or
+        `(img_axes, profile_axes)` — two parallel lists, one profile axis
+        per image axis, in the same order — when `show_profile=True`.
+        `results` is a list of
         `{'layer', 'warped', 'q_par_ax', 'q_perp_ax', 'info'}` dicts, one
         per plotted layer, in the same order as `axes`/`img_axes`.
     """
@@ -3536,17 +3554,46 @@ def plot_rod_qspace_warp(
     if n_img_panels == 1 and not show_profile and ax is not None:
         fig = ax.figure
         img_axes = [ax]
-        ax_profile = None
+        profile_axes = [None]
+    elif n_img_panels == 1:
+        # Single layer: spacious side-by-side (image, profile), exactly as before.
+        if show_profile:
+            fig = plt.figure(figsize=figsize, facecolor=BG)
+            gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3, top=0.8)
+            img_axes = [fig.add_subplot(gs[0, 0])]
+            profile_axes = [fig.add_subplot(gs[0, 1])]
+        else:
+            fig, ax0 = plt.subplots(figsize=figsize, facecolor=BG)
+            img_axes = [ax0]
+            profile_axes = [None]
     else:
-        n_cols = n_img_panels + (1 if show_profile else 0)
-        fig, axes_arr = plt.subplots(
-            1, n_cols, figsize=(figsize[0] * n_cols, figsize[1]), facecolor=BG,
-        )
-        axes_arr = np.atleast_1d(axes_arr)
-        img_axes = list(axes_arr[:n_img_panels])
-        ax_profile = axes_arr[-1] if show_profile else None
-        profile_top = max(0.8 - 0.05 * (len(results) - 1), 0.6)
-        fig.subplots_adjust(wspace=0.4, top=profile_top if show_profile else 0.9)
+        # Multiple layers/blocks: small-multiples grid, wrapped after `ncols`
+        # panels, each optionally paired with its own compact profile axis --
+        # a single shared profile axis across many layers/blocks turns into a
+        # tangle of overlapping lines and stacked labels, so each layer gets
+        # its own instead (same idea as plot_rod_tangency_blocks's per-panel
+        # image+profile pairing).
+        ncols_eff = max(1, min(ncols, n_img_panels))
+        nrows = int(np.ceil(n_img_panels / ncols_eff))
+        if show_profile:
+            fig = plt.figure(figsize=(figsize[0] * 1.7 * ncols_eff, figsize[1] * nrows), facecolor=BG)
+            outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.45, top=0.88)
+        else:
+            fig = plt.figure(figsize=(figsize[0] * ncols_eff, figsize[1] * nrows), facecolor=BG)
+            outer_gs = mgridspec.GridSpec(nrows, ncols_eff, figure=fig, hspace=0.55, wspace=0.35, top=0.9)
+
+        img_axes, profile_axes = [], []
+        for idx in range(n_img_panels):
+            row, col = divmod(idx, ncols_eff)
+            if show_profile:
+                inner_gs = mgridspec.GridSpecFromSubplotSpec(
+                    1, 2, subplot_spec=outer_gs[row, col], width_ratios=[1.3, 1], wspace=0.12,
+                )
+                img_axes.append(fig.add_subplot(inner_gs[0, 0]))
+                profile_axes.append(fig.add_subplot(inner_gs[0, 1]))
+            else:
+                img_axes.append(fig.add_subplot(outer_gs[row, col]))
+                profile_axes.append(None)
 
     for idx, (ax_i, res) in enumerate(zip(img_axes, results)):
         warped, q_par_ax, q_perp_ax, info = res["warped"], res["q_par_ax"], res["q_perp_ax"], res["info"]
@@ -3591,7 +3638,6 @@ def plot_rod_qspace_warp(
                         "SL0" if m == 0 else f"{m:+d}", (0.0, q_m), xytext=(8, 0),
                         textcoords="offset points", color=color, fontsize=7, va="center", zorder=6,
                     )
-        res["sat_info"] = sat_info
 
         if show_relaxed_buffer:
             if not stack.buffer_layers:
@@ -3631,48 +3677,58 @@ def plot_rod_qspace_warp(
             title += f"  |{info['dpix_dalong']:.1e} px/Å⁻¹"
         ax_i.set_title(title, color=FG, fontsize=9, pad=6)
 
-    if show_profile:
-        _ax_style(ax_profile, "")
-        for idx, res in enumerate(results):
-            warped, q_par_ax, q_perp_ax = res["warped"], res["q_par_ax"], res["q_perp_ax"]
-            color = _ROD_TANGENCY_PALETTE[idx % len(_ROD_TANGENCY_PALETTE)] if multi else COL_SUP
-
+        ax_p = profile_axes[idx]
+        if ax_p is not None:
             iperp0 = int(np.argmin(np.abs(q_perp_ax)))
             lo = max(iperp0 - profile_halfwidth_bins, 0)
             hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
             profile = np.nansum(warped[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
 
-            plabel = res["layer"] if multi else "measured (± " + f"{profile_halfwidth_bins} bins lateral)"
-            ax_profile.plot(q_par_ax, profile, "-", color=color, lw=1.3, label=plabel)
-
-            sat_info = res.get("sat_info")
-            if sat_info is not None:
-                for m, sat in sat_info["satellites"].items():
-                    if sat["pix"] is None or not sat["on_detector"]:
-                        continue
-                    q_m = sat["along"]
-                    if q_par_ax[0] <= q_m <= q_par_ax[-1]:
-                        ax_profile.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
-                        ax_profile.text(
-                            q_m, 1.02 + 0.06 * idx, "SL0" if m == 0 else f"{m:+d}",
-                            transform=ax_profile.get_xaxis_transform(),
-                            color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
-                        )
-
-        ax_profile.set_yscale("log")
-        ax_profile.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
-        ax_profile.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
-        ax_profile.set_ylabel(
-            f"intensity  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
-        )
-        leg_p = ax_profile.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
-        leg_p.get_frame().set_alpha(0.85)
-        ax_profile.set_title(
-            "Warped intensity along q_parallel", color=FG, fontsize=9, pad=20 + 12 * (len(results) - 1)
-        )
-
-    for res in results:
-        res.pop("sat_info", None)
+            _ax_style(ax_p, "")
+            ax_p.axvline(0.0, color=FG, lw=0.8 if not multi else 0.6, alpha=0.4)
+            if not multi:
+                # Single layer: spacious, fully-labelled profile, as before.
+                ax_p.plot(
+                    q_par_ax, profile, "-", color=color, lw=1.3,
+                    label="measured (± " + f"{profile_halfwidth_bins} bins lateral)",
+                )
+                ax_p.set_yscale("log")
+                ax_p.set_xlabel("q_parallel  (Å⁻¹)", color=FG, fontsize=8)
+                ax_p.set_ylabel(
+                    f"intensity  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
+                )
+                if sat_info is not None:
+                    for m, sat in sat_info["satellites"].items():
+                        if sat["pix"] is None or not sat["on_detector"]:
+                            continue
+                        q_m = sat["along"]
+                        if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                            ax_p.axvline(q_m, color=color, lw=0.8, ls=":", alpha=0.6)
+                            ax_p.text(
+                                q_m, 1.02, "SL0" if m == 0 else f"{m:+d}",
+                                transform=ax_p.get_xaxis_transform(),
+                                color=color, fontsize=7, ha="center", va="bottom", clip_on=False,
+                            )
+                leg_p = ax_p.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+                leg_p.get_frame().set_alpha(0.85)
+                ax_p.set_title("Warped intensity along q_parallel", color=FG, fontsize=9, pad=20)
+            else:
+                # Several layers/blocks: compact per-panel profile, no per-satellite
+                # text labels (dotted lines only) and no legend, since colour +
+                # the paired image panel's own title already identify it -- text
+                # labels here are exactly what got "messy" with one shared axis.
+                ax_p.plot(q_par_ax, profile, "-", color=color, lw=1.1)
+                ax_p.set_yscale("log")
+                ax_p.tick_params(labelsize=6)
+                ax_p.set_xlabel("q_parallel (Å⁻¹)", color=FG, fontsize=6.5)
+                ax_p.yaxis.tick_right()
+                if sat_info is not None:
+                    for m, sat in sat_info["satellites"].items():
+                        if sat["pix"] is None or not sat["on_detector"]:
+                            continue
+                        q_m = sat["along"]
+                        if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                            ax_p.axvline(q_m, color=color, lw=0.6, ls=":", alpha=0.5)
 
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
@@ -3681,10 +3737,10 @@ def plot_rod_qspace_warp(
     if not multi:
         r0 = results[0]
         if show_profile:
-            return fig, (img_axes[0], ax_profile), r0["warped"], r0["q_par_ax"], r0["q_perp_ax"], r0["info"]
+            return fig, (img_axes[0], profile_axes[0]), r0["warped"], r0["q_par_ax"], r0["q_perp_ax"], r0["info"]
         return fig, img_axes[0], r0["warped"], r0["q_par_ax"], r0["q_perp_ax"], r0["info"]
 
-    axes_ret = (img_axes, ax_profile) if show_profile else img_axes
+    axes_ret = (img_axes, profile_axes) if show_profile else img_axes
     return fig, axes_ret, results
 
 

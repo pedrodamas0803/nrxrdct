@@ -3831,6 +3831,195 @@ def plot_rod_qspace_warp(
     return fig, axes_ret, results
 
 
+def plot_simulated_rod_qspace(
+    stack,
+    hkl,
+    energy_eV,
+    layer=None,
+    *,
+    camera=None,
+    ki_hat=None,
+    q_par_range=None,
+    q_perp_range=None,
+    n_par: int = 300,
+    n_perp: int = 300,
+    half_size_px: float = 40.0,
+    perp_probe_px: float = 5.0,
+    max_satellites: int = 0,
+    structure_model: str = "coherent",
+    show_profile: bool = False,
+    profile_halfwidth_bins: int = 3,
+    log_scale: bool = True,
+    cmap: str = "inferno",
+    ax=None,
+    figsize=(6.5, 5.5),
+    out_path=None,
+):
+    """
+    Display the `(q_parallel, q_perp)` simulated intensity map produced by
+    :func:`~nrxrdct.laue.simulation.simulate_rod_qspace` — the
+    simulation-only counterpart of :func:`plot_rod_qspace_warp`, which
+    instead displays a *measured* detector image warped onto the same
+    axes. Same axis convention (`q_parallel` vertical, `q_perp`
+    horizontal) and, when `camera` is given, the same `perp_hat` anchoring
+    as `warp_rod_to_qspace` — call both functions for the same
+    `hkl`/`layer`/`camera` (matching `q_par_range`/`q_perp_range`, e.g. by
+    passing the `info` from one call's `q_par_range=(q_par_ax[0],
+    q_par_ax[-1])` to the other) to compare simulation against measured
+    data on identical axes.
+
+    Unlike `plot_rod_qspace_warp`, this only ever handles a single layer
+    (matching :func:`~nrxrdct.laue.simulation.simulate_rod_qspace`'s own
+    interface) — call it once per layer/block for a side-by-side
+    comparison instead of the small-multiples grid `plot_rod_qspace_warp`
+    builds for `layer='all'`/a list.
+
+    With `max_satellites > 0`, the satellite comb is marked using
+    :func:`~nrxrdct.laue.simulation.rod_satellite_along_positions` — pure
+    Q-space geometry (same anchoring convention as `rod_tangency`'s own
+    `'satellites'`), so this works whether or not `camera` was given, and
+    markers are never filtered by on-detector status (there is no detector
+    notion in a fixed-energy structure-factor map).
+
+    Args:
+        stack, hkl, energy_eV, layer, camera, ki_hat, q_par_range,
+        q_perp_range, n_par, n_perp, half_size_px, perp_probe_px,
+        structure_model: Forwarded to
+            :func:`~nrxrdct.laue.simulation.simulate_rod_qspace`.
+        max_satellites (int): `0` (default) shows only the crosshair at `G0`. `N > 0` also marks
+            satellite orders `m = -N, ..., N` (see above).
+        show_profile (bool): Add a paired axis with the intensity along `q_parallel`, summed
+            over `±profile_halfwidth_bins` grid columns around `q_perp=0` —
+            same idea as `plot_rod_qspace_warp`'s own `show_profile`, read
+            directly off the already-computed simulated grid. Requires
+            `ax=None`.
+        profile_halfwidth_bins (int): Lateral summation half-width, in `q_perp` **grid columns**. Unused
+            unless `show_profile=True`.
+        log_scale (bool): Apply `log1p` scaling to the map before display.
+        cmap (str): Matplotlib colormap.
+        ax (matplotlib.axes.Axes, optional): Draw into an existing axes instead of creating a new figure. Only
+            valid when `show_profile=False`; raises otherwise.
+        figsize: Figure size (ignored if `ax` is given).
+        out_path (str or None): Save figure to this path if given.
+
+    Returns:
+        `show_profile=False` (default): `(fig, ax, F2, q_par_ax, q_perp_ax, info)`.
+        `show_profile=True`: `(fig, (ax, ax_profile), F2, q_par_ax, q_perp_ax, info)`.
+
+        `F2`, `q_par_ax`, `q_perp_ax`, `info` are exactly
+        :func:`~nrxrdct.laue.simulation.simulate_rod_qspace`'s own return
+        values.
+
+    Example:
+    >>> plot_simulated_rod_qspace(stack, (0, 0, 2), energy_eV=17000, camera=cam, max_satellites=3)
+    """
+    from .simulation import rod_satellite_along_positions, simulate_rod_qspace
+
+    if show_profile and ax is not None:
+        raise ValueError("show_profile=True always creates its own figure; pass ax=None")
+
+    F2, q_par_ax, q_perp_ax, info = simulate_rod_qspace(
+        stack, hkl, energy_eV, layer=layer, camera=camera, ki_hat=ki_hat,
+        q_par_range=q_par_range, q_perp_range=q_perp_range,
+        n_par=n_par, n_perp=n_perp, half_size_px=half_size_px,
+        perp_probe_px=perp_probe_px, max_satellites=max_satellites,
+        structure_model=structure_model, verbose=False,
+    )
+
+    standalone = ax is None
+    if standalone:
+        if show_profile:
+            fig = plt.figure(figsize=figsize, facecolor=BG)
+            gs = mgridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.3, top=0.8)
+            ax_i = fig.add_subplot(gs[0, 0])
+            ax_p = fig.add_subplot(gs[0, 1])
+        else:
+            fig, ax_i = plt.subplots(figsize=figsize, facecolor=BG)
+            ax_p = None
+    else:
+        fig = ax.figure
+        ax_i = ax
+        ax_p = None
+
+    _ax_style(ax_i, "")
+
+    display = F2.T  # (n_perp, n_par) -> (n_par, n_perp): rows=q_par, cols=q_perp
+    if log_scale and display.max() > 0:
+        display = np.log1p(display / display.max() * 1000.0)
+
+    extent = [q_perp_ax[0], q_perp_ax[-1], q_par_ax[0], q_par_ax[-1]]
+    im = ax_i.imshow(
+        display, origin="lower", aspect="auto", extent=extent,
+        cmap=cmap, interpolation="nearest",
+    )
+    cb = fig.colorbar(im, ax=ax_i, pad=0.02, fraction=0.045)
+    cb.set_label("log intensity" if log_scale else "|F|²", color=FG, fontsize=8)
+    cb.ax.tick_params(colors="#7788aa", labelsize=7)
+
+    ax_i.plot(0.0, 0.0, "+", color=FG, ms=10, mew=1.4, zorder=5)
+    ax_i.annotate(
+        "G0", (0.0, 0.0), xytext=(8, 8),
+        textcoords="offset points", color=FG, fontsize=7, zorder=6,
+    )
+
+    sat_along = None
+    if max_satellites > 0:
+        sat_along = rod_satellite_along_positions(
+            info["stack_flat"], info["layer_obj"], info["G0"], info["n_hat"], max_satellites
+        )
+        for m, q_m in sat_along.items():
+            if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                ax_i.plot(0.0, q_m, "o", color=COL_SUP, ms=6, mec=BG, mew=0.6, zorder=4)
+                ax_i.annotate(
+                    "SL0" if m == 0 else f"{m:+d}", (0.0, q_m), xytext=(8, 0),
+                    textcoords="offset points", color=COL_SUP, fontsize=7, va="center", zorder=6,
+                )
+
+    ax_i.set_xlabel(r"$q_\perp$  (Å⁻¹)", color=FG, fontsize=8)
+    ax_i.set_ylabel(r"$q_\parallel$  (Å⁻¹)", color=FG, fontsize=8)
+    ax_i.set_title(
+        f"simulated  hkl={info['hkl']}  ({info['layer']})  E={info['energy_eV']:.0f} eV",
+        color=FG, fontsize=9, pad=6,
+    )
+
+    if ax_p is not None:
+        iperp0 = int(np.argmin(np.abs(q_perp_ax)))
+        lo = max(iperp0 - profile_halfwidth_bins, 0)
+        hi = min(iperp0 + profile_halfwidth_bins + 1, len(q_perp_ax))
+        profile = np.sum(F2[lo:hi, :], axis=0)  # (n_perp, n_par) -> (n_par,)
+
+        _ax_style(ax_p, "")
+        ax_p.axvline(0.0, color=FG, lw=0.8, alpha=0.4)
+        ax_p.plot(q_par_ax, profile, "-", color=COL_SUP, lw=1.3, label="simulated")
+        ax_p.set_yscale("log")
+        ax_p.set_xlabel(r"$q_\parallel$  (Å⁻¹)", color=FG, fontsize=8)
+        ax_p.set_ylabel(
+            f"|F|²  (Σ over ±{profile_halfwidth_bins} bins lateral)", color=FG, fontsize=8
+        )
+        if sat_along is not None:
+            for m, q_m in sat_along.items():
+                if q_par_ax[0] <= q_m <= q_par_ax[-1]:
+                    ax_p.axvline(q_m, color=COL_SUP, lw=0.8, ls=":", alpha=0.6)
+                    ax_p.text(
+                        q_m, 1.02, "SL0" if m == 0 else f"{m:+d}",
+                        transform=ax_p.get_xaxis_transform(),
+                        color=COL_SUP, fontsize=7, ha="center", va="bottom", clip_on=False,
+                    )
+        leg = ax_p.legend(loc="upper right", fontsize=6.5, facecolor=BG, edgecolor="#333355", labelcolor=FG)
+        leg.get_frame().set_alpha(0.85)
+        ax_p.set_title(r"Simulated intensity along $q_\parallel$", color=FG, fontsize=9, pad=34)
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    _force_draw(fig)
+
+    if show_profile:
+        return fig, (ax_i, ax_p), F2, q_par_ax, q_perp_ax, info
+    return fig, ax_i, F2, q_par_ax, q_perp_ax, info
+
+
 def plot_tth_chi_overlay(
     image,
     camera,
@@ -6763,6 +6952,138 @@ def plot_qspace_around_spot(
             handles=legend_handles, fontsize=7, labelcolor=FG,
             facecolor="#1a1f2e", edgecolor="#333355", loc="upper left",
         )
+
+    if standalone:
+        fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Saved → {out_path}")
+
+    _force_draw(fig)
+    return fig, ax
+
+
+def plot_simulated_qspace_around_spot(
+    vol: dict,
+    *,
+    log_intensity: bool = True,
+    intensity_floor: float = 1e-6,
+    elev: float = 22.0,
+    azim: float = -60.0,
+    figsize: tuple[float, float] = (9, 8),
+    ax: "plt.Axes | None" = None,
+    out_path: "str | None" = None,
+):
+    """
+    Render the 3-D fixed-energy structure-factor volume returned by
+    :func:`~nrxrdct.laue.simulation.simulate_qspace_around_spot` — the
+    simulation-only counterpart of :func:`plot_qspace_around_spot`, which
+    instead shows the elastic-condition-filtered volume from
+    :func:`~nrxrdct.laue.simulation.qspace_around_spot`.
+
+    `plot_qspace_around_spot` has to distinguish *why* a voxel fails to
+    reach the detector — destructive interference (`I` near zero), outside
+    the accessible energy window, or reachable but off-detector — since
+    those are three physically distinct fates for a real white-beam
+    exposure. None of that applies here: `vol['F2']` was evaluated at one
+    fixed energy for the *entire* grid with no elastic-condition/camera
+    filtering (see `simulate_qspace_around_spot`'s docstring), so every
+    voxel already has a well-defined value. There is accordingly no energy
+    window surface and no filled/hollow on-detector distinction to draw —
+    every point gets one filled marker, coloured/sized purely by `F2`. The
+    warm colour ramp and marker-size-by-intensity convention otherwise
+    match `plot_qspace_around_spot` exactly, so the two read as the same
+    kind of picture.
+
+    Args:
+        vol: Return value of
+            :func:`~nrxrdct.laue.simulation.simulate_qspace_around_spot`.
+        log_intensity: Colour/size by `log10(F2 / F2_max + floor)` instead
+            of the raw ratio. `True` by default — structure-factor
+            intensities span many orders of magnitude near a fringe
+            minimum.
+        intensity_floor: Added (as a fraction of the volume's max
+            intensity) before taking the log, so exact zeros stay finite.
+        elev, azim: 3-D view angle (degrees), forwarded to `Axes3D.view_init`.
+        figsize: Figure size in inches (only used when `ax is None`).
+        ax: Draw into an existing 3-D :class:`~matplotlib.axes.Axes`
+            (created with `projection='3d'`); `None` creates a new figure.
+        out_path: Save path; `None` → do not save.
+
+    Returns:
+        `(fig, ax)`
+
+    Example:
+    >>> vol = simulate_qspace_around_spot(stack, (0, 0, 2), energy_eV=17000)
+    >>> plot_simulated_qspace_around_spot(vol, out_path="sim_qspace_002.png")
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
+
+    along = np.asarray(vol["along"])
+    lat1 = np.asarray(vol["lateral1"])
+    lat2 = np.asarray(vol["lateral2"])
+    F2 = vol["F2"]
+
+    AA, T1, T2 = np.meshgrid(along, lat1, lat2, indexing="ij")
+
+    # ── colour / size by intensity ────────────────────────────────────────────
+    F2max = float(F2.max()) if F2.size and F2.max() > 0 else 1.0
+    if log_intensity:
+        val = np.log10(F2 / F2max + intensity_floor)
+        vmin, vmax = np.log10(intensity_floor), 0.0
+    else:
+        val = F2 / F2max
+        vmin, vmax = 0.0, 1.0
+
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "qvol_warm", [_QVOL_LOW, _QVOL_MID, _QVOL_HIGH]
+    )
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+    frac = np.clip((val - vmin) / max(vmax - vmin, 1e-12), 0.0, 1.0)
+    sizes = 3.0 + 40.0 * frac ** 1.5
+
+    # ── set up axes ────────────────────────────────────────────────────────────
+    standalone = ax is None
+    if standalone:
+        fig = plt.figure(figsize=figsize)
+        fig.patch.set_facecolor(BG)
+        ax = fig.add_subplot(111, projection="3d")
+    else:
+        fig = ax.figure
+
+    ax.set_facecolor(BG)
+    fig.patch.set_facecolor(BG)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.set_pane_color((0.03, 0.05, 0.08, 1.0))
+        pane._axinfo["grid"]["color"] = (0.1, 0.12, 0.18, 0.6)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+
+    sc = ax.scatter(
+        AA.ravel(), T1.ravel(), T2.ravel(),
+        c=val.ravel(), cmap=cmap, norm=norm,
+        s=sizes.ravel(), marker="o", linewidths=0, alpha=0.9, depthshade=True,
+    )
+
+    # ── labels / colorbar ──────────────────────────────────────────────────────
+    hkl = vol.get("hkl")
+    layer_label = vol.get("layer")
+    energy_eV = vol.get("energy_eV")
+    ax.set_xlabel("ΔQ ∥ n̂  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_ylabel("ΔQ transverse 1  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_zlabel("ΔQ transverse 2  (Å⁻¹)", color=FG, fontsize=8, labelpad=8)
+    ax.set_title(
+        f"Simulated Q-space intensity around hkl={hkl}  (layer '{layer_label}')  E={energy_eV:.0f} eV",
+        color=FG, fontsize=10, pad=10,
+    )
+    ax.view_init(elev=elev, azim=azim)
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+    cbar.set_label("log₁₀ |F|² / |F|²_max" if log_intensity else "|F|² / |F|²_max", color=FG, fontsize=8)
+    cbar.ax.yaxis.set_tick_params(color="#7788aa", labelsize=7)
+    plt.setp(cbar.ax.get_yticklabels(), color=FG)
+    cbar.outline.set_edgecolor("#333355")
 
     if standalone:
         fig.tight_layout()

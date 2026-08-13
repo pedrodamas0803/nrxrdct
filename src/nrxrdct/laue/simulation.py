@@ -3462,6 +3462,488 @@ def qspace_around_spot(
     }
 
 
+def simulate_qspace_around_spot(
+    stack,
+    hkl,
+    energy_eV,
+    layer=None,
+    *,
+    n_along=301,
+    n_lateral=7,
+    extent_along=None,
+    extent_lateral=None,
+    max_satellites=6,
+    pin_satellites=True,
+    structure_model="coherent",
+    verbose=True,
+):
+    """
+    Simulated `|F_stack(Q)|²` on a 3-D grid around one Bragg spot, evaluated
+    at a single **fixed** photon energy — the fixed-energy counterpart of
+    :func:`qspace_around_spot`.
+
+    `qspace_around_spot` solves the exact elastic (Ewald-sphere) condition
+    at every voxel, so `E` varies continuously across the grid and only the
+    subset of voxels that are actually reachable by *some* white-beam photon
+    carries nonzero intensity — the physically correct picture for a real
+    energy-dispersive Laue exposure. This function instead asks a simpler
+    question: "what does the coherent structure factor of this stack look
+    like across Q-space near `G0`, if I evaluate it at one chosen energy?"
+    Every voxel gets a value regardless of whether it sits on the Ewald
+    sphere for `energy_eV` — most of them physically wouldn't, since a
+    single fixed energy only intersects Q-space on a 2-D sphere shell, not
+    a 3-D volume. What's returned is therefore the bare kinematical
+    structure-factor landscape (rod shape, thickness fringes, superlattice
+    satellites) as a function of Q alone, decoupled from any specific
+    diffraction geometry — no Lorentz-polarization factor, no camera, no
+    reachability filtering. Use :func:`qspace_around_spot` instead when you
+    need the physically-realizable intensity a detector would actually
+    record.
+
+    Grid geometry, extent auto-scaling, and satellite pinning are identical
+    to :func:`qspace_around_spot` (see that function's docstring) — this
+    function reuses the same `(n_hat, t1, t2)` local frame and `along`
+    pinning logic, just without the elastic-condition/camera machinery.
+
+    Args:
+        stack : LayeredCrystal
+        hkl : (int, int, int)
+            Miller indices of the reference reflection, in `layer.crystal`'s
+            lattice.
+        energy_eV (float): Fixed photon energy (eV) the structure factor is evaluated
+            at for every voxel (via `Layer.structure_factor_batch` →
+            `StructureFactorForQ`, same one-batched-call-per-layer path
+            `qspace_around_spot` uses for its own `energy_ref_eV`).
+        layer : Layer, str, or None, optional
+            Which layer's `(crystal, U, n_hat)` defines `G0` and the rod
+            axis. Same resolution rule as `qspace_around_spot` (`None` ->
+            `stack.layers[0]`).
+        n_along, n_lateral, extent_along, extent_lateral, max_satellites,
+        pin_satellites : Same meaning as in `qspace_around_spot`.
+        structure_model ({'coherent', 'average'}, optional): `'coherent'` (default) evaluates the full layer-by-layer coherent
+            stack structure factor. `'average'` uses the composition-weighted
+            average structure factor instead (satellite positions identical,
+            intensities differ) — same choice as `qspace_around_spot`.
+        verbose (bool, optional): Print a short summary (grid shape, energy, `|F|²` range) after
+            evaluation.
+
+    Returns:
+        dict with keys `'hkl'`, `'layer'`, `'energy_eV'`, `'G0'`, `'axes'`
+        (`{'n_hat', 't1', 't2'}`), `'along'`, `'lateral1'`, `'lateral2'`,
+        `'Q'` (shape `(n_along, n_lateral, n_lateral, 3)`), and `'F2'`
+        (`|F_stack(Q, energy_eV)|²`, same shape as `Q` minus the last axis)
+        — the same grid/axis conventions as `qspace_around_spot`, minus the
+        elastic-condition-only fields (`'I'`, `'E'`, `'reachable'`, `'pix'`,
+        `'on_detector'`).
+
+    Example:
+    >>> vol = simulate_qspace_around_spot(stack, (0, 0, 2), energy_eV=17000)
+    >>> vol['F2'][:, vol['F2'].shape[1] // 2, vol['F2'].shape[2] // 2]  # rod profile
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if structure_model not in ("coherent", "average"):
+        raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
+
+    stack._update_offsets()
+    _sat_periods = [
+        blk._period for blk in getattr(stack, "_blocks", [])
+        if blk.n_rep >= 2 and blk._period > 1e-6
+    ]
+    stack = _flatten_if_multiblock(stack)
+    stack._update_offsets()
+
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        layer = stack.layers[0]
+    elif isinstance(layer, str):
+        match = next((l for l in stack.all_layers if l.label == layer), None)
+        if match is None:
+            available = [l.label for l in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+        layer = match
+
+    h, k, l = (int(x) for x in hkl)
+    G0 = layer.U @ layer.crystal.Q(h, k, l)
+    n_hat = np.asarray(layer.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    tmp = np.array([1.0, 0.0, 0.0]) if abs(n_hat[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e_t1 = tmp - n_hat * np.dot(tmp, n_hat)
+    e_t1 /= np.linalg.norm(e_t1)
+    e_t2 = np.cross(n_hat, e_t1)
+
+    if extent_along is None:
+        t_period = stack.bilayer_thickness if stack.n_rep > 1 else layer.thickness
+        q_fringe = (2.0 * np.pi / t_period) if t_period > 1e-6 else 0.01 * float(np.linalg.norm(G0))
+        extent_along = (max_satellites + 0.5) * q_fringe
+    if extent_lateral is None:
+        extent_lateral = 0.05 * extent_along
+
+    along_vals = np.linspace(-extent_along, extent_along, n_along)
+
+    _pinned_sat_along = []
+    if pin_satellites and _sat_periods:
+        Gn = float(G0 @ stack.n_hat)
+        for Lambda in _sat_periods:
+            m_center = int(round(Gn * Lambda / (2.0 * np.pi)))
+            sat_pts = []
+            for m in range(m_center - max_satellites - 1, m_center + max_satellites + 2):
+                a = 2.0 * np.pi * m / Lambda - Gn
+                if -extent_along <= a <= extent_along:
+                    sat_pts.append(a)
+            if sat_pts:
+                along_vals = np.unique(np.concatenate([along_vals, np.array(sat_pts)]))
+                _pinned_sat_along.extend(sat_pts)
+    elif pin_satellites and not _sat_periods and verbose:
+        print(
+            f"  simulate_qspace_around_spot: pin_satellites=True but no blocks with "
+            f"n_rep≥2 found in stack — check stack.blocks"
+        )
+
+    t1_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
+    t2_vals = np.linspace(-extent_lateral, extent_lateral, n_lateral) if n_lateral > 1 else np.array([0.0])
+
+    AA, T1, T2 = np.meshgrid(along_vals, t1_vals, t2_vals, indexing="ij")
+    shape = AA.shape
+    Q_grid = (
+        G0[None, None, None, :]
+        + AA[..., None] * n_hat
+        + T1[..., None] * e_t1
+        + T2[..., None] * e_t2
+    )
+    Q_flat = Q_grid.reshape(-1, 3)
+
+    batch_fn = (
+        stack.average_structure_factor_batch
+        if structure_model == "average"
+        else stack.structure_factor_batch
+    )
+    F_flat = batch_fn(Q_flat, float(energy_eV))
+    F2_flat = np.abs(F_flat) ** 2
+
+    if verbose:
+        sat_info = (
+            f"  pinned_sats={len(_pinned_sat_along)}" if _pinned_sat_along else
+            f"  pinned_sats=0(no blocks w/ n_rep≥2)" if (pin_satellites and not _sat_periods) else ""
+        )
+        print(
+            f"  simulate_qspace_around_spot: hkl={hkl}  layer='{layer.label}'  "
+            f"grid={shape}  E={float(energy_eV):.1f} eV  "
+            f"|F|²∈[{F2_flat.min():.3e}, {F2_flat.max():.3e}]" + sat_info
+        )
+
+    return {
+        "hkl": (h, k, l),
+        "layer": layer.label,
+        "energy_eV": float(energy_eV),
+        "G0": G0,
+        "axes": {"n_hat": n_hat, "t1": e_t1, "t2": e_t2},
+        "along": along_vals,
+        "lateral1": t1_vals,
+        "lateral2": t2_vals,
+        "Q": Q_grid,
+        "F2": F2_flat.reshape(shape),
+    }
+
+
+def simulate_rod_qspace(
+    stack,
+    hkl,
+    energy_eV,
+    layer=None,
+    *,
+    camera=None,
+    ki_hat=None,
+    q_par_range=None,
+    q_perp_range=None,
+    n_par=300,
+    n_perp=300,
+    half_size_px=40.0,
+    perp_probe_px=5.0,
+    max_satellites=6,
+    structure_model="coherent",
+    verbose=True,
+):
+    """
+    Simulated `|F_stack(Q)|²` on a 2-D `(q_parallel, q_perp)` grid around one
+    Bragg spot, evaluated at a single **fixed** photon energy — the
+    simulation-side counterpart of :func:`~nrxrdct.laue.laue_plotting.warp_rod_to_qspace`
+    (which instead resamples a *measured* detector image at the exact
+    per-voxel elastic-condition energy). Feed the result to
+    `nrxrdct.laue.laue_plotting.plot_rod_qspace_warp`-style display code, or
+    plot it directly with `imshow` — the return signature
+    `(F2, q_par_ax, q_perp_ax, info)` mirrors `warp_rod_to_qspace`'s
+    `(warped, q_par_ax, q_perp_ax, info)` so the two are drop-in comparable
+    on the same axes.
+
+    As in :func:`simulate_qspace_around_spot`, fixing the energy means most
+    grid points are not physically on the Ewald sphere for `energy_eV` —
+    this is the bare structure-factor landscape as a function of Q, not a
+    reconstruction of what a real energy-dispersive exposure would record
+    (no Lorentz-polarization factor, no reachability filtering).
+
+    Axis convention:
+        `q_parallel` is measured along `layer.n_hat` (the stacking
+        direction, `= layer_tangency`'s rod axis), `q_perp` along one
+        transverse direction. **`camera` given:** `q_perp` is chosen to
+        line up with `rod_tangency`'s own `perp_dir_px` at the nominal
+        energy — the *same* axis `warp_rod_to_qspace`/`plot_rod_qspace_warp`
+        use — so a simulated map can be directly overlaid on the warped
+        experimental one; the elastic condition is only solved here to
+        calibrate axis directions/auto-range, never to filter or weight the
+        simulated intensity itself. **`camera=None`:** `q_perp` falls back
+        to an arbitrary transverse direction (same convention as
+        `qspace_around_spot`'s `t1`), and the extent auto-scales from the
+        fringe period the same way `simulate_qspace_around_spot` does.
+
+    Args:
+        stack : LayeredCrystal
+        hkl : (int, int, int)
+            Miller indices of the reference reflection.
+        energy_eV (float): Fixed photon energy (eV) the structure factor is evaluated at.
+        layer : Layer, str, or None, optional
+            Which layer's `(crystal, U, n_hat)` to use. `None` (default)
+            uses `stack.layers[0]`.
+        camera : Camera or None, optional
+            Detector geometry, used only to anchor `q_perp`/the auto-ranged
+            extents to the same convention `warp_rod_to_qspace` uses — see
+            above. `None` skips all of that and uses an arbitrary transverse
+            axis with fringe-period-based auto-ranging.
+        ki_hat : array-like (3,) or None, optional
+            Incident beam direction (LT frame). Default `KI_HAT`. Only used
+            when `camera` is given (axis calibration).
+        q_par_range, q_perp_range ((float, float) or None, optional): Output range in Å⁻¹, `(min, max)`, centred on `G0`. `None`
+            auto-derives from `camera`'s pixel geometry (if given) or the
+            fringe period (if not) — see above.
+        n_par, n_perp (int, optional): Output grid size along each axis.
+        half_size_px (float, optional): Half-window (pixels) used to auto-derive the ranges when
+            `camera` is given and a range isn't. Unused otherwise.
+        perp_probe_px (float, optional): Pixel step used to bootstrap `q_perp`'s direction when `camera`
+            is given — same role as in `warp_rod_to_qspace`.
+        max_satellites (int, optional): Only used to size the default extent when `camera=None` — same
+            role as in `simulate_qspace_around_spot`/`qspace_around_spot`.
+        structure_model ({'coherent', 'average'}, optional): Same choice as `simulate_qspace_around_spot`.
+        verbose (bool, optional): Print a short summary after evaluation.
+
+    Returns:
+        F2 (ndarray, shape (n_perp, n_par)): `|F_stack(Q, energy_eV)|²` at every grid point.
+        q_par_ax (ndarray, shape (n_par,)): `q_parallel` values (Å⁻¹).
+        q_perp_ax (ndarray, shape (n_perp,)): `q_perp` values (Å⁻¹).
+        info (dict): `hkl`, `layer`, `energy_eV`, `G0`, `n_hat`, `perp_hat`, and
+            (only when `camera` was given) `pix0`, `dpix_dalong` — for axis
+            labelling/titling, matching `warp_rod_to_qspace`'s `info` keys
+            where they overlap. Also `layer_obj` (the resolved `Layer`
+            instance, not just its label) and `stack_flat` (the
+            already-flattened `stack` this function evaluated against,
+            i.e. `_flatten_if_multiblock(stack)`) — together these let a
+            caller (e.g. `plot_simulated_rod_qspace`) look up this exact
+            layer's owning block (for satellite-comb geometry via
+            `rod_satellite_along_positions`) without re-flattening the
+            stack itself, which for a genuinely multi-block stack would
+            produce different `Layer` objects than the ones this call
+            actually used.
+
+    Example:
+    >>> F2, qpar, qperp, info = simulate_rod_qspace(stack, (0, 0, 2), energy_eV=17000, camera=cam)
+    >>> plt.imshow(np.log1p(F2), extent=[qperp[0], qperp[-1], qpar[0], qpar[-1]], origin="lower")
+    """
+    if type(stack).__name__ != "LayeredCrystal":
+        raise TypeError(f"stack must be a LayeredCrystal, got {type(stack).__name__}")
+    if structure_model not in ("coherent", "average"):
+        raise ValueError(f"structure_model must be 'coherent' or 'average', got {structure_model!r}")
+
+    stack._update_offsets()
+    stack = _flatten_if_multiblock(stack)
+    stack._update_offsets()
+
+    if layer is None:
+        if not stack.layers:
+            raise ValueError("stack has no repeating/film layers; pass `layer` explicitly")
+        ly = stack.layers[0]
+    elif isinstance(layer, str):
+        ly = next((l for l in stack.all_layers if l.label == layer), None)
+        if ly is None:
+            available = [l.label for l in stack.all_layers]
+            raise ValueError(f"no layer labeled {layer!r}; available labels: {available}")
+    else:
+        ly = layer
+
+    h, k, l = (int(x) for x in hkl)
+    G0 = ly.U @ ly.crystal.Q(h, k, l)
+    n_hat = np.asarray(ly.n_hat, dtype=float)
+    n_hat = n_hat / np.linalg.norm(n_hat)
+
+    pix0 = None
+    dpix_dalong = None
+
+    if camera is not None:
+        info0 = rod_tangency(stack, hkl, layer=ly, camera=camera, ki_hat=ki_hat)
+        if not info0["on_detector"]:
+            raise ValueError(f"hkl={info0['hkl']} is off-detector for layer {info0['layer']!r}")
+
+        ki = np.asarray(ki_hat if ki_hat is not None else KI_HAT, dtype=float)
+        ki = ki / np.linalg.norm(ki)
+
+        def _solve(Q):
+            kdG = float(Q @ ki)
+            Gm2 = float(Q @ Q)
+            if kdG >= 0:
+                return None
+            lam = -4.0 * np.pi * kdG / Gm2
+            E = HC / lam
+            km = 2.0 * np.pi / lam
+            kf = ki * km + Q
+            kf /= np.linalg.norm(kf)
+            pix, on_det = camera.project_batch(kf[None, :])
+            return float(E), pix[0].copy(), bool(on_det[0])
+
+        px0, py0 = info0["pix0"]
+        perp_px = info0["perp_dir_px"]
+        kf_probe_hat = camera.pixel_to_kf(
+            np.array([px0 + perp_probe_px * perp_px[0]]),
+            np.array([py0 + perp_probe_px * perp_px[1]]),
+        )[0]
+        lam0 = HC / info0["E0"]
+        k0 = 2.0 * np.pi / lam0
+        Q_probe = k0 * (kf_probe_hat - ki)
+        dQ_perp = Q_probe - G0
+        dQ_perp -= np.dot(dQ_perp, n_hat) * n_hat
+        perp_hat = dQ_perp / np.linalg.norm(dQ_perp)
+
+        d_step = 1e-4
+        res_plus = _solve(G0 + d_step * perp_hat)
+        res_minus = _solve(G0 - d_step * perp_hat)
+        dpix_dperp = (
+            float(np.linalg.norm(res_plus[1] - res_minus[1]) / (2.0 * d_step))
+            if res_plus is not None and res_minus is not None
+            else None
+        )
+
+        pix0 = info0["pix0"]
+        dpix_dalong = info0["dpix_dalong"]
+
+        if q_par_range is None:
+            q_par_half = half_size_px / dpix_dalong
+            q_par_range = (-q_par_half, q_par_half)
+        if q_perp_range is None:
+            if dpix_dperp is None:
+                raise ValueError("could not evaluate d(pixel)/d(q_perp) near this reflection; pass q_perp_range explicitly")
+            q_perp_half = half_size_px / dpix_dperp
+            q_perp_range = (-q_perp_half, q_perp_half)
+    else:
+        tmp = np.array([1.0, 0.0, 0.0]) if abs(n_hat[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        perp_hat = tmp - n_hat * np.dot(tmp, n_hat)
+        perp_hat /= np.linalg.norm(perp_hat)
+
+        if q_par_range is None or q_perp_range is None:
+            t_period = stack.bilayer_thickness if stack.n_rep > 1 else ly.thickness
+            q_fringe = (2.0 * np.pi / t_period) if t_period > 1e-6 else 0.01 * float(np.linalg.norm(G0))
+            extent_along = (max_satellites + 0.5) * q_fringe
+            if q_par_range is None:
+                q_par_range = (-extent_along, extent_along)
+            if q_perp_range is None:
+                extent_perp = 0.05 * extent_along
+                q_perp_range = (-extent_perp, extent_perp)
+
+    q_par_ax = np.linspace(q_par_range[0], q_par_range[1], n_par)
+    q_perp_ax = np.linspace(q_perp_range[0], q_perp_range[1], n_perp)
+
+    QPAR, QPERP = np.meshgrid(q_par_ax, q_perp_ax)  # shape (n_perp, n_par)
+    Q_flat = (
+        G0[None, :]
+        + QPAR.ravel()[:, None] * n_hat[None, :]
+        + QPERP.ravel()[:, None] * perp_hat[None, :]
+    )
+
+    batch_fn = (
+        stack.average_structure_factor_batch
+        if structure_model == "average"
+        else stack.structure_factor_batch
+    )
+    F_flat = batch_fn(Q_flat, float(energy_eV))
+    F2 = (np.abs(F_flat) ** 2).reshape(n_perp, n_par)
+
+    info = {
+        "hkl": (h, k, l),
+        "layer": ly.label,
+        "layer_obj": ly,
+        "stack_flat": stack,
+        "energy_eV": float(energy_eV),
+        "G0": G0,
+        "n_hat": n_hat,
+        "perp_hat": perp_hat,
+        "pix0": pix0,
+        "dpix_dalong": dpix_dalong,
+    }
+
+    if verbose:
+        print(
+            f"  simulate_rod_qspace: hkl={hkl}  layer='{ly.label}'  E={float(energy_eV):.1f} eV  "
+            f"grid=({n_perp},{n_par})  |F|²∈[{F2.min():.3e}, {F2.max():.3e}]"
+        )
+
+    return F2, q_par_ax, q_perp_ax, info
+
+
+def rod_satellite_along_positions(stack, layer, G0, n_hat, max_satellites):
+    """
+    Q-space positions of the satellite/fringe comb along a rod's own
+    `n_hat` axis — pure Q-space geometry, no elastic-condition/camera
+    evaluation, so it works without a `Camera`. Same anchoring convention
+    :func:`rod_tangency` uses for its own `'satellites']['along']` values
+    (see that function's docstring for the full physical reasoning):
+    superlattice principal maxima anchored to the nearest true comb tooth
+    when `layer` belongs to a repeating block with `n_rep > 1`; an isolated
+    finite layer's own thickness-fringe maxima at half-integer positions
+    otherwise.
+
+    Used by :func:`~nrxrdct.laue.laue_plotting.plot_simulated_rod_qspace`
+    to mark satellite positions on a fixed-energy simulated map, where
+    there is no `Camera`/pixel information to drive `rod_tangency` itself.
+
+    Args:
+        stack : LayeredCrystal
+            Already flattened (see `_flatten_if_multiblock`) — same
+            requirement as `rod_tangency`'s own internal handling.
+        layer : Layer
+            The resolved layer object (not a label/`None`) whose block
+            membership determines the comb anchoring.
+        G0 : ndarray (3,)
+            Nominal reflection Q vector (lab frame, Å⁻¹).
+        n_hat : ndarray (3,)
+            Rod axis (unit vector, lab frame).
+        max_satellites : int
+            Orders `m = -max_satellites, ..., max_satellites` to compute.
+
+    Returns:
+        dict `{m: along}` — `along` (Å⁻¹) is the exact ΔQ from `G0` along
+        `n_hat` for order `m`.
+    """
+    stack._update_offsets()
+    owning_block = None
+    if layer not in stack.buffer_layers:
+        owning_block = next((blk for blk in stack._blocks if layer in blk.layers), None)
+    is_superlattice = owning_block is not None and owning_block.n_rep > 1 and owning_block._period > 1e-6
+
+    if is_superlattice:
+        period = float(owning_block._period)
+        Gn = float(G0 @ n_hat)
+        ell0 = round(Gn * period / (2.0 * np.pi))
+
+        def _along(m):
+            return 2.0 * np.pi * (ell0 + m) / period - Gn
+    else:
+        period = float(layer.thickness) if getattr(layer, "thickness", 0.0) > 1e-6 else 0.01 * float(np.linalg.norm(G0))
+        q_fringe = 2.0 * np.pi / period
+
+        def _along(m):
+            return 0.0 if m == 0 else (m + 0.5 if m > 0 else m - 0.5) * q_fringe
+
+    return {m: _along(m) for m in range(-max_satellites, max_satellites + 1)}
+
+
 def qspace_per_layer(
     stack,
     hkl,

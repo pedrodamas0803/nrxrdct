@@ -4330,7 +4330,7 @@ class GrainMap:
         camera,
         hkl: tuple,
         *,
-        grain: int = 0,
+        grain: "int | str" = 0,
         half_window_x: int = 20,
         half_window_y: int = 20,
         h5_dataset: "str | None" = None,
@@ -4342,21 +4342,30 @@ class GrainMap:
         log_scale: bool = True,
         figsize: "tuple | None" = None,
         out_path: "str | None" = None,
+        n_workers: "int | None" = None,
     ) -> tuple:
         """
         Mosaic of one (h, k, l) reflection across the raster scan.
 
         For every map pixel, the detector position of *hkl* is simulated from
-        the fitted orientation matrix (`self.U[grain]`), and a window of the
-        raw detector image centred on that position is extracted. Windows are
+        the fitted orientation matrix (`self.U[grain]`, or the per-pixel
+        merged orientation when `grain='merged'`), and a window of the raw
+        detector image centred on that position is extracted. Windows are
         tiled on the same `(iy, ix)` grid as the scan, so spot shape,
         intensity, and position can be compared across the map at a glance.
+
+        Per-pixel simulation and image loading are parallelised across
+        threads (see *n_workers*), since most of the wall time is spent
+        waiting on image I/O.
 
         Args:
             crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
             camera (Camera): Detector geometry.
             hkl (tuple of int): Miller indices `(h, k, l)` of the reflection to extract.
-            grain (int): Grain slot whose fitted `U` matrices are used. Default `0`.
+            grain (int or 'merged'): Grain slot whose fitted `U` matrices are used.  `'merged'`
+                uses the per-pixel winning grain set by :meth:`apply_merge`
+                (pixels with no merge winner are skipped, same as an unfitted
+                pixel).  Default `0`.
             half_window_x, half_window_y (int): Half-width / half-height, in pixels, of the
                 window extracted around the simulated spot position. Each
                 extracted tile is `(2*half_window_y + 1, 2*half_window_x + 1)`.
@@ -4375,6 +4384,8 @@ class GrainMap:
             figsize (tuple or None): Figure size. `None` (default) scales with the mosaic
                 size.
             out_path (str or None): If given, save the figure to this path.
+            n_workers (int or None): Number of threads used to simulate spots and load images
+                in parallel.  Defaults to ``os.cpu_count()``.
 
         Returns:
             fig (Figure):
@@ -4385,6 +4396,7 @@ class GrainMap:
                 (unfitted pixel, reflection off-detector / not excited, or
                 image unavailable).
 """
+        import threading
         from .simulation import simulate_laue
 
         if (h5_dataset is None) == (tiff_dir is None):
@@ -4398,21 +4410,30 @@ class GrainMap:
         tile_h = 2 * half_window_y + 1
         tile_w = 2 * half_window_x + 1
 
-        # ── image loader (same convention as inspect_frame / reindex_frame) ────
-        _tiff_index: "list | None" = None
+        # ── per-pixel orientation, honouring the merged selection ──────────────
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
+        else:
+            U_map = self.U[grain]                 # (ny, nx, 3, 3)
 
-        def _load_image(frame_idx: int) -> "np.ndarray | None":
-            nonlocal _tiff_index
-            if tiff_dir is not None:
-                if _tiff_index is None:
-                    pat   = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
-                    files = []
-                    for fname in os.listdir(tiff_dir):
-                        m = pat.search(fname)
-                        if m:
-                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
-                    files.sort(key=lambda x: x[0])
-                    _tiff_index = [p for _, p in files]
+        # ── image loader (thread-safe: one handle per worker thread) ───────────
+        _local = threading.local()
+        _h5_handles: list = []
+        _h5_lock = threading.Lock()
+
+        if tiff_dir is not None:
+            pat   = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+            files = []
+            for fname in os.listdir(tiff_dir):
+                m = pat.search(fname)
+                if m:
+                    files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+            files.sort(key=lambda x: x[0])
+            _tiff_index = [p for _, p in files]
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
                 if frame_idx >= len(_tiff_index):
                     return None
                 try:
@@ -4420,64 +4441,97 @@ class GrainMap:
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
                 except Exception:
                     return None
-            else:
-                if self.h5_path is None:
+        else:
+            if self.h5_path is None:
+                raise ValueError("h5_path not set on this GrainMap")
+
+            def _get_h5() -> "h5py.File | None":
+                f = getattr(_local, "h5file", None)
+                if f is None:
+                    try:
+                        f = h5py.File(self.h5_path, "r")
+                    except Exception:
+                        return None
+                    _local.h5file = f
+                    with _h5_lock:
+                        _h5_handles.append(f)
+                return f
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
+                f = _get_h5()
+                if f is None or h5_dataset not in f:
                     return None
                 try:
-                    with h5py.File(self.h5_path, "r") as f:
-                        if h5_dataset not in f:
-                            return None
-                        ds = f[h5_dataset]
-                        if frame_idx >= ds.shape[0]:
-                            return None
-                        return ds[frame_idx].astype(np.float32)
+                    ds = f[h5_dataset]
+                    if frame_idx >= ds.shape[0]:
+                        return None
+                    return ds[frame_idx].astype(np.float32)
                 except Exception:
                     return None
+
+        # ── per-pixel worker ─────────────────────────────────────────────────
+        def _process_pixel(iy: int, ix: int, U: np.ndarray):
+            try:
+                spots = simulate_laue(crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV)
+            except Exception:
+                return None
+            spot = next(
+                (s for s in spots if tuple(s["hkl"]) == hkl and s.get("pix") is not None),
+                None,
+            )
+            if spot is None:
+                return None
+
+            image = _load_image(self.frame_index(iy, ix))
+            if image is None:
+                return None
+
+            xc, yc = spot["pix"]
+            xc, yc = int(round(xc)), int(round(yc))
+            nv_im, nh_im = image.shape
+
+            y0, y1 = yc - half_window_y, yc + half_window_y + 1
+            x0, x1 = xc - half_window_x, xc + half_window_x + 1
+            sy0, sy1 = max(y0, 0), min(y1, nv_im)
+            sx0, sx1 = max(x0, 0), min(x1, nh_im)
+            if sy0 >= sy1 or sx0 >= sx1:
+                return None
+
+            tile = np.full((tile_h, tile_w), np.nan)
+            tile[sy0 - y0: sy1 - y0, sx0 - x0: sx1 - x0] = image[sy0:sy1, sx0:sx1]
+            return iy, ix, tile
 
         # ── assemble mosaic ──────────────────────────────────────────────────
         mosaic = np.full(
             (self.ny * (tile_h + gap_px) - gap_px, self.nx * (tile_w + gap_px) - gap_px),
             np.nan,
         )
+        jobs = [
+            (iy, ix, U_map[iy, ix])
+            for iy in range(self.ny)
+            for ix in range(self.nx)
+            if not np.any(np.isnan(U_map[iy, ix]))
+        ]
+
         n_found = 0
-        for iy in range(self.ny):
-            for ix in range(self.nx):
-                U = self.U[grain, iy, ix]
-                if np.any(np.isnan(U)):
-                    continue
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                futures = [pool.submit(_process_pixel, iy, ix, U) for iy, ix, U in jobs]
+                for fut in concurrent.futures.as_completed(futures):
+                    result = fut.result()
+                    if result is None:
+                        continue
+                    iy, ix, tile = result
+                    ry0 = iy * (tile_h + gap_px)
+                    rx0 = ix * (tile_w + gap_px)
+                    mosaic[ry0:ry0 + tile_h, rx0:rx0 + tile_w] = tile
+                    n_found += 1
+        finally:
+            for f in _h5_handles:
                 try:
-                    spots = simulate_laue(crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV)
+                    f.close()
                 except Exception:
-                    continue
-                spot = next(
-                    (s for s in spots if tuple(s["hkl"]) == hkl and s.get("pix") is not None),
-                    None,
-                )
-                if spot is None:
-                    continue
-
-                image = _load_image(self.frame_index(iy, ix))
-                if image is None:
-                    continue
-
-                xc, yc = spot["pix"]
-                xc, yc = int(round(xc)), int(round(yc))
-                nv_im, nh_im = image.shape
-
-                y0, y1 = yc - half_window_y, yc + half_window_y + 1
-                x0, x1 = xc - half_window_x, xc + half_window_x + 1
-                sy0, sy1 = max(y0, 0), min(y1, nv_im)
-                sx0, sx1 = max(x0, 0), min(x1, nh_im)
-                if sy0 >= sy1 or sx0 >= sx1:
-                    continue
-
-                tile = np.full((tile_h, tile_w), np.nan)
-                tile[sy0 - y0: sy1 - y0, sx0 - x0: sx1 - x0] = image[sy0:sy1, sx0:sx1]
-
-                ry0 = iy * (tile_h + gap_px)
-                rx0 = ix * (tile_w + gap_px)
-                mosaic[ry0:ry0 + tile_h, rx0:rx0 + tile_w] = tile
-                n_found += 1
+                    pass
 
         # ── figure ────────────────────────────────────────────────────────────
         if figsize is None:
@@ -4492,7 +4546,7 @@ class GrainMap:
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title(
-            f"hkl = {hkl}  —  grain {grain + 1}  —  "
+            f"hkl = {hkl}  —  {self._grain_label(grain)}  —  "
             f"{n_found}/{self.ny * self.nx} tiles found  "
             f"(±{half_window_x} × ±{half_window_y} px)",
             fontsize=10,

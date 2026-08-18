@@ -9291,11 +9291,11 @@ class GrainMap:
                 "merged grain slot.  Pass the same grain_index used in write_merge_links()."
             )
         gi_target = int(grain_index)
-        files     = glob.glob(os.path.join(merged_dir, "frame_*_g*.npz"))
+        files     = glob.glob(os.path.join(merged_dir, f"frame_*_g{gi_target:02d}.npz"))
 
         def _load(fpath: str) -> bool:
             m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
-            if not m:
+            if not m or int(m.group(2)) != gi_target:
                 return False
             frame_idx = int(m.group(1))
             iy, ix    = self.map_index(frame_idx)

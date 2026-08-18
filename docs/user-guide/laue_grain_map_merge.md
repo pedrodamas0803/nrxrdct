@@ -88,31 +88,42 @@ A position where *every* grain fails at least one filter receives
 
 Typical starting values: `min_match_rate=0.2`, `min_n_matched=3`.
 
-### 2.2 `apply_merge` — register the result as a new grain slot
+### 2.2 `apply_merge` — register the per-pixel selection
 
 ```python
-gi_merged = gmap.apply_merge(best_grain, metrics)
-print(f"Merged grain stored in slot {gi_merged}")
+gmap.apply_merge(best_grain, metrics)
 ```
 
-`apply_merge` appends a new grain slot (grain index `n_grains - 1` after
-the call) that is filled from `best_grain` and `metrics`.  All existing
-analysis and plotting methods work on this slot as on any other:
+`apply_merge` stores *best_grain* as `gmap.best_grain_map`.  It does **not**
+create a new grain slot and `n_grains` is unchanged — `metrics` is accepted
+for API compatibility but not stored.  Every analysis and plotting method
+that accepts a `grain` argument can dispatch per-pixel to the right grain
+slot by passing the string `'merged'`:
 
 ```python
-gmap.plot_map("match_rate", grain=gi_merged)
-gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1])
+gmap.plot_map("match_rate", grain='merged')
+gmap.plot_ipf_map('merged', direction=[0, 0, 1])
 ```
 
-`apply_merge` is **idempotent**: calling it a second time with updated
-parameters overwrites the same grain slot in-place rather than creating a
-new one.  The slot index `gi_merged` is stored in `gmap._merged_grain`.
-
-`inspect_frame` uses the merged grain by default when it exists:
+`inspect_frame` uses the merged selection by default when it exists:
 
 ```python
-gmap.inspect_frame(frame_idx)   # automatically uses gi_merged
+gmap.inspect_frame(frame_idx)   # automatically uses 'merged'
 ```
+
+If you want the merged result to live in its own grain slot (e.g. to persist
+it to disk and reload it later, or to run `reduce_to_fundamental_zone` on
+it), create one explicitly by adding a new `UB{n}.npy` reference file to
+`processing_dir` and rescanning:
+
+```python
+np.save(os.path.join(gmap.processing_dir, f"UB{gmap.n_grains}.npy"), some_reference_U)
+gmap.reload_ub_matrices()          # grows all per-grain arrays by one slot
+gi_merged = gmap.n_grains - 1      # index of the new slot
+```
+
+You will need to pass `gi_merged` as `grain_index` to both `write_merge_links`
+and `collect_merged` below.
 
 ### 2.3 `write_merge_links` — on-disk persistence
 
@@ -124,22 +135,32 @@ gmap.write_merge_links(
     base_dir="./processing",
     best_grain=best_grain,
     metrics=metrics,           # inherits the source directory automatically
+    grain_index=gi_merged,     # slot index to embed in the symlink names
     overwrite=True,
 )
 ```
 
-This creates a `merged/` subfolder inside `base_dir` and populates it with
-`frame_NNNNN_g{gi_merged:02d}.npz` symlinks, each pointing to the
-corresponding `ubs/` or `strain/` result file of the winning grain.
+This creates a `merged/{ubs,strain}/` subfolder inside `base_dir` and
+populates it with `frame_NNNNN_g{gi_merged:02d}.npz` symlinks, each pointing
+to the corresponding `ubs/` or `strain/` result file of the winning grain.
+
+> **Important:** the `merged/{source}/` folder is shared across *all* merge
+> targets that use the same `source`. If you write links for more than one
+> `grain_index` (e.g. comparing two different filter thresholds, or merging
+> subregions separately), their symlinks coexist in the same directory,
+> distinguished only by the `g{gi_merged:02d}` suffix. `collect_merged`
+> filters strictly on that suffix, so always pass the matching `grain_index`
+> to both calls — don't rely on directory contents alone to tell merges apart.
 
 To re-load the merged map from those links in a new session:
 
 ```python
-gi_loaded = gmap.collect_merged(base_dir="./processing")
+gmap.collect_merged(base_dir="./processing", grain_index=gi_merged)
 ```
 
 `collect_merged` auto-detects whether the files contain orientation-only or
-strain results by checking for the `"strain_voigt"` key.
+strain results by checking for the `"strain_voigt"` key, and only loads
+files whose embedded suffix matches `grain_index`.
 
 ---
 
@@ -276,21 +297,26 @@ updated in `gmap.strain_voigt[grain]`.
             min_n_matched=3,
         )
 
-6.  Register merged slot
-        gi_merged = gmap.apply_merge(best_grain, metrics)
+6.  Register the per-pixel selection
+        gmap.apply_merge(best_grain, metrics)
+        # every grain-aware method now accepts grain='merged'
 
-7.  Optionally: re-run symmetry reduction on the merged slot
+7.  Optionally: re-run symmetry reduction on the merged result
+        # reduce_to_fundamental_zone operates on a real grain slot, not
+        # the 'merged' selector, so give the merged result its own slot
+        # first (see §2.2) if you need this step.
         gmap.reduce_to_fundamental_zone(grain=gi_merged, symmetry="cubic")
 
-8.  Persist to disk
-        gmap.write_merge_links("./processing", best_grain, metrics)
+8.  Persist to disk (only if you created a dedicated slot in §2.2)
+        gmap.write_merge_links("./processing", best_grain, metrics,
+                               grain_index=gi_merged, overwrite=True)
         gmap.save("grainmap.h5")
 
 9.  Analyse
-        gmap.plot_overview(grain=gi_merged)
-        gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1], stretch="local",
+        gmap.plot_overview(grain='merged')
+        gmap.plot_ipf_map('merged', direction=[0, 0, 1], stretch="local",
                           best_grain=best_grain)
-        gmap.plot_map("match_rate", grain=gi_merged)
+        gmap.plot_map("match_rate", grain='merged')
 ```
 
 Step 3 (symmetry reduction) should be performed *before* merging.  The merge
@@ -390,11 +416,11 @@ for iy in range(gmap.ny):
 
 ```python
 # Global colour stretch — spans entire map range
-gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1], stretch="global")
+gmap.plot_ipf_map('merged', direction=[0, 0, 1], stretch="global")
 
 # Per-grain colour stretch — each grain region stretched independently
 # (requires best_grain to define the regions)
-gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1],
+gmap.plot_ipf_map('merged', direction=[0, 0, 1],
                   stretch="local", best_grain=best_grain)
 ```
 
@@ -408,7 +434,7 @@ internal orientation spread within each grain.
 
 ```python
 fig, axes = gmap.plot_overview(
-    grain=gi_merged,
+    grain='merged',
     ipf_axes=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
     quality_metrics=["match_rate", "rms_px", "kam"],
     show_strain=True,
@@ -419,7 +445,12 @@ fig, axes = gmap.plot_overview(
 
 ### Frame inspection
 
+`inspect_frame`'s `map_grain` argument only accepts an integer grain slot (not
+the `'merged'` string), and defaults to grain `0` when omitted — it does
+**not** automatically pick up the merged selection. To inspect the merged
+result, pass the dedicated slot created in §2.2 explicitly:
+
 ```python
-gmap.inspect_frame(frame_idx)   # defaults to gi_merged when it exists
-gmap.inspect_frame(frame_idx, map_grain=0)   # force a specific grain
+gmap.inspect_frame(crystal, camera, base_dir, map_grain=gi_merged)
+gmap.inspect_frame(crystal, camera, base_dir, map_grain=0)   # a specific source grain
 ```

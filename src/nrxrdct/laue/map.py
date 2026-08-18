@@ -5071,6 +5071,11 @@ class GrainMap:
                     f"rms={fit_result.rms_px:.2f} px  "
                     f"match={fit_result.match_rate:.0%}"
                 )
+            # Refresh the map image so the stored pixel is visible immediately
+            if gi == map_grain:
+                im_map.set_data(map_data)
+                im_map.autoscale()
+                fig.canvas.draw_idle()
             if self.save_path:
                 self.save(self.save_path)
                 save_note = f" — saved to {os.path.basename(self.save_path)}"

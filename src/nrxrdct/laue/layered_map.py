@@ -2820,6 +2820,10 @@ class LayeredMap:
                 return
             iy, ix = _state["iy"], _state["ix"]
             self.set_result(iy, ix, r)
+            # Refresh the map image so the stored pixel is visible immediately
+            im_map.set_data(map_data)
+            im_map.autoscale()
+            fig.canvas.draw_idle()
             save_note = ""
             if self.save_path:
                 self.save(self.save_path)

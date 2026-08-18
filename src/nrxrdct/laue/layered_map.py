@@ -1236,26 +1236,15 @@ class LayeredMap:
                 fig.canvas.draw_idle()
                 return
             nv, nh = disp.shape
-            try:
-                user_vmin = float(w_vmin.value) if w_vmin.value.strip() else None
-            except ValueError:
-                user_vmin = None
-            try:
-                user_vmax = float(w_vmax.value) if w_vmax.value.strip() else None
-            except ValueError:
-                user_vmax = None
-            pos = disp[disp > 0]
-            clip_min = user_vmin if user_vmin is not None else 0.0
-            clip_max = user_vmax if user_vmax is not None else (
-                float(np.percentile(pos, 99)) if pos.size else 1.0
-            )
+            clip_min, clip_max = w_vrange.value
+            clip_min, clip_max = float(clip_min), float(clip_max)
             if clip_max <= clip_min:
                 clip_max = clip_min + 1.0
             disp_clipped = np.clip(disp, clip_min, clip_max)
             disp_norm    = (disp_clipped - clip_min) / (clip_max - clip_min)
             disp_show = np.log1p(disp_norm * 1000) if w_log_scale.value else disp_norm
             ax_det.imshow(disp_show, origin="upper", extent=[0, nh, nv, 0],
-                          cmap="gray", aspect="equal", zorder=0)
+                          cmap=w_cmap.value, aspect="equal", zorder=0)
             _has_legend = False
             saved_xy = _state.get("saved_xy")
             if saved_xy is not None and len(saved_xy) > 0:
@@ -1328,6 +1317,7 @@ class LayeredMap:
             _state.update(frame_idx=frame_idx, iy=iy, ix=ix,
                           image=image, proc_image=None, props=None,
                           saved_xy=saved_xy)
+            _update_vrange(image)
             btn_segment.disabled = image is None
             btn_save.disabled    = True
             n_saved = len(saved_xy) if saved_xy is not None else 0
@@ -1513,13 +1503,32 @@ class LayeredMap:
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
 
-        _dsk = dict(style={"description_width": "40px"},
-                    layout=ipw.Layout(width="130px"), continuous_update=False)
         w_log_scale = ipw.Checkbox(value=True, description="Log scale",
                                    layout=ipw.Layout(width="110px"),
                                    style={"description_width": "initial"})
-        w_vmin = ipw.Text(value="", description="vmin:", placeholder="auto", **_dsk)
-        w_vmax = ipw.Text(value="", description="vmax:", placeholder="auto (99th %)", **_dsk)
+        w_vrange = ipw.FloatRangeSlider(
+            value=[0.0, 1.0], min=0.0, max=1.0, step=0.01,
+            description="Range:", continuous_update=False,
+            readout_format=".3g",
+            layout=ipw.Layout(width="320px"),
+            style={"description_width": "50px"},
+        )
+        w_cmap = ipw.Dropdown(
+            options=sorted(plt.colormaps()), value="gray",
+            description="Colormap:",
+            layout=ipw.Layout(width="200px"),
+            style={"description_width": "70px"},
+        )
+
+        def _update_vrange(img: "np.ndarray | None") -> None:
+            if img is None:
+                return
+            pos = img[img > 0]
+            hi_default = float(np.percentile(pos, 99)) if pos.size else 1.0
+            full_max = float(img.max()) if img.size else hi_default
+            slider_max = max(full_max, hi_default * 1.5, 1.0)
+            w_vrange.max = slider_max
+            w_vrange.value = [0.0, hi_default]
 
         def _redraw(_=None) -> None:
             if _state["image"] is not None:
@@ -1529,8 +1538,8 @@ class LayeredMap:
             w_r2.disabled = not change["new"]
 
         w_log_scale.observe(_redraw, names="value")
-        w_vmin.observe(_redraw, names="value")
-        w_vmax.observe(_redraw, names="value")
+        w_vrange.observe(_redraw, names="value")
+        w_cmap.observe(_redraw, names="value")
         w_fit_spots.observe(_on_fit_toggle, names="value")
         btn_segment.on_click(_cb_segment)
         btn_save.on_click(_cb_save)
@@ -1553,7 +1562,7 @@ class LayeredMap:
                      layout=ipw.Layout(gap="8px", margin="6px 0 0 0")),
             ipw.HBox(
                 [ipw.HTML("<b style='line-height:26px;margin-right:6px'>Display:</b>"),
-                 w_log_scale, w_vmin, w_vmax],
+                 w_log_scale, w_vrange, w_cmap],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0", align_items="center"),
             ),
             _info,

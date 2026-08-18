@@ -4709,14 +4709,15 @@ class GrainMap:
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
-        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
-                     shrink=0.8, label=map_label)
+        cbar_map = fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                                 shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        ax_map.set_title(
-            f"Click to select — {map_label}  (grain {map_grain + 1})",
-            fontsize=9,
-        )
+
+        def _map_title(label: str) -> str:
+            return f"Click to select — {label}  (grain {map_grain + 1})"
+
+        ax_map.set_title(_map_title(map_label), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -4927,6 +4928,23 @@ class GrainMap:
             layout=ipw.Layout(margin="4px 0 0 6px"),
         )
 
+        w_map_quantity = ipw.Dropdown(
+            options=[(label, key) for key, (_, label, _) in _map_opts.items()],
+            value=map_quantity if map_quantity in _map_opts else "match_rate",
+            layout=ipw.Layout(width="150px", height="32px"),
+        )
+
+        def _cb_map_quantity(change) -> None:
+            data, label, cmap = _map_opts[change["new"]]
+            im_map.set_data(data)
+            im_map.set_cmap(cmap)
+            im_map.autoscale()
+            cbar_map.set_label(label)
+            ax_map.set_title(_map_title(label), fontsize=9)
+            fig.canvas.draw_idle()
+
+        w_map_quantity.observe(_cb_map_quantity, names="value")
+
         def _cb_index(_) -> None:
             import asyncio
             import queue as _qmod
@@ -5073,7 +5091,7 @@ class GrainMap:
                 )
             # Refresh the map image so the stored pixel is visible immediately
             if gi == map_grain:
-                im_map.set_data(map_data)
+                im_map.set_data(_map_opts[w_map_quantity.value][0])
                 im_map.autoscale()
                 fig.canvas.draw_idle()
             if self.save_path:
@@ -5321,7 +5339,10 @@ class GrainMap:
                 [btn_index, btn_fit, btn_strain,
                  ipw.HTML("<span style='color:#aaa;align-self:center'>grain:</span>",
                           layout=ipw.Layout(margin="0 2px 0 10px")),
-                 w_grain, btn_store, btn_save],
+                 w_grain, btn_store, btn_save,
+                 ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
+                          layout=ipw.Layout(margin="0 2px 0 10px")),
+                 w_map_quantity],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
                                   align_items="center"),
             ),
@@ -5529,14 +5550,15 @@ class GrainMap:
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
-        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
-                     shrink=0.8, label=map_label)
+        cbar_map = fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                                 shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        ax_map.set_title(
-            f"Click to select — {map_label}  (grain {map_grain + 1})",
-            fontsize=9,
-        )
+
+        def _map_title(label: str) -> str:
+            return f"Click to select — {label}  (grain {map_grain + 1})"
+
+        ax_map.set_title(_map_title(map_label), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -5970,6 +5992,23 @@ class GrainMap:
             layout=ipw.Layout(margin="2px 0 0 6px"),
         )
 
+        w_map_quantity = ipw.Dropdown(
+            options=[(label, key) for key, (_, label, _) in _map_opts.items()],
+            value=map_quantity if map_quantity in _map_opts else "match_rate",
+            layout=ipw.Layout(width="150px", height="32px"),
+        )
+
+        def _cb_map_quantity(change) -> None:
+            data, label, cmap = _map_opts[change["new"]]
+            im_map.set_data(data)
+            im_map.set_cmap(cmap)
+            im_map.autoscale()
+            cbar_map.set_label(label)
+            ax_map.set_title(_map_title(label), fontsize=9)
+            fig.canvas.draw_idle()
+
+        w_map_quantity.observe(_cb_map_quantity, names="value")
+
         # ── UB file loader ────────────────────────────────────────────────────
         def _scan_ub_files() -> list:
             seen: dict[str, str] = {}
@@ -6173,7 +6212,7 @@ class GrainMap:
             kind = "strain+orient" if _state["strain_fit_result"] is not None else "orient"
             btn_remove.disabled = False
             # Refresh the map image so the stored pixel is visible immediately
-            im_map.set_data(map_data)
+            im_map.set_data(_map_opts[w_map_quantity.value][0])
             im_map.autoscale()
             fig.canvas.draw_idle()
             if self.save_path:
@@ -6321,7 +6360,12 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center'>grain:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),
                  ),
-                 w_grain, btn_store, btn_save, btn_remove],
+                 w_grain, btn_store, btn_save, btn_remove,
+                 ipw.HTML(
+                     "<span style='color:#aaa;align-self:center'>map:</span>",
+                     layout=ipw.Layout(margin="0 2px 0 10px"),
+                 ),
+                 w_map_quantity],
                 layout=ipw.Layout(gap="6px", align_items="center",
                                   margin="2px 0 2px 0"),
             ),

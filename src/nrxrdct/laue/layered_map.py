@@ -1195,11 +1195,15 @@ class LayeredMap:
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
-        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
-                     shrink=0.8, label=map_label)
+        cbar_map = fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                                 shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        ax_map.set_title(f"Click to select — {map_label}", fontsize=9)
+
+        def _map_title(label: str) -> str:
+            return f"Click to select — {label}"
+
+        ax_map.set_title(_map_title(map_label), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -1493,7 +1497,7 @@ class LayeredMap:
                 _info.value = f"<b style='color:#44dd66'>Saved → {out_path}</b>"
                 print(f"  💾 Saved → {os.path.abspath(out_path)}")
                 _state["saved_xy"] = None   # new result replaces old overlay
-                if map_quantity == "n_obs":
+                if w_map_quantity.value == "n_obs":
                     new_data = _build_n_obs_data()
                     im_map.set_data(new_data)
                     valid = new_data[np.isfinite(new_data)]
@@ -1502,6 +1506,23 @@ class LayeredMap:
                     fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
+
+        w_map_quantity = ipw.Dropdown(
+            options=[(label, key) for key, (_, label, _) in _map_opts.items()],
+            value=map_quantity if map_quantity in _map_opts else "n_obs",
+            layout=ipw.Layout(width="150px", height="32px"),
+        )
+
+        def _cb_map_quantity(change) -> None:
+            data_fn, label, cmap = _map_opts[change["new"]]
+            im_map.set_data(data_fn())
+            im_map.set_cmap(cmap)
+            im_map.autoscale()
+            cbar_map.set_label(label)
+            ax_map.set_title(_map_title(label), fontsize=9)
+            fig.canvas.draw_idle()
+
+        w_map_quantity.observe(_cb_map_quantity, names="value")
 
         w_log_scale = ipw.Checkbox(value=True, description="Log scale",
                                    layout=ipw.Layout(width="110px"),
@@ -1558,8 +1579,11 @@ class LayeredMap:
                     w_fit_spots, w_overwrite,
                 ]),
             ]),
-            ipw.HBox([btn_segment, btn_save],
-                     layout=ipw.Layout(gap="8px", margin="6px 0 0 0")),
+            ipw.HBox([btn_segment, btn_save,
+                      ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
+                               layout=ipw.Layout(margin="0 2px 0 10px")),
+                      w_map_quantity],
+                     layout=ipw.Layout(gap="8px", margin="6px 0 0 0", align_items="center")),
             ipw.HBox(
                 [ipw.HTML("<b style='line-height:26px;margin-right:6px'>Display:</b>"),
                  w_log_scale, w_vrange, w_cmap],
@@ -2372,11 +2396,15 @@ class LayeredMap:
             map_data, origin="upper", extent=extent_map,
             cmap=map_cmap, interpolation="nearest", aspect="auto",
         )
-        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
-                     shrink=0.8, label=map_label)
+        cbar_map = fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                                 shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        ax_map.set_title(f"Click to select — {map_label}", fontsize=9)
+
+        def _map_title(label: str) -> str:
+            return f"Click to select — {label}"
+
+        ax_map.set_title(_map_title(map_label), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -2592,6 +2620,23 @@ class LayeredMap:
             "</span>",
             layout=ipw.Layout(margin="4px 0 0 6px"),
         )
+
+        w_map_quantity = ipw.Dropdown(
+            options=[(label, key) for key, (_, label, _) in _map_opts.items()],
+            value=map_quantity if map_quantity in _map_opts else "match_rate",
+            layout=ipw.Layout(width="150px", height="32px"),
+        )
+
+        def _cb_map_quantity(change) -> None:
+            data, label, cmap = _map_opts[change["new"]]
+            im_map.set_data(data)
+            im_map.set_cmap(cmap)
+            im_map.autoscale()
+            cbar_map.set_label(label)
+            ax_map.set_title(_map_title(label), fontsize=9)
+            fig.canvas.draw_idle()
+
+        w_map_quantity.observe(_cb_map_quantity, names="value")
 
         # ── async-threaded button callbacks ───────────────────────────────────
 
@@ -2821,7 +2866,7 @@ class LayeredMap:
             iy, ix = _state["iy"], _state["ix"]
             self.set_result(iy, ix, r)
             # Refresh the map image so the stored pixel is visible immediately
-            im_map.set_data(map_data)
+            im_map.set_data(_map_opts[w_map_quantity.value][0])
             im_map.autoscale()
             fig.canvas.draw_idle()
             save_note = ""
@@ -2892,7 +2937,10 @@ class LayeredMap:
         _row_kw = dict(layout=ipw.Layout(gap="6px", margin="2px 0 0 0", align_items="center"))
         _controls = ipw.VBox([
             ipw.HBox([btn_fit_ori, btn_fit_str, btn_img_ori, btn_img_str], **_row_kw),
-            ipw.HBox([btn_store,   btn_save,    btn_reload],                **_row_kw),
+            ipw.HBox([btn_store,   btn_save,    btn_reload,
+                      ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
+                               layout=ipw.Layout(margin="0 2px 0 10px")),
+                      w_map_quantity],                                     **_row_kw),
             _info,
         ], layout=ipw.Layout(padding="6px 8px"))
 

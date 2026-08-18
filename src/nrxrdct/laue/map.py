@@ -4912,9 +4912,11 @@ class GrainMap:
         btn_img_str = ipw.Button(description="🖼 Img strain", button_style="warning",  **_bkw)
         btn_store   = ipw.Button(description="⬆ Store",      button_style="success",  **_bkw)
         btn_save    = ipw.Button(description="💾 Save UB",   button_style="",         **_bkw)
-        w_grain     = ipw.BoundedIntText(
-            value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
-            layout=ipw.Layout(width="55px", height="32px"),
+        w_grain     = ipw.Dropdown(
+            options=[("Auto (shown grain)", "auto")]
+                    + [(f"Grain {i + 1}", i) for i in range(self.n_grains)],
+            value="auto",
+            layout=ipw.Layout(width="160px", height="32px"),
         )
         btn_index.disabled   = True
         btn_fit.disabled     = True
@@ -4979,7 +4981,6 @@ class GrainMap:
                         angle_tol_deg=angle_tol_deg,
                         min_match_rate=min_match_rate,
                         n_obs_use=n_obs_use,
-                        verbose=True,
                     )
                     q.put(res)
                 except Exception as exc:
@@ -5038,7 +5039,6 @@ class GrainMap:
                         crystal, camera, obs_xy, U0,
                         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                         max_match_px=fit_max_match_px,
-                        verbose=True,
                     )
                     q.put(res)
                 except Exception as exc:
@@ -5075,7 +5075,7 @@ class GrainMap:
                 return
             iy   = _state["iy"]
             ix   = _state["ix"]
-            gi   = int(w_grain.value)
+            gi   = w_map_grain.value if w_grain.value == "auto" else int(w_grain.value)
             if gi < 0 or gi >= self.n_grains:
                 _info.value = (
                     f"<b style='color:#f44'>Grain {gi} out of range "
@@ -5162,7 +5162,6 @@ class GrainMap:
                         crystal, camera, obs_xy, U0,
                         E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                         max_match_px=fit_max_match_px,
-                        verbose=True,
                     )
                     q.put(res)
                 except Exception as exc:
@@ -5233,7 +5232,6 @@ class GrainMap:
                         max_angle_deg = img_max_angle_deg,
                         E_min         = E_min_eV,
                         E_max         = E_max_eV,
-                        verbose       = True,
                     )
                     q.put(res)
                 except Exception as exc:
@@ -5310,7 +5308,6 @@ class GrainMap:
                         max_angle_deg = img_max_angle_deg,
                         E_min         = E_min_eV,
                         E_max         = E_max_eV,
-                        verbose       = True,
                     )
                     q.put(res)
                 except Exception as exc:
@@ -5349,7 +5346,7 @@ class GrainMap:
         _controls = ipw.VBox([
             ipw.HBox(
                 [btn_index, btn_fit, btn_strain,
-                 ipw.HTML("<span style='color:#aaa;align-self:center'>grain:</span>",
+                 ipw.HTML("<span style='color:#aaa;align-self:center'>store to:</span>",
                           layout=ipw.Layout(margin="0 2px 0 10px")),
                  w_grain, btn_store, btn_save,
                  ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
@@ -5799,7 +5796,7 @@ class GrainMap:
                 g_src = int(self.best_grain_map[iy, ix])
                 if g_src >= 0:
                     existing_U = self.U[g_src, iy, ix]
-                    w_grain.value = g_src
+                    w_map_grain.value = g_src
                     u_source = f"U from merged (grain {g_src + 1})"
                     has_strain = not np.any(
                         np.isnan(self.strain_tensor[g_src, iy, ix])
@@ -5986,9 +5983,11 @@ class GrainMap:
                                    layout=ipw.Layout(width="120px", height="32px"))
         btn_store     = ipw.Button(description="⬆ Store",        button_style="success", **_bkw)
         btn_save      = ipw.Button(description="💾 Save UB",     button_style="",        **_bkw)
-        w_grain       = ipw.BoundedIntText(
-            value=0, min=0, max=max(self.n_grains - 1, 0), step=1,
-            layout=ipw.Layout(width="55px", height="32px"),
+        w_grain       = ipw.Dropdown(
+            options=[("Auto (shown grain)", "auto")]
+                    + [(f"Grain {i + 1}", i) for i in range(self.n_grains)],
+            value="auto",
+            layout=ipw.Layout(width="160px", height="32px"),
         )
         btn_fit_pairs.disabled = True
         btn_refine.disabled    = True
@@ -6118,7 +6117,6 @@ class GrainMap:
                     E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                     max_match_px=3000.0,
                     allowed_hkl=manual_hkl,
-                    verbose=True,
                 )
 
             def _on_done(item) -> None:
@@ -6152,7 +6150,6 @@ class GrainMap:
                     crystal, camera, obs_xy, U0,
                     E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                     max_match_px=fit_max_match_px,
-                    verbose=True,
                 )
 
             def _on_done(item) -> None:
@@ -6184,7 +6181,6 @@ class GrainMap:
                     crystal, camera, obs_xy, U0,
                     E_min_eV=E_min_eV, E_max_eV=E_max_eV,
                     max_match_px=fit_max_match_px,
-                    verbose=True,
                 )
 
             def _on_done(item) -> None:
@@ -6224,7 +6220,7 @@ class GrainMap:
                 return
             iy = _state["iy"]
             ix = _state["ix"]
-            gi = int(w_grain.value)
+            gi = w_map_grain.value if w_grain.value == "auto" else int(w_grain.value)
             if gi < 0 or gi >= self.n_grains:
                 _info.value = (
                     f"<b style='color:#f44'>Grain {gi} out of range "
@@ -6291,7 +6287,6 @@ class GrainMap:
                     angle_tol_deg=angle_tol_deg,
                     min_match_rate=min_match_rate,
                     n_obs_use=n_obs_use,
-                    verbose=True,
                 )
 
             def _on_done(item) -> None:
@@ -6381,7 +6376,7 @@ class GrainMap:
             ipw.HBox(
                 [btn_fit_pairs, btn_refine, btn_strain, btn_clear,
                  ipw.HTML(
-                     "<span style='color:#aaa;align-self:center'>grain:</span>",
+                     "<span style='color:#aaa;align-self:center'>store to:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),
                  ),
                  w_grain, btn_store, btn_save, btn_remove,

@@ -4679,15 +4679,18 @@ class GrainMap:
                     return None
             return None
 
-        _map_opts = {
-            "match_rate":    (self.match_rate[map_grain], "Match rate",      "viridis"),
-            "rms_px":        (self.rms_px[map_grain],     "RMS (px)",        "plasma_r"),
-            "mean_px":       (self.mean_px[map_grain],    "Mean dev (px)",   "plasma_r"),
-            "cost":          (self.cost[map_grain],       "Cost",            "plasma_r"),
-            "misorientation":(self.misorientation_map(map_grain), "Misor. (°)", "viridis"),
-        }
+        def _build_map_opts(grain_idx: int) -> dict:
+            return {
+                "match_rate":    (self.match_rate[grain_idx], "Match rate",      "viridis"),
+                "rms_px":        (self.rms_px[grain_idx],     "RMS (px)",        "plasma_r"),
+                "mean_px":       (self.mean_px[grain_idx],    "Mean dev (px)",   "plasma_r"),
+                "cost":          (self.cost[grain_idx],       "Cost",            "plasma_r"),
+                "misorientation":(self.misorientation_map(grain_idx), "Misor. (°)", "viridis"),
+            }
+
+        _map_opts = _build_map_opts(map_grain)
         map_data, map_label, map_cmap = _map_opts.get(
-            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+            map_quantity, _map_opts["match_rate"]
         )
 
         with plt.ioff():
@@ -4714,10 +4717,10 @@ class GrainMap:
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
 
-        def _map_title(label: str) -> str:
-            return f"Click to select — {label}  (grain {map_grain + 1})"
+        def _map_title(label: str, grain_idx: int) -> str:
+            return f"Click to select — {label}  (grain {grain_idx + 1})"
 
-        ax_map.set_title(_map_title(map_label), fontsize=9)
+        ax_map.set_title(_map_title(map_label, map_grain), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -4933,17 +4936,26 @@ class GrainMap:
             value=map_quantity if map_quantity in _map_opts else "match_rate",
             layout=ipw.Layout(width="150px", height="32px"),
         )
+        w_map_grain = ipw.Dropdown(
+            options=[(f"Grain {i + 1}", i) for i in range(self.n_grains)],
+            value=map_grain,
+            layout=ipw.Layout(width="110px", height="32px"),
+        )
 
-        def _cb_map_quantity(change) -> None:
-            data, label, cmap = _map_opts[change["new"]]
+        def _refresh_map_display(_=None) -> None:
+            nonlocal _map_opts
+            gi = w_map_grain.value
+            _map_opts = _build_map_opts(gi)
+            data, label, cmap = _map_opts[w_map_quantity.value]
             im_map.set_data(data)
             im_map.set_cmap(cmap)
             im_map.autoscale()
             cbar_map.set_label(label)
-            ax_map.set_title(_map_title(label), fontsize=9)
+            ax_map.set_title(_map_title(label, gi), fontsize=9)
             fig.canvas.draw_idle()
 
-        w_map_quantity.observe(_cb_map_quantity, names="value")
+        w_map_quantity.observe(_refresh_map_display, names="value")
+        w_map_grain.observe(_refresh_map_display, names="value")
 
         def _cb_index(_) -> None:
             import asyncio
@@ -5090,7 +5102,7 @@ class GrainMap:
                     f"match={fit_result.match_rate:.0%}"
                 )
             # Refresh the map image so the stored pixel is visible immediately
-            if gi == map_grain:
+            if gi == w_map_grain.value:
                 im_map.set_data(_map_opts[w_map_quantity.value][0])
                 im_map.autoscale()
                 fig.canvas.draw_idle()
@@ -5342,7 +5354,7 @@ class GrainMap:
                  w_grain, btn_store, btn_save,
                  ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
                           layout=ipw.Layout(margin="0 2px 0 10px")),
-                 w_map_quantity],
+                 w_map_quantity, w_map_grain],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
                                   align_items="center"),
             ),
@@ -5522,14 +5534,17 @@ class GrainMap:
                     return None
             return None
 
-        _map_opts = {
-            "match_rate": (self.match_rate[map_grain], "Match rate",    "viridis"),
-            "rms_px":     (self.rms_px[map_grain],     "RMS (px)",      "plasma_r"),
-            "mean_px":    (self.mean_px[map_grain],     "Mean dev (px)", "plasma_r"),
-            "cost":       (self.cost[map_grain],        "Cost",          "plasma_r"),
-        }
+        def _build_map_opts(grain_idx: int) -> dict:
+            return {
+                "match_rate": (self.match_rate[grain_idx], "Match rate",    "viridis"),
+                "rms_px":     (self.rms_px[grain_idx],     "RMS (px)",      "plasma_r"),
+                "mean_px":    (self.mean_px[grain_idx],    "Mean dev (px)", "plasma_r"),
+                "cost":       (self.cost[grain_idx],       "Cost",          "plasma_r"),
+            }
+
+        _map_opts = _build_map_opts(map_grain)
         map_data, map_label, map_cmap = _map_opts.get(
-            map_quantity, (self.match_rate[map_grain], "Match rate", "viridis")
+            map_quantity, _map_opts["match_rate"]
         )
 
         with plt.ioff():
@@ -5555,10 +5570,10 @@ class GrainMap:
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
 
-        def _map_title(label: str) -> str:
-            return f"Click to select — {label}  (grain {map_grain + 1})"
+        def _map_title(label: str, grain_idx: int) -> str:
+            return f"Click to select — {label}  (grain {grain_idx + 1})"
 
-        ax_map.set_title(_map_title(map_label), fontsize=9)
+        ax_map.set_title(_map_title(map_label, map_grain), fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -5997,17 +6012,26 @@ class GrainMap:
             value=map_quantity if map_quantity in _map_opts else "match_rate",
             layout=ipw.Layout(width="150px", height="32px"),
         )
+        w_map_grain = ipw.Dropdown(
+            options=[(f"Grain {i + 1}", i) for i in range(self.n_grains)],
+            value=map_grain,
+            layout=ipw.Layout(width="110px", height="32px"),
+        )
 
-        def _cb_map_quantity(change) -> None:
-            data, label, cmap = _map_opts[change["new"]]
+        def _refresh_map_display(_=None) -> None:
+            nonlocal _map_opts
+            gi = w_map_grain.value
+            _map_opts = _build_map_opts(gi)
+            data, label, cmap = _map_opts[w_map_quantity.value]
             im_map.set_data(data)
             im_map.set_cmap(cmap)
             im_map.autoscale()
             cbar_map.set_label(label)
-            ax_map.set_title(_map_title(label), fontsize=9)
+            ax_map.set_title(_map_title(label, gi), fontsize=9)
             fig.canvas.draw_idle()
 
-        w_map_quantity.observe(_cb_map_quantity, names="value")
+        w_map_quantity.observe(_refresh_map_display, names="value")
+        w_map_grain.observe(_refresh_map_display, names="value")
 
         # ── UB file loader ────────────────────────────────────────────────────
         def _scan_ub_files() -> list:
@@ -6365,7 +6389,7 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center'>map:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),
                  ),
-                 w_map_quantity],
+                 w_map_quantity, w_map_grain],
                 layout=ipw.Layout(gap="6px", align_items="center",
                                   margin="2px 0 2px 0"),
             ),

@@ -4361,7 +4361,14 @@ def plot_laue_comparison(
             # [-0.5, Nh-0.5, Nv-0.5, -0.5] achieves this.  Without this
             # correction every pixel centre would be shifted +0.5 px in x and y
             # relative to the scatter markers plotted at (xcam, ycam).
-            ext = [-0.5, camera.Nh - 0.5, camera.Nv - 0.5, -0.5]
+            #
+            # Derived from arr.shape rather than camera.Nh/Nv: if the raw
+            # frame's actual dimensions ever disagree with the camera
+            # calibration (crop, binning, stale .det file), an extent based
+            # on camera.Nh/Nv silently stretches the background relative to
+            # the markers — which are placed independently via camera.project()
+            # — while arr.shape always matches what's actually on screen.
+            ext = [-0.5, arr.shape[1] - 0.5, arr.shape[0] - 0.5, -0.5]
             return arr, ext
 
     exp_disp, ext = _prepare(exp_image)
@@ -4559,6 +4566,161 @@ def plot_laue_comparison(
         fig.savefig(out_path, dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         print(f"  Comparison saved → {out_path}")
+
+
+def plot_twin_search(
+    image,
+    crystal,
+    camera,
+    U0,
+    twin_result,
+    *,
+    peaklist=None,
+    match_px: float = 10.0,
+    i_thresh: float = 0.01,
+    n_label: int = 6,
+    vmin_pct: float = 1.0,
+    vmax_pct: float = 99.9,
+    E_min_eV: float = 5_000,
+    E_max_eV: float = 27_000,
+    allowed_hkl=None,
+    figsize: tuple = (10, 9),
+    out_path: "str | None" = None,
+):
+    """
+    Overlay a primary orientation and a twin candidate on the raw image.
+
+    Simulates both `U0` and the twin candidate's orientation and draws each
+    one's predicted spot positions over the raw detector frame, together with
+    the measured peak list if supplied.  When *peaklist* is given, the title
+    reports the :func:`~nrxrdct.laue.fitting.classify_spot_matches` counts
+    directly, so you can see at a glance whether the twin candidate explains
+    any real, independent intensity or is just re-explaining `U0`'s own spots.
+
+    Args:
+        image ((Nv, Nh) array): Raw detector frame.
+        crystal: Crystal object passed to :func:`~nrxrdct.laue.simulation.simulate_laue`.
+        camera (Camera): Detector geometry.
+        U0 ((3, 3) ndarray): Primary/reference orientation matrix.
+        twin_result (TwinCandidateResult or (3, 3) ndarray): Output of
+            :func:`~nrxrdct.laue.fitting.search_twin_orientation_image` (a
+            single candidate, e.g. `results[0]`), or a bare orientation matrix.
+        peaklist (ndarray (N, >=2) or None): Segmented peak table
+            (`peaklist[:, :2]` = pixel positions).  When given, measured
+            peaks are overlaid and the title shows the U0/twin/both/neither
+            match breakdown from :func:`~nrxrdct.laue.fitting.classify_spot_matches`.
+        match_px (float): Match radius (px) for the peak classification.
+            Default `10.0`.
+        i_thresh (float): Minimum `I/Imax` for a simulated spot to be shown.
+            Default `0.01`.
+        n_label (int): Number of strongest spots per candidate to annotate
+            with their `(hkl)`.  Default `6`.
+        vmin_pct, vmax_pct (float): Percentiles of the raw image (over
+            positive pixels) used as the `LogNorm` display range.  Default
+            `1.0`, `99.9` — robust to a handful of extreme/saturated pixels
+            without needing manual tuning.
+        E_min_eV, E_max_eV (float): Energy range for spot simulation.
+        allowed_hkl: Pre-computed allowed-HKL frozenset (see
+            :func:`~nrxrdct.laue.simulation.precompute_allowed_hkl`).
+            Strongly recommended.
+        figsize (tuple): Figure size in inches.  Default `(10, 9)`.
+        out_path (str or None): Save the figure to this path if given.
+
+    Returns:
+        fig (matplotlib.figure.Figure):
+        ax (matplotlib.axes.Axes):
+"""
+    from .fitting import TwinCandidateResult, classify_spot_matches
+    from .simulation import simulate_laue as _sim_laue
+
+    U_twin = (
+        twin_result.U if isinstance(twin_result, TwinCandidateResult)
+        else np.asarray(twin_result, dtype=float)
+    )
+
+    spots_u0 = _sim_laue(crystal, U0, camera, E_min=E_min_eV, E_max=E_max_eV,
+                          allowed_hkl=allowed_hkl)
+    spots_tw = _sim_laue(crystal, U_twin, camera, E_min=E_min_eV, E_max=E_max_eV,
+                          allowed_hkl=allowed_hkl)
+    spots_u0 = [s for s in spots_u0 if s["intensity"] >= i_thresh]
+    spots_tw = [s for s in spots_tw if s["intensity"] >= i_thresh]
+
+    img = np.asarray(image, dtype=float)
+    pos = img[img > 0]
+    vmin = float(np.percentile(pos, vmin_pct)) if pos.size else 1.0
+    vmax = float(np.percentile(pos, vmax_pct)) if pos.size else 1.0
+    vmax = max(vmax, vmin * 1.001)
+
+    fig, ax = plt.subplots(figsize=figsize, facecolor=BG)
+    ax.set_facecolor(BG)
+    ax.imshow(
+        img, origin="upper", cmap="inferno",
+        norm=mcolors.LogNorm(vmin=max(vmin, 1e-6), vmax=vmax),
+        aspect="equal", interpolation="nearest", alpha=0.75, zorder=1,
+    )
+
+    title_extra = ""
+    if peaklist is not None:
+        pk = np.asarray(peaklist, dtype=float)
+        if pk.shape[0] > 0:
+            ax.scatter(
+                pk[:, 0], pk[:, 1], s=30,
+                facecolors="none", edgecolors="white", linewidths=0.8,
+                zorder=2, label=f"measured (n={pk.shape[0]})",
+            )
+            cls = classify_spot_matches(
+                pk[:, :2], spots_u0, spots_tw,
+                match_px=match_px, label_a="U0", label_b="twin",
+            )
+            title_extra = (
+                f"  |  U0 only {int(cls.a_only.sum())}  "
+                f"twin only {int(cls.b_only.sum())}  "
+                f"both {int(cls.both.sum())}  "
+                f"neither {int(cls.neither.sum())}"
+            )
+
+    def _scatter(spots, color, label, marker):
+        if not spots:
+            return
+        xy = np.array([s["pix"] for s in spots])
+        I  = np.array([s["intensity"] for s in spots])
+        ax.scatter(
+            xy[:, 0], xy[:, 1], s=30 + 120 * I,
+            facecolors="none", edgecolors=color, marker=marker,
+            linewidths=1.3, zorder=3, label=f"{label}  (n={len(spots)})",
+        )
+        for i in np.argsort(I)[::-1][:n_label]:
+            h, k, l = spots[i]["hkl"]
+            ax.annotate(
+                f"({h:.0f}{k:.0f}{l:.0f})", xy[i], xytext=(4, 4),
+                textcoords="offset points", fontsize=7, color=color, zorder=4,
+            )
+
+    _scatter(spots_u0, COL_BCC, "primary (U0)", "o")
+    _scatter(spots_tw, COL_SUP, "twin candidate", "s")
+
+    ax.set_xlim(-0.5, img.shape[1] - 0.5)
+    ax.set_ylim(img.shape[0] - 0.5, -0.5)
+    ax.set_xlabel("Column  (pixel)", color=FG, fontsize=9)
+    ax.set_ylabel("Row  (pixel)", color=FG, fontsize=9)
+    ax.tick_params(colors="#7788aa", labelsize=7)
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#1a1f2e")
+    ax.set_title(
+        "Primary vs. twin-candidate simulated spots" + title_extra,
+        color=FG, fontsize=9, pad=6,
+    )
+    ax.legend(
+        loc="upper right", fontsize=7, framealpha=0.4,
+        facecolor="#1a1f2e", edgecolor="#3a3f4e", labelcolor=FG,
+    )
+    fig.tight_layout()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"  Twin-search plot saved → {out_path}")
+
+    return fig, ax
 
 
 # ─────────────────────────────────────────────────────────────────────────────

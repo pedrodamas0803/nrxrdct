@@ -3990,8 +3990,8 @@ class GrainMap:
                 (which do not produce match-rate / cost statistics).
                 Default `'match_rate'`.
             map_grain (int or None): Grain index used to build the left-panel map.  `None` (default)
-                uses the merged grain slot when :meth:`apply_merge` has been
-                called, otherwise falls back to grain `0`.
+                uses the merged per-pixel selection when :meth:`apply_merge` has
+                been called, otherwise falls back to grain `0`.
             motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
             motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
             E_min_eV, E_max_eV (float): Energy range for spot simulation.  Defaults `5000` / `27000` eV.
@@ -4017,7 +4017,7 @@ class GrainMap:
         seg_dir    = os.path.join(base_dir, "seg")
         grains_use = list(grains) if grains is not None else list(range(self.n_grains))
         if map_grain is None:
-            map_grain = 0
+            map_grain = 'merged' if self.best_grain_map is not None else 0
 
         # ── motor / extent helpers ────────────────────────────────────────────
         mu = motor_units or {}
@@ -4107,16 +4107,19 @@ class GrainMap:
             return None
 
         # ── left-panel map data ───────────────────────────────────────────────
+        def _grain_sel(arr: np.ndarray) -> np.ndarray:
+            return self._select_merged(arr) if map_grain == 'merged' else arr[map_grain]
+
         _map_opts = {
-            "match_rate":    (self.match_rate[map_grain], "Match rate",      "viridis"),
-            "rms_px":        (self.rms_px[map_grain],     "RMS (px)",        "plasma_r"),
-            "mean_px":       (self.mean_px[map_grain],    "Mean dev (px)",   "plasma_r"),
-            "cost":          (self.cost[map_grain],       "Cost",            "plasma_r"),
+            "match_rate":    (_grain_sel(self.match_rate), "Match rate",      "viridis"),
+            "rms_px":        (_grain_sel(self.rms_px),     "RMS (px)",        "plasma_r"),
+            "mean_px":       (_grain_sel(self.mean_px),    "Mean dev (px)",   "plasma_r"),
+            "cost":          (_grain_sel(self.cost),       "Cost",            "plasma_r"),
             "misorientation":(self.misorientation_map(map_grain), "Misor. (°)", "viridis"),
         }
         map_data, map_label, map_cmap = _map_opts.get(
             map_quantity,
-            (self.match_rate[map_grain], "Match rate", "viridis"),
+            (_grain_sel(self.match_rate), "Match rate", "viridis"),
         )
 
         # ── figure ────────────────────────────────────────────────────────────
@@ -4136,8 +4139,9 @@ class GrainMap:
                      shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
+        grain_label = "merged" if map_grain == 'merged' else f"grain {map_grain + 1}"
         ax_map.set_title(
-            f"Click to inspect — {map_label}  (grain {map_grain + 1})",
+            f"Click to inspect — {map_label}  ({grain_label})",
             fontsize=9,
         )
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
@@ -4564,8 +4568,11 @@ class GrainMap:
             map_quantity (str): Scalar quantity shown on the left panel.  One of
                 `'match_rate'`, `'rms_px'`, `'mean_px'`, `'cost'`, `'misorientation'`.
                 Use `'misorientation'` for grains refined via image-based search methods.
-            map_grain (int or None): Grain index used to build the left-panel map.  `None` uses
-                the merged grain slot when available, otherwise grain `0`.
+            map_grain (int or None): Grain index used to build the left-panel map, and the grain
+                slot new fits are written into when the "Store" dropdown is left on
+                "Auto (shown grain)".  Because it doubles as a write target, it must
+                name a real grain slot — it cannot resolve to the merged per-pixel
+                selection.  `None` (default) falls back to grain `0`.
             motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
             motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
             E_min_eV, E_max_eV (float): Energy range for spot simulation.  The allowed-HKL sphere
@@ -5423,8 +5430,11 @@ class GrainMap:
                 *h5_dataset*.
             map_quantity (str): Scalar shown on the left panel.  One of `'match_rate'`,
                 `'rms_px'`, `'mean_px'`, `'cost'`.
-            map_grain (int or None): Grain slot for the left-panel map.  `None` uses the merged slot
-                or grain 0.
+            map_grain (int or None): Grain slot for the left-panel map, and the grain slot new
+                fits are written into when the "Store" dropdown is left on
+                "Auto (shown grain)".  Because it doubles as a write target, it must
+                name a real grain slot — it cannot resolve to the merged per-pixel
+                selection.  `None` (default) falls back to grain `0`.
             motor_x, motor_y (str or None): Motor names for axis labels and click conversion.
             motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
             E_min_eV, E_max_eV (float): Energy range for spot simulation.  The allowed-HKL sphere
@@ -6477,7 +6487,7 @@ class GrainMap:
         os.makedirs(seg_dir, exist_ok=True)
 
         if map_grain is None:
-            map_grain = 0
+            map_grain = 'merged' if self.best_grain_map is not None else 0
 
         mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
@@ -6563,7 +6573,7 @@ class GrainMap:
         def _grain_map(arr)->np.ndarray:
             if self.n_grains == 0:
                 return np.full((self.ny, self.nx), np.nan)
-            return arr[map_grain]
+            return self._select_merged(arr) if map_grain == 'merged' else arr[map_grain]
 
         _map_opts = {
             "match_rate": (lambda: _grain_map(self.match_rate), "Match rate",    "viridis"),
@@ -6600,10 +6610,11 @@ class GrainMap:
                      shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
+        grain_label = "merged" if map_grain == 'merged' else f"grain {map_grain + 1}"
         _map_title = (
             f"Click to select — {map_label}"
             if map_quantity == "n_obs"
-            else f"Click to select — {map_label}  (grain {map_grain + 1})"
+            else f"Click to select — {map_label}  ({grain_label})"
         )
         ax_map.set_title(_map_title, fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)

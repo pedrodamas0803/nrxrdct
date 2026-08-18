@@ -445,12 +445,18 @@ fig, axes = gmap.plot_overview(
 
 ### Frame inspection
 
-`inspect_frame`'s `map_grain` argument only accepts an integer grain slot (not
-the `'merged'` string), and defaults to grain `0` when omitted — it does
-**not** automatically pick up the merged selection. To inspect the merged
-result, pass the dedicated slot created in §2.2 explicitly:
+`inspect_frame` and `segment_frame` are read-only viewers: leaving `map_grain`
+unset shows the merged per-pixel selection automatically once `apply_merge()`
+has been called, and falls back to grain `0` otherwise.
 
 ```python
-gmap.inspect_frame(crystal, camera, base_dir, map_grain=gi_merged)
-gmap.inspect_frame(crystal, camera, base_dir, map_grain=0)   # a specific source grain
+gmap.inspect_frame(crystal, camera, base_dir)                # merged, if available
+gmap.inspect_frame(crystal, camera, base_dir, map_grain=0)    # force a specific source grain
 ```
+
+`reindex_frame` and `reindex_frame_manual` are different: their `map_grain`
+also names the grain slot that new fits are written into (via the "Store"
+dropdown's "Auto (shown grain)" option), so it must always be a real slot —
+`None` falls back to grain `0` there, never to the merged selection. Pass an
+explicit `map_grain` (e.g. `gi_merged` from §2.2, or any source grain) if you
+want to reindex against a specific slot.

@@ -81,9 +81,11 @@ from .simulation import (
     E_MIN_eV,
     F2_THRESHOLD,
     precompute_allowed_hkl,
+    rotate_U_about_crystal_axis,
     simulate_laue,
     simulate_laue_stack,
     simulate_mixed_phases,
+    symmetry_equivalent_axes,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5062,6 +5064,286 @@ def search_orientation_image(
         print(f"  {out}")
 
     return out
+
+
+@dataclass
+class TwinCandidateResult(_ResultMixin):
+    """
+    One twin-law candidate evaluated by :func:`search_twin_orientation_image`.
+
+    Attributes:
+        axis ((3,) ndarray): Crystal-frame twin axis tested (one symmetry
+            variant of the axis passed to :func:`search_twin_orientation_image`).
+        angle_deg (float): Twin rotation angle (degrees) about *axis* used to
+            build the starting candidate.
+        refinement (ImageRefinementResult): Result of running
+            :func:`search_orientation_image` from that candidate.
+"""
+    axis       : np.ndarray
+    angle_deg  : float
+    refinement : ImageRefinementResult
+
+    @property
+    def U(self) -> np.ndarray:
+        """Refined orientation matrix (shortcut for `self.refinement.U`)."""
+        return self.refinement.U
+
+    @property
+    def score(self) -> float:
+        """Refined score (shortcut for `self.refinement.score`)."""
+        return self.refinement.score
+
+    def __str__(self) -> str:
+        a = self.axis
+        return (
+            f"TwinCandidateResult  axis=[{a[0]:+.3f} {a[1]:+.3f} {a[2]:+.3f}]  "
+            f"angle={self.angle_deg:.1f}°  {self.refinement}"
+        )
+
+
+def search_twin_orientation_image(
+    crystal,
+    U0: np.ndarray,
+    camera,
+    image: np.ndarray,
+    twin_axis: np.ndarray,
+    twin_angle_deg: float = 180.0,
+    *,
+    symmetry: str = "cubic",
+    kernel_sigma: float = 0.3,
+    bg_sigma: float = 251.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    allowed_hkl=None,
+    search_misor_deg: float = 2.0,
+    n_search: int = 200,
+    max_angle_deg: float = 0.15,
+    seed: "int | None" = None,
+    method: str = "Powell",
+    options: "dict | None" = None,
+    verbose: bool = False,
+) -> "list[TwinCandidateResult]":
+    """
+    Search for a crystallographic twin of *U0* in a single raw image.
+
+    Builds one starting candidate per symmetry-equivalent variant of
+    *twin_axis* (:func:`~nrxrdct.laue.simulation.symmetry_equivalent_axes`)
+    by rotating *U0* by *twin_angle_deg* about each variant
+    (:func:`~nrxrdct.laue.simulation.rotate_U_about_crystal_axis`), then runs
+    :func:`search_orientation_image` from each candidate to locate and polish
+    the true local orientation.  A small *search_misor_deg* (default 2°) is
+    enough to capture the modest lattice relaxation real twin boundaries show
+    relative to the ideal CSL angle, without wandering into an unrelated basin.
+
+    For the BCC/B2 {112}<111> compound twin (misorientation 180°/<111>,
+    equivalent to 60°/<111> under cubic symmetry), the default
+    `twin_angle_deg=180.0` combined with `twin_axis=[1, 1, 1]` tests all 4
+    crystallographically equivalent <111> variants automatically.
+
+    Results are returned **sorted by refined score, best first** — the twin
+    variant (if any) that actually explains real intensity in the image will
+    be `results[0]`.
+
+    A high score alone is not sufficient evidence of a genuine twin: verify
+    with :func:`classify_spot_matches` against a real peak list — a genuine
+    twin should explain measured peaks that *U0* does not (`b_only > 0`), not
+    just re-explain peaks *U0* already accounts for.
+
+    Args:
+        crystal: Crystal object passed to :func:`simulate_laue`.
+        U0 ((3, 3) ndarray): Orientation matrix of the (already fitted)
+            reference grain the twin is tested against.
+        camera (Camera): Detector geometry.
+        image ((ny, nx) ndarray): Raw detector frame.  Gap / invalid pixels
+            must be flagged as negative (Eiger convention: −1).
+        twin_axis ((3,) array-like): A representative crystal-frame twin
+            axis, e.g. `[1, 1, 1]` for a {112}<111> BCC/B2 twin.  Expanded to
+            all symmetry-equivalent variants internally.
+        twin_angle_deg (float): Twin rotation angle about *twin_axis*, in the
+            crystal frame (e.g. `180.0` for a reflection twin expressed as a
+            2-fold rotation about the twin-plane normal / twin direction).
+            Default `180.0`.
+        symmetry (str): Crystal point-group symmetry used to expand
+            *twin_axis* into its equivalent variants.  Default `'cubic'`.
+        kernel_sigma, bg_sigma, E_min, E_max, allowed_hkl: Forwarded to
+            :func:`search_orientation_image`.
+        search_misor_deg (float): Misorientation search radius (degrees)
+            around each ideal twin candidate.  Keep small — this accounts
+            for lattice relaxation at the twin boundary, not uncertainty in
+            the twin law itself.  Default `2.0`.
+        n_search (int): Grid-search sample count per candidate.  Default `200`.
+        max_angle_deg (float): Local-refinement bound (degrees).  Default `0.15`.
+        seed (int or None): Random seed forwarded to each grid search.
+        method (str): `scipy.optimize.minimize` method.  Default `'Powell'`.
+        options (dict or None): Forwarded to `scipy.optimize.minimize`.
+        verbose (bool): Print a summary line per axis variant.  Default `False`.
+
+    Returns:
+        list of TwinCandidateResult: One per symmetry-equivalent axis
+            variant, sorted by refined score descending.
+
+    Example::
+
+        hkl = laue.precompute_allowed_hkl(crystal, E_max_eV=27000)
+        results = laue.search_twin_orientation_image(
+            crystal, U0, camera, image,
+            twin_axis=[1, 1, 1], twin_angle_deg=180.0,
+            allowed_hkl=hkl, verbose=True,
+        )
+        best = results[0]
+        print(best)
+    """
+    axes = symmetry_equivalent_axes(twin_axis, symmetry=symmetry)
+
+    results = []
+    for axis in axes:
+        U_seed = rotate_U_about_crystal_axis(U0, twin_angle_deg, axis)
+        refinement = search_orientation_image(
+            crystal, U_seed, camera, image,
+            kernel_sigma      = kernel_sigma,
+            bg_sigma          = bg_sigma,
+            E_min             = E_min,
+            E_max             = E_max,
+            allowed_hkl       = allowed_hkl,
+            search_misor_deg  = search_misor_deg,
+            n_search          = n_search,
+            max_angle_deg     = max_angle_deg,
+            seed              = seed,
+            method            = method,
+            options           = options,
+            verbose           = False,
+        )
+        candidate = TwinCandidateResult(
+            axis=axis, angle_deg=twin_angle_deg, refinement=refinement,
+        )
+        results.append(candidate)
+        if verbose:
+            print(f"  {candidate}")
+
+    results.sort(key=lambda c: c.score, reverse=True)
+    return results
+
+
+@dataclass
+class SpotMatchClassification(_ResultMixin):
+    """
+    Per-observed-spot classification against two candidate spot lists
+    (:func:`classify_spot_matches`).
+
+    Attributes:
+        mask_a ((N,) bool ndarray): True where the observed spot has a
+            candidate-*a* spot within `match_px`.
+        mask_b ((N,) bool ndarray): True where the observed spot has a
+            candidate-*b* spot within `match_px`.
+        label_a, label_b (str): Labels used in `__str__` and by
+            :func:`~nrxrdct.laue.laue_plotting.plot_twin_search`.
+"""
+    mask_a  : np.ndarray
+    mask_b  : np.ndarray
+    label_a : str = "a"
+    label_b : str = "b"
+
+    @property
+    def n_total(self) -> int:
+        return int(len(self.mask_a))
+
+    @property
+    def a_only(self) -> np.ndarray:
+        """Explained by *a* but not *b*."""
+        return self.mask_a & ~self.mask_b
+
+    @property
+    def b_only(self) -> np.ndarray:
+        """Explained by *b* but not *a*."""
+        return self.mask_b & ~self.mask_a
+
+    @property
+    def both(self) -> np.ndarray:
+        """Explained by both *a* and *b*."""
+        return self.mask_a & self.mask_b
+
+    @property
+    def neither(self) -> np.ndarray:
+        """Explained by neither *a* nor *b*."""
+        return ~self.mask_a & ~self.mask_b
+
+    def __str__(self) -> str:
+        n = self.n_total
+        return (
+            f"SpotMatchClassification  "
+            f"{self.label_a} only: {int(self.a_only.sum())}/{n}  "
+            f"{self.label_b} only: {int(self.b_only.sum())}/{n}  "
+            f"both: {int(self.both.sum())}/{n}  "
+            f"neither: {int(self.neither.sum())}/{n}"
+        )
+
+
+def classify_spot_matches(
+    obs_xy: np.ndarray,
+    spots_a: "list[dict]",
+    spots_b: "list[dict]",
+    *,
+    match_px: float = 10.0,
+    label_a: str = "a",
+    label_b: str = "b",
+) -> SpotMatchClassification:
+    """
+    Classify each observed spot by which candidate orientation(s) explain it.
+
+    For every observed pixel position, independently checks whether *any*
+    simulated spot from *spots_a* and, separately, from *spots_b* falls
+    within *match_px*.  Unlike :func:`_match_spots`, this is **not** a
+    one-to-one assignment — it's an existence test against two candidate
+    sets, which is what you want when asking "does orientation A explain
+    this peak, does orientation B, both, or neither" rather than "what's the
+    globally optimal pairing."
+
+    The primary use case is testing a twin candidate against a fitted
+    primary orientation: a genuine twin domain should explain real peaks
+    that the primary orientation does not (`b_only` nonzero). If every peak
+    the twin candidate matches is also matched by the primary orientation
+    (`b_only` empty), the candidate isn't adding any independent evidence —
+    see :func:`search_twin_orientation_image`.
+
+    Args:
+        obs_xy ((N, 2) array-like): Observed pixel positions `[xcam, ycam]`,
+            e.g. `peaklist[:, :2]`.
+        spots_a, spots_b (list of dict): Spot lists from
+            :func:`~nrxrdct.laue.simulation.simulate_laue` (or compatible);
+            each dict must contain a `'pix'` key.
+        match_px (float): Maximum pixel distance for a candidate spot to
+            count as explaining an observed spot.  Default `10.0`.
+        label_a, label_b (str): Labels carried through to
+            `SpotMatchClassification.__str__` and to
+            :func:`~nrxrdct.laue.laue_plotting.plot_twin_search`.
+
+    Returns:
+        SpotMatchClassification
+
+    Example::
+
+        cls = classify_spot_matches(
+            peaklist[:, :2], spots_u0, spots_twin,
+            label_a='U0', label_b='twin',
+        )
+        print(cls)
+        # SpotMatchClassification  U0 only: 33/81  twin only: 0/81  both: 14/81  neither: 34/81
+    """
+    obs_xy = np.asarray(obs_xy, dtype=float)
+
+    def _has_match(spots) -> np.ndarray:
+        if not spots or len(obs_xy) == 0:
+            return np.zeros(len(obs_xy), dtype=bool)
+        sim_xy = np.array([s["pix"] for s in spots], dtype=float)
+        d = np.linalg.norm(obs_xy[:, None, :] - sim_xy[None, :, :], axis=-1)
+        return d.min(axis=1) < match_px
+
+    return SpotMatchClassification(
+        mask_a=_has_match(spots_a),
+        mask_b=_has_match(spots_b),
+        label_a=label_a,
+        label_b=label_b,
+    )
 
 
 def search_strain_image(

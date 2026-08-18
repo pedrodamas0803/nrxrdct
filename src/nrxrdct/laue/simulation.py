@@ -7828,6 +7828,60 @@ def _symmetry_ops_np(symmetry: str) -> np.ndarray:
     return result
 
 
+def symmetry_equivalent_axes(
+    axis: "np.ndarray",
+    symmetry: str = "cubic",
+    *,
+    atol: float = 1e-6,
+) -> "np.ndarray":
+    """
+    Unique crystal-frame directions equivalent to *axis* under the point group.
+
+    Applies every proper rotation of the crystal's point group to *axis* and
+    deduplicates the results, treating a direction and its negation as the
+    same axis (a 180° rotation about `v` is identical to a 180° rotation
+    about `-v`).  Useful for enumerating twin-law variants: a {112}<111>
+    BCC/B2 twin, for example, can occur about any of the 4 crystallographically
+    equivalent <111> directions, and testing only `[1, 1, 1]` would miss the
+    other 3.
+
+    Args:
+        axis ((3,) array-like): A representative crystal-frame direction
+            (e.g. `[1, 1, 1]`).  Need not be a unit vector.
+        symmetry (str): Crystal point-group symmetry — same options as
+            :func:`disorientation` (`'cubic'`, `'hexagonal'`, `'tetragonal'`,
+            `'orthorhombic'`).
+        atol (float): Absolute tolerance used to deduplicate equivalent
+            directions.  Default `1e-6`.
+
+    Returns:
+        axes ((M, 3) ndarray): Unique unit-vector directions, one row per
+            symmetry-equivalent variant of *axis*.
+
+    Example::
+
+        # the 4 <111>-type axes for the BCC/B2 {112}<111> twin law
+        axes = symmetry_equivalent_axes([1, 1, 1], symmetry='cubic')
+    """
+    ops = _symmetry_ops_np(symmetry)                     # (N, 3, 3)
+    axis = np.asarray(axis, dtype=float)
+    axis = axis / np.linalg.norm(axis)
+
+    equiv = ops @ axis                                   # (N, 3)
+    # Canonicalise sign so v and -v collapse to the same row: flip so the
+    # first component with |component| > atol is positive.
+    for i, v in enumerate(equiv):
+        j = int(np.argmax(np.abs(v) > atol))
+        if v[j] < 0:
+            equiv[i] = -v
+
+    unique: list = []
+    for v in equiv:
+        if not any(np.allclose(v, u, atol=atol) for u in unique):
+            unique.append(v)
+    return np.array(unique)
+
+
 def map_to_fundamental_zone(
     U: "np.ndarray",
     symmetry: str = "cubic",

@@ -389,6 +389,68 @@ class GrainMap:
         """Return the stored fit result (or `None`) at `(iy, ix, grain)`."""
         return self._results[grain][iy][ix]
 
+    def _write_fit_npz(self, base_dir: str, gi: int, iy: int, ix: int, result) -> str:
+        """
+        Persist a single fit result to disk in the same layout the SLURM
+        orientation/strain workers use, so it becomes visible to
+        :meth:`collect_orientation`, :meth:`collect_strain`, and (via
+        :meth:`write_merge_links`) the merge pipeline.
+
+        Writes `base_dir/strain/frame_{frame_idx:05d}_g{gi:02d}.npz` when
+        *result* carries strain data (has a `strain_voigt` attribute),
+        otherwise `base_dir/ubs/frame_{frame_idx:05d}_g{gi:02d}.npz`. Any
+        existing file at that path is unconditionally overwritten — unlike
+        the batch workers, an interactive "Store" always means "replace
+        whatever was there."
+
+        *result* types that don't carry spot-matching statistics (image-
+        refinement results — see :class:`~nrxrdct.laue.fitting.ImageRefinementResult`,
+        :class:`~nrxrdct.laue.fitting.StrainImageRefinementResult`) are
+        written with `rms_px`/`mean_px`/`match_rate`/`cost` as `NaN` and
+        `n_matched` as `-1`, matching how they're represented once loaded.
+        Note such a pixel will then never pass :meth:`merge`'s quality
+        filters (which require a real `n_matched`/`match_rate`), since
+        image-refinement has no comparable spot-matching statistic.
+
+        Args:
+            base_dir (str): Root processing directory (same one passed to
+                `submit_orientation` / `collect_orientation` / `write_merge_links`).
+            gi (int): Grain slot index embedded in the filename.
+            iy, ix (int): Map position.
+            result: Fit result object with at least `U` and (optionally) `rotvec`,
+                `rms_px`, `mean_px`, `n_matched`, `match_rate`, `cost`, and,
+                for strain-capable results, `strain_tensor` / `strain_voigt`
+                (and optionally `U_eff`).
+
+        Returns:
+            str: The path written.
+"""
+        has_strain = hasattr(result, "strain_voigt")
+        out_dir    = os.path.join(base_dir, "strain" if has_strain else "ubs")
+        os.makedirs(out_dir, exist_ok=True)
+
+        frame_idx = self.frame_index(iy, ix)
+        out_path  = os.path.join(out_dir, f"frame_{frame_idx:05d}_g{gi:02d}.npz")
+
+        save_dict = dict(
+            U          = np.asarray(result.U),
+            rotvec     = np.asarray(getattr(result, "rotvec", np.zeros(3))),
+            rms_px     = np.array(getattr(result, "rms_px", np.nan)),
+            mean_px    = np.array(getattr(result, "mean_px", np.nan)),
+            n_matched  = np.array(getattr(result, "n_matched", -1)),
+            match_rate = np.array(getattr(result, "match_rate", np.nan)),
+            cost       = np.array(getattr(result, "cost", np.nan)),
+        )
+        if has_strain:
+            save_dict["U_eff"]         = np.asarray(getattr(result, "U_eff", result.U))
+            save_dict["strain_tensor"] = np.asarray(result.strain_tensor)
+            save_dict["strain_voigt"]  = np.asarray(result.strain_voigt)
+
+        tmp = out_path[:-4] + ".tmp.npz"
+        np.savez(tmp, **save_dict)
+        os.replace(tmp, out_path)   # atomic overwrite, unlike os.rename on Windows
+        return out_path
+
     def merge(
         self,
         metric: str = "match_rate",
@@ -5166,6 +5228,14 @@ class GrainMap:
                     f"rms={fit_result.rms_px:.2f} px  "
                     f"match={fit_result.match_rate:.0%}"
                 )
+
+            try:
+                npz_path = self._write_fit_npz(base_dir, gi, iy, ix, fit_result)
+                npz_note = f" — wrote {os.path.relpath(npz_path, base_dir)}"
+                print_line += f"  → {npz_path}"
+            except Exception as exc:
+                npz_note = f" — <b style='color:#f44'>npz write failed: {exc}</b>"
+
             # Refresh the map image so the stored pixel is visible immediately
             if gi == w_map_grain.value:
                 im_map.set_data(_map_opts[w_map_quantity.value][0])
@@ -5179,7 +5249,7 @@ class GrainMap:
             _info.value = (
                 f"<b style='color:#44dd66'>Stored → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{fit_result}"
-                f"<span style='color:#aaa'>{save_note}</span>"
+                f"<span style='color:#aaa'>{save_note}{npz_note}</span>"
             )
             print(print_line + (f"  → saved to {self.save_path}" if self.save_path else "  (in memory only)"))
 
@@ -6303,6 +6373,15 @@ class GrainMap:
             _state["stored_result"] = result
             kind = "strain+orient" if _state["strain_fit_result"] is not None else "orient"
             btn_remove.disabled = False
+
+            try:
+                npz_path = self._write_fit_npz(base_dir, gi, iy, ix, result)
+                npz_note = f" — wrote {os.path.relpath(npz_path, base_dir)}"
+                npz_print = f"  → {npz_path}"
+            except Exception as exc:
+                npz_note  = f" — <b style='color:#f44'>npz write failed: {exc}</b>"
+                npz_print = f"  → npz write failed: {exc}"
+
             # Refresh the map image so the stored pixel is visible immediately
             im_map.set_data(_map_opts[w_map_quantity.value][0])
             im_map.autoscale()
@@ -6315,7 +6394,7 @@ class GrainMap:
             _info.value = (
                 f"<b style='color:#44dd66'>Stored {kind} → grain {gi + 1} "
                 f"(iy={iy}, ix={ix})</b>&emsp;{result}"
-                f"<span style='color:#aaa'>{save_note}"
+                f"<span style='color:#aaa'>{save_note}{npz_note}"
                 " — click ✂ Remove spots to isolate next grain</span>"
             )
             print(
@@ -6323,6 +6402,7 @@ class GrainMap:
                 f"rms={result.rms_px:.2f} px  "
                 f"match={result.match_rate:.0%}"
                 + (f"  → saved to {self.h5_path}" if self.h5_path else "  (in memory only)")
+                + npz_print
             )
 
         def _cb_save(_) -> None:

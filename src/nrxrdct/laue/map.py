@@ -4812,12 +4812,16 @@ class GrainMap:
     ) -> tuple:
         """
         Interactive per-UB-candidate score heatmap, with a dropdown to switch
-        between candidates.
+        between candidates, a checkbox for log-scale color mapping, and a
+        vmin/vmax range slider.
 
         Every heatmap is precomputed up front (via
         :meth:`compute_ub_candidate_scores`, unless *scores* is supplied
-        directly); the dropdown callback only swaps the displayed array —
-        no recomputation on selection.
+        directly); widget callbacks only swap the displayed array / color
+        norm — no recomputation on selection. Switching candidates always
+        resets the slider to the 1st / 99.9th percentile of that candidate's
+        score map; the slider can then be dragged to override it for the
+        currently shown candidate.
 
         Args:
             scores ((n_grains, ny, nx) ndarray or None): Precomputed scores, as
@@ -4873,11 +4877,31 @@ class GrainMap:
             if self.ub_files else [f"UB{gi}" for gi in range(n_ub)]
         )
 
+        import matplotlib.colors as mcolors
+
+        def _frame_bounds(data: np.ndarray) -> tuple:
+            finite = data[np.isfinite(data)]
+            if finite.size == 0:
+                return 0.0, 1.0
+            lo, hi = float(finite.min()), float(finite.max())
+            return (lo, hi) if hi > lo else (lo, lo + 1e-9)
+
+        def _frame_percentiles(data: np.ndarray) -> tuple:
+            finite = data[np.isfinite(data)]
+            if finite.size == 0:
+                return 0.0, 1.0
+            lo = float(np.percentile(finite, 1))
+            hi = float(np.percentile(finite, 99.9))
+            return (lo, hi) if hi > lo else (lo, lo + 1e-9)
+
         with plt.ioff():
             fig, ax = plt.subplots(figsize=figsize)
+
+        vmin0, vmax0 = _frame_percentiles(scores[0])
         im = ax.imshow(
             scores[0], origin="upper", extent=extent, cmap=cmap,
             interpolation="nearest", aspect="auto",
+            norm=mcolors.Normalize(vmin=vmin0, vmax=vmax0),
         )
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03, label="score (a.u.)")
         ax.set_xlabel(xlabel)
@@ -4892,17 +4916,64 @@ class GrainMap:
             layout=ipw.Layout(width="280px"),
             style={"description_width": "110px"},
         )
+        w_log = ipw.Checkbox(
+            value=False, description="log scale",
+            layout=ipw.Layout(width="120px"),
+        )
+        lo0, hi0 = _frame_bounds(scores[0])
+        w_vminmax = ipw.FloatRangeSlider(
+            value=(vmin0, vmax0), min=lo0, max=hi0,
+            step=(hi0 - lo0) / 500 if hi0 > lo0 else 1e-9,
+            description="vmin/vmax:",
+            continuous_update=False,
+            readout_format=".3g",
+            layout=ipw.Layout(width="420px"),
+            style={"description_width": "80px"},
+        )
 
-        def _refresh(_=None) -> None:
-            gi = w_ub.value
-            im.set_data(scores[gi])
-            im.autoscale()
-            ax.set_title(f"UB candidate score — {ub_names[gi]}", fontsize=10)
+        def _apply_norm(_=None) -> None:
+            vmin, vmax = w_vminmax.value
+            if w_log.value and vmin <= 0:
+                finite_pos = scores[w_ub.value][
+                    np.isfinite(scores[w_ub.value]) & (scores[w_ub.value] > 0)
+                ]
+                vmin = float(finite_pos.min()) if finite_pos.size else 1e-9
+                vmax = max(vmax, vmin * 1.0000001)
+            im.set_norm(
+                mcolors.LogNorm(vmin=vmin, vmax=vmax)
+                if w_log.value else mcolors.Normalize(vmin=vmin, vmax=vmax)
+            )
             fig.canvas.draw_idle()
 
-        w_ub.observe(_refresh, names="value")
+        def _refresh_ub(_=None) -> None:
+            gi = w_ub.value
+            data = scores[gi]
+            im.set_data(data)
+            ax.set_title(f"UB candidate score — {ub_names[gi]}", fontsize=10)
 
-        _ipy_display(ipw.VBox([fig.canvas, w_ub]))
+            lo, hi = _frame_bounds(data)
+            vmin, vmax = _frame_percentiles(data)
+            # widen bounds first so the new value never falls outside the
+            # slider's current [min, max] while updating (ipywidgets errors
+            # otherwise), then narrow to the new frame's bounds.
+            w_vminmax.min = min(w_vminmax.min, lo)
+            w_vminmax.max = max(w_vminmax.max, hi)
+            w_vminmax.step = (hi - lo) / 500 if hi > lo else 1e-9
+            w_vminmax.value = (vmin, vmax)
+            w_vminmax.min = lo
+            w_vminmax.max = hi
+
+            _apply_norm()
+
+        w_ub.observe(_refresh_ub, names="value")
+        w_log.observe(_apply_norm, names="value")
+        w_vminmax.observe(_apply_norm, names="value")
+
+        _controls = ipw.HBox(
+            [w_ub, w_log, w_vminmax],
+            layout=ipw.Layout(gap="10px", align_items="center", flex_flow="row wrap"),
+        )
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
         return fig, ax, scores
 
     def reindex_frame(

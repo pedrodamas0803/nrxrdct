@@ -4423,7 +4423,10 @@ class GrainMap:
         Args:
             crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
             camera (Camera): Detector geometry.
-            hkl (tuple of int): Miller indices `(h, k, l)` of the reflection to extract.
+            hkl (tuple of int): Miller indices `(h, k, l)` of the reflection to extract. If
+                `hkl` is not itself the primary reflection at a pixel, spots whose
+                `harmonic_hkls` list contains `hkl` are also matched (e.g. `hkl` merged
+                onto another reflection's pixel as a harmonic).
             grain (int or 'merged'): Grain slot whose fitted `U` matrices are used.  `'merged'`
                 uses the per-pixel winning grain set by :meth:`apply_merge`
                 (pixels with no merge winner are skipped, same as an unfitted
@@ -4542,6 +4545,17 @@ class GrainMap:
                 None,
             )
             if spot is None:
+                # Fall back to a harmonic hit: hkl may have been merged onto
+                # another reflection's pixel (e.g. hkl=(2,2,2) absorbed into
+                # the (1,1,1) spot) — see simulate_laue's harmonic_hkls.
+                spot = next(
+                    (
+                        s for s in spots
+                        if hkl in s.get("harmonic_hkls", ()) and s.get("pix") is not None
+                    ),
+                    None,
+                )
+            if spot is None:
                 return None
 
             image = _load_image(self.frame_index(iy, ix))
@@ -4621,6 +4635,126 @@ class GrainMap:
             fig.savefig(out_path, dpi=150)
 
         return fig, ax, mosaic
+
+    def suggest_hkl(
+        self,
+        crystal,
+        camera,
+        *,
+        grain: "int | str" = 0,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 27000.0,
+        top_n: int = 10,
+        include_harmonics: bool = True,
+        max_pixels: "int | None" = None,
+        n_workers: "int | None" = None,
+    ) -> list:
+        """
+        Suggest reflections likely to be usable across most of the map.
+
+        For every fitted map pixel, simulates the full Laue pattern from that
+        pixel's orientation matrix and records which `(h, k, l)` reflections
+        land on the detector. Reflections are ranked by how many pixels they
+        are excited at, so the top of the list is a good starting point for
+        :meth:`plot_hkl_mosaic` — a reflection excited at fewer than
+        `self.ny * self.nx` pixels will show gaps (unfitted / off-detector
+        pixels) in the mosaic.
+
+        Simulation reuses the same per-pixel `simulate_laue` call as
+        `plot_hkl_mosaic`, parallelised across threads (see *n_workers*); no
+        detector images are loaded, so this is much cheaper than the mosaic
+        itself.
+
+        Args:
+            crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
+            camera (Camera): Detector geometry.
+            grain (int or 'merged'): Grain slot whose fitted `U` matrices are used, same
+                meaning as in :meth:`plot_hkl_mosaic`. Default `0`.
+            E_min_eV, E_max_eV (float): Energy range used to simulate reflections.
+                Defaults `5000` / `27000` eV.
+            top_n (int): Number of top reflections to return. Default `10`.
+            include_harmonics (bool): Also count a reflection as present at a pixel when it
+                appears in a spot's `harmonic_hkls` (i.e. merged onto another reflection's
+                pixel) — matches the fallback lookup used by `plot_hkl_mosaic`. Default
+                `True`.
+            max_pixels (int or None): If given, randomly subsample at most this many fitted
+                pixels instead of simulating the whole map (useful for a quick estimate on
+                large maps). `None` (default) uses every fitted pixel.
+            n_workers (int or None): Number of threads used to run per-pixel simulations in
+                parallel. Defaults to `os.cpu_count()`.
+
+        Returns:
+            list of dict: Up to `top_n` entries, sorted by descending `n_pixels`, each with:
+
+                `hkl`             `(h, k, l)` tuple.
+                `n_pixels`        Number of sampled pixels where this reflection is excited
+                                  and on-detector.
+                `fraction`        `n_pixels` divided by the number of pixels sampled.
+                `mean_intensity`  Mean, over the pixels where it appears, of the
+                                  reflection's `intensity` (per-pixel-normalised `I_raw`,
+                                  see `simulate_laue`).
+        """
+        from .simulation import simulate_laue
+
+        if grain == 'merged':
+            if self.best_grain_map is None:
+                raise ValueError("No merge result — call apply_merge first.")
+            U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
+        else:
+            U_map = self.U[grain]                 # (ny, nx, 3, 3)
+
+        pixels = [
+            (iy, ix)
+            for iy in range(self.ny)
+            for ix in range(self.nx)
+            if not np.any(np.isnan(U_map[iy, ix]))
+        ]
+        if not pixels:
+            return []
+
+        if max_pixels is not None and len(pixels) > max_pixels:
+            rng = np.random.default_rng()
+            idx = rng.choice(len(pixels), size=max_pixels, replace=False)
+            pixels = [pixels[i] for i in idx]
+
+        def _process_pixel(iy: int, ix: int):
+            try:
+                spots = simulate_laue(
+                    crystal, U_map[iy, ix], camera, E_min=E_min_eV, E_max=E_max_eV,
+                )
+            except Exception:
+                return []
+            seen: dict = {}
+            for s in spots:
+                if s.get("pix") is None:
+                    continue
+                hkls = {tuple(s["hkl"])}
+                if include_harmonics:
+                    hkls.update(tuple(h) for h in s.get("harmonic_hkls", ()))
+                for hk in hkls:
+                    seen[hk] = s["intensity"]
+            return list(seen.items())
+
+        counts: dict = {}
+        intensity_sum: dict = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futures = [pool.submit(_process_pixel, iy, ix) for iy, ix in pixels]
+            for fut in concurrent.futures.as_completed(futures):
+                for hk, intensity in fut.result():
+                    counts[hk] = counts.get(hk, 0) + 1
+                    intensity_sum[hk] = intensity_sum.get(hk, 0.0) + intensity
+
+        n_sampled = len(pixels)
+        ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -intensity_sum[kv[0]]))
+        return [
+            {
+                "hkl": hk,
+                "n_pixels": n,
+                "fraction": n / n_sampled,
+                "mean_intensity": intensity_sum[hk] / n,
+            }
+            for hk, n in ranked[:top_n]
+        ]
 
     def compute_ub_candidate_scores(
         self,

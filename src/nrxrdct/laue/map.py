@@ -9297,6 +9297,21 @@ class GrainMap:
         merged_dir = os.path.join(base_dir, "merged", src_label)
         os.makedirs(merged_dir, exist_ok=True)
 
+        # Clear this target's own stale entries up front. A per-pixel replace
+        # only fires when a fresh source file exists for that pixel this run;
+        # without this, a symlink left over from an earlier run (now pointing
+        # at a deleted/replaced source file, e.g. after re-running strain
+        # refinement) would never be removed, and collect_merged would later
+        # fail trying to read through it.
+        n_stale = 0
+        if overwrite:
+            for stale in glob.glob(os.path.join(merged_dir, f"frame_*_g{gi_merged:02d}.npz")):
+                try:
+                    os.remove(stale)
+                    n_stale += 1
+                except OSError:
+                    pass
+
         n_links = 0
         n_missing = 0
         for iy in range(self.ny):
@@ -9323,6 +9338,8 @@ class GrainMap:
                 os.symlink(rel_src, dst_file)
                 n_links += 1
 
+        if n_stale:
+            print(f"write_merge_links: {n_stale} stale symlinks removed", flush=True)
         if n_missing:
             print(f"write_merge_links: {n_missing} source files not found (skipped)", flush=True)
         print(f"write_merge_links: {n_links} symlinks → {merged_dir}  [source={src_label}]", flush=True)
@@ -9341,12 +9358,21 @@ class GrainMap:
 
         This is the complement of :meth:`write_merge_links`: it reads the
         `.npz` symlinks produced by that method and populates the chosen
-        grain slot.  Strain fields (`strain_voigt`, `strain_tensor`) are
-        loaded automatically when present.
+        grain slot.  Strain fields (`strain_voigt`, `strain_tensor`, and the
+        derived `strain_tensor_deviatoric`) are loaded/recomputed
+        automatically when present.
+
+        The target slot is reset to its unfitted defaults (`NaN` / `n_matched
+        = -1`) before loading, so the result reflects exactly this merge
+        selection — including at pixels with no merge winner — with no
+        leftover values from whatever the slot held before.  This matters if
+        *grain_index* reuses an existing (non-merged) grain slot rather than
+        a dedicated one.
 
         Args:
             base_dir (str): Same root directory passed to :meth:`write_merge_links`.
             grain_index (int or None): Grain slot to populate.  `None` uses `self.n_grains - 1`.
+                Its current contents are discarded before loading (see above).
             source ({"ubs", "strain"}): Which merged subfolder to read from.  `"ubs"` loads orientation-
                 only results; `"strain"` loads results that include strain tensors.
                 Must match the `source` used when calling :meth:`write_merge_links`.
@@ -9371,7 +9397,23 @@ class GrainMap:
                 "merged grain slot.  Pass the same grain_index used in write_merge_links()."
             )
         gi_target = int(grain_index)
-        files     = glob.glob(os.path.join(merged_dir, f"frame_*_g{gi_target:02d}.npz"))
+
+        # Reset the target slot so it reflects exactly this merge selection —
+        # otherwise a pixel with no fresh symlink here (no merge winner, or a
+        # load failure) would silently keep whatever was in this slot before,
+        # which is especially misleading when grain_index reuses an existing
+        # (non-merged) grain slot rather than a dedicated one.
+        self.U[gi_target]                        = np.nan
+        self.rms_px[gi_target]                   = np.nan
+        self.mean_px[gi_target]                  = np.nan
+        self.n_matched[gi_target]                = -1
+        self.match_rate[gi_target]               = np.nan
+        self.cost[gi_target]                     = np.nan
+        self.strain_voigt[gi_target]             = np.nan
+        self.strain_tensor[gi_target]            = np.nan
+        self.strain_tensor_deviatoric[gi_target] = np.nan
+
+        files = glob.glob(os.path.join(merged_dir, f"frame_*_g{gi_target:02d}.npz"))
 
         def _load(fpath: str) -> bool:
             m = re.search(r"frame_(\d{5})_g(\d{2})\.npz$", os.path.basename(fpath))
@@ -9390,8 +9432,12 @@ class GrainMap:
                 self.match_rate[gi_target, iy, ix] = float(d["match_rate"])
                 self.cost[gi_target, iy, ix]       = float(d["cost"])
                 if "strain_voigt" in d:
+                    eps = d["strain_tensor"]
                     self.strain_voigt[gi_target, iy, ix]  = d["strain_voigt"]
-                    self.strain_tensor[gi_target, iy, ix] = d["strain_tensor"]
+                    self.strain_tensor[gi_target, iy, ix] = eps
+                    self.strain_tensor_deviatoric[gi_target, iy, ix] = (
+                        eps - np.trace(eps) / 3.0 * np.eye(3)
+                    )
                 return True
             except Exception as exc:
                 print(f"  ✗  {fpath}: {exc}", flush=True)

@@ -6303,6 +6303,10 @@ class GrainMap:
                 f"{len(obs_xy)} obs, {n_sim} sim — {u_source}</span>"
             )
             btn_index.disabled  = len(obs_xy) < 3
+            # A pixel with an existing/merged orientation already has a usable
+            # U0 at this point — no need to force Index or manual pairing
+            # first just to unlock refinement.
+            btn_refine.disabled = len(obs_xy) < 3 or U0 is None
             btn_strain.disabled = True
             btn_store.disabled  = True
             btn_save.disabled   = True

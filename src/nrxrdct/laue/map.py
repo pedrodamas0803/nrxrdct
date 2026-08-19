@@ -4631,7 +4631,6 @@ class GrainMap:
         tiff_dir: "str | None" = None,
         E_min_eV: float = 5000.0,
         E_max_eV: float = 27000.0,
-        normalize: str = "monitor",
         n_workers: "int | None" = None,
     ) -> np.ndarray:
         """
@@ -4641,11 +4640,11 @@ class GrainMap:
         pixel, so each candidate is simulated exactly once
         (`simulate_laue(..., geometry_only=True)` — positions only, no
         structure-factor work). Each detector image is then loaded exactly
-        once, normalised, and the normalised intensity at every candidate's
-        simulated spot pixels is summed in one vectorised pass (`bincount`
-        over all candidates at once — no per-candidate Python loop). Image
-        I/O is parallelised across threads, matching the pattern used by
-        :meth:`plot_hkl_mosaic`.
+        once, and the raw intensity in the 3x3 pixel window around every
+        candidate's simulated spot positions is summed in one vectorised
+        pass (`bincount` over all candidates at once — no per-candidate
+        Python loop). Image I/O is parallelised across threads, matching the
+        pattern used by :meth:`plot_hkl_mosaic`.
 
         Args:
             crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
@@ -4656,18 +4655,14 @@ class GrainMap:
                 by embedded number and mapped to 0-based frame indices.
             E_min_eV, E_max_eV (float): Energy range used to simulate spot positions.
                 Defaults `5000` / `27000` eV.
-            normalize (str): Per-image normalisation applied before summing:
-                `'monitor'` (default) divides by `self.monitor` counts for that frame
-                (falls back to no normalisation if unavailable — TIFF stacks have no
-                monitor channel); `'max'` divides by the image's own max; `'sum'`
-                divides by the image's own total counts; `'none'` sums raw intensity.
             n_workers (int or None): Number of threads used to load images in parallel.
                 Defaults to `os.cpu_count()`.
 
         Returns:
             scores ((n_grains, ny, nx) ndarray): Per-candidate, per-pixel score
-                (sum of normalised image intensity at that candidate's simulated
-                spots). `NaN` wherever the image could not be loaded.
+                (sum of raw image intensity in a 3x3 window around each of that
+                candidate's simulated spots). `NaN` wherever the image could not
+                be loaded.
         """
         import threading
         from .simulation import simulate_laue, precompute_allowed_hkl
@@ -4678,8 +4673,6 @@ class GrainMap:
             )
         if self.n_grains == 0:
             raise ValueError("No candidate UB matrices found (self.U_ref is empty)")
-        if normalize not in ("monitor", "max", "sum", "none"):
-            raise ValueError(f"unknown normalize={normalize!r}")
 
         n_ub = self.n_grains
         allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=E_max_eV)
@@ -4707,7 +4700,15 @@ class GrainMap:
             np.full(len(r), gi, dtype=np.int64) for gi, r in enumerate(spot_rows_list)
         ])
 
-        # ── thread-safe image (+ monitor) loader, same pattern as plot_hkl_mosaic ──
+        # integrate a 3x3 window around each simulated spot position
+        _offsets = np.array(
+            [(dr, dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1)], dtype=np.int64
+        )
+        all_rows = (all_rows[:, None] + _offsets[None, :, 0]).ravel()
+        all_cols = (all_cols[:, None] + _offsets[None, :, 1]).ravel()
+        ub_id = np.repeat(ub_id, len(_offsets))
+
+        # ── thread-safe image loader, same pattern as plot_hkl_mosaic ──
         _local = threading.local()
         _h5_handles: list = []
         _h5_lock = threading.Lock()
@@ -4730,9 +4731,6 @@ class GrainMap:
                     return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
                 except Exception:
                     return None
-
-            def _monitor_value(frame_idx: int) -> "float | None":
-                return None
         else:
             if self.h5_path is None:
                 raise ValueError("h5_path not set on this GrainMap")
@@ -4761,18 +4759,6 @@ class GrainMap:
                 except Exception:
                     return None
 
-            def _monitor_value(frame_idx: int) -> "float | None":
-                f = _get_h5()
-                if f is None or not self.monitor or self.monitor not in f:
-                    return None
-                try:
-                    mv = f[self.monitor]
-                    if frame_idx >= mv.shape[0]:
-                        return None
-                    return float(mv[frame_idx])
-                except Exception:
-                    return None
-
         # ── per-pixel worker: load once, score every UB in one vectorised pass ──
         def _process_pixel(iy: int, ix: int):
             frame_idx = self.frame_index(iy, ix)
@@ -4781,19 +4767,6 @@ class GrainMap:
                 return iy, ix, None
 
             img = image.astype(np.float64, copy=False)
-            if normalize == "monitor":
-                mv = _monitor_value(frame_idx)
-                if mv:
-                    img = img / mv
-            elif normalize == "max":
-                m = float(img.max())
-                if m > 0:
-                    img = img / m
-            elif normalize == "sum":
-                s = float(img.sum())
-                if s > 0:
-                    img = img / s
-
             h, w = img.shape
             valid = (all_rows >= 0) & (all_rows < h) & (all_cols >= 0) & (all_cols < w)
             if not np.any(valid):
@@ -4830,7 +4803,6 @@ class GrainMap:
         tiff_dir: "str | None" = None,
         E_min_eV: float = 5000.0,
         E_max_eV: float = 27000.0,
-        normalize: str = "monitor",
         n_workers: "int | None" = None,
         motor_x: "str | None" = None,
         motor_y: "str | None" = None,
@@ -4852,7 +4824,7 @@ class GrainMap:
                 returned by :meth:`compute_ub_candidate_scores`. If `None`
                 (default), it is computed here — *crystal*, *camera*, and one of
                 *h5_dataset* / *tiff_dir* must then be supplied.
-            crystal, camera, h5_dataset, tiff_dir, E_min_eV, E_max_eV, normalize, n_workers:
+            crystal, camera, h5_dataset, tiff_dir, E_min_eV, E_max_eV, n_workers:
                 Forwarded to :meth:`compute_ub_candidate_scores` when *scores* is `None`.
             motor_x, motor_y (str or None): Motor names for axis labels/extent.
             motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
@@ -4877,7 +4849,7 @@ class GrainMap:
                 crystal, camera,
                 h5_dataset=h5_dataset, tiff_dir=tiff_dir,
                 E_min_eV=E_min_eV, E_max_eV=E_max_eV,
-                normalize=normalize, n_workers=n_workers,
+                n_workers=n_workers,
             )
 
         n_ub = scores.shape[0]
@@ -5321,8 +5293,10 @@ class GrainMap:
             else:
                 obs_xy = np.empty((0, 2))
 
-            # Check if map already has a fitted U for this position
-            existing_U = self.U[map_grain, iy, ix]
+            # Check if map already has a fitted U for this position — use the
+            # currently displayed/selected grain, not the grain this widget
+            # happened to open with.
+            existing_U = self.U[w_map_grain.value, iy, ix]
             has_existing = not np.any(np.isnan(existing_U))
 
             _state.update(
@@ -5485,10 +5459,11 @@ class GrainMap:
             btn_fit.description = "Fitting…"
 
             # Starting U: prefer index result, fall back to existing map U
+            # for the currently displayed/selected grain.
             if _state["result"] is not None:
                 U0 = _state["result"].U
             else:
-                U0 = self.U[map_grain, _state["iy"], _state["ix"]]
+                U0 = self.U[w_map_grain.value, _state["iy"], _state["ix"]]
 
             q: _qmod.Queue = _qmod.Queue()
 
@@ -5640,6 +5615,16 @@ class GrainMap:
                 item = q.get_nowait()
                 if isinstance(item, Exception):
                     _info.value = f"<b style='color:#f44'>Strain fit error: {item}</b>"
+                elif item.n_matched == 0:
+                    _info.value = (
+                        f"<b style='color:#f44'>Strain fit returned 0 matches — "
+                        f"the orientation may need further refinement before fitting strain.  "
+                        f"Orientation result is still available for Store.</b>"
+                    )
+                    # Do not overwrite fit_result with a degenerate zero-match
+                    # result — that would corrupt the seed orientation for any
+                    # later Fit/Img-refine attempt on this pixel with a garbage
+                    # U, even though a good orientation fit is already stored.
                 else:
                     _state["fit_result"] = item
                     col = "#ffcc44" if item.success else "#ffaa33"
@@ -5669,7 +5654,7 @@ class GrainMap:
             U_start = (
                 _state["fit_result"].U if _state["fit_result"] is not None
                 else _state["result"].U if _state["result"] is not None
-                else self.U[map_grain, _state["iy"], _state["ix"]]
+                else self.U[w_map_grain.value, _state["iy"], _state["ix"]]
             )
             if np.any(np.isnan(U_start)):
                 _info.value = "<b style='color:#f44'>No U available — index or fit first</b>"
@@ -5739,7 +5724,7 @@ class GrainMap:
             fit_result = _state["fit_result"]
             U_start = (
                 fit_result.U if fit_result is not None
-                else self.U[map_grain, _state["iy"], _state["ix"]]
+                else self.U[w_map_grain.value, _state["iy"], _state["ix"]]
             )
             if np.any(np.isnan(U_start)):
                 _info.value = "<b style='color:#f44'>No U available — run orientation step first</b>"
@@ -6284,10 +6269,13 @@ class GrainMap:
                     if has_strain:
                         u_source += " + strain"
                 else:
-                    existing_U = self.U[map_grain, iy, ix]
+                    # No merge winner here — fall back to the currently
+                    # displayed/selected grain, not the grain this widget
+                    # happened to open with.
+                    existing_U = self.U[w_map_grain.value, iy, ix]
                     u_source = "U from map"
             else:
-                existing_U = self.U[map_grain, iy, ix]
+                existing_U = self.U[w_map_grain.value, iy, ix]
                 u_source = "U from map"
 
             has_map_U = not np.any(np.isnan(existing_U))
@@ -6681,19 +6669,23 @@ class GrainMap:
                 if isinstance(item, Exception):
                     _info.value = f"<b style='color:#f44'>Strain fit error: {item}</b>"
                     return
-                # Always update simulation so the display reflects the fitted U.
-                _state["U0"] = item.U
-                _run_simulation(item.U)
                 if item.n_matched == 0:
                     _info.value = (
                         f"<b style='color:#f44'>Strain fit returned 0 matches — "
                         f"the orientation may need further refinement before fitting strain.  "
                         f"Orientation result is still available for Store.</b>"
                     )
-                    # Do not overwrite strain_fit_result with a zero-match result;
-                    # Store will fall back to the orientation result.
+                    # Do not overwrite U0 or strain_fit_result with a degenerate
+                    # zero-match result — that would corrupt the seed orientation
+                    # for any later Index/Refine attempt on this pixel with a
+                    # garbage U, even though a good orientation fit is already
+                    # sitting in _state.
                     _draw_det()
                     return
+                # Only adopt the new orientation once the strain fit actually
+                # converged to something meaningful.
+                _state["U0"] = item.U
+                _run_simulation(item.U)
                 _state["strain_fit_result"] = item
                 col = "#ffcc44" if item.success else "#ffaa33"
                 _info.value = f"<b style='color:{col}'>{item}</b>"

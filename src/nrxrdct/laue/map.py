@@ -4622,6 +4622,317 @@ class GrainMap:
 
         return fig, ax, mosaic
 
+    def compute_ub_candidate_scores(
+        self,
+        crystal,
+        camera,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 27000.0,
+        normalize: str = "monitor",
+        n_workers: "int | None" = None,
+    ) -> np.ndarray:
+        """
+        Score every map pixel against every candidate UB in `self.U_ref`.
+
+        Spot positions depend only on `(U, crystal, camera)`, not on the map
+        pixel, so each candidate is simulated exactly once
+        (`simulate_laue(..., geometry_only=True)` — positions only, no
+        structure-factor work). Each detector image is then loaded exactly
+        once, normalised, and the normalised intensity at every candidate's
+        simulated spot pixels is summed in one vectorised pass (`bincount`
+        over all candidates at once — no per-candidate Python loop). Image
+        I/O is parallelised across threads, matching the pattern used by
+        :meth:`plot_hkl_mosaic`.
+
+        Args:
+            crystal (Crystal or LayeredCrystal): Crystal structure used for spot simulation.
+            camera (Camera): Detector geometry.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the
+                image stack. Mutually exclusive with *tiff_dir*; supply exactly one.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files, sorted
+                by embedded number and mapped to 0-based frame indices.
+            E_min_eV, E_max_eV (float): Energy range used to simulate spot positions.
+                Defaults `5000` / `27000` eV.
+            normalize (str): Per-image normalisation applied before summing:
+                `'monitor'` (default) divides by `self.monitor` counts for that frame
+                (falls back to no normalisation if unavailable — TIFF stacks have no
+                monitor channel); `'max'` divides by the image's own max; `'sum'`
+                divides by the image's own total counts; `'none'` sums raw intensity.
+            n_workers (int or None): Number of threads used to load images in parallel.
+                Defaults to `os.cpu_count()`.
+
+        Returns:
+            scores ((n_grains, ny, nx) ndarray): Per-candidate, per-pixel score
+                (sum of normalised image intensity at that candidate's simulated
+                spots). `NaN` wherever the image could not be loaded.
+        """
+        import threading
+        from .simulation import simulate_laue, precompute_allowed_hkl
+
+        if (h5_dataset is None) == (tiff_dir is None):
+            raise ValueError(
+                "compute_ub_candidate_scores: supply exactly one of h5_dataset or tiff_dir"
+            )
+        if self.n_grains == 0:
+            raise ValueError("No candidate UB matrices found (self.U_ref is empty)")
+        if normalize not in ("monitor", "max", "sum", "none"):
+            raise ValueError(f"unknown normalize={normalize!r}")
+
+        n_ub = self.n_grains
+        allowed_hkl = precompute_allowed_hkl(crystal, E_max_eV=E_max_eV)
+
+        # ── simulate spot positions once per UB candidate ──────────────────
+        spot_rows_list: list = []
+        spot_cols_list: list = []
+        for gi in range(n_ub):
+            spots = simulate_laue(
+                crystal, self.U_ref[gi], camera,
+                E_min=E_min_eV, E_max=E_max_eV,
+                allowed_hkl=allowed_hkl, geometry_only=True,
+            )
+            if spots:
+                xy = np.array([s["pix"] for s in spots], dtype=np.float64)
+                spot_cols_list.append(np.round(xy[:, 0]).astype(np.int64))
+                spot_rows_list.append(np.round(xy[:, 1]).astype(np.int64))
+            else:
+                spot_cols_list.append(np.empty(0, dtype=np.int64))
+                spot_rows_list.append(np.empty(0, dtype=np.int64))
+
+        all_rows = np.concatenate(spot_rows_list)
+        all_cols = np.concatenate(spot_cols_list)
+        ub_id = np.concatenate([
+            np.full(len(r), gi, dtype=np.int64) for gi, r in enumerate(spot_rows_list)
+        ])
+
+        # ── thread-safe image (+ monitor) loader, same pattern as plot_hkl_mosaic ──
+        _local = threading.local()
+        _h5_handles: list = []
+        _h5_lock = threading.Lock()
+
+        if tiff_dir is not None:
+            pat = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+            files = []
+            for fname in os.listdir(tiff_dir):
+                m = pat.search(fname)
+                if m:
+                    files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+            files.sort(key=lambda t: t[0])
+            _tiff_index = [p for _, p in files]
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+
+            def _monitor_value(frame_idx: int) -> "float | None":
+                return None
+        else:
+            if self.h5_path is None:
+                raise ValueError("h5_path not set on this GrainMap")
+
+            def _get_h5() -> "h5py.File | None":
+                f = getattr(_local, "h5file", None)
+                if f is None:
+                    try:
+                        f = h5py.File(self.h5_path, "r")
+                    except Exception:
+                        return None
+                    _local.h5file = f
+                    with _h5_lock:
+                        _h5_handles.append(f)
+                return f
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
+                f = _get_h5()
+                if f is None or h5_dataset not in f:
+                    return None
+                try:
+                    ds = f[h5_dataset]
+                    if frame_idx >= ds.shape[0]:
+                        return None
+                    return ds[frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+
+            def _monitor_value(frame_idx: int) -> "float | None":
+                f = _get_h5()
+                if f is None or not self.monitor or self.monitor not in f:
+                    return None
+                try:
+                    mv = f[self.monitor]
+                    if frame_idx >= mv.shape[0]:
+                        return None
+                    return float(mv[frame_idx])
+                except Exception:
+                    return None
+
+        # ── per-pixel worker: load once, score every UB in one vectorised pass ──
+        def _process_pixel(iy: int, ix: int):
+            frame_idx = self.frame_index(iy, ix)
+            image = _load_image(frame_idx)
+            if image is None:
+                return iy, ix, None
+
+            img = image.astype(np.float64, copy=False)
+            if normalize == "monitor":
+                mv = _monitor_value(frame_idx)
+                if mv:
+                    img = img / mv
+            elif normalize == "max":
+                m = float(img.max())
+                if m > 0:
+                    img = img / m
+            elif normalize == "sum":
+                s = float(img.sum())
+                if s > 0:
+                    img = img / s
+
+            h, w = img.shape
+            valid = (all_rows >= 0) & (all_rows < h) & (all_cols >= 0) & (all_cols < w)
+            if not np.any(valid):
+                return iy, ix, np.zeros(n_ub, dtype=np.float64)
+            vals = img[all_rows[valid], all_cols[valid]]
+            out = np.bincount(ub_id[valid], weights=vals, minlength=n_ub)
+            return iy, ix, out
+
+        scores = np.full((n_ub, self.ny, self.nx), np.nan, dtype=np.float64)
+        jobs = [(iy, ix) for iy in range(self.ny) for ix in range(self.nx)]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                futures = [pool.submit(_process_pixel, iy, ix) for iy, ix in jobs]
+                for fut in concurrent.futures.as_completed(futures):
+                    iy, ix, out = fut.result()
+                    if out is not None:
+                        scores[:, iy, ix] = out
+        finally:
+            for f in _h5_handles:
+                try:
+                    f.close()
+                except Exception:
+                    pass
+
+        return scores
+
+    def plot_ub_candidate_scores(
+        self,
+        scores: "np.ndarray | None" = None,
+        *,
+        crystal=None,
+        camera=None,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 27000.0,
+        normalize: str = "monitor",
+        n_workers: "int | None" = None,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        cmap: str = "viridis",
+        figsize: tuple = (7, 6),
+    ) -> tuple:
+        """
+        Interactive per-UB-candidate score heatmap, with a dropdown to switch
+        between candidates.
+
+        Every heatmap is precomputed up front (via
+        :meth:`compute_ub_candidate_scores`, unless *scores* is supplied
+        directly); the dropdown callback only swaps the displayed array —
+        no recomputation on selection.
+
+        Args:
+            scores ((n_grains, ny, nx) ndarray or None): Precomputed scores, as
+                returned by :meth:`compute_ub_candidate_scores`. If `None`
+                (default), it is computed here — *crystal*, *camera*, and one of
+                *h5_dataset* / *tiff_dir* must then be supplied.
+            crystal, camera, h5_dataset, tiff_dir, E_min_eV, E_max_eV, normalize, n_workers:
+                Forwarded to :meth:`compute_ub_candidate_scores` when *scores* is `None`.
+            motor_x, motor_y (str or None): Motor names for axis labels/extent.
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            cmap (str): Colormap for the heatmap. Default `"viridis"`.
+            figsize (tuple): Figure size. Default `(7, 6)`.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+            scores ((n_grains, ny, nx) ndarray): The per-candidate score maps shown.
+        """
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+
+        if scores is None:
+            if crystal is None or camera is None:
+                raise ValueError(
+                    "plot_ub_candidate_scores: supply `scores`, or `crystal` and "
+                    "`camera` so it can be computed"
+                )
+            scores = self.compute_ub_candidate_scores(
+                crystal, camera,
+                h5_dataset=h5_dataset, tiff_dir=tiff_dir,
+                E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                normalize=normalize, n_workers=n_workers,
+            )
+
+        n_ub = scores.shape[0]
+        if n_ub == 0:
+            raise ValueError("no UB candidates to plot")
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu, yu = mu.get(motor_x, ""), mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel, ylabel = "column (ix)", "row (iy)"
+
+        ub_names = (
+            [os.path.basename(p) for p in self.ub_files]
+            if self.ub_files else [f"UB{gi}" for gi in range(n_ub)]
+        )
+
+        with plt.ioff():
+            fig, ax = plt.subplots(figsize=figsize)
+        im = ax.imshow(
+            scores[0], origin="upper", extent=extent, cmap=cmap,
+            interpolation="nearest", aspect="auto",
+        )
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03, label="score (a.u.)")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"UB candidate score — {ub_names[0]}", fontsize=10)
+        fig.tight_layout()
+
+        w_ub = ipw.Dropdown(
+            options=[(name, gi) for gi, name in enumerate(ub_names)],
+            value=0,
+            description="UB candidate:",
+            layout=ipw.Layout(width="280px"),
+            style={"description_width": "110px"},
+        )
+
+        def _refresh(_=None) -> None:
+            gi = w_ub.value
+            im.set_data(scores[gi])
+            im.autoscale()
+            ax.set_title(f"UB candidate score — {ub_names[gi]}", fontsize=10)
+            fig.canvas.draw_idle()
+
+        w_ub.observe(_refresh, names="value")
+
+        _ipy_display(ipw.VBox([fig.canvas, w_ub]))
+        return fig, ax, scores
+
     def reindex_frame(
         self,
         crystal,
@@ -4671,6 +4982,13 @@ class GrainMap:
            selected position and grain slot chosen by the grain selector.
         6. **💾 Save UB** — writes the best available U to an auto-numbered
            `UB<n>.npy` file in the current directory.
+
+        The **strain OK only** checkbox filters the left-panel map to show
+        only pixels where the currently-displayed grain has a converged
+        strain fit (`self.strain_voigt` finite); pixels without one are
+        blanked out (`NaN`), making it easy to spot exactly which positions
+        still need a strain refit for that grain — click one directly to
+        fix it.
 
         Args:
             crystal (Crystal): xrayutilities crystal structure used for indexing and simulation.
@@ -5070,21 +5388,35 @@ class GrainMap:
             value=map_grain,
             layout=ipw.Layout(width="110px", height="32px"),
         )
+        w_strain_only = ipw.Checkbox(
+            value=False, description="strain OK only", indent=False,
+            layout=ipw.Layout(width="150px"),
+        )
+
+        def _strain_ok_mask(gi: int) -> np.ndarray:
+            """(ny, nx) bool: True where grain gi has a converged strain fit."""
+            return ~np.any(np.isnan(self.strain_voigt[gi]), axis=-1)
 
         def _refresh_map_display(_=None) -> None:
             nonlocal _map_opts
             gi = w_map_grain.value
             _map_opts = _build_map_opts(gi)
             data, label, cmap = _map_opts[w_map_quantity.value]
+            if w_strain_only.value:
+                data = np.where(_strain_ok_mask(gi), data, np.nan)
             im_map.set_data(data)
             im_map.set_cmap(cmap)
             im_map.autoscale()
             cbar_map.set_label(label)
-            ax_map.set_title(_map_title(label, gi), fontsize=9)
+            title = _map_title(label, gi)
+            if w_strain_only.value:
+                title += "  ·  strain OK only"
+            ax_map.set_title(title, fontsize=9)
             fig.canvas.draw_idle()
 
         w_map_quantity.observe(_refresh_map_display, names="value")
         w_map_grain.observe(_refresh_map_display, names="value")
+        w_strain_only.observe(_refresh_map_display, names="value")
 
         def _cb_index(_) -> None:
             import asyncio
@@ -5236,11 +5568,10 @@ class GrainMap:
             except Exception as exc:
                 npz_note = f" — <b style='color:#f44'>npz write failed: {exc}</b>"
 
-            # Refresh the map image so the stored pixel is visible immediately
-            if gi == w_map_grain.value:
-                im_map.set_data(_map_opts[w_map_quantity.value][0])
-                im_map.autoscale()
-                fig.canvas.draw_idle()
+            # Refresh the map image so the stored pixel is visible immediately.
+            # Goes through _refresh_map_display so the strain-only mask (if
+            # active) stays applied rather than briefly showing every pixel.
+            _refresh_map_display()
             if self.save_path:
                 self.save(self.save_path)
                 save_note = f" — saved to {os.path.basename(self.save_path)}"
@@ -5486,7 +5817,7 @@ class GrainMap:
                  w_grain, btn_store, btn_save,
                  ipw.HTML("<span style='color:#aaa;align-self:center'>map:</span>",
                           layout=ipw.Layout(margin="0 2px 0 10px")),
-                 w_map_quantity, w_map_grain],
+                 w_map_quantity, w_map_grain, w_strain_only],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0",
                                   align_items="center"),
             ),
@@ -5547,6 +5878,13 @@ class GrainMap:
            from the remaining spots.  Only enabled after a successful *Store*.
 
         Right-click on the detector panel cancels a pending sim-spot selection.
+
+        The **strain OK only** checkbox filters the left-panel map to show
+        only pixels where the currently-displayed grain has a converged
+        strain fit (`self.strain_voigt` finite); pixels without one are
+        blanked out (`NaN`), making it easy to spot exactly which positions
+        still need a strain refit for that grain — click one directly to
+        fix it.
 
         Args:
             crystal (Crystal): xrayutilities crystal structure.
@@ -6158,21 +6496,35 @@ class GrainMap:
             value=map_grain,
             layout=ipw.Layout(width="110px", height="32px"),
         )
+        w_strain_only = ipw.Checkbox(
+            value=False, description="strain OK only", indent=False,
+            layout=ipw.Layout(width="150px"),
+        )
+
+        def _strain_ok_mask(gi: int) -> np.ndarray:
+            """(ny, nx) bool: True where grain gi has a converged strain fit."""
+            return ~np.any(np.isnan(self.strain_voigt[gi]), axis=-1)
 
         def _refresh_map_display(_=None) -> None:
             nonlocal _map_opts
             gi = w_map_grain.value
             _map_opts = _build_map_opts(gi)
             data, label, cmap = _map_opts[w_map_quantity.value]
+            if w_strain_only.value:
+                data = np.where(_strain_ok_mask(gi), data, np.nan)
             im_map.set_data(data)
             im_map.set_cmap(cmap)
             im_map.autoscale()
             cbar_map.set_label(label)
-            ax_map.set_title(_map_title(label, gi), fontsize=9)
+            title = _map_title(label, gi)
+            if w_strain_only.value:
+                title += "  ·  strain OK only"
+            ax_map.set_title(title, fontsize=9)
             fig.canvas.draw_idle()
 
         w_map_quantity.observe(_refresh_map_display, names="value")
         w_map_grain.observe(_refresh_map_display, names="value")
+        w_strain_only.observe(_refresh_map_display, names="value")
 
         # ── UB file loader ────────────────────────────────────────────────────
         def _scan_ub_files() -> list:
@@ -6382,10 +6734,10 @@ class GrainMap:
                 npz_note  = f" — <b style='color:#f44'>npz write failed: {exc}</b>"
                 npz_print = f"  → npz write failed: {exc}"
 
-            # Refresh the map image so the stored pixel is visible immediately
-            im_map.set_data(_map_opts[w_map_quantity.value][0])
-            im_map.autoscale()
-            fig.canvas.draw_idle()
+            # Refresh the map image so the stored pixel is visible immediately.
+            # Goes through _refresh_map_display so the strain-only mask (if
+            # active) stays applied rather than briefly showing every pixel.
+            _refresh_map_display()
             if self.save_path:
                 self.save(self.save_path)
                 save_note = f" — saved to {os.path.basename(self.save_path)}"
@@ -6536,7 +6888,7 @@ class GrainMap:
                      "<span style='color:#aaa;align-self:center'>map:</span>",
                      layout=ipw.Layout(margin="0 2px 0 10px"),
                  ),
-                 w_map_quantity, w_map_grain],
+                 w_map_quantity, w_map_grain, w_strain_only],
                 layout=ipw.Layout(gap="6px", align_items="center",
                                   margin="2px 0 2px 0"),
             ),

@@ -1545,11 +1545,12 @@ class LayeredMap:
             if img is None:
                 return
             pos = img[img > 0]
+            lo_default = float(np.percentile(pos, 1)) if pos.size else 0.0
             hi_default = float(np.percentile(pos, 99)) if pos.size else 1.0
             full_max = float(img.max()) if img.size else hi_default
             slider_max = max(full_max, hi_default * 1.5, 1.0)
             w_vrange.max = slider_max
-            w_vrange.value = [0.0, hi_default]
+            w_vrange.value = [lo_default, hi_default]
 
         def _redraw(_=None) -> None:
             if _state["image"] is not None:
@@ -2497,10 +2498,14 @@ class LayeredMap:
             image = _load_image(frame_idx)
             if image is not None:
                 pos  = image[image > 0]
+                vmin = float(np.percentile(pos, 1)) if pos.size else 0.0
                 vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                if vmax <= vmin:
+                    vmax = vmin + 1.0
                 nv_im, nh_im = image.shape
+                disp_norm = np.clip((image - vmin) / (vmax - vmin), 0, None)
                 ax_det.imshow(
-                    np.log1p(image / vmax * 1000),
+                    np.log1p(disp_norm * 1000),
                     origin="upper", extent=[0, nh_im, nv_im, 0],
                     cmap="gray", aspect="equal", zorder=0,
                 )

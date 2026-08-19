@@ -4856,7 +4856,7 @@ class GrainMap:
             if image is not None:
                 pos  = image[image > 0]
                 vmin = float(np.percentile(pos, 1)) if pos.size else 0.0
-                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                vmax = float(np.percentile(pos, 99.9)) if pos.size else 1.0
                 if vmax <= vmin:
                     vmax = vmin + 1.0
                 nv_im, nh_im = image.shape
@@ -5701,7 +5701,7 @@ class GrainMap:
             if image is not None:
                 pos  = image[image > 0]
                 vmin = float(np.percentile(pos, 1)) if pos.size else 0.0
-                vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
+                vmax = float(np.percentile(pos, 99.9)) if pos.size else 1.0
                 if vmax <= vmin:
                     vmax = vmin + 1.0
                 nv_im, nh_im = image.shape
@@ -7097,7 +7097,7 @@ class GrainMap:
                 return
             pos = img[img > 0]
             lo_default = float(np.percentile(pos, 1)) if pos.size else 0.0
-            hi_default = float(np.percentile(pos, 99)) if pos.size else 1.0
+            hi_default = float(np.percentile(pos, 99.9)) if pos.size else 1.0
             full_max = float(img.max()) if img.size else hi_default
             slider_max = max(full_max, hi_default * 1.5, 1.0)
             w_vrange.max = slider_max

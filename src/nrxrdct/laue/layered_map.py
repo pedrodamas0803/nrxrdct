@@ -1547,10 +1547,16 @@ class LayeredMap:
             pos = img[img > 0]
             lo_default = float(np.percentile(pos, 1)) if pos.size else 0.0
             hi_default = float(np.percentile(pos, 99.9)) if pos.size else 1.0
-            full_max = float(img.max()) if img.size else hi_default
-            slider_max = max(full_max, hi_default * 1.5, 1.0)
-            w_vrange.max = slider_max
+            if hi_default <= lo_default:
+                hi_default = lo_default + 1.0
+            # Cap the track at a high percentile rather than the raw pixel max —
+            # a single saturated/hot pixel would otherwise stretch the slider so
+            # far that the vmin/vmax handles bunch up in a sliver near the low end.
+            slider_max = hi_default * 1.2
+            w_vrange.max = max(slider_max, w_vrange.max)  # avoid a transient value > max
             w_vrange.value = [lo_default, hi_default]
+            w_vrange.max = slider_max
+            w_vrange.step = max(slider_max / 200.0, 1e-6)
 
         def _redraw(_=None) -> None:
             if _state["image"] is not None:

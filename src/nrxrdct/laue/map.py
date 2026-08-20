@@ -2387,6 +2387,130 @@ class GrainMap:
         )
         return fig, axes
 
+    def plot_lattice_ratio_histogram(
+        self,
+        a0: float,
+        b0: float,
+        c0: float,
+        ratios: "list[str] | None" = None,
+        grains: "list[int] | None" = None,
+        *,
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
+        bins: int = 40,
+        density: bool = False,
+        alpha: float = 0.7,
+        figsize: tuple | None = None,
+        title: str | None = None,
+    ) -> tuple:
+        """
+        Histogram of the ``b/a`` and ``c/a`` axial lattice-parameter ratios.
+
+        Uses the same deviatoric-strain-based ratios as
+        :meth:`plot_lattice_ratios` (see its docstring for the derivation
+        and the physical rationale for fixing ``a ≡ a0``). Each ratio gets
+        its own subplot; when multiple grains are requested their
+        distributions are overlaid with different colours.  A vertical
+        dashed line marks the mean of each distribution.
+
+        Args:
+            a0, b0, c0 (float): Nominal (unstrained) lattice parameters, in
+                whatever consistent unit you want the ratio to reflect
+                (only the ratios `b0/a0` and `c0/a0` matter).
+            ratios (list of str or None): Ratios to plot — any subset of
+                ``'b/a'``, ``'c/a'``.  ``None`` plots both.  Default ``None``.
+            grains (list of int or None): Grain indices to include.  ``None`` uses all grains.
+                Default ``None``.
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, noise pixels
+                (``label == -1``) are excluded from the histograms.
+                Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict the
+                histograms to pixels that belong to this specific cluster label.
+                ``None`` includes all non-noise pixels.  Default ``None``.
+            bins (int): Number of histogram bins.  Default ``40``.
+            density (bool): Normalise each histogram to unit area.  Default ``False``.
+            alpha (float): Bar transparency (0–1).  Default ``0.7``.
+            figsize (tuple or None): Figure size.  Auto-sized when ``None``.
+            title (str or None): Figure suptitle.  Auto-generated when ``None``.
+
+        Returns:
+            tuple: ``(fig, axes)`` where *axes* is a 2-D ndarray matching the subplot grid.
+        """
+        _all_ratios = list(self._LATTICE_RATIO_COMPONENTS.keys())
+        ratios = list(ratios) if ratios is not None else _all_ratios
+
+        invalid = [r for r in ratios if r not in self._LATTICE_RATIO_COMPONENTS]
+        if invalid:
+            raise ValueError(
+                f"Unknown ratio(s) {invalid}. Choose from: {_all_ratios}"
+            )
+
+        grains = list(grains) if grains is not None else list(range(self.n_grains))
+
+        _lbl_mask = None
+        if label_map is not None:
+            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+
+        n     = len(ratios)
+        ncols = min(n, 3)
+        nrows = int(np.ceil(n / ncols))
+
+        default_fs = (4.5 * ncols, 3.5 * nrows)
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=figsize or default_fs,
+            squeeze=False,
+        )
+
+        prop_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+        for idx, ratio in enumerate(ratios):
+            row, col = divmod(idx, ncols)
+            ax       = axes[row, col]
+
+            for gi, grain in enumerate(grains):
+                data = self._lattice_ratio_map(ratio, a0, b0, c0, grain)
+                if _lbl_mask is not None:
+                    data = np.where(_lbl_mask, np.nan, data)
+                vals = data[np.isfinite(data)].ravel()
+                if vals.size == 0:
+                    continue
+
+                color  = prop_cycle[gi % len(prop_cycle)]
+                glabel = self._grain_label(grain) if self.n_grains > 1 else None
+                ax.hist(vals, bins=bins, density=density,
+                        color=color, alpha=alpha, label=glabel)
+                ax.axvline(float(np.mean(vals)), color=color,
+                           linestyle="--", linewidth=1.2, alpha=0.9)
+
+            ax.set_xlabel(ratio, fontsize=9)
+            ax.set_ylabel("Density" if density else "Count", fontsize=9)
+            ax.set_title(ratio, fontsize=10)
+            ax.tick_params(labelsize=8)
+
+            if self.n_grains > 1 and idx == 0:
+                ax.legend(fontsize=7, framealpha=0.7)
+
+        # Hide any unused axes in the last row
+        for idx in range(n, nrows * ncols):
+            row, col = divmod(idx, ncols)
+            axes[row, col].set_visible(False)
+
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
+        fig.suptitle(
+            title or (
+                f"Axial lattice-parameter ratio histogram"
+                f"  (a fixed at a0={a0:g}){_lbl_suffix}"
+            ),
+            fontsize=11, y=1.01,
+        )
+        fig.tight_layout()
+        return fig, axes
+
     # ── Stress analysis ───────────────────────────────────────────────────────
 
     # Code Voigt ordering: [xx=0, yy=1, zz=2, xy=3, xz=4, yz=5]

@@ -333,14 +333,14 @@ default dark theme used for interactive exploration.</p>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
 <span class="normal"><a href="#__codelineno-0-77">77</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">switch_to_dark_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Switch matplotlib and nrxrdct&#39;s visualization widgets back to the</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">"""</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Switch matplotlib and nrxrdct's visualization widgets back to the</span>
 <a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    default dark theme used for interactive exploration.</span>
 <a id="__codelineno-0-73" name="__codelineno-0-73"></a>
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">    See :func:`switch_to_light_mode` for details on scope and timing.</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    """</span>
 <a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_DARK_RC</span><span class="p">)</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">&quot;dark&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">"dark"</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -407,8 +407,8 @@ viewer = StackViewer(volume)  # renders light, ready for a figure export</p>
 <span class="normal"><a href="#__codelineno-0-64">64</a></span>
 <span class="normal"><a href="#__codelineno-0-65">65</a></span>
 <span class="normal"><a href="#__codelineno-0-66">66</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="k">def</span><span class="w"> </span><span class="nf">switch_to_light_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    Switch matplotlib and nrxrdct&#39;s visualization widgets to a light theme.</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="w">    </span><span class="sd">"""</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    Switch matplotlib and nrxrdct's visualization widgets to a light theme.</span>
 <a id="__codelineno-0-49" name="__codelineno-0-49"></a>
 <a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    Updates ``matplotlib.pyplot.rcParams`` — so plain ``plt.subplots()``-based</span>
 <a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">    plots (e.g. :func:`~nrxrdct.visualization.plot_integrated_cake`,</span>
@@ -424,9 +424,9 @@ viewer = StackViewer(volume)  # renders light, ready for a figure export</p>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        &gt;&gt;&gt; from nrxrdct.visualization import switch_to_light_mode, StackViewer</span>
 <a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">        &gt;&gt;&gt; switch_to_light_mode()</span>
 <a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        &gt;&gt;&gt; viewer = StackViewer(volume)  # renders light, ready for a figure export</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    """</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_LIGHT_RC</span><span class="p">)</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">&quot;light&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="n">_ph</span><span class="o">.</span><span class="n">set_theme</span><span class="p">(</span><span class="s2">"light"</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

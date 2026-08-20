@@ -445,7 +445,7 @@ lines fall within the energy axis range.</p>
 <span class="normal"><a href="#__codelineno-0-148">148</a></span>
 <span class="normal"><a href="#__codelineno-0-149">149</a></span>
 <span class="normal"><a href="#__codelineno-0-150">150</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_element_component</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="sd">    Build the expected spectral shape for one element on a given energy axis.</span>
 <a id="__codelineno-0-113" name="__codelineno-0-113"></a>
 <a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="sd">    Each emission line is modelled as a Gaussian weighted by its fluorescence</span>
@@ -453,7 +453,7 @@ lines fall within the energy axis range.</p>
 <a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">    lines of the same element are physically motivated.</span>
 <a id="__codelineno-0-117" name="__codelineno-0-117"></a>
 <a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">        element (str): Chemical symbol, e.g. ``&quot;Fe&quot;``.</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">        element (str): Chemical symbol, e.g. ``"Fe"``.</span>
 <a id="__codelineno-0-120" name="__codelineno-0-120"></a><span class="sd">        energy_axis (np.ndarray): 1-D array of energy values in keV (from MCA</span>
 <a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">            calibration).</span>
 <a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">        excitation_energy (float): Incident beam energy in keV.</span>
@@ -464,7 +464,7 @@ lines fall within the energy axis range.</p>
 <a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">        component (np.ndarray): Normalised spectral template for the element</span>
 <a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            (max = 1), shape ``(len(energy_axis),)``. Returns a zero array if no</span>
 <a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">            lines fall within the energy axis range.</span>
-<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">    """</span>
 <a id="__codelineno-0-131" name="__codelineno-0-131"></a>    <span class="n">sigma</span> <span class="o">=</span> <span class="n">fwhm_keV</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)))</span>
 <a id="__codelineno-0-132" name="__codelineno-0-132"></a>    <span class="n">Z</span> <span class="o">=</span> <span class="n">xraylib</span><span class="o">.</span><span class="n">SymbolToAtomicNumber</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
 <a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="n">emin</span><span class="p">,</span> <span class="n">emax</span> <span class="o">=</span> <span class="n">energy_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">energy_axis</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
@@ -645,7 +645,7 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 <span class="normal"><a href="#__codelineno-0-249">249</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_fit_matrix</span><span class="p">(</span>
 <a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span>
 <a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">    Build the design matrix for XRF spectrum fitting.</span>
 <a id="__codelineno-0-217" name="__codelineno-0-217"></a>
 <a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">    Separating matrix construction from fitting allows the (identical) matrix</span>
@@ -654,7 +654,7 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 <a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">        energy_axis (np.ndarray): Energy in keV for each MCA channel, shape</span>
 <a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">            ``(n_channels,)``.</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">        elements (list): Elements to model, e.g. ``[&quot;Fe&quot;, &quot;Cu&quot;, &quot;Zn&quot;]``.</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">        elements (list): Elements to model, e.g. ``["Fe", "Cu", "Zn"]``.</span>
 <a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">        excitation_energy (float): Incident beam energy in keV.</span>
 <a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).</span>
 <a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">        background_order (int, optional): Polynomial degree for the background</span>
@@ -664,8 +664,8 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 <a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">        A (np.ndarray): Design matrix of shape ``(n_channels, n_components)``.</span>
 <a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">            Columns are element templates followed by background polynomial terms.</span>
 <a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">        labels (list): Column labels. Element names come first; background terms</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            are named ``&quot;_bg0&quot;``, ``&quot;_bg1&quot;``, etc.</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            are named ``"_bg0"``, ``"_bg1"``, etc.</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    """</span>
 <a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="n">E_norm</span> <span class="o">=</span> <span class="p">(</span><span class="n">energy_axis</span> <span class="o">-</span> <span class="n">energy_axis</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="o">/</span> <span class="n">energy_axis</span><span class="o">.</span><span class="n">ptp</span><span class="p">()</span>
 <a id="__codelineno-0-237" name="__codelineno-0-237"></a>
 <a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="n">columns</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
@@ -677,7 +677,7 @@ are named <code>"_bg0"</code>, <code>"_bg1"</code>, etc.</p>
 <a id="__codelineno-0-244" name="__codelineno-0-244"></a>
 <a id="__codelineno-0-245" name="__codelineno-0-245"></a>    <span class="k">for</span> <span class="n">deg</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">background_order</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
 <a id="__codelineno-0-246" name="__codelineno-0-246"></a>        <span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">E_norm</span><span class="o">**</span><span class="n">deg</span><span class="p">)</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_bg</span><span class="si">{</span><span class="n">deg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"_bg</span><span class="si">{</span><span class="n">deg</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <a id="__codelineno-0-248" name="__codelineno-0-248"></a>
 <a id="__codelineno-0-249" name="__codelineno-0-249"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">(</span><span class="n">columns</span><span class="p">),</span> <span class="n">labels</span>
 </code></pre></div></td></tr></table></div>
@@ -888,7 +888,7 @@ background).</p>
 <a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span>
 <a id="__codelineno-0-159" name="__codelineno-0-159"></a>    <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
 <a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">    Fit a fluorescence spectrum as a linear combination of element templates.</span>
 <a id="__codelineno-0-163" name="__codelineno-0-163"></a>
 <a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">    A polynomial background is included as additional free components.  The fit</span>
@@ -900,7 +900,7 @@ background).</p>
 <a id="__codelineno-0-170" name="__codelineno-0-170"></a><span class="sd">            ``(n_channels,)``.</span>
 <a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">        energy_axis (np.ndarray): Energy in keV for each MCA channel, shape</span>
 <a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">            ``(n_channels,)``.</span>
-<a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">        elements (list): Elements to include, e.g. ``[&quot;Fe&quot;, &quot;Cu&quot;, &quot;Zn&quot;]``.</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">        elements (list): Elements to include, e.g. ``["Fe", "Cu", "Zn"]``.</span>
 <a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">        excitation_energy (float): Incident beam energy in keV.</span>
 <a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).</span>
 <a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">        background_order (int, optional): Polynomial degree for the background</span>
@@ -913,7 +913,7 @@ background).</p>
 <a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">        fitted (np.ndarray): Reconstructed spectrum (element contributions +</span>
 <a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">            background).</span>
 <a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">        components (dict): Spectral template used for each element (before scaling).</span>
-<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">    """</span>
 <a id="__codelineno-0-187" name="__codelineno-0-187"></a>    <span class="n">E_norm</span> <span class="o">=</span> <span class="p">(</span><span class="n">energy_axis</span> <span class="o">-</span> <span class="n">energy_axis</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="o">/</span> <span class="n">energy_axis</span><span class="o">.</span><span class="n">ptp</span><span class="p">()</span>
 <a id="__codelineno-0-188" name="__codelineno-0-188"></a>
 <a id="__codelineno-0-189" name="__codelineno-0-189"></a>    <span class="n">columns</span> <span class="o">=</span> <span class="p">{}</span>
@@ -923,7 +923,7 @@ background).</p>
 <a id="__codelineno-0-193" name="__codelineno-0-193"></a>            <span class="n">columns</span><span class="p">[</span><span class="n">el</span><span class="p">]</span> <span class="o">=</span> <span class="n">comp</span>
 <a id="__codelineno-0-194" name="__codelineno-0-194"></a>
 <a id="__codelineno-0-195" name="__codelineno-0-195"></a>    <span class="k">for</span> <span class="n">deg</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">background_order</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a>        <span class="n">columns</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;_bg</span><span class="si">{</span><span class="n">deg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">E_norm</span><span class="o">**</span><span class="n">deg</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a>        <span class="n">columns</span><span class="p">[</span><span class="sa">f</span><span class="s2">"_bg</span><span class="si">{</span><span class="n">deg</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">E_norm</span><span class="o">**</span><span class="n">deg</span>
 <a id="__codelineno-0-197" name="__codelineno-0-197"></a>
 <a id="__codelineno-0-198" name="__codelineno-0-198"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">columns</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
 <a id="__codelineno-0-199" name="__codelineno-0-199"></a>    <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">columns</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">])</span>
@@ -933,7 +933,7 @@ background).</p>
 <a id="__codelineno-0-203" name="__codelineno-0-203"></a>    <span class="n">fitted</span> <span class="o">=</span> <span class="n">A</span> <span class="o">@</span> <span class="n">coeffs</span>
 <a id="__codelineno-0-204" name="__codelineno-0-204"></a>    <span class="n">residual</span> <span class="o">=</span> <span class="n">spectrum</span> <span class="o">-</span> <span class="n">fitted</span>
 <a id="__codelineno-0-205" name="__codelineno-0-205"></a>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="n">coefficients</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">coeffs</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_bg&quot;</span><span class="p">)}</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="n">coefficients</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">coeffs</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"_bg"</span><span class="p">)}</span>
 <a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="n">components</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">columns</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">elements</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">}</span>
 <a id="__codelineno-0-208" name="__codelineno-0-208"></a>
 <a id="__codelineno-0-209" name="__codelineno-0-209"></a>    <span class="k">return</span> <span class="n">coefficients</span><span class="p">,</span> <span class="n">residual</span><span class="p">,</span> <span class="n">fitted</span><span class="p">,</span> <span class="n">components</span>
@@ -951,7 +951,7 @@ background).</p>
 
 
 <a href="#nrxrdct.fluo.fluorescence.fit_fluo_volume" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_volume</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lstsq&#39;</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_fluo_volume</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span> <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'lstsq'</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1163,10 +1163,10 @@ with the fitted amplitude for each spatial pixel.</p>
 <a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="n">excitation_energy</span><span class="p">,</span>
 <a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">fwhm_keV</span><span class="o">=</span><span class="mf">0.18</span><span class="p">,</span>
 <a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="n">background_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;lstsq&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">"lstsq"</span><span class="p">,</span>
 <a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
 <a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">    Fit fluorescence spectra for every pixel in a 3-D dataset.</span>
 <a id="__codelineno-0-264" name="__codelineno-0-264"></a>
 <a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    Args:</span>
@@ -1174,41 +1174,41 @@ with the fitted amplitude for each spatial pixel.</p>
 <a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">            axis 0 is the energy dimension.</span>
 <a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">        energy_axis (np.ndarray): Energy in keV for each channel, shape</span>
 <a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">            ``(n_energy,)``.</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">        elements (list): Elements to fit, e.g. ``[&quot;Fe&quot;, &quot;Cu&quot;, &quot;Zn&quot;]``.</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">        elements (list): Elements to fit, e.g. ``["Fe", "Cu", "Zn"]``.</span>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">        excitation_energy (float): Incident beam energy in keV.</span>
 <a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">        fwhm_keV (float, optional): Detector FWHM in keV (default 0.18).</span>
 <a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        background_order (int, optional): Polynomial degree for the background</span>
 <a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">            model (default 2).</span>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">        method (str, optional): Fitting strategy. ``&quot;lstsq&quot;`` solves all pixels</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">        method (str, optional): Fitting strategy. ``"lstsq"`` solves all pixels</span>
 <a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">            in a single batched ``np.linalg.lstsq`` call — very fast but</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">            non-negativity is only enforced by clipping. ``&quot;nnls&quot;`` calls</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">            non-negativity is only enforced by clipping. ``"nnls"`` calls</span>
 <a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">            ``scipy.optimize.nnls`` per pixel (parallelised with ``joblib``) —</span>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">            strictly non-negative but slower. Default ``&quot;lstsq&quot;``.</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        n_jobs (int, optional): Number of parallel workers for ``method=&quot;nnls&quot;``</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">            (``-1`` uses all CPUs). Ignored for ``method=&quot;lstsq&quot;`` (default ``-1``).</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">            strictly non-negative but slower. Default ``"lstsq"``.</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        n_jobs (int, optional): Number of parallel workers for ``method="nnls"``</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">            (``-1`` uses all CPUs). Ignored for ``method="lstsq"`` (default ``-1``).</span>
 <a id="__codelineno-0-282" name="__codelineno-0-282"></a>
 <a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">        coeff_maps (dict): Mapping ``element -&gt; np.ndarray`` of shape ``(n_y, n_x)``</span>
 <a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">            with the fitted amplitude for each spatial pixel.</span>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    """</span>
 <a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="n">n_energy</span><span class="p">,</span> <span class="n">n_y</span><span class="p">,</span> <span class="n">n_x</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span>
 <a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="n">n_pixels</span> <span class="o">=</span> <span class="n">n_y</span> <span class="o">*</span> <span class="n">n_x</span>
 <a id="__codelineno-0-289" name="__codelineno-0-289"></a>
 <a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="n">A</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="n">build_fit_matrix</span><span class="p">(</span>
 <a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="n">energy_axis</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">excitation_energy</span><span class="p">,</span> <span class="n">fwhm_keV</span><span class="p">,</span> <span class="n">background_order</span>
 <a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="p">)</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">element_labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">l</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">labels</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">l</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_bg&quot;</span><span class="p">)]</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">element_labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">l</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">labels</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">l</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"_bg"</span><span class="p">)]</span>
 <a id="__codelineno-0-294" name="__codelineno-0-294"></a>
 <a id="__codelineno-0-295" name="__codelineno-0-295"></a>    <span class="c1"># Shape: (n_energy, n_pixels) — keeps memory contiguous for LAPACK</span>
 <a id="__codelineno-0-296" name="__codelineno-0-296"></a>    <span class="n">spectra</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">n_energy</span><span class="p">,</span> <span class="n">n_pixels</span><span class="p">)</span>
 <a id="__codelineno-0-297" name="__codelineno-0-297"></a>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;lstsq&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"lstsq"</span><span class="p">:</span>
 <a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="c1"># Single batched solve: A (n_energy, n_comp) \ spectra (n_energy, n_pixels)</span>
 <a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="n">coeffs</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">lstsq</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">spectra</span><span class="p">,</span> <span class="n">rcond</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 <a id="__codelineno-0-301" name="__codelineno-0-301"></a>        <span class="c1"># coeffs: (n_comp, n_pixels) -&gt; (n_pixels, n_comp)</span>
 <a id="__codelineno-0-302" name="__codelineno-0-302"></a>        <span class="n">coeffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">coeffs</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 <a id="__codelineno-0-303" name="__codelineno-0-303"></a>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;nnls&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"nnls"</span><span class="p">:</span>
 <a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="c1"># spectra.T: (n_pixels, n_energy) for row-wise iteration</span>
 <a id="__codelineno-0-306" name="__codelineno-0-306"></a>        <span class="n">spectra_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">spectra</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a>        <span class="k">try</span><span class="p">:</span>
@@ -1224,7 +1224,7 @@ with the fitted amplitude for each spatial pixel.</p>
 <a id="__codelineno-0-317" name="__codelineno-0-317"></a>            <span class="p">)</span>
 <a id="__codelineno-0-318" name="__codelineno-0-318"></a>
 <a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;. Choose &#39;lstsq&#39; or &#39;nnls&#39;.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown method '</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">'. Choose 'lstsq' or 'nnls'."</span><span class="p">)</span>
 <a id="__codelineno-0-321" name="__codelineno-0-321"></a>
 <a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="n">coeff_maps</span> <span class="o">=</span> <span class="p">{</span>
 <a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="n">label</span><span class="p">:</span> <span class="n">coeffs</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">n_y</span><span class="p">,</span> <span class="n">n_x</span><span class="p">)</span>
@@ -1424,13 +1424,13 @@ symbol is used for any entry without a supplied name.</p>
 <a id="__codelineno-0-21" name="__codelineno-0-21"></a>    <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-22" name="__codelineno-0-22"></a>    <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_LINES</span><span class="p">,</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="sd">    Return XRF emission line energies for one or more elements within a given</span>
 <a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="sd">    energy range.</span>
 <a id="__codelineno-0-27" name="__codelineno-0-27"></a>
 <a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="sd">        elements (str or list): Chemical symbol(s) (e.g. ``&quot;Fe&quot;`` or</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="sd">            ``[&quot;Fe&quot;, &quot;Cu&quot;, &quot;Zn&quot;]``).</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="sd">        elements (str or list): Chemical symbol(s) (e.g. ``"Fe"`` or</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="sd">            ``["Fe", "Cu", "Zn"]``).</span>
 <a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">        energy_range (tuple): ``(emin, emax)`` energy window in keV; lines</span>
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">            outside this range are excluded.</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">        names (list of str, optional): Keys to use in the returned dict, one</span>
@@ -1445,7 +1445,7 @@ symbol is used for any entry without a supplied name.</p>
 <a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">        ``pd.DataFrame`` with columns ``line`` and ``energy_keV``, sorted by</span>
 <a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">        energy.  Elements for which no lines fall within *energy_range* are</span>
 <a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">        included with an empty DataFrame.</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    """</span>
 <a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">elements</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
 <a id="__codelineno-0-47" name="__codelineno-0-47"></a>        <span class="n">elements</span> <span class="o">=</span> <span class="p">[</span><span class="n">elements</span><span class="p">]</span>
 <a id="__codelineno-0-48" name="__codelineno-0-48"></a>
@@ -1469,10 +1469,10 @@ symbol is used for any entry without a supplied name.</p>
 <a id="__codelineno-0-66" name="__codelineno-0-66"></a>            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
 <a id="__codelineno-0-67" name="__codelineno-0-67"></a>                <span class="k">continue</span>
 <a id="__codelineno-0-68" name="__codelineno-0-68"></a>            <span class="k">if</span> <span class="n">emin</span> <span class="o">&lt;=</span> <span class="n">en</span> <span class="o">&lt;=</span> <span class="n">emax</span><span class="p">:</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a>                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;line&quot;</span><span class="p">:</span> <span class="n">line_name</span><span class="p">,</span> <span class="s2">&quot;energy_keV&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">en</span><span class="p">),</span> <span class="mi">4</span><span class="p">)})</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a>                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">"line"</span><span class="p">:</span> <span class="n">line_name</span><span class="p">,</span> <span class="s2">"energy_keV"</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">en</span><span class="p">),</span> <span class="mi">4</span><span class="p">)})</span>
 <a id="__codelineno-0-70" name="__codelineno-0-70"></a>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;line&quot;</span><span class="p">,</span> <span class="s2">&quot;energy_keV&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a>            <span class="s2">&quot;energy_keV&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"line"</span><span class="p">,</span> <span class="s2">"energy_keV"</span><span class="p">])</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a>            <span class="s2">"energy_keV"</span>
 <a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="n">results</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span>
 <a id="__codelineno-0-75" name="__codelineno-0-75"></a>

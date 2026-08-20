@@ -287,7 +287,7 @@ point-by-point method.</p>
 <p><strong>Prerequisite</strong>: install the optional <code>xrdct</code> extra to get
 <a href="https://github.com/FABLE-3DXRD/ImageD11">ImageD11</a>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>xrdct<span class="w">        </span><span class="c1"># with uv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nrxrdct[xrdct]&quot;</span><span class="w"> </span><span class="c1"># with pip</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"nrxrdct[xrdct]"</span><span class="w"> </span><span class="c1"># with pip</span>
 </code></pre></div>
 <p>You'll also need an ImageD11 <code>.par</code> parameter file (detector geometry +
 unit cell) — see <a href="#2-calibration">Calibration</a> below if you only have a
@@ -352,12 +352,12 @@ closed-form conversion documented at
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">poni_to_par</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">poni_to_par</span><span class="p">(</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">&quot;detector.poni&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="s2">&quot;detector.par&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">"detector.poni"</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="s2">"detector.par"</span><span class="p">,</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">cell_params</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="s2">&quot;cell__a&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">&quot;cell__b&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">&quot;cell__c&quot;</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">&quot;cell_alpha&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">&quot;cell_beta&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">&quot;cell_gamma&quot;</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="s2">&quot;cell_lattice_[P,A,B,C,I,F,R]&quot;</span><span class="p">:</span> <span class="mi">225</span><span class="p">,</span>  <span class="c1"># 225 = F, e.g. FCC</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="s2">"cell__a"</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">"cell__b"</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span> <span class="s2">"cell__c"</span><span class="p">:</span> <span class="mf">5.41143</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">"cell_alpha"</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">"cell_beta"</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span> <span class="s2">"cell_gamma"</span><span class="p">:</span> <span class="mf">90.0</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="s2">"cell_lattice_[P,A,B,C,I,F,R]"</span><span class="p">:</span> <span class="mi">225</span><span class="p">,</span>  <span class="c1"># 225 = F, e.g. FCC</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="p">},</span>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">)</span>
 </code></pre></div>
@@ -401,20 +401,20 @@ plausible-looking but incorrect orientations.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3DXRDSlice</span><span class="p">,</span> <span class="n">SegmentationOptions</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sl</span> <span class="o">=</span> <span class="n">S3DXRDSlice</span><span class="p">(</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">&quot;mask.edf&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">par_file</span><span class="o">=</span><span class="s2">&quot;detector.par&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">sample_name</span><span class="o">=</span><span class="s2">&quot;sample1&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">"scan.h5"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">"mask.edf"</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">par_file</span><span class="o">=</span><span class="s2">"detector.par"</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">sample_name</span><span class="o">=</span><span class="s2">"sample1"</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">"cubic"</span><span class="p">,</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">sl</span><span class="o">.</span><span class="n">segment</span><span class="p">(</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="n">SegmentationOptions</span><span class="p">(</span><span class="n">cut</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">pixels_in_spot</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">sl</span><span class="o">.</span><span class="n">segment</span><span class="p">(</span><span class="s2">"segmented.h5"</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="n">SegmentationOptions</span><span class="p">(</span><span class="n">cut</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">pixels_in_spot</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">sl</span><span class="o">.</span><span class="n">build_columnfile</span><span class="p">()</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">sl</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;grains.txt&quot;</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">sl</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;s3dxrd_slice.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">sl</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">"grains.txt"</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">sl</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">"s3dxrd_slice.h5"</span><span class="p">)</span>
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
 <a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="nb">print</span><span class="p">(</span><span class="n">sl</span><span class="p">)</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># S3DXRDSlice(sample=&#39;sample1&#39;, IndexingResult(phase=None, symmetry=&#39;cubic&#39;, indexed 812/1024 pixels))</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># S3DXRDSlice(sample='sample1', IndexingResult(phase=None, symmetry='cubic', indexed 812/1024 pixels))</span>
 </code></pre></div>
 <p><code>sl.indexing.best_ubi</code> is the per-pixel UBI matrix, shape <code>(NI, NJ, 3, 3)</code>
 (NaN where no grain was indexed); <code>sl.indexing.best_nuniq</code> /
@@ -425,13 +425,13 @@ plausible-looking but incorrect orientations.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">segment_slice</span><span class="p">,</span> <span class="n">SegmentationOptions</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">results</span> <span class="o">=</span> <span class="n">segment_slice</span><span class="p">(</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">&quot;scan.h5&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">output_file</span><span class="o">=</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">&quot;mask.edf&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">master_file</span><span class="o">=</span><span class="s2">"scan.h5"</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">output_file</span><span class="o">=</span><span class="s2">"segmented.h5"</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">mask_file</span><span class="o">=</span><span class="s2">"mask.edf"</span><span class="p">,</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">options</span><span class="o">=</span><span class="n">SegmentationOptions</span><span class="p">(</span><span class="n">cut</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">howmany</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span> <span class="n">pixels_in_spot</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">camera_name</span><span class="o">=</span><span class="s2">&quot;eiger&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">translation_motor</span><span class="o">=</span><span class="s2">&quot;dty&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">rotation_motor</span><span class="o">=</span><span class="s2">&quot;rot&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">camera_name</span><span class="o">=</span><span class="s2">"eiger"</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">translation_motor</span><span class="o">=</span><span class="s2">"dty"</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">rotation_motor</span><span class="o">=</span><span class="s2">"rot"</span><span class="p">,</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
 </code></pre></div>
 <p>Reads the same raw frames as <code>integrate_powder_parallel</code>, but segments
@@ -469,7 +469,7 @@ read or segment is skipped with a warning rather than aborting the run.</p>
 <h3 id="42-columnfile-assembly-build_columnfile">4.2 Columnfile assembly — <code>build_columnfile</code><a class="headerlink" href="#42-columnfile-assembly-build_columnfile" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_columnfile</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">colf</span> <span class="o">=</span> <span class="n">build_columnfile</span><span class="p">(</span><span class="s2">&quot;segmented.h5&quot;</span><span class="p">,</span> <span class="n">par_file</span><span class="o">=</span><span class="s2">&quot;detector.par&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">colf</span> <span class="o">=</span> <span class="n">build_columnfile</span><span class="p">(</span><span class="s2">"segmented.h5"</span><span class="p">,</span> <span class="n">par_file</span><span class="o">=</span><span class="s2">"detector.par"</span><span class="p">)</span>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># colf.tth, colf.eta, colf.ds, colf.gx/gy/gz now available</span>
 </code></pre></div>
 <p>Assembles all segmented peaks across the slice into a single ImageD11
@@ -479,8 +479,8 @@ g-vectors) via the supplied <code>.par</code> file.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">index_slice</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">index_slice</span><span class="p">(</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">colf</span><span class="p">,</span> <span class="s2">&quot;detector.par&quot;</span><span class="p">,</span> <span class="s2">&quot;grains.txt&quot;</span><span class="p">,</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span> <span class="n">hkl_tol</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">gridstep</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">colf</span><span class="p">,</span> <span class="s2">"detector.par"</span><span class="p">,</span> <span class="s2">"grains.txt"</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">"cubic"</span><span class="p">,</span> <span class="n">hkl_tol</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">gridstep</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_procs</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">)</span>
 </code></pre></div>
 <p>For every <code>(i, j)</code> pixel of the sample cross-section, finds the
@@ -532,8 +532,8 @@ scanning-3DXRD method (Henningsson &amp; Hall).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nrxrdct.xrdct</span><span class="w"> </span><span class="kn">import</span> <span class="n">combine_with_powder</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">combine_with_powder</span><span class="p">(</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;s3dxrd_slice.h5&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">reconstruction_file</span><span class="o">=</span><span class="s2">&quot;reconstruction.h5&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">"s3dxrd_slice.h5"</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">reconstruction_file</span><span class="o">=</span><span class="s2">"reconstruction.h5"</span><span class="p">,</span>
 <a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">tth_index</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>
 <a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">pixel_size_mm</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
 <a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">)</span>

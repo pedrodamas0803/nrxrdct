@@ -301,7 +301,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 </code></pre></div>
 <p><strong>Windows (PowerShell)</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">&quot;irm https://astral.sh/uv/install.ps1 | iex&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">"irm https://astral.sh/uv/install.ps1 | iex"</span>
 </code></pre></div>
 <p><strong>Via pip (any platform)</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>uv
@@ -330,7 +330,7 @@
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>add<span class="w"> </span>ipykernel
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Register the kernel — the --name must be unique on the server</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">&quot;nrxrdct&quot;</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">"nrxrdct"</span>
 </code></pre></div>
 <p>After refreshing the JupyterLab page the kernel <strong>nrxrdct</strong> will appear in the kernel selector.</p>
 <div class="admonition tip">
@@ -347,7 +347,7 @@
 </code></pre></div>
 <h3 id="registering-a-jupyter-kernel_1">Registering a Jupyter kernel<a class="headerlink" href="#registering-a-jupyter-kernel_1" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pip<span class="w"> </span>install<span class="w"> </span>ipykernel
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">&quot;nrxrdct&quot;</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python<span class="w"> </span>-m<span class="w"> </span>ipykernel<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>--name<span class="w"> </span>nrxrdct<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">"nrxrdct"</span>
 </code></pre></div>
 <p>After refreshing the JupyterLab page the kernel <strong>nrxrdct</strong> will appear in the kernel selector.</p>
 <div class="admonition tip">
@@ -361,9 +361,9 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>laue
 </code></pre></div>
 <p><strong>With <code>pip</code>:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nrxrdct[laue]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"nrxrdct[laue]"</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># or, inside an already-activated environment:</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;orix&gt;=0.11&quot;</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"orix&gt;=0.11"</span>
 </code></pre></div>
 <hr />
 <h3 id="gsas-ii">GSAS-II<a class="headerlink" href="#gsas-ii" title="Permanent link">&para;</a></h3>
@@ -376,7 +376,7 @@
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/AdvancedPhotonSource/GSAS-II.git<span class="w"> </span>~/gsas2
 <a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 <a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Add to PYTHONPATH in your shell profile (or prepend it per-session)</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/gsas2:</span><span class="nv">$PYTHONPATH</span><span class="s2">&quot;</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/gsas2:</span><span class="nv">$PYTHONPATH</span><span class="s2">"</span>
 </code></pre></div>
 <p>Verify the installation:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">GSASIIscriptable</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">G2sc</span>
@@ -435,7 +435,7 @@
 </tbody>
 </table>
 <p>With <code>uv</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>uv<span class="w"> </span>add<span class="w"> </span>fabio<span class="w"> </span>hdf5plugin<span class="w"> </span><span class="s2">&quot;napari[all]&quot;</span><span class="w"> </span>ipywidgets
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>uv<span class="w"> </span>add<span class="w"> </span>fabio<span class="w"> </span>hdf5plugin<span class="w"> </span><span class="s2">"napari[all]"</span><span class="w"> </span>ipywidgets
 </code></pre></div>
 <hr />
 <h2 id="building-the-documentation-locally">Building the documentation locally<a class="headerlink" href="#building-the-documentation-locally" title="Permanent link">&para;</a></h2>

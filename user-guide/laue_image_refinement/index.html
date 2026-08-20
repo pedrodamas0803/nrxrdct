@@ -495,7 +495,7 @@ preserved.</p>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">result</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">refine_strain_image_stack</span><span class="p">(</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">stack</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">raw_frame</span><span class="p">,</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">strain0_list</span>  <span class="o">=</span> <span class="n">prior</span><span class="o">.</span><span class="n">strain_tensors</span><span class="p">,</span>   <span class="c1"># from fit_strain_orientation_stack</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">fit_strain</span>    <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;e_xx&quot;</span><span class="p">,</span> <span class="s2">&quot;e_yy&quot;</span><span class="p">,</span> <span class="s2">&quot;e_zz&quot;</span><span class="p">),</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">fit_strain</span>    <span class="o">=</span> <span class="p">(</span><span class="s2">"e_xx"</span><span class="p">,</span> <span class="s2">"e_yy"</span><span class="p">,</span> <span class="s2">"e_zz"</span><span class="p">),</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">allowed_hkl</span>   <span class="o">=</span> <span class="n">hkl</span><span class="p">,</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
@@ -504,7 +504,7 @@ preserved.</p>
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># StackStrainImageRefinementResult [OK]  |δω|=0.004°  score=13102.1  Δscore=+762.4  n_sim=184</span>
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">voigt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">strain_voigts</span><span class="p">):</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: ε_zz = </span><span class="si">{</span><span class="n">voigt</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Layer </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: ε_zz = </span><span class="si">{</span><span class="n">voigt</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </code></pre></div>
 <p><code>strain0_list</code> accepts a list of <code>(3, 3)</code> tensors in <code>stack.all_layers</code> order.
 Pass <code>result_peaks.strain_tensors</code> directly from
@@ -620,13 +620,13 @@ via <code>u_source</code>.</p>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">base_dir</span><span class="p">,</span>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">crystal</span><span class="p">,</span>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">camera</span><span class="p">,</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">&quot;strain&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">"1.1/measurement/eiger4m"</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">"strain"</span><span class="p">,</span>
 <a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
 <a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
 <a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">n_jobs</span>        <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">&quot;01:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">&quot;8G&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">"01:00:00"</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">"8G"</span><span class="p">,</span>
 <a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">)</span>
 <a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
 <a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># After jobs finish:</span>
@@ -637,13 +637,13 @@ via <code>u_source</code>.</p>
 <a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="n">base_dir</span><span class="p">,</span>
 <a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>    <span class="n">crystal</span><span class="p">,</span>
 <a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">camera</span><span class="p">,</span>
-<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">&quot;strain&quot;</span><span class="p">,</span>          <span class="c1"># seeds strain0 from strain/ npz</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">h5_dataset</span>    <span class="o">=</span> <span class="s2">"1.1/measurement/eiger4m"</span><span class="p">,</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="n">u_source</span>      <span class="o">=</span> <span class="s2">"strain"</span><span class="p">,</span>          <span class="c1"># seeds strain0 from strain/ npz</span>
 <a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>    <span class="n">kernel_sigma</span>  <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
 <a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>    <span class="n">max_angle_deg</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
 <a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>    <span class="n">n_jobs</span>        <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">&quot;02:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">&quot;8G&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="n">time</span>          <span class="o">=</span> <span class="s2">"02:00:00"</span><span class="p">,</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>    <span class="n">mem</span>           <span class="o">=</span> <span class="s2">"8G"</span><span class="p">,</span>
 <a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="p">)</span>
 <a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>
 <a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="c1"># After jobs finish:</span>
@@ -678,7 +678,7 @@ standard pipeline), use the <strong>search</strong> variants instead.</p>
 <a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span>
 <a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
 <a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">U_found</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">U</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;|δω| from U_ref: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">rotvec</span><span class="p">))</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">°&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"|δω| from U_ref: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">rotvec</span><span class="p">))</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">°"</span><span class="p">)</span>
 </code></pre></div>
 <p>The result has the same type as <code>refine_orientation_image</code> (<code>ImageRefinementResult</code>),
 so it is a drop-in replacement wherever that result is used.</p>
@@ -744,18 +744,18 @@ updated.</p>
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">base_dir</span><span class="p">,</span>
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">crystal</span><span class="p">,</span>
 <a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">camera</span><span class="p">,</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">h5_dataset</span>       <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">h5_dataset</span>       <span class="o">=</span> <span class="s2">"1.1/measurement/eiger4m"</span><span class="p">,</span>
 <a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">U_refs</span>           <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">U_ref_1</span><span class="p">},</span>
 <a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">n_jobs</span>           <span class="o">=</span> <span class="mi">80</span><span class="p">,</span>
 <a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">search_misor_deg</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
 <a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">n_search</span>         <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
 <a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">kernel_sigma</span>     <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
 <a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">max_angle_deg</span>    <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
-<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">partition</span>        <span class="o">=</span> <span class="s2">&quot;nice&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">time</span>             <span class="o">=</span> <span class="s2">&quot;04:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">mem</span>              <span class="o">=</span> <span class="s2">&quot;32G&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">partition</span>        <span class="o">=</span> <span class="s2">"nice"</span><span class="p">,</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">time</span>             <span class="o">=</span> <span class="s2">"04:00:00"</span><span class="p">,</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="n">mem</span>              <span class="o">=</span> <span class="s2">"32G"</span><span class="p">,</span>
 <a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">cpus_per_task</span>    <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">python_bin</span>       <span class="o">=</span> <span class="s2">&quot;/path/to/python&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">python_bin</span>       <span class="o">=</span> <span class="s2">"/path/to/python"</span><span class="p">,</span>
 <a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="p">)</span>
 <a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
 <a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="c1"># After jobs finish:</span>
@@ -766,18 +766,18 @@ updated.</p>
 <a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>    <span class="n">base_dir</span><span class="p">,</span>
 <a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>    <span class="n">crystal</span><span class="p">,</span>
 <a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">camera</span><span class="p">,</span>
-<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>    <span class="n">h5_dataset</span>       <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>    <span class="n">h5_dataset</span>       <span class="o">=</span> <span class="s2">"1.1/measurement/eiger4m"</span><span class="p">,</span>
 <a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>    <span class="n">U_refs</span>           <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">U_ref_1</span><span class="p">},</span>
 <a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>    <span class="n">n_jobs</span>           <span class="o">=</span> <span class="mi">80</span><span class="p">,</span>
 <a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>    <span class="n">search_misor_deg</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
 <a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>    <span class="n">n_search</span>         <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
 <a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>    <span class="n">kernel_sigma</span>     <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
 <a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>    <span class="n">max_angle_deg</span>    <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
-<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>    <span class="n">partition</span>        <span class="o">=</span> <span class="s2">&quot;nice&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>    <span class="n">time</span>             <span class="o">=</span> <span class="s2">&quot;04:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>    <span class="n">mem</span>              <span class="o">=</span> <span class="s2">&quot;32G&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>    <span class="n">partition</span>        <span class="o">=</span> <span class="s2">"nice"</span><span class="p">,</span>
+<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>    <span class="n">time</span>             <span class="o">=</span> <span class="s2">"04:00:00"</span><span class="p">,</span>
+<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>    <span class="n">mem</span>              <span class="o">=</span> <span class="s2">"32G"</span><span class="p">,</span>
 <a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>    <span class="n">cpus_per_task</span>    <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>    <span class="n">python_bin</span>       <span class="o">=</span> <span class="s2">&quot;/path/to/python&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>    <span class="n">python_bin</span>       <span class="o">=</span> <span class="s2">"/path/to/python"</span><span class="p">,</span>
 <a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a><span class="p">)</span>
 <a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>
 <a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a><span class="c1"># After jobs finish:</span>
@@ -798,10 +798,10 @@ left-panel of <code>inspect_frame</code> will be blank for these grain slots.  U
 has <code>U</code> filled:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">,</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">h5_dataset</span>   <span class="o">=</span> <span class="s2">&quot;1.1/measurement/eiger4m&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">h5_dataset</span>   <span class="o">=</span> <span class="s2">"1.1/measurement/eiger4m"</span><span class="p">,</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">grains</span>       <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">],</span>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">map_grain</span>    <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">map_quantity</span> <span class="o">=</span> <span class="s1">&#39;misorientation&#39;</span><span class="p">,</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">map_quantity</span> <span class="o">=</span> <span class="s1">'misorientation'</span><span class="p">,</span>
 <a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="p">)</span>
 </code></pre></div>
 </div>

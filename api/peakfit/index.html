@@ -462,7 +462,7 @@ fit_peak_from_file(xy_file, center, window, model, bg_method, bg_kwargs)
 <a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">    Clip (tth, intensity) to a ±window/2 neighbourhood of *center*.</span>
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a>
 <a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    Args:</span>
@@ -476,15 +476,15 @@ fit_peak_from_file(xy_file, center, window, model, bg_method, bg_kwargs)
 <a id="__codelineno-0-83" name="__codelineno-0-83"></a>
 <a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">        ValueError: Fewer than 5 data points fall inside the window.</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    """</span>
 <a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="n">half</span> <span class="o">=</span> <span class="n">window</span> <span class="o">/</span> <span class="mf">2.0</span>
 <a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">tth</span> <span class="o">&gt;=</span> <span class="n">center</span> <span class="o">-</span> <span class="n">half</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">tth</span> <span class="o">&lt;=</span> <span class="n">center</span> <span class="o">+</span> <span class="n">half</span><span class="p">)</span>
 <a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
 <a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;</span> <span class="mi">5</span><span class="p">:</span>
 <a id="__codelineno-0-91" name="__codelineno-0-91"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="sa">f</span><span class="s2">&quot;Only </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> points found in window &quot;</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a>            <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">center</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">half</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">center</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">half</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">] °. &quot;</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94"></a>            <span class="s2">&quot;Widen the window or adjust the center position.&quot;</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="sa">f</span><span class="s2">"Only </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> points found in window "</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>            <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">center</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">half</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">center</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">half</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">] °. "</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a>            <span class="s2">"Widen the window or adjust the center position."</span>
 <a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="p">)</span>
 <a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="k">return</span> <span class="n">tth</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">intensity</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
@@ -501,7 +501,7 @@ fit_peak_from_file(xy_file, center, window, model, bg_method, bg_kwargs)
 
 
 <a href="#nrxrdct.fitting.peakfit.fit_peak" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_peak</span><span class="p">(</span><span class="n">tth</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">intensity</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;gaussian&#39;</span><span class="p">,</span> <span class="s1">&#39;lorentzian&#39;</span><span class="p">,</span> <span class="s1">&#39;voigt&#39;</span><span class="p">,</span> <span class="s1">&#39;pseudo_voigt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;pseudo_voigt&#39;</span><span class="p">,</span> <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;snip&#39;</span><span class="p">,</span> <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_peak</span><span class="p">(</span><span class="n">tth</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">intensity</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">'gaussian'</span><span class="p">,</span> <span class="s1">'lorentzian'</span><span class="p">,</span> <span class="s1">'voigt'</span><span class="p">,</span> <span class="s1">'pseudo_voigt'</span><span class="p">]</span> <span class="o">=</span> <span class="s1">'pseudo_voigt'</span><span class="p">,</span> <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'snip'</span><span class="p">,</span> <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -745,9 +745,9 @@ and fit (intensity units)</li>
     </tr>
   </tbody>
 </table>        <p>Example::</p>
-<div class="highlight"><pre><span></span><code>tth, I = np.loadtxt(&quot;pattern.xy&quot;, unpack=True)
-result = fit_peak(tth, I, center=3.56, window=0.4, model=&quot;pseudo_voigt&quot;)
-print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;center&#39;]:.4f} °&quot;)
+<div class="highlight"><pre><span></span><code>tth, I = np.loadtxt("pattern.xy", unpack=True)
+result = fit_peak(tth, I, center=3.56, window=0.4, model="pseudo_voigt")
+print(f"FWHM = {result['fwhm']:.4f} °   centre = {result['center']:.4f} °")
 </code></pre></div>
 
 
@@ -937,11 +937,11 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">intensity</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gaussian&quot;</span><span class="p">,</span> <span class="s2">&quot;lorentzian&quot;</span><span class="p">,</span> <span class="s2">&quot;voigt&quot;</span><span class="p">,</span> <span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;snip&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"gaussian"</span><span class="p">,</span> <span class="s2">"lorentzian"</span><span class="p">,</span> <span class="s2">"voigt"</span><span class="p">,</span> <span class="s2">"pseudo_voigt"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"pseudo_voigt"</span><span class="p">,</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"snip"</span><span class="p">,</span>
 <a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">    Fit a single diffraction peak within a 2θ window.</span>
 <a id="__codelineno-0-114" name="__codelineno-0-114"></a>
 <a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">    The background is estimated with :func:`~nrxrdct.powder.calculate_xrd_baseline`</span>
@@ -953,32 +953,32 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">        intensity (np.ndarray): Intensity values, same length as *tth*.</span>
 <a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">        center (float): Nominal peak centre (°); defines the window midpoint.</span>
 <a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="sd">        window (float): Total window width in degrees around *center*.</span>
-<a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">        model (str): Peak profile – ``&quot;gaussian&quot;``, ``&quot;lorentzian&quot;``,</span>
-<a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">            ``&quot;voigt&quot;``, or ``&quot;pseudo_voigt&quot;`` (default).</span>
+<a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">        model (str): Peak profile – ``"gaussian"``, ``"lorentzian"``,</span>
+<a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">            ``"voigt"``, or ``"pseudo_voigt"`` (default).</span>
 <a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">        bg_method (str): Background algorithm forwarded to</span>
 <a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">            :func:`~nrxrdct.powder.calculate_xrd_baseline`.  Supported values:</span>
-<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            ``&quot;snip&quot;`` (default, fast), ``&quot;iasls&quot;``, ``&quot;aspls&quot;``,</span>
-<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">            ``&quot;arpls&quot;``, ``&quot;mor&quot;``.</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            ``"snip"`` (default, fast), ``"iasls"``, ``"aspls"``,</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">            ``"arpls"``, ``"mor"``.</span>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        bg_kwargs (dict or None): Extra keyword arguments for the background</span>
 <a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">            estimator (forwarded verbatim).</span>
 <a id="__codelineno-0-132" name="__codelineno-0-132"></a>
 <a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">        dict: Fitted parameters.  Keys present for **all** models:</span>
 <a id="__codelineno-0-135" name="__codelineno-0-135"></a>
-<a id="__codelineno-0-136" name="__codelineno-0-136"></a><span class="sd">        * ``&quot;center&quot;``    – refined peak position (°)</span>
-<a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="sd">        * ``&quot;amplitude&quot;`` – peak height above background</span>
-<a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">        * ``&quot;fwhm&quot;``      – full-width at half-maximum (°)</span>
-<a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">        * ``&quot;area&quot;``      – integrated peak area (intensity × °)</span>
-<a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">        * ``&quot;residual&quot;``  – RMS residual between background-subtracted data</span>
+<a id="__codelineno-0-136" name="__codelineno-0-136"></a><span class="sd">        * ``"center"``    – refined peak position (°)</span>
+<a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="sd">        * ``"amplitude"`` – peak height above background</span>
+<a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">        * ``"fwhm"``      – full-width at half-maximum (°)</span>
+<a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">        * ``"area"``      – integrated peak area (intensity × °)</span>
+<a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">        * ``"residual"``  – RMS residual between background-subtracted data</span>
 <a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">          and fit (intensity units)</span>
-<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">        * ``&quot;r2&quot;``        – coefficient of determination R² of the fit</span>
-<a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">        * ``&quot;success&quot;``   – ``True`` if the optimiser converged</span>
+<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">        * ``"r2"``        – coefficient of determination R² of the fit</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">        * ``"success"``   – ``True`` if the optimiser converged</span>
 <a id="__codelineno-0-144" name="__codelineno-0-144"></a>
 <a id="__codelineno-0-145" name="__codelineno-0-145"></a><span class="sd">        Model-specific keys:</span>
 <a id="__codelineno-0-146" name="__codelineno-0-146"></a>
-<a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="sd">        * ``&quot;sigma&quot;`` – Gaussian standard deviation (°) — Gaussian and Voigt</span>
-<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="sd">        * ``&quot;gamma&quot;`` – Lorentzian half-width (°) — Lorentzian and Voigt</span>
-<a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">        * ``&quot;eta&quot;``   – Lorentzian mixing fraction ∈ [0, 1] — pseudo-Voigt</span>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="sd">        * ``"sigma"`` – Gaussian standard deviation (°) — Gaussian and Voigt</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="sd">        * ``"gamma"`` – Lorentzian half-width (°) — Lorentzian and Voigt</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">        * ``"eta"``   – Lorentzian mixing fraction ∈ [0, 1] — pseudo-Voigt</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150"></a>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">        On failure all numeric values are ``nan`` and ``success`` is ``False``.</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a>
@@ -987,15 +987,15 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-155" name="__codelineno-0-155"></a>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">    Example::</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        tth, I = np.loadtxt(&quot;pattern.xy&quot;, unpack=True)</span>
-<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        result = fit_peak(tth, I, center=3.56, window=0.4, model=&quot;pseudo_voigt&quot;)</span>
-<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">        print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;center&#39;]:.4f} °&quot;)</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-162" name="__codelineno-0-162"></a>    <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-163" name="__codelineno-0-163"></a>    <span class="k">if</span> <span class="n">model</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;gaussian&quot;</span><span class="p">,</span> <span class="s2">&quot;lorentzian&quot;</span><span class="p">,</span> <span class="s2">&quot;voigt&quot;</span><span class="p">,</span> <span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        tth, I = np.loadtxt("pattern.xy", unpack=True)</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        result = fit_peak(tth, I, center=3.56, window=0.4, model="pseudo_voigt")</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">        print(f"FWHM = {result['fwhm']:.4f} °   centre = {result['center']:.4f} °")</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">    """</span>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a>    <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"-"</span><span class="p">,</span> <span class="s2">"_"</span><span class="p">)</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a>    <span class="k">if</span> <span class="n">model</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"gaussian"</span><span class="p">,</span> <span class="s2">"lorentzian"</span><span class="p">,</span> <span class="s2">"voigt"</span><span class="p">,</span> <span class="s2">"pseudo_voigt"</span><span class="p">):</span>
 <a id="__codelineno-0-164" name="__codelineno-0-164"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a>            <span class="sa">f</span><span class="s2">&quot;model=</span><span class="si">{</span><span class="n">model</span><span class="si">!r}</span><span class="s2"> not recognised. &quot;</span>
-<a id="__codelineno-0-166" name="__codelineno-0-166"></a>            <span class="s2">&quot;Choose &#39;gaussian&#39;, &#39;lorentzian&#39;, &#39;voigt&#39;, or &#39;pseudo_voigt&#39;.&quot;</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a>            <span class="sa">f</span><span class="s2">"model=</span><span class="si">{</span><span class="n">model</span><span class="si">!r}</span><span class="s2"> not recognised. "</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a>            <span class="s2">"Choose 'gaussian', 'lorentzian', 'voigt', or 'pseudo_voigt'."</span>
 <a id="__codelineno-0-167" name="__codelineno-0-167"></a>        <span class="p">)</span>
 <a id="__codelineno-0-168" name="__codelineno-0-168"></a>
 <a id="__codelineno-0-169" name="__codelineno-0-169"></a>    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">extract_window</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">window</span><span class="p">)</span>
@@ -1025,10 +1025,10 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-193" name="__codelineno-0-193"></a>
 <a id="__codelineno-0-194" name="__codelineno-0-194"></a>    <span class="k">try</span><span class="p">:</span>
 <a id="__codelineno-0-195" name="__codelineno-0-195"></a>        <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a>            <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a>            <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s2">"ignore"</span><span class="p">)</span>
 <a id="__codelineno-0-197" name="__codelineno-0-197"></a>
 <a id="__codelineno-0-198" name="__codelineno-0-198"></a>            <span class="c1"># ── Gaussian ──────────────────────────────────────────────────</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a>            <span class="k">if</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;gaussian&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a>            <span class="k">if</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">"gaussian"</span><span class="p">:</span>
 <a id="__codelineno-0-200" name="__codelineno-0-200"></a>                <span class="n">p0</span> <span class="o">=</span> <span class="p">[</span><span class="n">A0</span><span class="p">,</span> <span class="n">x0_0</span><span class="p">,</span> <span class="n">sigma0</span><span class="p">]</span>
 <a id="__codelineno-0-201" name="__codelineno-0-201"></a>                <span class="n">lo</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="n">half_w</span><span class="p">,</span> <span class="mf">1e-9</span><span class="p">]</span>
 <a id="__codelineno-0-202" name="__codelineno-0-202"></a>                <span class="n">hi</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">half_w</span><span class="p">,</span> <span class="n">window</span><span class="p">]</span>
@@ -1039,11 +1039,11 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-207" name="__codelineno-0-207"></a>                <span class="n">sigma</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">sigma</span><span class="p">)</span>
 <a id="__codelineno-0-208" name="__codelineno-0-208"></a>                <span class="n">fwhm</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">))</span> <span class="o">*</span> <span class="n">sigma</span>
 <a id="__codelineno-0-209" name="__codelineno-0-209"></a>                <span class="n">area</span> <span class="o">=</span> <span class="n">A</span> <span class="o">*</span> <span class="n">sigma</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;sigma&quot;</span><span class="p">:</span> <span class="n">sigma</span><span class="p">}</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"sigma"</span><span class="p">:</span> <span class="n">sigma</span><span class="p">}</span>
 <a id="__codelineno-0-211" name="__codelineno-0-211"></a>                <span class="n">y_fit</span> <span class="o">=</span> <span class="n">_gaussian</span><span class="p">(</span><span class="n">x_c</span><span class="p">,</span> <span class="o">*</span><span class="n">popt</span><span class="p">)</span>
 <a id="__codelineno-0-212" name="__codelineno-0-212"></a>
 <a id="__codelineno-0-213" name="__codelineno-0-213"></a>            <span class="c1"># ── Lorentzian ────────────────────────────────────────────────</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a>            <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;lorentzian&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>            <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">"lorentzian"</span><span class="p">:</span>
 <a id="__codelineno-0-215" name="__codelineno-0-215"></a>                <span class="n">p0</span> <span class="o">=</span> <span class="p">[</span><span class="n">A0</span><span class="p">,</span> <span class="n">x0_0</span><span class="p">,</span> <span class="n">gamma0</span><span class="p">]</span>
 <a id="__codelineno-0-216" name="__codelineno-0-216"></a>                <span class="n">lo</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="n">half_w</span><span class="p">,</span> <span class="mf">1e-9</span><span class="p">]</span>
 <a id="__codelineno-0-217" name="__codelineno-0-217"></a>                <span class="n">hi</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">half_w</span><span class="p">,</span> <span class="n">window</span><span class="p">]</span>
@@ -1054,11 +1054,11 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-222" name="__codelineno-0-222"></a>                <span class="n">gamma</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">gamma</span><span class="p">)</span>
 <a id="__codelineno-0-223" name="__codelineno-0-223"></a>                <span class="n">fwhm</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">gamma</span>
 <a id="__codelineno-0-224" name="__codelineno-0-224"></a>                <span class="n">area</span> <span class="o">=</span> <span class="n">A</span> <span class="o">*</span> <span class="n">gamma</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;gamma&quot;</span><span class="p">:</span> <span class="n">gamma</span><span class="p">}</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"gamma"</span><span class="p">:</span> <span class="n">gamma</span><span class="p">}</span>
 <a id="__codelineno-0-226" name="__codelineno-0-226"></a>                <span class="n">y_fit</span> <span class="o">=</span> <span class="n">_lorentzian</span><span class="p">(</span><span class="n">x_c</span><span class="p">,</span> <span class="o">*</span><span class="n">popt</span><span class="p">)</span>
 <a id="__codelineno-0-227" name="__codelineno-0-227"></a>
 <a id="__codelineno-0-228" name="__codelineno-0-228"></a>            <span class="c1"># ── Voigt ─────────────────────────────────────────────────────</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a>            <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;voigt&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a>            <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">"voigt"</span><span class="p">:</span>
 <a id="__codelineno-0-230" name="__codelineno-0-230"></a>                <span class="n">p0</span> <span class="o">=</span> <span class="p">[</span><span class="n">A0</span><span class="p">,</span> <span class="n">x0_0</span><span class="p">,</span> <span class="n">sigma0</span><span class="p">,</span> <span class="n">gamma0</span><span class="p">]</span>
 <a id="__codelineno-0-231" name="__codelineno-0-231"></a>                <span class="n">lo</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="n">half_w</span><span class="p">,</span> <span class="mf">1e-9</span><span class="p">,</span> <span class="mf">1e-9</span><span class="p">]</span>
 <a id="__codelineno-0-232" name="__codelineno-0-232"></a>                <span class="n">hi</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">half_w</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="n">window</span><span class="p">]</span>
@@ -1075,7 +1075,7 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-243" name="__codelineno-0-243"></a>                    <span class="o">+</span> <span class="mf">4.47163</span> <span class="o">*</span> <span class="n">fG</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">fL</span><span class="o">**</span><span class="mi">3</span> <span class="o">+</span> <span class="mf">0.07842</span> <span class="o">*</span> <span class="n">fG</span> <span class="o">*</span> <span class="n">fL</span><span class="o">**</span><span class="mi">4</span> <span class="o">+</span> <span class="n">fL</span><span class="o">**</span><span class="mi">5</span>
 <a id="__codelineno-0-244" name="__codelineno-0-244"></a>                <span class="p">)</span> <span class="o">**</span> <span class="mf">0.2</span>
 <a id="__codelineno-0-245" name="__codelineno-0-245"></a>                <span class="n">area</span> <span class="o">=</span> <span class="n">A</span> <span class="o">/</span> <span class="n">_scipy_voigt</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">gamma</span><span class="p">)</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;sigma&quot;</span><span class="p">:</span> <span class="n">sigma</span><span class="p">,</span> <span class="s2">&quot;gamma&quot;</span><span class="p">:</span> <span class="n">gamma</span><span class="p">}</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"sigma"</span><span class="p">:</span> <span class="n">sigma</span><span class="p">,</span> <span class="s2">"gamma"</span><span class="p">:</span> <span class="n">gamma</span><span class="p">}</span>
 <a id="__codelineno-0-247" name="__codelineno-0-247"></a>                <span class="n">y_fit</span> <span class="o">=</span> <span class="n">_voigt</span><span class="p">(</span><span class="n">x_c</span><span class="p">,</span> <span class="o">*</span><span class="n">popt</span><span class="p">)</span>
 <a id="__codelineno-0-248" name="__codelineno-0-248"></a>
 <a id="__codelineno-0-249" name="__codelineno-0-249"></a>            <span class="c1"># ── Pseudo-Voigt ──────────────────────────────────────────────</span>
@@ -1092,7 +1092,7 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 <a id="__codelineno-0-260" name="__codelineno-0-260"></a>                <span class="n">area</span> <span class="o">=</span> <span class="n">A</span> <span class="o">*</span> <span class="p">(</span>
 <a id="__codelineno-0-261" name="__codelineno-0-261"></a>                    <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">eta</span><span class="p">)</span> <span class="o">*</span> <span class="n">sg</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span> <span class="o">+</span> <span class="n">eta</span> <span class="o">*</span> <span class="n">gm</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
 <a id="__codelineno-0-262" name="__codelineno-0-262"></a>                <span class="p">)</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;eta&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">eta</span><span class="p">)}</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>                <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"eta"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">eta</span><span class="p">)}</span>
 <a id="__codelineno-0-264" name="__codelineno-0-264"></a>                <span class="n">y_fit</span> <span class="o">=</span> <span class="n">_pseudo_voigt</span><span class="p">(</span><span class="n">x_c</span><span class="p">,</span> <span class="o">*</span><span class="n">popt</span><span class="p">)</span>
 <a id="__codelineno-0-265" name="__codelineno-0-265"></a>
 <a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
@@ -1126,7 +1126,7 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
 
 
 <a href="#nrxrdct.fitting.peakfit.fit_peak_from_file" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_peak_from_file</span><span class="p">(</span><span class="n">xy_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;gaussian&#39;</span><span class="p">,</span> <span class="s1">&#39;lorentzian&#39;</span><span class="p">,</span> <span class="s1">&#39;voigt&#39;</span><span class="p">,</span> <span class="s1">&#39;pseudo_voigt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;pseudo_voigt&#39;</span><span class="p">,</span> <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;snip&#39;</span><span class="p">,</span> <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fit_peak_from_file</span><span class="p">(</span><span class="n">xy_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">'gaussian'</span><span class="p">,</span> <span class="s1">'lorentzian'</span><span class="p">,</span> <span class="s1">'voigt'</span><span class="p">,</span> <span class="s1">'pseudo_voigt'</span><span class="p">]</span> <span class="o">=</span> <span class="s1">'pseudo_voigt'</span><span class="p">,</span> <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'snip'</span><span class="p">,</span> <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1227,8 +1227,8 @@ print(f&quot;FWHM = {result[&#39;fwhm&#39;]:.4f} °   centre = {result[&#39;cent
     </tr>
   </tbody>
 </table>        <p>Example::</p>
-<div class="highlight"><pre><span></span><code>result = fit_peak_from_file(&quot;pattern.xy&quot;, center=3.56, window=0.4)
-print(result[&quot;fwhm&quot;], result[&quot;center&quot;])
+<div class="highlight"><pre><span></span><code>result = fit_peak_from_file("pattern.xy", center=3.56, window=0.4)
+print(result["fwhm"], result["center"])
 </code></pre></div>
 
 
@@ -1269,11 +1269,11 @@ print(result[&quot;fwhm&quot;], result[&quot;center&quot;])
 <a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="n">xy_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="n">center</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="n">window</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gaussian&quot;</span><span class="p">,</span> <span class="s2">&quot;lorentzian&quot;</span><span class="p">,</span> <span class="s2">&quot;voigt&quot;</span><span class="p">,</span> <span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;pseudo_voigt&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;snip&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"gaussian"</span><span class="p">,</span> <span class="s2">"lorentzian"</span><span class="p">,</span> <span class="s2">"voigt"</span><span class="p">,</span> <span class="s2">"pseudo_voigt"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"pseudo_voigt"</span><span class="p">,</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="n">bg_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"snip"</span><span class="p">,</span>
 <a id="__codelineno-0-295" name="__codelineno-0-295"></a>    <span class="n">bg_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="w">    </span><span class="sd">"""</span>
 <a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">    Load a ``.xy`` diffraction file and fit a single peak.</span>
 <a id="__codelineno-0-299" name="__codelineno-0-299"></a>
 <a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">    Convenience wrapper around :func:`fit_peak`.</span>
@@ -1282,8 +1282,8 @@ print(result[&quot;fwhm&quot;], result[&quot;center&quot;])
 <a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">        xy_file (Path or str): Path to the ``.xy`` file.</span>
 <a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">        center (float): Nominal peak centre in degrees.</span>
 <a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">        window (float): Total window width in degrees.</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        model (str): Peak profile (default ``&quot;pseudo_voigt&quot;``).</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">        bg_method (str): Background algorithm (default ``&quot;snip&quot;``).</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        model (str): Peak profile (default ``"pseudo_voigt"``).</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">        bg_method (str): Background algorithm (default ``"snip"``).</span>
 <a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">        bg_kwargs (dict or None): Extra kwargs for the background estimator.</span>
 <a id="__codelineno-0-309" name="__codelineno-0-309"></a>
 <a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">    Returns:</span>
@@ -1291,9 +1291,9 @@ print(result[&quot;fwhm&quot;], result[&quot;center&quot;])
 <a id="__codelineno-0-312" name="__codelineno-0-312"></a>
 <a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    Example::</span>
 <a id="__codelineno-0-314" name="__codelineno-0-314"></a>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">        result = fit_peak_from_file(&quot;pattern.xy&quot;, center=3.56, window=0.4)</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        print(result[&quot;fwhm&quot;], result[&quot;center&quot;])</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">        result = fit_peak_from_file("pattern.xy", center=3.56, window=0.4)</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        print(result["fwhm"], result["center"])</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">    """</span>
 <a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="n">arrays</span> <span class="o">=</span> <span class="n">read_xy_file</span><span class="p">(</span><span class="n">xy_file</span><span class="p">)</span>
 <a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="n">tth</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">arrays</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arrays</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 <a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="k">return</span> <span class="n">fit_peak</span><span class="p">(</span><span class="n">tth</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">bg_method</span><span class="p">,</span> <span class="n">bg_kwargs</span><span class="p">)</span>

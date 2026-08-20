@@ -274,27 +274,27 @@ from pathlib import Path
 from nrxrdct.slurm_integration import launch, monitor
 
 slurm_ids = launch(
-    master_file  = Path(&quot;/data/raw/sample_master.h5&quot;),
-    output_file  = Path(&quot;/data/processed/integrated.h5&quot;),
-    poni_file    = Path(&quot;/data/calib/detector.poni&quot;),
-    mask_file    = Path(&quot;/data/calib/mask.edf&quot;),
+    master_file  = Path("/data/raw/sample_master.h5"),
+    output_file  = Path("/data/processed/integrated.h5"),
+    poni_file    = Path("/data/calib/detector.poni"),
+    mask_file    = Path("/data/calib/mask.edf"),
     n_jobs       = 8,
     n_points     = 1000,
     n_workers    = 16,
     batch_size   = 32,
-    method       = &quot;filter&quot;,
+    method       = "filter",
     percentile   = (10, 90),
-    partition    = &quot;nice&quot;,
-    time         = &quot;04:00:00&quot;,
-    mem          = &quot;64G&quot;,
+    partition    = "nice",
+    time         = "04:00:00",
+    mem          = "64G",
     cpus         = 16,
-    conda_env    = &quot;nrxrdct&quot;,
+    conda_env    = "nrxrdct",
 )
 
 # Block until all integration jobs finish
 monitor(
     slurm_ids   = slurm_ids,
-    output_file = Path(&quot;/data/processed/integrated.h5&quot;),
+    output_file = Path("/data/processed/integrated.h5"),
     watch       = True,
     interval    = 60,
 )
@@ -333,8 +333,8 @@ nrxrdct-slurm monitor \
 from nrxrdct.slurm_reconstruction import build_sinogram
 
 build_sinogram(
-    integrated_file = Path(&quot;/data/processed/integrated.h5&quot;),
-    sinogram_file   = Path(&quot;/data/processed/sinogram.h5&quot;),
+    integrated_file = Path("/data/processed/integrated.h5"),
+    sinogram_file   = Path("/data/processed/sinogram.h5"),
     n_rot           = 901,
     n_tth_angles    = 1000,
     n_lines         = 10,
@@ -359,21 +359,21 @@ nrxrdct-slurm-recon build \
 from nrxrdct.slurm_reconstruction import launch_recon
 
 recon_ids = launch_recon(
-    sinogram_file = Path(&quot;/data/processed/sinogram.h5&quot;),
-    output_file   = Path(&quot;/data/processed/reconstruction.h5&quot;),
+    sinogram_file = Path("/data/processed/sinogram.h5"),
+    output_file   = Path("/data/processed/reconstruction.h5"),
     n_jobs        = 8,
-    algo          = &quot;SART_CUDA&quot;,
+    algo          = "SART_CUDA",
     num_iter      = 200,
     dty_step      = 1.0,
-    partition     = &quot;gpu&quot;,
-    time          = &quot;08:00:00&quot;,
-    mem           = &quot;64G&quot;,
+    partition     = "gpu",
+    time          = "08:00:00",
+    mem           = "64G",
     cpus          = 8,
     gpu           = True,
-    conda_env     = &quot;nrxrdct&quot;,
+    conda_env     = "nrxrdct",
 )
 
-print(&quot;Reconstruction job IDs:&quot;, recon_ids)
+print("Reconstruction job IDs:", recon_ids)
 ```
 </code></pre></div>
 <p>=== "CLI"</p>
@@ -400,21 +400,21 @@ nrxrdct-slurm-recon launch \
 <div class="highlight"><pre><span></span><code>```python
 from nrxrdct.slurm_integration import check, repair
 
-result = check(output_file=Path(&quot;/data/processed/integrated.h5&quot;))
-print(&quot;Missing scans:&quot;,   result[&quot;missing&quot;])
-print(&quot;Corrupted scans:&quot;, result[&quot;corrupted&quot;])
+result = check(output_file=Path("/data/processed/integrated.h5"))
+print("Missing scans:",   result["missing"])
+print("Corrupted scans:", result["corrupted"])
 
 # Resubmit only the failed scans
-if result[&quot;missing&quot;] or result[&quot;corrupted&quot;]:
+if result["missing"] or result["corrupted"]:
     repair(
-        output_file = Path(&quot;/data/processed/integrated.h5&quot;),
-        master_file = Path(&quot;/data/raw/sample_master.h5&quot;),
-        poni_file   = Path(&quot;/data/calib/detector.poni&quot;),
-        mask_file   = Path(&quot;/data/calib/mask.edf&quot;),
+        output_file = Path("/data/processed/integrated.h5"),
+        master_file = Path("/data/raw/sample_master.h5"),
+        poni_file   = Path("/data/calib/detector.poni"),
+        mask_file   = Path("/data/calib/mask.edf"),
         n_jobs      = 2,
         watch       = True,
-        partition   = &quot;nice&quot;,
-        conda_env   = &quot;nrxrdct&quot;,
+        partition   = "nice",
+        conda_env   = "nrxrdct",
     )
 ```
 </code></pre></div>
@@ -444,30 +444,30 @@ from pathlib import Path
 from nrxrdct.slurm_integration import launch, monitor, check, repair
 from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
 
-DATA        = Path(&quot;/data/raw/sample_master.h5&quot;)
-INTEGRATED  = Path(&quot;/data/processed/integrated.h5&quot;)
-SINOGRAM    = Path(&quot;/data/processed/sinogram.h5&quot;)
-RECON       = Path(&quot;/data/processed/reconstruction.h5&quot;)
-PONI        = Path(&quot;/data/calib/detector.poni&quot;)
-MASK        = Path(&quot;/data/calib/mask.edf&quot;)
+DATA        = Path("/data/raw/sample_master.h5")
+INTEGRATED  = Path("/data/processed/integrated.h5")
+SINOGRAM    = Path("/data/processed/sinogram.h5")
+RECON       = Path("/data/processed/reconstruction.h5")
+PONI        = Path("/data/calib/detector.poni")
+MASK        = Path("/data/calib/mask.edf")
 
 # 1. Integrate
 ids = launch(
     master_file=DATA, output_file=INTEGRATED,
     poni_file=PONI, mask_file=MASK,
     n_jobs=8, n_points=1000, n_workers=16,
-    method=&quot;filter&quot;, percentile=(10, 90),
-    partition=&quot;nice&quot;, time=&quot;04:00:00&quot;, mem=&quot;64G&quot;, cpus=16,
-    conda_env=&quot;nrxrdct&quot;,
+    method="filter", percentile=(10, 90),
+    partition="nice", time="04:00:00", mem="64G", cpus=16,
+    conda_env="nrxrdct",
 )
 monitor(slurm_ids=ids, output_file=INTEGRATED, watch=True)
 
 # 2. Check and repair
 result = check(output_file=INTEGRATED)
-if result[&quot;missing&quot;] or result[&quot;corrupted&quot;]:
+if result["missing"] or result["corrupted"]:
     repair(output_file=INTEGRATED, master_file=DATA,
         poni_file=PONI, mask_file=MASK,
-        n_jobs=2, watch=True, conda_env=&quot;nrxrdct&quot;)
+        n_jobs=2, watch=True, conda_env="nrxrdct")
 
 # 3. Build sinogram
 build_sinogram(integrated_file=INTEGRATED, sinogram_file=SINOGRAM,
@@ -476,11 +476,11 @@ build_sinogram(integrated_file=INTEGRATED, sinogram_file=SINOGRAM,
 # 4. Reconstruct
 recon_ids = launch_recon(
     sinogram_file=SINOGRAM, output_file=RECON,
-    n_jobs=8, algo=&quot;SART_CUDA&quot;, num_iter=200,
-    partition=&quot;gpu&quot;, time=&quot;08:00:00&quot;, mem=&quot;64G&quot;, cpus=8,
-    gpu=True, conda_env=&quot;nrxrdct&quot;,
+    n_jobs=8, algo="SART_CUDA", num_iter=200,
+    partition="gpu", time="08:00:00", mem="64G", cpus=8,
+    gpu=True, conda_env="nrxrdct",
 )
-print(&quot;Reconstruction submitted:&quot;, recon_ids)
+print("Reconstruction submitted:", recon_ids)
 ```
 </code></pre></div>
               

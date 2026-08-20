@@ -95,7 +95,7 @@
         <ul>
     <li class="toctree-l4"><a class="reference internal" href="#21-merge-select-the-best-grain-per-pixel">2.1 merge — select the best grain per pixel</a>
     </li>
-    <li class="toctree-l4"><a class="reference internal" href="#22-apply_merge-register-the-result-as-a-new-grain-slot">2.2 apply_merge — register the result as a new grain slot</a>
+    <li class="toctree-l4"><a class="reference internal" href="#22-apply_merge-register-the-per-pixel-selection">2.2 apply_merge — register the per-pixel selection</a>
     </li>
     <li class="toctree-l4"><a class="reference internal" href="#23-write_merge_links-on-disk-persistence">2.3 write_merge_links — on-disk persistence</a>
     </li>
@@ -321,7 +321,7 @@ merging step selects the best fit at each position, collapsing N maps into one.<
 <h2 id="2-the-merging-workflow">2. The merging workflow<a class="headerlink" href="#2-the-merging-workflow" title="Permanent link">&para;</a></h2>
 <h3 id="21-merge-select-the-best-grain-per-pixel">2.1 <code>merge</code> — select the best grain per pixel<a class="headerlink" href="#21-merge-select-the-best-grain-per-pixel" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">metric</span><span class="o">=</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span>       <span class="c1"># primary ranking criterion</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">metric</span><span class="o">=</span><span class="s2">"match_rate"</span><span class="p">,</span>       <span class="c1"># primary ranking criterion</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">min_match_rate</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>       <span class="c1"># discard fits below this threshold</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">min_n_matched</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>           <span class="c1"># require at least 3 matched spots</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">max_rms_px</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>            <span class="c1"># discard fits with large residuals</span>
@@ -411,40 +411,59 @@ few matches can be misleading.</p>
 <code>best_grain = -1</code> and <code>NaN</code> metric values.  It will appear as a white
 (masked) pixel in all maps.</p>
 <p>Typical starting values: <code>min_match_rate=0.2</code>, <code>min_n_matched=3</code>.</p>
-<h3 id="22-apply_merge-register-the-result-as-a-new-grain-slot">2.2 <code>apply_merge</code> — register the result as a new grain slot<a class="headerlink" href="#22-apply_merge-register-the-result-as-a-new-grain-slot" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">gi_merged</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Merged grain stored in slot </span><span class="si">{</span><span class="n">gi_merged</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<h3 id="22-apply_merge-register-the-per-pixel-selection">2.2 <code>apply_merge</code> — register the per-pixel selection<a class="headerlink" href="#22-apply_merge-register-the-per-pixel-selection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">apply_merge</span><span class="p">(</span><span class="n">best_grain</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
 </code></pre></div>
-<p><code>apply_merge</code> appends a new grain slot (grain index <code>n_grains - 1</code> after
-the call) that is filled from <code>best_grain</code> and <code>metrics</code>.  All existing
-analysis and plotting methods work on this slot as on any other:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">)</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<p><code>apply_merge</code> stores <em>best_grain</em> as <code>gmap.best_grain_map</code>.  It does <strong>not</strong>
+create a new grain slot and <code>n_grains</code> is unchanged — <code>metrics</code> is accepted
+for API compatibility but not stored.  Every analysis and plotting method
+that accepts a <code>grain</code> argument can dispatch per-pixel to the right grain
+slot by passing the string <code>'merged'</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_map</span><span class="p">(</span><span class="s2">"match_rate"</span><span class="p">,</span> <span class="n">grain</span><span class="o">=</span><span class="s1">'merged'</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="s1">'merged'</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
 </code></pre></div>
-<p><code>apply_merge</code> is <strong>idempotent</strong>: calling it a second time with updated
-parameters overwrites the same grain slot in-place rather than creating a
-new one.  The slot index <code>gi_merged</code> is stored in <code>gmap._merged_grain</code>.</p>
-<p><code>inspect_frame</code> uses the merged grain by default when it exists:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># automatically uses gi_merged</span>
+<p><code>inspect_frame</code> uses the merged selection by default when it exists:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># automatically uses 'merged'</span>
 </code></pre></div>
+<p>If you want the merged result to live in its own grain slot (e.g. to persist
+it to disk and reload it later, or to run <code>reduce_to_fundamental_zone</code> on
+it), create one explicitly by adding a new <code>UB{n}.npy</code> reference file to
+<code>processing_dir</code> and rescanning:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">processing_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"UB</span><span class="si">{</span><span class="n">gmap</span><span class="o">.</span><span class="n">n_grains</span><span class="si">}</span><span class="s2">.npy"</span><span class="p">),</span> <span class="n">some_reference_U</span><span class="p">)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">reload_ub_matrices</span><span class="p">()</span>          <span class="c1"># grows all per-grain arrays by one slot</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">gi_merged</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">n_grains</span> <span class="o">-</span> <span class="mi">1</span>      <span class="c1"># index of the new slot</span>
+</code></pre></div>
+<p>You will need to pass <code>gi_merged</code> as <code>grain_index</code> to both <code>write_merge_links</code>
+and <code>collect_merged</code> below.</p>
 <h3 id="23-write_merge_links-on-disk-persistence">2.3 <code>write_merge_links</code> — on-disk persistence<a class="headerlink" href="#23-write_merge_links-on-disk-persistence" title="Permanent link">&para;</a></h3>
 <p>After merging you can write symlinks so that the merged selection is visible
 on disk in the same format as the per-grain result files:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">write_merge_links</span><span class="p">(</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">base_dir</span><span class="o">=</span><span class="s2">&quot;./processing&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">,</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">metrics</span><span class="o">=</span><span class="n">metrics</span><span class="p">,</span>           <span class="c1"># inherits the source directory automatically</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">write_merge_links</span><span class="p">(</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">base_dir</span><span class="o">=</span><span class="s2">"./processing"</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">metrics</span><span class="o">=</span><span class="n">metrics</span><span class="p">,</span>           <span class="c1"># inherits the source directory automatically</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">grain_index</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>     <span class="c1"># slot index to embed in the symlink names</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">)</span>
 </code></pre></div>
-<p>This creates a <code>merged/</code> subfolder inside <code>base_dir</code> and populates it with
-<code>frame_NNNNN_g{gi_merged:02d}.npz</code> symlinks, each pointing to the
-corresponding <code>ubs/</code> or <code>strain/</code> result file of the winning grain.</p>
+<p>This creates a <code>merged/{ubs,strain}/</code> subfolder inside <code>base_dir</code> and
+populates it with <code>frame_NNNNN_g{gi_merged:02d}.npz</code> symlinks, each pointing
+to the corresponding <code>ubs/</code> or <code>strain/</code> result file of the winning grain.</p>
+<blockquote>
+<p><strong>Important:</strong> the <code>merged/{source}/</code> folder is shared across <em>all</em> merge
+targets that use the same <code>source</code>. If you write links for more than one
+<code>grain_index</code> (e.g. comparing two different filter thresholds, or merging
+subregions separately), their symlinks coexist in the same directory,
+distinguished only by the <code>g{gi_merged:02d}</code> suffix. <code>collect_merged</code>
+filters strictly on that suffix, so always pass the matching <code>grain_index</code>
+to both calls — don't rely on directory contents alone to tell merges apart.</p>
+</blockquote>
 <p>To re-load the merged map from those links in a new session:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">gi_loaded</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">collect_merged</span><span class="p">(</span><span class="n">base_dir</span><span class="o">=</span><span class="s2">&quot;./processing&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">collect_merged</span><span class="p">(</span><span class="n">base_dir</span><span class="o">=</span><span class="s2">"./processing"</span><span class="p">,</span> <span class="n">grain_index</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">)</span>
 </code></pre></div>
 <p><code>collect_merged</code> auto-detects whether the files contain orientation-only or
-strain results by checking for the <code>"strain_voigt"</code> key.</p>
+strain results by checking for the <code>"strain_voigt"</code> key, and only loads
+files whose embedded suffix matches <code>grain_index</code>.</p>
 <hr />
 <h2 id="3-symmetry-equivalent-orientations">3. Symmetry-equivalent orientations<a class="headerlink" href="#3-symmetry-equivalent-orientations" title="Permanent link">&para;</a></h2>
 <h3 id="31-the-problem">3.1 The problem<a class="headerlink" href="#31-the-problem" title="Permanent link">&para;</a></h3>
@@ -488,12 +507,12 @@ s^*(\text{iy, ix}) = \underset{s}{\operatorname{argmax}}\;
 <p>Maximising the matrix trace is equivalent to minimising the geodesic
 misorientation angle
 <span class="arithmatex">\(\omega = \arccos\!\left(\tfrac{\operatorname{tr}(R^T U^{(s)})-1}{2}\right)\)</span>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span>     <span class="c1"># point group</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>       <span class="c1"># None = quaternion mean of all valid pixels</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">changed</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2"> pixels relabelled&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">symmetry</span><span class="o">=</span><span class="s2">"cubic"</span><span class="p">,</span>     <span class="c1"># point group</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>       <span class="c1"># None = quaternion mean of all valid pixels</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">changed</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2"> pixels relabelled"</span><span class="p">)</span>
 </code></pre></div>
 <p>The method modifies <code>gmap.U[grain]</code> <strong>in place</strong>.  It returns a boolean mask
 of the pixels that were actually changed.</p>
@@ -510,14 +529,14 @@ of the pixels that were actually changed.</p>
 <p>This works well when one grain dominates the map.  If the grain of interest
 occupies only a minority of pixels (e.g. in a merged map with two distinct
 grains), supply the centre of that grain explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Use the median orientation of grain 1 as reference</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">U_grain1</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">grain1_mask</span><span class="p">]</span>          <span class="c1"># shape (M, 3, 3)</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial.transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rotation</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">q</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">U_grain1</span><span class="p">)</span><span class="o">.</span><span class="n">as_quat</span><span class="p">()</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">q</span> <span class="o">@</span> <span class="n">q</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">R_ref</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_quat</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)))</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span><span class="n">grain</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s2">&quot;cubic&quot;</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="n">R_ref</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Use the median orientation of grain 1 as reference</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">U_grain1</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">grain1_mask</span><span class="p">]</span>          <span class="c1"># shape (M, 3, 3)</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial.transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rotation</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">q</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">U_grain1</span><span class="p">)</span><span class="o">.</span><span class="n">as_quat</span><span class="p">()</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">q</span> <span class="o">@</span> <span class="n">q</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">R_ref</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_quat</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)))</span><span class="o">.</span><span class="n">as_matrix</span><span class="p">()</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">changed</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">reduce_to_fundamental_zone</span><span class="p">(</span><span class="n">grain</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s2">"cubic"</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="n">R_ref</span><span class="p">)</span>
 </code></pre></div>
 <h4 id="strain-tensor-rotation">Strain tensor rotation<a class="headerlink" href="#strain-tensor-rotation" title="Permanent link">&para;</a></h4>
 <p>When strain data are present the strain tensor is rotated consistently with
@@ -536,41 +555,46 @@ strain values.</p>
 </blockquote>
 <hr />
 <h2 id="4-recommended-workflow">4. Recommended workflow<a class="headerlink" href="#4-recommended-workflow" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>1.  Pre-index reference orientations
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>        index_orientation / interactive_orientation
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>2.  Run per-grain fits across the full map
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        fit_orientation / fit_strain_orientation
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>3.  For each grain: resolve symmetry equivalents
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        gmap.reduce_to_fundamental_zone(grain=gi, symmetry=&quot;cubic&quot;)
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>4.  Inspect individual grain maps
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        gmap.plot_ipf_map(gi, direction=[0, 0, 1])
-<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        gmap.plot_map(&quot;match_rate&quot;, grain=gi)
-<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
-<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>5.  Merge
-<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>        best_grain, metrics = gmap.merge(
-<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>            metric=&quot;match_rate&quot;,
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>            min_match_rate=0.25,
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>            min_n_matched=3,
-<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>        )
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
-<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>6.  Register merged slot
-<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>        gi_merged = gmap.apply_merge(best_grain, metrics)
-<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
-<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>7.  Optionally: re-run symmetry reduction on the merged slot
-<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>        gmap.reduce_to_fundamental_zone(grain=gi_merged, symmetry=&quot;cubic&quot;)
-<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
-<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>8.  Persist to disk
-<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>        gmap.write_merge_links(&quot;./processing&quot;, best_grain, metrics)
-<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>        gmap.save(&quot;grainmap.h5&quot;)
-<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>
-<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>9.  Analyse
-<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        gmap.plot_overview(grain=gi_merged)
-<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>        gmap.plot_ipf_map(gi_merged, direction=[0, 0, 1], stretch=&quot;local&quot;,
-<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>                          best_grain=best_grain)
-<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>        gmap.plot_map(&quot;match_rate&quot;, grain=gi_merged)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>1.  Pre-index reference orientations
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>        index_orientation / interactive_orientation
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>2.  Run per-grain fits across the full map
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        fit_orientation / fit_strain_orientation
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>3.  For each grain: resolve symmetry equivalents
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>        gmap.reduce_to_fundamental_zone(grain=gi, symmetry="cubic")
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>4.  Inspect individual grain maps
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>        gmap.plot_ipf_map(gi, direction=[0, 0, 1])
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>        gmap.plot_map("match_rate", grain=gi)
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>5.  Merge
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>        best_grain, metrics = gmap.merge(
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>            metric="match_rate",
+<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>            min_match_rate=0.25,
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>            min_n_matched=3,
+<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>        )
+<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>
+<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>6.  Register the per-pixel selection
+<a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>        gmap.apply_merge(best_grain, metrics)
+<a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>        # every grain-aware method now accepts grain='merged'
+<a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>
+<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>7.  Optionally: re-run symmetry reduction on the merged result
+<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>        # reduce_to_fundamental_zone operates on a real grain slot, not
+<a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>        # the 'merged' selector, so give the merged result its own slot
+<a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>        # first (see §2.2) if you need this step.
+<a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>        gmap.reduce_to_fundamental_zone(grain=gi_merged, symmetry="cubic")
+<a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>
+<a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>8.  Persist to disk (only if you created a dedicated slot in §2.2)
+<a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a>        gmap.write_merge_links("./processing", best_grain, metrics,
+<a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a>                               grain_index=gi_merged, overwrite=True)
+<a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a>        gmap.save("grainmap.h5")
+<a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a>
+<a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a>9.  Analyse
+<a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a>        gmap.plot_overview(grain='merged')
+<a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a>        gmap.plot_ipf_map('merged', direction=[0, 0, 1], stretch="local",
+<a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a>                          best_grain=best_grain)
+<a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a>        gmap.plot_map("match_rate", grain='merged')
 </code></pre></div>
 <p>Step 3 (symmetry reduction) should be performed <em>before</em> merging.  The merge
 step compares quality metrics and selects the best grain; running symmetry
@@ -592,13 +616,13 @@ S^* = \underset{s}{\operatorname{argmax}}\; \operatorname{tr}(\mathbf{U}\,\mathb
 \]</div>
 <p>Only <strong>proper rotations</strong> (det = +1) are used, so every output is a valid
 rotation matrix.  Arbitrary batch dimensions are supported.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Single matrix</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">U_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Whole map at once — (ny, nx, 3, 3) → (ny, nx, 3, 3)</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">U_fz_map</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">nrxrdct.laue</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">laue</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Single matrix</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">U_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">'cubic'</span><span class="p">)</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Whole map at once — (ny, nx, 3, 3) → (ny, nx, 3, 3)</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">U_fz_map</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">'cubic'</span><span class="p">)</span>
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Relation to <code>reduce_to_fundamental_zone</code></p>
@@ -623,36 +647,36 @@ orientation matrices:</p>
 <p>Both inputs are projected to SO(3) via SVD before the comparison, so
 non-orthogonal matrices such as <span class="arithmatex">\(\mathbf{U}_\text{eff} = \mathbf{U}(\mathbf{I}+\boldsymbol{\varepsilon})\)</span>
 are handled correctly.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">angle_deg</span><span class="p">,</span> <span class="n">R_dis</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">disorientation</span><span class="p">(</span><span class="n">U1</span><span class="p">,</span> <span class="n">U2</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Disorientation: </span><span class="si">{</span><span class="n">angle_deg</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">°&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">angle_deg</span><span class="p">,</span> <span class="n">R_dis</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">disorientation</span><span class="p">(</span><span class="n">U1</span><span class="p">,</span> <span class="n">U2</span><span class="p">,</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">'cubic'</span><span class="p">)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Disorientation: </span><span class="si">{</span><span class="n">angle_deg</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">°"</span><span class="p">)</span>
 </code></pre></div>
 <p>A typical use case is computing the pixel-by-pixel disorientation between two
 grain slots across a raster map:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">U0_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>  <span class="c1"># (ny, nx, 3, 3)</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">U1_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">&#39;cubic&#39;</span><span class="p">)</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">valid</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span> <span class="o">&amp;</span>
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span>
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">)</span>
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">dis_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">,</span> <span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
-<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">for</span> <span class="n">iy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">):</span>
-<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="k">for</span> <span class="n">ix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">):</span>
-<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>        <span class="k">if</span> <span class="n">valid</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]:</span>
-<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>            <span class="n">R_mis</span> <span class="o">=</span> <span class="n">U1_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">@</span> <span class="n">U0_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span><span class="o">.</span><span class="n">T</span>
-<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>            <span class="n">tr</span>    <span class="o">=</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
-<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>            <span class="n">dis_map</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">tr</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">U0_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">'cubic'</span><span class="p">)</span>  <span class="c1"># (ny, nx, 3, 3)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">U1_fz</span> <span class="o">=</span> <span class="n">laue</span><span class="o">.</span><span class="n">map_to_fundamental_zone</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">symmetry</span><span class="o">=</span><span class="s1">'cubic'</span><span class="p">)</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">valid</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span> <span class="o">&amp;</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">U</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="p">)</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">dis_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">,</span> <span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="k">for</span> <span class="n">iy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">ny</span><span class="p">):</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>    <span class="k">for</span> <span class="n">ix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gmap</span><span class="o">.</span><span class="n">nx</span><span class="p">):</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>        <span class="k">if</span> <span class="n">valid</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]:</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>            <span class="n">R_mis</span> <span class="o">=</span> <span class="n">U1_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">@</span> <span class="n">U0_fz</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span><span class="o">.</span><span class="n">T</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>            <span class="n">tr</span>    <span class="o">=</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">R_mis</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>            <span class="n">dis_map</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">tr</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
 </code></pre></div>
 <hr />
 <h2 id="6-plotting-merged-results">6. Plotting merged results<a class="headerlink" href="#6-plotting-merged-results" title="Permanent link">&para;</a></h2>
 <h3 id="ipf-maps">IPF maps<a class="headerlink" href="#ipf-maps" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Global colour stretch — spans entire map range</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Per-grain colour stretch — each grain region stretched independently</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># (requires best_grain to define the regions)</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="n">gi_merged</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>                  <span class="n">stretch</span><span class="o">=</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Global colour stretch — spans entire map range</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="s1">'merged'</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">stretch</span><span class="o">=</span><span class="s2">"global"</span><span class="p">)</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Per-grain colour stretch — each grain region stretched independently</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># (requires best_grain to define the regions)</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="n">gmap</span><span class="o">.</span><span class="n">plot_ipf_map</span><span class="p">(</span><span class="s1">'merged'</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>                  <span class="n">stretch</span><span class="o">=</span><span class="s2">"local"</span><span class="p">,</span> <span class="n">best_grain</span><span class="o">=</span><span class="n">best_grain</span><span class="p">)</span>
 </code></pre></div>
 <p><code>stretch="local"</code> is most useful when the map contains two (or more)
 distinct grains: with global stretching the inter-grain colour contrast
@@ -660,19 +684,28 @@ dominates the gamut and the intra-grain spread is compressed.  Local
 stretching gives each grain region its own colour scale, revealing the
 internal orientation spread within each grain.</p>
 <h3 id="overview-map">Overview map<a class="headerlink" href="#overview-map" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_overview</span><span class="p">(</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="n">gi_merged</span><span class="p">,</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">ipf_axes</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">quality_metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;match_rate&quot;</span><span class="p">,</span> <span class="s2">&quot;rms_px&quot;</span><span class="p">,</span> <span class="s2">&quot;kam&quot;</span><span class="p">],</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">show_strain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">strain_components</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;exx&quot;</span><span class="p">,</span> <span class="s2">&quot;eyy&quot;</span><span class="p">,</span> <span class="s2">&quot;ezz&quot;</span><span class="p">],</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">strain_frame</span><span class="o">=</span><span class="s2">&quot;crystal&quot;</span><span class="p">,</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">gmap</span><span class="o">.</span><span class="n">plot_overview</span><span class="p">(</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="n">grain</span><span class="o">=</span><span class="s1">'merged'</span><span class="p">,</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">ipf_axes</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">quality_metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">"match_rate"</span><span class="p">,</span> <span class="s2">"rms_px"</span><span class="p">,</span> <span class="s2">"kam"</span><span class="p">],</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">show_strain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="n">strain_components</span><span class="o">=</span><span class="p">[</span><span class="s2">"exx"</span><span class="p">,</span> <span class="s2">"eyy"</span><span class="p">,</span> <span class="s2">"ezz"</span><span class="p">],</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="n">strain_frame</span><span class="o">=</span><span class="s2">"crystal"</span><span class="p">,</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="frame-inspection">Frame inspection<a class="headerlink" href="#frame-inspection" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>   <span class="c1"># defaults to gi_merged when it exists</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">,</span> <span class="n">map_grain</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>   <span class="c1"># force a specific grain</span>
+<p><code>inspect_frame</code> and <code>segment_frame</code> are read-only viewers: leaving <code>map_grain</code>
+unset shows the merged per-pixel selection automatically once <code>apply_merge()</code>
+has been called, and falls back to grain <code>0</code> otherwise.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">)</span>                <span class="c1"># merged, if available</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">gmap</span><span class="o">.</span><span class="n">inspect_frame</span><span class="p">(</span><span class="n">crystal</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">,</span> <span class="n">map_grain</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>    <span class="c1"># force a specific source grain</span>
 </code></pre></div>
+<p><code>reindex_frame</code> and <code>reindex_frame_manual</code> are different: their <code>map_grain</code>
+also names the grain slot that new fits are written into (via the "Store"
+dropdown's "Auto (shown grain)" option), so it must always be a real slot —
+<code>None</code> falls back to grain <code>0</code> there, never to the merged selection. Pass an
+explicit <code>map_grain</code> (e.g. <code>gi_merged</code> from §2.2, or any source grain) if you
+want to reindex against a specific slot.</p>
               
             </div>
           </div><footer>

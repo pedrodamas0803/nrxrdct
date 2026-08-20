@@ -52,9 +52,7 @@ nav:
       - Scanning 3DXRD (s3DXRD): user-guide/s3dxrd.md
     - Laue Diffraction:
       - Diffraction and Laue Theory: user-guide/laue_theory.md
-      - Laue Theory References: user-guide/laue_theory_refs.md
       - Thin-Film Satellites: user-guide/laue_thin_film_satellites.md
-      - Thin-Film Satellite References: user-guide/laue_thin_film_satellites_refs.md
       - Layered Structures: user-guide/laue_layered_structures.md
       - Darwin Model (Thick Layers): user-guide/laue_darwin.md
       - Rod Tangency and Per-Pixel Simulation: user-guide/laue_rod_tangency.md

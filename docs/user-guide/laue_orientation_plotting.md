@@ -168,7 +168,7 @@ the coordinate system in which that direction is defined:
 | `"sample"` | Axis is in the sample frame; converted to lab via the inverse of the sample tilt |
 
 The sample frame is related to the lab frame by a rotation of `sample_tilt_deg`
-degrees about `sample_tilt_axis` (default −40° about Y).  Specifying
+degrees about `sample_tilt_axis` (default +40° about Y).  Specifying
 `frame="sample"` and `axis="z"` therefore asks *"which crystal direction is
 parallel to the sample surface normal?"*
 
@@ -184,7 +184,7 @@ fig, ax = gmap.plot_ipf_map(
 # Which crystal direction is parallel to the sample surface normal?
 fig, ax = gmap.plot_ipf_map(
     axis="z", grain=0, frame="sample",
-    sample_tilt_deg=-40.0, sample_tilt_axis="y",
+    sample_tilt_deg=40.0, sample_tilt_axis="y",
     motor_x="pz", motor_y="py",
     motor_units={"pz": "mm", "py": "mm"},
 )
@@ -250,7 +250,7 @@ fig, axes = gmap.plot_ipf_scatter(
 # Scatter in the sample frame
 fig, axes = gmap.plot_ipf_scatter(
     grain=0, frame="sample",
-    sample_tilt_deg=-40.0, sample_tilt_axis="y",
+    sample_tilt_deg=40.0, sample_tilt_axis="y",
 )
 ```
 
@@ -264,7 +264,7 @@ fig, axes = gmap.plot_ipf_scatter(
 | **Sample** | Lab frame rotated by `sample_tilt_deg` about `sample_tilt_axis` to align with the physical sample surface | `frame="sample"` |
 | **Crystal** | Unit cell axes as defined by the xrayutilities `Crystal` object | Implicit in `plot_map` (orientation matrix U relates crystal ↔ lab) |
 
-The sample tilt defaults to −40° about the lab Y axis, which is the standard
+The sample tilt defaults to +40° about the lab Y axis, which is the standard
 incidence geometry at many Laue micro-diffraction beamlines.  Override with
 `sample_tilt_deg` and `sample_tilt_axis` on any plot method.
 

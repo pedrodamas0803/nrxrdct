@@ -185,7 +185,9 @@ $$
 
 The **sample frame** accounts for the physical orientation of the sample on the
 diffractometer.  In the default configuration it is related to the lab frame by a
-rotation $\mathbf{R}_s$ of $-40°$ about the lab $Y$ axis (the sample tilt):
+rotation $\mathbf{R}_s$ of $+40°$ about the lab $Y$ axis (the sample tilt,
+same `sample_tilt_deg` sign convention as `euler_to_U` — see
+[Theory §5.2](laue_theory.md#52-crystal-frame-and-orientation-matrix-u)):
 
 $$
 \mathbf{r}_\text{sample} = \mathbf{R}_s\,\mathbf{r}_\text{lab}
@@ -245,12 +247,12 @@ gmap.plot_strain_component("e_zz", grain=0, frame="crystal")
 # Lab frame
 gmap.plot_strain_component("e_zz", grain=0, frame="lab")
 
-# Sample frame (−40° about Y by default)
+# Sample frame (+40° about Y by default)
 gmap.plot_strain_component("e_zz", grain=0, frame="sample")
 
 # Custom tilt
 gmap.plot_strain_component("e_zz", grain=0, frame="sample",
-                           sample_tilt_deg=-35.0, sample_tilt_axis="y",
+                           sample_tilt_deg=35.0, sample_tilt_axis="y",
                            motor_x="pz", motor_y="py",
                            motor_units={"pz": "mm", "py": "mm"})
 ```
@@ -269,8 +271,9 @@ U   = gmap.U[0]                       # (ny, nx, 3, 3)
 # Lab frame (vectorised)
 eps_lab = np.einsum("...ik,...kl,...jl->...ij", U, eps, U)
 
-# Custom rotation R applied on top of the lab frame
-R = scipy.spatial.transform.Rotation.from_euler("y", -40, degrees=True).as_matrix()
+# Custom rotation R applied on top of the lab frame (matches the default
+# sample tilt; pass a different angle for a genuinely custom frame)
+R = scipy.spatial.transform.Rotation.from_euler("y", 40, degrees=True).as_matrix()
 eps_custom = np.einsum("ik,...kl,jl->...ij", R, eps_lab, R)
 
 # Extract a component

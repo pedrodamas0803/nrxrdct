@@ -140,6 +140,7 @@ from .segmentation import (
 )
 from .map import GrainMap, parse_scan_title
 from .layered_map import LayeredMap
+from .compare import compare_grain_populations
 from .fit_io import read_fit_file, read_raw, prepare_image, F_from_UBB0, plot_fit_frame, inspect_fit_map
 from .simulation import (
     BM32_KB,
@@ -288,6 +289,7 @@ __all__ = [
     "GrainMap",
     "LayeredMap",
     "parse_scan_title",
+    "compare_grain_populations",
     # Interactive orientation / calibration tools
     "OrientationState",
     "interactive_orientation",

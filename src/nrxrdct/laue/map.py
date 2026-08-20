@@ -4625,11 +4625,221 @@ class GrainMap:
 
         fig, ax = plt.subplots(figsize=figsize)
         disp = np.log1p(np.clip(mosaic, 0, None)) if log_scale else mosaic
-        im = ax.imshow(disp, cmap=cmap, interpolation="nearest", origin="upper")
+        # interpolation_stage="rgba": nearest-neighbour in colour space, not
+        # data space — without this, matplotlib anti-alias-resamples the raw
+        # array before colormapping whenever the mosaic has more pixels than
+        # the rendered figure (routine here), which blurs the tiles despite
+        # interpolation="nearest".
+        im = ax.imshow(disp, cmap=cmap, interpolation="nearest",
+                        interpolation_stage="rgba", origin="upper")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title(
             f"hkl = {hkl}  —  {self._grain_label(grain)}  —  "
+            f"{n_found}/{self.ny * self.nx} tiles found  "
+            f"(±{half_window_x} × ±{half_window_y} px)",
+            fontsize=10,
+        )
+        fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02,
+                     label="log(1 + I)" if log_scale else "I")
+        fig.tight_layout()
+
+        if out_path is not None:
+            fig.savefig(out_path, dpi=150)
+
+        return fig, ax, mosaic
+
+    def plot_xy_mosaic(
+        self,
+        xy: tuple,
+        *,
+        half_window_x: int = 20,
+        half_window_y: int = 20,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        gap_px: int = 2,
+        cmap: str = "gray",
+        log_scale: bool = True,
+        figsize: "tuple | None" = None,
+        out_path: "str | None" = None,
+        n_workers: "int | None" = None,
+    ) -> tuple:
+        """
+        Mosaic of a fixed detector position across the raster scan.
+
+        For every map pixel, extracts a window of the raw detector image
+        centred on the same fixed `(x, y)` detector pixel coordinate — no
+        crystal, camera, or fitted orientation is used, just the raw images.
+        Windows are tiled on the same `(iy, ix)` grid as the scan, same
+        layout as :meth:`plot_hkl_mosaic`, so a spot's shape, intensity, and
+        drift can be compared across the map at a glance.
+
+        Useful for browsing a spot spotted by eye in one frame across the
+        whole map before (or instead of) simulating which `hkl` it is —
+        since it works directly off the raw images it is unaffected by
+        fitting / orientation / structure-factor issues.
+
+        Args:
+            xy (tuple of float): `(x, y)` detector pixel coordinate (column, row) to
+                centre every tile on — same convention as `camera.project()` /
+                `spot["pix"]` in :meth:`plot_hkl_mosaic`.
+            half_window_x, half_window_y (int): Half-width / half-height, in pixels, of the
+                window extracted around *xy*. Each extracted tile is
+                `(2*half_window_y + 1, 2*half_window_x + 1)`.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the
+                image stack (e.g. `'1.1/measurement/det'`). Mutually exclusive with
+                *tiff_dir*; supply exactly one.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files, sorted by
+                embedded number and mapped to 0-based frame indices. Mutually
+                exclusive with *h5_dataset*.
+            gap_px (int): NaN-filled gap, in pixels, inserted between neighbouring tiles
+                so the grid stays visible. Default `2`.
+            cmap (str): Colormap for the mosaic. Default `"gray"`.
+            log_scale (bool): Display `log1p` of the extracted intensity. Default `True`.
+            figsize (tuple or None): Figure size. `None` (default) scales with the mosaic
+                size.
+            out_path (str or None): If given, save the figure to this path.
+            n_workers (int or None): Number of threads used to load images in parallel.
+                Defaults to `os.cpu_count()`.
+
+        Returns:
+            fig (Figure):
+            ax (Axes):
+            mosaic ((ny*(th+gap)-gap, nx*(tw+gap)-gap) ndarray): The assembled tile grid
+                (`th = 2*half_window_y+1`, `tw = 2*half_window_x+1`), `NaN` wherever a tile
+                — or part of it — could not be extracted (image unavailable, or the window
+                entirely off the real image).
+"""
+        import threading
+
+        if (h5_dataset is None) == (tiff_dir is None):
+            raise ValueError(
+                "plot_xy_mosaic: supply exactly one of h5_dataset or tiff_dir"
+            )
+
+        xc, yc = xy
+        xc, yc = int(round(xc)), int(round(yc))
+        half_window_x = int(half_window_x)
+        half_window_y = int(half_window_y)
+        tile_h = 2 * half_window_y + 1
+        tile_w = 2 * half_window_x + 1
+
+        # ── image loader (thread-safe: one handle per worker thread) ───────────
+        _local = threading.local()
+        _h5_handles: list = []
+        _h5_lock = threading.Lock()
+
+        if tiff_dir is not None:
+            pat   = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+            files = []
+            for fname in os.listdir(tiff_dir):
+                m = pat.search(fname)
+                if m:
+                    files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+            files.sort(key=lambda x: x[0])
+            _tiff_index = [p for _, p in files]
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
+                if frame_idx >= len(_tiff_index):
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception:
+                    return None
+        else:
+            if self.h5_path is None:
+                raise ValueError("h5_path not set on this GrainMap")
+
+            def _get_h5() -> "h5py.File | None":
+                f = getattr(_local, "h5file", None)
+                if f is None:
+                    try:
+                        f = h5py.File(self.h5_path, "r")
+                    except Exception:
+                        return None
+                    _local.h5file = f
+                    with _h5_lock:
+                        _h5_handles.append(f)
+                return f
+
+            def _load_image(frame_idx: int) -> "np.ndarray | None":
+                f = _get_h5()
+                if f is None or h5_dataset not in f:
+                    return None
+                try:
+                    ds = f[h5_dataset]
+                    if frame_idx >= ds.shape[0]:
+                        return None
+                    return ds[frame_idx].astype(np.float32)
+                except Exception:
+                    return None
+
+        # ── per-pixel worker ─────────────────────────────────────────────────
+        def _process_pixel(iy: int, ix: int):
+            image = _load_image(self.frame_index(iy, ix))
+            if image is None:
+                return None
+
+            nv_im, nh_im = image.shape
+            y0, y1 = yc - half_window_y, yc + half_window_y + 1
+            x0, x1 = xc - half_window_x, xc + half_window_x + 1
+            sy0, sy1 = max(y0, 0), min(y1, nv_im)
+            sx0, sx1 = max(x0, 0), min(x1, nh_im)
+            if sy0 >= sy1 or sx0 >= sx1:
+                return None
+
+            tile = np.full((tile_h, tile_w), np.nan)
+            tile[sy0 - y0: sy1 - y0, sx0 - x0: sx1 - x0] = image[sy0:sy1, sx0:sx1]
+            return iy, ix, tile
+
+        # ── assemble mosaic ──────────────────────────────────────────────────
+        mosaic = np.full(
+            (self.ny * (tile_h + gap_px) - gap_px, self.nx * (tile_w + gap_px) - gap_px),
+            np.nan,
+        )
+        jobs = [(iy, ix) for iy in range(self.ny) for ix in range(self.nx)]
+
+        n_found = 0
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                futures = [pool.submit(_process_pixel, iy, ix) for iy, ix in jobs]
+                for fut in concurrent.futures.as_completed(futures):
+                    result = fut.result()
+                    if result is None:
+                        continue
+                    iy, ix, tile = result
+                    ry0 = iy * (tile_h + gap_px)
+                    rx0 = ix * (tile_w + gap_px)
+                    mosaic[ry0:ry0 + tile_h, rx0:rx0 + tile_w] = tile
+                    n_found += 1
+        finally:
+            for f in _h5_handles:
+                try:
+                    f.close()
+                except Exception:
+                    pass
+
+        # ── figure ────────────────────────────────────────────────────────────
+        if figsize is None:
+            figsize = (
+                float(np.clip(2 + self.nx * tile_w / 40, 4, 20)),
+                float(np.clip(2 + self.ny * tile_h / 40, 4, 20)),
+            )
+
+        fig, ax = plt.subplots(figsize=figsize)
+        disp = np.log1p(np.clip(mosaic, 0, None)) if log_scale else mosaic
+        # interpolation_stage="rgba": nearest-neighbour in colour space, not
+        # data space — without this, matplotlib anti-alias-resamples the raw
+        # array before colormapping whenever the mosaic has more pixels than
+        # the rendered figure (routine here), which blurs the tiles despite
+        # interpolation="nearest".
+        im = ax.imshow(disp, cmap=cmap, interpolation="nearest",
+                        interpolation_stage="rgba", origin="upper")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(
+            f"xy = ({xc}, {yc})  —  "
             f"{n_found}/{self.ny * self.nx} tiles found  "
             f"(±{half_window_x} × ±{half_window_y} px)",
             fontsize=10,

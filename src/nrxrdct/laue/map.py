@@ -2220,6 +2220,173 @@ class GrainMap:
         )
         return fig, axes
 
+    _LATTICE_RATIO_COMPONENTS = {"b/a": "e_yy", "c/a": "e_zz"}
+
+    def _lattice_ratio_map(
+        self,
+        ratio: str,
+        a0: float,
+        b0: "float | None",
+        c0: "float | None",
+        grain: "int | str",
+    ) -> np.ndarray:
+        """Return (ny, nx) array of the requested axial lattice-parameter ratio."""
+        if ratio not in self._LATTICE_RATIO_COMPONENTS:
+            raise ValueError(
+                f"Unknown ratio {ratio!r}. Choose from: "
+                f"{sorted(self._LATTICE_RATIO_COMPONENTS)}"
+            )
+        nominal = {"b/a": b0, "c/a": c0}[ratio]
+        if nominal is None:
+            needed = "b0" if ratio == "b/a" else "c0"
+            raise ValueError(f"{needed} is required to compute ratio {ratio!r}.")
+
+        # Laue only constrains the *deviatoric* (trace-free) strain — spot
+        # directions are insensitive to a uniform scale of the whole cell, so
+        # the raw axial strains carry an arbitrary hydrostatic offset.  The
+        # deviatoric components (ε' = ε − tr(ε)/3·I, already stored in
+        # `strain_tensor_deviatoric`) are invariant to that offset.  Fixing
+        # a ≡ a0 and rescaling the cell accordingly (the LaueTools
+        # convention) gives b/a, c/a purely in terms of ε'_xx and ε'_yy/ε'_zz —
+        # see plot_lattice_ratios docstring for the derivation.
+        eps_x = self._deviatoric_component_map(
+            "e_xx", grain, "crystal", 0.0, "y"
+        )
+        eps_r = self._deviatoric_component_map(
+            self._LATTICE_RATIO_COMPONENTS[ratio], grain, "crystal", 0.0, "y"
+        )
+        return (nominal / a0) * (1.0 + eps_r) / (1.0 + eps_x)
+
+    def plot_lattice_ratios(
+        self,
+        a0: float,
+        b0: float,
+        c0: float,
+        grain: "int | str" = 0,
+        *,
+        label_map: np.ndarray | None = None,
+        label: int | None = None,
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        motor_x: str | None = None,
+        motor_y: str | None = None,
+        motor_units: "dict | None" = None,
+        figsize: tuple | None = None,
+        title: str | None = None,
+        colorbar: bool = True,
+    ) -> tuple:
+        """
+        Plot the ``b/a`` and ``c/a`` axial lattice-parameter ratios in a 1×2 panel.
+
+        White-beam Laue only constrains the *deviatoric* (trace-free) part of
+        the strain tensor — spot directions are insensitive to a uniform
+        scaling of the whole unit cell, so the raw axial strains
+        (`strain_tensor` diagonal) carry an arbitrary hydrostatic offset that
+        the optimizer cannot resolve.  `strain_tensor_deviatoric` removes
+        that offset (``ε' = ε − tr(ε)/3·I``) and is therefore the physically
+        meaningful, well-determined quantity.
+
+        Following the same convention used by LaueTools when no absolute
+        energy calibration is available, the absolute scale is fixed by
+        assuming *a* itself is unchanged (``a ≡ a0``) and rescaling the cell
+        accordingly, which reduces to::
+
+            b/a = (b0 / a0) · (1 + ε'_yy) / (1 + ε'_xx)
+            c/a = (c0 / a0) · (1 + ε'_zz) / (1 + ε'_xx)
+
+        using the deviatoric crystal-frame components ε'_xx, ε'_yy, ε'_zz.
+
+        Args:
+            a0, b0, c0 (float): Nominal (unstrained) lattice parameters, in
+                whatever consistent unit you want the ratio to reflect
+                (only the ratios `b0/a0` and `c0/a0` matter).
+            grain (int): Grain index (0-based).
+            label_map ((ny, nx) int ndarray or None): Cluster labels from
+                :meth:`cluster_orientations`.  When provided, pixels with
+                ``label == -1`` (noise) are masked out.  Default ``None``.
+            label (int or None): When *label_map* is supplied, restrict the
+                plot to pixels that belong to this specific cluster label.
+                ``None`` shows all non-noise pixels.  Default ``None``.
+            cmap (str or None): Colormap.  Defaults to ``'viridis'``.
+            vmin, vmax (float or None): Shared colour-scale limits.  When
+                ``None``, each panel autoscales independently to its own data.
+            motor_x, motor_y (str or None): Motor names for physical-coordinate axis labels.
+            motor_units (dict or None): Units per motor name, e.g. ``{'pz': 'mm'}``.
+            figsize (tuple or None): Figure size in inches.  Defaults to ``(9, 4.5)``.
+            title (str or None): Figure suptitle.  Auto-generated when ``None``.
+            colorbar (bool): Add a colorbar to each panel.  Default ``True``.
+
+        Returns:
+            tuple: ``(fig, axes)`` where *axes* is a length-2 ndarray of Axes
+            ``[ax_b_over_a, ax_c_over_a]``.
+        """
+        _order = ["b/a", "c/a"]
+        cmap = cmap or "viridis"
+
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+        mu = motor_units or {}
+
+        if mx is not None and my is not None:
+            extent = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu = mu.get(motor_x, "")
+            yu = mu.get(motor_y, "")
+            xlabel = f"{motor_x} ({xu})" if xu else motor_x
+            ylabel = f"{motor_y} ({yu})" if yu else motor_y
+        else:
+            extent = [0, self.nx, self.ny, 0]
+            xlabel = "column (ix)"
+            ylabel = "row (iy)"
+
+        maps = {
+            ratio: self._lattice_ratio_map(ratio, a0, b0, c0, grain)
+            for ratio in _order
+        }
+        if label_map is not None:
+            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+            maps = {r: np.where(_lbl_mask, np.nan, m) for r, m in maps.items()}
+
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=figsize or (9, 4.5),
+            squeeze=True,
+            sharex=True,
+            sharey=True,
+            constrained_layout=True,
+        )
+
+        for ax, ratio in zip(axes, _order):
+            im = ax.imshow(
+                maps[ratio],
+                origin="upper",
+                extent=extent,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                interpolation="nearest",
+                aspect="auto",
+            )
+            ax.set_title(ratio, fontsize=10)
+            ax.set_xlabel(xlabel, fontsize=8)
+            if ratio == _order[0]:
+                ax.set_ylabel(ylabel, fontsize=8)
+            if colorbar:
+                fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+        _lbl_suffix = (
+            f"  cluster {label}" if label is not None
+            else ("  (all clusters)" if label_map is not None else "")
+        )
+        fig.suptitle(
+            title or (
+                f"{self._grain_label(grain)}  —  axial lattice-parameter ratios"
+                f"  (a fixed at a0={a0:g}){_lbl_suffix}"
+            ),
+            fontsize=11,
+        )
+        return fig, axes
+
     # ── Stress analysis ───────────────────────────────────────────────────────
 
     # Code Voigt ordering: [xx=0, yy=1, zz=2, xy=3, xz=4, yz=5]

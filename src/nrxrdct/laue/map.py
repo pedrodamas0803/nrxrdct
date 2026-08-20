@@ -2396,7 +2396,7 @@ class GrainMap:
         grains: "list[int] | None" = None,
         *,
         label_map: np.ndarray | None = None,
-        label: int | None = None,
+        label: "int | list[int] | None" = None,
         bins: int = 40,
         density: bool = False,
         alpha: float = 0.7,
@@ -2425,9 +2425,13 @@ class GrainMap:
                 :meth:`cluster_orientations`.  When provided, noise pixels
                 (``label == -1``) are excluded from the histograms.
                 Default ``None``.
-            label (int or None): When *label_map* is supplied, restrict the
-                histograms to pixels that belong to this specific cluster label.
-                ``None`` includes all non-noise pixels.  Default ``None``.
+            label (int, list of int, or None): When *label_map* is supplied,
+                restrict the histograms to pixels belonging to this cluster
+                label.  ``None`` includes all non-noise pixels.  Pass a list
+                of cluster labels to overlay one histogram per cluster
+                (grouped comparison) instead of a single combined
+                distribution — each cluster gets its own colour, just like
+                multiple *grains* do.  Default ``None``.
             bins (int): Number of histogram bins.  Default ``40``.
             density (bool): Normalise each histogram to unit area.  Default ``False``.
             alpha (float): Bar transparency (0–1).  Default ``0.7``.
@@ -2446,11 +2450,10 @@ class GrainMap:
                 f"Unknown ratio(s) {invalid}. Choose from: {_all_ratios}"
             )
 
-        grains = list(grains) if grains is not None else list(range(self.n_grains))
-
-        _lbl_mask = None
-        if label_map is not None:
-            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+        grains      = list(grains) if grains is not None else list(range(self.n_grains))
+        labels      = self._label_group_list(label)
+        multi_grain = self.n_grains > 1
+        multi_label = len(labels) > 1
 
         n     = len(ratios)
         ncols = min(n, 3)
@@ -2469,27 +2472,33 @@ class GrainMap:
             row, col = divmod(idx, ncols)
             ax       = axes[row, col]
 
+            si = 0
             for gi, grain in enumerate(grains):
                 data = self._lattice_ratio_map(ratio, a0, b0, c0, grain)
-                if _lbl_mask is not None:
-                    data = np.where(_lbl_mask, np.nan, data)
-                vals = data[np.isfinite(data)].ravel()
-                if vals.size == 0:
-                    continue
+                for lbl in labels:
+                    series = data
+                    if label_map is not None:
+                        _mask  = (label_map != lbl) if lbl is not None else (label_map < 0)
+                        series = np.where(_mask, np.nan, series)
+                    vals = series[np.isfinite(series)].ravel()
+                    if vals.size == 0:
+                        si += 1
+                        continue
 
-                color  = prop_cycle[gi % len(prop_cycle)]
-                glabel = self._grain_label(grain) if self.n_grains > 1 else None
-                ax.hist(vals, bins=bins, density=density,
-                        color=color, alpha=alpha, label=glabel)
-                ax.axvline(float(np.mean(vals)), color=color,
-                           linestyle="--", linewidth=1.2, alpha=0.9)
+                    color  = prop_cycle[si % len(prop_cycle)]
+                    glabel = self._label_group_text(grain, lbl, multi_grain, multi_label)
+                    ax.hist(vals, bins=bins, density=density,
+                            color=color, alpha=alpha, label=glabel)
+                    ax.axvline(float(np.mean(vals)), color=color,
+                               linestyle="--", linewidth=1.2, alpha=0.9)
+                    si += 1
 
             ax.set_xlabel(ratio, fontsize=9)
             ax.set_ylabel("Density" if density else "Count", fontsize=9)
             ax.set_title(ratio, fontsize=10)
             ax.tick_params(labelsize=8)
 
-            if self.n_grains > 1 and idx == 0:
+            if (multi_grain or multi_label) and idx == 0:
                 ax.legend(fontsize=7, framealpha=0.7)
 
         # Hide any unused axes in the last row
@@ -2497,10 +2506,14 @@ class GrainMap:
             row, col = divmod(idx, ncols)
             axes[row, col].set_visible(False)
 
-        _lbl_suffix = (
-            f"  cluster {label}" if label is not None
-            else ("  (all clusters)" if label_map is not None else "")
-        )
+        if label_map is None:
+            _lbl_suffix = ""
+        elif multi_label:
+            _lbl_suffix = f"  clusters {labels}"
+        elif labels[0] is not None:
+            _lbl_suffix = f"  cluster {labels[0]}"
+        else:
+            _lbl_suffix = "  (all clusters)"
         fig.suptitle(
             title or (
                 f"Axial lattice-parameter ratio histogram"
@@ -3015,6 +3028,20 @@ class GrainMap:
         fig.tight_layout()
         return fig, ax
 
+    @staticmethod
+    def _label_group_list(label) -> list:
+        """Normalise `label` (int, list/tuple of int, or None) to a list of groups."""
+        return list(label) if isinstance(label, (list, tuple, np.ndarray)) else [label]
+
+    def _label_group_text(self, grain, lbl, multi_grain: bool, multi_label: bool) -> "str | None":
+        """Legend text for one (grain, label-group) series, or None if nothing to show."""
+        parts = []
+        if multi_grain:
+            parts.append(self._grain_label(grain))
+        if multi_label:
+            parts.append(f"cluster {lbl}" if lbl is not None else "all clusters")
+        return "  ".join(parts) if parts else None
+
     def plot_strain_histogram(
         self,
         components: "list[str] | None" = None,
@@ -3024,7 +3051,7 @@ class GrainMap:
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         label_map: np.ndarray | None = None,
-        label: int | None = None,
+        label: "int | list[int] | None" = None,
         bins: int = 40,
         density: bool = False,
         scale: float = 1e3,
@@ -3061,9 +3088,13 @@ class GrainMap:
                 :meth:`cluster_orientations`.  When provided, noise pixels
                 (``label == -1``) are excluded from the histograms.
                 Default ``None``.
-            label (int or None): When *label_map* is supplied, restrict the
-                histograms to pixels that belong to this specific cluster label.
-                ``None`` includes all non-noise pixels.  Default ``None``.
+            label (int, list of int, or None): When *label_map* is supplied,
+                restrict the histograms to pixels belonging to this cluster
+                label.  ``None`` includes all non-noise pixels.  Pass a list
+                of cluster labels to overlay one histogram per cluster
+                (grouped comparison) instead of a single combined
+                distribution — each cluster gets its own colour, just like
+                multiple *grains* do.  Default ``None``.
             bins (int): Number of histogram bins.  Default `40`.
             density (bool): If `True`, normalise each histogram to unit area.
                 Default `False`.
@@ -3089,11 +3120,10 @@ class GrainMap:
                 f"Choose from: {_all_components}"
             )
 
-        grains = list(grains) if grains is not None else list(range(self.n_grains))
-
-        _lbl_mask = None
-        if label_map is not None:
-            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+        grains     = list(grains) if grains is not None else list(range(self.n_grains))
+        labels     = self._label_group_list(label)
+        multi_grain = self.n_grains > 1
+        multi_label = len(labels) > 1
 
         # ── subplot grid ──────────────────────────────────────────────────────
         n    = len(components)
@@ -3116,29 +3146,35 @@ class GrainMap:
             ax       = axes[row, col]
             _xlabel  = self._STRAIN_LABELS[comp] + scale_str
 
+            si = 0
             for gi, grain in enumerate(grains):
                 data = self._strain_component_map(
                     comp, grain, frame, sample_tilt_deg, sample_tilt_axis
                 )
-                if _lbl_mask is not None:
-                    data = np.where(_lbl_mask, np.nan, data)
-                vals = data[np.isfinite(data)].ravel() * scale
-                if vals.size == 0:
-                    continue
+                for lbl in labels:
+                    series = data
+                    if label_map is not None:
+                        _mask  = (label_map != lbl) if lbl is not None else (label_map < 0)
+                        series = np.where(_mask, np.nan, series)
+                    vals = series[np.isfinite(series)].ravel() * scale
+                    if vals.size == 0:
+                        si += 1
+                        continue
 
-                color  = prop_cycle[gi % len(prop_cycle)]
-                glabel = self._grain_label(grain) if self.n_grains > 1 else None
-                ax.hist(vals, bins=bins, density=density,
-                        color=color, alpha=alpha, label=glabel)
-                ax.axvline(float(np.mean(vals)), color=color,
-                           linestyle="--", linewidth=1.2, alpha=0.9)
+                    color  = prop_cycle[si % len(prop_cycle)]
+                    glabel = self._label_group_text(grain, lbl, multi_grain, multi_label)
+                    ax.hist(vals, bins=bins, density=density,
+                            color=color, alpha=alpha, label=glabel)
+                    ax.axvline(float(np.mean(vals)), color=color,
+                               linestyle="--", linewidth=1.2, alpha=0.9)
+                    si += 1
 
             ax.set_xlabel(_xlabel, fontsize=9)
             ax.set_ylabel("Density" if density else "Count", fontsize=9)
             ax.set_title(self._STRAIN_LABELS[comp], fontsize=10)
             ax.tick_params(labelsize=8)
 
-            if self.n_grains > 1 and idx == 0:
+            if (multi_grain or multi_label) and idx == 0:
                 ax.legend(fontsize=7, framealpha=0.7)
 
         # Hide any unused axes in the last row
@@ -3151,10 +3187,14 @@ class GrainMap:
             "lab":     "lab frame",
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }[frame]
-        _lbl_suffix = (
-            f"  cluster {label}" if label is not None
-            else ("  (all clusters)" if label_map is not None else "")
-        )
+        if label_map is None:
+            _lbl_suffix = ""
+        elif multi_label:
+            _lbl_suffix = f"  clusters {labels}"
+        elif labels[0] is not None:
+            _lbl_suffix = f"  cluster {labels[0]}"
+        else:
+            _lbl_suffix = "  (all clusters)"
         fig.suptitle(
             title or f"Strain histogram  [{_frame_label}]{_lbl_suffix}",
             fontsize=11, y=1.01,
@@ -3171,7 +3211,7 @@ class GrainMap:
         sample_tilt_deg: float = 40.0,
         sample_tilt_axis: str = "y",
         label_map: np.ndarray | None = None,
-        label: int | None = None,
+        label: "int | list[int] | None" = None,
         bins: int = 40,
         density: bool = False,
         scale: float = 1e3,
@@ -3199,9 +3239,13 @@ class GrainMap:
                 :meth:`cluster_orientations`.  When provided, noise pixels
                 (``label == -1``) are excluded from the histograms.
                 Default ``None``.
-            label (int or None): When *label_map* is supplied, restrict the
-                histograms to pixels that belong to this specific cluster label.
-                ``None`` includes all non-noise pixels.  Default ``None``.
+            label (int, list of int, or None): When *label_map* is supplied,
+                restrict the histograms to pixels belonging to this cluster
+                label.  ``None`` includes all non-noise pixels.  Pass a list
+                of cluster labels to overlay one histogram per cluster
+                (grouped comparison) instead of a single combined
+                distribution — each cluster gets its own colour, just like
+                multiple *grains* do.  Default ``None``.
             bins (int): Number of histogram bins.  Default ``40``.
             density (bool): Normalise each histogram to unit area.  Default ``False``.
             scale (float): Multiplicative factor applied before plotting.  Default ``1e3``
@@ -3222,11 +3266,10 @@ class GrainMap:
                 f"Unknown component(s) {invalid}. Choose from: {_all_components}"
             )
 
-        grains = list(grains) if grains is not None else list(range(self.n_grains))
-
-        _lbl_mask = None
-        if label_map is not None:
-            _lbl_mask = (label_map != label) if label is not None else (label_map < 0)
+        grains      = list(grains) if grains is not None else list(range(self.n_grains))
+        labels      = self._label_group_list(label)
+        multi_grain = self.n_grains > 1
+        multi_label = len(labels) > 1
 
         n     = len(components)
         ncols = min(n, 3)
@@ -3247,29 +3290,35 @@ class GrainMap:
             ax       = axes[row, col]
             _xlabel  = self._STRAIN_DEV_LABELS[comp] + scale_str
 
+            si = 0
             for gi, grain in enumerate(grains):
                 data = self._deviatoric_component_map(
                     comp, grain, frame, sample_tilt_deg, sample_tilt_axis
                 )
-                if _lbl_mask is not None:
-                    data = np.where(_lbl_mask, np.nan, data)
-                vals = data[np.isfinite(data)].ravel() * scale
-                if vals.size == 0:
-                    continue
+                for lbl in labels:
+                    series = data
+                    if label_map is not None:
+                        _mask  = (label_map != lbl) if lbl is not None else (label_map < 0)
+                        series = np.where(_mask, np.nan, series)
+                    vals = series[np.isfinite(series)].ravel() * scale
+                    if vals.size == 0:
+                        si += 1
+                        continue
 
-                color  = prop_cycle[gi % len(prop_cycle)]
-                glabel = self._grain_label(grain) if self.n_grains > 1 else None
-                ax.hist(vals, bins=bins, density=density,
-                        color=color, alpha=alpha, label=glabel)
-                ax.axvline(float(np.mean(vals)), color=color,
-                           linestyle="--", linewidth=1.2, alpha=0.9)
+                    color  = prop_cycle[si % len(prop_cycle)]
+                    glabel = self._label_group_text(grain, lbl, multi_grain, multi_label)
+                    ax.hist(vals, bins=bins, density=density,
+                            color=color, alpha=alpha, label=glabel)
+                    ax.axvline(float(np.mean(vals)), color=color,
+                               linestyle="--", linewidth=1.2, alpha=0.9)
+                    si += 1
 
             ax.set_xlabel(_xlabel, fontsize=9)
             ax.set_ylabel("Density" if density else "Count", fontsize=9)
             ax.set_title(self._STRAIN_DEV_LABELS[comp], fontsize=10)
             ax.tick_params(labelsize=8)
 
-            if self.n_grains > 1 and idx == 0:
+            if (multi_grain or multi_label) and idx == 0:
                 ax.legend(fontsize=7, framealpha=0.7)
 
         for idx in range(n, nrows * ncols):
@@ -3281,10 +3330,14 @@ class GrainMap:
             "lab":     "lab frame",
             "sample":  f"sample frame ({sample_tilt_deg:+.0f}° about {sample_tilt_axis})",
         }.get(frame, frame)
-        _lbl_suffix = (
-            f"  cluster {label}" if label is not None
-            else ("  (all clusters)" if label_map is not None else "")
-        )
+        if label_map is None:
+            _lbl_suffix = ""
+        elif multi_label:
+            _lbl_suffix = f"  clusters {labels}"
+        elif labels[0] is not None:
+            _lbl_suffix = f"  cluster {labels[0]}"
+        else:
+            _lbl_suffix = "  (all clusters)"
         fig.suptitle(
             title or f"Deviatoric strain histogram  [{_frame_label}]{_lbl_suffix}",
             fontsize=11, y=1.01,

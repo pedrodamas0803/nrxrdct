@@ -4537,7 +4537,14 @@ class GrainMap:
         # ── per-pixel worker ─────────────────────────────────────────────────
         def _process_pixel(iy: int, ix: int, U: np.ndarray):
             try:
-                spots = simulate_laue(crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV)
+                # geometry_only=True: only spot position/hkl are used below,
+                # never intensity/F2 — skips the (thread-locked, expensive)
+                # structure-factor evaluation entirely, and can only surface
+                # more matches since f2_thresh filtering is skipped too.
+                spots = simulate_laue(
+                    crystal, U, camera, E_min=E_min_eV, E_max=E_max_eV,
+                    geometry_only=True,
+                )
             except Exception:
                 return None
             spot = next(
@@ -4646,6 +4653,7 @@ class GrainMap:
         E_max_eV: float = 27000.0,
         top_n: int = 10,
         include_harmonics: bool = True,
+        geometry_only: bool = False,
         max_pixels: "int | None" = None,
         n_workers: "int | None" = None,
     ) -> list:
@@ -4677,6 +4685,16 @@ class GrainMap:
                 appears in a spot's `harmonic_hkls` (i.e. merged onto another reflection's
                 pixel) — matches the fallback lookup used by `plot_hkl_mosaic`. Default
                 `True`.
+            geometry_only (bool): Skip the structure-factor evaluation and `f2_thresh`
+                filtering, keeping every reflection that satisfies the sphere / energy /
+                detector-geometry checks. Much faster (skips the most expensive step of
+                `simulate_laue`), but a systematically-forbidden or negligible-intensity
+                reflection is excited at essentially the same pixels as a genuinely strong
+                one — selection rules depend only on `(h, k, l)`, not on which pixel/
+                orientation — so it can rank at the top of the suggestions despite
+                producing no real signal. `mean_intensity` also stops being meaningful
+                (every reflection's `F2` is forced to `1.0`). Off by default; only enable
+                for a quick, approximate first pass. Default `False`.
             max_pixels (int or None): If given, randomly subsample at most this many fitted
                 pixels instead of simulating the whole map (useful for a quick estimate on
                 large maps). `None` (default) uses every fitted pixel.
@@ -4721,6 +4739,7 @@ class GrainMap:
             try:
                 spots = simulate_laue(
                     crystal, U_map[iy, ix], camera, E_min=E_min_eV, E_max=E_max_eV,
+                    geometry_only=geometry_only,
                 )
             except Exception:
                 return []

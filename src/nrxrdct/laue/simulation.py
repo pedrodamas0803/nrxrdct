@@ -81,6 +81,7 @@ import json
 import math
 import os
 import subprocess
+import threading
 
 import dill as pickle
 import numpy as np
@@ -91,6 +92,49 @@ from scipy.special import kv
 # Populated lazily on the first simulate_laue_stack call with a given KB setup
 # so the 300-point xrayutilities loop never runs more than once per configuration.
 _KB_CACHE: dict = {}
+
+
+def _patch_xrayutilities_atom_thread_safety() -> None:
+    """
+    Serialise `xrayutilities.materials.atom.Atom.{f0,f1,f2}` across threads.
+
+    Each of those methods does `_db.SetMaterial(element)` followed by a
+    separate `_db.Get*(en)` read on one shared, unlocked `DataBase`
+    singleton (see `xrayutilities/materials/database.py`, `SetMaterial`
+    around line 258 and `GetF1`/`GetF2` around 339/355) — two non-atomic
+    steps mutating global state. `simulate_laue` is invoked concurrently
+    from `ThreadPoolExecutor` workers (`GrainMap.plot_hkl_mosaic`,
+    `suggest_hkl`, `compute_ub_candidate_scores`); without this lock, one
+    thread's `SetMaterial(elementA)` can land between another thread's
+    `SetMaterial(elementB)` and its `Get*` read, pairing element B's
+    energy grid with element A's value table — `numpy.interp` then raises
+    "fp and xp are not of the same length." Only crystals with 2+ distinct
+    elements trigger a *length* mismatch (single-element crystals just
+    redo a harmless no-op `SetMaterial`), and it's timing-dependent, so it
+    doesn't reproduce on every run. This can't be fixed in xrayutilities
+    itself (vendored/site-packages), so we lock around it here instead.
+    """
+    from xrayutilities.materials import atom as _xu_atom
+
+    if getattr(_xu_atom.Atom, "_nrxrdct_thread_safe", False):
+        return
+
+    lock = threading.Lock()
+    for _name in ("f0", "f1", "f2"):
+        _orig = getattr(_xu_atom.Atom, _name)
+
+        def _make_locked(orig):
+            def _locked(self, *args, **kwargs):
+                with lock:
+                    return orig(self, *args, **kwargs)
+            return _locked
+
+        setattr(_xu_atom.Atom, _name, _make_locked(_orig))
+
+    _xu_atom.Atom._nrxrdct_thread_safe = True
+
+
+_patch_xrayutilities_atom_thread_safety()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # USER PARAMETERS

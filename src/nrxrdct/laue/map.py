@@ -7679,8 +7679,6 @@ class GrainMap:
         *,
         h5_dataset: "str | None" = None,
         tiff_dir: "str | None" = None,
-        map_quantity: str = "match_rate",
-        map_grain: "int | None" = None,
         motor_x: "str | None" = None,
         motor_y: "str | None" = None,
         motor_units: "dict | None" = None,
@@ -7714,27 +7712,6 @@ class GrainMap:
                 Mutually exclusive with *tiff_dir*; one of the two must be given.
             tiff_dir (str or None): Path to a folder of `img_<number>.tif` files sorted by frame
                 index.  Mutually exclusive with *h5_dataset*.
-            map_quantity (str): Scalar quantity shown on the left overview panel.  Options:
-
-            `"match_rate"`
-                Fraction of simulated reflections matched after indexing
-                (default).  Useful to identify already-indexed pixels.
-            `"rms_px"`
-                RMS deviation of matched spot positions in pixels.
-            `"mean_px"`
-                Mean absolute deviation of matched spot positions in pixels.
-            `"cost"`
-                Indexing cost function value.
-            `"n_obs"`
-                Number of segmented spots per pixel, read from the `seg/`
-                directory.  Pixels with no saved segmentation file appear as
-                NaN (background colour).  The map refreshes live each time a
-                frame is saved, making it easy to track segmentation coverage
-                before running indexing.
-            map_grain (int or None): Grain slot index used to build the left-panel map for quantities
-                that are per-grain (`match_rate`, `rms_px`, `mean_px`,
-                `cost`).  Ignored for `n_obs`.  Defaults to the merged-grain
-                slot if one exists, otherwise grain 0.
             motor_x, motor_y (str or None): Motor names looked up in `self.motors`.  When both are supplied
                 the map axes use physical motor coordinates and click-to-pixel
                 conversion is done by nearest-neighbour search; otherwise pixel
@@ -7753,9 +7730,6 @@ class GrainMap:
 
         seg_dir = os.path.join(base_dir, "seg")
         os.makedirs(seg_dir, exist_ok=True)
-
-        if map_grain is None:
-            map_grain = 'merged' if self.best_grain_map is not None else 0
 
         mu = motor_units or {}
         mx = self.motors.get(motor_x) if motor_x else None
@@ -7838,22 +7812,8 @@ class GrainMap:
             raw = self.load_n_obs_map(seg_dir)
             return np.where(raw >= 0, raw.astype(float), np.nan)
 
-        def _grain_map(arr)->np.ndarray:
-            if self.n_grains == 0:
-                return np.full((self.ny, self.nx), np.nan)
-            return self._select_merged(arr) if map_grain == 'merged' else arr[map_grain]
-
-        _map_opts = {
-            "match_rate": (lambda: _grain_map(self.match_rate), "Match rate",    "viridis"),
-            "rms_px":     (lambda: _grain_map(self.rms_px),     "RMS (px)",      "plasma_r"),
-            "mean_px":    (lambda: _grain_map(self.mean_px),    "Mean dev (px)", "plasma_r"),
-            "cost":       (lambda: _grain_map(self.cost),       "Cost",          "plasma_r"),
-            "n_obs":      (_build_n_obs_data,                   "N spots (seg)", "YlOrRd"),
-        }
-        _data_fn, map_label, map_cmap = _map_opts.get(
-            map_quantity, (_map_opts["match_rate"][0], "Match rate", "viridis")
-        )
-        map_data = _data_fn()
+        map_label, map_cmap = "N spots (seg)", "YlOrRd"
+        map_data = _build_n_obs_data()
 
         # ── figure ────────────────────────────────────────────────────────────
         with plt.ioff():
@@ -7878,13 +7838,7 @@ class GrainMap:
                      shrink=0.8, label=map_label)
         ax_map.set_xlabel(xlabel_map, fontsize=9)
         ax_map.set_ylabel(ylabel_map, fontsize=9)
-        grain_label = "merged" if map_grain == 'merged' else f"grain {map_grain + 1}"
-        _map_title = (
-            f"Click to select — {map_label}"
-            if map_quantity == "n_obs"
-            else f"Click to select — {map_label}  ({grain_label})"
-        )
-        ax_map.set_title(_map_title, fontsize=9)
+        ax_map.set_title(f"Click to select — {map_label}", fontsize=9)
         sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
 
         ax_det.set_facecolor("k")
@@ -8268,13 +8222,12 @@ class GrainMap:
                 )
                 print(f"  💾 Saved → {os.path.abspath(out_path)}")
                 _state["saved_xy"] = None   # new result replaces old overlay
-                if map_quantity == "n_obs":
-                    new_data = _build_n_obs_data()
-                    im_map.set_data(new_data)
-                    valid = new_data[np.isfinite(new_data)]
-                    if valid.size:
-                        im_map.set_clim(valid.min(), valid.max())
-                    fig.canvas.draw_idle()
+                new_data = _build_n_obs_data()
+                im_map.set_data(new_data)
+                valid = new_data[np.isfinite(new_data)]
+                if valid.size:
+                    im_map.set_clim(valid.min(), valid.max())
+                fig.canvas.draw_idle()
             except Exception as exc:
                 _info.value = f"<b style='color:#f44'>Save error: {exc}</b>"
 
@@ -8356,6 +8309,963 @@ class GrainMap:
                 [ipw.HTML("<b style='line-height:26px;margin-right:6px'>Display:</b>"),
                  w_log_scale, w_vrange, w_cmap],
                 layout=ipw.Layout(gap="6px", margin="4px 0 0 0", align_items="center"),
+            ),
+            _info,
+        ], layout=ipw.Layout(padding="6px 8px"))
+
+        _ipy_display(ipw.VBox([fig.canvas, _controls]))
+
+    def index_candidate_ub(
+        self,
+        crystal,
+        camera,
+        base_dir: str,
+        *,
+        h5_dataset: "str | None" = None,
+        tiff_dir: "str | None" = None,
+        motor_x: "str | None" = None,
+        motor_y: "str | None" = None,
+        motor_units: "dict | None" = None,
+        E_min_eV: float = 5000.0,
+        E_max_eV: float = 27000.0,
+        f2_thresh: float = 1e-6,
+        max_match_px: float = 30.0,
+        top_n_obs: "int | None" = None,
+        top_n_sim: int = 80,
+        rot_range_deg: float = 20.0,
+        c_rot_range_deg: float = 180.0,
+        r_squared_min: float = 0.0,
+        include_unfitted: bool = True,
+        angle_tol_deg: float = 0.5,
+        min_match_rate: float = 0.25,
+        n_obs_use: int = 20,
+        figsize: tuple = (14, 7),
+    ) -> None:
+        """
+        Interactive single-frame finder for new candidate UB matrices.
+
+        Like :func:`~nrxrdct.laue.interactive.interactive_orientation`, but
+        wired directly into the map: the left panel shows the segmented
+        spot-count (`n_obs`) map so you can click a pixel with a strong
+        pattern, and the right panel overlays the raw image, the segmented
+        (observed) spots, and the simulated pattern for the working
+        orientation — exactly like the standalone tool's detector panel, but
+        in pixel space so the background image lines up with the spots.
+
+        Click a pixel on the left map to load its frame:
+
+        * If `self.processing_dir` (and the current directory) contain **no**
+          `UB[0-9]*.npy` candidate files yet, indexing runs automatically on
+          the clicked frame's spots to bootstrap a starting orientation —
+          there is nothing to pick from, so there is nothing to wait for.
+        * Otherwise the frame loads with **no** starting orientation; pick an
+          existing candidate from the **UB** dropdown to use it as a
+          starting point, or press **⚡ Auto index** to search for a new one
+          from this frame instead.
+
+        Once a starting orientation exists, refine it exactly as in
+        `interactive_orientation`:
+
+        * **Cry [100]/[010]/[001]** sliders rotate about the crystal axes.
+        * Click a simulated (orange) spot to select it — the **rot. [hkl]**
+          slider then spins the crystal about that plane normal.
+        * Press and drag a simulated spot onto its matching observed spot to
+          rotate U so it lands there.
+        * **Reset** restores the orientation last loaded/indexed; **Set as
+          ref.** bakes the current slider deltas in and zeros the sliders;
+          **⚡ Quick Fit** refines against the observed spots
+          (:func:`~nrxrdct.laue.fitting.fit_orientation`); the **Center at
+          hkl** buttons rotate U so that plane's spot lands at the detector
+          centre.
+        * **💾 Save UB** writes the current orientation to an auto-numbered
+          `UB<n>.npy` in `self.processing_dir` and calls
+          :meth:`reload_ub_matrices`, so it immediately becomes a new grain
+          slot and shows up in the UB dropdown for later frames.
+
+        Args:
+            crystal (Crystal): xrayutilities crystal structure used for indexing and simulation.
+            camera (Camera): Detector geometry.
+            base_dir (str): Processing directory containing the `seg/` sub-folder with
+                segmentation HDF5 spot files.
+            h5_dataset (str or None): HDF5 dataset path inside `self.h5_path` for the image stack.
+                Mutually exclusive with *tiff_dir*.
+            tiff_dir (str or None): Path to a folder of `img_<number>.tif` files.  Mutually
+                exclusive with *h5_dataset*.
+            motor_x, motor_y (str or None): Motor names for axis labels and click-to-pixel conversion.
+            motor_units (dict or None): Units per motor, e.g. `{'pz': 'mm', 'py': 'mm'}`.
+            E_min_eV, E_max_eV (float): Energy range for spot simulation.
+            f2_thresh (float): Minimum `|F|²` threshold for allowed reflections.
+            max_match_px (float): Pixel radius for match lines and for `⚡ Quick Fit`.
+            top_n_obs (int or None): Use only the `top_n_obs` brightest observed spots.  `None`
+                (default) uses all segmented spots.
+            top_n_sim (int): Max simulated spots displayed.  Default `80`.
+            rot_range_deg (float): Half-range of the `[100]`/`[010]` crystal-axis sliders (degrees).
+            c_rot_range_deg (float): Half-range of the `[001]` crystal-axis slider (degrees).  Defaults
+                to `180°` so the full azimuthal range is reachable in one drag.
+            r_squared_min (float): Minimum Gaussian-fit R² when loading the spot file.  Default `0`.
+            include_unfitted (bool): Include raw centroids (fit failed) from the spot file.
+            angle_tol_deg (float): Angular tolerance for the auto-indexer.  Default `0.5`.
+            min_match_rate (float): Minimum match rate for `IndexResult.success`.  Default `0.25`.
+            n_obs_use (int): Number of brightest observed spots passed to the auto-indexer.
+                Default `20`.
+            figsize (tuple): Figure size.  Default `(14, 7)`.
+"""
+        import ipywidgets as ipw
+        from IPython.display import display as _ipy_display
+        from .simulation import simulate_laue as _sim_laue
+        from .segmentation import convert_spotsfile2peaklist
+        from .fitting import (
+            index_orientation as _index,
+            fit_orientation   as _fit_ori,
+            _match_spots,
+        )
+
+        seg_dir = os.path.join(base_dir, "seg")
+
+        mu = motor_units or {}
+        mx = self.motors.get(motor_x) if motor_x else None
+        my = self.motors.get(motor_y) if motor_y else None
+
+        if mx is not None and my is not None:
+            extent_map = [mx[0, 0], mx[0, -1], my[-1, 0], my[0, 0]]
+            xu_ = mu.get(motor_x, "")
+            yu_ = mu.get(motor_y, "")
+            xlabel_map = f"{motor_x} ({xu_})" if xu_ else motor_x
+            ylabel_map = f"{motor_y} ({yu_})" if yu_ else motor_y
+        else:
+            extent_map = [0, self.nx, self.ny, 0]
+            xlabel_map = "column (ix)"
+            ylabel_map = "row (iy)"
+
+        def _click_to_iy_ix(xdata: float, ydata: float):
+            if mx is not None and my is not None:
+                dist = (mx - xdata) ** 2 + (my - ydata) ** 2
+                iy, ix = np.unravel_index(int(np.argmin(dist)), dist.shape)
+            else:
+                ix = int(np.clip(int(xdata), 0, self.nx - 1))
+                iy = int(np.clip(int(ydata), 0, self.ny - 1))
+            return int(iy), int(ix)
+
+        _tiff_index: list = []
+
+        def _load_image(frame_idx: int) -> "np.ndarray | None":
+            if tiff_dir is not None:
+                if not _tiff_index:
+                    pat = re.compile(r'(\d+)\.tiff?$', re.IGNORECASE)
+                    files = []
+                    for fname in os.listdir(tiff_dir):
+                        m = pat.search(fname)
+                        if m:
+                            files.append((int(m.group(1)), os.path.join(tiff_dir, fname)))
+                    files.sort(key=lambda t: t[0])
+                    _tiff_index.extend(p for _, p in files)
+                    if not _tiff_index:
+                        print(f"  ✗ No .tif/.tiff files found in {tiff_dir!r}", flush=True)
+                        return None
+                if frame_idx >= len(_tiff_index):
+                    print(
+                        f"  ✗ frame {frame_idx} out of range "
+                        f"({len(_tiff_index)} files in {tiff_dir!r})",
+                        flush=True,
+                    )
+                    return None
+                try:
+                    import skimage.io
+                    return skimage.io.imread(_tiff_index[frame_idx]).astype(np.float32)
+                except Exception as exc:
+                    print(f"  ✗ TIFF read error frame {frame_idx}: {exc}", flush=True)
+                    return None
+            elif h5_dataset is not None:
+                if self.h5_path is None:
+                    print("  ✗ h5_path not set on this GrainMap", flush=True)
+                    return None
+                try:
+                    with h5py.File(self.h5_path, "r") as fh:
+                        if h5_dataset not in fh:
+                            print(
+                                f"  ✗ dataset {h5_dataset!r} not found in {self.h5_path!r}",
+                                flush=True,
+                            )
+                            return None
+                        img = fh[h5_dataset][frame_idx].astype(np.float32)
+                        if self.monitor and self.monitor in fh:
+                            mon_val = float(fh[self.monitor][frame_idx])
+                            if mon_val > 0:
+                                img /= mon_val
+                        return img
+                except Exception as exc:
+                    print(f"  ✗ HDF5 read error frame {frame_idx}: {exc}", flush=True)
+                    return None
+            return None
+
+        def _build_n_obs_data() -> np.ndarray:
+            raw = self.load_n_obs_map(seg_dir)
+            return np.where(raw >= 0, raw.astype(float), np.nan)
+
+        map_data = _build_n_obs_data()
+
+        # ── figure ────────────────────────────────────────────────────────────
+        with plt.ioff():
+            fig = plt.figure(figsize=figsize)
+        try:
+            fig.canvas.manager.set_window_title("Laue — index candidate UB")
+        except Exception:
+            pass
+
+        gs = fig.add_gridspec(
+            1, 2, width_ratios=[1, 1.8], wspace=0.08,
+            left=0.07, right=0.97, bottom=0.09, top=0.91,
+        )
+        ax_map = fig.add_subplot(gs[0])
+        ax_det = fig.add_subplot(gs[1])
+
+        im_map = ax_map.imshow(
+            map_data, origin="upper", extent=extent_map,
+            cmap="YlOrRd", interpolation="nearest", aspect="auto",
+        )
+        fig.colorbar(im_map, ax=ax_map, fraction=0.04, pad=0.03,
+                     shrink=0.8, label="N spots (seg)")
+        ax_map.set_xlabel(xlabel_map, fontsize=9)
+        ax_map.set_ylabel(ylabel_map, fontsize=9)
+        ax_map.set_title("Click to select — N spots (seg)", fontsize=9)
+        sel_dot, = ax_map.plot([], [], "w+", ms=11, mew=2.0, zorder=10)
+
+        ax_det.set_facecolor("k")
+        ax_det.set_aspect("equal")
+        ax_det.set_xlabel("x (px)", fontsize=9)
+        ax_det.set_ylabel("y (px)", fontsize=9)
+        fig.suptitle(
+            "Index candidate UB  —  click map → index/refine → Save UB",
+            fontsize=9, color="#555",
+        )
+
+        _state: dict = {
+            "frame_idx": None, "iy": None, "ix": None,
+            "obs_xy": np.empty((0, 2)),
+            "image": None,
+            "U0": None,        # base orientation sliders rotate away from
+            "U0_orig": None,   # value restored by "Reset"
+            "U": None,         # live orientation including slider deltas
+            "sim_spots": [],   # cached on-detector simulated spots for U
+            "selected": None,  # selected sim spot dict, or None
+            "drawn": False,
+        }
+
+        # ── UB candidate scan / dropdown ────────────────────────────────────────
+        def _scan_ub_paths() -> list:
+            seen: dict = {}
+            for d in sorted({self.processing_dir or os.getcwd(), os.getcwd()}):
+                for p in sorted(glob.glob(os.path.join(d, "UB[0-9]*.npy"))):
+                    seen.setdefault(os.path.basename(p), p)
+            return list(seen.values())
+
+        def _ub_dropdown_options() -> list:
+            return [("— select —", "")] + [
+                (os.path.basename(p), p) for p in _scan_ub_paths()
+            ]
+
+        w_ub_dd = ipw.Dropdown(
+            options=_ub_dropdown_options(), value="",
+            description="UB:", layout=ipw.Layout(width="220px"),
+            style={"description_width": "30px"},
+        )
+        btn_refresh_ub = ipw.Button(
+            description="🔄", tooltip="Rescan for UB*.npy files",
+            layout=ipw.Layout(width="38px", height="32px"),
+        )
+
+        # ── simulation / redraw ─────────────────────────────────────────────────
+        def _simulate(U: np.ndarray) -> list:
+            return _sim_laue(
+                crystal, U, camera,
+                E_min=E_min_eV, E_max=E_max_eV, f2_thresh=f2_thresh,
+            )
+
+        def _draw_det() -> None:
+            frame_idx = _state["frame_idx"]
+            if frame_idx is None:
+                ax_det.cla()
+                ax_det.set_facecolor("k")
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+                ax_det.set_aspect("equal")
+                ax_det.set_xlabel("x (px)", fontsize=9)
+                ax_det.set_ylabel("y (px)", fontsize=9)
+                ax_det.set_title("← click map to select a frame", fontsize=9, color="#888")
+                fig.canvas.draw_idle()
+                return
+
+            obs_xy    = _state["obs_xy"]
+            U         = _state["U"]
+            sim_spots = _state["sim_spots"]
+
+            saved_xlim = ax_det.get_xlim()
+            saved_ylim = ax_det.get_ylim()
+
+            ax_det.cla()
+            ax_det.set_facecolor("k")
+
+            image = _state["image"]
+            if image is not None:
+                pos  = image[image > 0]
+                vmin = float(np.percentile(pos, 1))    if pos.size else 0.0
+                vmax = float(np.percentile(pos, 99.9))  if pos.size else 1.0
+                if vmax <= vmin:
+                    vmax = vmin + 1.0
+                nv_im, nh_im = image.shape
+                disp_norm = np.clip((image - vmin) / (vmax - vmin), 0, None)
+                ax_det.imshow(
+                    np.log1p(disp_norm * 1000),
+                    origin="upper", extent=[0, nh_im, nv_im, 0],
+                    cmap="gray", aspect="equal", zorder=0,
+                )
+            else:
+                ax_det.set_xlim(0, camera.Nh)
+                ax_det.set_ylim(camera.Nv, 0)
+            ax_det.set_aspect("equal")
+
+            sim_xy = (
+                np.array([s["pix"] for s in sim_spots])
+                if sim_spots else np.empty((0, 2))
+            )
+
+            n_matched = 0
+            rms_px    = float("nan")
+            if len(obs_xy):
+                edge_colors = ["white"] * len(obs_xy)
+                if len(sim_xy):
+                    row_ind, col_ind, dist_px = _match_spots(obs_xy, sim_xy, max_match_px)
+                    ok_mask   = dist_px < max_match_px
+                    n_matched = int(ok_mask.sum())
+                    if n_matched > 0:
+                        rms_px = float(np.sqrt((dist_px[ok_mask] ** 2).mean()))
+                    for r, c, ok in zip(row_ind, col_ind, ok_mask):
+                        if ok:
+                            edge_colors[r] = "#44dd66"
+                            ax_det.plot(
+                                [obs_xy[r, 0], sim_xy[c, 0]],
+                                [obs_xy[r, 1], sim_xy[c, 1]],
+                                color="#44dd66", lw=0.7, alpha=0.6, zorder=3,
+                            )
+                ax_det.scatter(
+                    obs_xy[:, 0], obs_xy[:, 1],
+                    s=45, c="none", edgecolors=edge_colors, linewidths=0.9,
+                    zorder=4, label=f"observed ({len(obs_xy)})",
+                )
+
+            if len(sim_xy):
+                ax_det.scatter(
+                    sim_xy[:, 0], sim_xy[:, 1],
+                    s=28, c="#ff6b35", marker="D", linewidths=0,
+                    zorder=5, label=f"simulated ({len(sim_xy)})",
+                )
+
+            sel = _state["selected"]
+            if sel is not None:
+                for s in sim_spots:
+                    if s.get("hkl") == sel["hkl"]:
+                        ax_det.scatter(
+                            [s["pix"][0]], [s["pix"][1]],
+                            s=130, c="none", edgecolors="#ffff00",
+                            linewidths=1.8, zorder=7, marker="o",
+                        )
+                        break
+
+            _drag_artists["sc_drag"] = ax_det.scatter(
+                [], [], s=180, c="none", edgecolors="#ff4400",
+                linewidths=1.8, zorder=8, marker="o",
+            )
+            _drag_artists["drag_line"], = ax_det.plot(
+                [], [], color="#ff4400", lw=1.0, linestyle="--", zorder=7, alpha=0.7,
+            )
+
+            if len(obs_xy) or len(sim_xy):
+                ax_det.legend(
+                    fontsize=7, loc="upper right",
+                    facecolor="#111", edgecolor="#444", labelcolor="white",
+                    framealpha=0.85,
+                )
+
+            ax_det.set_xlabel("x (px)", fontsize=9)
+            ax_det.set_ylabel("y (px)", fontsize=9)
+
+            iy, ix = _state["iy"], _state["ix"]
+            suffix = ""
+            if U is not None:
+                euler = Rotation.from_matrix(U).as_euler("ZXZ", degrees=True)
+                rate  = n_matched / max(min(len(obs_xy), len(sim_xy)), 1)
+                rms_s = f"{rms_px:.1f} px" if np.isfinite(rms_px) else "—"
+                suffix = (
+                    f"  —  φ₁={euler[0]:+.1f}° Φ={euler[1]:+.1f}° φ₂={euler[2]:+.1f}°"
+                    f"  match {n_matched}/{len(obs_xy)} ({rate:.0%})  rms {rms_s}"
+                )
+            ax_det.set_title(f"Frame {frame_idx}  (iy={iy}, ix={ix}){suffix}", fontsize=8)
+
+            if _state["drawn"]:
+                ax_det.set_xlim(saved_xlim)
+                ax_det.set_ylim(saved_ylim)
+            _state["drawn"] = True
+            fig.canvas.draw_idle()
+
+        _drag_artists: dict = {"sc_drag": None, "drag_line": None}
+
+        # ── slider-driven orientation update ────────────────────────────────────
+        _updating = [False]
+
+        def _do_update() -> None:
+            if _state["U0"] is None or _state["frame_idx"] is None:
+                _draw_det()
+                return
+            U = _state["U0"]
+            for angle_deg, cry_ax in (
+                (s_ca.value, np.array([1., 0., 0.])),
+                (s_cb.value, np.array([0., 1., 0.])),
+                (s_cc.value, np.array([0., 0., 1.])),
+            ):
+                if angle_deg == 0.0:
+                    continue
+                ax_lab = U @ cry_ax
+                ax_lab /= np.linalg.norm(ax_lab)
+                U = Rotation.from_rotvec(np.radians(angle_deg) * ax_lab).as_matrix() @ U
+
+            if _state["selected"] is not None and s_hkl.value != 0.0:
+                h, k, l = _state["selected"]["hkl"]
+                G_cry  = crystal.Q(h, k, l)
+                g_norm = np.linalg.norm(G_cry)
+                if g_norm > 1e-12:
+                    ax_hkl = U @ (G_cry / g_norm)
+                    ax_hkl /= np.linalg.norm(ax_hkl)
+                    U = Rotation.from_rotvec(np.radians(s_hkl.value) * ax_hkl).as_matrix() @ U
+
+            _state["U"] = U
+            spots  = _simulate(U)
+            on_det = [s for s in spots if s.get("pix") is not None][:top_n_sim]
+            _state["sim_spots"] = on_det
+            _draw_det()
+
+        def _reset_sliders() -> None:
+            _updating[0] = True
+            s_ca.value  = 0.0
+            s_cb.value  = 0.0
+            s_cc.value  = 0.0
+            s_hkl.value = 0.0
+            _updating[0] = False
+            _do_update()
+
+        def _on_slider(change) -> None:
+            if not _updating[0]:
+                _do_update()
+
+        # ── spot selection / drag-to-rotate ─────────────────────────────────────
+        _drag: dict = {
+            "active": False, "spot_idx": None,
+            "orig_xy": None, "press_screen": None,
+        }
+
+        def _deselect() -> None:
+            _state["selected"] = None
+            s_hkl.disabled    = True
+            s_hkl.description = "rot. [—]"
+            _hkl_html.value = (
+                "<span style='color:#666;font-style:italic'>"
+                "click a simulated spot to select it</span>"
+            )
+            _updating[0] = True
+            s_hkl.value  = 0.0
+            _updating[0] = False
+            _do_update()
+
+        def _select_spot(idx: int) -> None:
+            spot = _state["sim_spots"][idx]
+            _state["selected"] = spot
+            h, k, l = spot["hkl"]
+            _hkl_html.value = (
+                f"<b style='color:#ffff00'>({h:+d} {k:+d} {l:+d})</b>"
+                f"&nbsp;&nbsp;2θ&nbsp;=&nbsp;{spot['tth']:.2f}°"
+                f"&nbsp;&nbsp;χ&nbsp;=&nbsp;{spot['chi']:.2f}°"
+            )
+            s_hkl.description = f"rot. [{h} {k} {l}]"
+            s_hkl.disabled    = False
+            _updating[0] = True
+            s_hkl.value  = 0.0
+            _updating[0] = False
+            _do_update()
+
+        def _nearest_sim_idx(xdata: float, ydata: float) -> "int | None":
+            sim_spots = _state["sim_spots"]
+            if not sim_spots:
+                return None
+            xy = np.array([s["pix"] for s in sim_spots])
+            dx = xy[:, 0] - xdata
+            dy = xy[:, 1] - ydata
+            return int(np.argmin(dx ** 2 + dy ** 2))
+
+        def _on_press_det(event) -> None:
+            if event.inaxes is not ax_det or _state["U"] is None:
+                return
+            if event.button == 3:
+                _deselect()
+                return
+            if event.button != 1:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+            idx = _nearest_sim_idx(event.xdata, event.ydata)
+            if idx is None:
+                return
+            _drag["spot_idx"]     = idx
+            _drag["orig_xy"]      = np.array(_state["sim_spots"][idx]["pix"], dtype=float)
+            _drag["press_screen"] = np.array([event.x, event.y])
+            _drag["active"]       = False
+
+        def _on_motion_det(event) -> None:
+            if event.inaxes is not ax_det or _drag["spot_idx"] is None:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            screen_dist = np.linalg.norm(
+                np.array([event.x, event.y]) - _drag["press_screen"]
+            )
+            if screen_dist < 6.0:
+                return
+            _drag["active"] = True
+            orig = _drag["orig_xy"]
+            cur  = np.array([event.xdata, event.ydata])
+            if _drag_artists["sc_drag"] is not None:
+                _drag_artists["sc_drag"].set_offsets([cur])
+            if _drag_artists["drag_line"] is not None:
+                _drag_artists["drag_line"].set_data([orig[0], cur[0]], [orig[1], cur[1]])
+            fig.canvas.draw_idle()
+
+        def _on_release_det(event) -> None:
+            if event.button != 1 or _drag["spot_idx"] is None:
+                _drag["spot_idx"] = None
+                return
+
+            if not _drag["active"]:
+                _select_spot(_drag["spot_idx"])
+            else:
+                if event.xdata is not None and event.ydata is not None:
+                    orig = _drag["orig_xy"]
+                    drop = np.array([event.xdata, event.ydata])
+                    try:
+                        ki       = np.array([1.0, 0.0, 0.0])
+                        kf_orig  = camera.pixel_to_kf(np.array([orig[0]]), np.array([orig[1]]))[0]
+                        kf_drop  = camera.pixel_to_kf(np.array([drop[0]]), np.array([drop[1]]))[0]
+                        kf_orig /= np.linalg.norm(kf_orig)
+                        kf_drop /= np.linalg.norm(kf_drop)
+                        q_orig   = kf_orig - ki
+                        q_target = kf_drop - ki
+                        n_o, n_t = np.linalg.norm(q_orig), np.linalg.norm(q_target)
+                        if n_o > 1e-10 and n_t > 1e-10:
+                            q_o_hat = q_orig   / n_o
+                            q_t_hat = q_target / n_t
+                            axis    = np.cross(q_o_hat, q_t_hat)
+                            sin_a   = np.linalg.norm(axis)
+                            cos_a   = float(np.clip(np.dot(q_o_hat, q_t_hat), -1.0, 1.0))
+                            if sin_a > 1e-10:
+                                R = Rotation.from_rotvec(
+                                    np.arctan2(sin_a, cos_a) * axis / sin_a
+                                ).as_matrix()
+                                _state["U0"] = R @ _state["U"]
+                                _reset_sliders()
+                    except Exception:
+                        pass
+
+            if _drag_artists["sc_drag"] is not None:
+                _drag_artists["sc_drag"].set_offsets(np.empty((0, 2)))
+            if _drag_artists["drag_line"] is not None:
+                _drag_artists["drag_line"].set_data([], [])
+            _drag["spot_idx"] = None
+            _drag["active"]   = False
+            fig.canvas.draw_idle()
+
+        # ── auto-indexer ─────────────────────────────────────────────────────────
+        def _run_auto_index() -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if len(_state["obs_xy"]) < 3:
+                return
+            if getattr(_run_auto_index, "_running", False):
+                return
+            _run_auto_index._running = True
+            btn_index.disabled    = True
+            btn_index.description = "Indexing…"
+
+            obs_xy = _state["obs_xy"]
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _index(
+                        crystal, camera, obs_xy,
+                        f2_thresh=f2_thresh,
+                        angle_tol_deg=angle_tol_deg,
+                        min_match_rate=min_match_rate,
+                        n_obs_use=n_obs_use,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.15)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Index error: {item}</b>"
+                else:
+                    _state["U0"]      = item.U.copy()
+                    _state["U0_orig"] = item.U.copy()
+                    col = "#44dd66" if item.success else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{item}</b>"
+                    btn_fit.disabled  = len(_state["obs_xy"]) < 3
+                    btn_save.disabled = False
+                    _reset_sliders()
+                btn_index.description = "⚡ Auto index"
+                btn_index.disabled    = len(_state["obs_xy"]) < 3
+                _run_auto_index._running = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        # ── quick fit ────────────────────────────────────────────────────────────
+        def _cb_fit(_b) -> None:
+            import asyncio
+            import queue as _qmod
+            import threading
+
+            if _state["U"] is None or len(_state["obs_xy"]) < 3:
+                return
+            if getattr(_cb_fit, "_running", False):
+                return
+            _cb_fit._running    = True
+            btn_fit.disabled    = True
+            btn_fit.description = "Fitting…"
+
+            U_start = _state["U"].copy()
+            obs_xy  = _state["obs_xy"]
+            q: _qmod.Queue = _qmod.Queue()
+
+            def _run() -> None:
+                try:
+                    res = _fit_ori(
+                        crystal, camera, obs_xy, U_start,
+                        E_min_eV=E_min_eV, E_max_eV=E_max_eV,
+                        max_match_px=max_match_px, top_n_sim=top_n_sim,
+                        geometry_only=True, max_nfev=400, verbose=True,
+                    )
+                    q.put(res)
+                except Exception as exc:
+                    q.put(exc)
+
+            async def _wait() -> None:
+                threading.Thread(target=_run, daemon=True).start()
+                while q.empty():
+                    await asyncio.sleep(0.2)
+                item = q.get_nowait()
+                if isinstance(item, Exception):
+                    _info.value = f"<b style='color:#f44'>Quick fit error: {item}</b>"
+                else:
+                    _state["U0"] = item.U.copy()
+                    col = "#44aaff" if item.success else "#ffaa33"
+                    _info.value = f"<b style='color:{col}'>{item}</b>"
+                    btn_save.disabled = False
+                    _reset_sliders()
+                btn_fit.description = "⚡ Quick Fit"
+                btn_fit.disabled    = len(_state["obs_xy"]) < 3
+                _cb_fit._running    = False
+
+            try:
+                asyncio.get_event_loop().create_task(_wait())
+            except RuntimeError:
+                asyncio.ensure_future(_wait())
+
+        # ── reset / set-as-reference / save UB ──────────────────────────────────
+        def _cb_reset(_b) -> None:
+            if _state["U0_orig"] is not None:
+                _state["U0"] = _state["U0_orig"].copy()
+            _reset_sliders()
+
+        def _cb_setref(_b) -> None:
+            if _state["U"] is not None:
+                _state["U0"] = _state["U"].copy()
+            _reset_sliders()
+
+        def _cb_refresh_ub(_b) -> None:
+            current = w_ub_dd.value
+            opts = _ub_dropdown_options()
+            w_ub_dd.options = opts
+            valid = {v for _, v in opts if v}
+            w_ub_dd.value = current if current in valid else ""
+
+        def _cb_save(_b) -> None:
+            if _state["U"] is None:
+                return
+            target_dir = self.processing_dir or os.getcwd()
+            existing = []
+            for d in sorted({target_dir, os.getcwd()}):
+                existing += glob.glob(os.path.join(d, "UB[0-9]*.npy"))
+            max_n = -1
+            for fpath in existing:
+                m = re.search(r"UB(\d+)\.npy$", os.path.basename(fpath))
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+            fname    = f"UB{max_n + 1:02d}.npy"
+            out_path = os.path.join(target_dir, fname)
+            np.save(out_path, _state["U"])
+            self.reload_ub_matrices()
+            _cb_refresh_ub(None)
+            print(f"  💾 Saved U → {os.path.abspath(out_path)}")
+            _info.value = (
+                f"<b style='color:#44dd66'>Saved → {fname}</b>"
+                f"&emsp;<span style='color:#aaa'>n_grains now {self.n_grains}</span>"
+            )
+
+        def _load_ub_from_path(path: str) -> None:
+            try:
+                U = np.load(path)
+                if U.shape != (3, 3):
+                    raise ValueError(f"expected (3, 3), got {U.shape}")
+                _state["U0"]      = U
+                _state["U0_orig"] = U.copy()
+                _info.value = (
+                    f"<b style='color:#44dd66'>Loaded U from "
+                    f"{os.path.basename(path)}</b>"
+                )
+                btn_fit.disabled  = len(_state["obs_xy"]) < 3
+                btn_save.disabled = False
+                _reset_sliders()
+            except Exception as exc:
+                _info.value = f"<b style='color:#f44'>Load error: {exc}</b>"
+
+        def _cb_ub_select(change) -> None:
+            path = change["new"]
+            if path:
+                _load_ub_from_path(path)
+
+        w_ub_dd.observe(_cb_ub_select, names="value")
+        btn_refresh_ub.on_click(_cb_refresh_ub)
+
+        # ── "Center at hkl" preset buttons ───────────────────────────────────────
+        _presets: "list[tuple[str, tuple[int, int, int]]]" = [
+            ("100",  ( 1,  0,  0)),
+            ("010",  ( 0,  1,  0)),
+            ("001",  ( 0,  0,  1)),
+            ("111",  ( 1,  1,  1)),
+            ("-110", (-1,  1,  0)),
+            ("110",  ( 1,  1,  0)),
+        ]
+
+        def _make_center_cb(hkl):
+            h, k, l = hkl
+            def _cb(_b) -> None:
+                if _state["U"] is None:
+                    return
+                G_cry  = crystal.Q(h, k, l)
+                g_norm = np.linalg.norm(G_cry)
+                if g_norm < 1e-12:
+                    return
+                G_lab = _state["U"] @ (G_cry / g_norm)
+                G_lab /= np.linalg.norm(G_lab)
+
+                IO_LT2 = camera.IOlab
+                IO_LT  = np.array([IO_LT2[1], -IO_LT2[0], IO_LT2[2]])
+                d_hat  = IO_LT / np.linalg.norm(IO_LT)
+                ki_hat = np.array([1.0, 0.0, 0.0])
+                target = d_hat - ki_hat
+                t_norm = np.linalg.norm(target)
+                if t_norm < 1e-12:
+                    return
+                target_hat = target / t_norm
+
+                ax_r  = np.cross(G_lab, target_hat)
+                sin_a = np.linalg.norm(ax_r)
+                cos_a = float(np.dot(G_lab, target_hat))
+                if sin_a < 1e-10:
+                    if cos_a > 0:
+                        R_ctr = np.eye(3)
+                    else:
+                        perp = np.array([0., 0., 1.] if abs(G_lab[2]) < 0.9
+                                        else [0., 1., 0.])
+                        v = np.cross(G_lab, perp)
+                        R_ctr = Rotation.from_rotvec(
+                            np.pi * v / np.linalg.norm(v)
+                        ).as_matrix()
+                else:
+                    R_ctr = Rotation.from_rotvec(
+                        np.arctan2(sin_a, cos_a) * (ax_r / sin_a)
+                    ).as_matrix()
+
+                _state["U0"] = R_ctr @ _state["U"]
+                _reset_sliders()
+            return _cb
+
+        _ckw = dict(layout=ipw.Layout(width="62px", height="28px"))
+        _center_btns = []
+        for _lbl, _hkl in _presets:
+            _b = ipw.Button(description=_lbl, **_ckw)
+            _b.on_click(_make_center_cb(_hkl))
+            _center_btns.append(_b)
+
+        # ── map click handler ─────────────────────────────────────────────────
+        def _on_click_map(event) -> None:
+            if event.inaxes is not ax_map:
+                return
+            if event.xdata is None or event.ydata is None:
+                return
+            try:
+                if fig.canvas.toolbar.mode != "":
+                    return
+            except Exception:
+                pass
+
+            iy, ix    = _click_to_iy_ix(event.xdata, event.ydata)
+            frame_idx = self.frame_index(iy, ix)
+
+            if mx is not None and my is not None:
+                sel_dot.set_data([mx[iy, ix]], [my[iy, ix]])
+            else:
+                sel_dot.set_data([ix + 0.5], [iy + 0.5])
+
+            seg_path = os.path.join(seg_dir, f"frame_{frame_idx:05d}.h5")
+            if os.path.exists(seg_path):
+                try:
+                    obs_xy = convert_spotsfile2peaklist(
+                        seg_path,
+                        r_squared_min=r_squared_min,
+                        include_unfitted=include_unfitted,
+                    )[:, :2]
+                except Exception:
+                    obs_xy = np.empty((0, 2))
+            else:
+                obs_xy = np.empty((0, 2))
+            if top_n_obs is not None:
+                obs_xy = obs_xy[:top_n_obs]
+
+            _state.update(
+                frame_idx=frame_idx, iy=iy, ix=ix,
+                obs_xy=obs_xy, image=_load_image(frame_idx),
+                U0=None, U0_orig=None, U=None, sim_spots=[], selected=None,
+            )
+            _deselect_ui_only()
+            if w_ub_dd.value:
+                w_ub_dd.unobserve(_cb_ub_select, names="value")
+                w_ub_dd.value = ""
+                w_ub_dd.observe(_cb_ub_select, names="value")
+
+            enough = len(obs_xy) >= 3
+            btn_index.disabled = not enough
+            btn_fit.disabled   = True
+            btn_save.disabled  = True
+
+            has_candidates = len(_scan_ub_paths()) > 0
+            if not has_candidates and enough:
+                _info.value = (
+                    f"<span style='color:#aaa'>Frame {frame_idx} — "
+                    f"{len(obs_xy)} observed spots — no UB candidates found, "
+                    f"auto-indexing…</span>"
+                )
+                _draw_det()
+                _run_auto_index()
+            else:
+                _info.value = (
+                    f"<span style='color:#aaa'>Frame {frame_idx} — "
+                    f"{len(obs_xy)} observed spots</span>"
+                )
+                _draw_det()
+
+        def _deselect_ui_only() -> None:
+            """Reset the hkl-slider UI without triggering a redraw (map click already will)."""
+            s_hkl.disabled    = True
+            s_hkl.description = "rot. [—]"
+            _hkl_html.value = (
+                "<span style='color:#666;font-style:italic'>"
+                "click a simulated spot to select it</span>"
+            )
+            _updating[0] = True
+            s_hkl.value  = 0.0
+            _updating[0] = False
+
+        fig.canvas.mpl_connect("button_press_event",   _on_click_map)
+        fig.canvas.mpl_connect("button_press_event",   _on_press_det)
+        fig.canvas.mpl_connect("motion_notify_event",  _on_motion_det)
+        fig.canvas.mpl_connect("button_release_event", _on_release_det)
+
+        # ── ipywidgets ────────────────────────────────────────────────────────
+        _bkw = dict(layout=ipw.Layout(width="120px", height="32px"))
+        btn_index  = ipw.Button(description="⚡ Auto index", button_style="primary", **_bkw)
+        btn_reset  = ipw.Button(description="Reset",         button_style="warning", **_bkw)
+        btn_setref = ipw.Button(description="Set as ref.",   button_style="info",    **_bkw)
+        btn_fit    = ipw.Button(description="⚡ Quick Fit",  button_style="info",    **_bkw)
+        btn_save   = ipw.Button(description="💾 Save UB",    button_style="success", **_bkw)
+        btn_index.disabled = True
+        btn_fit.disabled   = True
+        btn_save.disabled  = True
+
+        btn_index.on_click(lambda _b: _run_auto_index())
+        btn_reset.on_click(_cb_reset)
+        btn_setref.on_click(_cb_setref)
+        btn_fit.on_click(_cb_fit)
+        btn_save.on_click(_cb_save)
+
+        _info = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>"
+            "click a map pixel to select a frame"
+            "</span>",
+            layout=ipw.Layout(margin="4px 0 0 6px"),
+        )
+
+        _sk = dict(
+            step=0.02, readout_format=".2f", continuous_update=False,
+            style={"description_width": "130px"}, layout=ipw.Layout(width="98%"),
+        )
+        s_ca = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
+                               description="Cry [100]  (a)", **_sk)
+        s_cb = ipw.FloatSlider(value=0.0, min=-rot_range_deg,   max=+rot_range_deg,
+                               description="Cry [010]  (b)", **_sk)
+        s_cc = ipw.FloatSlider(value=0.0, min=-c_rot_range_deg, max=+c_rot_range_deg,
+                               description="Cry [001]  (c)", **_sk)
+        s_hkl = ipw.FloatSlider(value=0.0, min=-rot_range_deg, max=+rot_range_deg,
+                                 description="rot. [—]", disabled=True, **_sk)
+        for s in (s_ca, s_cb, s_cc, s_hkl):
+            s.observe(_on_slider, names="value")
+
+        _hkl_html = ipw.HTML(
+            "<span style='color:#666;font-style:italic'>click a simulated spot to select it</span>",
+            layout=ipw.Layout(margin="0 0 2px 4px"),
+        )
+        btn_desel = ipw.Button(
+            description="✕ Deselect", button_style="warning",
+            layout=ipw.Layout(width="100px", height="26px"),
+        )
+        btn_desel.on_click(lambda _b: _deselect())
+
+        # ── layout and display ──────────────────────────────────────────────────
+        _draw_det()
+
+        _controls = ipw.VBox([
+            ipw.HBox(
+                [w_ub_dd, btn_refresh_ub, btn_index, btn_reset, btn_setref,
+                 btn_fit, btn_save],
+                layout=ipw.Layout(gap="6px", align_items="center", margin="4px 0 2px 0"),
+            ),
+            s_ca, s_cb, s_cc, s_hkl,
+            ipw.HBox([_hkl_html, btn_desel],
+                     layout=ipw.Layout(align_items="center", gap="6px")),
+            ipw.HBox(
+                [ipw.HTML("<b>Center at hkl:</b>",
+                          layout=ipw.Layout(align_self="center", margin="0 10px 0 0"))]
+                + _center_btns,
+                layout=ipw.Layout(gap="4px"),
             ),
             _info,
         ], layout=ipw.Layout(padding="6px 8px"))

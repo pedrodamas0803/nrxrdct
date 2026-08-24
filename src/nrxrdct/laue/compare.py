@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-__all__ = ["compare_grain_populations"]
+__all__ = ["compare_grain_populations", "compare_pixel_populations"]
 
 
 def _grain_ids_and_masks(gmap, grain, min_pixels: int) -> dict:
@@ -285,6 +285,141 @@ def compare_grain_populations(
         name: _two_sample_stats(vals_a.values(), vals_b.values(),
                                  n_bootstrap=n_bootstrap, rng=rng)
         for name, (vals_a, vals_b) in quantities.items()
+    }
+
+    df = pd.DataFrame(rows).T
+    df.index.name = "quantity"
+    df.attrs["label_a"] = label_a
+    df.attrs["label_b"] = label_b
+    return df
+
+
+def _pixel_quantities(gmap, grain) -> dict:
+    """Per-pixel scalar fields for the requested grain slot, keyed like the
+    per-grain quantities in :func:`compare_grain_populations`."""
+    eig = _principal_strains(gmap, grain)
+    return {
+        "rms_px": _selected_field(gmap, gmap.rms_px, grain),
+        "match_rate": _selected_field(gmap, gmap.match_rate, grain),
+        "misorientation_deg": gmap.misorientation_map(grain),
+        "equivalent_strain": gmap.equivalent_strain(grain),
+        "max_principal_strain": eig[..., 0],
+        "min_principal_strain": eig[..., -1],
+        "max_shear_strain": (eig[..., 0] - eig[..., -1]) / 2.0,
+    }
+
+
+def compare_pixel_populations(
+    map_a,
+    map_b,
+    *,
+    grain_a: "int | str" = "merged",
+    grain_b: "int | str" = "merged",
+    label_a: str = "A",
+    label_b: str = "B",
+    stride: int = 1,
+    max_pixels: "int | None" = 20_000,
+    n_bootstrap: int = 2000,
+    random_state: "int | None" = None,
+) -> pd.DataFrame:
+    """
+    Compare two :class:`~nrxrdct.laue.map.GrainMap` reconstructions
+    pixel-by-pixel *within* each map, instead of aggregating to one value
+    per physical grain first.
+
+    :func:`compare_grain_populations` reduces each map to one scalar per
+    physical grain before testing.  That is the statistically correct thing
+    to do when a map contains many grains, but it is useless when a map is
+    essentially a single physical grain: both samples collapse to ``n=1``
+    and every test in the output becomes ``NaN`` (see
+    :func:`compare_grain_populations`'s ``n_a < 2`` handling).  This function
+    instead compares the raw per-pixel distributions of the same
+    frame-invariant quantities, which is the only way to get a meaningful
+    sample size out of a single-grain map.
+
+    .. warning::
+        Neighbouring pixels within a grain are **not** independent samples
+        (that is exactly why :func:`compare_grain_populations` aggregates to
+        one value per grain in the first place).  P-values here are
+        therefore anti-conservative — a large map will make
+        ``mannwhitney_p``/``ks_p`` look significant even for differences
+        that are not physically meaningful.  Treat this function's output
+        as a *descriptive* comparison of the pixel-level distributions and
+        lean on ``median_diff``/``ci_low``/``ci_high`` (effect size) rather
+        than the p-values.  Prefer :func:`compare_grain_populations` whenever
+        a map has enough distinct grains for that per-grain reduction to
+        have a usable sample size.
+
+    *stride* subsamples the scan grid on a regular lattice (every *stride*-th
+    row/column) before comparing, which — unlike random pixel subsampling —
+    directly reduces spatial autocorrelation instead of just reducing ``n``.
+    Increasing it (e.g. to the approximate correlation length in pixels,
+    which :meth:`~nrxrdct.laue.map.GrainMap.kam_map` or a variogram can help
+    estimate) makes the p-values less optimistic.
+
+    ``misorientation_deg`` uses :meth:`~nrxrdct.laue.map.GrainMap.misorientation_map`,
+    which — unlike :func:`compare_grain_populations`'s
+    ``orientation_spread_deg`` — does **not** apply crystal-symmetry
+    reduction.  A symmetry-equivalent branch jump mid-grain would then read
+    as a large spurious misorientation.  Call
+    :meth:`~nrxrdct.laue.map.GrainMap.reduce_to_fundamental_zone` on each map
+    (before :meth:`apply_merge`) first if that is a concern.
+
+    Args:
+        map_a, map_b (GrainMap): The two reconstructions to compare.
+        grain_a, grain_b (int or 'merged'): Grain slot to use in each map.
+            ``'merged'`` (default) requires :meth:`GrainMap.apply_merge` to
+            have been called on that map.
+        label_a, label_b (str): Sample labels, stored in the returned
+            DataFrame's ``attrs`` for readability.
+        stride (int): Keep only every *stride*-th pixel along each map axis
+            before comparing.  Default ``1`` (every pixel).
+        max_pixels (int or None): If, after striding, either sample still
+            has more than this many finite pixels, randomly subsample down
+            to this count (caps bootstrap cost on large maps).  Set to
+            ``None`` to disable.  Default ``20000``.
+        n_bootstrap (int): Bootstrap resamples for the median-difference CI.
+            Default ``2000``.
+        random_state (int or None): Seed for the subsampling/bootstrap RNG.
+
+    Returns:
+        pandas.DataFrame: Same shape/columns as
+        :func:`compare_grain_populations`'s return value (one row per
+        quantity), but ``n_a``/``n_b`` now count pixels, not grains.
+
+    Example::
+
+        gmap_a.apply_merge(*gmap_a.merge(min_match_rate=0.3))
+        gmap_b.apply_merge(*gmap_b.merge(min_match_rate=0.3))
+
+        df = compare_pixel_populations(
+            gmap_a, gmap_b, symmetry='cubic',
+            label_a='as-grown', label_b='annealed', stride=3,
+        )
+        print(df)
+"""
+    rng = np.random.default_rng(random_state)
+
+    def _sampled_values(gmap, grain) -> dict:
+        stride_mask = np.zeros((gmap.ny, gmap.nx), dtype=bool)
+        stride_mask[::stride, ::stride] = True
+
+        out = {}
+        for name, field in _pixel_quantities(gmap, grain).items():
+            vals = field[stride_mask & np.isfinite(field)]
+            if max_pixels is not None and vals.size > max_pixels:
+                idx = rng.choice(vals.size, size=max_pixels, replace=False)
+                vals = vals[idx]
+            out[name] = vals
+        return out
+
+    vals_a = _sampled_values(map_a, grain_a)
+    vals_b = _sampled_values(map_b, grain_b)
+
+    rows = {
+        name: _two_sample_stats(vals_a[name], vals_b[name],
+                                 n_bootstrap=n_bootstrap, rng=rng)
+        for name in vals_a
     }
 
     df = pd.DataFrame(rows).T

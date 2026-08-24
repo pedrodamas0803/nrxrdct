@@ -62,7 +62,14 @@ def _principal_strains(gmap, grain) -> np.ndarray:
     of the tensor are.
     """
     eps = _selected_field(gmap, gmap.strain_tensor_deviatoric, grain)
-    return np.linalg.eigvalsh(eps)[..., ::-1]  # eigvalsh is ascending
+    valid = np.all(np.isfinite(eps), axis=(-2, -1))
+    out = np.full(eps.shape[:-1], np.nan)  # (ny, nx, 3)
+    if valid.any():
+        # Only finite matrices are passed to eigvalsh: NaN-containing input
+        # can make some LAPACK backends raise "did not converge" instead of
+        # propagating NaN.
+        out[valid] = np.linalg.eigvalsh(eps[valid])[:, ::-1]  # eigvalsh is ascending
+    return out
 
 
 def _grain_mean_orientations(gmap, grain, symmetry: str) -> dict:

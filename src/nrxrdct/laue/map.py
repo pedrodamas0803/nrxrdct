@@ -1065,6 +1065,10 @@ class GrainMap:
     @staticmethod
     def _mean_rotation(U_stack: np.ndarray) -> np.ndarray:
         """Nearest rotation to the arithmetic mean of a stack of rotation matrices."""
+        finite = ~np.any(np.isnan(U_stack), axis=(-2, -1))
+        U_stack = U_stack[finite]
+        if U_stack.size == 0:
+            raise ValueError("_mean_rotation: no finite rotation matrices in U_stack.")
         S, _, Vt = np.linalg.svd(U_stack.sum(axis=0))
         return S @ Vt
 
@@ -11603,6 +11607,12 @@ class GrainMap:
             valid = bgm >= 0
             iy_v, ix_v = np.where(valid)
             g_v        = bgm[iy_v, ix_v]
+            # best_grain_map is selected from quality metrics (match_rate,
+            # rms_px, n_matched) alone, so a pixel can pass those filters
+            # while U is still NaN there — filter those out explicitly so
+            # NaN never reaches orix / downstream linalg (svd, eigvalsh).
+            finite = ~np.any(np.isnan(self.U[g_v, iy_v, ix_v]), axis=(-2, -1))
+            iy_v, ix_v, g_v = iy_v[finite], ix_v[finite], g_v[finite]
         else:
             valid = ~np.any(np.isnan(self.U[grain]), axis=(-2, -1))
             iy_v, ix_v = np.where(valid)

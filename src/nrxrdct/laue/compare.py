@@ -17,7 +17,22 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-__all__ = ["compare_grain_populations", "compare_pixel_populations"]
+__all__ = [
+    "compare_grain_populations",
+    "compare_pixel_populations",
+    "plot_compared_distributions",
+]
+
+_QUANTITY_LABELS = {
+    "rms_px": "RMS residual (px)",
+    "match_rate": "Match rate",
+    "orientation_spread_deg": "Orientation spread (deg)",
+    "misorientation_deg": "Misorientation to grain mean (deg)",
+    "equivalent_strain": "Equivalent (von Mises) strain",
+    "max_principal_strain": "Max principal strain",
+    "min_principal_strain": "Min principal strain",
+    "max_shear_strain": "Max shear strain",
+}
 
 
 def _grain_ids_and_masks(gmap, grain, min_pixels: int) -> dict:
@@ -155,6 +170,53 @@ def _two_sample_stats(a, b, *, n_bootstrap: int, rng) -> dict:
     return out
 
 
+def _grain_level_arrays(map_a, map_b, grain_a, grain_b, symmetry: str, min_pixels: int) -> dict:
+    """Per-grain-median value arrays for map A/B, keyed by quantity name —
+    the exact data :func:`compare_grain_populations` runs its tests on and
+    :func:`plot_compared_distributions` (``level='grain'``) plots."""
+    masks_a = _grain_ids_and_masks(map_a, grain_a, min_pixels)
+    masks_b = _grain_ids_and_masks(map_b, grain_b, min_pixels)
+
+    eig_a = _principal_strains(map_a, grain_a)
+    eig_b = _principal_strains(map_b, grain_b)
+
+    quantities = {
+        "rms_px": (
+            _per_grain_medians(_selected_field(map_a, map_a.rms_px, grain_a), masks_a),
+            _per_grain_medians(_selected_field(map_b, map_b.rms_px, grain_b), masks_b),
+        ),
+        "match_rate": (
+            _per_grain_medians(_selected_field(map_a, map_a.match_rate, grain_a), masks_a),
+            _per_grain_medians(_selected_field(map_b, map_b.match_rate, grain_b), masks_b),
+        ),
+        "orientation_spread_deg": (
+            _orientation_spread_deg(map_a, grain_a, symmetry, masks_a),
+            _orientation_spread_deg(map_b, grain_b, symmetry, masks_b),
+        ),
+        "equivalent_strain": (
+            _per_grain_medians(map_a.equivalent_strain(grain_a), masks_a),
+            _per_grain_medians(map_b.equivalent_strain(grain_b), masks_b),
+        ),
+        "max_principal_strain": (
+            _per_grain_medians(eig_a[..., 0], masks_a),
+            _per_grain_medians(eig_b[..., 0], masks_b),
+        ),
+        "min_principal_strain": (
+            _per_grain_medians(eig_a[..., -1], masks_a),
+            _per_grain_medians(eig_b[..., -1], masks_b),
+        ),
+        "max_shear_strain": (
+            _per_grain_medians((eig_a[..., 0] - eig_a[..., -1]) / 2.0, masks_a),
+            _per_grain_medians((eig_b[..., 0] - eig_b[..., -1]) / 2.0, masks_b),
+        ),
+    }
+    return {
+        name: (np.array(list(vals_a.values()), dtype=float),
+               np.array(list(vals_b.values()), dtype=float))
+        for name, (vals_a, vals_b) in quantities.items()
+    }
+
+
 def compare_grain_populations(
     map_a,
     map_b,
@@ -290,47 +352,10 @@ def compare_grain_populations(
 """
     rng = np.random.default_rng(random_state)
 
-    masks_a = _grain_ids_and_masks(map_a, grain_a, min_pixels)
-    masks_b = _grain_ids_and_masks(map_b, grain_b, min_pixels)
-
-    eig_a = _principal_strains(map_a, grain_a)
-    eig_b = _principal_strains(map_b, grain_b)
-
-    quantities = {
-        "rms_px": (
-            _per_grain_medians(_selected_field(map_a, map_a.rms_px, grain_a), masks_a),
-            _per_grain_medians(_selected_field(map_b, map_b.rms_px, grain_b), masks_b),
-        ),
-        "match_rate": (
-            _per_grain_medians(_selected_field(map_a, map_a.match_rate, grain_a), masks_a),
-            _per_grain_medians(_selected_field(map_b, map_b.match_rate, grain_b), masks_b),
-        ),
-        "orientation_spread_deg": (
-            _orientation_spread_deg(map_a, grain_a, symmetry, masks_a),
-            _orientation_spread_deg(map_b, grain_b, symmetry, masks_b),
-        ),
-        "equivalent_strain": (
-            _per_grain_medians(map_a.equivalent_strain(grain_a), masks_a),
-            _per_grain_medians(map_b.equivalent_strain(grain_b), masks_b),
-        ),
-        "max_principal_strain": (
-            _per_grain_medians(eig_a[..., 0], masks_a),
-            _per_grain_medians(eig_b[..., 0], masks_b),
-        ),
-        "min_principal_strain": (
-            _per_grain_medians(eig_a[..., -1], masks_a),
-            _per_grain_medians(eig_b[..., -1], masks_b),
-        ),
-        "max_shear_strain": (
-            _per_grain_medians((eig_a[..., 0] - eig_a[..., -1]) / 2.0, masks_a),
-            _per_grain_medians((eig_b[..., 0] - eig_b[..., -1]) / 2.0, masks_b),
-        ),
-    }
-
+    arrays = _grain_level_arrays(map_a, map_b, grain_a, grain_b, symmetry, min_pixels)
     rows = {
-        name: _two_sample_stats(vals_a.values(), vals_b.values(),
-                                 n_bootstrap=n_bootstrap, rng=rng)
-        for name, (vals_a, vals_b) in quantities.items()
+        name: _two_sample_stats(a, b, n_bootstrap=n_bootstrap, rng=rng)
+        for name, (a, b) in arrays.items()
     }
 
     df = pd.DataFrame(rows).T
@@ -353,6 +378,34 @@ def _pixel_quantities(gmap, grain) -> dict:
         "min_principal_strain": eig[..., -1],
         "max_shear_strain": (eig[..., 0] - eig[..., -1]) / 2.0,
     }
+
+
+def _pixel_level_arrays(map_a, map_b, grain_a, grain_b, stride: int,
+                         max_pixels: "int | None", rng) -> dict:
+    """Per-pixel value arrays for map A/B, keyed by quantity name — the exact
+    data :func:`compare_pixel_populations` runs its tests on and
+    :func:`plot_compared_distributions` (``level='pixel'``) plots.
+
+    *rng* is consumed for the random subsampling above *max_pixels*; pass the
+    same instance you'll use for the bootstrap so a single ``random_state``
+    controls the whole call reproducibly.
+    """
+    def _sampled_values(gmap, grain) -> dict:
+        stride_mask = np.zeros((gmap.ny, gmap.nx), dtype=bool)
+        stride_mask[::stride, ::stride] = True
+
+        out = {}
+        for name, field in _pixel_quantities(gmap, grain).items():
+            vals = field[stride_mask & np.isfinite(field)]
+            if max_pixels is not None and vals.size > max_pixels:
+                idx = rng.choice(vals.size, size=max_pixels, replace=False)
+                vals = vals[idx]
+            out[name] = vals
+        return out
+
+    vals_a = _sampled_values(map_a, grain_a)
+    vals_b = _sampled_values(map_b, grain_b)
+    return {name: (vals_a[name], vals_b[name]) for name in vals_a}
 
 
 def compare_pixel_populations(
@@ -423,23 +476,55 @@ def compare_pixel_populations(
 
     **Statistical comparison**
 
-    The output columns and underlying tests are identical to
-    :func:`compare_grain_populations` — see its "Statistical comparison"
-    section for the full glossary — except every quantity is now a
-    per-pixel value rather than a per-grain median:
+    Same four tests/estimates as :func:`compare_grain_populations`, run on
+    map A's per-pixel values against map B's per-pixel values instead of
+    per-grain medians:
 
-    - ``median_a``, ``median_b``, ``median_diff``, ``ci_low``, ``ci_high`` —
-      same definitions, but over map A/B's per-pixel values.  This
-      bootstrap CI is the most trustworthy number in this table, since it
-      only asks "how big is the shift", which degrades gracefully under
-      pixel non-independence (the CI gets *narrower* than it should, not
-      *biased*).
-    - ``mannwhitney_p``, ``ks_stat``, ``ks_p``, ``levene_p`` — same tests,
-      but see the warning above: with thousands of correlated pixels these
-      will read as significant far more easily than their grain-level
-      counterparts, even for differences too small to care about physically.
+    - *Effect size — is there a difference, and how big?*
+
+      - ``median_a``, ``median_b`` — the median of the quantity across that
+        map's sampled pixels (after the ``stride``/``max_pixels`` filtering
+        below).
+      - ``median_diff`` — ``median_a - median_b``, in the quantity's native
+        units (degrees for ``misorientation_deg``, dimensionless for the
+        strain quantities and ``match_rate``, pixels for ``rms_px``).
+      - ``ci_low``, ``ci_high`` — a 95% bootstrap confidence interval on
+        ``median_diff``, built by resampling each map's *sampled pixels*
+        with replacement ``n_bootstrap`` times, recomputing the median
+        difference each time, and taking the 2.5th/97.5th percentiles of
+        that distribution of differences. This is the most trustworthy
+        number in this table: it only asks "how big is the shift", which
+        degrades gracefully under pixel non-independence (the interval
+        comes out *narrower* than it strictly should, but not *biased* in
+        one direction) — unlike the p-values below.
+
+    - ``mannwhitney_p`` — two-sided **Mann-Whitney U** test. Null
+      hypothesis: a pixel drawn at random from map A is equally likely to
+      have a larger or smaller value than one drawn from map B (no
+      systematic shift).
+
+    - ``ks_stat``, ``ks_p`` — two-sample **Kolmogorov-Smirnov** test.
+      ``ks_stat`` is the largest vertical gap between the two samples'
+      empirical CDFs; ``ks_p`` tests the null hypothesis that both samples
+      are drawn from the same distribution (sensitive to any shape/spread
+      difference, not just a median shift).
+
+    - ``levene_p`` — **Levene's test, median-centred (Brown-Forsythe)**.
+      Null hypothesis: the two pixel populations have equal spread
+      (variance), regardless of where their medians sit.
+
     - ``n_a``, ``n_b`` — pixel counts after striding/subsampling, not grain
       counts.
+
+    **Unlike the grain-level version, treat these p-values with real
+    suspicion**: neighbouring pixels are not independent samples (see the
+    warning above), so with thousands of correlated pixels
+    ``mannwhitney_p``/``ks_p``/``levene_p`` will read as significant far
+    more easily than their grain-level counterparts, even for differences
+    too small to care about physically. Lean on ``median_diff``/``ci_low``/
+    ``ci_high`` for the actual effect size, and use ``stride`` to make the
+    p-values less optimistic if you need them to mean something closer to
+    what they claim.
 
     Args:
         map_a, map_b (GrainMap): The two reconstructions to compare.
@@ -476,26 +561,10 @@ def compare_pixel_populations(
 """
     rng = np.random.default_rng(random_state)
 
-    def _sampled_values(gmap, grain) -> dict:
-        stride_mask = np.zeros((gmap.ny, gmap.nx), dtype=bool)
-        stride_mask[::stride, ::stride] = True
-
-        out = {}
-        for name, field in _pixel_quantities(gmap, grain).items():
-            vals = field[stride_mask & np.isfinite(field)]
-            if max_pixels is not None and vals.size > max_pixels:
-                idx = rng.choice(vals.size, size=max_pixels, replace=False)
-                vals = vals[idx]
-            out[name] = vals
-        return out
-
-    vals_a = _sampled_values(map_a, grain_a)
-    vals_b = _sampled_values(map_b, grain_b)
-
+    arrays = _pixel_level_arrays(map_a, map_b, grain_a, grain_b, stride, max_pixels, rng)
     rows = {
-        name: _two_sample_stats(vals_a[name], vals_b[name],
-                                 n_bootstrap=n_bootstrap, rng=rng)
-        for name in vals_a
+        name: _two_sample_stats(a, b, n_bootstrap=n_bootstrap, rng=rng)
+        for name, (a, b) in arrays.items()
     }
 
     df = pd.DataFrame(rows).T
@@ -503,3 +572,169 @@ def compare_pixel_populations(
     df.attrs["label_a"] = label_a
     df.attrs["label_b"] = label_b
     return df
+
+
+def plot_compared_distributions(
+    map_a,
+    map_b,
+    *,
+    level: str = "grain",
+    grain_a: "int | str" = "merged",
+    grain_b: "int | str" = "merged",
+    symmetry: str = "cubic",
+    label_a: str = "A",
+    label_b: str = "B",
+    min_pixels: int = 5,
+    stride: int = 1,
+    max_pixels: "int | None" = 20_000,
+    n_bootstrap: int = 2000,
+    random_state: "int | None" = None,
+    quantities: "list[str] | None" = None,
+    bins: int = 30,
+    ncols: int = 3,
+    figsize: "tuple[float, float] | None" = None,
+):
+    """
+    Plot the same per-grain or per-pixel distributions that
+    :func:`compare_grain_populations` / :func:`compare_pixel_populations`
+    run their tests on — one panel per quantity, map A and map B overlaid.
+
+    This draws from the *exact same* value-extraction path as those two
+    functions (same grain masks / ``min_pixels`` cut for ``level='grain'``;
+    same ``stride``/``max_pixels`` filtering for ``level='pixel'``), so what
+    you see here is what the p-values in the corresponding table were
+    computed from, not a separately-derived approximation.
+
+    Each panel shows:
+
+    - a semi-transparent filled histogram + solid step outline per map
+      (density-normalised, so panels are comparable regardless of sample
+      size);
+    - a dashed vertical line at each map's median;
+    - an annotation with the effect size (``median_diff`` and its 95%
+      bootstrap CI) and the Mann-Whitney p-value — the same numbers
+      :func:`compare_grain_populations`/:func:`compare_pixel_populations`
+      return in their ``median_diff``/``ci_low``/``ci_high``/``mannwhitney_p``
+      columns for that quantity.
+
+    Args:
+        map_a, map_b (GrainMap): The two reconstructions to compare.
+        level ('grain' or 'pixel'): Which comparison to draw. ``'grain'``
+            (default) mirrors :func:`compare_grain_populations` (one value
+            per physical grain); ``'pixel'`` mirrors
+            :func:`compare_pixel_populations` (one value per scan pixel,
+            after ``stride``/``max_pixels`` filtering).
+        grain_a, grain_b (int or 'merged'): Grain slot to use in each map.
+            ``'merged'`` (default) requires :meth:`GrainMap.apply_merge`.
+        symmetry (str): Crystal point-group symmetry — only used when
+            ``level='grain'`` (for ``orientation_spread_deg``); see
+            :func:`compare_grain_populations`.
+        label_a, label_b (str): Sample labels, used in the legend.
+        min_pixels (int): Only used when ``level='grain'`` — see
+            :func:`compare_grain_populations`.
+        stride, max_pixels: Only used when ``level='pixel'`` — see
+            :func:`compare_pixel_populations`.
+        n_bootstrap (int): Bootstrap resamples for the annotated CI.
+            Default ``2000``.
+        random_state (int or None): Seed for subsampling/bootstrap. Pass the
+            same value you used for a ``compare_*`` call to reproduce its
+            exact numbers in the annotation (``level='pixel'`` subsampling
+            is randomised, so a different seed can shift them slightly).
+        quantities (list of str or None): Subset/order of quantities to
+            plot. ``None`` (default) plots all seven, in the order
+            :func:`compare_grain_populations` reports them.
+        bins (int): Histogram bin count. Default ``30``.
+        ncols (int): Panels per row. Default ``3``.
+        figsize (tuple or None): Overall figure size. ``None`` auto-sizes
+            from the panel grid.
+
+    Returns:
+        matplotlib.figure.Figure
+
+    Example::
+
+        from nrxrdct.laue.compare import plot_compared_distributions
+
+        gmap_a.apply_merge(*gmap_a.merge(min_match_rate=0.3))
+        gmap_b.apply_merge(*gmap_b.merge(min_match_rate=0.3))
+
+        fig = plot_compared_distributions(
+            gmap_a, gmap_b, level='pixel', stride=3,
+            label_a='as-grown', label_b='annealed',
+        )
+"""
+    import matplotlib.pyplot as plt
+
+    rng = np.random.default_rng(random_state)
+
+    if level == "grain":
+        arrays = _grain_level_arrays(map_a, map_b, grain_a, grain_b, symmetry, min_pixels)
+        n_label = "grains"
+    elif level == "pixel":
+        arrays = _pixel_level_arrays(map_a, map_b, grain_a, grain_b, stride, max_pixels, rng)
+        n_label = "pixels"
+    else:
+        raise ValueError(f"level must be 'grain' or 'pixel', got {level!r}")
+
+    names = list(arrays) if quantities is None else list(quantities)
+    missing = [q for q in names if q not in arrays]
+    if missing:
+        raise ValueError(f"Unknown quantity/quantities {missing}; available: {list(arrays)}")
+
+    nrows = int(np.ceil(len(names) / ncols))
+    if figsize is None:
+        figsize = (4.2 * ncols, 3.0 * nrows)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+
+    # Validated categorical slots 1/2 (blue/orange) — see the dataviz palette
+    # reference; this pair clears every adjacent CVD/contrast gate.
+    color_a, color_b = "#2a78d6", "#eb6834"
+    ink, muted, grid = "#0b0b0b", "#52514e", "#c3c2b7"
+
+    for ax, name in zip(axes.flat, names):
+        a, b = arrays[name]
+        stat = _two_sample_stats(a, b, n_bootstrap=n_bootstrap, rng=rng)
+
+        combined = np.concatenate([a, b]) if a.size and b.size else (a if a.size else b)
+        edges = np.histogram_bin_edges(combined, bins=bins) if combined.size else bins
+
+        for vals, color in ((a, color_a), (b, color_b)):
+            if vals.size == 0:
+                continue
+            ax.hist(vals, bins=edges, density=True, histtype="stepfilled",
+                     color=color, alpha=0.35, zorder=1)
+            ax.hist(vals, bins=edges, density=True, histtype="step",
+                     color=color, linewidth=2, zorder=2)
+            ax.axvline(np.median(vals), color=color, linestyle="--",
+                       linewidth=1.5, zorder=3)
+
+        ax.set_title(_QUANTITY_LABELS.get(name, name), fontsize=10, color=ink)
+        ax.set_ylabel("density", fontsize=8, color=muted)
+        ax.tick_params(labelsize=8, colors=muted)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+        for spine in ("left", "bottom"):
+            ax.spines[spine].set_color(grid)
+
+        p = stat["mannwhitney_p"]
+        if np.isfinite(stat["median_diff"]):
+            p_txt = "p<0.001" if p < 1e-3 else f"p={p:.3f}"
+            txt = (f"Δmedian={stat['median_diff']:.3g} "
+                   f"[{stat['ci_low']:.3g}, {stat['ci_high']:.3g}]\n"
+                   f"MWU {p_txt}  (n={stat['n_a']}/{stat['n_b']} {n_label})")
+        else:
+            txt = f"n={stat['n_a']}/{stat['n_b']} {n_label} (too few for stats)"
+        ax.text(0.98, 0.95, txt, transform=ax.transAxes, ha="right", va="top",
+                fontsize=7, color=muted)
+
+    for ax in axes.flat[len(names):]:
+        ax.axis("off")
+
+    handles = [
+        plt.Line2D([0], [0], color=color_a, lw=2, label=label_a),
+        plt.Line2D([0], [0], color=color_b, lw=2, label=label_b),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, 1.02))
+    fig.tight_layout()
+    return fig

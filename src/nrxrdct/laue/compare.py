@@ -120,6 +120,9 @@ def _orientation_spread_deg(gmap, grain, symmetry: str, masks: dict) -> dict:
 
 
 def _two_sample_stats(a, b, *, n_bootstrap: int, rng) -> dict:
+    """Two-sample comparison of *a* vs *b* — see the "Statistical comparison"
+    section of :func:`compare_grain_populations`'s docstring for what each
+    returned key means."""
     a = np.asarray(list(a), dtype=float)
     b = np.asarray(list(b), dtype=float)
     out = {"n_a": a.size, "n_b": b.size}
@@ -190,23 +193,65 @@ def compare_grain_populations(
       unlike the raw tensor components which are expressed per-grain in
       each grain's own crystal frame.
 
-    For each quantity, the two samples' per-grain distributions are compared
-    with:
-
-    - **Mann-Whitney U** (``mannwhitney_p``) — shift in median.
-    - **two-sample KS** (``ks_stat``, ``ks_p``) — any distribution-shape
-      difference.
-    - **Levene, median-centred / Brown-Forsythe** (``levene_p``) — difference
-      in spread (heterogeneity), independent of any shift in the median.
-    - a bootstrap confidence interval on the median difference
-      (``ci_low``, ``ci_high``), resampling grains with replacement, as an
-      effect-size estimate — useful since grain counts are often small
-      enough that a p-value alone is not very informative.
-
     Grains are aggregated to the physical-grain level (one value per grain,
     not per pixel) before any test is run: neighbouring pixels within a
     grain are not independent samples, so testing on raw per-pixel arrays
     would understate the true p-values.
+
+    **Statistical comparison**
+
+    For each quantity, map A's per-grain distribution is compared against
+    map B's with four complementary tests/estimates that each answer a
+    different question — read them together, not in isolation:
+
+    - *Effect size — is there a difference, and how big?*
+
+      - ``median_a``, ``median_b`` — the median of the quantity across that
+        map's (filtered) grains.
+      - ``median_diff`` — ``median_a - median_b``, in the quantity's native
+        units (degrees for ``orientation_spread_deg``, dimensionless for the
+        strain quantities and ``match_rate``, pixels for ``rms_px``).
+      - ``ci_low``, ``ci_high`` — a 95% bootstrap confidence interval on
+        ``median_diff``.  Built by resampling each map's grains *with
+        replacement* ``n_bootstrap`` times, recomputing the median
+        difference each time, and taking the 2.5th/97.5th percentiles of
+        that distribution of differences.  If the interval excludes 0, the
+        shift is unlikely to be sampling noise; its width reflects how
+        precisely the shift is pinned down given the (often small) grain
+        counts — useful because a p-value alone doesn't say whether a
+        "significant" difference is large or tiny.
+
+    - ``mannwhitney_p`` — two-sided **Mann-Whitney U** test.  Null
+      hypothesis: a grain drawn at random from map A is equally likely to
+      have a larger or smaller value than one drawn from map B (no
+      systematic shift). It is a rank-based test on location — robust to
+      outliers and indifferent to distribution shape. A small p-value
+      (conventionally < 0.05) is evidence the two grain populations differ
+      in typical value.
+
+    - ``ks_stat``, ``ks_p`` — two-sample **Kolmogorov-Smirnov** test.
+      ``ks_stat`` is the largest vertical gap between the two samples'
+      empirical CDFs (0 = identical, up to 1 = fully separated); ``ks_p``
+      tests the null hypothesis that both samples are drawn from the same
+      distribution. Unlike Mann-Whitney, this is sensitive to *any*
+      distributional difference — shape, spread, multimodality — not only a
+      shift in the median, so it can flag a difference Mann-Whitney misses
+      (e.g. one map's grains being bimodal around the same median as the
+      other's).
+
+    - ``levene_p`` — **Levene's test, median-centred (Brown-Forsythe)**.
+      Null hypothesis: the two grain populations have equal spread
+      (variance), regardless of where their medians sit. A small p-value
+      together with a large ``mannwhitney_p`` means the two samples are
+      similarly centred but one is more heterogeneous than the other (e.g. a
+      wider spread of grain strains or orientations) — a distinction the
+      median-based tests above cannot make on their own.
+
+    ``n_a``, ``n_b`` are the number of grains that passed the
+    ``min_pixels`` cut in each map. Interpret the p-values in light of these:
+    with few grains — common for these maps — even a real difference may not
+    reach conventional significance, which is why the bootstrap CI is
+    reported alongside the p-values rather than as a replacement for them.
 
     Args:
         map_a, map_b (GrainMap): The two reconstructions to compare.
@@ -229,7 +274,8 @@ def compare_grain_populations(
     Returns:
         pandas.DataFrame: One row per quantity (index name ``quantity``),
         with columns ``n_a, n_b, median_a, median_b, median_diff, ci_low,
-        ci_high, mannwhitney_p, ks_stat, ks_p, levene_p``.
+        ci_high, mannwhitney_p, ks_stat, ks_p, levene_p`` — see "Statistical
+        comparison" above for what each column means.
 
     Example::
 
@@ -334,8 +380,18 @@ def compare_pixel_populations(
     and every test in the output becomes ``NaN`` (see
     :func:`compare_grain_populations`'s ``n_a < 2`` handling).  This function
     instead compares the raw per-pixel distributions of the same
-    frame-invariant quantities, which is the only way to get a meaningful
-    sample size out of a single-grain map.
+    frame-invariant quantities used by :func:`compare_grain_populations`,
+    which is the only way to get a meaningful sample size out of a
+    single-grain map:
+
+    - ``rms_px``, ``match_rate`` — per-pixel fit quality.
+    - ``misorientation_deg`` — per-pixel misorientation (deg) to that grain's
+      mean orientation, via :meth:`~nrxrdct.laue.map.GrainMap.misorientation_map`;
+      a pixel-level analogue of ``orientation_spread_deg``.
+    - ``equivalent_strain``, ``max_principal_strain``, ``min_principal_strain``,
+      ``max_shear_strain`` — per-pixel, from the eigenvalues of
+      ``strain_tensor_deviatoric`` (see :func:`compare_grain_populations` for
+      why only the deviatoric part is used).
 
     .. warning::
         Neighbouring pixels within a grain are **not** independent samples
@@ -365,6 +421,26 @@ def compare_pixel_populations(
     :meth:`~nrxrdct.laue.map.GrainMap.reduce_to_fundamental_zone` on each map
     (before :meth:`apply_merge`) first if that is a concern.
 
+    **Statistical comparison**
+
+    The output columns and underlying tests are identical to
+    :func:`compare_grain_populations` — see its "Statistical comparison"
+    section for the full glossary — except every quantity is now a
+    per-pixel value rather than a per-grain median:
+
+    - ``median_a``, ``median_b``, ``median_diff``, ``ci_low``, ``ci_high`` —
+      same definitions, but over map A/B's per-pixel values.  This
+      bootstrap CI is the most trustworthy number in this table, since it
+      only asks "how big is the shift", which degrades gracefully under
+      pixel non-independence (the CI gets *narrower* than it should, not
+      *biased*).
+    - ``mannwhitney_p``, ``ks_stat``, ``ks_p``, ``levene_p`` — same tests,
+      but see the warning above: with thousands of correlated pixels these
+      will read as significant far more easily than their grain-level
+      counterparts, even for differences too small to care about physically.
+    - ``n_a``, ``n_b`` — pixel counts after striding/subsampling, not grain
+      counts.
+
     Args:
         map_a, map_b (GrainMap): The two reconstructions to compare.
         grain_a, grain_b (int or 'merged'): Grain slot to use in each map.
@@ -393,7 +469,7 @@ def compare_pixel_populations(
         gmap_b.apply_merge(*gmap_b.merge(min_match_rate=0.3))
 
         df = compare_pixel_populations(
-            gmap_a, gmap_b, symmetry='cubic',
+            gmap_a, gmap_b,
             label_a='as-grown', label_b='annealed', stride=3,
         )
         print(df)

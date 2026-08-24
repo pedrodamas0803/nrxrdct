@@ -615,7 +615,14 @@ def plot_compared_distributions(
       bootstrap CI) and the Mann-Whitney p-value — the same numbers
       :func:`compare_grain_populations`/:func:`compare_pixel_populations`
       return in their ``median_diff``/``ci_low``/``ci_high``/``mannwhitney_p``
-      columns for that quantity.
+      columns for that quantity. If a map has fewer than 2 finite values for
+      that quantity (the same threshold at which the ``compare_*`` functions
+      report ``NaN`` — see their ``n_a < 2`` handling), the panel is still
+      drawn but the annotation falls back to just the sample counts, e.g.
+      ``"n=1/12 grains (too few for stats)"``.
+
+    Requires `matplotlib <https://matplotlib.org/>`_, imported lazily inside
+    this function (not a hard dependency of the rest of the module).
 
     Args:
         map_a, map_b (GrainMap): The two reconstructions to compare.
@@ -625,7 +632,9 @@ def plot_compared_distributions(
             :func:`compare_pixel_populations` (one value per scan pixel,
             after ``stride``/``max_pixels`` filtering).
         grain_a, grain_b (int or 'merged'): Grain slot to use in each map.
-            ``'merged'`` (default) requires :meth:`GrainMap.apply_merge`.
+            ``'merged'`` (default) uses every physical grain found in
+            :attr:`GrainMap.best_grain_map` and requires
+            :meth:`GrainMap.apply_merge` to have been called on that map.
         symmetry (str): Crystal point-group symmetry — only used when
             ``level='grain'`` (for ``orientation_spread_deg``); see
             :func:`compare_grain_populations`.
@@ -649,7 +658,14 @@ def plot_compared_distributions(
             from the panel grid.
 
     Returns:
-        matplotlib.figure.Figure
+        matplotlib.figure.Figure: A grid of ``ceil(len(quantities) / ncols)``
+        rows by ``ncols`` columns, one panel per quantity in *quantities*
+        order; any leftover panels (when the quantity count doesn't fill the
+        last row) are hidden rather than left blank-but-visible. Map A is
+        always drawn in blue, map B in orange (fixed, not configurable) —
+        these are the first two slots of this project's validated
+        categorical palette, chosen to stay distinguishable under the common
+        forms of colour-vision deficiency.
 
     Example::
 

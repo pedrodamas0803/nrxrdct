@@ -665,13 +665,18 @@ class GrainMap:
         Returns:
             (ny, nx, ...) ndarray with the winning grain's value at each pixel.
             Pixels where ``best_grain_map == -1`` are filled with ``NaN``
-            (float arrays) or ``-1`` (integer arrays).
+            (float arrays) or ``-1`` (integer arrays).  If no merge result
+            has been registered yet (:attr:`best_grain_map` is ``None``),
+            every pixel defaults to grain slot ``0``.
 """
+        bgm = self.best_grain_map
+        if bgm is None:
+            bgm = np.zeros((self.ny, self.nx), dtype=int)
         iy = np.arange(self.ny)[:, None]
         ix = np.arange(self.nx)[None, :]
-        g  = np.clip(self.best_grain_map, 0, self.n_grains - 1)
+        g  = np.clip(bgm, 0, self.n_grains - 1)
         result = arr[g, iy, ix].copy()
-        invalid = self.best_grain_map < 0
+        invalid = bgm < 0
         if invalid.any():
             if np.issubdtype(result.dtype, np.floating):
                 result[invalid] = np.nan
@@ -1092,10 +1097,10 @@ class GrainMap:
             return np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))
 
         if grain == 'merged':
-            if self.best_grain_map is None:
-                raise ValueError("No merge result — call apply_merge first.")
-            U_map = self._select_merged(self.U)   # (ny, nx, 3, 3)
+            U_map = self._select_merged(self.U)   # (ny, nx, 3, 3); grain 0 if unmerged
             bgm   = self.best_grain_map           # (ny, nx), -1 for unfitted
+            if bgm is None:
+                bgm = np.zeros((self.ny, self.nx), dtype=int)
             fitted_mask = ~np.any(np.isnan(U_map), axis=(-2, -1))
             misor = np.full((self.ny, self.nx), np.nan)
             valid = (bgm >= 0) & fitted_mask

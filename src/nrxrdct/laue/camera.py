@@ -979,7 +979,7 @@ class Camera:
         Returns:
             CalibrationResult
 """
-        from scipy.optimize import minimize
+        from scipy.optimize import minimize, OptimizeResult
         from scipy.spatial import cKDTree
         from .simulation import simulate_laue, precompute_allowed_hkl
 
@@ -1123,18 +1123,27 @@ class Camera:
             return {"maxiter": 5000, "ftol": 1e-6, "gtol": 1e-6}
 
         # ── staged optimisation ───────────────────────────────────────────────
-        result = None
-        for _cur_mmp in _stages:
-            _opts = _build_opts(x0)
-            if options:
-                _opts.update(options)
-            result = minimize(
-                _cost, x0,
-                method=_method,
-                bounds=scipy_bounds,
-                options=_opts,
+        if len(x0) == 0:
+            # Nothing to fit (empty fit_params and fit_U=False): skip the
+            # optimizer entirely rather than handing scipy a zero-length
+            # simplex (it raises an opaque ValueError on that input).
+            result = OptimizeResult(
+                x=x0, success=True,
+                message="No free parameters (fit_params empty and fit_U=False); nothing to optimize.",
             )
-            x0 = result.x
+        else:
+            result = None
+            for _cur_mmp in _stages:
+                _opts = _build_opts(x0)
+                if options:
+                    _opts.update(options)
+                result = minimize(
+                    _cost, x0,
+                    method=_method,
+                    bounds=scipy_bounds,
+                    options=_opts,
+                )
+                x0 = result.x
 
         cam_final = _build_cam(result.x)
         U_final = _build_U(result.x)

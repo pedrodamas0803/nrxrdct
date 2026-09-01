@@ -75,18 +75,26 @@ import scipy.ndimage as _ndi
 from scipy.optimize import least_squares, linear_sum_assignment, minimize
 from scipy.spatial.transform import Rotation
 
+from .camera import Camera
 from .simulation import (
     BM32_KB,
     E_MAX_eV,
     E_MIN_eV,
     F2_THRESHOLD,
     precompute_allowed_hkl,
+    rotate_U_about_axis,
     rotate_U_about_crystal_axis,
     simulate_laue,
     simulate_laue_stack,
     simulate_mixed_phases,
     symmetry_equivalent_axes,
 )
+
+# Eiger 4M sensor spec (fixed detector geometry, independent of camera.py's
+# BM32-specific DD/XCEN/... starting-calibration constants).
+_EIGER4M_N_PIX_H = 2068  # columns (px)
+_EIGER4M_N_PIX_V = 2162  # rows    (px)
+_EIGER4M_PIXEL_MM = 0.075  # pixel pitch (mm)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Result containers
@@ -5222,6 +5230,217 @@ def search_twin_orientation_image(
 
     results.sort(key=lambda c: c.score, reverse=True)
     return results
+
+
+@dataclass
+class GeScreenResult(_ResultMixin):
+    """
+    Result of :func:`screen_ge100_orientation`.
+
+    Attributes:
+        U ((3, 3) ndarray): Best-scoring candidate orientation matrix found
+            (stage-2 winner).
+        camera (Camera): Eiger 4M camera used for the screen — centred,
+            untilted, at the user-supplied sample-to-detector distance.
+        b_angle_deg (float): Best rotation (degrees) about the crystal
+            b-axis [010] found in the stage-1 coarse screen.
+        c_angle_deg (float): Best rotation (degrees) about the crystal
+            c-axis [001] found in the stage-2 full screen, applied on top of
+            the stage-1 winner.
+        score (float): Score of *U* (stage-2 best).
+        b_angles_deg, b_scores ((N,) ndarray): Every angle tried / score
+            obtained in stage 1, for diagnostics.
+        c_angles_deg, c_scores ((N,) ndarray): Every angle tried / score
+            obtained in stage 2, for diagnostics.
+"""
+
+    U: np.ndarray
+    camera: Camera
+    b_angle_deg: float
+    c_angle_deg: float
+    score: float
+    b_angles_deg: np.ndarray = field(repr=False)
+    b_scores: np.ndarray = field(repr=False)
+    c_angles_deg: np.ndarray = field(repr=False)
+    c_scores: np.ndarray = field(repr=False)
+
+    def __str__(self) -> str:
+        return (
+            f"GeScreenResult  b={self.b_angle_deg:.1f}°  "
+            f"c={self.c_angle_deg:.1f}°  score={self.score:.1f}"
+        )
+
+
+def screen_ge100_orientation(
+    image: np.ndarray,
+    dd_mm: float,
+    *,
+    tilt_deg: float = 40.0,
+    tilt_axis: str = "y",
+    b_screen_deg: float = 45.0,
+    b_step_deg: float = 1.0,
+    c_step_deg: float = 1.0,
+    match_radius_px: float = 15.0,
+    E_min: float = E_MIN_eV,
+    E_max: float = E_MAX_eV,
+    source: str = "bending_magnet",
+    source_kwargs: "dict | None" = None,
+    f2_thresh: float = F2_THRESHOLD,
+    verbose: bool = False,
+) -> GeScreenResult:
+    """
+    Screen candidate orientation matrices for a Ge (100) Laue calibration
+    standard against a raw detector image, to seed automatic calibration.
+
+    The calibrant is always a Ge (100) wafer mounted at a fixed, known
+    sample-tilt of *tilt_deg* about the lab *tilt_axis* — the only unknowns
+    are the crystal's azimuthal mounting angles, which this function resolves
+    with a two-stage discrete screen:
+
+    1. **Coarse screen about the crystal b-axis** [010]: starting from the
+       tilted reference orientation, step *b_step_deg* at a time out to
+       *b_screen_deg*, scoring each candidate with a single
+       :func:`~nrxrdct.laue.simulate_laue` call (`geometry_only=True`, one
+       evaluation — no optimiser) against the raw image intensity. The
+       highest-scoring angle is kept.
+
+    2. **Full screen about the crystal c-axis** [001]: starting from the
+       stage-1 winner, step *c_step_deg* at a time across the full 360°,
+       scored the same way. The highest-scoring angle is the returned result.
+
+    **Scoring** For each simulated spot, the predicted intensity is
+    multiplied by the brightest real pixel found within *match_radius_px* of
+    the predicted position (a tolerant lookup, since geometry is still coarse
+    at this stage), summed over all spots. Gap / invalid pixels must be
+    flagged negative (Eiger convention: −1) in *image* and are excluded.
+
+    **Camera** Built internally as an Eiger 4M (2068 × 2162 px, 75 µm pixels)
+    centred on the detector (`xcen = 1034`, `ycen = 1081`), untilted
+    (`xbet = xgam = 0`), at the user-supplied *dd_mm*.
+
+    Args:
+        image ((ny, nx) ndarray): Raw Eiger 4M detector frame. Gap/invalid
+            pixels must be flagged negative.
+        dd_mm (float): Sample-to-detector distance (mm).
+        tilt_deg (float): Known sample tilt (degrees) applied about
+            *tilt_axis* to the identity orientation to build the starting
+            reference. Default `40.0`.
+        tilt_axis (`'x'` | `'y'` | `'z'`): Lab-frame axis of the sample tilt.
+            Default `'y'`.
+        b_screen_deg (float): Stage-1 screen range (degrees) about the
+            crystal b-axis, from 0 up to and including this value.
+            Default `45.0`.
+        b_step_deg (float): Stage-1 angular step (degrees). Default `1.0`.
+        c_step_deg (float): Stage-2 angular step (degrees) over the full
+            360° screen about the crystal c-axis. Default `1.0`.
+        match_radius_px (float): Radius (pixels) of the disk searched around
+            each predicted spot for the brightest real pixel. Default `15.0`.
+        E_min, E_max (float): Photon energy range (eV) for the simulation.
+        source, source_kwargs: Forwarded to :func:`simulate_laue`.
+        f2_thresh (float): Structure-factor threshold used only to size the
+            allowed-HKL table (irrelevant to the score itself, since scoring
+            uses `geometry_only=True`).
+        verbose (bool): Print the score at every angle tried in both stages.
+
+    Returns:
+        GeScreenResult: Best candidate orientation and full per-stage
+            diagnostics.
+
+    Example::
+
+        result = laue.screen_ge100_orientation(raw_frame, dd_mm=115.0, verbose=True)
+        print(result)
+        # GeScreenResult  b=12.0°  c=203.0°  score=48213.7
+        U0, camera = result.U, result.camera
+"""
+    import xrayutilities as xu
+
+    crystal = xu.materials.Ge
+    camera = Camera(
+        dd=dd_mm,
+        xcen=_EIGER4M_N_PIX_H / 2.0,
+        ycen=_EIGER4M_N_PIX_V / 2.0,
+        xbet=0.0,
+        xgam=0.0,
+        pixelsize=_EIGER4M_PIXEL_MM,
+        n_pix_h=_EIGER4M_N_PIX_H,
+        n_pix_v=_EIGER4M_N_PIX_V,
+        kf_direction="Z>0",
+    )
+
+    allowed_hkl = precompute_allowed_hkl(
+        crystal, E_max_eV=E_max, E_ref_eV=0.5 * (E_min + E_max), f2_thresh=f2_thresh,
+    )
+
+    ny, nx = image.shape
+    valid = image >= 0
+    img = image.astype(np.float64)
+    img[~valid] = 0.0
+
+    r = int(round(match_radius_px))
+    yy, xx = np.mgrid[-r : r + 1, -r : r + 1]
+    disk = (xx**2 + yy**2) <= match_radius_px**2
+
+    def _score(U_cand: np.ndarray) -> float:
+        spots = simulate_laue(
+            crystal, U_cand, camera,
+            E_min=E_min, E_max=E_max,
+            source=source, source_kwargs=source_kwargs,
+            allowed_hkl=allowed_hkl,
+            geometry_only=True,
+        )
+        s = 0.0
+        for sp in spots:
+            xc, yc = sp["pix"]
+            col, row = int(round(xc)), int(round(yc))
+            row0, col0 = row - r, col - r
+            row1, col1 = row + r + 1, col + r + 1
+            ir0, ir1 = max(0, row0), min(ny, row1)
+            ic0, ic1 = max(0, col0), min(nx, col1)
+            if ir0 >= ir1 or ic0 >= ic1:
+                continue
+            m = disk[ir0 - row0 : ir1 - row0, ic0 - col0 : ic1 - col0] & valid[ir0:ir1, ic0:ic1]
+            if not m.any():
+                continue
+            s += float(sp["intensity"]) * float(img[ir0:ir1, ic0:ic1][m].max())
+        return s
+
+    U0 = rotate_U_about_axis(np.eye(3), tilt_deg, axis=tilt_axis)
+
+    # ── stage 1: coarse screen about the crystal b-axis ─────────────────────
+    b_angles = np.arange(0.0, b_screen_deg + 1e-9, b_step_deg)
+    b_scores = np.empty(len(b_angles))
+    for i, ang in enumerate(b_angles):
+        b_scores[i] = _score(rotate_U_about_crystal_axis(U0, float(ang), [0, 1, 0]))
+        if verbose:
+            print(f"  b={ang:6.1f}°  score={b_scores[i]:.1f}")
+
+    i_best = int(np.argmax(b_scores))
+    b_best = float(b_angles[i_best])
+    U_b = rotate_U_about_crystal_axis(U0, b_best, [0, 1, 0])
+    if verbose:
+        print(f"stage 1 best: b={b_best:.1f}°  score={b_scores[i_best]:.1f}")
+
+    # ── stage 2: full screen about the crystal c-axis ───────────────────────
+    c_angles = np.arange(0.0, 360.0, c_step_deg)
+    c_scores = np.empty(len(c_angles))
+    for i, ang in enumerate(c_angles):
+        c_scores[i] = _score(rotate_U_about_crystal_axis(U_b, float(ang), [0, 0, 1]))
+        if verbose:
+            print(f"  c={ang:6.1f}°  score={c_scores[i]:.1f}")
+
+    j_best = int(np.argmax(c_scores))
+    c_best = float(c_angles[j_best])
+    U_final = rotate_U_about_crystal_axis(U_b, c_best, [0, 0, 1])
+    if verbose:
+        print(f"stage 2 best: c={c_best:.1f}°  score={c_scores[j_best]:.1f}")
+
+    return GeScreenResult(
+        U=U_final, camera=camera,
+        b_angle_deg=b_best, c_angle_deg=c_best, score=float(c_scores[j_best]),
+        b_angles_deg=b_angles, b_scores=b_scores,
+        c_angles_deg=c_angles, c_scores=c_scores,
+    )
 
 
 @dataclass

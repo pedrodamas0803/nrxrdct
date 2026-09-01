@@ -94,9 +94,9 @@ class StackViewer:
 
                 {"Austenite": [2.07, 2.48, 3.59], "Ferrite": [2.03, 2.87]}
         show_profile (bool, optional): Whether to show the click-to-plot
-            profile panel. Defaults to ``True`` when the array has more
-            than one slice, ``False`` for a plain 2-D array (a profile
-            along a single slice would be trivial).
+            profile panel. Defaults to ``False``. Ignored (treated as
+            ``False``) for a plain 2-D array, since a profile along a
+            single slice would be trivial.
 
     Attributes:
         fig (plt.Figure): The underlying matplotlib figure.
@@ -128,7 +128,7 @@ class StackViewer:
         z_values: Optional[np.ndarray] = None,
         z_label: str = "Slice index",
         phases: Optional[Union[Dict[str, List[float]], Dict[str, pd.DataFrame]]] = None,
-        show_profile: Optional[bool] = None,
+        show_profile: bool = False,
     ) -> None:
         array = np.asarray(array)
         if array.ndim < 2:
@@ -150,9 +150,7 @@ class StackViewer:
 
         self.name = name
         self.n_slices = self.data.shape[0]
-        self.show_profile = (
-            self.n_slices > 1 if show_profile is None else bool(show_profile)
-        ) and self.n_slices > 1
+        self.show_profile = bool(show_profile) and self.n_slices > 1
 
         data_min = float(np.nanmin(self.data))
         data_max = float(np.nanmax(self.data))

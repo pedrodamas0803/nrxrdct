@@ -11,6 +11,7 @@ from .interactive import (
     interactive_orientation,
 )
 from .fitting import (
+    GeScreenResult,
     ImageRefinementResult,
     StackImageRefinementResult,
     StrainImageRefinementResult,
@@ -41,6 +42,7 @@ from .fitting import (
     laue_strain_thickness_stack_residuals,
     refine_orientation_image,
     refine_orientation_image_stack,
+    screen_ge100_orientation,
     search_orientation_image,
     search_strain_image,
     search_twin_orientation_image,
@@ -315,6 +317,8 @@ __all__ = [
     "refine_strain_image",
     "refine_strain_image_stack",
     "refine_strain_thickness_image_stack",
+    "GeScreenResult",
+    "screen_ge100_orientation",
     # Orientation fitting
     "OrientationFitResult",
     "StackFitResult",

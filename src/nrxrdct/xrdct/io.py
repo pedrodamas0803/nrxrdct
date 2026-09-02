@@ -167,7 +167,7 @@ def read_xy_file(input_file: Path = "integrated_data.xy") -> tuple[np.ndarray, .
     Returns:
         tuple: Columns unpacked as separate arrays (e.g. ``(x, y)`` or ``(x, y, err)``).
     """
-    return np.loadtxt(str(input_file), unpack=True)
+    return np.loadtxt(str(input_file), unpack=True, comments=["#", "%", "//"])
 
 
 def write_starting_instrument_pars(

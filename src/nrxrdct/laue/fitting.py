@@ -5242,24 +5242,34 @@ class GeScreenResult(_ResultMixin):
             polish (:attr:`polish`.U).
         camera (Camera): Eiger 4M camera used for the screen — centred,
             untilted, at the user-supplied sample-to-detector distance.
-        b_angle_deg (float): Best rotation (degrees) about the crystal
-            b-axis [010] found in the stage-1 coarse screen.
-        a_angle_deg (float): Best rotation (degrees) about the crystal
-            a-axis [100] found in the stage-2 short screen, applied on top
-            of the stage-1 winner.
-        c_angle_deg (float): Best rotation (degrees) about the crystal
-            c-axis [001] found in the stage-3 full screen, applied on top of
-            the stage-2 winner.
+        b_angle_deg (float): Rotation (degrees) about the crystal b-axis
+            [010] on the winning beam path (stage 1).
+        a_angle_deg (float): Rotation (degrees) about the crystal a-axis
+            [100] on the winning beam path (stage 2), applied on top of
+            *b_angle_deg*.
+        c_angle_deg (float): Rotation (degrees) about the crystal c-axis
+            [001] on the winning beam path (stage 3), applied on top of
+            *a_angle_deg*.
         score (float): Score of *U* (:attr:`polish`.score).
         b_angles_deg, b_scores ((N,) ndarray): Every angle tried / score
-            obtained in stage 1, for diagnostics.
-        a_angles_deg, a_scores ((N,) ndarray): Every angle tried / score
-            obtained in stage 2, for diagnostics.
-        c_angles_deg, c_scores ((N,) ndarray): Every angle tried / score
-            obtained in stage 3, for diagnostics.
+            obtained in stage 1 (single starting point), for diagnostics.
+        a_angles_deg ((N,) ndarray): Angle grid used in stage 2.
+        a_scores ((K1, N) ndarray): Score of every (stage-1 beam member,
+            stage-2 angle) pair — row *i* is the stage-2 curve started from
+            the *i*-th stage-1 survivor (see :attr:`candidates` for which
+            b-angle each row corresponds to before stage-2 pruning).
+        c_angles_deg ((N,) ndarray): Angle grid used in stage 3.
+        c_scores ((K2, N) ndarray): Score of every (stage-2 beam member,
+            stage-3 angle) pair, same layout as *a_scores*.
+        candidates (list of dict): Top *beam_width* candidates surviving
+            stage 3, sorted best-first, each
+            `{"U", "score", "b_angle_deg", "a_angle_deg", "c_angle_deg"}`.
+            `candidates[0]` is what stage 4 polishes. Inspect the rest when
+            the polished result looks wrong — the true orientation is often
+            one of the runners-up.
         polish (ImageRefinementResult): Full result of the stage-4 local
-            refinement (:func:`refine_orientation_image`) starting from the
-            stage-3 winner.
+            refinement (:func:`refine_orientation_image`) starting from
+            `candidates[0]`.
 """
 
     U: np.ndarray
@@ -5274,6 +5284,7 @@ class GeScreenResult(_ResultMixin):
     a_scores: np.ndarray = field(repr=False)
     c_angles_deg: np.ndarray = field(repr=False)
     c_scores: np.ndarray = field(repr=False)
+    candidates: list = field(repr=False)
     polish: "ImageRefinementResult" = field(repr=False)
 
     def __str__(self) -> str:
@@ -5282,7 +5293,8 @@ class GeScreenResult(_ResultMixin):
             f"a={self.a_angle_deg:.1f}°  "
             f"c={self.c_angle_deg:.1f}°  "
             f"|δpolish|={float(np.degrees(np.linalg.norm(self.polish.rotvec))):.3f}°  "
-            f"score={self.score:.1f}"
+            f"score={self.score:.1f}  "
+            f"(top of {len(self.candidates)} candidates)"
         )
 
 
@@ -5292,6 +5304,7 @@ def screen_ge100_orientation(
     *,
     tilt_deg: float = 40.0,
     tilt_axis: str = "y",
+    beam_width: int = 5,
     b_screen_deg: float = 45.0,
     b_step_deg: float = 1.0,
     a_screen_deg: float = 3.0,
@@ -5315,19 +5328,29 @@ def screen_ge100_orientation(
     standard against a raw detector image, to seed automatic calibration.
 
     The calibrant is a Ge (100) wafer mounted at a fixed, known sample-tilt
-    of *tilt_deg* about the lab *tilt_axis*. Four stages, each starting from
-    the previous stage's winner:
+    of *tilt_deg* about the lab *tilt_axis*. Four stages, run as a **beam
+    search**: instead of keeping only the single best angle after each
+    discrete stage (which can never recover if that single choice was
+    wrong), the top *beam_width* candidates are carried forward and each one
+    is re-screened in the next stage; only after the last discrete stage is
+    the beam collapsed to the single overall best candidate for polishing.
 
-    1. **Coarse screen about the crystal b-axis** [010]: step *b_step_deg* at
-       a time out to *b_screen_deg*, scoring each candidate with a single
+    1. **Coarse screen about the crystal b-axis** [010]: from the tilted
+       reference orientation, step *b_step_deg* at a time out to
+       *b_screen_deg*, scoring each candidate with a single
        :func:`~nrxrdct.laue.simulate_laue` call (`geometry_only=True`, one
-       evaluation — no optimiser) against the raw image intensity.
+       evaluation — no optimiser) against the raw image intensity. Keep the
+       top *beam_width* angles.
 
-    2. **Short screen about the crystal a-axis** [100]: step *a_step_deg* at
-       a time out to *a_screen_deg*, scored the same way.
+    2. **Short screen about the crystal a-axis** [100]: from *each* stage-1
+       survivor, step *a_step_deg* at a time out to *a_screen_deg*, scored
+       the same way. Keep the overall top *beam_width* (b, a) pairs.
 
-    3. **Full screen about the crystal c-axis** [001]: step *c_step_deg* at
-       a time across the full 360°, scored the same way.
+    3. **Full screen about the crystal c-axis** [001]: from *each* stage-2
+       survivor, step *c_step_deg* at a time across the full 360°, scored
+       the same way. The overall top *beam_width* (b, a, c) triples become
+       :attr:`GeScreenResult.candidates`; the single best is carried to
+       stage 4.
 
     4. **Local polish**: starting from the stage-3 winner,
        :func:`refine_orientation_image` runs a bounded (±*polish_max_angle_deg*)
@@ -5345,6 +5368,12 @@ def screen_ge100_orientation(
     image-based refinement functions (*polish_kernel_sigma*/*polish_bg_sigma*),
     which is better suited to gradient-based optimisation.
 
+    Runtime scales roughly linearly with *beam_width* from stage 2 onward
+    (stage 3 alone runs `beam_width * 360 / c_step_deg` simulations) — if
+    the result still looks wrong, check :attr:`GeScreenResult.candidates`
+    before raising *beam_width* further; the true orientation is often
+    already present as a lower-ranked candidate.
+
     **Camera** Built internally as an Eiger 4M (2068 × 2162 px, 75 µm pixels)
     centred on the detector (`xcen = 1034`, `ycen = 1081`), untilted
     (`xbet = xgam = 0`), at the user-supplied *dd_mm*.
@@ -5358,6 +5387,8 @@ def screen_ge100_orientation(
             reference. Default `40.0`.
         tilt_axis (`'x'` | `'y'` | `'z'`): Lab-frame axis of the sample tilt.
             Default `'y'`.
+        beam_width (int): Number of candidates carried forward between
+            stages 1-3. Default `5`.
         b_screen_deg (float): Stage-1 screen range (degrees) about the
             crystal b-axis, from 0 up to and including this value.
             Default `45.0`.
@@ -5383,18 +5414,21 @@ def screen_ge100_orientation(
             allowed-HKL table (irrelevant to the discrete-stage score, since
             it uses `geometry_only=True`).
         verbose (bool): Print the score at every angle tried in stages 1-3,
-            and the stage-4 refinement summary.
+            the beam kept after each stage, and the stage-4 refinement
+            summary.
 
     Returns:
-        GeScreenResult: Best candidate orientation (post-polish) and full
-            per-stage diagnostics.
+        GeScreenResult: Best candidate orientation (post-polish), the
+            surviving beam, and full per-stage diagnostics.
 
     Example::
 
         result = laue.screen_ge100_orientation(raw_frame, dd_mm=115.0, verbose=True)
         print(result)
-        # GeScreenResult  b=12.0°  a=1.0°  c=203.0°  |δpolish|=0.184°  score=48213.7
+        # GeScreenResult  b=12.0°  a=1.0°  c=203.0°  |δpolish|=0.184°  score=48213.7  (top of 5 candidates)
         U0, camera = result.U, result.camera
+        for c in result.candidates:
+            print(c["b_angle_deg"], c["a_angle_deg"], c["c_angle_deg"], c["score"])
 """
     import xrayutilities as xu
 
@@ -5448,45 +5482,74 @@ def screen_ge100_orientation(
             s += float(sp["intensity"]) * float(img[ir0:ir1, ic0:ic1][m].max())
         return s
 
-    def _screen(U_start: np.ndarray, crystal_axis, screen_deg: float, step_deg: float, label: str):
-        angles = np.arange(0.0, screen_deg + 1e-9, step_deg)
-        scores = np.empty(len(angles))
-        for i, ang in enumerate(angles):
-            scores[i] = _score(rotate_U_about_crystal_axis(U_start, float(ang), crystal_axis))
-            if verbose:
-                print(f"  {label}={ang:6.1f}°  score={scores[i]:.1f}")
-        i_best = int(np.argmax(scores))
-        best = float(angles[i_best])
-        U_best = rotate_U_about_crystal_axis(U_start, best, crystal_axis)
-        if verbose:
-            print(f"stage best: {label}={best:.1f}°  score={scores[i_best]:.1f}")
-        return U_best, best, angles, scores
-
     U0 = rotate_U_about_axis(np.eye(3), tilt_deg, axis=tilt_axis)
 
-    # ── stage 1: coarse screen about the crystal b-axis ─────────────────────
-    U_b, b_best, b_angles, b_scores = _screen(U0, [0, 1, 0], b_screen_deg, b_step_deg, "b")
-
-    # ── stage 2: short screen about the crystal a-axis ───────────────────────
-    U_a, a_best, a_angles, a_scores = _screen(U_b, [1, 0, 0], a_screen_deg, a_step_deg, "a")
-
-    # ── stage 3: full screen about the crystal c-axis ────────────────────────
-    c_angles = np.arange(0.0, 360.0, c_step_deg)
-    c_scores = np.empty(len(c_angles))
-    for i, ang in enumerate(c_angles):
-        c_scores[i] = _score(rotate_U_about_crystal_axis(U_a, float(ang), [0, 0, 1]))
-        if verbose:
-            print(f"  c={ang:6.1f}°  score={c_scores[i]:.1f}")
-
-    j_best = int(np.argmax(c_scores))
-    c_best = float(c_angles[j_best])
-    U_c = rotate_U_about_crystal_axis(U_a, c_best, [0, 0, 1])
+    # ── stage 1: coarse screen about the crystal b-axis (single start) ──────
+    b_angles = np.arange(0.0, b_screen_deg + 1e-9, b_step_deg)
+    b_scores = np.array([_score(rotate_U_about_crystal_axis(U0, float(ang), [0, 1, 0])) for ang in b_angles])
     if verbose:
-        print(f"stage best: c={c_best:.1f}°  score={c_scores[j_best]:.1f}")
+        for ang, s in zip(b_angles, b_scores):
+            print(f"  b={ang:6.1f}°  score={s:.1f}")
 
-    # ── stage 4: local polish around the stage-3 winner ──────────────────────
+    order = np.argsort(b_scores)[::-1][:beam_width]
+    beam = [
+        {
+            "U": rotate_U_about_crystal_axis(U0, float(b_angles[i]), [0, 1, 0]),
+            "score": float(b_scores[i]),
+            "b_angle_deg": float(b_angles[i]),
+            "a_angle_deg": None,
+            "c_angle_deg": None,
+        }
+        for i in order
+    ]
+    if verbose:
+        print("stage 1 beam:", [(m["b_angle_deg"], round(m["score"], 1)) for m in beam])
+
+    # ── stage 2: short screen about the crystal a-axis (beam) ───────────────
+    a_angles = np.arange(0.0, a_screen_deg + 1e-9, a_step_deg)
+    a_scores = np.empty((len(beam), len(a_angles)))
+    a_pool = []
+    for row, member in enumerate(beam):
+        for col, ang in enumerate(a_angles):
+            U_cand = rotate_U_about_crystal_axis(member["U"], float(ang), [1, 0, 0])
+            s = _score(U_cand)
+            a_scores[row, col] = s
+            a_pool.append({
+                "U": U_cand, "score": s,
+                "b_angle_deg": member["b_angle_deg"], "a_angle_deg": float(ang), "c_angle_deg": None,
+            })
+    a_pool.sort(key=lambda c: c["score"], reverse=True)
+    beam = a_pool[:beam_width]
+    if verbose:
+        print("stage 2 beam:", [(m["b_angle_deg"], m["a_angle_deg"], round(m["score"], 1)) for m in beam])
+
+    # ── stage 3: full screen about the crystal c-axis (beam) ────────────────
+    c_angles = np.arange(0.0, 360.0, c_step_deg)
+    c_scores = np.empty((len(beam), len(c_angles)))
+    c_pool = []
+    for row, member in enumerate(beam):
+        for col, ang in enumerate(c_angles):
+            U_cand = rotate_U_about_crystal_axis(member["U"], float(ang), [0, 0, 1])
+            s = _score(U_cand)
+            c_scores[row, col] = s
+            c_pool.append({
+                "U": U_cand, "score": s,
+                "b_angle_deg": member["b_angle_deg"], "a_angle_deg": member["a_angle_deg"], "c_angle_deg": float(ang),
+            })
+    c_pool.sort(key=lambda c: c["score"], reverse=True)
+    candidates = c_pool[:beam_width]
+    best = candidates[0]
+    if verbose:
+        print("stage 3 top candidates:")
+        for c in candidates:
+            print(
+                f"    b={c['b_angle_deg']:.1f}°  a={c['a_angle_deg']:.1f}°  "
+                f"c={c['c_angle_deg']:.1f}°  score={c['score']:.1f}"
+            )
+
+    # ── stage 4: local polish around the overall best candidate ─────────────
     polish = refine_orientation_image(
-        crystal, U_c, camera, image,
+        crystal, best["U"], camera, image,
         kernel_sigma=polish_kernel_sigma,
         bg_sigma=polish_bg_sigma,
         E_min=E_min, E_max=E_max,
@@ -5499,10 +5562,12 @@ def screen_ge100_orientation(
 
     return GeScreenResult(
         U=polish.U, camera=camera,
-        b_angle_deg=b_best, a_angle_deg=a_best, c_angle_deg=c_best, score=polish.score,
+        b_angle_deg=best["b_angle_deg"], a_angle_deg=best["a_angle_deg"], c_angle_deg=best["c_angle_deg"],
+        score=polish.score,
         b_angles_deg=b_angles, b_scores=b_scores,
         a_angles_deg=a_angles, a_scores=a_scores,
         c_angles_deg=c_angles, c_scores=c_scores,
+        candidates=candidates,
         polish=polish,
     )
 

@@ -3671,14 +3671,38 @@ class InstrumentCalibration(BaseRefinement):
         ax_diff.set_xlabel("2θ (degrees)")
 
         # --- Bar chart of calibrated parameters ---
-        bar_params = ["Zero", "W", "X", "Y"]
+        table_units = {
+            "Lam": "Å",
+            "Zero": "°2θ",
+            "U": "centideg²",
+            "V": "centideg²",
+            "W": "centideg²",
+            "X": "centideg",
+            "Y": "centideg",
+            "SH/L": "-",
+            "Polariz.": "-",
+        }
+        bar_params = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
         bar_vals = [calibrated.get(p, 0.0) for p in bar_params]
         colours_bar = ["steelblue" if v >= 0 else "tomato" for v in bar_vals]
+        bar_labels = [f"{p}\n({table_units[p]})" for p in bar_params]
 
-        bars = ax_ip.bar(bar_params, bar_vals, color=colours_bar, edgecolor="k", lw=0.6)
+        def _is_refined(p):
+            entry = ip.get(p)
+            return bool(entry[2]) if isinstance(entry, list) and len(entry) >= 3 else False
+
+        refined_now = [p for p in bar_params if _is_refined(p)]
+
+        bars = ax_ip.bar(bar_labels, bar_vals, color=colours_bar, edgecolor="k", lw=0.6)
         ax_ip.axhline(0, color="k", lw=0.5)
-        ax_ip.set_title("Refined parameters\n(U, V, SH/L fixed at 0)")
+        title = "Instrument parameters"
+        if refined_now:
+            title += f"\ncurrently marked to refine: {', '.join(refined_now)}"
+        else:
+            title += "\nall parameters currently fixed"
+        ax_ip.set_title(title, fontsize=9)
         ax_ip.set_ylabel("Value")
+        ax_ip.tick_params(axis="x", labelsize=6)
         spread = max(abs(v) for v in bar_vals) if any(bar_vals) else 1
         for bar, val in zip(bars, bar_vals):
             ax_ip.text(
@@ -3698,8 +3722,10 @@ class InstrumentCalibration(BaseRefinement):
             tth_range = np.linspace(self.low_lim, self.high_lim, 300)
             tan_th = np.tan(np.radians(tth_range / 2))
             cos_th = np.cos(np.radians(tth_range / 2))
-            fwhm_G = np.sqrt(np.abs(W_v)) * np.ones_like(tth_range)
-            fwhm_L = np.abs(X_v) / cos_th + np.abs(Y_v) * tan_th
+            # W (centideg²) and X, Y (centideg) per GSAS-II convention;
+            # divide by 100 to convert centideg(²) to degrees.
+            fwhm_G = (np.sqrt(np.abs(W_v)) / 100) * np.ones_like(tth_range)
+            fwhm_L = (np.abs(X_v) / cos_th + np.abs(Y_v) * tan_th) / 100
             fwhm_total = (fwhm_G**5 + fwhm_L**5) ** (1 / 5)
             ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (W)")
             ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X+Y)")
@@ -3722,10 +3748,11 @@ class InstrumentCalibration(BaseRefinement):
 
         # --- Parameter table ---
         table_params = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
+        table_labels = [f"{p}\n({table_units[p]})" for p in table_params]
         table_vals = [f"{calibrated.get(p, 0.0):.6f}" for p in table_params]
         tbl = ax_text.table(
             cellText=[table_vals],
-            colLabels=table_params,
+            colLabels=table_labels,
             loc="center",
             cellLoc="center",
         )

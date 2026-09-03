@@ -3594,10 +3594,15 @@ class InstrumentCalibration(BaseRefinement):
         """
         ip = self.hist["Instrument Parameters"][0]
         params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
+        # GSAS-II stores U, V, W in centideg² and X, Y in centideg; convert
+        # to plain degrees (deg² / deg) so every reported value is in degrees.
+        _deg_conversion = {"U": 1e4, "V": 1e4, "W": 1e4, "X": 1e2, "Y": 1e2}
         calibrated = {}
         for p in params_to_report:
             if p in ip:
                 val = ip[p][1] if isinstance(ip[p], list) else ip[p]
+                if p in _deg_conversion:
+                    val = val / _deg_conversion[p]
                 calibrated[p] = val
 
         wR = self.hist.get_wR()
@@ -3674,11 +3679,11 @@ class InstrumentCalibration(BaseRefinement):
         table_units = {
             "Lam": "Å",
             "Zero": "°2θ",
-            "U": "centideg²",
-            "V": "centideg²",
-            "W": "centideg²",
-            "X": "centideg",
-            "Y": "centideg",
+            "U": "deg²",
+            "V": "deg²",
+            "W": "deg²",
+            "X": "deg",
+            "Y": "deg",
             "SH/L": "-",
             "Polariz.": "-",
         }
@@ -3722,10 +3727,9 @@ class InstrumentCalibration(BaseRefinement):
             tth_range = np.linspace(self.low_lim, self.high_lim, 300)
             tan_th = np.tan(np.radians(tth_range / 2))
             cos_th = np.cos(np.radians(tth_range / 2))
-            # W (centideg²) and X, Y (centideg) per GSAS-II convention;
-            # divide by 100 to convert centideg(²) to degrees.
-            fwhm_G = (np.sqrt(np.abs(W_v)) / 100) * np.ones_like(tth_range)
-            fwhm_L = (np.abs(X_v) / cos_th + np.abs(Y_v) * tan_th) / 100
+            # W, X, Y already converted to degrees / degrees² above.
+            fwhm_G = np.sqrt(np.abs(W_v)) * np.ones_like(tth_range)
+            fwhm_L = np.abs(X_v) / cos_th + np.abs(Y_v) * tan_th
             fwhm_total = (fwhm_G**5 + fwhm_L**5) ** (1 / 5)
             ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (W)")
             ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X+Y)")

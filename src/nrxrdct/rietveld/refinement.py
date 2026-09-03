@@ -2998,6 +2998,135 @@ class BaseRefinement(Scan):
             print(f"  {label:<{label_w}} {val:>14}  {unit}")
         print(f"\n  Total free parameters: {len(rows)}")
 
+    # Known-safe re-enable targets for refine_ever_refined_variables: GSAS-II
+    # variable tokens whose refine flag is a plain boolean at a fixed
+    # location, so they can be flipped back on without extra state (unlike
+    # Debye terms, Size, Mustrain, Pref.Ori., or atoms, which need a whole
+    # model dict re-supplied via set_HAP_refinements / atom.refinement_flags).
+    _INSTRUMENT_TOKENS: set[str] = {
+        "Lam", "Lam1", "Lam2", "Zero", "Azimuth", "Polariz.",
+        "U", "V", "W", "Z", "X", "Y", "SH/L",
+        "alpha-0", "alpha-1", "beta-0", "beta-1",
+    }
+    _SAMPLE_TOKENS: set[str] = {
+        "Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
+        "Transparency", "SurfRoughA", "SurfRoughB",
+    }
+    _DIJ_INDEX: dict[str, int] = {
+        "D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5,
+    }
+
+    def refine_ever_refined_variables(self, exclude: list[str] | None = None) -> None:
+        """
+        Free every parameter refined at some point this session and run one
+        joint refinement cycle with all of them free simultaneously.
+
+        Complements the sequential, one-parameter-per-cycle style used
+        elsewhere in this class (e.g. :meth:`refine_instrument_parameters`,
+        which refines and freezes ``Zero``, then ``W``, then ``X``, then
+        ``Y`` one at a time): once every parameter has been individually
+        refined and frozen, call this to check the combined/simultaneous
+        solution, or as a final joint-polishing cycle.
+
+        Only variables recorded in :attr:`_ever_refined` (i.e. seen by
+        :meth:`print_ever_refined_variables`) whose GSAS-II refine flag is a
+        plain boolean at a known, fixed location are re-enabled: the overall
+        background refine flag, Instrument Parameters, Sample Parameters
+        (histogram ``Scale``/``Absorption``/``Shift``/``Displace*``/...),
+        phase ``Cell``, HAP ``Scale``/``Extinction``, and ``HStrain`` Dij
+        terms. Debye background terms, Size, Mustrain, Pref.Ori., and atom
+        parameters are **not** auto re-enabled — GSAS-II stores their state
+        as a whole model dict (type/value/axis/...), not a simple flag, so
+        blindly flipping a boolean could silently misconfigure the model.
+        Any such variable found in the history is reported as skipped;
+        re-enable it explicitly via its dedicated method (e.g.
+        :meth:`refine_background` with ``debye_terms``, or
+        :meth:`refine_crystallite_size`) before calling this if you want it
+        included in the joint cycle.
+
+        Args:
+            exclude (list of str, optional): Variables to leave fixed even
+                though they were refined earlier this session. Accepts
+                either the full GSAS-II variable name (e.g. ``":0:Zero"``)
+                or the short token (e.g. ``"Zero"``). Default ``None`` frees
+                everything this method knows how to re-enable.
+        """
+        if not self._ever_refined:
+            print("No refinement cycles have been run yet in this session — nothing to free.")
+            return
+
+        exclude_set = set(exclude or [])
+        freed: list[str] = []
+        skipped: list[str] = []
+
+        for var in self._ever_refined:
+            parts = var.split(":")
+            phase_idx_str = parts[0] if parts else ""
+            var_token = parts[2] if len(parts) >= 3 else var
+
+            if var in exclude_set or var_token in exclude_set:
+                continue
+
+            if phase_idx_str == "":
+                if var_token in self._INSTRUMENT_TOKENS:
+                    self.hist.set_refinements({"Instrument Parameters": [var_token]})
+                    freed.append(var)
+                    continue
+                if var_token in self._SAMPLE_TOKENS:
+                    self.hist.SampleParameters[var_token][1] = True
+                    freed.append(var)
+                    continue
+                if var_token.startswith("Back;"):
+                    bkg0 = self.hist["Background"][0]
+                    self.hist.set_refinements(
+                        {"Background": {"type": bkg0[0], "no. coeffs": bkg0[2], "refine": True}}
+                    )
+                    freed.append(var)
+                    continue
+            else:
+                phase = self.gpx.phases()[int(phase_idx_str)]
+                hap = phase.data["Histograms"].get(self.hist.name, {})
+                if var_token == "Scale" and hap:
+                    phase.set_HAP_refinements({"Scale": True}, histograms=[self.hist])
+                    freed.append(var)
+                    continue
+                if var_token == "eA" and hap:
+                    hap["Extinction"][1] = True
+                    freed.append(var)
+                    continue
+                if var_token in self._DIJ_INDEX and hap.get("HStrain"):
+                    hap["HStrain"][1][self._DIJ_INDEX[var_token]] = True
+                    freed.append(var)
+                    continue
+                if var_token.startswith("A") and var_token[1:].isdigit():
+                    phase.set_refinements({"Cell": True})
+                    freed.append(var)
+                    continue
+
+            skipped.append(var)
+
+        self.gpx.save()
+
+        print("\n" + "=" * 60)
+        print("JOINT REFINEMENT OF ALL EVER-REFINED VARIABLES")
+        print("=" * 60)
+        print(f"  Freed   : {len(freed)}")
+        for var in freed:
+            print(f"    {var}")
+        if skipped:
+            print(f"  Skipped : {len(skipped)} (not auto-toggleable — see docstring)")
+            for var in skipped:
+                print(f"    {var}")
+        if exclude_set:
+            print(f"  Excluded by request: {sorted(exclude_set)}")
+
+        if not freed:
+            print("\nNothing to refine — no eligible variables were freed.")
+            return
+
+        self._run_refinement()
+        print("\nJoint refinement cycle complete.")
+
     def print_covariance_matrix(self) -> None:
         """Print the correlation matrix (normalised covariance) of all refined variables."""
         cov_data = self.gpx["Covariance"]["data"]

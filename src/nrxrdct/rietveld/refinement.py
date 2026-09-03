@@ -98,6 +98,11 @@ class BaseRefinement(Scan):
         self.low_lim, self.high_lim = tth_lims
         self.tth, self.intensity = read_xy_file(str(self.xy_file))
         self.phases = []
+        # Accumulates every GSAS-II variable name that has been free in at
+        # least one refinement cycle run so far this session, keyed by its
+        # "p:h:<var>:n" name, mapping to its value/esd from the last cycle
+        # in which it was actually varied. See _run_refinement().
+        self._ever_refined: dict[str, dict] = {}
 
         if self.low_lim == None:
             self.low_lim = self.tth.min()
@@ -135,6 +140,7 @@ class BaseRefinement(Scan):
         self.gpx = G2sc.G2Project(gpxfile=str(gpx_file))
         self.hist = self.gpx.histograms()[0]
         self.phases = self.gpx.phases()
+        self._ever_refined = {}
         if self.phases:
             self.phase = self.phases[-1]
             self.calibrant_composition = self.phase.name
@@ -475,7 +481,7 @@ class BaseRefinement(Scan):
             bkg_extra["debyeTerms"] = terms
 
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
 
         if freeze:
             bkg = self.hist["Background"]
@@ -496,7 +502,7 @@ class BaseRefinement(Scan):
         """Refine the overall histogram scale factor."""
         self.hist.SampleParameters["Scale"][1] = True
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
         if freeze:
             self.hist.SampleParameters["Scale"][1] = False
             self.gpx.save()
@@ -522,7 +528,7 @@ class BaseRefinement(Scan):
                 )
             available[name].set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             if freeze:
                 available[name].set_HAP_refinements(
                     {"Scale": False}, histograms=[self.hist]
@@ -535,7 +541,7 @@ class BaseRefinement(Scan):
         """Refine the 2θ zero-shift instrument parameter."""
         self.hist.set_refinements({"Instrument Parameters": ["Zero"]})
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
         if freeze:
             self.hist["Instrument Parameters"][0]["Zero"][2] = False
             self.gpx.save()
@@ -559,7 +565,7 @@ class BaseRefinement(Scan):
         """
         self.hist.set_refinements({"Instrument Parameters": ["Lam"]})
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
         if freeze:
             self.hist["Instrument Parameters"][0]["Lam"][2] = False
             self.gpx.save()
@@ -695,7 +701,7 @@ class BaseRefinement(Scan):
             )
         self.hist.set_refinements({"Sample Parameters": [parameter]})
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
         if freeze:
             self.hist.clear_refinements({"Sample Parameters": [parameter]})
             self.gpx.save()
@@ -849,7 +855,7 @@ class BaseRefinement(Scan):
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             if (
                 freeze
                 and param in ip
@@ -900,7 +906,7 @@ class BaseRefinement(Scan):
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             if (
                 freeze
                 and param in ip
@@ -1085,7 +1091,7 @@ class BaseRefinement(Scan):
         for param in parameters:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Refined {param} ({profile} profile)")
 
     def free_and_refine_cell(
@@ -1124,7 +1130,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_refinements({"Cell": True})
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
         for ph in targets:
             print(f"Cell refined for phase '{ph.name}'")
 
@@ -1359,7 +1365,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(pars, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Preferred orientation ({model}) refined for phase '{ph.name}'")
 
     def refine_atomic_positions(
@@ -1454,7 +1460,7 @@ class BaseRefinement(Scan):
                     if atoms is None or atom.label in atoms or atom.element in atoms:
                         atom.refinement_flags = flag
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             phase_names = [ph.name for ph in targets]
             atom_info = f", atoms={atoms}" if atoms is not None else ""
             print(
@@ -1522,7 +1528,7 @@ class BaseRefinement(Scan):
                 atom.refinement_flags = atom.refinement_flags + "F"
 
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
 
         if freeze:
             for atom in target_atoms:
@@ -1638,7 +1644,7 @@ class BaseRefinement(Scan):
                 atom.refinement_flags = atom.refinement_flags + "U"
 
         self.gpx.save()
-        self.gpx.do_refinements([{}])
+        self._run_refinement()
 
         if freeze:
             for atom in target_atoms:
@@ -1664,7 +1670,7 @@ class BaseRefinement(Scan):
             if hap.get("LeBail", False):
                 ph.set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
 
     def refine_crystallite_size(
         self,
@@ -1779,7 +1785,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(ref_dict, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Crystallite size ({refine_type}) refined for phase '{ph.name}'")
 
     def refine_mustrain(
@@ -1898,7 +1904,7 @@ class BaseRefinement(Scan):
                 histograms=[self.hist],
             )
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Microstrain ({refine_type}) refined for phase '{ph.name}'")
 
     def refine_hstrain(self, phase: str | list[str] | None = None) -> None:
@@ -1955,7 +1961,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements({"HStrain": True}, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"HStrain refined for phase '{ph.name}'")
 
     def refine_extinction(self, phase: str | list[str] | None = None) -> None:
@@ -2011,7 +2017,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements({"Extinction": True}, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Extinction refined for phase '{ph.name}'")
 
     def refine_babinet(
@@ -2081,7 +2087,7 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(bab_dict, histograms=[self.hist])
             self.gpx.save()
-            self.gpx.do_refinements([{}])
+            self._run_refinement()
             print(f"Babinet {params} refined for phase '{ph.name}'")
 
     def print_refinement_results(self) -> None:
@@ -2724,8 +2730,8 @@ class BaseRefinement(Scan):
         # Instrument (CW)
         "Lam": "Å",         "Lam1": "Å",        "Lam2": "Å",
         "Zero": "deg",
-        "U": "deg²",        "V": "deg²",         "W": "deg²",
-        "X": "deg",         "Y": "deg",          "Z": "deg",
+        "U": "deg²",        "V": "deg²",         "W": "deg²",        "Z": "deg²",
+        "X": "deg",         "Y": "deg",
         "SH/L": "—",        "Polariz.": "—",     "I(L2)/I(L1)": "—",
         # HAP – scale / extinction
         "Scale": "—",       "eA": "—",
@@ -2739,9 +2745,10 @@ class BaseRefinement(Scan):
         # HAP – preferred orientation (March-Dollase ratio)
         "MD": "—",
         # Background coefficients  (prefix "Back;" matched below)
-        # Cell parameters
-        "a": "Å",           "b": "Å",            "c": "Å",
-        "alpha": "deg",     "beta": "deg",       "gamma": "deg",
+        # Cell parameters — GSAS-II varies the metric-tensor components A0..A5
+        # (not a/b/c/alpha/beta/gamma directly) when "Cell" is refined.
+        "A0": "Å²",         "A1": "Å²",          "A2": "Å²",
+        "A3": "Å²",         "A4": "Å²",          "A5": "Å²",
         # Atom parameters
         "dAx": "frac",      "dAy": "frac",       "dAz": "frac",
         "AUiso": "Å²",      "Afrac": "—",
@@ -2766,8 +2773,53 @@ class BaseRefinement(Scan):
                 return unit
         return "—"
 
+    # GSAS-II stores these instrument-parameter tokens in centideg(²);
+    # divide by this factor to report them in plain degrees / degrees².
+    _VAR_DEG_CONVERSION: dict[str, float] = {
+        "U": 1e4, "V": 1e4, "W": 1e4, "Z": 1e4,
+        "X": 1e2, "Y": 1e2,
+    }
+
+    def _run_refinement(self) -> None:
+        """
+        Run one GSAS-II least-squares cycle and record every variable that was varied.
+
+        GSAS-II's own ``Covariance`` data is overwritten by each cycle, so a
+        workflow that refines parameters sequentially (one per cycle, e.g.
+        :meth:`refine_peak_profile`) loses the record of everything refined
+        earlier in the sequence. All internal refinement calls go through
+        this wrapper instead of calling ``self.gpx.do_refinements`` directly,
+        accumulating each cycle's varied variables into ``self._ever_refined``
+        (keyed by GSAS-II's own ``"p:h:<var>:n"`` variable name) so that
+        :meth:`print_ever_refined_variables` can report the full session
+        history rather than just the last cycle.
+        """
+        self.gpx.do_refinements([{}])
+        cov_data = self.gpx["Covariance"]["data"]
+        vary_list = cov_data.get("varyList", [])
+        variables = cov_data.get("variables", [])
+        sigmas = cov_data.get("sig", [])
+        for i, var in enumerate(vary_list):
+            val = variables[i] if i < len(variables) else float("nan")
+            sig = sigmas[i] if i < len(sigmas) else None
+            self._ever_refined[var] = {"value": val, "esd": sig}
+
+    def _format_var_row(self, var: str, val: float, sig: float | None, status: str) -> str:
+        """Format one ``print_refined_variables``-style table row, applying unit conversion."""
+        parts = var.split(":")
+        var_token = parts[2] if len(parts) >= 3 else var
+        units = self._var_units(var_token)
+        # GSAS-II reports U/V/W/X/Y/Z in centideg(²); convert to plain degrees.
+        conv = self._VAR_DEG_CONVERSION.get(var_token)
+        if conv is not None:
+            val = val / conv
+            if sig is not None:
+                sig = sig / conv
+        esd_str = f"{sig:.6g}" if sig is not None else "n/a"
+        return f"  {var:<36} {val:>14.6g} {esd_str:>14} {units:>8}  {status}"
+
     def print_refined_variables(self) -> None:
-        """Print all currently refined variables with their values, esds, units, and status."""
+        """Print all variables varied in the last completed refinement cycle."""
         cov_data  = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
         variables = cov_data.get("variables", [])
@@ -2783,21 +2835,168 @@ class BaseRefinement(Scan):
         frozen_set = {str(v) for v in frozen_raw}
 
         print("\n" + "=" * 75)
-        print("REFINED VARIABLES")
+        print("REFINED VARIABLES (last cycle)")
         print("=" * 75)
         print(f"  {'Parameter':<36} {'Value':>14} {'Esd':>14} {'Units':>8}  Status")
         print("  " + "-" * 73)
         for i, var in enumerate(vary_list):
-            val     = variables[i] if i < len(variables) else float("nan")
-            sig     = sigmas[i]    if i < len(sigmas)    else None
-            esd_str = f"{sig:.6g}" if sig is not None else "n/a"
-            status  = "Frozen" if var in frozen_set else "Free"
-            # extract the <var> token from p:h:<var>:n
-            parts     = var.split(":")
-            var_token = parts[2] if len(parts) >= 3 else var
-            units     = self._var_units(var_token)
-            print(f"  {var:<36} {val:>14.6g} {esd_str:>14} {units:>8}  {status}")
+            val    = variables[i] if i < len(variables) else float("nan")
+            sig    = sigmas[i]    if i < len(sigmas)    else None
+            status = "Frozen" if var in frozen_set else "Free"
+            print(self._format_var_row(var, val, sig, status))
         print(f"\n  Total refined parameters: {len(vary_list)}")
+
+    def print_ever_refined_variables(self) -> None:
+        """
+        Print every variable that has been free in at least one refinement
+        cycle run so far this session (accumulated across all internal
+        calls that go through :meth:`_run_refinement`).
+
+        Unlike :meth:`print_refined_variables` — which only reflects the
+        *last* completed cycle and therefore loses earlier steps of a
+        sequential workflow (e.g. refine W then freeze it, refine X then
+        freeze it, refine Y, ...) — this reports the full session history,
+        showing each variable's value/esd from the last cycle in which it
+        was actually varied.
+
+        ``Status`` reflects GSAS-II's own auto-freeze mechanism (parameters
+        it disabled itself as numerically unstable), evaluated *now* — it is
+        not a record of the flag at the time the variable was refined. For
+        the live user-set refine flags, use :meth:`print_free_variables`.
+
+        Note:
+            Only refinement cycles triggered through this class's methods are
+            tracked. A cycle run by calling ``self.gpx.do_refinements(...)``
+            directly (bypassing :meth:`_run_refinement`) will not appear here.
+        """
+        if not self._ever_refined:
+            print(
+                "No refinement cycles have been run yet in this session "
+                "(via this class's methods)."
+            )
+            return
+
+        controls = self.gpx["Controls"]["data"]
+        frozen_raw = controls.get("parmFrozen", {}).get("FrozenList", [])
+        frozen_set = {str(v) for v in frozen_raw}
+
+        print("\n" + "=" * 75)
+        print("VARIABLES REFINED AT SOME POINT THIS SESSION")
+        print("=" * 75)
+        print(f"  {'Parameter':<36} {'Value':>14} {'Esd':>14} {'Units':>8}  Status")
+        print("  " + "-" * 73)
+        for var, rec in self._ever_refined.items():
+            status = "Frozen" if var in frozen_set else "Free"
+            print(self._format_var_row(var, rec["value"], rec["esd"], status))
+        print(f"\n  Total variables refined this session: {len(self._ever_refined)}")
+
+    def print_free_variables(self) -> None:
+        """
+        Print every parameter currently marked to refine (live GSAS-II flags).
+
+        Unlike :meth:`print_refined_variables` / :meth:`print_ever_refined_variables`,
+        which report the *outcome* of refinement cycles already run, this
+        walks the project's current refinement flags directly — background,
+        Debye terms, instrument parameters, sample parameters, and per-phase
+        cell / atoms / HAP settings — so it reflects what *would* be varied
+        if you ran a refinement right now, even if no cycle has run since
+        the flags last changed (e.g. right after :meth:`fix_all_parameters`
+        or :meth:`set_HAP_parameter`).
+        """
+        rows: list[tuple[str, str, str]] = []  # (label, formatted value, units)
+
+        def add(label: str, val, unit: str = "") -> None:
+            val_str = f"{val:.6g}" if isinstance(val, (int, float)) else str(val)
+            rows.append((label, val_str, unit))
+
+        # Background
+        bkg = self.hist["Background"]
+        if bkg[0][1]:
+            add("Background (poly. coeffs)", bkg[0][2], "n coeffs")
+        for i, term in enumerate(bkg[1].get("debyeTerms", [])):
+            A, refA, R, refR, U, refU = term
+            if refA:
+                add(f"Debye[{i}] A", A)
+            if refR:
+                add(f"Debye[{i}] R", R, "Å")
+            if refU:
+                add(f"Debye[{i}] U", U)
+
+        # Instrument parameters
+        ip = self.hist["Instrument Parameters"][0]
+        for p, entry in ip.items():
+            if isinstance(entry, list) and len(entry) >= 3 and entry[2]:
+                val = entry[1]
+                conv = self._VAR_DEG_CONVERSION.get(p)
+                if conv is not None:
+                    val = val / conv
+                add(p, val, self._var_units(p))
+
+        # Sample parameters
+        sp = self.hist.SampleParameters
+        for key in (
+            "Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
+            "Transparency", "SurfRoughA", "SurfRoughB",
+        ):
+            entry = sp.get(key)
+            if isinstance(entry, list) and len(entry) >= 2 and entry[1]:
+                add(f"Sample {key}", entry[0])
+
+        # Per-phase
+        for ph in self.gpx.phases():
+            if ph.data["General"]["Cell"][0]:
+                add(f"Phase '{ph.name}' Cell", "refine")
+            for atom in ph.atoms():
+                if atom.refinement_flags:
+                    add(f"Phase '{ph.name}' atom {atom.label}", atom.refinement_flags)
+
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            if not hap:
+                continue
+
+            sc = hap.get("Scale", [1.0, False])
+            if sc[1]:
+                add(f"Phase '{ph.name}' HAP Scale", sc[0])
+
+            ext = hap.get("Extinction", [0.0, False])
+            if ext[1]:
+                add(f"Phase '{ph.name}' Extinction", ext[0])
+
+            hs = hap.get("HStrain")
+            if hs:
+                for i, (v, f) in enumerate(zip(hs[0], hs[1])):
+                    if f:
+                        add(f"Phase '{ph.name}' HStrain D{i}", v, "Å⁻²")
+
+            sz = hap.get("Size")
+            if sz:
+                ref = any(sz[2]) if isinstance(sz[2], list) else sz[2]
+                if ref:
+                    add(f"Phase '{ph.name}' Size ({sz[0]})", "refine", "µm")
+
+            ms = hap.get("Mustrain")
+            if ms:
+                ref = any(ms[2]) if isinstance(ms[2], list) else ms[2]
+                if ref:
+                    add(f"Phase '{ph.name}' Mustrain ({ms[0]})", "refine", "µε")
+
+            po = hap.get("Pref.Ori.")
+            if po and po[2]:
+                add(f"Phase '{ph.name}' Pref.Ori.", po[0])
+
+        print("\n" + "=" * 75)
+        print("CURRENTLY FREE VARIABLES (live flags)")
+        print("=" * 75)
+        if not rows:
+            print("  (none — every parameter is currently fixed)")
+            return
+
+        label_w = max(len(r[0]) for r in rows) + 2
+        print(f"  {'Parameter':<{label_w}} {'Value':>14}  Units")
+        print("  " + "-" * (label_w + 24))
+        for label, val, unit in rows:
+            print(f"  {label:<{label_w}} {val:>14}  {unit}")
+        print(f"\n  Total free parameters: {len(rows)}")
 
     def print_covariance_matrix(self) -> None:
         """Print the correlation matrix (normalised covariance) of all refined variables."""

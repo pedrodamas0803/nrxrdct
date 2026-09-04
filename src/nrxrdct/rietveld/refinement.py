@@ -41,6 +41,26 @@ from .refine_dict import *
 COLORS = ["magenta", "darkgreen", "blue", "red"]
 
 
+def _wavelength_entries(ip: dict) -> dict:
+    """
+    Extract the wavelength parameter(s) actually present in a GSAS-II
+    instrument-parameter dict.
+
+    Returns ``{"Lam": value}`` for a single-wavelength profile, or
+    ``{"Lam1": ..., "Lam2": ..., "I(L2)/I(L1)": ...}`` for a Ka1/Ka2 doublet
+    profile.  Reading from ``ip`` (rather than a value derived separately
+    from beam energy) ensures the reported wavelength always matches what
+    GSAS-II is actually using for the fit.
+    """
+    keys = ["Lam1", "Lam2", "I(L2)/I(L1)"] if "Lam1" in ip else ["Lam"]
+    entries = {}
+    for key in keys:
+        if key in ip:
+            val = ip[key]
+            entries[key] = val[1] if isinstance(val, list) else val
+    return entries
+
+
 class BaseRefinement(Scan):
     """
     Base class for GSAS-II Rietveld refinement of a single powder pattern.
@@ -3811,7 +3831,8 @@ class InstrumentCalibration(BaseRefinement):
             "SH/L",
         ]
 
-        lines.append(f"Lam:{self.wavelength}\n")
+        for key, val in _wavelength_entries(ip).items():
+            lines.append(f"{key}:{val}\n")
 
         for p in key_order_single:
             if p in ip:
@@ -3921,7 +3942,10 @@ class InstrumentCalibration(BaseRefinement):
             :meth:`__init__`.
         """
         ip = self.hist["Instrument Parameters"][0]
-        params_to_report = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
+        wavelength_params = list(_wavelength_entries(ip))
+        params_to_report = wavelength_params + [
+            "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz.",
+        ]
         # GSAS-II stores U, V, W in centideg² and X, Y in centideg; convert
         # to plain degrees (deg² / deg) so every reported value is in degrees.
         _deg_conversion = {"U": 1e4, "V": 1e4, "W": 1e4, "X": 1e2, "Y": 1e2}
@@ -4006,6 +4030,9 @@ class InstrumentCalibration(BaseRefinement):
         # --- Bar chart of calibrated parameters ---
         table_units = {
             "Lam": "Å",
+            "Lam1": "Å",
+            "Lam2": "Å",
+            "I(L2)/I(L1)": "-",
             "Zero": "°2θ",
             "U": "deg²",
             "V": "deg²",
@@ -4015,7 +4042,7 @@ class InstrumentCalibration(BaseRefinement):
             "SH/L": "-",
             "Polariz.": "-",
         }
-        bar_params = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
+        bar_params = ["Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
         bar_vals = [calibrated.get(p, 0.0) for p in bar_params]
         colours_bar = ["steelblue" if v >= 0 else "tomato" for v in bar_vals]
         bar_labels = [f"{p}\n({table_units[p]})" for p in bar_params]
@@ -4079,7 +4106,7 @@ class InstrumentCalibration(BaseRefinement):
             )
 
         # --- Parameter table ---
-        table_params = ["Lam", "Zero", "U", "V", "W", "X", "Y", "SH/L", "Polariz."]
+        table_params = params_to_report
         table_labels = [f"{p}\n({table_units[p]})" for p in table_params]
         table_vals = [f"{calibrated.get(p, 0.0):.6f}" for p in table_params]
         tbl = ax_text.table(

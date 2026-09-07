@@ -155,6 +155,7 @@ async def select_roi_nb(
     selector = PolygonSelector(  # noqa: F841
         ax,
         _onselect,
+        useblit=False,
         props=dict(color="red", linewidth=1.5),
         handle_props=dict(markersize=6),
     )
@@ -168,6 +169,7 @@ async def select_roi_nb(
     plt.show()
 
     while not _done[0]:
+        fig.canvas.draw_idle()
         await asyncio.sleep(0.05)
 
     selector.disconnect_events()

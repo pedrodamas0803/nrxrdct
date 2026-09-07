@@ -425,13 +425,17 @@ class BaseRefinement(Scan):
         function: str = "chebyschev",
         debye_terms: list | None = None,
         freeze: bool = False,
+        user_background: list | np.ndarray | None = None,
     ) -> None:
         """
         Refine the powder pattern background.
 
         Args:
             number_coeff (int, optional): Number of background function coefficients (default 12).
+                Ignored when ``function="user"`` — the point count is taken from
+                ``user_background`` instead.
             do_refine (bool, optional): Whether to activate the background refinement flag (default ``True``).
+                Pass ``False`` together with ``function="user"`` to keep a supplied background fixed.
             function (str, optional): Background function type.  Must be one of:
 
                 * ``"chebyschev"``        — Chebyshev polynomial (default)
@@ -442,6 +446,7 @@ class BaseRefinement(Scan):
                 * ``"lin interpolate"``   — Linear interpolation
                 * ``"inv interpolate"``   — Inverse interpolation
                 * ``"log interpolate"``   — Logarithmic interpolation
+                * ``"user"``              — User-supplied background curve, see ``user_background``
             debye_terms (list of dict, optional): Debye–scattering components for amorphous content.
                 Each entry is a dict with the following keys (all optional; unset keys fall back to
                 defaults):
@@ -459,6 +464,11 @@ class BaseRefinement(Scan):
                         {"A": 1000.0, "R": 4.5, "U": 0.01,
                          "refine_A": True, "refine_R": True, "refine_U": False},
                     ]
+            user_background (list or array, optional): Background intensity values evaluated at
+                points evenly spaced across ``[self.low_lim, self.high_lim]``.  Required when
+                ``function="user"``; ignored (with a warning) for every other ``function`` value.
+                Internally stored as GSAS-II's ``"lin interpolate"`` type, with the point count
+                taken from ``len(user_background)``.
         """
         valid_functions = {
             "chebyschev",
@@ -469,6 +479,7 @@ class BaseRefinement(Scan):
             "lin interpolate",
             "inv interpolate",
             "log interpolate",
+            "user",
         }
         if function not in valid_functions:
             raise ValueError(
@@ -476,15 +487,33 @@ class BaseRefinement(Scan):
                 f"Valid options are: {sorted(valid_functions)}"
             )
 
+        if function == "user":
+            if user_background is None or len(user_background) < 2:
+                raise ValueError(
+                    "function='user' requires 'user_background' with at least 2 points."
+                )
+        elif user_background is not None:
+            print(
+                f"Warning: 'user_background' is ignored because function='{function}' "
+                "(only used when function='user')."
+            )
+
+        gsas_function = "lin interpolate" if function == "user" else function
+        n_coeff = len(user_background) if function == "user" else number_coeff
+
         self.hist.set_refinements(
             {
                 "Background": {
-                    "type": function,
-                    "no. coeffs": number_coeff,
+                    "type": gsas_function,
+                    "no. coeffs": n_coeff,
                     "refine": do_refine,
                 }
             }
         )
+
+        if function == "user":
+            bkg_rec = self.hist["Background"][0]
+            bkg_rec[3:] = [float(v) for v in user_background]
 
         if debye_terms:
             bkg_extra = self.hist["Background"][1]

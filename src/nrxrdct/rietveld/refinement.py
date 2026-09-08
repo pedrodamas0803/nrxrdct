@@ -4186,8 +4186,9 @@ class InstrumentCalibration(BaseRefinement):
 
         **Bottom-right — FWHM model** (``ax_fw``)
             Predicted peak FWHM as a function of 2θ, decomposed into its
-            Gaussian (orange, driven by ``W``) and Lorentzian (blue, driven
-            by ``X`` and ``Y``) components, plus the Thompson-Cox-Hastings
+            Gaussian (orange, ``FWHM²_G = U·tan²θ + V·tanθ + W``) and
+            Lorentzian (blue, ``FWHM_L = X/cosθ + Y·tanθ``) components, plus
+            the Thompson-Cox-Hastings
             (TCH) combined total (black).  The TCH pseudo-Voigt combination
             rule is:
 
@@ -4354,18 +4355,28 @@ class InstrumentCalibration(BaseRefinement):
 
         # --- FWHM vs 2theta ---
         try:
-            W_v = calibrated.get("W", 0)
-            X_v = calibrated.get("X", 0)
-            Y_v = calibrated.get("Y", 0)
+            U_v = calibrated.get("U", 0.0)
+            V_v = calibrated.get("V", 0.0)
+            W_v = calibrated.get("W", 0.0)
+            X_v = calibrated.get("X", 0.0)
+            Y_v = calibrated.get("Y", 0.0)
             tth_range = np.linspace(self.low_lim, self.high_lim, 300)
             tan_th = np.tan(np.radians(tth_range / 2))
             cos_th = np.cos(np.radians(tth_range / 2))
-            # W, X, Y already converted to degrees / degrees² above.
-            fwhm_G = np.sqrt(np.abs(W_v)) * np.ones_like(tth_range)
-            fwhm_L = np.abs(X_v) / cos_th + np.abs(Y_v) * tan_th
+            # U, V, W, X, Y already converted to degrees / degrees² above.
+            # Caglioti (Gaussian) and TCH (Lorentzian) terms are combined with
+            # their actual sign *before* clipping — U/V/W/X/Y can each refine
+            # slightly negative from least-squares noise even though the
+            # combined width must be non-negative; clipping each term
+            # individually (as before) would force spurious constructive
+            # addition instead of letting them partially cancel.
+            sig2 = U_v * tan_th**2 + V_v * tan_th + W_v
+            fwhm_G = np.sqrt(np.clip(sig2, 0, None))
+            gam = X_v / cos_th + Y_v * tan_th
+            fwhm_L = np.clip(gam, 0, None)
             fwhm_total = (fwhm_G**5 + fwhm_L**5) ** (1 / 5)
-            ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (W)")
-            ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X+Y)")
+            ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (U,V,W)")
+            ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X,Y)")
             ax_fw.plot(tth_range, fwhm_total, "k-", lw=1.5, label="TCH total")
             ax_fw.set_xlabel("2θ (degrees)")
             ax_fw.set_ylabel("FWHM (degrees)")

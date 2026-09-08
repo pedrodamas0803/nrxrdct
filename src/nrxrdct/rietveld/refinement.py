@@ -11,6 +11,7 @@ calibrant-based instrument parameter calibration with dedicated plotting.
 from __future__ import annotations
 
 import os
+import pickle
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -123,6 +124,11 @@ class BaseRefinement(Scan):
         # "p:h:<var>:n" name, mapping to its value/esd from the last cycle
         # in which it was actually varied. See _run_refinement().
         self._ever_refined: dict[str, dict] = {}
+        # Ordered list of step dicts in (close to) the schema GSAS-II's own
+        # G2Project.do_refinements(refinements=[...]) expects, one entry per
+        # refinement cycle run this session. See _run_refinement() and
+        # get_step_refinements().
+        self._step_refinements: list[dict] = []
 
         if self.low_lim == None:
             self.low_lim = self.tth.min()
@@ -161,6 +167,7 @@ class BaseRefinement(Scan):
         self.hist = self.gpx.histograms()[0]
         self.phases = self.gpx.phases()
         self._ever_refined = {}
+        self._step_refinements = []
         if self.phases:
             self.phase = self.phases[-1]
             self.calibrant_composition = self.phase.name
@@ -530,7 +537,27 @@ class BaseRefinement(Scan):
             bkg_extra["debyeTerms"] = terms
 
         self.gpx.save()
-        self._run_refinement()
+        step_key = "once" if freeze else "set"
+        step = {
+            step_key: {
+                "Background": {"type": gsas_function, "no. coeffs": n_coeff, "refine": do_refine}
+            }
+        }
+        notes = []
+        if function == "user":
+            notes.append(
+                "function='user' custom coefficient values are not encoded here; "
+                "pass the same user_background when replaying."
+            )
+        if debye_terms:
+            notes.append(
+                f"{len(debye_terms)} Debye term(s) configured — not representable in "
+                "GSAS-II's do_refinements 'set'/'once' schema; recreate via "
+                "refine_background(debye_terms=...) on the target project first."
+            )
+        if notes:
+            step["note"] = " ".join(notes)
+        self._run_refinement(step=step)
 
         if freeze:
             bkg = self.hist["Background"]
@@ -551,7 +578,7 @@ class BaseRefinement(Scan):
         """Refine the overall histogram scale factor."""
         self.hist.SampleParameters["Scale"][1] = True
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(step={("once" if freeze else "set"): {"Sample Parameters": ["Scale"]}})
         if freeze:
             self.hist.SampleParameters["Scale"][1] = False
             self.gpx.save()
@@ -577,7 +604,13 @@ class BaseRefinement(Scan):
                 )
             available[name].set_HAP_refinements({"Scale": True}, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    ("once" if freeze else "set"): {"Scale": True},
+                    "phases": [name],
+                    "histograms": [self.hist.name],
+                }
+            )
             if freeze:
                 available[name].set_HAP_refinements(
                     {"Scale": False}, histograms=[self.hist]
@@ -590,7 +623,9 @@ class BaseRefinement(Scan):
         """Refine the 2θ zero-shift instrument parameter."""
         self.hist.set_refinements({"Instrument Parameters": ["Zero"]})
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={("once" if freeze else "set"): {"Instrument Parameters": ["Zero"]}}
+        )
         if freeze:
             self.hist["Instrument Parameters"][0]["Zero"][2] = False
             self.gpx.save()
@@ -614,7 +649,9 @@ class BaseRefinement(Scan):
         """
         self.hist.set_refinements({"Instrument Parameters": ["Lam"]})
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={("once" if freeze else "set"): {"Instrument Parameters": ["Lam"]}}
+        )
         if freeze:
             self.hist["Instrument Parameters"][0]["Lam"][2] = False
             self.gpx.save()
@@ -750,7 +787,9 @@ class BaseRefinement(Scan):
             )
         self.hist.set_refinements({"Sample Parameters": [parameter]})
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={("once" if freeze else "set"): {"Sample Parameters": [parameter]}}
+        )
         if freeze:
             self.hist.clear_refinements({"Sample Parameters": [parameter]})
             self.gpx.save()
@@ -904,7 +943,9 @@ class BaseRefinement(Scan):
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={("once" if freeze else "set"): {"Instrument Parameters": [param]}}
+            )
             if (
                 freeze
                 and param in ip
@@ -955,7 +996,9 @@ class BaseRefinement(Scan):
         for param in refine:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={("once" if freeze else "set"): {"Instrument Parameters": [param]}}
+            )
             if (
                 freeze
                 and param in ip
@@ -1140,7 +1183,7 @@ class BaseRefinement(Scan):
         for param in parameters:
             self.hist.set_refinements({"Instrument Parameters": [param]})
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(step={"set": {"Instrument Parameters": [param]}})
             print(f"Refined {param} ({profile} profile)")
 
     def free_and_refine_cell(
@@ -1179,7 +1222,13 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_refinements({"Cell": True})
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={
+                ("once" if freeze_after else "set"): {"Cell": True},
+                "phases": [ph.name for ph in targets],
+                "histograms": [self.hist.name],
+            }
+        )
         for ph in targets:
             print(f"Cell refined for phase '{ph.name}'")
 
@@ -1414,7 +1463,19 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(pars, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": pars,
+                    "phases": [ph.name],
+                    "histograms": [self.hist.name],
+                    "note": (
+                        f"Pref.Ori. model '{model}' recorded as passed to set_HAP_refinements "
+                        "(parsMD_DICT/parsSH_DICT shape). GSAS-II's do_refinements tutorial "
+                        "examples use a differently-shaped dict for some phase-level models — "
+                        "verify this replays correctly before relying on it."
+                    ),
+                }
+            )
             print(f"Preferred orientation ({model}) refined for phase '{ph.name}'")
 
     def refine_atomic_positions(
@@ -1504,12 +1565,20 @@ class BaseRefinement(Scan):
             targets = [available[n] for n in names]
 
         for flag in flags:
+            touched_labels = []
             for ph in targets:
                 for atom in ph.atoms():
                     if atoms is None or atom.label in atoms or atom.element in atoms:
                         atom.refinement_flags = flag
+                        touched_labels.append(atom.label)
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": {"Atoms": {label: flag for label in touched_labels}},
+                    "phases": [ph.name for ph in targets],
+                    "histograms": [self.hist.name],
+                }
+            )
             phase_names = [ph.name for ph in targets]
             atom_info = f", atoms={atoms}" if atoms is not None else ""
             print(
@@ -1577,7 +1646,15 @@ class BaseRefinement(Scan):
                 atom.refinement_flags = atom.refinement_flags + "F"
 
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={
+                ("once" if freeze else "set"): {
+                    "Atoms": {a.label: a.refinement_flags for a in target_atoms}
+                },
+                "phases": [ph.name for ph in targets],
+                "histograms": [self.hist.name],
+            }
+        )
 
         if freeze:
             for atom in target_atoms:
@@ -1693,7 +1770,15 @@ class BaseRefinement(Scan):
                 atom.refinement_flags = atom.refinement_flags + "U"
 
         self.gpx.save()
-        self._run_refinement()
+        self._run_refinement(
+            step={
+                ("once" if freeze else "set"): {
+                    "Atoms": {a.label: a.refinement_flags for a in target_atoms}
+                },
+                "phases": [ph.name for ph in targets],
+                "histograms": [self.hist.name],
+            }
+        )
 
         if freeze:
             for atom in target_atoms:
@@ -1714,12 +1799,18 @@ class BaseRefinement(Scan):
         self.hist.SampleParameters["Scale"][1] = False
         self.hist.SampleParameters["Scale"][0] = 1.0
         self.gpx.save()
-        for ph in self.gpx.phases():
+        for i, ph in enumerate(self.gpx.phases()):
             hap = ph.data["Histograms"].get(self.hist.name, {})
+            step: dict = {}
+            if i == 0:
+                step["clear"] = {"Sample Parameters": ["Scale"]}
             if hap.get("LeBail", False):
                 ph.set_HAP_refinements({"Scale": True}, histograms=[self.hist])
+                step.setdefault("set", {})["Scale"] = True
+                step["phases"] = [ph.name]
+                step["histograms"] = [self.hist.name]
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(step=step or None)
 
     def refine_crystallite_size(
         self,
@@ -1834,7 +1925,19 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(ref_dict, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": ref_dict,
+                    "phases": [ph.name],
+                    "histograms": [self.hist.name],
+                    "note": (
+                        f"Size model '{refine_type}' recorded as passed to set_HAP_refinements "
+                        "(SIZE_*_DICT shape). GSAS-II's do_refinements tutorial examples use a "
+                        "differently-shaped dict for some phase-level models — verify this "
+                        "replays correctly before relying on it."
+                    ),
+                }
+            )
             print(f"Crystallite size ({refine_type}) refined for phase '{ph.name}'")
 
     def refine_mustrain(
@@ -1953,7 +2056,20 @@ class BaseRefinement(Scan):
                 histograms=[self.hist],
             )
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": {"Mustrain": ref_dict},
+                    "phases": [ph.name],
+                    "histograms": [self.hist.name],
+                    "note": (
+                        f"Mustrain model '{refine_type}' recorded as passed to "
+                        "set_HAP_refinements (MUSTRAIN_*_DICT shape). GSAS-II's do_refinements "
+                        "tutorial examples use a differently-shaped dict ('refine' as a string, "
+                        "'direction' instead of 'axis') for this key — verify this replays "
+                        "correctly before relying on it."
+                    ),
+                }
+            )
             print(f"Microstrain ({refine_type}) refined for phase '{ph.name}'")
 
     def refine_hstrain(self, phase: str | list[str] | None = None) -> None:
@@ -2010,7 +2126,13 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements({"HStrain": True}, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": {"HStrain": True},
+                    "phases": [ph.name],
+                    "histograms": [self.hist.name],
+                }
+            )
             print(f"HStrain refined for phase '{ph.name}'")
 
     def refine_extinction(self, phase: str | list[str] | None = None) -> None:
@@ -2066,7 +2188,13 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements({"Extinction": True}, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={
+                    "set": {"Extinction": True},
+                    "phases": [ph.name],
+                    "histograms": [self.hist.name],
+                }
+            )
             print(f"Extinction refined for phase '{ph.name}'")
 
     def refine_babinet(
@@ -2136,7 +2264,9 @@ class BaseRefinement(Scan):
         for ph in targets:
             ph.set_HAP_refinements(bab_dict, histograms=[self.hist])
             self.gpx.save()
-            self._run_refinement()
+            self._run_refinement(
+                step={"set": bab_dict, "phases": [ph.name], "histograms": [self.hist.name]}
+            )
             print(f"Babinet {params} refined for phase '{ph.name}'")
 
     def print_refinement_results(self) -> None:
@@ -2829,7 +2959,7 @@ class BaseRefinement(Scan):
         "X": 1e2, "Y": 1e2,
     }
 
-    def _run_refinement(self) -> None:
+    def _run_refinement(self, step: dict | None = None) -> None:
         """
         Run one GSAS-II least-squares cycle and record every variable that was varied.
 
@@ -2842,12 +2972,26 @@ class BaseRefinement(Scan):
         (keyed by GSAS-II's own ``"p:h:<var>:n"`` variable name) so that
         :meth:`print_ever_refined_variables` can report the full session
         history rather than just the last cycle.
+
+        Args:
+            step (dict, optional): If given, describes *this* cycle in (close
+                to) the schema :meth:`G2sc.G2Project.do_refinements` expects
+                for its ``refinements`` list — e.g.
+                ``{"set": {"Instrument Parameters": ["W"]}}`` or, for a
+                parameter that gets frozen again right after this cycle,
+                ``{"once": {"Instrument Parameters": ["Zero"]}}``. Appended to
+                ``self._step_refinements`` for :meth:`get_step_refinements`.
+                Flags must already be set live on ``self.hist``/the phase
+                objects *before* calling this — ``step`` is recorded for
+                later replay, it does not itself apply anything.
         """
         self.gpx.do_refinements([{}])
         cov_data = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
         variables = cov_data.get("variables", [])
         sigmas = cov_data.get("sig", [])
+        if step is not None:
+            self._step_refinements.append(step)
         for i, var in enumerate(vary_list):
             val = variables[i] if i < len(variables) else float("nan")
             sig = sigmas[i] if i < len(sigmas) else None
@@ -3175,6 +3319,111 @@ class BaseRefinement(Scan):
 
         self._run_refinement()
         print("\nJoint refinement cycle complete.")
+
+    def get_step_refinements(self) -> dict:
+        """
+        Package this session's refinement steps into a portable recipe.
+
+        Each entry of the returned ``"steps"`` list is a real GSAS-II
+        ``do_refinements(refinements=[...])`` step dict — confirmed against
+        GSAS-II's own scripting documentation (Specifying Refinement
+        Parameters / ``do_refinements`` reference):
+
+        * ``"set"`` — parameters listed here are turned on and stay on.
+        * ``"once"`` — turned on for that cycle only, then GSAS-II clears
+          them automatically once the cycle completes (matches this class's
+          own ``freeze=True`` pattern).
+        * ``"clear"`` — parameters turned off.
+        * ``"phases"`` — list of phase names/indices the ``set``/``once``/
+          ``clear`` payload applies to for phase-level keys (``Cell``,
+          ``Scale``, ``Extinction``, ``HStrain``, ``Size``, ``Mustrain``,
+          ``Pref.Ori.``, ``Babinet``, ``Atoms``). Per GSAS-II's docs, these
+          keys are placed directly at the top level of ``set``/``once``
+          (not nested under the phase name) — ``"phases"`` is what scopes
+          them.
+        * ``"histograms"`` — list of histogram names the step applies to.
+        * ``"note"`` — present when a step can't be captured this way at
+          all: background Debye terms and generalized Size/Mustrain/
+          Pref.Ori. *model definitions* (as opposed to their refine flags)
+          aren't covered by the documented ``set``/``once``/``clear`` keys —
+          such a step carries no ``"set"``/``"once"``/``"clear"`` key;
+          recreate it manually on the target project (e.g. via
+          :meth:`refine_background` with ``debye_terms``) before replaying.
+
+        The whole ``"steps"`` list can be passed directly to GSAS-II's own
+        ``target_gpx.do_refinements(steps)``, or to :meth:`apply_step_refinements`
+        for a version that also reports/skips the non-replayable ``"note"``-only
+        entries.
+
+        Returns:
+            dict: ``{"steps": [...], "wavelength": <Å>, "phases": [<names>]}``.
+            Pickle this (see :meth:`save_step_refinements`) to replay the
+            same recipe against other GSAS-II projects, e.g. other
+            voxels/patterns in an XRD-CT scan.
+        """
+        return {
+            "steps": list(self._step_refinements),
+            "wavelength": getattr(self, "wavelength", None),
+            "phases": [ph.name for ph in self.gpx.phases()],
+        }
+
+    def save_step_refinements(self, path: Path = Path("step_refinements.pkl")) -> Path:
+        """
+        Pickle this session's refinement recipe (:meth:`get_step_refinements`) to disk.
+
+        Args:
+            path (Path, optional): Output ``.pkl`` path (default ``"step_refinements.pkl"``).
+
+        Returns:
+            Path: The path written to.
+        """
+        recipe = self.get_step_refinements()
+        with open(path, "wb") as f:
+            pickle.dump(recipe, f)
+        print(f"Step-refinement recipe ({len(recipe['steps'])} steps) saved to: {path}")
+        return path
+
+    def apply_step_refinements(self, steps: list[dict] | dict, run: bool = True) -> None:
+        """
+        Replay a step-refinement recipe (:meth:`get_step_refinements`) onto
+        *this* project via GSAS-II's own ``do_refinements``.
+
+        ``"note"``-only steps (no ``"set"``/``"once"``/``"clear"`` key —
+        Debye terms, generalized Size/Mustrain/Pref.Ori. model definitions)
+        are reported and skipped rather than guessed at; see
+        :meth:`get_step_refinements` for why.
+
+        Args:
+            steps (list of dict, or dict): Either a ``"steps"`` list directly,
+                or the full dict from :meth:`get_step_refinements` / a loaded
+                pickle (its ``"steps"`` key is used automatically).
+            run (bool, optional): If ``True`` (default), actually run each
+                refinement cycle. If ``False``, only report what each step
+                would do (via GSAS-II's own ``"skip"`` key) without refining.
+        """
+        if isinstance(steps, dict) and "steps" in steps:
+            steps = steps["steps"]
+
+        replayable = []
+        skipped = 0
+        for i, step in enumerate(steps):
+            note = step.get("note")
+            payload = {k: v for k, v in step.items() if k != "note"}
+            if not any(k in payload for k in ("set", "once", "clear")):
+                skipped += 1
+                if note:
+                    print(f"  [step {i}] skipped (not auto-replayable): {note}")
+                continue
+            if note:
+                print(f"  [step {i}] note: {note}")
+            if not run:
+                payload["skip"] = True
+            replayable.append(payload)
+
+        if replayable:
+            self.gpx.do_refinements(replayable)
+            self.gpx.save()
+        print(f"Applied {len(replayable)} step(s), skipped {skipped} (not auto-replayable).")
 
     def print_covariance_matrix(self) -> None:
         """Print the correlation matrix (normalised covariance) of all refined variables."""

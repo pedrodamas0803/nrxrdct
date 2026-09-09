@@ -3466,6 +3466,133 @@ class BaseRefinement(Scan):
         for i, var in enumerate(vary_list):
             print(f"    {i:3d}  {var}")
 
+    def _variable_diagnostics_table(
+        self,
+        significance_threshold: float = 3.0,
+        moderate_corr_threshold: float = 0.75,
+        high_corr_threshold: float = 0.90,
+    ) -> list[dict]:
+        """
+        Build a diagnostics table for the variables refined in the *last*
+        completed cycle: value, esd, a significance metric, and flags for
+        parameters that are poorly determined or strongly correlated with
+        another variable.
+
+        Restricted to the last cycle (rather than the full-session
+        :attr:`_ever_refined` history) because correlation flags require the
+        covariance matrix, and GSAS-II only keeps that matrix for the most
+        recent cycle — its row/column order matches ``varyList`` exactly.
+
+        Args:
+            significance_threshold (float, optional): A parameter is flagged
+                "low significance" when ``|value/esd| < significance_threshold``,
+                i.e. its refined value is not clearly resolved from zero at that
+                many standard deviations (default 3.0).
+            moderate_corr_threshold (float, optional): Flag "high correlation" when the largest
+                off-diagonal absolute correlation for a parameter reaches this value (default 0.75).
+            high_corr_threshold (float, optional): Flag "SEVERE correlation" when the largest
+                off-diagonal absolute correlation reaches this value (default 0.90) — such pairs are
+                effectively redundant and refining them together is unstable.
+
+        Returns:
+            list of dict: One entry per variable in ``varyList``, each with keys
+            ``var``, ``value``, ``esd``, ``units``, ``significance`` (``|value/esd|``
+            or ``None``), and ``flags`` (list of str, empty if none apply).
+        """
+        cov_data = self.gpx["Covariance"]["data"]
+        vary_list = cov_data.get("varyList", [])
+        variables = cov_data.get("variables", [])
+        sigmas = cov_data.get("sig", [])
+        cov_matrix = cov_data.get("covMatrix")
+
+        rows: list[dict] = []
+        if not vary_list:
+            return rows
+
+        corr = None
+        if cov_matrix is not None and len(cov_matrix):
+            sig_diag = np.sqrt(np.diag(cov_matrix))
+            with np.errstate(invalid="ignore"):
+                corr = cov_matrix / np.outer(sig_diag, sig_diag)
+            corr = np.nan_to_num(corr)
+
+        for i, var in enumerate(vary_list):
+            val = variables[i] if i < len(variables) else float("nan")
+            sig = sigmas[i] if i < len(sigmas) else None
+
+            parts = var.split(":")
+            var_token = parts[2] if len(parts) >= 3 else var
+            units = self._var_units(var_token)
+            conv = self._VAR_DEG_CONVERSION.get(var_token)
+            if conv is not None:
+                val = val / conv
+                if sig is not None:
+                    sig = sig / conv
+
+            significance = abs(val / sig) if sig not in (None, 0) else None
+
+            flags: list[str] = []
+            if significance is None:
+                flags.append("esd unavailable")
+            elif significance < significance_threshold:
+                flags.append(f"low significance (|val/esd|={significance:.1f})")
+
+            if corr is not None and len(vary_list) > 1:
+                row_corr = np.abs(corr[i]).copy()
+                row_corr[i] = 0.0
+                j = int(np.argmax(row_corr))
+                max_c = row_corr[j]
+                if max_c >= high_corr_threshold:
+                    flags.append(f"SEVERE correlation ({max_c:.2f}) with {vary_list[j]}")
+                elif max_c >= moderate_corr_threshold:
+                    flags.append(f"high correlation ({max_c:.2f}) with {vary_list[j]}")
+
+            rows.append(
+                {
+                    "var": var,
+                    "value": val,
+                    "esd": sig,
+                    "units": units,
+                    "significance": significance,
+                    "flags": flags,
+                }
+            )
+        return rows
+
+    def print_variable_diagnostics(
+        self,
+        significance_threshold: float = 3.0,
+        moderate_corr_threshold: float = 0.75,
+        high_corr_threshold: float = 0.90,
+    ) -> None:
+        """
+        Print value/esd/significance and correlation-problem flags for every
+        variable refined in the last completed cycle.
+
+        See :meth:`_variable_diagnostics_table` for the flagging rules.
+        """
+        rows = self._variable_diagnostics_table(
+            significance_threshold, moderate_corr_threshold, high_corr_threshold
+        )
+        if not rows:
+            print("No refined variables found (run a refinement first).")
+            return
+
+        print("\n" + "=" * 100)
+        print("VARIABLE DIAGNOSTICS (last cycle)")
+        print("=" * 100)
+        print(f"  {'Parameter':<32} {'Value':>14} {'Esd':>14} {'Units':>6} {'|Val/Esd|':>10}  Flags")
+        print("  " + "-" * 96)
+        for r in rows:
+            sig_str = f"{r['significance']:.1f}" if r["significance"] is not None else "n/a"
+            esd_str = f"{r['esd']:.6g}" if r["esd"] is not None else "n/a"
+            flags_str = "; ".join(r["flags"]) if r["flags"] else "OK"
+            print(
+                f"  {r['var']:<32} {r['value']:>14.6g} {esd_str:>14} {r['units']:>6} {sig_str:>10}  {flags_str}"
+            )
+        n_flagged = sum(1 for r in rows if r["flags"])
+        print(f"\n  {n_flagged} of {len(rows)} parameter(s) flagged.")
+
     def plot_covariance_matrix(
         self, show: bool = True, figsize: tuple = (6, 4)
     ) -> tuple:
@@ -3939,11 +4066,71 @@ class BaseRefinement(Scan):
         if show:
             plt.show()
 
+    def _render_diagnostics_table_pages(
+        self,
+        pdf: PdfPages,
+        rows: list[dict],
+        significance_threshold: float,
+        moderate_corr_threshold: float,
+        high_corr_threshold: float,
+        rows_per_page: int = 25,
+    ) -> None:
+        """
+        Render :meth:`_variable_diagnostics_table` rows as one or more PDF
+        table pages, colouring rows that carry a flag (yellow for "high
+        correlation" / "low significance", red for "SEVERE correlation").
+        """
+        col_labels = ["Parameter", "Value", "Esd", "Units", "|Val/Esd|", "Flags"]
+        for start in range(0, len(rows), rows_per_page):
+            chunk = rows[start : start + rows_per_page]
+            fig, ax = plt.subplots(figsize=(11, 8.5))
+            ax.axis("off")
+
+            cell_text = []
+            cell_colours = []
+            for r in chunk:
+                sig_str = f"{r['significance']:.1f}" if r["significance"] is not None else "n/a"
+                esd_str = f"{r['esd']:.4g}" if r["esd"] is not None else "n/a"
+                flags_str = "; ".join(r["flags"]) if r["flags"] else "OK"
+                cell_text.append(
+                    [r["var"], f"{r['value']:.6g}", esd_str, r["units"], sig_str, flags_str]
+                )
+                if any("SEVERE" in f for f in r["flags"]):
+                    row_colour = "#f5b7b1"
+                elif r["flags"]:
+                    row_colour = "#f9e79f"
+                else:
+                    row_colour = "white"
+                cell_colours.append([row_colour] * len(col_labels))
+
+            tbl = ax.table(
+                cellText=cell_text,
+                colLabels=col_labels,
+                cellColours=cell_colours,
+                loc="center",
+                cellLoc="left",
+            )
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(7)
+            tbl.scale(1, 1.4)
+            ax.set_title(
+                "Refined parameter diagnostics (last cycle)\n"
+                f"|value/esd| < {significance_threshold:g} -> low significance   "
+                f"|corr| >= {moderate_corr_threshold:g} -> high correlation   "
+                f">= {high_corr_threshold:g} -> severe",
+                fontsize=9,
+            )
+            pdf.savefig(fig)
+            plt.close(fig)
+
     def generate_report(
         self,
         path: Path = Path("refinement_report.pdf"),
         include_covariance: bool = True,
         lines_per_page: int = 58,
+        significance_threshold: float = 3.0,
+        moderate_corr_threshold: float = 0.75,
+        high_corr_threshold: float = 0.90,
     ) -> Path:
         """
         Generate a multi-page PDF report summarising the current refinement.
@@ -3957,15 +4144,26 @@ class BaseRefinement(Scan):
            :meth:`print_refinement_results` (R-factors, instrument and
            sample parameters, background, and per-phase cell/HAP/atom
            tables), paginated as monospace text.
-        4. The parameter correlation-matrix heatmap, if covariance data
+        4. A per-variable diagnostics table (value, esd, significance, and
+           correlation/significance flags) from
+           :meth:`_variable_diagnostics_table`, for the variables refined in
+           the last cycle.
+        5. The parameter correlation-matrix heatmap, if covariance data
            from a refinement cycle is available.
 
         Args:
             path (Path, optional): Output PDF path (default ``"refinement_report.pdf"``).
-            include_covariance (bool, optional): Include the correlation-matrix heatmap page
-                when covariance data is available (default ``True``).
+            include_covariance (bool, optional): Include the diagnostics table and correlation-matrix
+                heatmap pages when covariance data is available (default ``True``).
             lines_per_page (int, optional): Number of text lines per page for the parameter-listing
                 section (default 58, sized for a letter page at 7.5pt monospace).
+            significance_threshold (float, optional): Passed to :meth:`_variable_diagnostics_table` —
+                flags a parameter as "low significance" when ``|value/esd|`` falls below this
+                (default 3.0).
+            moderate_corr_threshold (float, optional): Passed to :meth:`_variable_diagnostics_table` —
+                flags "high correlation" above this off-diagonal correlation magnitude (default 0.75).
+            high_corr_threshold (float, optional): Passed to :meth:`_variable_diagnostics_table` —
+                flags "SEVERE correlation" above this magnitude (default 0.90).
 
         Returns:
             Path: The path the PDF was written to.
@@ -4020,6 +4218,22 @@ class BaseRefinement(Scan):
                 )
                 pdf.savefig(fig)
                 plt.close(fig)
+
+            # --- Per-variable diagnostics table ---
+            if include_covariance:
+                diag_rows = self._variable_diagnostics_table(
+                    significance_threshold, moderate_corr_threshold, high_corr_threshold
+                )
+                if diag_rows:
+                    self._render_diagnostics_table_pages(
+                        pdf,
+                        diag_rows,
+                        significance_threshold,
+                        moderate_corr_threshold,
+                        high_corr_threshold,
+                    )
+                else:
+                    print("No refined variables found — skipping diagnostics table page.")
 
             # --- Correlation matrix heatmap ---
             if include_covariance:

@@ -10,15 +10,18 @@ calibrant-based instrument parameter calibration with dedicated plotting.
 
 from __future__ import annotations
 
+import io
 import os
 import pickle
 import shutil
+from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
+from matplotlib.backends.backend_pdf import PdfPages
 
 try:
     from GSASII import GSASIIscriptable as G2sc  # type: ignore
@@ -3829,26 +3832,21 @@ class BaseRefinement(Scan):
                             f"    Pref.Ori.  : SH  ord={po[4]}  axis={po[3]}  refine={refine}"
                         )
 
-    def plot_results(
-        self,
-        image_path: Path = "calibration_plot.png",
-        show: bool = True,
-        figsize: tuple = (9, 6),
-    ) -> None:
+    def _build_fit_figure(self, figsize: tuple = (9, 6)):
         """
-        Plot the Rietveld fit (observed / calculated / difference) and save to disk.
+        Build the observed/calculated/difference Rietveld fit figure.
+
+        Shared by :meth:`plot_results` and :meth:`generate_report`. The
+        figure is returned unsaved and unshown so callers can route it to a
+        PNG file, a PDF page, or the screen as needed.
 
         Args:
-            image_path (Path, optional): Output image file (default ``"calibration_plot.png"``).
-            show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
             figsize (tuple of (float, float), optional): Figure size in inches as
-                ``(width, height)`` (default ``(12, 9)``).
-        """
-        wR = self.hist.get_wR()
-        print("\n" + "=" * 60)
-        print("Generating calibration plot")
-        print("=" * 60)
+                ``(width, height)`` (default ``(9, 6)``).
 
+        Returns:
+            matplotlib.figure.Figure: The assembled figure.
+        """
         fig = plt.figure(figsize=figsize)
         gs = gridspec.GridSpec(
             2, 1, figure=fig, height_ratios=[3, 1], hspace=0.08, wspace=0.35
@@ -3869,19 +3867,17 @@ class BaseRefinement(Scan):
         ax_main.plot(tth, ybkg, "b--", lw=0.8, label="Background")
 
         # Reflection tick marks for both phases
-        # colours_ticks = {"calibrant": "magenta", "Al_holder": "darkorange"}
         yrange = yobs.max() - yobs.min()
         tick_y0 = yobs.min() - 0.02 * yrange
         for ii, ph in enumerate(self.gpx.phases()):
             try:
                 reflist = self.hist.reflections()[ph.name]["RefList"]
                 ref_tth = reflist[:, 5]
-                # colour = colours_ticks.get(ph.name, "green")
                 ax_main.vlines(
                     ref_tth,
                     tick_y0,
                     tick_y0 + 0.04 * yrange,
-                    color=COLORS[ii],
+                    color=COLORS[ii % len(COLORS)],
                     lw=0.8,
                     label=f"{ph.name} reflections",
                 )
@@ -3889,6 +3885,7 @@ class BaseRefinement(Scan):
                 pass
 
         ax_main.set_ylabel("Intensity")
+        wR = self.hist.get_wR()
         residuals = self.hist.residuals
         chi2 = residuals.get("GOF")
         stat_parts = []
@@ -3910,15 +3907,152 @@ class BaseRefinement(Scan):
         ax_diff.set_ylabel("Obs−Calc")
         ax_diff.set_xlabel("2θ (degrees)")
 
-        plt.suptitle(
+        fig.suptitle(
             f"Refinement results of {self.sample_name}.",
             fontsize=12,
             fontweight="bold",
             y=1.01,
         )
-        plt.savefig(str(image_path), dpi=150, bbox_inches="tight")
+        return fig
+
+    def plot_results(
+        self,
+        image_path: Path = "calibration_plot.png",
+        show: bool = True,
+        figsize: tuple = (9, 6),
+    ) -> None:
+        """
+        Plot the Rietveld fit (observed / calculated / difference) and save to disk.
+
+        Args:
+            image_path (Path, optional): Output image file (default ``"calibration_plot.png"``).
+            show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
+            figsize (tuple of (float, float), optional): Figure size in inches as
+                ``(width, height)`` (default ``(12, 9)``).
+        """
+        print("\n" + "=" * 60)
+        print("Generating calibration plot")
+        print("=" * 60)
+
+        fig = self._build_fit_figure(figsize=figsize)
+        fig.savefig(str(image_path), dpi=150, bbox_inches="tight")
         if show:
             plt.show()
+
+    def generate_report(
+        self,
+        path: Path = Path("refinement_report.pdf"),
+        include_covariance: bool = True,
+        lines_per_page: int = 58,
+    ) -> Path:
+        """
+        Generate a multi-page PDF report summarising the current refinement.
+
+        The report bundles together, as consecutive pages of a single PDF:
+
+        1. A title/summary page (sample name, phases, Rwp, GOF, 2θ range).
+        2. The Rietveld fit plot (observed / calculated / difference),
+           via :meth:`_build_fit_figure`.
+        3. The full parameter listing produced by
+           :meth:`print_refinement_results` (R-factors, instrument and
+           sample parameters, background, and per-phase cell/HAP/atom
+           tables), paginated as monospace text.
+        4. The parameter correlation-matrix heatmap, if covariance data
+           from a refinement cycle is available.
+
+        Args:
+            path (Path, optional): Output PDF path (default ``"refinement_report.pdf"``).
+            include_covariance (bool, optional): Include the correlation-matrix heatmap page
+                when covariance data is available (default ``True``).
+            lines_per_page (int, optional): Number of text lines per page for the parameter-listing
+                section (default 58, sized for a letter page at 7.5pt monospace).
+
+        Returns:
+            Path: The path the PDF was written to.
+        """
+        path = Path(path)
+        wR = self.get_Rwp()
+        chi2 = self.get_chi2()
+
+        with PdfPages(str(path)) as pdf:
+            # --- Title / summary page ---
+            fig = plt.figure(figsize=(8.5, 11))
+            fig.text(
+                0.5, 0.85, "Rietveld Refinement Report",
+                ha="center", fontsize=20, fontweight="bold",
+            )
+            fig.text(0.5, 0.80, self.sample_name, ha="center", fontsize=14)
+            fig.text(
+                0.5, 0.76, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                ha="center", fontsize=10, color="gray",
+            )
+            summary_lines = [
+                f"Histogram    : {self.hist.name}",
+                f"Phases       : {', '.join(ph.name for ph in self.gpx.phases())}",
+                f"Rwp          : {wR:.4f} %" if wR is not None else "Rwp          : n/a",
+                f"GOF (chi2)   : {chi2:.4f}" if chi2 is not None else "GOF (chi2)   : n/a",
+                f"2theta range : [{self.low_lim:.3f}, {self.high_lim:.3f}] deg",
+                f"Refinement steps run this session: {len(self._step_refinements)}",
+            ]
+            fig.text(
+                0.12, 0.65, "\n".join(summary_lines),
+                fontsize=11, family="monospace", va="top",
+            )
+            pdf.savefig(fig)
+            plt.close(fig)
+
+            # --- Rietveld fit plot ---
+            fig = self._build_fit_figure()
+            pdf.savefig(fig)
+            plt.close(fig)
+
+            # --- Full parameter listing, paginated ---
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                self.print_refinement_results()
+            all_lines = buf.getvalue().splitlines()
+            for i in range(0, len(all_lines), lines_per_page):
+                chunk = all_lines[i : i + lines_per_page]
+                fig = plt.figure(figsize=(8.5, 11))
+                fig.text(
+                    0.05, 0.98, "\n".join(chunk),
+                    fontsize=7.5, family="monospace", va="top",
+                )
+                pdf.savefig(fig)
+                plt.close(fig)
+
+            # --- Correlation matrix heatmap ---
+            if include_covariance:
+                cov_data = self.gpx["Covariance"]["data"]
+                vary_list = cov_data.get("varyList", [])
+                cov_matrix = cov_data.get("covMatrix")
+                if vary_list and cov_matrix is not None and len(cov_matrix):
+                    sigmas = np.sqrt(np.diag(cov_matrix))
+                    with np.errstate(invalid="ignore"):
+                        corr = cov_matrix / np.outer(sigmas, sigmas)
+                    corr = np.nan_to_num(corr)
+                    n = len(vary_list)
+                    fig, ax = plt.subplots(figsize=(8.5, 8.5))
+                    im = ax.imshow(corr, vmin=-1, vmax=1, cmap="coolwarm", aspect="auto")
+                    fig.colorbar(im, ax=ax, label="Correlation coefficient")
+                    ax.set_xticks(range(n))
+                    ax.set_yticks(range(n))
+                    ax.set_xticklabels(vary_list, rotation=90, fontsize=7)
+                    ax.set_yticklabels(vary_list, fontsize=7)
+                    ax.set_title("Parameter correlation matrix")
+                    fig.tight_layout()
+                    pdf.savefig(fig)
+                    plt.close(fig)
+                else:
+                    print("No covariance data found — skipping correlation matrix page.")
+
+            info = pdf.infodict()
+            info["Title"] = f"Rietveld Refinement Report - {self.sample_name}"
+            info["Author"] = "nrxrdct"
+            info["CreationDate"] = datetime.now()
+
+        print(f"Report saved to: {path}")
+        return path
 
 
 class InstrumentCalibration(BaseRefinement):

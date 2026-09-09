@@ -16,6 +16,9 @@ elem_radius
     Return the CN-12 metallic radius (Å) for an element symbol.
 list_structures
     List supported crystal structures for :func:`make_alloy_crystal`.
+symmetrize_crystal_from_p1
+    Symmetrize a P1 structure (e.g. DFT-relaxed) into an xrayutilities
+    Crystal built from its true space group, via spglib.
 """
 
 from .simulation import (
@@ -27,6 +30,7 @@ from .structures import (
     make_alloy_crystal,
     elem_radius,
     list_structures,
+    symmetrize_crystal_from_p1,
 )
 
 __all__ = [
@@ -36,4 +40,5 @@ __all__ = [
     "make_alloy_crystal",
     "elem_radius",
     "list_structures",
+    "symmetrize_crystal_from_p1",
 ]

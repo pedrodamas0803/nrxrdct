@@ -20,6 +20,11 @@ Vegard's-law calculations.
 Data sources (in priority order):
     1. xrayutilities — crystallographic lattice parameters (exact)
     2. xraylib       — elemental density + atomic weight (< 1 % error)
+
+Also provides :func:`symmetrize_crystal_from_p1`, which turns a P1 structure
+(e.g. a DFT-relaxed cell with no assumed symmetry) into an xrayutilities
+Crystal built from its true space group, using spglib to detect the
+symmetry and idealize the atomic positions.
 """
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ import warnings
 from typing import Sequence
 
 import numpy as np
+import spglib
 import xraylib
 import xrayutilities as xu
 
@@ -285,3 +291,102 @@ def make_alloy_crystal(
 def list_structures() -> list[str]:
     """Return the supported structure types for :func:`make_alloy_crystal`."""
     return sorted(_TARGET)
+
+
+# ── P1 → symmetrized Crystal ──────────────────────────────────────────────────
+
+def _lattice_params(lattice: np.ndarray) -> tuple[float, float, float, float, float, float]:
+    """Convert a 3x3 lattice-vector matrix (rows) to (a, b, c, alpha, beta, gamma)."""
+    va, vb, vc = lattice
+    a, b, c = np.linalg.norm(va), np.linalg.norm(vb), np.linalg.norm(vc)
+    alpha = np.degrees(np.arccos(np.dot(vb, vc) / (b * c)))
+    beta = np.degrees(np.arccos(np.dot(va, vc) / (a * c)))
+    gamma = np.degrees(np.arccos(np.dot(va, vb) / (a * b)))
+    return a, b, c, alpha, beta, gamma
+
+
+def _sgrp_lattice_args(
+    sgnum: int, a: float, b: float, c: float, alpha: float, beta: float, gamma: float
+) -> tuple[float, ...]:
+    """Select the (a[, b, c, angles...]) subset SGLattice expects for *sgnum*."""
+    if sgnum >= 195:  # cubic
+        return (a,)
+    if sgnum >= 75:  # tetragonal, trigonal, hexagonal
+        return (a, c)
+    if sgnum >= 16:  # orthorhombic
+        return (a, b, c)
+    if sgnum >= 3:  # monoclinic
+        return (a, b, c, beta)
+    return (a, b, c, alpha, beta, gamma)  # triclinic
+
+
+def symmetrize_crystal_from_p1(
+    lattice: np.ndarray,
+    frac_coords: np.ndarray,
+    species: Sequence[str],
+    *,
+    symprec: float = 1e-2,
+    name: str | None = None,
+    b_factor: float = 0.0,
+) -> xu.materials.Crystal:
+    """
+    Symmetrize a P1 structure (e.g. DFT-relaxed) into an xrayutilities Crystal.
+
+    Uses spglib to detect the true space group and produce an idealized,
+    standardized cell. Each symmetry-independent atom is then handed to
+    :class:`xu.materials.SGLattice`, which identifies its Wyckoff site from
+    the space group automatically.
+
+    Args:
+        lattice (np.ndarray): 3x3 array of lattice vectors (rows), in Å.
+        frac_coords (np.ndarray): (N, 3) fractional atomic coordinates, one
+            row per atom. No symmetry is assumed (P1).
+        species (Sequence[str]): Length-N element symbols, same order as
+            *frac_coords*.
+        symprec (float): spglib distance tolerance (Å) used to detect
+            symmetry. DFT-relaxed structures are rarely exactly symmetric —
+            scan a few values (e.g. ``1e-3`` to ``1e-1``) and check where the
+            detected space group number stabilizes.
+        name (str, optional): Crystal name. Defaults to the spglib
+            international symbol (e.g. ``"Fm-3m"``).
+        b_factor (float): Isotropic Debye–Waller *B*-factor applied to every
+            site (default 0.0).
+
+    Returns:
+        xu.materials.Crystal: Crystal built from the symmetrized,
+            standardized cell.
+
+    Raises:
+        RuntimeError: If spglib detects no symmetry at *symprec* (the input
+            noise exceeds the tolerance — try loosening *symprec*).
+    """
+    numbers = [xraylib.SymbolToAtomicNumber(s) for s in species]
+    cell = (np.asarray(lattice), np.asarray(frac_coords), numbers)
+
+    ds = spglib.get_symmetry_dataset(cell, symprec=symprec)
+    if ds is None:
+        raise RuntimeError(
+            f"spglib found no symmetry at symprec={symprec}; "
+            "try loosening symprec for a DFT-relaxed structure."
+        )
+
+    # Re-run on the standardized/idealized cell to find symmetry-equivalent
+    # atoms within it, so only one representative per Wyckoff orbit is kept
+    # — SGLattice expands the rest itself.
+    std = spglib.get_symmetry_dataset(
+        (ds.std_lattice, ds.std_positions, ds.std_types), symprec=symprec
+    )
+    reps = sorted(set(std.equivalent_atoms))
+
+    atoms = [xraylib.AtomicNumberToSymbol(int(std.std_types[i])) for i in reps]
+    pos = [tuple(std.std_positions[i]) for i in reps]
+    occ = [1.0] * len(reps)
+    bvals = [b_factor] * len(reps)
+
+    a, b, c, alpha, beta, gamma = _lattice_params(ds.std_lattice)
+    lat_args = _sgrp_lattice_args(ds.number, a, b, c, alpha, beta, gamma)
+
+    lat = xu.materials.SGLattice(
+        ds.number, *lat_args, atoms=atoms, pos=pos, occ=occ, b=bvals
+    )
+    return xu.materials.Crystal(name or ds.international.replace("/", "_"), lat)

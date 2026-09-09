@@ -138,10 +138,6 @@ class BaseRefinement(Scan):
         if self.high_lim == None:
             self.hih_lim = self.tth.max()
 
-        self.param_file_init = write_starting_instrument_pars(
-            polarization=polarization, wavelength=self.wavelength
-        )
-
         print(60 * "=")
         print("=== If you need more information on the parameters, see the link:")
         print(
@@ -4148,8 +4144,9 @@ class BaseRefinement(Scan):
            correlation/significance flags) from
            :meth:`_variable_diagnostics_table`, for the variables refined in
            the last cycle.
-        5. The parameter correlation-matrix heatmap, if covariance data
-           from a refinement cycle is available.
+        5. The parameter correlation matrix, printed as a numeric table
+           (:meth:`print_covariance_matrix`) followed by a heatmap, if
+           covariance data from a refinement cycle is available.
 
         Args:
             path (Path, optional): Output PDF path (default ``"refinement_report.pdf"``).
@@ -4235,12 +4232,35 @@ class BaseRefinement(Scan):
                 else:
                     print("No refined variables found — skipping diagnostics table page.")
 
-            # --- Correlation matrix heatmap ---
+            # --- Correlation matrix: printed numeric table + heatmap ---
             if include_covariance:
                 cov_data = self.gpx["Covariance"]["data"]
                 vary_list = cov_data.get("varyList", [])
                 cov_matrix = cov_data.get("covMatrix")
-                if vary_list and cov_matrix is not None and len(cov_matrix):
+                has_cov = bool(vary_list) and cov_matrix is not None and len(cov_matrix)
+
+                if has_cov:
+                    # Printed numeric matrix (same table as print_covariance_matrix),
+                    # paginated as monospace text with a font size shrunk to fit
+                    # the widest row so it stays readable for larger vary lists.
+                    buf = io.StringIO()
+                    with redirect_stdout(buf):
+                        self.print_covariance_matrix()
+                    corr_lines = buf.getvalue().splitlines()
+                    max_len = max((len(line) for line in corr_lines), default=1)
+                    corr_fontsize = max(4.0, min(7.5, 620.0 / max_len))
+                    corr_lines_per_page = 70
+                    for i in range(0, len(corr_lines), corr_lines_per_page):
+                        chunk = corr_lines[i : i + corr_lines_per_page]
+                        fig = plt.figure(figsize=(11, 8.5))
+                        fig.text(
+                            0.03, 0.98, "\n".join(chunk),
+                            fontsize=corr_fontsize, family="monospace", va="top",
+                        )
+                        pdf.savefig(fig)
+                        plt.close(fig)
+
+                    # Heatmap
                     sigmas = np.sqrt(np.diag(cov_matrix))
                     with np.errstate(invalid="ignore"):
                         corr = cov_matrix / np.outer(sigmas, sigmas)
@@ -4258,7 +4278,7 @@ class BaseRefinement(Scan):
                     pdf.savefig(fig)
                     plt.close(fig)
                 else:
-                    print("No covariance data found — skipping correlation matrix page.")
+                    print("No covariance data found — skipping correlation matrix pages.")
 
             info = pdf.infodict()
             info["Title"] = f"Rietveld Refinement Report - {self.sample_name}"

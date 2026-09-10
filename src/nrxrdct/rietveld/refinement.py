@@ -25,9 +25,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 try:
     from GSASII import GSASIIscriptable as G2sc  # type: ignore
+    from GSASII import GSASIIspc as G2spc  # type: ignore
     _GSASII_AVAILABLE = True
 except ImportError:
     G2sc = None  # type: ignore[assignment]
+    G2spc = None  # type: ignore[assignment]
     _GSASII_AVAILABLE = False
 
 
@@ -2480,20 +2482,28 @@ class BaseRefinement(Scan):
 
     def get_chi2(self) -> float | None:
         """
-        Return the reduced chi-squared (goodness-of-fit, GOF) of the last cycle.
+        Return the goodness-of-fit (GOF) of the last completed cycle.
 
-        The reduced χ² is::
+        GSAS-II defines::
 
-            χ² = Σ w·(yobs−ycalc)² / (N_obs − N_vars)
+            GOF = √( Σ w·(yobs−ycalc)² / (N_obs − N_vars) ) = √(reduced χ²)
 
-        where *N_obs* is the number of data points and *N_vars* is the number
-        of free parameters.  A value near 1.0 indicates a statistically ideal
-        fit; values ≫ 1 suggest systematic misfit or underestimated errors.
+        i.e. this is the square root of reduced χ² (the value GSAS-II itself
+        prints as ``GOF`` in its refinement log) — square it to get reduced
+        χ² directly. A GOF near 1.0 indicates a statistically ideal fit;
+        values ≫ 1 suggest systematic misfit or underestimated errors.
+
+        Note:
+            GOF is a project-wide statistic (it depends on the total number
+            of variables across every histogram/phase in the joint fit), so
+            it is only recorded in the project's ``Covariance`` data — not on
+            ``self.hist`` itself, unlike Rwp/R/Rb (see :meth:`get_Rwp`).
 
         Returns:
-            float or None: Reduced χ², or ``None`` if no refinement has been run yet.
+            float or None: GOF (= √reduced χ²), or ``None`` if no refinement has been run yet.
         """
-        return self.hist["data"][0].get("GOF")
+        rvals = self.gpx["Covariance"]["data"].get("Rvals", {})
+        return rvals.get("GOF")
 
     def save(self) -> None:
         """
@@ -2540,6 +2550,69 @@ class BaseRefinement(Scan):
         fmt = "%.6g"
         np.savetxt(str(path), data, delimiter=sep, header=header, comments="", fmt=fmt)
         print(f"Pattern exported to: {path}")
+
+    def export_cif(
+        self,
+        phase: str | list[str] | None = None,
+        path: Path | None = None,
+    ) -> Path | list[Path]:
+        """
+        Export refined phase structure(s) to CIF file(s).
+
+        Thin wrapper around GSAS-II's own ``G2Phase.export_CIF()``, which
+        writes cell parameters, space group/symmetry operators, and atom
+        parameters for the phase — including esds pulled from the current
+        covariance matrix wherever the corresponding parameter was refined.
+
+        Args:
+            phase (str, list of str, or None, optional): Phase name(s) to export.  Names
+                must match those passed to :meth:`add_phase`.  ``None`` (default) exports
+                every phase in the project.
+            path (Path, optional): Output ``.cif`` file when exporting a single phase
+                (default ``"<phase_name>.cif"``), or an output *directory* when exporting
+                more than one phase (default ``"."``, writing one ``<phase_name>.cif`` per
+                phase).
+
+        Returns:
+            Path or list of Path: The file written, when exporting a single phase;
+            otherwise a list of files written, one per phase.
+
+        Note:
+            Esds are only populated from the covariance matrix of the most
+            recently completed refinement cycle — export after your final
+            cycle, not mid-session, if you want them included.
+        """
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if not available:
+            raise RuntimeError("No phases in project — add one via add_phase() first.")
+
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        if len(targets) == 1:
+            out_path = Path(path) if path is not None else Path(f"{targets[0].name}.cif")
+            targets[0].export_CIF(str(out_path))
+            print(f"CIF exported for phase '{targets[0].name}' to: {out_path}")
+            return out_path
+
+        out_dir = Path(path) if path is not None else Path(".")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        written = []
+        for ph in targets:
+            out_path = out_dir / f"{ph.name}.cif"
+            ph.export_CIF(str(out_path))
+            written.append(out_path)
+            print(f"CIF exported for phase '{ph.name}' to: {out_path}")
+        return written
 
     def print_HAP_parameters(self, phase: str | list[str] | None = None) -> None:
         """
@@ -3204,9 +3277,17 @@ class BaseRefinement(Scan):
         "Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
         "Transparency", "SurfRoughA", "SurfRoughB",
     }
-    _DIJ_INDEX: dict[str, int] = {
-        "D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5,
-    }
+    # Membership gate for HStrain (Dij) tokens. The *position* of a given
+    # token within hap["HStrain"][1] is NOT a fixed global index — GSAS-II
+    # only stores the Laue-class-allowed subset (e.g. just "D11" for cubic,
+    # "D11"/"D33" for tetragonal/hexagonal, up to all six for triclinic),
+    # and that subset is not always a prefix of this canonical ordering
+    # (tetragonal/hexagonal drop "D22", so "D33" ends up at local index 1,
+    # not 2). The true per-phase order is looked up via G2spc.HStrainNames
+    # in refine_ever_refined_variables() instead of assumed from this dict.
+    _DIJ_TOKENS: frozenset[str] = frozenset(
+        {"D11", "D22", "D33", "D12", "D13", "D23"}
+    )
 
     def refine_ever_refined_variables(self, exclude: list[str] | None = None) -> None:
         """
@@ -3286,8 +3367,15 @@ class BaseRefinement(Scan):
                     hap["Extinction"][1] = True
                     freed.append(var)
                     continue
-                if var_token in self._DIJ_INDEX and hap.get("HStrain"):
-                    hap["HStrain"][1][self._DIJ_INDEX[var_token]] = True
+                if var_token in self._DIJ_TOKENS and hap.get("HStrain"):
+                    try:
+                        sg_data = phase.data["General"]["SGData"]
+                        dij_names = G2spc.HStrainNames(sg_data)
+                        dij_idx = dij_names.index(var_token)
+                    except Exception:
+                        skipped.append(var)
+                        continue
+                    hap["HStrain"][1][dij_idx] = True
                     freed.append(var)
                     continue
                 if var_token.startswith("A") and var_token[1:].isdigit():
@@ -4009,13 +4097,12 @@ class BaseRefinement(Scan):
 
         ax_main.set_ylabel("Intensity")
         wR = self.hist.get_wR()
-        residuals = self.hist.residuals
-        chi2 = residuals.get("GOF")
+        gof = self.get_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        if chi2 is not None:
-            stat_parts.append(f"χ² = {chi2:.4f}")
+        if gof is not None:
+            stat_parts.append(f"GOF = {gof:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"
@@ -4653,13 +4740,12 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
-        residuals = self.hist.residuals
-        chi2 = residuals.get("GOF")
+        gof = self.get_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        if chi2 is not None:
-            stat_parts.append(f"χ² = {chi2:.4f}")
+        if gof is not None:
+            stat_parts.append(f"GOF = {gof:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"

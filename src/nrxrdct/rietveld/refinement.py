@@ -379,6 +379,120 @@ class BaseRefinement(Scan):
             f"  (total excluded regions: {len(current)})"
         )
 
+    def find_kbeta_exclusions(
+        self,
+        kbeta_wavelength: float,
+        phase: str | list[str] | None = None,
+        half_width_deg: float = 0.3,
+        apply: bool = False,
+    ) -> list[tuple[float, float]]:
+        """
+        Compute 2θ windows contaminated by Kβ diffraction, for exclusion.
+
+        GSAS-II's CW peak-shape model ties every phase in a histogram to a
+        single wavelength (or a fixed Kα1/Kα2 doublet) — there is no slot
+        for a third, Kβ line. If a detector/filter doesn't fully reject Kβ,
+        each Kα reflection's d-spacing produces a *second*, spurious peak at
+        a lower 2θ under Kβ's shorter wavelength::
+
+            sin(θ_β) = (λ_β / λ_α) · sin(θ_α)
+
+        This walks every allowed reflection of the requested phase(s) at the
+        project's current Kα wavelength, computes the corresponding Kβ 2θ,
+        and returns a ``half_width_deg``-wide window around each —
+        overlapping/adjacent windows are merged into contiguous ranges so
+        the result stays small enough to feed to :meth:`add_excluded_region`.
+
+        Args:
+            kbeta_wavelength (float): Kβ wavelength in Å for your source. Not looked up
+                automatically — common values: Cu Kβ ≈ 1.39222 Å, Co Kβ ≈ 1.62079 Å,
+                Fe Kβ ≈ 1.75661 Å, Cr Kβ ≈ 2.08487 Å, Mo Kβ ≈ 0.63229 Å, Ag Kβ ≈ 0.49701 Å.
+            phase (str, list of str, or None, optional): Phase(s) whose reflections to use.
+                ``None`` (default) uses every phase in the project.
+            half_width_deg (float, optional): Half-width of the exclusion window around each
+                computed Kβ 2θ position, in degrees (default 0.3°) — widen this if your peaks
+                are broader than that (see :meth:`print_instrument_parameters` for the current
+                U/V/W/X/Y peak-width parameters).
+            apply (bool, optional): If ``True``, immediately call :meth:`add_excluded_region`
+                for every computed window.  Default ``False`` — only compute and return them,
+                so you can review before excluding real data.
+
+        Returns:
+            list of (float, float): Merged ``(low, high)`` 2θ windows in degrees, ascending.
+
+        Note:
+            Kα reflections at high enough angle that no Kβ Bragg angle exists
+            for the same d-spacing (``(λ_β/λ_α)·sin(θ_α) > 1``) are skipped
+            automatically.
+        """
+        ip = self.hist["Instrument Parameters"][0]
+        if "Lam1" in ip:
+            lam_a = ip["Lam1"][1]
+        elif "Lam" in ip:
+            lam_a = ip["Lam"][1]
+        else:
+            lam_a = self.wavelength
+
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            targets = list(available.values())
+        else:
+            names = [phase] if isinstance(phase, str) else list(phase)
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Phase '{name}' not found. "
+                        f"Available phases: {list(available)}"
+                    )
+            targets = [available[n] for n in names]
+
+        tth_alpha: list[float] = []
+        for ph in targets:
+            try:
+                reflist = self.hist.reflections()[ph.name]["RefList"]
+            except Exception:
+                continue
+            tth_alpha.extend(reflist[:, 5])
+
+        if not tth_alpha:
+            print(
+                "No reflections found for the requested phase(s) — "
+                "run a refinement cycle first so reflection lists are computed."
+            )
+            return []
+
+        ratio = kbeta_wavelength / lam_a
+        windows = []
+        for tth_a in tth_alpha:
+            theta_a = np.radians(tth_a / 2.0)
+            s = ratio * np.sin(theta_a)
+            if abs(s) > 1:
+                continue  # no Kβ Bragg angle exists at this d-spacing
+            tth_b = 2.0 * np.degrees(np.arcsin(s))
+            windows.append((tth_b - half_width_deg, tth_b + half_width_deg))
+
+        windows.sort()
+        merged: list[list[float]] = []
+        for lo, hi in windows:
+            if merged and lo <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], hi)
+            else:
+                merged.append([lo, hi])
+        result = [(lo, hi) for lo, hi in merged]
+
+        print(
+            f"Found {len(result)} Kβ-contaminated 2θ window(s) "
+            f"(λ_Kβ={kbeta_wavelength:.5f} Å, λ_Kα={lam_a:.5f} Å):"
+        )
+        for lo, hi in result:
+            print(f"  [{lo:.4f}, {hi:.4f}] °")
+
+        if apply:
+            for lo, hi in result:
+                self.add_excluded_region(lo, hi)
+
+        return result
+
     def set_LeBail(
         self,
         phase: str | list[str] | None = None,
@@ -661,6 +775,46 @@ class BaseRefinement(Scan):
         frozen_info = " (parameter frozen)" if freeze else ""
         print(
             f"Wavelength refinement done: Lam = {lam_val:.8f} Å  ({energy_kev:.4f} keV){frozen_info}"
+        )
+
+    def refine_kalpha_ratio(self, freeze: bool = False) -> None:
+        """
+        Refine the Kα2/Kα1 intensity ratio (``I(L2)/I(L1)``).
+
+        Only meaningful for a dual-wavelength (Kα1/Kα2 doublet) lab-source
+        profile, i.e. when the instrument parameters carry ``Lam1``/``Lam2``
+        rather than a single ``Lam`` (see :func:`_wavelength_entries`). The
+        nominal ratio (~0.5 for Cu Kα) is usually accurate enough to leave
+        fixed; refine it only if the doublet peak shapes show a clear,
+        systematic mismatch between the relative Kα1/Kα2 peak heights across
+        the pattern.
+
+        Args:
+            freeze (bool, optional): If ``True``, clear the ``I(L2)/I(L1)`` refinement flag
+                after the cycle so the ratio stays fixed in subsequent steps (default ``False``).
+
+        Raises:
+            ValueError: If the current instrument parameters are single-wavelength
+                (no ``I(L2)/I(L1)`` entry to refine).
+        """
+        ip = self.hist["Instrument Parameters"][0]
+        if "I(L2)/I(L1)" not in ip:
+            raise ValueError(
+                "No 'I(L2)/I(L1)' parameter in the instrument parameters — "
+                "this is a single-wavelength profile (no Kα1/Kα2 doublet in use)."
+            )
+        self.hist.set_refinements({"Instrument Parameters": ["I(L2)/I(L1)"]})
+        self.gpx.save()
+        self._run_refinement(
+            step={("once" if freeze else "set"): {"Instrument Parameters": ["I(L2)/I(L1)"]}}
+        )
+        if freeze:
+            ip["I(L2)/I(L1)"][2] = False
+            self.gpx.save()
+        ratio_val = ip["I(L2)/I(L1)"][1]
+        frozen_info = " (parameter frozen)" if freeze else ""
+        print(
+            f"Kα2/Kα1 ratio refinement done: I(L2)/I(L1) = {ratio_val:.6f}{frozen_info}"
         )
 
     def print_instrument_parameters(self) -> None:
@@ -3269,7 +3423,7 @@ class BaseRefinement(Scan):
     # Debye terms, Size, Mustrain, Pref.Ori., or atoms, which need a whole
     # model dict re-supplied via set_HAP_refinements / atom.refinement_flags).
     _INSTRUMENT_TOKENS: set[str] = {
-        "Lam", "Lam1", "Lam2", "Zero", "Azimuth", "Polariz.",
+        "Lam", "Lam1", "Lam2", "I(L2)/I(L1)", "Zero", "Azimuth", "Polariz.",
         "U", "V", "W", "Z", "X", "Y", "SH/L",
         "alpha-0", "alpha-1", "beta-0", "beta-1",
     }

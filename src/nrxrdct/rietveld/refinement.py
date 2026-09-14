@@ -5039,8 +5039,14 @@ class InstrumentCalibration(BaseRefinement):
             sig2 = U_v * tan_th**2 + V_v * tan_th + W_v
             fwhm_G = np.sqrt(np.clip(sig2, 0, None))
             gam = X_v / cos_th + Y_v * tan_th
-            fwhm_L = np.clip(gam, 0, None)
-            fwhm_total = (fwhm_G**5 + fwhm_L**5) ** (1 / 5)
+            # Plot the true (possibly negative) Lorentzian term so its actual
+            # X/cosθ + Y·tanθ shape is visible — e.g. Y alone gives a rising
+            # tanθ curve, not a flat line. Only clip a *separate* copy for the
+            # TCH combination below, since raising a negative fwhm_total base
+            # to the fractional power 1/5 would otherwise yield NaN.
+            fwhm_L = gam
+            fwhm_L_safe = np.clip(gam, 0, None)
+            fwhm_total = (fwhm_G**5 + fwhm_L_safe**5) ** (1 / 5)
             ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (U,V,W)")
             ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X,Y)")
             ax_fw.plot(tth_range, fwhm_total, "k-", lw=1.5, label="TCH total")

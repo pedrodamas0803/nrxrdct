@@ -493,6 +493,63 @@ class BaseRefinement(Scan):
 
         return result
 
+    def plot_kbeta_exclusions(
+        self,
+        kbeta_wavelength: float,
+        phase: str | list[str] | None = None,
+        half_width_deg: float = 0.3,
+        image_path: Path | None = None,
+        show: bool = True,
+        figsize: tuple = (9, 6),
+    ) -> tuple:
+        """
+        Plot the Rietveld fit with Kβ-contaminated 2θ windows shaded on top.
+
+        Computes the same windows as :meth:`find_kbeta_exclusions` (without
+        applying them — nothing is excluded) and shades them as vertical
+        spans over the observed/calculated/difference fit plot from
+        :meth:`_build_fit_figure`, so you can visually check where they fall
+        relative to the actual peaks before excluding that data for real.
+
+        Args:
+            kbeta_wavelength (float): Kβ wavelength in Å. See :meth:`find_kbeta_exclusions`
+                for typical anode values.
+            phase (str, list of str, or None, optional): Phase(s) whose reflections to use.
+                ``None`` (default) uses every phase in the project.
+            half_width_deg (float, optional): Half-width of each shaded window in degrees
+                (default 0.3°) — same meaning as in :meth:`find_kbeta_exclusions`.
+            image_path (Path, optional): If given, save the figure to this path.
+            show (bool, optional): If ``True`` (default), call ``plt.show()``.
+            figsize (tuple of (float, float), optional): Figure size in inches
+                (default ``(9, 6)``).
+
+        Returns:
+            tuple: ``(fig, windows)`` — the Figure, and the ``(low, high)`` window list
+            from :meth:`find_kbeta_exclusions`.
+        """
+        windows = self.find_kbeta_exclusions(
+            kbeta_wavelength, phase=phase, half_width_deg=half_width_deg, apply=False
+        )
+
+        fig, ax_main, ax_diff = self._build_fit_figure(figsize=figsize)
+
+        for i, (lo, hi) in enumerate(windows):
+            ax_main.axvspan(
+                lo, hi, color="tab:orange", alpha=0.25, lw=0, zorder=0,
+                label="Kβ window" if i == 0 else None,
+            )
+            ax_diff.axvspan(lo, hi, color="tab:orange", alpha=0.25, lw=0, zorder=0)
+
+        if windows:
+            ax_main.legend(fontsize=7, markerscale=2)
+
+        if image_path is not None:
+            fig.savefig(str(image_path), dpi=150, bbox_inches="tight")
+        if show:
+            plt.show()
+
+        return fig, windows
+
     def set_LeBail(
         self,
         phase: str | list[str] | None = None,
@@ -4210,7 +4267,8 @@ class BaseRefinement(Scan):
                 ``(width, height)`` (default ``(9, 6)``).
 
         Returns:
-            matplotlib.figure.Figure: The assembled figure.
+            tuple: ``(fig, ax_main, ax_diff)`` — the assembled figure and its two axes,
+            so callers can add further overlays (e.g. shaded regions) before display/save.
         """
         fig = plt.figure(figsize=figsize)
         gs = gridspec.GridSpec(
@@ -4277,7 +4335,7 @@ class BaseRefinement(Scan):
             fontweight="bold",
             y=1.01,
         )
-        return fig
+        return fig, ax_main, ax_diff
 
     def plot_results(
         self,
@@ -4298,7 +4356,7 @@ class BaseRefinement(Scan):
         print("Generating calibration plot")
         print("=" * 60)
 
-        fig = self._build_fit_figure(figsize=figsize)
+        fig, _, _ = self._build_fit_figure(figsize=figsize)
         fig.savefig(str(image_path), dpi=150, bbox_inches="tight")
         if show:
             plt.show()
@@ -4438,7 +4496,7 @@ class BaseRefinement(Scan):
             plt.close(fig)
 
             # --- Rietveld fit plot ---
-            fig = self._build_fit_figure()
+            fig, _, _ = self._build_fit_figure()
             pdf.savefig(fig)
             plt.close(fig)
 

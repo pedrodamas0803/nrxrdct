@@ -211,9 +211,8 @@ def azimuthal_integration_1d(
         raise ValueError(f"image must be 2D, got shape {image.shape}")
 
     ai = _get_integrator(poni_file)
-    _, low = ai.separate(image)
     result = ai.integrate1d(
-        low,
+        image,
         npt=npt,
         unit=unit,
         mask=mask,

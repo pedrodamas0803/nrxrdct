@@ -86,6 +86,26 @@ def _progress_bar(done: int, total: int, width: int = 30) -> str:
     return f"[{'█' * filled}{'░' * (width - filled)}]"
 
 
+def _erase(n_lines: int) -> None:
+    """Erase the previously printed snapshot so the next one redraws in place.
+
+    Uses ``IPython.display.clear_output`` inside Jupyter (which clears the
+    whole cell output) and falls back to ANSI cursor-up + clear-to-end for a
+    regular terminal.
+    """
+    if n_lines <= 0:
+        return
+    try:
+        from IPython.display import clear_output
+
+        clear_output(wait=True)
+    except ImportError:
+        import sys
+
+        sys.stdout.write(f"\033[{n_lines}A\033[J")
+        sys.stdout.flush()
+
+
 def _render_snapshot(
     slurm_ids: list[str],
     states: dict[str, str],
@@ -160,6 +180,10 @@ def monitor(
 
     Progress is measured by counting completed .npy files in tmp_dir,
     giving an accurate per-scan view independent of SLURM job boundaries.
+    When ``watch=True``, each poll redraws the status block in place
+    (via ``IPython.display.clear_output`` in Jupyter, or ANSI cursor
+    movement in a terminal) instead of printing a new block every
+    *interval* seconds.
 
     Args:
         slurm_ids (list[str]): SLURM job IDs returned by launch().
@@ -175,14 +199,14 @@ def monitor(
     tmp_dir = Path(tmp_dir)
     t0 = start_time or time.time()
 
-    def _snapshot() -> dict:
+    def _snapshot() -> tuple[dict, str]:
         states = _query_slurm(slurm_ids)
         n_done, n_total = _query_progress(tmp_dir)
         elapsed = time.time() - t0
-        print(_render_snapshot(slurm_ids, states, n_done, n_total, elapsed))
-        all_done = all(s in _DONE_STATES | _FAILED_STATES for s in states.values())
+        text       = _render_snapshot(slurm_ids, states, n_done, n_total, elapsed)
+        all_done   = all(s in _DONE_STATES | _FAILED_STATES for s in states.values())
         any_failed = any(s in _FAILED_STATES for s in states.values())
-        return {
+        result = {
             "states": states,
             "n_done": n_done,
             "n_total": n_total,
@@ -190,16 +214,26 @@ def monitor(
             "all_done": all_done,
             "any_failed": any_failed,
         }
+        return result, text
 
     if not watch:
-        return _snapshot()
+        result, text = _snapshot()
+        print(text)
+        return result
 
-    print(f"Watching {len(slurm_ids)} jobs — polling every {interval}s. "
-          f"Press Ctrl+C to stop.\n")
-    result = {}
+    banner = (
+        f"Watching {len(slurm_ids)} jobs — polling every {interval}s. "
+        f"Press Ctrl+C to stop.\n"
+    )
+    result     = {}
+    prev_lines = 0
     try:
         while True:
-            result = _snapshot()
+            result, text = _snapshot()
+            frame = banner + text
+            _erase(prev_lines)
+            print(frame)
+            prev_lines = frame.count("\n") + 1
             if result["all_done"]:
                 if result["any_failed"]:
                     print("⚠  Some jobs failed. Run check() to find missing scans,\n"

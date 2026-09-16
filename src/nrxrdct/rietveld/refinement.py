@@ -3183,6 +3183,92 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print("All parameters fixed.")
 
+    def _recompute_pattern(self) -> None:
+        """
+        Force GSAS-II to recompute ycalc/background/reflections/Rwp/GOF from
+        the *current* in-memory parameter values, without letting anything
+        currently marked free drift away from what's set right now.
+
+        Simply mutating a value in ``self.hist``/a phase object (e.g.
+        ``ip["W"][1] = 0``) changes the stored parameter but does **not**
+        retroactively recompute the calculated pattern or fit statistics —
+        those are snapshots from the last actual GSAS-II refinement cycle.
+        This runs one refinement cycle with every refine flag temporarily
+        cleared (same traversal as :meth:`fix_all_parameters`, but captured
+        and restored rather than left cleared) so GSAS-II performs its usual
+        forward calculation and residual/statistics computation with zero
+        free parameters — a pure recompute — then restores every flag to
+        exactly what it was before this call.
+        """
+        item_restores: list[tuple] = []
+        atom_restores: list[tuple] = []
+
+        def freeze(container, key) -> None:
+            item_restores.append((container, key, container[key]))
+            container[key] = False
+
+        # Background polynomial + Debye terms
+        bkg = self.hist["Background"]
+        freeze(bkg[0], 1)
+        for term in bkg[1].get("debyeTerms", []):
+            for idx in (1, 3, 5):
+                freeze(term, idx)
+
+        # Instrument parameters
+        ip = self.hist["Instrument Parameters"][0]
+        for val in ip.values():
+            if isinstance(val, list) and len(val) >= 3:
+                freeze(val, 2)
+
+        # Sample parameters
+        sp = self.hist.SampleParameters
+        for key in (
+            "Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
+            "Transparency", "SurfRoughA", "SurfRoughB",
+        ):
+            if key in sp and isinstance(sp[key], list) and len(sp[key]) >= 2:
+                freeze(sp[key], 1)
+
+        # Per-phase
+        for ph in self.gpx.phases():
+            freeze(ph.data["General"]["Cell"], 0)
+            for atom in ph.atoms():
+                atom_restores.append((atom, atom.refinement_flags))
+                atom.refinement_flags = ""
+
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            for key in ("Scale", "Extinction"):
+                entry = hap.get(key)
+                if isinstance(entry, list) and len(entry) >= 2:
+                    freeze(entry, 1)
+
+            hs = hap.get("HStrain")
+            if hs:
+                for i in range(len(hs[1])):
+                    freeze(hs[1], i)
+
+            for model_key in ("Size", "Mustrain"):
+                model = hap.get(model_key)
+                if model:
+                    for idx in (2, 5):
+                        if idx < len(model) and isinstance(model[idx], list):
+                            for i in range(len(model[idx])):
+                                freeze(model[idx], i)
+
+            po = hap.get("Pref.Ori.")
+            if po and len(po) > 2:
+                freeze(po, 2)
+
+        self.gpx.save()
+        try:
+            self.gpx.do_refinements([{}])
+        finally:
+            for container, key, old in item_restores:
+                container[key] = old
+            for atom, old_flags in atom_restores:
+                atom.refinement_flags = old_flags
+            self.gpx.save()
+
     # ------------------------------------------------------------------
     # Units lookup for print_refined_variables
     # Keys are matched against the <var> token of the p:h:<var>:n name.
@@ -4801,7 +4887,7 @@ class InstrumentCalibration(BaseRefinement):
         )
 
     def plot_calibration_results(
-        self, show: bool = True, figsize: tuple = (12, 9)
+        self, show: bool = True, figsize: tuple = (12, 9), recompute: bool = True
     ) -> None:
         """
         Generate and save a five-panel calibration diagnostic figure.
@@ -4820,6 +4906,10 @@ class InstrumentCalibration(BaseRefinement):
             ``colours_ticks`` dict (``"calibrant"`` → magenta,
             ``"Al_holder"`` → dark orange, others → green).  The title shows
             the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).
+            With the default ``recompute=True``, the calculated profile,
+            background, reflection positions, and fit statistics are all
+            freshly computed from whatever is currently set in memory before
+            plotting — see the ``recompute`` argument below.
 
         **Bottom-left — Difference plot** (``ax_diff``, shares x-axis)
             Observed minus calculated residuals (I\\ :sub:`obs` − I\\ :sub:`calc`)
@@ -4829,27 +4919,32 @@ class InstrumentCalibration(BaseRefinement):
             remaining peak-shape errors; asymmetric residuals around strong
             peaks suggest that ``Zero`` or ``SH/L`` need attention.
 
-        **Top-right — Refined parameter bar chart** (``ax_ip``)
-            Bar chart of the four key refined instrument parameters:
-            ``Zero``, ``W``, ``X``, ``Y``.  Blue bars are positive values,
-            red bars are negative.  Each bar is labelled with its numerical
-            value to four decimal places.
+        **Top-right — Instrument parameter bar chart** (``ax_ip``)
+            Bar chart of ``Zero``, ``U``, ``V``, ``W``, ``X``, ``Y``,
+            ``SH/L``, ``Polariz.``, using each parameter's *current*
+            in-memory value (see the ``recompute`` argument).  Blue bars are
+            positive values, red bars are negative.  Each bar is labelled
+            with its numerical value to four decimal places.  The title
+            lists which of these are currently marked to refine.
 
             * **Zero** — 2θ zero-point offset (degrees).  A non-zero value
               means the diffractometer's mechanical zero does not coincide
               with the true 2θ = 0°.  Should be small (|Zero| ≲ 0.05°) for
               a well-aligned instrument.
+            * **U**, **V** — Gaussian width, tan²θ and tanθ terms
+              (deg²).  Typically fixed at 0 for a well-collimated
+              synchrotron beam with a 2-D detector; relevant for
+              laboratory sources.
             * **W** — angle-independent Gaussian width coefficient
-              (centideg²).  For a synchrotron beam with a 2-D detector this
+              (deg²).  For a synchrotron beam with a 2-D detector this
               is typically the dominant peak-width contribution.
-            * **X** — Lorentzian width, 1/cosθ term (centideg).  Related to
+            * **X** — Lorentzian width, 1/cosθ term (deg).  Related to
               sample crystallite size and instrumental contributions along
               the beam direction.
-            * **Y** — Lorentzian width, tanθ term (centideg).  Related to
+            * **Y** — Lorentzian width, tanθ term (deg).  Related to
               microstrain and other angle-dependent broadening.
-
-            U, V, and SH/L are fixed at 0 / 0.0001 for synchrotron data with
-            a 2-D detector and are not shown here.
+            * **SH/L** — axial-divergence asymmetry parameter, typically
+              fixed near 0.0001 for a 2-D detector.
 
         **Bottom-right — FWHM model** (``ax_fw``)
             Predicted peak FWHM as a function of 2θ, decomposed into its
@@ -4868,17 +4963,29 @@ class InstrumentCalibration(BaseRefinement):
             instrumental calibration.
 
         **Bottom strip — Parameter table** (``ax_text``, spans both columns)
-            Tabulated values of all nine instrument parameters reported:
-            Lam, Zero, U, V, W, X, Y, SH/L, and Polariz.  Values that were
-            fixed during calibration (U = V = 0, SH/L = 0.0001) are included
-            for completeness but carry no physical meaning for 2-D detector
-            synchrotron data.
+            Tabulated *current* values of Lam(1/2), Zero, U, V, W, X, Y,
+            SH/L, and Polariz. — same current-value semantics as the bar
+            chart above.  A value's text is coloured dark green and bold
+            when that parameter is currently marked to refine, so it's
+            clear at a glance what the next refinement cycle would
+            actually change versus what's just being reported.
 
         Args:
             show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
                 Set to ``False`` when running in a batch/headless environment.
             figsize (tuple of (float, float), optional): Figure size in inches as
                 ``(width, height)`` (default ``(12, 9)``).
+            recompute (bool, optional): If ``True`` (default), force GSAS-II to
+                recompute the calculated pattern, background, reflections, and
+                fit statistics from whatever is *currently* in memory on
+                ``self.hist``/the phase objects before plotting (see
+                :meth:`_recompute_pattern`) — this is what makes a value you
+                just set directly (e.g. ``ip["W"][1] = 0``), without calling a
+                ``refine_*`` method, show up in the top-left fit panel and the
+                Rwp/GOF in its title. Every refine flag is restored exactly as
+                it was afterward, so this never changes what you have marked
+                free. Set to ``False`` to skip the extra cycle (e.g. right
+                after a real refinement already updated everything).
 
         Note:
             The output image is written to the path set by
@@ -4887,6 +4994,9 @@ class InstrumentCalibration(BaseRefinement):
             The ``calibration/`` directory is created automatically in
             :meth:`__init__`.
         """
+        if recompute:
+            self._recompute_pattern()
+
         ip = self.hist["Instrument Parameters"][0]
         wavelength_params = list(_wavelength_entries(ip))
         params_to_report = wavelength_params + [
@@ -5079,9 +5189,16 @@ class InstrumentCalibration(BaseRefinement):
         tbl.auto_set_font_size(False)
         tbl.set_fontsize(8)
         tbl.scale(1, 1.8)
+        # Colour each value by its *current* refine flag so it's clear at a
+        # glance what would actually change in the next refinement cycle.
+        for col_idx, p in enumerate(table_params):
+            cell_text = tbl[(1, col_idx)].get_text()
+            if _is_refined(p):
+                cell_text.set_color("darkgreen")
+                cell_text.set_fontweight("bold")
         ax_text.set_title(
             "Refined instrument parameter values\n"
-            "(U=V=0, SH/L=0.0001 fixed — not meaningful for 2D detector)",
+            "(green/bold = currently marked to refine)",
             pad=4,
             fontsize=9,
         )

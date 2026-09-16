@@ -1,11 +1,11 @@
 """
-nrxrdct.slurm_integration
---------------------------
+nrxrdct.azimuthal.slurm_integration
+------------------------------------
 Tools for distributing powder integration across SLURM HPC clusters.
 
 Typical workflow
 ----------------
-    from nrxrdct.slurm_integration import launch, monitor, merge, check, repair
+    from nrxrdct.azimuthal.slurm_integration import launch, monitor, merge, check, repair
 
     # 1. Submit integration jobs
     result = launch(

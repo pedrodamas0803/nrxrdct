@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_integration.launch_jobs
---------------------------------------
+nrxrdct.azimuthal.slurm_integration.launch_jobs
+---------------------------------------------------
 Validates master HDF5 entries, writes a launch_meta.json sidecar into the
 tmp directory, and submits N sbatch jobs.
 
@@ -9,7 +9,7 @@ all jobs finish.
 
 Python API
 ----------
-    from nrxrdct.slurm_integration import launch
+    from nrxrdct.azimuthal.slurm_integration import launch
 
     slurm_ids = launch(
         master_file = Path("master.h5"),
@@ -18,14 +18,14 @@ Python API
         mask_file   = Path("mask.edf"),
         n_jobs      = 8,
         partition   = "cpu",
-        conda_env   = "nrxrdct",
+        python_bin  = "/path/to/env/bin/python",
     )
 
 CLI
 ---
     nrxrdct-slurm launch --master-file master.h5 --output-file output.h5 \\
         --poni-file calib.poni --mask-file mask.edf \\
-        --n-jobs 8 --partition cpu --conda-env nrxrdct
+        --n-jobs 8 --partition cpu --python-bin /path/to/env/bin/python
 """
 
 from __future__ import annotations
@@ -157,6 +157,7 @@ def _submit_job(
     env_activate: Path | None,
     conda_env: str | None,
     log_dir: Path,
+    python_bin: str | None = None,
 ) -> str:
     indices_str = ",".join(str(i) for i in indices)
     script_path = log_dir / f"job_{job_id:04d}.sh"
@@ -181,21 +182,27 @@ def _submit_job(
         f"    --max-iter      {max_iter}"
     )
 
-    if env_activate:
+    if python_bin:
+        env_block = "# python_bin used directly — no environment activation needed"
+        python_line = (
+            f"{python_bin} -m nrxrdct.azimuthal.slurm_integration.integrate_worker "
+            f"\\\n{worker_args}"
+        )
+    elif env_activate:
         env_block = f"source {env_activate}"
         python_line = (
-            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+            f"python -m nrxrdct.azimuthal.slurm_integration.integrate_worker \\\n{worker_args}"
         )
     elif conda_env:
         env_block = "# conda run used below"
         python_line = (
             f"conda run -n {conda_env} --no-capture-output "
-            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+            f"python -m nrxrdct.azimuthal.slurm_integration.integrate_worker \\\n{worker_args}"
         )
     else:
         env_block = "# no environment activation"
         python_line = (
-            f"python -m nrxrdct.slurm_integration.integrate_worker \\\n{worker_args}"
+            f"python -m nrxrdct.azimuthal.slurm_integration.integrate_worker \\\n{worker_args}"
         )
 
     script = (
@@ -263,6 +270,7 @@ def launch(
     cpus: int = 16,
     gpu: bool = False,
     # Environment
+    python_bin: str | None = None,
     env_activate: Path | None = None,
     conda_env: str | None = None,
 ) -> dict:
@@ -355,6 +363,7 @@ def launch(
         "mem": mem,
         "cpus": cpus,
         "gpu": gpu,
+        "python_bin": python_bin,
         "env_activate": str(env_activate) if env_activate else None,
         "conda_env": conda_env,
         # Integration settings — reused by repair()
@@ -397,6 +406,7 @@ def launch(
             env_activate=env_activate,
             conda_env=conda_env,
             log_dir=log_dir,
+            python_bin=python_bin,
         )
         slurm_ids.append(sid)
 
@@ -450,6 +460,13 @@ def _build_parser(sub=None):
     p.add_argument("--mem", default="32G")
     p.add_argument("--cpus", type=int, default=16)
     p.add_argument("--gpu", action="store_true")
+    p.add_argument(
+        "--python-bin",
+        default=None,
+        help="Full path to the Python interpreter on the compute nodes "
+        '(e.g. "/path/to/env/bin/python"). Runs the worker directly with no '
+        "environment activation; takes precedence over --env-activate/--conda-env.",
+    )
     p.add_argument("--env-activate", type=Path, default=None)
     p.add_argument("--conda-env", default=None)
     return p
@@ -476,6 +493,7 @@ def _cli_launch(args):
         mem=args.mem,
         cpus=args.cpus,
         gpu=args.gpu,
+        python_bin=args.python_bin,
         env_activate=args.env_activate,
         conda_env=args.conda_env,
     )

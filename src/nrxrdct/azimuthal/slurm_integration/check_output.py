@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_integration.check_output
-----------------------------------------
+nrxrdct.azimuthal.slurm_integration.check_output
+---------------------------------------------------
 Verify progress and completeness of the integration pipeline.
 
 Two stages can be checked independently:
@@ -12,7 +12,7 @@ Two stages can be checked independently:
 
 Python API
 ----------
-    from nrxrdct.slurm_integration import check
+    from nrxrdct.azimuthal.slurm_integration import check
 
     # Check integration progress (tmp files)
     check(tmp_dir=Path("output_tmp"))
@@ -269,6 +269,7 @@ def repair(
     _mask_file = Path(kwargs.pop("mask_file", mask_file or lm["mask_file"]))
     _env_activate = kwargs.pop("env_activate", lm.get("env_activate"))
     _env_activate = Path(_env_activate) if _env_activate else None
+    _python_bin = kwargs.pop("python_bin", lm.get("python_bin"))
 
     # All settings fall back to what was used at launch time
     settings = dict(
@@ -322,6 +323,7 @@ def repair(
             env_activate=_env_activate,
             conda_env=settings["conda_env"],
             log_dir=log_dir,
+            python_bin=_python_bin,
         )
         slurm_ids.append(sid)
 

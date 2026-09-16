@@ -1,11 +1,11 @@
 """
-nrxrdct.slurm_reconstruction
------------------------------
+nrxrdct.xrdct.slurm_reconstruction
+-------------------------------------
 Tools for distributing tomographic reconstruction across SLURM HPC clusters.
 
 Python API
 ----------
-    from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
+    from nrxrdct.xrdct.slurm_reconstruction import build_sinogram, launch_recon
 
     # Step 1 (optional) — assemble sinogram from integrated HDF5
     build_sinogram(
@@ -24,7 +24,7 @@ Python API
         algo          = "SART_CUDA",
         num_iter      = 200,
         gpu           = True,
-        conda_env     = "nrxrdct",
+        python_bin    = "/path/to/env/bin/python",
     )
 
 CLI

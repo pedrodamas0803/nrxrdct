@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_reconstruction.cli
-----------------------------------
+nrxrdct.xrdct.slurm_reconstruction.cli
+------------------------------------------
 Unified CLI entry point registered as 'nrxrdct-slurm-recon'.
 
 Sub-commands

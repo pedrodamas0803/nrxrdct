@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_reconstruction.reconstruct_worker
-------------------------------------------------
+nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker
+--------------------------------------------------------
 Worker executed inside each SLURM reconstruction job.
 
 For each assigned 2θ index the worker:
@@ -13,7 +13,7 @@ For each assigned 2θ index the worker:
    exclusive POSIX lock to serialise concurrent writes from sibling jobs.
 
 Invoked by launch_recon.py via:
-    python -m nrxrdct.slurm_reconstruction.reconstruct_worker <args>
+    python -m nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker <args>
 """
 
 from __future__ import annotations

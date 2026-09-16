@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_integration.cli
--------------------------------
+nrxrdct.azimuthal.slurm_integration.cli
+------------------------------------------
 Unified CLI entry point registered as 'nrxrdct-slurm'.
 
 Sub-commands

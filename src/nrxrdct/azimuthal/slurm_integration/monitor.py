@@ -1,11 +1,11 @@
 """
-nrxrdct.slurm_integration.monitor
------------------------------------
+nrxrdct.azimuthal.slurm_integration.monitor
+-----------------------------------------------
 Monitor SLURM job progress by polling both SLURM state and the tmp directory.
 
 Python API
 ----------
-    from nrxrdct.slurm_integration import monitor
+    from nrxrdct.azimuthal.slurm_integration import monitor
 
     monitor(slurm_ids=["12345", "12346"], tmp_dir=Path("output_tmp"))
     monitor(slurm_ids=[...], tmp_dir=Path("output_tmp"), watch=True, interval=30)

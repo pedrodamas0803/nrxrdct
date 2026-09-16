@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_integration.merge
----------------------------------
+nrxrdct.azimuthal.slurm_integration.merge
+--------------------------------------------
 Assemble the final output HDF5 from the per-scan .npy / .meta.json files
 produced by integrate_worker.py.
 
@@ -10,7 +10,7 @@ corruption possible.
 
 Python API
 ----------
-    from nrxrdct.slurm_integration import merge
+    from nrxrdct.azimuthal.slurm_integration import merge
 
     merge(
         tmp_dir     = Path("integration_tmp"),

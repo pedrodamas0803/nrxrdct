@@ -1,6 +1,6 @@
 """
-nrxrdct.slurm_integration.integrate_worker
--------------------------------------------
+nrxrdct.azimuthal.slurm_integration.integrate_worker
+------------------------------------------------------
 Worker executed inside each SLURM job.
 
 Each scan is integrated frame-by-frame (streaming + batching to control RAM)
@@ -14,7 +14,7 @@ corruption issues.  The final HDF5 is assembled by merge.py after all jobs
 finish.
 
 Invoked by launch_jobs.py via:
-    python -m nrxrdct.slurm_integration.integrate_worker <args>
+    python -m nrxrdct.azimuthal.slurm_integration.integrate_worker <args>
 """
 
 from __future__ import annotations

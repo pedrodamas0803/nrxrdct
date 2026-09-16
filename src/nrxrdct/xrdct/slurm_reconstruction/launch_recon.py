@@ -1,12 +1,12 @@
 """
-nrxrdct.slurm_reconstruction.launch_recon
-------------------------------------------
+nrxrdct.xrdct.slurm_reconstruction.launch_recon
+--------------------------------------------------
 Assemble (or accept pre-built) sinogram, then split the 2θ axis across N
 SLURM jobs and submit one sbatch script per chunk.
 
 Python API
 ----------
-    from nrxrdct.slurm_reconstruction import build_sinogram, launch_recon
+    from nrxrdct.xrdct.slurm_reconstruction import build_sinogram, launch_recon
 
     # Build sinogram from integrated HDF5 (skipped if file already exists)
     build_sinogram(
@@ -30,7 +30,7 @@ Python API
         mem           = "64G",
         cpus          = 8,
         gpu           = True,
-        conda_env     = "nrxrdct",
+        python_bin    = "/path/to/env/bin/python",
     )
 
 CLI (registered as 'nrxrdct-slurm-recon')
@@ -42,7 +42,7 @@ CLI (registered as 'nrxrdct-slurm-recon')
     nrxrdct-slurm-recon launch \\
         --sinogram-file sinogram.h5 --output-file reconstruction.h5 \\
         --n-jobs 8 --algo SART_CUDA --num-iter 200 --gpu \\
-        --partition nice --conda-env nrxrdct
+        --partition nice --python-bin /path/to/env/bin/python
 """
 
 from __future__ import annotations
@@ -218,12 +218,13 @@ def _submit_job(
     env_activate: Path | None,
     conda_env: str | None,
     log_dir: Path,
+    python_bin: str | None = None,
 ) -> str:
     """
     Write an sbatch script for *tth_indices* and submit it, returning the SLURM job ID.
 
     The script is written to ``<log_dir>/recon_job_<job_id:04d>.sh`` and
-    invokes :mod:`nrxrdct.slurm_reconstruction.reconstruct_worker` as a
+    invokes :mod:`nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker` as a
     Python module.
 
     Args:
@@ -261,23 +262,29 @@ def _submit_job(
         f'    --dty-step       {dty_step}'
     )
 
-    if env_activate:
+    if python_bin:
+        env_block   = "# python_bin used directly — no environment activation needed"
+        python_line = (
+            f"{python_bin} -m nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker \\\n"
+            f"{worker_args}"
+        )
+    elif env_activate:
         env_block   = f"source {env_activate}"
         python_line = (
-            f"python -m nrxrdct.slurm_reconstruction.reconstruct_worker \\\n"
+            f"python -m nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker \\\n"
             f"{worker_args}"
         )
     elif conda_env:
         env_block   = "# conda run used below — no separate activate needed"
         python_line = (
             f"conda run -n {conda_env} --no-capture-output "
-            f"python -m nrxrdct.slurm_reconstruction.reconstruct_worker \\\n"
+            f"python -m nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker \\\n"
             f"{worker_args}"
         )
     else:
         env_block   = "# no environment activation"
         python_line = (
-            f"python -m nrxrdct.slurm_reconstruction.reconstruct_worker \\\n"
+            f"python -m nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker \\\n"
             f"{worker_args}"
         )
 
@@ -336,6 +343,7 @@ def launch_recon(
     cpus: int = 8,
     gpu: bool = True,
     # Environment
+    python_bin: str | None = None,
     env_activate: Path | None = None,
     conda_env: str | None = None,
 ) -> list[str]:
@@ -344,7 +352,7 @@ def launch_recon(
 
     Reads sinogram metadata from *sinogram_file*, initialises *output_file*,
     divides the 2θ axis into *n_jobs* chunks, and submits one sbatch job per
-    chunk.  Each job runs :mod:`nrxrdct.slurm_reconstruction.reconstruct_worker`
+    chunk.  Each job runs :mod:`nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker`
     with a GPU node (when *gpu* is ``True``).
 
     Use :func:`build_sinogram` first if you need to assemble the sinogram from
@@ -365,6 +373,9 @@ def launch_recon(
         mem (str, optional): SLURM memory request (default ``"64G"``).
         cpus (int, optional): CPUs per task (default 8).
         gpu (bool, optional): Request a GPU node via ``--gres=gpu:1`` (default ``True``).
+        python_bin (str or None, optional): Full path to the Python interpreter on the
+            compute nodes (e.g. ``"/path/to/env/bin/python"``). Runs the worker directly
+            with no environment activation; takes precedence over *env_activate*/*conda_env*.
         env_activate (Path or None, optional): Shell activate script sourced before the worker command.
         conda_env (str or None, optional): Conda environment used via ``conda run``
             (alternative to *env_activate*).
@@ -425,6 +436,7 @@ def launch_recon(
             env_activate  = env_activate,
             conda_env     = conda_env,
             log_dir       = log_dir,
+            python_bin    = python_bin,
         )
         slurm_ids.append(sid)
 
@@ -495,6 +507,11 @@ def _build_parser_launch(sub=None):
                    help="CPUs per task (default: 8)")
     p.add_argument("--gpu",            action="store_true",
                    help="Request a GPU node (--gres=gpu:1)")
+    p.add_argument("--python-bin",     default=None,
+                   help="Full path to the Python interpreter on the compute nodes "
+                        '(e.g. "/path/to/env/bin/python"). Runs the worker directly '
+                        "with no environment activation; takes precedence over "
+                        "--env-activate/--conda-env.")
     p.add_argument("--env-activate",   type=Path, default=None,
                    help="Shell activate script to source before the worker")
     p.add_argument("--conda-env",      default=None,
@@ -526,6 +543,7 @@ def _cli_launch(args):
         mem           = args.mem,
         cpus          = args.cpus,
         gpu           = args.gpu,
+        python_bin    = args.python_bin,
         env_activate  = args.env_activate,
         conda_env     = args.conda_env,
     )

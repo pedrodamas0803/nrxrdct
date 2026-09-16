@@ -177,7 +177,13 @@ def azimuthal_integration_1d(
     azimuth_range: Optional[Tuple[float, float]] = None,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """
-    Perform 1D azimuthal integration of a detector image using pyFAI.
+    Perform plain 1D azimuthal integration of a detector image using pyFAI.
+
+    Every unmasked pixel in each radial bin is averaged with no outlier
+    rejection. Use :func:`azimuthal_integration_1d_filter` (percentile
+    rejection) or :func:`azimuthal_integration_1d_sigma_clip` (iterative
+    sigma-clipping) instead if the image contains hot pixels, zingers, or
+    single-crystal Bragg spots that would bias a plain average.
 
     Args:
         image (np.ndarray): 2D detector image as a numpy array.

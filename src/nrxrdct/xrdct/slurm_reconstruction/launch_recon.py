@@ -225,7 +225,9 @@ def _submit_job(
 
     The script is written to ``<log_dir>/recon_job_<job_id:04d>.sh`` and
     invokes :mod:`nrxrdct.xrdct.slurm_reconstruction.reconstruct_worker` as a
-    Python module.
+    Python module. Exactly one of *python_bin*, *env_activate*, or *conda_env*
+    determines how the worker's environment is set up, checked in that
+    priority order; if none are given, ``python`` is invoked as-is.
 
     Args:
         job_id (int): Sequential job identifier used for script and log file naming.
@@ -240,10 +242,15 @@ def _submit_job(
         mem (str): SLURM memory directive.
         cpus (int): ``--cpus-per-task`` value.
         gpu (bool): If ``True``, adds ``#SBATCH --gres=gpu:1``.
-        env_activate (Path or None): Shell script to ``source`` before the worker command.
-        conda_env (str or None): Conda environment for ``conda run``; used when
-            *env_activate* is ``None``.
+        env_activate (Path or None): Shell script to ``source`` before the worker
+            command. Ignored if *python_bin* is given.
+        conda_env (str or None): Conda environment for ``conda run``; used only when
+            both *python_bin* and *env_activate* are ``None``.
         log_dir (Path): Directory where the script and log files are written.
+        python_bin (str or None, optional): Full path to the Python interpreter on
+            the compute nodes (e.g. ``"/path/to/env/bin/python"``). Runs the worker
+            directly with no environment activation; takes precedence over
+            *env_activate* and *conda_env* (default ``None``).
 
     Returns:
         str: SLURM job ID string returned by ``sbatch``.
@@ -382,6 +389,10 @@ def launch_recon(
 
     Returns:
         list of str: SLURM job IDs of the submitted jobs.
+
+    Raises:
+        ValueError: If *algo* is not one of the supported ASTRA algorithms.
+        FileNotFoundError: If *sinogram_file* does not exist.
     """
     if algo not in RECONSTRUCTION_ALGOS:
         raise ValueError(
@@ -531,6 +542,7 @@ def _cli_build(args):
 
 
 def _cli_launch(args):
+    """Parse CLI arguments and delegate to :func:`launch_recon`."""
     launch_recon(
         sinogram_file = args.sinogram_file,
         output_file   = args.output_file,

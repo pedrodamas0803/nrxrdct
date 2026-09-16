@@ -159,6 +159,49 @@ def _submit_job(
     log_dir: Path,
     python_bin: str | None = None,
 ) -> str:
+    """
+    Write an sbatch script for *indices* and submit it, returning the SLURM job ID.
+
+    The script is written to ``<log_dir>/job_<job_id:04d>.sh`` and invokes
+    :mod:`nrxrdct.azimuthal.slurm_integration.integrate_worker` as a Python
+    module. Exactly one of *python_bin*, *env_activate*, or *conda_env*
+    determines how the worker's environment is set up, checked in that
+    priority order; if none are given, ``python`` is invoked as-is.
+
+    Args:
+        job_id (int): Sequential job identifier used for script and log file naming.
+        indices (list of int): Global scan indices assigned to this job.
+        master_file (Path): HDF5 master file forwarded verbatim to the worker CLI.
+        tmp_dir (Path): Shared tmp directory where the worker writes per-scan output.
+        poni_file (Path): pyFAI ``.poni`` calibration file forwarded to the worker.
+        mask_file (Path): Detector mask file forwarded to the worker.
+        n_points (int): Number of radial bins forwarded to the worker.
+        n_workers (int): Integration threads per job forwarded to the worker.
+        batch_size (int): Frames streamed from HDF5 per batch in the worker.
+        unit (str): Radial unit forwarded to the worker (e.g. ``"2th_deg"``).
+        method (str): Integration method forwarded to the worker
+            (``"standard"``, ``"filter"``, or ``"sigma_clip"``).
+        percentile (str): ``"low,high"`` percentile bounds forwarded to the worker.
+        thres (float): Sigma-clipping threshold forwarded to the worker.
+        max_iter (int): Maximum sigma-clipping iterations forwarded to the worker.
+        partition (str): SLURM partition directive.
+        time (str): SLURM wall-time directive.
+        mem (str): SLURM memory directive.
+        cpus (int): ``--cpus-per-task`` value.
+        gpu (bool): If ``True``, adds ``#SBATCH --gres=gpu:1``.
+        env_activate (Path or None): Shell script to ``source`` before the worker
+            command. Ignored if *python_bin* is given.
+        conda_env (str or None): Conda environment for ``conda run``; used only when
+            both *python_bin* and *env_activate* are ``None``.
+        log_dir (Path): Directory where the script and log files are written.
+        python_bin (str or None, optional): Full path to the Python interpreter on
+            the compute nodes (e.g. ``"/path/to/env/bin/python"``). Runs the worker
+            directly with no environment activation; takes precedence over
+            *env_activate* and *conda_env* (default ``None``).
+
+    Returns:
+        str: SLURM job ID string returned by ``sbatch``.
+    """
     indices_str = ",".join(str(i) for i in indices)
     script_path = log_dir / f"job_{job_id:04d}.sh"
     log_out = log_dir / f"job_{job_id:04d}_%j.out"
@@ -275,14 +318,62 @@ def launch(
     conda_env: str | None = None,
 ) -> dict:
     """
-    Validate master file, write launch_meta.json, and submit N SLURM jobs.
+    Validate master file entries, write a launch_meta.json sidecar, and submit
+    N SLURM jobs for distributed 1D azimuthal integration.
 
-    Workers write results to <output_file.parent>/<output_file.stem>_tmp/.
-    Call merge() after all jobs finish to assemble the output HDF5.
+    Workers write results to ``<output_file.parent>/<output_file.stem>_tmp/``
+    as per-scan ``.npy``/``.meta.json`` files — the output HDF5 file itself is
+    not touched here. Call :func:`merge` after all jobs finish to assemble it,
+    and :func:`repair` (which reuses the settings recorded in
+    ``launch_meta.json``, including *python_bin*) to resubmit any scans that
+    fail or go missing.
 
-    Returns
-    -------
-    dict with keys 'slurm_ids', 'tmp_dir', 'n_scans'.
+    Args:
+        master_file (Path): HDF5 master file containing all scan entries.
+        output_file (Path): Destination HDF5 file for integrated patterns; used
+            to derive the tmp directory name (not created by this call).
+        poni_file (Path): pyFAI ``.poni`` calibration file.
+        mask_file (Path): Detector mask file (fabio-readable).
+        rot (np.ndarray or None, optional): Rotation angle array; read from the
+            first valid entry's ``measurement/rot`` when ``None``.
+        n_jobs (int, optional): Number of SLURM jobs to submit (default 8).
+        n_points (int, optional): Number of radial bins per integrated pattern
+            (default 1000).
+        n_workers (int, optional): Integration threads per job (default 16).
+        batch_size (int, optional): Frames streamed from HDF5 per batch in the
+            worker (default 32).
+        unit (str, optional): Radial unit (default ``"2th_deg"``).
+        method (str, optional): Integration method: ``"standard"``, ``"filter"``,
+            or ``"sigma_clip"`` (default ``"standard"``).
+        percentile (tuple of (float, float), optional): Percentile bounds used
+            when *method* is ``"filter"`` (default ``(10, 90)``).
+        thres (float, optional): Sigma-clipping threshold used when *method* is
+            ``"sigma_clip"`` (default 3.0).
+        max_iter (int, optional): Maximum sigma-clipping iterations (default 5).
+        partition (str, optional): SLURM partition (default ``"cpu"``).
+        time (str, optional): SLURM wall-time limit (default ``"04:00:00"``).
+        mem (str, optional): SLURM memory request (default ``"32G"``).
+        cpus (int, optional): CPUs per task (default 16).
+        gpu (bool, optional): Request a GPU node via ``--gres=gpu:1`` (default
+            ``False``).
+        python_bin (str or None, optional): Full path to the Python interpreter
+            on the compute nodes (e.g. ``"/path/to/env/bin/python"``). Runs the
+            worker directly with no environment activation; takes precedence
+            over *env_activate* and *conda_env* (default ``None``).
+        env_activate (Path or None, optional): Shell activate script sourced
+            before the worker command; used only when *python_bin* is ``None``
+            (default ``None``).
+        conda_env (str or None, optional): Conda environment used via
+            ``conda run``; used only when both *python_bin* and *env_activate*
+            are ``None`` (default ``None``).
+
+    Returns:
+        dict: Keys ``'slurm_ids'`` (list of str), ``'tmp_dir'`` (Path), and
+        ``'n_scans'`` (int).
+
+    Raises:
+        ValueError: If *method* is not one of the supported integration methods.
+        RuntimeError: If no valid entries are found in *master_file*.
     """
     from nrxrdct.azimuthal.slurm_integration.integrate_worker import INTEGRATION_METHODS
 
@@ -431,6 +522,7 @@ def launch(
 
 
 def _build_parser(sub=None):
+    """Build the ``launch`` sub-command parser, attaching it to *sub* if provided."""
     import argparse
 
     desc = "Submit powder integration across N SLURM jobs"
@@ -473,6 +565,7 @@ def _build_parser(sub=None):
 
 
 def _cli_launch(args):
+    """Parse CLI arguments and delegate to :func:`launch`."""
     pct = tuple(int(x) for x in args.percentile.split(","))
     launch(
         master_file=args.master_file,

@@ -233,9 +233,10 @@ def repair(
     """
     Resubmit SLURM jobs for any scans missing from the tmp directory.
 
-    All integration and SLURM settings are read from launch_meta.json so
-    you don't need to repeat them. Pass **kwargs to override any individual
-    setting (e.g. partition, mem, n_workers).
+    All integration and SLURM settings — including *python_bin*, *env_activate*,
+    and *conda_env* — are read back from the ``launch_meta.json`` sidecar written
+    by :func:`launch`, so you don't need to repeat them. Pass **kwargs to
+    override any individual setting (e.g. partition, mem, n_workers, python_bin).
 
     Args:
         tmp_dir (Path): Tmp directory from the original launch().
@@ -246,7 +247,15 @@ def repair(
         n_jobs (int): Number of repair jobs. Defaults to 1.
         watch (bool): Block until repair jobs finish.
         interval (int): Polling interval in seconds when watch=True.
-        **kwargs: Override any setting from launch_meta (partition, mem, etc.).
+        **kwargs: Override any setting from launch_meta, e.g. ``partition``, ``mem``,
+            ``n_workers``, ``python_bin`` (full path to the Python interpreter,
+            takes precedence over ``env_activate``/``conda_env``), ``env_activate``,
+            ``conda_env``.
+
+    Returns:
+        dict: The :func:`check` result (``missing_tmp``, ``corrupted_tmp``, ...),
+        plus a ``'repair_job_ids'`` key listing the SLURM IDs of the resubmitted
+        jobs (empty list if nothing was missing).
     """
     from .launch_jobs import _split_indices, _submit_job
 

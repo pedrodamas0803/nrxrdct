@@ -122,7 +122,13 @@ class BaseRefinement(Scan):
         self.xy_file = xy_file
         self.param_file = param_file
         self.low_lim, self.high_lim = tth_lims
-        self.tth, self.intensity = read_xy_file(str(self.xy_file))
+        _xy_cols = read_xy_file(str(self.xy_file))
+        self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
+        # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
+        # .xy file has a third column — see save_xy_file(). None for older
+        # 2-column files; _compute_gof_chi2() falls back to a Poisson
+        # approximation in that case.
+        self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
         self.phases = []
         # Accumulates every GSAS-II variable name that has been free in at
         # least one refinement cycle run so far this session, keyed by its
@@ -3290,10 +3296,19 @@ class BaseRefinement(Scan):
         undercounts everything actually fit this session (often just 1,
         whatever was refined last). It can also simply be missing (e.g.
         right after :meth:`_recompute_pattern`'s zero-free-parameter pass).
-        This instead uses Poisson weighting (``w = 1/yobs``, matching
-        GSAS-II's default for a plain-column ``.xy`` histogram with no
-        explicit per-point esd — see ``read_xy_file``/``__init__``) and
-        ``N_vars = max(len(self._ever_refined), self._count_free_parameters())``,
+
+        Weights use real per-point uncertainty (``w = 1/esd**2``) from
+        ``self.esd`` when the ``.xy`` file had a third ("Sigma") column (see
+        ``save_xy_file``/``__init__``) *and* it lines up one-to-one with
+        GSAS-II's current ``yobs`` (same length — GSAS-II may have trimmed
+        the raw file to ``tth_lims``/excluded regions, in which case a
+        mismatch is expected, not a bug). Otherwise falls back to a Poisson
+        approximation (``w = 1/yobs``) — only a rough proxy, since ``yobs``
+        here is typically not raw photon counts (e.g. it's often already
+        monitor-normalized upstream), so treat a Poisson-fallback GOF as
+        indicative at best.
+
+        N_vars = ``max(len(self._ever_refined), self._count_free_parameters())``,
         i.e. every variable ever free this session (or currently free, if
         that's larger), so both quantities stay consistent with whatever the
         plotted pattern currently shows.
@@ -3306,7 +3321,13 @@ class BaseRefinement(Scan):
         diff = yobs - ycalc
         n_vars = max(len(self._ever_refined), self._count_free_parameters())
         dof = max(len(yobs) - n_vars, 1)
-        w = 1.0 / np.clip(yobs, 1.0, None)
+
+        esd = getattr(self, "esd", None)
+        if esd is not None and len(esd) == len(yobs) and np.all(esd > 0):
+            w = 1.0 / np.asarray(esd) ** 2
+        else:
+            w = 1.0 / np.clip(yobs, 1.0, None)
+
         chi2 = float(np.sum(w * diff**2))
         gof = float(np.sqrt(chi2 / dof))
         return gof, chi2
@@ -4999,7 +5020,13 @@ class InstrumentCalibration(BaseRefinement):
         self.xy_file = xy_file
         self.param_file = param_file
         self.low_lim, self.high_lim = tth_lims
-        self.tth, self.intensity = read_xy_file(str(self.xy_file))
+        _xy_cols = read_xy_file(str(self.xy_file))
+        self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
+        # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
+        # .xy file has a third column — see save_xy_file(). None for older
+        # 2-column files; _compute_gof_chi2() falls back to a Poisson
+        # approximation in that case.
+        self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
         self.phases = []
 
         if self.low_lim == None:

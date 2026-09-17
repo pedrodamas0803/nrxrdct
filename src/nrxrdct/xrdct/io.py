@@ -136,8 +136,15 @@ def save_xy_file(
     Args:
         x (np.ndarray): Scattering axis values (e.g. 2-theta in degrees).
         y (np.ndarray): Intensity values.
-        err (np.ndarray or None, optional): Per-point uncertainties. Defaults to
-            an array of zeros when not provided.
+        err (np.ndarray or None, optional): Per-point uncertainties (e.g.
+            pyFAI's propagated ``sigma`` from
+            :func:`~nrxrdct.azimuthal.integration.azimuthal_integration_1d`).
+            Written as a third ("Sigma") column so GSAS-II and
+            :meth:`~nrxrdct.rietveld.refinement.BaseRefinement._compute_gof_chi2`
+            can use real per-point weights instead of a Poisson
+            approximation. Defaults to an array of zeros when not provided
+            (GSAS-II falls back to its own Poisson-on-intensity estimate for
+            zero/absent esd's, same as historical 2-column files).
         output_file (Path, optional): Destination file path
             (default ``"integrated_data.xy"``).
         unit (str, optional): Label for the scattering-angle axis written into
@@ -148,11 +155,13 @@ def save_xy_file(
     if not isinstance(err, np.ndarray):
         err = np.zeros_like(y)
     header = (
-        f"# pyFAI multi-geometry azimuthal integration\n"
-        f"# Unit: {unit}\n"
-        f"# Columns: {unit}  Intensity  Sigma\n"
+        f"pyFAI multi-geometry azimuthal integration\n"
+        f"Unit: {unit}\n"
+        f"Columns: {unit}  Intensity  Sigma"
     )
-    np.savetxt(str(output_file), np.column_stack([x, y]), fmt="%.6f")
+    np.savetxt(
+        str(output_file), np.column_stack([x, y, err]), fmt="%.6f", header=header
+    )
     if verbose:
         print(f"Integrated pattern saved to:\n  {str(output_file)}")
 

@@ -134,6 +134,13 @@ class BaseRefinement(Scan):
         # refinement cycle run this session. See _run_refinement() and
         # get_step_refinements().
         self._step_refinements: list[dict] = []
+        # One snapshot per cycle that had >=1 free parameter: {"vary_list",
+        # "cov_matrix", "variables", "sig"}. GSAS-II only ever keeps the
+        # *current* cycle's covariance matrix, so a later cycle silently
+        # erases an earlier one's — this cache is what lets
+        # print_covariance_matrix/plot_covariance_matrix(cycle=...) look
+        # back at any prior cycle. See _record_vary_list().
+        self._covariance_history: list[dict] = []
 
         if self.low_lim == None:
             self.low_lim = self.tth.min()
@@ -173,6 +180,7 @@ class BaseRefinement(Scan):
         self.phases = self.gpx.phases()
         self._ever_refined = {}
         self._step_refinements = []
+        self._covariance_history = []
         self._record_vary_list()
         if self.phases:
             self.phase = self.phases[-1]
@@ -3405,7 +3413,9 @@ class BaseRefinement(Scan):
     def _record_vary_list(self) -> None:
         """
         Copy GSAS-II's current ``Covariance.varyList``/``variables``/``sig``
-        into ``self._ever_refined``, keyed by GSAS-II's own variable name.
+        into ``self._ever_refined``, keyed by GSAS-II's own variable name,
+        and — when a covariance matrix is present — append a snapshot of it
+        to ``self._covariance_history``.
 
         Shared by :meth:`_run_refinement` (after a cycle this session) and
         :meth:`load_model` (seeding from whatever a *previously* run
@@ -3413,6 +3423,17 @@ class BaseRefinement(Scan):
         GUI — already left baked into the loaded ``.gpx``), so GOF/χ² in
         :meth:`plot_calibration_results` account for real fitting history
         either way rather than only fitting done since this object existed.
+
+        The covariance cache exists because GSAS-II only ever keeps the
+        *current* cycle's matrix — a later cycle silently overwrites an
+        earlier one's, so without caching, a matrix from a cycle where two
+        parameters happened to be free together (e.g. via
+        :meth:`refine_ever_refined_variables`) would be lost the moment the
+        next cycle runs. :meth:`print_covariance_matrix` /
+        :meth:`plot_covariance_matrix` can look back into this history via
+        their ``cycle`` argument. Cycles with zero free parameters (e.g.
+        :meth:`_recompute_pattern`) never reach this method at all, since
+        they call ``self.gpx.do_refinements`` directly.
         """
         cov_data = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
@@ -3422,6 +3443,17 @@ class BaseRefinement(Scan):
             val = variables[i] if i < len(variables) else float("nan")
             sig = sigmas[i] if i < len(sigmas) else None
             self._ever_refined[var] = {"value": val, "esd": sig}
+
+        cov_matrix = cov_data.get("covMatrix")
+        if vary_list and cov_matrix is not None and len(cov_matrix):
+            self._covariance_history.append(
+                {
+                    "vary_list": list(vary_list),
+                    "cov_matrix": np.array(cov_matrix, copy=True),
+                    "variables": list(variables),
+                    "sig": list(sigmas),
+                }
+            )
 
     def _format_var_row(self, var: str, val: float, sig: float | None, status: str) -> str:
         """Format one ``print_refined_variables``-style table row, applying unit conversion."""
@@ -3866,15 +3898,96 @@ class BaseRefinement(Scan):
             self.gpx.save()
         print(f"Applied {len(replayable)} step(s), skipped {skipped} (not auto-replayable).")
 
-    def print_covariance_matrix(self) -> None:
-        """Print the correlation matrix (normalised covariance) of all refined variables."""
-        cov_data = self.gpx["Covariance"]["data"]
-        vary_list = cov_data.get("varyList", [])
-        cov_matrix = cov_data.get("covMatrix")
+    def _resolve_covariance(self, cycle: int | None) -> tuple[list, "np.ndarray | None"]:
+        """
+        Return ``(vary_list, cov_matrix)`` for either the live GSAS-II
+        ``Covariance`` data (``cycle=None``) or a cached snapshot from
+        ``self._covariance_history`` (``cycle=<index>``, Python-style
+        negative indices allowed — e.g. ``-1`` is the most recent cached
+        cycle, which is normally the same as ``cycle=None``).
+        """
+        if cycle is None:
+            cov_data = self.gpx["Covariance"]["data"]
+            return cov_data.get("varyList", []), cov_data.get("covMatrix")
+        if not self._covariance_history:
+            return [], None
+        try:
+            snap = self._covariance_history[cycle]
+        except IndexError:
+            print(
+                f"cycle={cycle} is out of range "
+                f"(0..{len(self._covariance_history) - 1}, or negative)."
+            )
+            return [], None
+        return snap["vary_list"], snap["cov_matrix"]
+
+    def print_covariance_history(self) -> None:
+        """
+        Print a summary of every cached covariance snapshot from this
+        session's refinement cycles — one row per cycle that had ≥1 free
+        parameter, in the order it ran. Pass the row index as ``cycle=`` to
+        :meth:`print_covariance_matrix` / :meth:`plot_covariance_matrix` to
+        look back at that specific snapshot instead of the current live one.
+        """
+        if not self._covariance_history:
+            print("No covariance snapshots cached yet (run a refinement first).")
+            return
+        print("\n" + "=" * 60)
+        print("COVARIANCE HISTORY")
+        print("=" * 60)
+        for i, snap in enumerate(self._covariance_history):
+            print(f"  [{i}] {len(snap['vary_list'])} variable(s): {snap['vary_list']}")
+
+    def print_covariance_matrix(
+        self, auto_joint_refine: bool = False, cycle: int | None = None
+    ) -> None:
+        """
+        Print the correlation matrix (normalised covariance) of the
+        variables free during one refinement cycle — the last completed one
+        by default, or a cached earlier one via ``cycle``.
+
+        GSAS-II only ever keeps one covariance matrix — for whichever
+        parameters were free together in that one cycle. It cannot be
+        reconstructed after the fact for parameters refined in *separate*
+        cycles (e.g. this class's usual refine-then-freeze pattern): a
+        correlation between two parameters that were never free at the same
+        time simply was never computed. If the last cycle's variables are a
+        subset of :attr:`_ever_refined`, a note is printed pointing at
+        :meth:`refine_ever_refined_variables`, which runs one cycle with
+        everything ever refined this session free simultaneously — the only
+        way to get a real joint matrix covering all of them.
+
+        Args:
+            auto_joint_refine (bool, optional): If ``True``, call
+                :meth:`refine_ever_refined_variables` first so the matrix
+                covers everything refined this session. This actually runs a
+                refinement cycle and **will shift parameter values** (unlike
+                a plotting-only call) — off by default for that reason.
+            cycle (int, optional): Index into the cached covariance history
+                (see :meth:`print_covariance_history`) instead of reading
+                GSAS-II's current live ``Covariance`` data. ``None``
+                (default) uses the live data, i.e. the last completed cycle.
+        """
+        if auto_joint_refine:
+            self.refine_ever_refined_variables()
+
+        vary_list, cov_matrix = self._resolve_covariance(cycle)
 
         if not vary_list or cov_matrix is None or not len(cov_matrix):
             print("No covariance data found (run a refinement first).")
             return
+
+        missing = set(self._ever_refined) - set(vary_list)
+        if missing:
+            print(
+                f"Note: this matrix covers only the {len(vary_list)} variable(s) free "
+                f"in the last cycle. {len(missing)} previously-refined variable(s) are "
+                "not included — GSAS-II can't reconstruct a joint correlation for "
+                "parameters refined in separate cycles. Call "
+                "refine_ever_refined_variables() first (or pass "
+                "auto_joint_refine=True) for a matrix covering everything refined "
+                "this session."
+            )
 
         sigmas = np.sqrt(np.diag(cov_matrix))
         with np.errstate(invalid="ignore"):
@@ -3886,7 +3999,7 @@ class BaseRefinement(Scan):
         label_w = max(len(v) for v in vary_list) + 2
 
         print("\n" + "=" * 60)
-        print("CORRELATION MATRIX")
+        print("CORRELATION MATRIX" if cycle is None else f"CORRELATION MATRIX (cached cycle {cycle})")
         print("=" * 60)
 
         # Header row with short indices
@@ -4032,7 +4145,11 @@ class BaseRefinement(Scan):
         print(f"\n  {n_flagged} of {len(rows)} parameter(s) flagged.")
 
     def plot_covariance_matrix(
-        self, show: bool = True, figsize: tuple = (6, 4)
+        self,
+        show: bool = True,
+        figsize: tuple = (6, 4),
+        auto_joint_refine: bool = False,
+        cycle: int | None = None,
     ) -> tuple:
         """
         Plot the correlation matrix (normalised covariance) as a heatmap.
@@ -4041,20 +4158,40 @@ class BaseRefinement(Scan):
         so that diagonal entries are 1 and off-diagonal entries are Pearson
         correlation coefficients in [-1, 1].
 
+        Like :meth:`print_covariance_matrix`, this only ever covers the
+        variables free during one cycle — the last completed one by default,
+        or a cached earlier one via ``cycle``. GSAS-II can't reconstruct a
+        joint correlation for parameters refined in separate cycles (this
+        class's usual refine-then-freeze pattern), since that correlation
+        was never actually computed. If the last cycle's variables are a
+        subset of :attr:`_ever_refined`, the title notes how many
+        previously-refined variables are missing and points at
+        :meth:`refine_ever_refined_variables`.
+
         Args:
             show (bool, optional): Call ``plt.show()`` after creating the figure
                 (default ``True``).
             figsize (tuple of (float, float), optional): Figure size in inches as
                 ``(width, height)`` (default ``(12, 9)``).
+            auto_joint_refine (bool, optional): If ``True``, call
+                :meth:`refine_ever_refined_variables` first so the matrix
+                covers everything refined this session. This actually runs a
+                refinement cycle and **will shift parameter values** (unlike
+                a plotting-only call) — off by default for that reason.
+            cycle (int, optional): Index into the cached covariance history
+                (see :meth:`print_covariance_history`) instead of reading
+                GSAS-II's current live ``Covariance`` data. ``None``
+                (default) uses the live data, i.e. the last completed cycle.
 
         Returns:
             tuple: ``(fig, ax)`` — the :class:`matplotlib.figure.Figure` and
             :class:`matplotlib.axes.Axes` objects so the caller can further
             customise or save the plot.
         """
-        cov_data = self.gpx["Covariance"]["data"]
-        vary_list = cov_data.get("varyList", [])
-        cov_matrix = cov_data.get("covMatrix")
+        if auto_joint_refine:
+            self.refine_ever_refined_variables()
+
+        vary_list, cov_matrix = self._resolve_covariance(cycle)
 
         if not vary_list or cov_matrix is None or not len(cov_matrix):
             raise RuntimeError("No covariance data found (run a refinement first).")
@@ -4074,7 +4211,12 @@ class BaseRefinement(Scan):
         ax.set_yticks(range(n))
         ax.set_xticklabels(vary_list, rotation=90, fontsize=8)
         ax.set_yticklabels(vary_list, fontsize=8)
-        ax.set_title("Correlation matrix")
+
+        missing = set(self._ever_refined) - set(vary_list)
+        title = "Correlation matrix (last cycle)" if cycle is None else f"Correlation matrix (cached cycle {cycle})"
+        if missing:
+            title += f"\n{len(missing)} previously-refined variable(s) not shown — see refine_ever_refined_variables()"
+        ax.set_title(title, fontsize=9)
 
         fig.tight_layout()
 
@@ -4890,16 +5032,24 @@ class InstrumentCalibration(BaseRefinement):
         self.write_calibrated_instrument_pars()
         print("\nCalibration sequence complete.")
 
-    def write_calibrated_instrument_pars(self) -> None:
+    def write_calibrated_instrument_pars(self, path: Path | None = None) -> None:
         """
         Export the refined instrument parameters to a GSAS-II ``.instprm`` file.
 
-        The file is written to ``calibration/<param_file>`` and the calibrated
-        values are also printed to stdout for quick verification.
+        Args:
+            path (Path, optional): Output ``.instprm`` file path. ``None``
+                (default) uses ``self.calibration_file`` (``calibration/<param_file>``,
+                set in :meth:`__init__` via ``param_file``). Parent directories
+                are created if needed.
+
+        The calibrated values are also printed to stdout for quick verification.
         """
         print("\n" + "=" * 60)
         print("EXPORTING CALIBRATED INSTPRM")
         print("=" * 60)
+
+        out_path = Path(path) if path is not None else self.calibration_file
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         ip = self.hist["Instrument Parameters"][0]
         lines = ["#GSAS-II instrument parameter file\n"]
@@ -4927,15 +5077,14 @@ class InstrumentCalibration(BaseRefinement):
                 val = ip[p][1] if isinstance(ip[p], list) else ip[p]
                 lines.append(f"{p}:{val}\n")
 
-        with open(str(self.calibration_file), "w") as f:
+        with open(str(out_path), "w") as f:
             f.writelines(lines)
 
-        print(f"Calibrated instprm saved to:\n  {str(self.calibration_file)}")
+        print(f"Calibrated instprm saved to:\n  {out_path}")
         print("\nFinal calibrated parameters:")
         for line in lines[1:]:  # skip the header comment
             print(f"  {line.rstrip()}")
 
-        print(f"Calibrated instprm saved to:\n  {str(self.calibration_file)}")
         print("\nIn your sample refinements:")
         print("  - Use this file as INST_PARAMS")
         print("  - Fix Zero, W, X, Y (carry from calibration)")

@@ -3898,19 +3898,26 @@ class BaseRefinement(Scan):
             self.gpx.save()
         print(f"Applied {len(replayable)} step(s), skipped {skipped} (not auto-replayable).")
 
-    def _resolve_covariance(self, cycle: int | None) -> tuple[list, "np.ndarray | None"]:
+    def _resolve_covariance(
+        self, cycle: int | None
+    ) -> tuple[list, list, list, "np.ndarray | None"]:
         """
-        Return ``(vary_list, cov_matrix)`` for either the live GSAS-II
-        ``Covariance`` data (``cycle=None``) or a cached snapshot from
-        ``self._covariance_history`` (``cycle=<index>``, Python-style
-        negative indices allowed — e.g. ``-1`` is the most recent cached
-        cycle, which is normally the same as ``cycle=None``).
+        Return ``(vary_list, variables, sig, cov_matrix)`` for either the
+        live GSAS-II ``Covariance`` data (``cycle=None``) or a cached
+        snapshot from ``self._covariance_history`` (``cycle=<index>``,
+        Python-style negative indices allowed — e.g. ``-1`` is the most
+        recent cached cycle, which is normally the same as ``cycle=None``).
         """
         if cycle is None:
             cov_data = self.gpx["Covariance"]["data"]
-            return cov_data.get("varyList", []), cov_data.get("covMatrix")
+            return (
+                cov_data.get("varyList", []),
+                cov_data.get("variables", []),
+                cov_data.get("sig", []),
+                cov_data.get("covMatrix"),
+            )
         if not self._covariance_history:
-            return [], None
+            return [], [], [], None
         try:
             snap = self._covariance_history[cycle]
         except IndexError:
@@ -3918,8 +3925,8 @@ class BaseRefinement(Scan):
                 f"cycle={cycle} is out of range "
                 f"(0..{len(self._covariance_history) - 1}, or negative)."
             )
-            return [], None
-        return snap["vary_list"], snap["cov_matrix"]
+            return [], [], [], None
+        return snap["vary_list"], snap["variables"], snap["sig"], snap["cov_matrix"]
 
     def print_covariance_history(self) -> None:
         """
@@ -3971,7 +3978,7 @@ class BaseRefinement(Scan):
         if auto_joint_refine:
             self.refine_ever_refined_variables()
 
-        vary_list, cov_matrix = self._resolve_covariance(cycle)
+        vary_list, _variables, _sig, cov_matrix = self._resolve_covariance(cycle)
 
         if not vary_list or cov_matrix is None or not len(cov_matrix):
             print("No covariance data found (run a refinement first).")
@@ -4022,17 +4029,22 @@ class BaseRefinement(Scan):
         significance_threshold: float = 3.0,
         moderate_corr_threshold: float = 0.75,
         high_corr_threshold: float = 0.90,
+        cycle: int | None = None,
     ) -> list[dict]:
         """
-        Build a diagnostics table for the variables refined in the *last*
-        completed cycle: value, esd, a significance metric, and flags for
-        parameters that are poorly determined or strongly correlated with
-        another variable.
+        Build a diagnostics table for the variables free in one refinement
+        cycle — the last completed one by default, or a cached earlier one
+        via ``cycle`` (see :attr:`_covariance_history` /
+        :meth:`print_covariance_history`): value, esd, a significance
+        metric, and flags for parameters that are poorly determined or
+        strongly correlated with another variable.
 
-        Restricted to the last cycle (rather than the full-session
+        Restricted to a single cycle (rather than the full-session
         :attr:`_ever_refined` history) because correlation flags require the
-        covariance matrix, and GSAS-II only keeps that matrix for the most
-        recent cycle — its row/column order matches ``varyList`` exactly.
+        covariance matrix, and GSAS-II only ever computes one for whichever
+        parameters were free together *in that cycle* — its row/column order
+        matches that cycle's ``varyList`` exactly, and there is no such
+        matrix spanning parameters refined in separate cycles.
 
         Args:
             significance_threshold (float, optional): A parameter is flagged
@@ -4044,17 +4056,16 @@ class BaseRefinement(Scan):
             high_corr_threshold (float, optional): Flag "SEVERE correlation" when the largest
                 off-diagonal absolute correlation reaches this value (default 0.90) — such pairs are
                 effectively redundant and refining them together is unstable.
+            cycle (int, optional): Index into :attr:`_covariance_history`
+                instead of GSAS-II's live ``Covariance`` data. ``None``
+                (default) uses the live data, i.e. the last completed cycle.
 
         Returns:
             list of dict: One entry per variable in ``varyList``, each with keys
             ``var``, ``value``, ``esd``, ``units``, ``significance`` (``|value/esd|``
             or ``None``), and ``flags`` (list of str, empty if none apply).
         """
-        cov_data = self.gpx["Covariance"]["data"]
-        vary_list = cov_data.get("varyList", [])
-        variables = cov_data.get("variables", [])
-        sigmas = cov_data.get("sig", [])
-        cov_matrix = cov_data.get("covMatrix")
+        vary_list, variables, sigmas, cov_matrix = self._resolve_covariance(cycle)
 
         rows: list[dict] = []
         if not vary_list:
@@ -4115,22 +4126,24 @@ class BaseRefinement(Scan):
         significance_threshold: float = 3.0,
         moderate_corr_threshold: float = 0.75,
         high_corr_threshold: float = 0.90,
+        cycle: int | None = None,
     ) -> None:
         """
         Print value/esd/significance and correlation-problem flags for every
-        variable refined in the last completed cycle.
+        variable free in one refinement cycle — the last completed one by
+        default, or a cached earlier one via ``cycle``.
 
         See :meth:`_variable_diagnostics_table` for the flagging rules.
         """
         rows = self._variable_diagnostics_table(
-            significance_threshold, moderate_corr_threshold, high_corr_threshold
+            significance_threshold, moderate_corr_threshold, high_corr_threshold, cycle=cycle
         )
         if not rows:
             print("No refined variables found (run a refinement first).")
             return
 
         print("\n" + "=" * 100)
-        print("VARIABLE DIAGNOSTICS (last cycle)")
+        print("VARIABLE DIAGNOSTICS (last cycle)" if cycle is None else f"VARIABLE DIAGNOSTICS (cached cycle {cycle})")
         print("=" * 100)
         print(f"  {'Parameter':<32} {'Value':>14} {'Esd':>14} {'Units':>6} {'|Val/Esd|':>10}  Flags")
         print("  " + "-" * 96)
@@ -4191,7 +4204,7 @@ class BaseRefinement(Scan):
         if auto_joint_refine:
             self.refine_ever_refined_variables()
 
-        vary_list, cov_matrix = self._resolve_covariance(cycle)
+        vary_list, _variables, _sig, cov_matrix = self._resolve_covariance(cycle)
 
         if not vary_list or cov_matrix is None or not len(cov_matrix):
             raise RuntimeError("No covariance data found (run a refinement first).")
@@ -4654,11 +4667,18 @@ class BaseRefinement(Scan):
         moderate_corr_threshold: float,
         high_corr_threshold: float,
         rows_per_page: int = 25,
+        title_suffix: str = "last cycle",
     ) -> None:
         """
         Render :meth:`_variable_diagnostics_table` rows as one or more PDF
         table pages, colouring rows that carry a flag (yellow for "high
         correlation" / "low significance", red for "SEVERE correlation").
+
+        Args:
+            title_suffix (str, optional): Text in parentheses after "Refined
+                parameter diagnostics" identifying which cycle these rows
+                came from (default ``"last cycle"``) — pass e.g.
+                ``f"cached cycle {i}"`` when iterating :attr:`_covariance_history`.
         """
         col_labels = ["Parameter", "Value", "Esd", "Units", "|Val/Esd|", "Flags"]
         for start in range(0, len(rows), rows_per_page):
@@ -4694,7 +4714,7 @@ class BaseRefinement(Scan):
             tbl.set_fontsize(7)
             tbl.scale(1, 1.4)
             ax.set_title(
-                "Refined parameter diagnostics (last cycle)\n"
+                f"Refined parameter diagnostics ({title_suffix})\n"
                 f"|value/esd| < {significance_threshold:g} -> low significance   "
                 f"|corr| >= {moderate_corr_threshold:g} -> high correlation   "
                 f">= {high_corr_threshold:g} -> severe",
@@ -4724,18 +4744,24 @@ class BaseRefinement(Scan):
            :meth:`print_refinement_results` (R-factors, instrument and
            sample parameters, background, and per-phase cell/HAP/atom
            tables), paginated as monospace text.
-        4. A per-variable diagnostics table (value, esd, significance, and
+        4. For *every* cached covariance snapshot in
+           :attr:`_covariance_history` (one per refinement cycle this
+           session that had ≥1 free parameter — see
+           :meth:`print_covariance_history`), in order: a per-variable
+           diagnostics table (value, esd, significance, and
            correlation/significance flags) from
-           :meth:`_variable_diagnostics_table`, for the variables refined in
-           the last cycle.
-        5. The parameter correlation matrix, printed as a numeric table
-           (:meth:`print_covariance_matrix`) followed by a heatmap, if
-           covariance data from a refinement cycle is available.
+           :meth:`_variable_diagnostics_table`, the correlation matrix as a
+           numeric table (:meth:`print_covariance_matrix`), and its heatmap
+           (:meth:`plot_covariance_matrix`). GSAS-II only ever keeps the
+           *live* covariance for the last cycle — this cache is what lets
+           the report include every cycle's correlations (e.g. a joint one
+           from :meth:`refine_ever_refined_variables`) rather than just the
+           final one.
 
         Args:
             path (Path, optional): Output PDF path (default ``"refinement_report.pdf"``).
-            include_covariance (bool, optional): Include the diagnostics table and correlation-matrix
-                heatmap pages when covariance data is available (default ``True``).
+            include_covariance (bool, optional): Include the per-cycle diagnostics/correlation
+                pages described in point 4 above (default ``True``).
             lines_per_page (int, optional): Number of text lines per page for the parameter-listing
                 section (default 58, sized for a letter page at 7.5pt monospace).
             significance_threshold (float, optional): Passed to :meth:`_variable_diagnostics_table` —
@@ -4800,69 +4826,67 @@ class BaseRefinement(Scan):
                 pdf.savefig(fig)
                 plt.close(fig)
 
-            # --- Per-variable diagnostics table ---
+            # --- Per-cycle diagnostics table + correlation matrix ---
+            # Iterates self._covariance_history (one snapshot per cycle that
+            # had >=1 free parameter) rather than only GSAS-II's live
+            # Covariance data, since a later cycle silently overwrites an
+            # earlier one's matrix there — this way the report covers every
+            # joint correlation actually computed this session (e.g. from
+            # refine_ever_refined_variables()), not just the last cycle.
             if include_covariance:
-                diag_rows = self._variable_diagnostics_table(
-                    significance_threshold, moderate_corr_threshold, high_corr_threshold
-                )
-                if diag_rows:
-                    self._render_diagnostics_table_pages(
-                        pdf,
-                        diag_rows,
-                        significance_threshold,
-                        moderate_corr_threshold,
-                        high_corr_threshold,
+                if not self._covariance_history:
+                    print(
+                        "No covariance data found — skipping diagnostics/correlation pages."
                     )
                 else:
-                    print("No refined variables found — skipping diagnostics table page.")
+                    for idx in range(len(self._covariance_history)):
+                        n_vars = len(self._covariance_history[idx]["vary_list"])
+                        label = f"cached cycle {idx}, {n_vars} variable(s)"
 
-            # --- Correlation matrix: printed numeric table + heatmap ---
-            if include_covariance:
-                cov_data = self.gpx["Covariance"]["data"]
-                vary_list = cov_data.get("varyList", [])
-                cov_matrix = cov_data.get("covMatrix")
-                has_cov = bool(vary_list) and cov_matrix is not None and len(cov_matrix)
+                        diag_rows = self._variable_diagnostics_table(
+                            significance_threshold,
+                            moderate_corr_threshold,
+                            high_corr_threshold,
+                            cycle=idx,
+                        )
+                        if diag_rows:
+                            self._render_diagnostics_table_pages(
+                                pdf,
+                                diag_rows,
+                                significance_threshold,
+                                moderate_corr_threshold,
+                                high_corr_threshold,
+                                title_suffix=label,
+                            )
 
-                if has_cov:
-                    # Printed numeric matrix (same table as print_covariance_matrix),
-                    # paginated as monospace text with a font size shrunk to fit
-                    # the widest row so it stays readable for larger vary lists.
-                    buf = io.StringIO()
-                    with redirect_stdout(buf):
-                        self.print_covariance_matrix()
-                    corr_lines = buf.getvalue().splitlines()
-                    max_len = max((len(line) for line in corr_lines), default=1)
-                    corr_fontsize = max(4.0, min(7.5, 620.0 / max_len))
-                    corr_lines_per_page = 70
-                    for i in range(0, len(corr_lines), corr_lines_per_page):
-                        chunk = corr_lines[i : i + corr_lines_per_page]
-                        fig = plt.figure(figsize=(11, 8.5))
-                        fig.text(
-                            0.03, 0.98, "\n".join(chunk),
-                            fontsize=corr_fontsize, family="monospace", va="top",
+                        # Printed numeric matrix (same table as
+                        # print_covariance_matrix), paginated as monospace
+                        # text with a font size shrunk to fit the widest row
+                        # so it stays readable for larger vary lists.
+                        buf = io.StringIO()
+                        with redirect_stdout(buf):
+                            self.print_covariance_matrix(cycle=idx)
+                        corr_lines = buf.getvalue().splitlines()
+                        max_len = max((len(line) for line in corr_lines), default=1)
+                        corr_fontsize = max(4.0, min(7.5, 620.0 / max_len))
+                        corr_lines_per_page = 70
+                        for i in range(0, len(corr_lines), corr_lines_per_page):
+                            chunk = corr_lines[i : i + corr_lines_per_page]
+                            fig = plt.figure(figsize=(11, 8.5))
+                            fig.text(
+                                0.03, 0.98, "\n".join(chunk),
+                                fontsize=corr_fontsize, family="monospace", va="top",
+                            )
+                            pdf.savefig(fig)
+                            plt.close(fig)
+
+                        # Heatmap (reuses plot_covariance_matrix so the
+                        # figure stays identical to calling it directly)
+                        fig, _ax = self.plot_covariance_matrix(
+                            show=False, figsize=(8.5, 8.5), cycle=idx
                         )
                         pdf.savefig(fig)
                         plt.close(fig)
-
-                    # Heatmap
-                    sigmas = np.sqrt(np.diag(cov_matrix))
-                    with np.errstate(invalid="ignore"):
-                        corr = cov_matrix / np.outer(sigmas, sigmas)
-                    corr = np.nan_to_num(corr)
-                    n = len(vary_list)
-                    fig, ax = plt.subplots(figsize=(8.5, 8.5))
-                    im = ax.imshow(corr, vmin=-1, vmax=1, cmap="coolwarm", aspect="auto")
-                    fig.colorbar(im, ax=ax, label="Correlation coefficient")
-                    ax.set_xticks(range(n))
-                    ax.set_yticks(range(n))
-                    ax.set_xticklabels(vary_list, rotation=90, fontsize=7)
-                    ax.set_yticklabels(vary_list, fontsize=7)
-                    ax.set_title("Parameter correlation matrix")
-                    fig.tight_layout()
-                    pdf.savefig(fig)
-                    plt.close(fig)
-                else:
-                    print("No covariance data found — skipping correlation matrix pages.")
 
             info = pdf.infodict()
             info["Title"] = f"Rietveld Refinement Report - {self.sample_name}"

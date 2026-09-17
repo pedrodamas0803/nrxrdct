@@ -138,7 +138,7 @@ class BaseRefinement(Scan):
         if self.low_lim == None:
             self.low_lim = self.tth.min()
         if self.high_lim == None:
-            self.hih_lim = self.tth.max()
+            self.high_lim = self.tth.max()
 
         print(60 * "=")
         print("=== If you need more information on the parameters, see the link:")
@@ -155,7 +155,11 @@ class BaseRefinement(Scan):
         reload a project after restarting Python.  The first histogram and
         all phases found in the project are attached to ``self.hist`` and
         ``self.phases`` respectively so that all other methods work
-        immediately after loading.
+        immediately after loading.  ``self._ever_refined`` (session history
+        used e.g. by GOF/χ² in :meth:`plot_calibration_results`) is reset
+        and then seeded from whatever the loaded ``.gpx`` already carries in
+        its own ``Covariance`` data, so parameters refined before this
+        object existed (an earlier session, or the GSAS-II GUI) still count.
 
         Args:
             gpx_file (Path): Path to an existing ``.gpx`` file.
@@ -169,6 +173,7 @@ class BaseRefinement(Scan):
         self.phases = self.gpx.phases()
         self._ever_refined = {}
         self._step_refinements = []
+        self._record_vary_list()
         if self.phases:
             self.phase = self.phases[-1]
             self.calibrant_composition = self.phase.name
@@ -3183,69 +3188,51 @@ class BaseRefinement(Scan):
         self.gpx.save()
         print("All parameters fixed.")
 
-    def _recompute_pattern(self) -> None:
+    def _iter_refine_flags(self):
         """
-        Force GSAS-II to recompute ycalc/background/reflections/Rwp/GOF from
-        the *current* in-memory parameter values, without letting anything
-        currently marked free drift away from what's set right now.
+        Yield ``(container, key)`` for every simple boolean refine-flag
+        location this class manages — background (poly + Debye terms),
+        instrument parameters, sample parameters, and per-phase Cell/HAP
+        Scale/Extinction/HStrain/Size/Mustrain/Pref.Ori.  Read/write via
+        ``container[key]``. Atom ``refinement_flags`` strings are not simple
+        booleans and are handled separately by callers.
 
-        Simply mutating a value in ``self.hist``/a phase object (e.g.
-        ``ip["W"][1] = 0``) changes the stored parameter but does **not**
-        retroactively recompute the calculated pattern or fit statistics —
-        those are snapshots from the last actual GSAS-II refinement cycle.
-        This runs one refinement cycle with every refine flag temporarily
-        cleared (same traversal as :meth:`fix_all_parameters`, but captured
-        and restored rather than left cleared) so GSAS-II performs its usual
-        forward calculation and residual/statistics computation with zero
-        free parameters — a pure recompute — then restores every flag to
-        exactly what it was before this call.
+        Shared by :meth:`_recompute_pattern` (freeze/restore) and
+        :meth:`_count_free_parameters` (count), so both stay in sync with
+        exactly the same set of flags.
         """
-        item_restores: list[tuple] = []
-        atom_restores: list[tuple] = []
-
-        def freeze(container, key) -> None:
-            item_restores.append((container, key, container[key]))
-            container[key] = False
-
-        # Background polynomial + Debye terms
         bkg = self.hist["Background"]
-        freeze(bkg[0], 1)
+        yield (bkg[0], 1)
         for term in bkg[1].get("debyeTerms", []):
             for idx in (1, 3, 5):
-                freeze(term, idx)
+                yield (term, idx)
 
-        # Instrument parameters
         ip = self.hist["Instrument Parameters"][0]
         for val in ip.values():
             if isinstance(val, list) and len(val) >= 3:
-                freeze(val, 2)
+                yield (val, 2)
 
-        # Sample parameters
         sp = self.hist.SampleParameters
         for key in (
             "Scale", "Absorption", "Shift", "DisplaceX", "DisplaceY",
             "Transparency", "SurfRoughA", "SurfRoughB",
         ):
             if key in sp and isinstance(sp[key], list) and len(sp[key]) >= 2:
-                freeze(sp[key], 1)
+                yield (sp[key], 1)
 
-        # Per-phase
         for ph in self.gpx.phases():
-            freeze(ph.data["General"]["Cell"], 0)
-            for atom in ph.atoms():
-                atom_restores.append((atom, atom.refinement_flags))
-                atom.refinement_flags = ""
+            yield (ph.data["General"]["Cell"], 0)
 
             hap = ph.data["Histograms"].get(self.hist.name, {})
             for key in ("Scale", "Extinction"):
                 entry = hap.get(key)
                 if isinstance(entry, list) and len(entry) >= 2:
-                    freeze(entry, 1)
+                    yield (entry, 1)
 
             hs = hap.get("HStrain")
             if hs:
                 for i in range(len(hs[1])):
-                    freeze(hs[1], i)
+                    yield (hs[1], i)
 
             for model_key in ("Size", "Mustrain"):
                 model = hap.get(model_key)
@@ -3253,11 +3240,67 @@ class BaseRefinement(Scan):
                     for idx in (2, 5):
                         if idx < len(model) and isinstance(model[idx], list):
                             for i in range(len(model[idx])):
-                                freeze(model[idx], i)
+                                yield (model[idx], i)
 
             po = hap.get("Pref.Ori.")
             if po and len(po) > 2:
-                freeze(po, 2)
+                yield (po, 2)
+
+    def _count_free_parameters(self) -> int:
+        """
+        Count how many parameters are *currently* marked to refine.
+
+        Used as N_vars for a manually-computed GOF/χ² (see
+        :meth:`plot_calibration_results`) so the degrees-of-freedom count
+        matches whatever is live on the project right now, independent of
+        whether GSAS-II's own ``Covariance`` data has been (re)populated.
+        Atom-string flags are translated to an approximate parameter count:
+        ``X`` (coordinates) → 3, ``U`` → 1 (isotropic) or 6 (anisotropic),
+        ``F`` (occupancy) → 1.
+        """
+        n = sum(1 for container, key in self._iter_refine_flags() if bool(container[key]))
+        for ph in self.gpx.phases():
+            for atom in ph.atoms():
+                flags = atom.refinement_flags or ""
+                if "X" in flags:
+                    n += 3
+                if "U" in flags:
+                    n += 1 if atom.adp_flag == "I" else 6
+                if "F" in flags:
+                    n += 1
+        return n
+
+    def _recompute_pattern(self) -> None:
+        """
+        Force GSAS-II to recompute ycalc/background/reflections/Rwp from the
+        *current* in-memory parameter values, without letting anything
+        currently marked free drift away from what's set right now.
+
+        Simply mutating a value in ``self.hist``/a phase object (e.g.
+        ``ip["W"][1] = 0``) changes the stored parameter but does **not**
+        retroactively recompute the calculated pattern or fit statistics —
+        those are snapshots from the last actual GSAS-II refinement cycle.
+        This runs one refinement cycle with every refine flag temporarily
+        cleared (via :meth:`_iter_refine_flags`, captured and restored
+        rather than left cleared) so GSAS-II performs its usual forward
+        calculation with zero free parameters — a pure recompute — then
+        restores every flag to exactly what it was before this call.
+
+        Note:
+            GSAS-II only populates its own GOF/χ² (``Covariance.Rvals``) when
+            a cycle has ≥1 free parameter, so this alone does not refresh
+            those — see :meth:`plot_calibration_results`, which computes
+            them manually instead.
+        """
+        item_restores = [(c, k, c[k]) for c, k in self._iter_refine_flags()]
+        for container, key, _ in item_restores:
+            container[key] = False
+
+        atom_restores: list[tuple] = []
+        for ph in self.gpx.phases():
+            for atom in ph.atoms():
+                atom_restores.append((atom, atom.refinement_flags))
+                atom.refinement_flags = ""
 
         self.gpx.save()
         try:
@@ -3355,12 +3398,26 @@ class BaseRefinement(Scan):
                 later replay, it does not itself apply anything.
         """
         self.gpx.do_refinements([{}])
+        if step is not None:
+            self._step_refinements.append(step)
+        self._record_vary_list()
+
+    def _record_vary_list(self) -> None:
+        """
+        Copy GSAS-II's current ``Covariance.varyList``/``variables``/``sig``
+        into ``self._ever_refined``, keyed by GSAS-II's own variable name.
+
+        Shared by :meth:`_run_refinement` (after a cycle this session) and
+        :meth:`load_model` (seeding from whatever a *previously* run
+        refinement — in this session or an earlier one, e.g. via the GSAS-II
+        GUI — already left baked into the loaded ``.gpx``), so GOF/χ² in
+        :meth:`plot_calibration_results` account for real fitting history
+        either way rather than only fitting done since this object existed.
+        """
         cov_data = self.gpx["Covariance"]["data"]
         vary_list = cov_data.get("varyList", [])
         variables = cov_data.get("variables", [])
         sigmas = cov_data.get("sig", [])
-        if step is not None:
-            self._step_refinements.append(step)
         for i, var in enumerate(vary_list):
             val = variables[i] if i < len(variables) else float("nan")
             sig = sigmas[i] if i < len(sigmas) else None
@@ -4743,7 +4800,7 @@ class InstrumentCalibration(BaseRefinement):
         if self.low_lim == None:
             self.low_lim = self.tth.min()
         if self.high_lim == None:
-            self.hih_lim = self.tth.max()
+            self.high_lim = self.tth.max()
 
         self.param_file_init = write_starting_instrument_pars(
             polarization=polarization, wavelength=self.wavelength
@@ -4905,9 +4962,16 @@ class InstrumentCalibration(BaseRefinement):
             allowed Bragg reflection for each phase; colours cycle through the
             ``colours_ticks`` dict (``"calibrant"`` → magenta,
             ``"Al_holder"`` → dark orange, others → green).  The title shows
-            the phase/calibrant name, Rwp (%), and χ² (goodness-of-fit).
+            the phase/calibrant name, Rwp (%), GOF, and χ².  GOF/χ² are
+            computed directly from the plotted ``yobs``/``ycalc`` (Poisson
+            weighting, ``w = 1/yobs``, matching GSAS-II's default for a
+            plain 2-column ``.xy`` histogram with no explicit per-point
+            esd; degrees of freedom from :meth:`_count_free_parameters`)
+            rather than read from GSAS-II's own ``Covariance`` data — that
+            data is only populated by a cycle with ≥1 free parameter, so it
+            is unavailable or stale right after a zero-parameter recompute.
             With the default ``recompute=True``, the calculated profile,
-            background, reflection positions, and fit statistics are all
+            background, reflection positions, and these statistics are all
             freshly computed from whatever is currently set in memory before
             plotting — see the ``recompute`` argument below.
 
@@ -5062,12 +5126,32 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
-        gof = self.get_chi2()
+        # GSAS-II's own GOF/χ² (Covariance.Rvals) is only populated when a
+        # refinement cycle has >=1 free parameter, so it's unavailable (or
+        # stale, from whatever last real refinement ran) right after a
+        # zero-parameter recompute. Compute directly from yobs/ycalc/diff
+        # instead so it always matches what's plotted. Poisson weighting
+        # (w = 1/yobs) matches GSAS-II's default for a plain 2-column .xy
+        # histogram with no explicit per-point esd.
+        #
+        # N_vars must come from self._ever_refined (every variable that was
+        # free in *any* cycle this session), not _count_free_parameters()'s
+        # live flag count: every refine_* method in this class refines a
+        # parameter then immediately freezes it (freeze=True) so the next
+        # one can be refined in isolation, so by the end of a normal
+        # calibration *everything* is flagged fixed again even though real
+        # fitting happened — using the live count would silently understate
+        # the degrees of freedom used and make GOF look artificially good.
+        n_vars = max(len(self._ever_refined), self._count_free_parameters())
+        dof = max(len(yobs) - n_vars, 1)
+        w = 1.0 / np.clip(yobs, 1.0, None)
+        chi2 = float(np.sum(w * diff**2))
+        gof = np.sqrt(chi2 / dof)
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        if gof is not None:
-            stat_parts.append(f"GOF = {gof:.4f}")
+        stat_parts.append(f"GOF = {gof:.4f}")
+        stat_parts.append(f"χ² = {chi2:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"

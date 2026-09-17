@@ -4646,17 +4646,20 @@ class BaseRefinement(Scan):
         ax_main.plot(tth, ycalc, "r-", lw=1, label="Calculated")
         ax_main.plot(tth, ybkg, "b--", lw=0.8, label="Background")
 
-        # Reflection tick marks for both phases
+        # Reflection tick marks — one row per phase, stacked vertically below
+        # the pattern so overlapping phases' ticks stay distinguishable.
         yrange = yobs.max() - yobs.min()
-        tick_y0 = yobs.min() - 0.02 * yrange
+        row_height = 0.04 * yrange
+        row_gap = 0.015 * yrange
         for ii, ph in enumerate(self.gpx.phases()):
             try:
                 reflist = self.hist.reflections()[ph.name]["RefList"]
                 ref_tth = reflist[:, 5]
+                row_top = yobs.min() - 0.02 * yrange - ii * (row_height + row_gap)
                 ax_main.vlines(
                     ref_tth,
-                    tick_y0,
-                    tick_y0 + 0.04 * yrange,
+                    row_top - row_height,
+                    row_top,
                     color=COLORS[ii % len(COLORS)],
                     lw=0.8,
                     label=f"{ph.name} reflections",

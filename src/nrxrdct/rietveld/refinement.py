@@ -3278,6 +3278,39 @@ class BaseRefinement(Scan):
                     n += 1
         return n
 
+    def _compute_gof_chi2(self) -> tuple[float, float]:
+        """
+        Compute GOF and χ² directly from the histogram's current
+        ``yobs``/``ycalc`` rather than from GSAS-II's own
+        ``Covariance.Rvals.GOF``.
+
+        That value only reflects whichever parameter(s) were free in the
+        *last completed cycle* — and this class's usual workflow refines one
+        parameter, freezes it, refines the next, so its N_vars badly
+        undercounts everything actually fit this session (often just 1,
+        whatever was refined last). It can also simply be missing (e.g.
+        right after :meth:`_recompute_pattern`'s zero-free-parameter pass).
+        This instead uses Poisson weighting (``w = 1/yobs``, matching
+        GSAS-II's default for a plain-column ``.xy`` histogram with no
+        explicit per-point esd — see ``read_xy_file``/``__init__``) and
+        ``N_vars = max(len(self._ever_refined), self._count_free_parameters())``,
+        i.e. every variable ever free this session (or currently free, if
+        that's larger), so both quantities stay consistent with whatever the
+        plotted pattern currently shows.
+
+        Returns:
+            tuple: ``(gof, chi2)``.
+        """
+        yobs = self.hist.getdata("yobs")
+        ycalc = self.hist.getdata("ycalc")
+        diff = yobs - ycalc
+        n_vars = max(len(self._ever_refined), self._count_free_parameters())
+        dof = max(len(yobs) - n_vars, 1)
+        w = 1.0 / np.clip(yobs, 1.0, None)
+        chi2 = float(np.sum(w * diff**2))
+        gof = float(np.sqrt(chi2 / dof))
+        return gof, chi2
+
     def _recompute_pattern(self) -> None:
         """
         Force GSAS-II to recompute ycalc/background/reflections/Rwp from the
@@ -4558,7 +4591,12 @@ class BaseRefinement(Scan):
 
         Shared by :meth:`plot_results` and :meth:`generate_report`. The
         figure is returned unsaved and unshown so callers can route it to a
-        PNG file, a PDF page, or the screen as needed.
+        PNG file, a PDF page, or the screen as needed. The title's GOF/χ²
+        are computed directly from ``yobs``/``ycalc`` (Poisson weighting)
+        with degrees of freedom from ``max(len(self._ever_refined),
+        self._count_free_parameters())`` rather than read from GSAS-II's own
+        ``Covariance.Rvals`` — see the inline comment where they're computed
+        for why (same fix as :meth:`InstrumentCalibration.plot_calibration_results`).
 
         Args:
             figsize (tuple of (float, float), optional): Figure size in inches as
@@ -4607,12 +4645,12 @@ class BaseRefinement(Scan):
 
         ax_main.set_ylabel("Intensity")
         wR = self.hist.get_wR()
-        gof = self.get_chi2()
+        gof, chi2 = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        if gof is not None:
-            stat_parts.append(f"GOF = {gof:.4f}")
+        stat_parts.append(f"GOF = {gof:.4f}")
+        stat_parts.append(f"χ² = {chi2:.4f}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"
@@ -4777,7 +4815,7 @@ class BaseRefinement(Scan):
         """
         path = Path(path)
         wR = self.get_Rwp()
-        chi2 = self.get_chi2()
+        gof, chi2 = self._compute_gof_chi2()
 
         with PdfPages(str(path)) as pdf:
             # --- Title / summary page ---
@@ -4795,7 +4833,8 @@ class BaseRefinement(Scan):
                 f"Histogram    : {self.hist.name}",
                 f"Phases       : {', '.join(ph.name for ph in self.gpx.phases())}",
                 f"Rwp          : {wR:.4f} %" if wR is not None else "Rwp          : n/a",
-                f"GOF (chi2)   : {chi2:.4f}" if chi2 is not None else "GOF (chi2)   : n/a",
+                f"GOF          : {gof:.4f}",
+                f"chi2         : {chi2:.4f}",
                 f"2theta range : [{self.low_lim:.3f}, {self.high_lim:.3f}] deg",
                 f"Refinement steps run this session: {len(self._step_refinements)}",
             ]
@@ -5299,27 +5338,7 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
-        # GSAS-II's own GOF/χ² (Covariance.Rvals) is only populated when a
-        # refinement cycle has >=1 free parameter, so it's unavailable (or
-        # stale, from whatever last real refinement ran) right after a
-        # zero-parameter recompute. Compute directly from yobs/ycalc/diff
-        # instead so it always matches what's plotted. Poisson weighting
-        # (w = 1/yobs) matches GSAS-II's default for a plain 2-column .xy
-        # histogram with no explicit per-point esd.
-        #
-        # N_vars must come from self._ever_refined (every variable that was
-        # free in *any* cycle this session), not _count_free_parameters()'s
-        # live flag count: every refine_* method in this class refines a
-        # parameter then immediately freezes it (freeze=True) so the next
-        # one can be refined in isolation, so by the end of a normal
-        # calibration *everything* is flagged fixed again even though real
-        # fitting happened — using the live count would silently understate
-        # the degrees of freedom used and make GOF look artificially good.
-        n_vars = max(len(self._ever_refined), self._count_free_parameters())
-        dof = max(len(yobs) - n_vars, 1)
-        w = 1.0 / np.clip(yobs, 1.0, None)
-        chi2 = float(np.sum(w * diff**2))
-        gof = np.sqrt(chi2 / dof)
+        gof, chi2 = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")

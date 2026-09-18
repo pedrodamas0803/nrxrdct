@@ -956,7 +956,14 @@ class Camera:
             max_match_px (float or list of float): Cap distance (pixels) used in the cost function and for
                 reporting the final match rate.  Pass a list to run staged
                 refinement: the optimizer restarts from the previous result
-                at each successively tighter cap, e.g. `[30, 10, 3]`.
+                at each successively tighter cap, e.g. `[30, 10, 3]`.  If the
+                coarsest cap is tighter than the actual initial mismatch it
+                is silently widened first — a cap with (almost) every spot
+                already beyond it gives a flat cost and no usable gradient.
+                Any stage that still ends with zero spots inside its own cap
+                is reported via `success=False` and a message on the
+                returned `CalibrationResult`, instead of the misleading
+                `success=True` scipy reports for a stalled fit.
             top_n_sim (int or None): Restrict cost evaluation to the brightest *N* simulated spots.
             bounds (dict or None): Explicit parameter bounds as `{param_name: (lo, hi)}`.  Values
                 are absolute (not relative).  Keys are the same as `fit_params`
@@ -1034,32 +1041,35 @@ class Camera:
             dU = Rotation.from_euler("xyz", [rx, ry, rz], degrees=True).as_matrix()
             return U0 @ dU
 
-        def _cost(x):
-            try:
-                cam = _build_cam(x)
-                U_cur = _build_U(x)
-                spots = simulate_laue(
-                    crystal, U_cur, cam,
-                    E_min=E_min, E_max=E_max,
-                    source=source, source_kwargs=src_kw,
-                    f2_thresh=f2_thresh,
-                    allowed_hkl=allowed_hkl,
-                )
-            except Exception:
-                return float(_cur_mmp ** 2)
-
+        def _sim_xy(x):
+            """Simulated on-detector pixel positions for x (top_n_sim applied)."""
+            cam = _build_cam(x)
+            U_cur = _build_U(x)
+            spots = simulate_laue(
+                crystal, U_cur, cam,
+                E_min=E_min, E_max=E_max,
+                source=source, source_kwargs=src_kw,
+                f2_thresh=f2_thresh,
+                allowed_hkl=allowed_hkl,
+            )
             sim_xy = np.array(
                 [s["pix"] for s in spots if s.get("pix") is not None]
             )
-            if len(sim_xy) == 0:
-                return float(_cur_mmp ** 2)
-
             if top_n_sim is not None and len(sim_xy) > top_n_sim:
                 I_vals = np.array(
                     [s["I_raw"] for s in spots if s.get("pix") is not None]
                 )
                 idx = np.argsort(I_vals)[::-1][:top_n_sim]
                 sim_xy = sim_xy[idx]
+            return sim_xy
+
+        def _cost(x):
+            try:
+                sim_xy = _sim_xy(x)
+            except Exception:
+                return float(_cur_mmp ** 2)
+            if len(sim_xy) == 0:
+                return float(_cur_mmp ** 2)
 
             tree = cKDTree(sim_xy)
             dists, _ = tree.query(obs_xy, k=1)
@@ -1122,7 +1132,27 @@ class Camera:
                 }
             return {"maxiter": 5000, "ftol": 1e-6, "gtol": 1e-6}
 
+        # ── auto-widen the first stage to the real initial mismatch ────────────
+        # A stage's cost is mean(min(dist, cap)**2). If the coarsest requested
+        # cap is tighter than the true mismatch at x0, essentially every
+        # observed spot already sits beyond it, so the cost is flat and the
+        # optimizer has no gradient to follow — it converges trivially near
+        # x0 while scipy still reports success=True. Measure the actual
+        # mismatch up front and prepend a coarser stage if needed so the
+        # first optimization always starts with real signal.
+        if len(x0) > 0:
+            try:
+                sim_xy0 = _sim_xy(x0)
+            except Exception:
+                sim_xy0 = np.empty((0, 2))
+            if len(sim_xy0) > 0:
+                d0 = cKDTree(sim_xy0).query(obs_xy, k=1)[0]
+                needed = float(np.median(d0)) * 1.5
+                if needed > _stages[0]:
+                    _stages = [needed] + _stages
+
         # ── staged optimisation ───────────────────────────────────────────────
+        stage_warnings = []
         if len(x0) == 0:
             # Nothing to fit (empty fit_params and fit_U=False): skip the
             # optimizer entirely rather than handing scipy a zero-length
@@ -1133,7 +1163,7 @@ class Camera:
             )
         else:
             result = None
-            for _cur_mmp in _stages:
+            for stage_idx, _cur_mmp in enumerate(_stages):
                 _opts = _build_opts(x0)
                 if options:
                     _opts.update(options)
@@ -1144,6 +1174,21 @@ class Camera:
                     options=_opts,
                 )
                 x0 = result.x
+
+                try:
+                    sim_xy_stage = _sim_xy(x0)
+                except Exception:
+                    sim_xy_stage = np.empty((0, 2))
+                n_in_cap = (
+                    int(np.sum(cKDTree(sim_xy_stage).query(obs_xy, k=1)[0] < _cur_mmp))
+                    if len(sim_xy_stage) > 0 else 0
+                )
+                if n_in_cap == 0:
+                    stage_warnings.append(
+                        f"stage {stage_idx} (max_match_px={_cur_mmp:g}): no observed "
+                        f"spot matched within the cap; the optimizer had no usable "
+                        f"gradient and stalled"
+                    )
 
         cam_final = _build_cam(result.x)
         U_final = _build_U(result.x)
@@ -1169,6 +1214,10 @@ class Camera:
             if n_matched > 0:
                 rms_px = float(np.sqrt((dists[ok] ** 2).mean()))
 
+        message = result.message
+        if stage_warnings:
+            message = (message + " | " if message else "") + "; ".join(stage_warnings)
+
         return CalibrationResult(
             camera=cam_final,
             U=U_final,
@@ -1177,8 +1226,8 @@ class Camera:
             n_obs=n_obs,
             n_sim=len(sim_xy_f),
             fit_params=tuple(_all_names),
-            success=bool(result.success),
-            message=result.message,
+            success=bool(result.success) and not stage_warnings,
+            message=message,
         )
 
     def fit_calibration_staged(

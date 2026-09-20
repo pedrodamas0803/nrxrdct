@@ -3,6 +3,15 @@ nrxrdct.laue — Laue diffraction simulation utilities.
 """
 
 from .camera import Camera, CalibrationResult
+from .components import (
+    ComponentCandidate,
+    bin_image_stack,
+    load_laue_stack,
+    find_ub_candidates_nmf,
+    plot_component_candidates,
+    refine_component_candidate_manual,
+    save_ub_candidates,
+)
 from .crystal import build_b2, build_bcc, crystal_from_cif, crystals_from_cifs
 from .interactive import (
     CalibrationState,
@@ -240,6 +249,14 @@ __all__ = [
     # Camera / detector
     "Camera",
     "CalibrationResult",
+    # NMF candidate-UB discovery
+    "ComponentCandidate",
+    "bin_image_stack",
+    "load_laue_stack",
+    "find_ub_candidates_nmf",
+    "plot_component_candidates",
+    "refine_component_candidate_manual",
+    "save_ub_candidates",
     # Simulation
     "print_absorption_table",
     "clear_allowed_hkl_cache",

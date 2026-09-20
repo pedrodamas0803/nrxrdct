@@ -645,97 +645,64 @@ def kb_reflectivity(
     grazing_angle_mrad: float = 2.8,
     n_mirrors: int = 2,
     roughness_ang: float = 3.0,
-) -> float:
+    density_g_cm3: float | None = None,
+):
     """
-    Fresnel reflectivity of a KB mirror system (s-polarisation, kinematical limit).
+    Fresnel reflectivity of a mirror coating, average of s- and p-polarisation.
 
-    Uses the optical constants δ, β of the coating material (via *xrayutilities*)
-    to compute the critical-angle total-external-reflection profile, with
-    Névot–Croce roughness damping.  The result is raised to the power
-    `n_mirrors` to model paired mirrors.
+    Uses *xraylib*'s tabulated optical constants for `material`, via the same
+    `PreRefl.reflectivity_amplitudes_fresnel_external_xraylib` routine used by
+    the Shadow4 reference calculation in :mod:`nrxrdct.laue.beamline`
+    (:func:`~nrxrdct.laue.beamline._reflectivity`), so the fast analytical
+    correction here matches the full ray-traced spectrum. Névot–Croce
+    roughness damping is included by that routine. The single-mirror
+    reflectivity is raised to the power `n_mirrors` to model identical
+    mirrors in series (e.g. KB1 + KB2).
 
     Args:
-    energy_eV : float
-        Photon energy (eV).
+    energy_eV : float or ndarray
+        Photon energy (eV). Scalar or array.
     material : str
-        Coating material name recognised by *xrayutilities*
-        (e.g. `'Rh'`, `'Pt'`, `'Si'`).
+        Coating element symbol recognised by *xraylib* (e.g. `'Ir'`, `'Rh'`,
+        `'Pt'`).
     grazing_angle_mrad : float
         Nominal grazing incidence angle of each mirror (mrad).
     n_mirrors : int
-        Number of mirrors in the KB system (typically 2).
+        Number of identical mirrors in series (KB: typically 2; M1/M2: 1 each).
     roughness_ang : float
-        RMS surface roughness (Å).  Used in the Névot–Croce factor
-        `exp(-(2 k sinθ σ)²)`.
+        RMS surface roughness (Å), passed through as `roughness_rms_A`.
+    density_g_cm3 : float or None
+        Coating mass density (g/cm3). If `None`, looked up from `xraylib`
+        via `ElementDensity(SymbolToAtomicNumber(material))`.
 
     Returns:
-    float
-        Total reflectivity in [0, 1].
-
-    Note:
-    The Fresnel reflectivity for s-polarisation is:
-
-    $$
-    r_s = \\frac{\\sin\\theta - \\sqrt{n^2 - \\cos^2\\theta}}
-               {\\sin\\theta + \\sqrt{n^2 - \\cos^2\\theta}}
-    $$
-    where $n = 1 - \\delta + i\\beta$ and $\\theta$ is the
-    grazing angle.  The Névot–Croce roughness correction is applied as:
-
-    $$
-    R_{\\text{rough}} = R_{\\text{smooth}} \\cdot
-        \\exp\\!\\left[-(2 k \\sin\\theta\\,\\sigma)^2\\right]
-    $$
-    The two KB mirrors are assumed identical, giving
-    $R_{\\text{total}} = R_{\\text{single}}^{n_{\\text{mirrors}}}$.
+    float or ndarray
+        Total reflectivity in [0, 1], same shape as `energy_eV`.
 """
-    import xrayutilities as xu
-
-    theta = grazing_angle_mrad * 1e-3  # rad
-    lam_ang = en2lam(energy_eV)  # Å
-    k = 2.0 * np.pi / lam_ang  # Å⁻¹
-
-    # Optical constants via xrayutilities
-    # xu.materials.Rh is an Element object, which has no delta_beta method.
-    # Wrap it in Amorphous (which accepts element name + density) to get δ, β.
     try:
-        mat = getattr(xu.materials, material, None)
-        if mat is None or not hasattr(mat, "delta_beta"):
-            # Element objects don't have delta_beta — create an Amorphous proxy
-            elem = getattr(xu.materials.elements, material, None)
-            if elem is None:
-                return 1.0  # unknown material: assume perfect (no correction)
-            density = getattr(elem, "density", None)
-            if not density:
-                return 1.0
-            mat = xu.materials.Amorphous(material, density)
-        delta, beta = mat.delta_beta(energy_eV)
-    except Exception:
-        # If xrayutilities fails for any reason, skip the correction rather
-        # than zeroing out all spectral weights (which produces 0 spots).
-        return 1.0
+        from shadow4.physical_models.prerefl.prerefl import PreRefl
+        import xraylib
+    except ImportError as exc:
+        raise ImportError(
+            "kb_reflectivity requires shadow4 and xraylib.\n"
+            "Install with:  pip install shadow4 xraylib"
+        ) from exc
 
-    n_sq = (1.0 - delta + 1j * beta) ** 2  # n²
+    if density_g_cm3 is None:
+        density_g_cm3 = xraylib.ElementDensity(xraylib.SymbolToAtomicNumber(material))
 
-    sin_th = np.sin(theta)
-    cos_th = np.cos(theta)
+    E_arr = np.atleast_1d(np.asarray(energy_eV, dtype=float))
+    rs, rp = PreRefl.reflectivity_amplitudes_fresnel_external_xraylib(
+        photon_energy_ev=E_arr,
+        coating_material=material,
+        coating_density=density_g_cm3,
+        grazing_angle_mrad=grazing_angle_mrad,
+        roughness_rms_A=roughness_ang,
+    )
+    R_single = np.clip(0.5 * (np.abs(rs) ** 2 + np.abs(rp) ** 2), 0.0, 1.0)
+    R = R_single**n_mirrors
 
-    # sqrt(n² - cos²θ)  — complex
-    sq = np.sqrt(n_sq - cos_th**2 + 0j)
-
-    denom = sin_th + sq
-    if abs(denom) < 1e-15:
-        return 0.0
-
-    r_s = (sin_th - sq) / denom
-    R_smooth = float(abs(r_s) ** 2)
-
-    # Névot–Croce roughness factor
-    nc = np.exp(-((2.0 * k * sin_th * roughness_ang) ** 2))
-    R_single = R_smooth * float(nc)
-    R_single = max(0.0, min(1.0, R_single))
-
-    return R_single**n_mirrors
+    return float(R[0]) if np.ndim(energy_eV) == 0 else R
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1625,7 +1592,7 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
         _kb_key = tuple(sorted(kb_params.items()))
         if _kb_key not in _KB_CACHE:
             _E_kb = np.linspace(1_000.0, 120_000.0, 400)
-            _R_kb = np.array([kb_reflectivity(e, **kb_params) for e in _E_kb])
+            _R_kb = kb_reflectivity(_E_kb, **kb_params)
             _KB_CACHE[_kb_key] = (_E_kb, _R_kb)
         _E_kb, _R_kb = _KB_CACHE[_kb_key]
 
@@ -1644,7 +1611,7 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
         _key = tuple(sorted(params.items()))
         if _key not in _KB_CACHE:
             _E_m = np.linspace(1_000.0, 120_000.0, 400)
-            _R_m = np.array([kb_reflectivity(e, **params) for e in _E_m])
+            _R_m = kb_reflectivity(_E_m, **params)
             _KB_CACHE[_key] = (_E_m, _R_m)
         _E_m, _R_m = _KB_CACHE[_key]
         return lambda E_arr: np.interp(E_arr, _E_m, _R_m)

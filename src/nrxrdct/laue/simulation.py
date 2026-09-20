@@ -618,6 +618,26 @@ BM32_KB = dict(
     roughness_ang=3.0,
 )
 
+#: Analytical reflectivity parameters for the BM32 M1/M2 collimating/focusing
+#: mirrors (Ir-coated bent cylinders upstream of the KB system).  Unlike the
+#: KB mirrors, M1 and M2 are always in the beam path and are the elements
+#: that actually cut the low-/high-energy ends of the pink-beam spectrum, so
+#: they are applied unconditionally to analytical sources (see
+#: :func:`_make_spectrum_fn`).  Grazing angles from the BM32 optics page
+#: (same values used in :mod:`nrxrdct.laue.beamline`).
+BM32_M1 = dict(
+    material="Ir",
+    grazing_angle_mrad=3.062181698459972,
+    n_mirrors=1,
+    roughness_ang=3.0,
+)
+BM32_M2 = dict(
+    material="Ir",
+    grazing_angle_mrad=2.5627372258861216,
+    n_mirrors=1,
+    roughness_ang=3.0,
+)
+
 
 def kb_reflectivity(
     energy_eV,
@@ -1517,6 +1537,16 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
         * `'wiggler'` — same formula scaled by number of poles (fast).
         * `'undulator'` — Gaussian harmonic model (fast).
         * `'flat'` — uniform weight of 1.0 (fast, for testing).
+
+        For these four analytical sources, the BM32 M1 + M2 mirror
+        reflectivities (`BM32_M1`, `BM32_M2`; analytical Fresnel formula via
+        :func:`kb_reflectivity`, same as the KB correction below) are always
+        applied in addition to `kb_params`. M1/M2 are the elements that
+        actually cut the low-/high-energy ends of the beamline spectrum — the
+        KB mirrors alone (previously the only correction applied here) barely
+        affect its shape. This is a fast analytical stand-in for the full
+        Shadow4 ray-tracing of M1/M2 (see `'shadow4'` below), which is too
+        slow to run per simulation call.
         * `'shadow4'` — full optical-chain Monte Carlo via Shadow4 + xraylib.
           Traces SBM32 → M1 (Ir) → M2 (Ir) → KB (Rh) and returns absolute
           flux [ph/s/eV] at the sample.  **KB reflectivity is included** in
@@ -1604,6 +1634,24 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
     else:
         _kb_scale = None
 
+    # ── M1 + M2 reflectivity lookup tables (BM32 collimating/focusing mirrors) ─
+    # These are the elements that actually cut the pink-beam spectrum (the KB
+    # secondary-source slit passes so few rays that KB reflectivity alone,
+    # without M1/M2, misses most of the spectral shaping). Applied only to
+    # analytical sources below — 'shadow4' already ray-traces M1/M2 physically
+    # and 'tabulated' is assumed to already include their effect.
+    def _mirror_scale(params):
+        _key = tuple(sorted(params.items()))
+        if _key not in _KB_CACHE:
+            _E_m = np.linspace(1_000.0, 120_000.0, 400)
+            _R_m = np.array([kb_reflectivity(e, **params) for e in _E_m])
+            _KB_CACHE[_key] = (_E_m, _R_m)
+        _E_m, _R_m = _KB_CACHE[_key]
+        return lambda E_arr: np.interp(E_arr, _E_m, _R_m)
+
+    _m1_scale = _mirror_scale(BM32_M1)
+    _m2_scale = _mirror_scale(BM32_M2)
+
     if source in ("shadow4", "tabulated"):
         from scipy.interpolate import interp1d
         f_max = f_arr.max()
@@ -1651,6 +1699,7 @@ def _make_spectrum_fn(source, source_kwargs=None, kb_params=None):
                 "Choose from: 'bending_magnet', 'wiggler', 'undulator', "
                 "'flat', 'shadow4', 'tabulated'."
             )
+        out = out * _m1_scale(E_arr) * _m2_scale(E_arr)
         if _kb_scale is not None:
             out = out * _kb_scale(E_arr)
         return float(out[0]) if np.ndim(E) == 0 else out

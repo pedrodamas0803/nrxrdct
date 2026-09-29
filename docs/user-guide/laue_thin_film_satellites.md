@@ -144,32 +144,218 @@ $$
 
 ## 4. Detector displacement direction
 
-The displacement of a satellite on the detector relative to its parent Bragg
-spot is set by how $\delta\mathbf{G} = \mathbf{G}_\text{sat} - \mathbf{G}_{hkl}$
-rotates the scattered wavevector $\mathbf{k}_f = \mathbf{k}_i + \mathbf{G}$.
-For small displacements
+This section works out where a satellite lands on the detector relative to
+its parent Bragg spot, in five steps:
+
+1. the spot direction depends only on $\hat{G}$;
+2. only the part of $\delta\mathbf{G}$ perpendicular to $\mathbf{G}$ moves the spot;
+3. that tilt is split into radial ($2\theta$) and azimuthal parts;
+4. the change of direction is projected onto the flat detector;
+5. the energy shift is computed.
+
+Throughout, the satellite offset is
 
 $$
-\delta\mathbf{k}_f \approx \delta\mathbf{G}
-- \left(\delta\mathbf{G}\cdot\hat{k}_f\right)\hat{k}_f
+\delta\mathbf{G} \equiv \mathbf{G}_\text{sat} - \mathbf{G}_{hkl}
+= s\,q\,\hat{n}_\text{lab},
+\qquad s = \left(|m|+\tfrac{1}{2}\right)\operatorname{sgn}(m),
+\quad q = \frac{2\pi}{t},
 $$
 
-(the component along $\hat{k}_f$ changes only the energy, not the direction).
-The **in-plane** part of $\delta\mathbf{G}$ — i.e.\ the projection of
-$\hat{n}_\text{lab}$ onto the detector plane — determines the pixel
-displacement direction.
+and $|\delta\mathbf{G}| \ll |\mathbf{G}_{hkl}|$ (for $t = 50$ nm,
+$q \approx 0.013$ Å$^{-1}$, compared with $|\mathbf{G}| \sim 2$–$10$ Å$^{-1}$).
+
+### Step 1 — In Laue geometry the spot direction depends only on $\hat{G}$
+
+The incident beam is $\mathbf{k}_i = k\,\hat{x}$ with $k = 2\pi/\lambda = E/\hbar c$.
+Elastic scattering requires $|\mathbf{k}_i + \mathbf{G}| = |\mathbf{k}_i|$:
+
+$$
+|\mathbf{k}_i + \mathbf{G}|^2 = k^2
+\;\Longrightarrow\;
+2k\,G_x + |\mathbf{G}|^2 = 0
+\;\Longrightarrow\;
+k = -\frac{|\mathbf{G}|^2}{2\,G_x},
+$$
+
+which is the energy formula from §2 (a reflection is accessible only if
+$G_x < 0$).  Substituting this $k$ back into $\mathbf{k}_f = k\hat{x} + \mathbf{G}$:
+
+$$
+\hat{k}_f = \frac{\mathbf{k}_f}{k}
+= \hat{x} + \frac{\mathbf{G}}{k}
+= \hat{x} - \frac{2\,G_x}{|\mathbf{G}|^2}\,\mathbf{G}
+= \hat{x} - 2\,(\hat{x}\cdot\hat{G})\,\hat{G}.
+$$
+
+This is the mirror reflection of the beam direction in the lattice plane with
+normal $\hat{G}$.  $|\mathbf{G}|$ has cancelled out, so it sets only the
+wavelength and not the spot position.  The white beam simply supplies whichever
+wavelength is needed.
+
+### Step 2 — Only the component of $\delta\mathbf{G}$ perpendicular to $\mathbf{G}$ moves the spot
+
+Split the offset into components parallel and perpendicular to $\mathbf{G}$:
+
+$$
+\delta\mathbf{G} = \delta G_\parallel\,\hat{G} + \delta\mathbf{G}_\perp,
+\qquad
+\delta G_\parallel = \delta\mathbf{G}\cdot\hat{G},
+\qquad
+\delta\mathbf{G}_\perp = \delta\mathbf{G} - (\delta\mathbf{G}\cdot\hat{G})\,\hat{G}.
+$$
+
+To first order, the unit vector changes by
+
+$$
+\delta\hat{G} = \frac{\delta\mathbf{G}_\perp}{|\mathbf{G}|}
+= \frac{s\,q}{|\mathbf{G}|}\,
+\bigl[\hat{n}_\text{lab} - (\hat{n}_\text{lab}\cdot\hat{G})\,\hat{G}\bigr].
+$$
+
+$\delta G_\parallel$ only rescales $|\mathbf{G}|$. By Step 1 that changes the
+energy but not the pixel.  **The quantity that sets the displacement is the
+projection of $\hat{n}_\text{lab}$ perpendicular to $\mathbf{G}$.**  It is
+*not* the projection onto the detector plane, and not the part perpendicular
+to $\hat{k}_f$.
+
+> **Special case — symmetric reflections.**  If $\mathbf{G}_{hkl} \parallel \hat{n}$
+> (e.g. $00\ell$ for $c$-axis growth), $\delta\mathbf{G}_\perp = 0$.  All
+> fringes then fall **on the same pixel** as the Bragg spot at slightly
+> different energies.  A white-beam detector that does not resolve energy
+> cannot separate them.  Fringes are visible as separate spots only on
+> asymmetric reflections.
+
+### Step 3 — Radial and azimuthal parts of the tilt
+
+Differentiate the mirror formula from Step 1:
+
+$$
+\delta\hat{k}_f = -2\left[(\hat{x}\cdot\delta\hat{G})\,\hat{G}
++ (\hat{x}\cdot\hat{G})\,\delta\hat{G}\right].
+$$
+
+To read this off, define an orthonormal frame attached to the reflection.
+$\theta$ is the Bragg angle, so $\hat{x}\cdot\hat{G} = -\sin\theta$.
+
+* $\hat{G}$: the scattering vector direction;
+* $\hat{e}_\parallel$: the unit vector perpendicular to $\hat{G}$ **in** the
+  scattering plane (the plane containing $\hat{x}$ and $\hat{G}$), chosen so
+  that $\hat{x} = -\sin\theta\,\hat{G} + \cos\theta\,\hat{e}_\parallel$;
+* $\hat{e}_\perp = \hat{G}\times\hat{e}_\parallel$: perpendicular to the
+  scattering plane.
+
+In this frame $\hat{k}_f = \sin\theta\,\hat{G} + \cos\theta\,\hat{e}_\parallel$.
+Write the tilt as $\delta\hat{G} = \alpha\,\hat{e}_\parallel + \beta\,\hat{e}_\perp$,
+with
+
+$$
+\alpha = \frac{\delta\mathbf{G}\cdot\hat{e}_\parallel}{|\mathbf{G}|},
+\qquad
+\beta = \frac{\delta\mathbf{G}\cdot\hat{e}_\perp}{|\mathbf{G}|}.
+$$
+
+Then $\hat{x}\cdot\delta\hat{G} = \alpha\cos\theta$. Substituting:
+
+$$
+\delta\hat{k}_f
+= -2\alpha\,\underbrace{\left(\cos\theta\,\hat{G} - \sin\theta\,\hat{e}_\parallel\right)}_{\text{unit vector in scattering plane},\ \perp\,\hat{k}_f}
+\;+\; 2\beta\sin\theta\,\hat{e}_\perp .
+$$
+
+So:
+
+| Tilt of $\hat{G}$ | Effect on the scattered beam | On the detector |
+|---|---|---|
+| $\alpha$ (in scattering plane) | rotates by $2\alpha$, i.e. $\Delta(2\theta) = -2\alpha$ | **radial** shift (along the $2\theta$ direction) |
+| $\beta$ (out of scattering plane) | rotates by $2\beta\sin\theta$ | **azimuthal** shift (along the $\chi$ / Debye-ring direction) |
+
+The in-plane tilt is doubled, as for any mirror.  The out-of-plane tilt is
+reduced by $\sin\theta$, so for low-angle reflections most of the visible
+displacement is radial.
+
+### Step 4 — Projection onto the flat detector
+
+Put the sample at the origin. Let the detector plane have unit normal
+$\hat{n}_d$ and lie a distance $D$ from the sample along $\hat{n}_d$.  The
+scattered ray reaches the detector at
+
+$$
+\mathbf{P} = \frac{D}{\hat{k}_f\cdot\hat{n}_d}\,\hat{k}_f .
+$$
+
+Varying $\hat{k}_f$ (both the numerator and the denominator change) gives the
+in-plane displacement:
+
+$$
+\delta\mathbf{P} = \frac{D}{\hat{k}_f\cdot\hat{n}_d}
+\left[\delta\hat{k}_f
+- \frac{\delta\hat{k}_f\cdot\hat{n}_d}{\hat{k}_f\cdot\hat{n}_d}\,\hat{k}_f\right],
+\qquad \delta\mathbf{P}\cdot\hat{n}_d = 0 .
+$$
+
+The pixel displacement is $\delta\mathbf{P}$ projected onto the detector's
+two pixel axes and divided by the pixel size.  For a spot near the detector
+centre ($\hat{k}_f \approx \hat{n}_d$) this reduces to
+$\delta\mathbf{P} \approx D\,\delta\hat{k}_f$.
+
+In practice `simulate_laue_stack` does not use this linearisation.  It
+projects $\mathbf{G}_\text{sat}$ exactly with the `Camera` geometry, just like
+any Bragg reflection.  Steps 1–4 are for understanding and estimating the
+displacement.
+
+### Step 5 — Energy shift
+
+From Step 1, $E = \hbar c\,|\mathbf{G}|^2 / (2|G_x|) = \hbar c\,|\mathbf{G}|/(2\sin\theta)$.
+Take the logarithmic derivative and use $\delta\sin\theta = -\hat{x}\cdot\delta\hat{G} = -\alpha\cos\theta$:
+
+$$
+\frac{\delta E}{E} = \frac{\delta G_\parallel}{|\mathbf{G}|} + \alpha\cot\theta .
+$$
+
+The $m = +1$ and $m = -1$ satellites therefore sit at energies on opposite
+sides of $E_0$.  Near the edge of the spectrum, only one of the two may fall
+inside $[E_\text{min}, E_\text{max}]$.
+
+### Worked example
+
+Take a $t = 50$ nm film and a reflection with $d_{hkl} = 1$ Å
+($|\mathbf{G}| = 2\pi$ Å$^{-1}$), and suppose $\hat{n}$ lies entirely in the
+scattering plane, perpendicular to $\mathbf{G}$.  For the first fringe:
+
+$$
+|\delta\mathbf{G}| = 1.5 \times \frac{2\pi}{500\ \text{Å}} \approx 0.019\ \text{Å}^{-1},
+\qquad
+\alpha = \frac{0.019}{6.28} \approx 3.0\times10^{-3}\ \text{rad},
+$$
+
+$$
+|\Delta(2\theta)| = 2\alpha \approx 6.0\ \text{mrad} \approx 0.34^\circ,
+\qquad
+|\delta\mathbf{P}| \approx D\cdot 2\alpha \approx 0.48\ \text{mm at } D = 80\ \text{mm},
+$$
+
+which is about 6 pixels on an 80 µm-pixel detector.  The displacement scales
+as $1/(t\,|\mathbf{G}|)$, so thinner films and lower-order reflections give
+satellites that are easier to resolve.
 
 ### Why flipping $\hat{n}$ alone does not flip the satellite side
 
-Both $m=+1$ (at $+\Delta q_n$) and $m=-1$ (at $-\Delta q_n$) are always
-enumerated.  The satellite energies $E^{(m)}$ depend on the actual
-$\mathbf{G}_\text{sat}$ vectors, which are unchanged by relabelling $m$.
-Thus flipping $\hat{n} \to -\hat{n}$ merely swaps the $m$-labels; it does
-not move any spot to a new detector position.
+Both $m=+1$ ($\delta\mathbf{G} = +1.5\,q\,\hat{n}$) and $m=-1$
+($\delta\mathbf{G} = -1.5\,q\,\hat{n}$) are always enumerated.  Under
+$\hat{n}\to-\hat{n}$ the pair of offset vectors $\{+\delta\mathbf{G},
+-\delta\mathbf{G}\}$ is mapped onto itself, with the $m$-labels swapped.  The
+set of $\mathbf{G}_\text{sat}$ vectors is unchanged, so Steps 1–5 give the
+same pixels and energies.  Flipping $\hat{n}$ does **not** move any
+spot.
 
-The correct way to control which side the fringe appears on is to ensure the
-stacking direction $\hat{n}_\text{crystal}$ points **from substrate toward
-surface** (the growth direction).  For $c$-axis GaN use $[001]$ not $[00\bar 1]$.
+What the sign of $\hat{n}$ *does* affect is the layer phases
+$e^{i\mathbf{Q}\cdot z_j\hat{n}}$ in $F_\text{stack}$ (§3).  Reversing
+$\hat{n}$ reverses the stacking order, which changes how the layers interfere.
+In a strained or multi-layer stack this can make one side's fringes brighter
+than the other's.  To get the right *intensities*, make sure the stacking
+direction $\hat{n}_\text{crystal}$ points **from substrate toward surface**
+(the growth direction).  For $c$-axis GaN use $[001]$, not $[00\bar 1]$.
 
 ---
 

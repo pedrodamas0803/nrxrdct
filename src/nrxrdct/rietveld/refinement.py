@@ -1155,25 +1155,24 @@ class BaseRefinement(Scan):
             refine (list of str, optional): Ordered list of Gaussian instrument parameters to refine.
                 Valid choices (all available in the FCJVoigt / ExpFCJVoigt profile):
 
+                GSAS-II's U, V, W define the Gaussian *variance*
+                σ² = U·tan²θ + V·tanθ + W, not FWHM²; the Gaussian FWHM is
+                sqrt(8 ln2 · σ²).
+
                 ``"U"``
-                    Caglioti quadratic term: FWHM²_G += U·tan²θ.
+                    Caglioti quadratic term: σ² += U·tan²θ.
                     Dominated by sample microstrain and wavelength dispersion.
                     Units: centideg².
 
                 ``"V"``
-                    Caglioti linear term: FWHM²_G += V·tanθ.
+                    Caglioti linear term: σ² += V·tanθ.
                     Usually small; cross-term between source and detector
                     contributions.  Units: centideg².
 
                 ``"W"``
-                    Caglioti constant term: FWHM²_G += W.
+                    Caglioti constant term: σ² += W.
                     For a well-collimated synchrotron beam with a 2-D detector
                     this is often the *only* non-negligible Gaussian contribution.
-                    Units: centideg².
-
-                ``"Z"``
-                    Size-broadening Gaussian term: FWHM²_G += Z/cos²θ.
-                    Encodes crystallite-size broadening in the Gaussian channel.
                     Units: centideg².
 
                 ``"SH/L"``
@@ -1234,10 +1233,19 @@ class BaseRefinement(Scan):
                     Encodes microstrain-induced Lorentzian broadening.
                     Units: centideg.
 
-                The total Lorentzian FWHM combines with the Gaussian via the
-                Thompson–Cox–Hastings pseudo-Voigt mixing rule:
+                ``"Z"``
+                    Constant Lorentzian term: FWHM_L += Z.  Units: centideg.
 
-                    FWHM_total⁵ = FWHM_G⁵ + FWHM_L⁵  (approximate)
+                The phase's Size and Mustrain broadening are *added* to
+                X and Y respectively (same 1/cosθ and tanθ shapes), so they
+                are fully correlated with them; keep them fixed while
+                calibrating (see :meth:`InstrumentCalibration.add_phase`).
+
+                The total Lorentzian FWHM combines with the Gaussian via the
+                Thompson–Cox–Hastings pseudo-Voigt rule:
+
+                    FWHM⁵ = G⁵ + 2.69269·G⁴L + 2.42843·G³L² + 4.47163·G²L³
+                    + 0.07842·GL⁴ + L⁵
 
         Note:
             Parameters are refined *sequentially* (one per cycle).  To refine
@@ -1285,8 +1293,13 @@ class BaseRefinement(Scan):
             synchrotron CW data.  Peak width is parametrised via the
             Thompson-Cox-Hastings (TCH) approach:
 
-            - Gaussian FWHM²  = U·tan²θ + V·tanθ + W + Z/cos²θ
-            - Lorentzian FWHM = X/cosθ  + Y·tanθ
+            - Gaussian variance σ² = U·tan²θ + V·tanθ + W
+              (FWHM_G = sqrt(8 ln2 · σ²))
+            - Lorentzian FWHM  γ  = X/cosθ + Y·tanθ + Z
+
+            The phase's Size and Mustrain broadening are added on top of
+            X and Y (same angular shapes), so they must be held fixed when
+            calibrating the instrument.
 
             Parameters:
 
@@ -1310,9 +1323,8 @@ class BaseRefinement(Scan):
             ``Y`` — Lorentzian width, tanθ term.  Proportional to
             microstrain broadening (Williamson-Hall).  Units: centideg.
 
-            ``Z`` — Gaussian width added in quadrature, independent of
-            angle.  Rarely refined; used to model detector point-spread.
-            Units: centideg².
+            ``Z`` — Lorentzian width, angle-independent (constant) term.
+            Rarely refined.  Units: centideg.
 
             ``SH/L`` — Axial divergence ratio (S+H)/L, where S is the
             receiving-slit height, H the sample height, and L the
@@ -4378,12 +4390,12 @@ class BaseRefinement(Scan):
                 [
                     ("Lam",         "Wavelength",                                                   "Å"),
                     ("Zero",        "Two-theta zero-point correction",                              "degrees"),
-                    ("U",           "Cagliotti Gaussian – U  (FWHM²=Utan²θ+Vtanθ+W)",             "degrees²"),
-                    ("V",           "Cagliotti Gaussian – V",                                       "degrees²"),
-                    ("W",           "Cagliotti Gaussian – W",                                       "degrees²"),
-                    ("X",           "Lorentzian broadening – X  (scales as 1/cosθ)",               "degrees"),
-                    ("Y",           "Lorentzian broadening – Y  (scales as tanθ)",                 "degrees"),
-                    ("Z",           "Lorentzian broadening – Z  (constant term)",                  "degrees"),
+                    ("U",           "Cagliotti Gaussian – U  (σ²=Utan²θ+Vtanθ+W)",                "centideg²"),
+                    ("V",           "Cagliotti Gaussian – V",                                       "centideg²"),
+                    ("W",           "Cagliotti Gaussian – W",                                       "centideg²"),
+                    ("X",           "Lorentzian broadening – X  (scales as 1/cosθ)",               "centideg"),
+                    ("Y",           "Lorentzian broadening – Y  (scales as tanθ)",                 "centideg"),
+                    ("Z",           "Lorentzian broadening – Z  (constant term)",                  "centideg"),
                     ("SH/L",        "Finger-Cox-Jephcoat axial asymmetry = S/L + H/L",             "dimensionless"),
                     ("Polariz.",    "Beam polarization fraction",                                   "0 – 1"),
                     ("I(L2)/I(L1)","Kα₂/Kα₁ intensity ratio (dual-wavelength sources only)",      "dimensionless"),
@@ -5065,6 +5077,46 @@ class InstrumentCalibration(BaseRefinement):
         self.calibration_file = Path("calibration") / self.param_file
         self.calibration_image = Path("calibration") / image_file
 
+    def add_phase(
+        self,
+        cif_file: Path = Path("cif_file"),
+        phase_name: str = "LaB6",
+        block_cell: bool = True,
+        size: float = 10.0,
+        mustrain: float = 0.0,
+    ) -> G2sc.G2Phase:
+        """
+        Add the calibrant phase and neutralise its sample broadening.
+
+        GSAS-II does not subtract an instrument resolution function: it adds
+        the phase's Size and Mustrain broadening on top of the instrumental
+        profile. Left at GSAS-II's defaults (1 µm, 1000 µε) these add roughly
+        ``5.7·tanθ`` centideg (Mustrain) and ``1.8λ/(π·D·cosθ)`` centideg
+        (Size) of Lorentzian width, which have exactly the shapes of ``Y``
+        and ``X`` — so the calibrated ``Y`` (and to a lesser extent ``X``)
+        come out biased low, often negative, and sample microstrain refined
+        later with that ``.instprm`` is biased high. Here both are set to
+        values contributing negligible broadening and frozen, so all
+        observed broadening goes into the instrument parameters.
+
+        Args:
+            cif_file (Path, optional): Path to the calibrant CIF file.
+            phase_name (str, optional): Name to assign the phase (default ``"LaB6"``).
+            block_cell (bool, optional): Fix atom positions and unit cell (default ``True``).
+            size (float, optional): Isotropic crystallite size in µm (default 10.0,
+                i.e. negligible). Use the certified value for a standard such as
+                NIST SRM 660c if its size broadening should be kept out of the
+                instrument profile.
+            mustrain (float, optional): Isotropic microstrain in µε (default 0.0).
+
+        Returns:
+            G2Phase: The newly added GSAS-II phase object.
+        """
+        phase = super().add_phase(cif_file, phase_name, block_cell)
+        self.set_HAP_parameter("Size", size, phase=phase.name, freeze=True)
+        self.set_HAP_parameter("Mustrain", mustrain, phase=phase.name, freeze=True)
+        return phase
+
     def refine_instrument_parameters(
         self,
         profile_params: list[str] = ["W", "X", "Y"],
@@ -5258,11 +5310,11 @@ class InstrumentCalibration(BaseRefinement):
               means the diffractometer's mechanical zero does not coincide
               with the true 2θ = 0°.  Should be small (|Zero| ≲ 0.05°) for
               a well-aligned instrument.
-            * **U**, **V** — Gaussian width, tan²θ and tanθ terms
+            * **U**, **V** — Gaussian variance, tan²θ and tanθ terms
               (deg²).  Typically fixed at 0 for a well-collimated
               synchrotron beam with a 2-D detector; relevant for
               laboratory sources.
-            * **W** — angle-independent Gaussian width coefficient
+            * **W** — angle-independent Gaussian variance term
               (deg²).  For a synchrotron beam with a 2-D detector this
               is typically the dominant peak-width contribution.
             * **X** — Lorentzian width, 1/cosθ term (deg).  Related to
@@ -5275,13 +5327,13 @@ class InstrumentCalibration(BaseRefinement):
 
         **Bottom-right — FWHM model** (``ax_fw``)
             Predicted peak FWHM as a function of 2θ, decomposed into its
-            Gaussian (orange, ``FWHM²_G = U·tan²θ + V·tanθ + W``) and
-            Lorentzian (blue, ``FWHM_L = X/cosθ + Y·tanθ``) components, plus
-            the Thompson-Cox-Hastings
-            (TCH) combined total (black).  The TCH pseudo-Voigt combination
-            rule is:
+            Gaussian (orange, ``FWHM_G = sqrt(8 ln2 · σ²)`` with
+            ``σ² = U·tan²θ + V·tanθ + W``) and Lorentzian (blue,
+            ``FWHM_L = γ = X/cosθ + Y·tanθ + Z``) components, plus the
+            Thompson-Cox-Hastings (TCH) combined total (black):
 
-                FWHM\\ :sub:`total`\\ ⁵ = FWHM\\ :sub:`G`\\ ⁵ + FWHM\\ :sub:`L`\\ ⁵
+                FWHM⁵ = G⁵ + 2.69269·G⁴L + 2.42843·G³L² + 4.47163·G²L³
+                + 0.07842·GL⁴ + L⁵
 
             Use this panel to judge whether the peak-width model is
             physically reasonable across the full angular range.  If the
@@ -5463,6 +5515,7 @@ class InstrumentCalibration(BaseRefinement):
             W_v = calibrated.get("W", 0.0)
             X_v = calibrated.get("X", 0.0)
             Y_v = calibrated.get("Y", 0.0)
+            Z_v = ip["Z"][1] / 1e2 if "Z" in ip else 0.0
             tth_range = np.linspace(self.low_lim, self.high_lim, 300)
             tan_th = np.tan(np.radians(tth_range / 2))
             cos_th = np.cos(np.radians(tth_range / 2))
@@ -5473,19 +5526,28 @@ class InstrumentCalibration(BaseRefinement):
             # combined width must be non-negative; clipping each term
             # individually (as before) would force spurious constructive
             # addition instead of letting them partially cancel.
+            # GSAS-II's U, V, W give the Gaussian *variance* σ², not FWHM².
             sig2 = U_v * tan_th**2 + V_v * tan_th + W_v
-            fwhm_G = np.sqrt(np.clip(sig2, 0, None))
-            gam = X_v / cos_th + Y_v * tan_th
+            fwhm_G = np.sqrt(8 * np.log(2) * np.clip(sig2, 0, None))
+            gam = X_v / cos_th + Y_v * tan_th + Z_v
             # Plot the true (possibly negative) Lorentzian term so its actual
             # X/cosθ + Y·tanθ shape is visible — e.g. Y alone gives a rising
             # tanθ curve, not a flat line. Only clip a *separate* copy for the
             # TCH combination below, since raising a negative fwhm_total base
             # to the fractional power 1/5 would otherwise yield NaN.
             fwhm_L = gam
-            fwhm_L_safe = np.clip(gam, 0, None)
-            fwhm_total = (fwhm_G**5 + fwhm_L_safe**5) ** (1 / 5)
+            G, L = fwhm_G, np.clip(gam, 0, None)
+            # Full Thompson-Cox-Hastings polynomial, as used by GSAS-II.
+            fwhm_total = (
+                G**5
+                + 2.69269 * G**4 * L
+                + 2.42843 * G**3 * L**2
+                + 4.47163 * G**2 * L**3
+                + 0.07842 * G * L**4
+                + L**5
+            ) ** (1 / 5)
             ax_fw.plot(tth_range, fwhm_G, "darkorange", lw=1.5, label="Gaussian (U,V,W)")
-            ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X,Y)")
+            ax_fw.plot(tth_range, fwhm_L, "steelblue", lw=1.5, label="Lorentzian (X,Y,Z)")
             ax_fw.plot(tth_range, fwhm_total, "k-", lw=1.5, label="TCH total")
             ax_fw.set_xlabel("2θ (degrees)")
             ax_fw.set_ylabel("FWHM (degrees)")

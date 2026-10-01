@@ -122,6 +122,29 @@ def read_volume_from_file(input_file: Path, slicing: tuple | None = None) -> np.
     return volume
 
 
+def sanitize_esd(y: np.ndarray, err: np.ndarray) -> np.ndarray:
+    """
+    Replace non-positive or non-finite uncertainties by a Poisson estimate.
+
+    GSAS-II's xye reader (before April 2026) computes ``1/esd**2`` and, on
+    the resulting ZeroDivisionError, stops reading with ``x``/``y`` one point
+    longer than ``w``; newer versions skip ``y``/``w`` but keep ``x`` for a
+    negative esd. Either way the stored data arrays are ragged and the next
+    ``.gpx`` reload fails. ``sqrt(max(y, 1))`` matches the ``w = 1/y`` weight
+    GSAS-II itself uses when no esd is given.
+
+    Args:
+        y (np.ndarray): Intensity values.
+        err (np.ndarray): Per-point uncertainties.
+
+    Returns:
+        np.ndarray: Uncertainties, all strictly positive and finite.
+    """
+    err = np.asarray(err, dtype=float)
+    good = np.isfinite(err) & (err > 0)
+    return np.where(good, err, np.sqrt(np.clip(np.nan_to_num(y), 1.0, None)))
+
+
 def save_xy_file(
     x: np.ndarray,
     y: np.ndarray,
@@ -142,9 +165,9 @@ def save_xy_file(
             Written as a third ("Sigma") column so GSAS-II and
             :meth:`~nrxrdct.rietveld.refinement.BaseRefinement._compute_gof_chi2`
             can use real per-point weights instead of a Poisson
-            approximation. Defaults to an array of zeros when not provided
-            (GSAS-II falls back to its own Poisson-on-intensity estimate for
-            zero/absent esd's, same as historical 2-column files).
+            approximation. Missing, zero, negative or non-finite values are
+            replaced by the Poisson estimate ``sqrt(max(y, 1))`` (see
+            :func:`sanitize_esd`).
         output_file (Path, optional): Destination file path
             (default ``"integrated_data.xy"``).
         unit (str, optional): Label for the scattering-angle axis written into
@@ -154,6 +177,7 @@ def save_xy_file(
     """
     if not isinstance(err, np.ndarray):
         err = np.zeros_like(y)
+    err = sanitize_esd(y, err)
     header = (
         f"pyFAI multi-geometry azimuthal integration\n"
         f"Unit: {unit}\n"

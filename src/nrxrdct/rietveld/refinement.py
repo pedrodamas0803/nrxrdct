@@ -40,7 +40,7 @@ def _require_gsasii() -> None:
             "Install it separately — see https://gsas-ii.readthedocs.io/."
         )
 
-from ..xrdct.io import read_xy_file, write_starting_instrument_pars
+from ..xrdct.io import read_xy_file, sanitize_esd, write_starting_instrument_pars
 from ..xrdct.parameters import Scan
 from .refine_dict import *
 
@@ -321,8 +321,29 @@ class BaseRefinement(Scan):
         _require_gsasii()
         self.gpx = G2sc.G2Project(newgpx=str(gpx_file))
 
+        datafile = self.xy_file
+        if self.esd is not None:
+            bad = ~(np.isfinite(self.esd) & (self.esd > 0))
+            if bad.any():
+                # GSAS-II's xye reader leaves ragged data arrays for rows with
+                # esd <= 0 (see sanitize_esd), which crash the next .gpx
+                # reload (e.g. in add_phase). Feed it a sanitized copy.
+                print(
+                    f"WARNING: {bad.sum()} zero/negative/non-finite esd values "
+                    f"in {self.xy_file}; replacing them with sqrt(I)."
+                )
+                self.esd = sanitize_esd(self.intensity, self.esd)
+                datafile = Path(gpx_file).with_name(
+                    Path(self.xy_file).stem + "_sanitized.xy"
+                )
+                np.savetxt(
+                    str(datafile),
+                    np.column_stack([self.tth, self.intensity, self.esd]),
+                    fmt="%.6f",
+                )
+
         self.hist = self.gpx.add_powder_histogram(
-            datafile=self.xy_file, iparams=self.param_file, phases="all"
+            datafile=str(datafile), iparams=self.param_file, phases="all"
         )
         self.hist["data"][0]["Limits"] = [self.low_lim, self.high_lim]
         self.gpx.save()

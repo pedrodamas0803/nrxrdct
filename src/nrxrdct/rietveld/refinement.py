@@ -637,6 +637,38 @@ class BaseRefinement(Scan):
             print(f"Phase '{ph.name}' set to {mode} mode")
         self.gpx.save()
 
+    def _add_background_pwdr_histogram(self, user_background: list | np.ndarray) -> str:
+        """
+        Register ``user_background`` as its own, phase-free PWDR histogram.
+
+        GSAS-II's ``"background PWDR"`` linking mechanism (``getBackground`` /
+        ``GetUsedHistogramsAndPhases`` in ``GSASIIpwd``/``GSASIIstrIO``) matches
+        points *positionally* against the main histogram's data array — it does
+        not interpolate by 2θ value. The new histogram is therefore written
+        with ``self.tth`` as its 2θ column, guaranteeing the two arrays line up
+        point-for-point.
+
+        Args:
+            user_background (list or array): Background intensities, one per point of ``self.tth``.
+
+        Returns:
+            str: Name GSAS-II assigned to the new histogram.
+        """
+        self._user_bkg_counter = getattr(self, "_user_bkg_counter", 0) + 1
+        bkg_file = Path(self.gpx.filename).with_name(
+            f"user_background_{self._user_bkg_counter}.xy"
+        )
+        np.savetxt(
+            str(bkg_file),
+            np.column_stack([self.tth, np.asarray(user_background, dtype=float)]),
+            fmt="%.6f",
+        )
+        bkg_hist = self.gpx.add_powder_histogram(
+            datafile=str(bkg_file), iparams=self.param_file, phases=None
+        )
+        self.gpx.save()
+        return bkg_hist.name
+
     def refine_background(
         self,
         number_coeff: int = 12,
@@ -651,10 +683,11 @@ class BaseRefinement(Scan):
 
         Args:
             number_coeff (int, optional): Number of background function coefficients (default 12).
-                Ignored when ``function="user"`` — the point count is taken from
-                ``user_background`` instead.
+                Ignored when ``function="user"``.
             do_refine (bool, optional): Whether to activate the background refinement flag (default ``True``).
-                Pass ``False`` together with ``function="user"`` to keep a supplied background fixed.
+                For ``function="user"`` this instead controls whether the single scale factor
+                applied to the supplied curve is refined — pass ``False`` to keep it fixed at 1.0
+                (i.e. the supplied background used as-is).
             function (str, optional): Background function type.  Must be one of:
 
                 * ``"chebyschev"``        — Chebyshev polynomial (default)
@@ -683,11 +716,22 @@ class BaseRefinement(Scan):
                         {"A": 1000.0, "R": 4.5, "U": 0.01,
                          "refine_A": True, "refine_R": True, "refine_U": False},
                     ]
-            user_background (list or array, optional): Background intensity values evaluated at
-                points evenly spaced across ``[self.low_lim, self.high_lim]``.  Required when
-                ``function="user"``; ignored (with a warning) for every other ``function`` value.
-                Internally stored as GSAS-II's ``"lin interpolate"`` type, with the point count
-                taken from ``len(user_background)``.
+            user_background (list or array, optional): Background intensity values measured at
+                *exactly* the same 2θ points as the fitted pattern — ``len(user_background)`` must
+                equal ``len(self.tth)``, e.g. the output of a background-estimation algorithm
+                (SNIP, rolling ball, asymmetric least squares, ...) run directly on the loaded
+                ``.xy`` data. Required when ``function="user"``; ignored (with a warning) for
+                every other ``function`` value.
+
+                Stored as a *separate*, phase-free PWDR histogram and linked to the main histogram
+                through GSAS-II's native ``"background PWDR"`` mechanism: a single scale factor
+                (``do_refine``) multiplies the whole curve, on top of a fixed, zero polynomial
+                background. The cost of a refinement cycle is therefore independent of how many
+                points the curve has. An earlier version of this method instead wrote every point
+                in as its own ``"lin interpolate"`` background coefficient, which made
+                ``no. coeffs`` — and the per-cycle cost of building the variable list — scale with
+                the curve length; catastrophic for a curve sampled at full pattern resolution
+                (e.g. 10k points).
         """
         valid_functions = {
             "chebyschev",
@@ -711,28 +755,37 @@ class BaseRefinement(Scan):
                 raise ValueError(
                     "function='user' requires 'user_background' with at least 2 points."
                 )
+            if len(user_background) != len(self.tth):
+                raise ValueError(
+                    f"'user_background' has {len(user_background)} point(s) but the fitted "
+                    f"pattern has {len(self.tth)}. GSAS-II's background-histogram mechanism "
+                    "matches points by position, not by 2theta value, so the curve must be "
+                    "evaluated at exactly the same 2theta points as self.tth."
+                )
         elif user_background is not None:
             print(
                 f"Warning: 'user_background' is ignored because function='{function}' "
                 "(only used when function='user')."
             )
 
-        gsas_function = "lin interpolate" if function == "user" else function
-        n_coeff = len(user_background) if function == "user" else number_coeff
-
-        self.hist.set_refinements(
-            {
-                "Background": {
-                    "type": gsas_function,
-                    "no. coeffs": n_coeff,
-                    "refine": do_refine,
-                }
-            }
-        )
-
         if function == "user":
-            bkg_rec = self.hist["Background"][0]
-            bkg_rec[3:] = [float(v) for v in user_background]
+            bkg_hist_name = self._add_background_pwdr_histogram(user_background)
+            self.hist.set_refinements(
+                {"Background": {"type": "chebyschev", "no. coeffs": 1, "refine": False}}
+            )
+            self.hist["Background"][1]["background PWDR"] = [bkg_hist_name, 1.0, do_refine]
+            gsas_function, n_coeff = "user", len(user_background)
+        else:
+            gsas_function, n_coeff = function, number_coeff
+            self.hist.set_refinements(
+                {
+                    "Background": {
+                        "type": gsas_function,
+                        "no. coeffs": n_coeff,
+                        "refine": do_refine,
+                    }
+                }
+            )
 
         if debye_terms:
             bkg_extra = self.hist["Background"][1]
@@ -758,8 +811,10 @@ class BaseRefinement(Scan):
         notes = []
         if function == "user":
             notes.append(
-                "function='user' custom coefficient values are not encoded here; "
-                "pass the same user_background when replaying."
+                "function='user' links a separate background-PWDR histogram via "
+                "Background[1]['background PWDR']; not representable in GSAS-II's "
+                "do_refinements 'set'/'once' schema — pass the same user_background "
+                "when replaying."
             )
         if debye_terms:
             notes.append(
@@ -776,6 +831,8 @@ class BaseRefinement(Scan):
             bkg[0][1] = False
             for term in bkg[1].get("debyeTerms", []):
                 term[1] = term[3] = term[5] = False  # refA, refR, refU
+            if "background PWDR" in bkg[1]:
+                bkg[1]["background PWDR"][2] = False
             self.gpx.save()
 
         frozen_info = " (parameters frozen)" if freeze else ""
@@ -3202,6 +3259,8 @@ class BaseRefinement(Scan):
         bkg[0][1] = False
         for term in bkg[1].get("debyeTerms", []):
             term[1] = term[3] = term[5] = False  # refA, refR, refU
+        if "background PWDR" in bkg[1]:
+            bkg[1]["background PWDR"][2] = False
 
         # Instrument parameters
         ip = self.hist["Instrument Parameters"][0]
@@ -3253,6 +3312,8 @@ class BaseRefinement(Scan):
         for term in bkg[1].get("debyeTerms", []):
             for idx in (1, 3, 5):
                 yield (term, idx)
+        if "background PWDR" in bkg[1]:
+            yield (bkg[1]["background PWDR"], 2)
 
         ip = self.hist["Instrument Parameters"][0]
         for val in ip.values():
@@ -3430,6 +3491,7 @@ class BaseRefinement(Scan):
         "Mustrain;i": "µε", "Mustrain;u": "µε",  "Mustrain;mx": "µε",
         # HAP – preferred orientation (March-Dollase ratio)
         "MD": "—",
+        "BF mult": "—",
         # Background coefficients  (prefix "Back;" matched below)
         # Cell parameters — GSAS-II varies the metric-tensor components A0..A5
         # (not a/b/c/alpha/beta/gamma directly) when "Cell" is refined.

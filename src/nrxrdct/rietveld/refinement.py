@@ -664,7 +664,7 @@ class BaseRefinement(Scan):
             fmt="%.6f",
         )
         bkg_hist = self.gpx.add_powder_histogram(
-            datafile=str(bkg_file), iparams=self.param_file, phases=None
+            datafile=str(bkg_file), iparams=self.param_file, phases=[]
         )
         self.gpx.save()
         return bkg_hist.name

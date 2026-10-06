@@ -145,6 +145,24 @@ def sanitize_esd(y: np.ndarray, err: np.ndarray) -> np.ndarray:
     return np.where(good, err, np.sqrt(np.clip(np.nan_to_num(y), 1.0, None)))
 
 
+def is_placeholder_esd(y: np.ndarray, err: np.ndarray) -> bool:
+    """
+    Return ``True`` if ``err`` is just ``sqrt(max(y, 1))`` everywhere.
+
+    Older versions of :func:`save_xy_file` wrote that as the "Sigma" column
+    when given no uncertainties, so such a column carries no information
+    beyond ``y`` and should be treated as missing.
+    """
+    y = np.asarray(y, dtype=float)
+    err = np.asarray(err, dtype=float)
+    if y.shape != err.shape:
+        return False
+    # Files are written with fmt="%.6f": allow for that rounding.
+    return bool(
+        np.allclose(err, np.sqrt(np.clip(np.nan_to_num(y), 1.0, None)), rtol=1e-5, atol=2e-6)
+    )
+
+
 def save_xy_file(
     x: np.ndarray,
     y: np.ndarray,
@@ -164,10 +182,13 @@ def save_xy_file(
             :func:`~nrxrdct.azimuthal.integration.azimuthal_integration_1d`).
             Written as a third ("Sigma") column so GSAS-II and
             :meth:`~nrxrdct.rietveld.refinement.BaseRefinement._compute_gof_chi2`
-            can use real per-point weights instead of a Poisson
-            approximation. Missing, zero, negative or non-finite values are
-            replaced by the Poisson estimate ``sqrt(max(y, 1))`` (see
-            :func:`sanitize_esd`).
+            can use real per-point weights. Zero, negative or non-finite
+            values are replaced by ``sqrt(max(y, 1))`` (see
+            :func:`sanitize_esd`). If ``None`` (default), only two columns
+            are written: a made-up ``sqrt(y)`` column would be
+            indistinguishable from real uncertainties downstream, whereas
+            without one GSAS-II weights by ``1/y`` and ``_compute_gof_chi2``
+            estimates the noise level from the data.
         output_file (Path, optional): Destination file path
             (default ``"integrated_data.xy"``).
         unit (str, optional): Label for the scattering-angle axis written into
@@ -175,17 +196,18 @@ def save_xy_file(
         verbose (bool, optional): If ``True``, print the output path after saving
             (default ``True``).
     """
-    if not isinstance(err, np.ndarray):
-        err = np.zeros_like(y)
-    err = sanitize_esd(y, err)
+    if err is None:
+        columns = [x, y]
+        names = f"{unit}  Intensity"
+    else:
+        columns = [x, y, sanitize_esd(y, err)]
+        names = f"{unit}  Intensity  Sigma"
     header = (
         f"pyFAI multi-geometry azimuthal integration\n"
         f"Unit: {unit}\n"
-        f"Columns: {unit}  Intensity  Sigma"
+        f"Columns: {names}"
     )
-    np.savetxt(
-        str(output_file), np.column_stack([x, y, err]), fmt="%.6f", header=header
-    )
+    np.savetxt(str(output_file), np.column_stack(columns), fmt="%.6f", header=header)
     if verbose:
         print(f"Integrated pattern saved to:\n  {str(output_file)}")
 

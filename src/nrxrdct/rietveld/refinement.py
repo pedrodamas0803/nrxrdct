@@ -43,7 +43,12 @@ def _require_gsasii() -> None:
             "Install it separately — see https://gsas-ii.readthedocs.io/."
         )
 
-from ..xrdct.io import read_xy_file, sanitize_esd, write_starting_instrument_pars
+from ..xrdct.io import (
+    is_placeholder_esd,
+    read_xy_file,
+    sanitize_esd,
+    write_starting_instrument_pars,
+)
 from ..xrdct.parameters import Scan
 from .refine_dict import *
 
@@ -134,8 +139,11 @@ class BaseRefinement(Scan):
         # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
         # .xy file has a third column — see save_xy_file(). None for older
         # 2-column files; _compute_gof_chi2() then uses σ² = k·I weights, with
-        # k = intensity_scale or estimated from the data.
+        # k = intensity_scale or estimated from the data. A sqrt(I) column
+        # written by older save_xy_file() versions counts as no esd.
         self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
+        if self.esd is not None and is_placeholder_esd(self.intensity, self.esd):
+            self.esd = None
         self.intensity_scale = intensity_scale
         self.phases = []
         # Accumulates every GSAS-II variable name that has been free in at
@@ -5831,8 +5839,11 @@ class InstrumentCalibration(BaseRefinement):
         self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
         # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
         # .xy file has a third column — see save_xy_file(). None for older
-        # 2-column files; _compute_gof_chi2() then uses σ² = k·I weights.
+        # 2-column files (or a placeholder sqrt(I) column); _compute_gof_chi2()
+        # then uses σ² = k·I weights.
         self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
+        if self.esd is not None and is_placeholder_esd(self.intensity, self.esd):
+            self.esd = None
         self.phases = []
 
         if self.low_lim == None:

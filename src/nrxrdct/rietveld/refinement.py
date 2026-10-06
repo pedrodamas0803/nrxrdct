@@ -14,6 +14,7 @@ import io
 import os
 import pickle
 import shutil
+import warnings
 from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
@@ -24,10 +25,12 @@ from matplotlib import gridspec
 from matplotlib.backends.backend_pdf import PdfPages
 
 try:
+    from GSASII import GSASIIlattice as G2lat  # type: ignore
     from GSASII import GSASIIscriptable as G2sc  # type: ignore
     from GSASII import GSASIIspc as G2spc  # type: ignore
     _GSASII_AVAILABLE = True
 except ImportError:
+    G2lat = None  # type: ignore[assignment]
     G2sc = None  # type: ignore[assignment]
     G2spc = None  # type: ignore[assignment]
     _GSASII_AVAILABLE = False
@@ -1651,6 +1654,228 @@ class BaseRefinement(Scan):
             print(f"Frozen {params} for phase '{ph.name}'")
         self.gpx.save()
 
+    # ------------------------------------------------------------------
+    # HAP model configuration
+    # ------------------------------------------------------------------
+    # GSAS-II's G2Phase.set_HAP_refinements only reads part of a model
+    # definition: for "Pref.Ori." it only sets the refine flag (model, ratio,
+    # axis and SH order are ignored); for "Size"/"Mustrain" it ignores
+    # "equatorial"/"axial", ignores "value" for Mustrain, and silently
+    # accepts unknown Size types without setting any flag. The helpers below
+    # write the model definition into the HAP data directly, following the
+    # layout used by GSASIIstrIO:
+    #   Size/Mustrain: [type, [i, a, LGmix], [ref_i, ref_a, ref_mx], axis,
+    #                   [ellipsoid/Shkl coeffs], [coeff refine flags]]
+    #   Pref.Ori.:     [model, MD ratio, refine, MD axis, SH order,
+    #                   {SH coeff: value}, hkl list, tolerance]
+
+    _SIZE_TYPES = ("isotropic", "uniaxial", "ellipsoidal")
+    _MUSTRAIN_TYPES = ("isotropic", "uniaxial", "generalized")
+
+    def _target_phases(self, phase: str | list[str] | None) -> list:
+        """Resolve a phase name, list of names, or ``None`` (all) to G2Phase objects."""
+        available = {ph.name: ph for ph in self.gpx.phases()}
+        if phase is None:
+            return list(available.values())
+        names = [phase] if isinstance(phase, str) else list(phase)
+        for name in names:
+            if name not in available:
+                raise ValueError(
+                    f"Phase '{name}' not found. Available phases: {list(available)}"
+                )
+        return [available[n] for n in names]
+
+    @staticmethod
+    def _hstrain_names(ph) -> list[str]:
+        """HStrain term names of ``ph`` in storage order (e.g. ``["D11", "eA"]`` for cubic)."""
+        return list(G2spc.HStrainNames(ph.data["General"]["SGData"]))
+
+    def _configure_broadening_model(self, ph, key: str, spec: dict) -> dict:
+        """
+        Write a Size or Mustrain model definition into the HAP data of ``ph``.
+
+        Args:
+            ph (G2Phase): Target phase.
+            key (str): ``"Size"`` or ``"Mustrain"``.
+            spec (dict): Model definition (keys documented in
+                :mod:`nrxrdct.rietveld.refine_dict`). Not modified.
+
+        Returns:
+            dict: The equivalent dict in the shape GSAS-II's
+            ``set_HAP_refinements`` / ``do_refinements`` accept for ``key``,
+            used to record the step, or ``{}`` when it cannot be expressed
+            that way (ellipsoidal size).
+        """
+        hap = ph.data["Histograms"][self.hist.name]
+        entry = hap[key]
+        spec = dict(spec)
+        old_type = entry[0]
+        mtype = spec.pop("type", old_type)
+        if key == "Size" and mtype == "generalized":
+            mtype = "ellipsoidal"  # GSAS-II's name for the tensor size model
+        valid = self._SIZE_TYPES if key == "Size" else self._MUSTRAIN_TYPES
+        if mtype not in valid:
+            raise ValueError(
+                f"Unknown {key} model '{mtype}'. Valid options: {list(valid)}"
+            )
+        refine = bool(spec.pop("refine", True))
+        value = spec.pop("value", None)
+        equatorial = spec.pop("equatorial", None)
+        axial = spec.pop("axial", None)
+        axis = spec.pop("direction", None)
+        axis = spec.pop("axis", None) if axis is None else axis
+        lgmix = spec.pop("LGmix", None)
+        terms = spec.pop("terms", None)
+        if spec:
+            warnings.warn(f"Ignoring unknown {key} keys: {sorted(spec)}")
+        if terms is not None and mtype != "ellipsoidal":
+            warnings.warn(f"'terms' is only used by the ellipsoidal size model; ignored for '{mtype}'.")
+
+        # Starting value carried over when switching model.
+        iso_value = float(value) if value is not None else float(entry[1][0])
+        switched = mtype != old_type
+
+        entry[0] = mtype
+        entry[2][0] = entry[2][1] = False
+        entry[5] = [False] * len(entry[5])
+
+        if mtype == "isotropic":
+            if value is not None:
+                entry[1][0] = float(value)
+            entry[2][0] = refine
+        elif mtype == "uniaxial":
+            if switched or value is not None:
+                entry[1][0] = entry[1][1] = iso_value
+            if equatorial is not None:
+                entry[1][0] = float(equatorial)
+            if axial is not None:
+                entry[1][1] = float(axial)
+            entry[2][0] = entry[2][1] = refine
+        elif mtype == "ellipsoidal":
+            # D(h) = (h^T S h)^(-1/2): a sphere of diameter D has S = 1/D^2 · I.
+            # GSAS-II applies no symmetry constraints to S, so by default only
+            # the diagonal terms are refined; off-diagonal terms are singular
+            # for orthogonal axes.
+            if switched or value is not None:
+                inv2 = 1.0 / iso_value**2
+                entry[4] = [inv2, inv2, inv2, 0.0, 0.0, 0.0]
+            names = ["S11", "S22", "S33", "S12", "S13", "S23"]
+            terms = ["S11", "S22", "S33"] if terms is None else list(terms)
+            unknown = set(terms) - set(names)
+            if unknown:
+                raise ValueError(f"Unknown ellipsoid terms {sorted(unknown)}; valid: {names}")
+            entry[5] = [refine and n in terms for n in names]
+            laue = ph.data["General"]["SGData"]["SGLaue"]
+            if laue in ("m3", "m3m"):
+                warnings.warn(
+                    f"Phase '{ph.name}' is cubic: the ellipsoidal size model is not "
+                    "symmetry-constrained in GSAS-II; the isotropic model is the "
+                    "symmetry-consistent choice."
+                )
+        else:  # generalized (Stephens) mustrain
+            if switched or value is not None:
+                general = ph.data["General"]
+                entry[4] = list(
+                    G2spc.Muiso2Shkl(iso_value, general["SGData"], general["Cell"][1:7])
+                )
+            entry[5] = [refine] * len(entry[4])
+
+        if axis is not None:
+            axis = [int(n) for n in axis]
+            if len(axis) != 3 or not any(axis):
+                raise ValueError(f"{key} axis must be a non-zero [h, k, l], got {axis}")
+            entry[3] = axis
+
+        if lgmix is not None:
+            mix = lgmix if isinstance(lgmix, dict) else {"value": lgmix}
+            if "value" in mix:
+                mx = float(mix["value"])
+                if not 0.0 <= mx <= 1.0:
+                    raise ValueError(f"LGmix must be between 0 and 1, got {mx}")
+                entry[1][2] = mx
+            if "refine" in mix:
+                entry[2][2] = bool(mix["refine"])
+
+        if mtype == "ellipsoidal":
+            # GSAS-II's set_HAP_refinements would set all six ellipsoid flags
+            # to one value, overriding ``terms``; the flags are carried by the
+            # recorded "hap_model" entry instead.
+            return {}
+        g2_dict = {"type": mtype, "refine": refine}
+        if mtype == "uniaxial":
+            g2_dict["direction"] = list(entry[3])
+        if key == "Size" and mtype == "isotropic" and value is not None:
+            g2_dict["value"] = float(value)
+        return g2_dict
+
+    def _configure_pref_ori(self, ph, spec: dict) -> bool:
+        """
+        Write a March–Dollase or spherical-harmonics model into the HAP data of ``ph``.
+
+        Args:
+            ph (G2Phase): Target phase.
+            spec (dict): Inner ``"Pref.Ori."`` definition (keys documented in
+                :mod:`nrxrdct.rietveld.refine_dict`). Not modified.
+
+        Returns:
+            bool: The refine flag that was set.
+        """
+        po = ph.data["Histograms"][self.hist.name]["Pref.Ori."]
+        spec = dict(spec)
+        model = spec.pop("Model", po[0])
+        refine = bool(spec.pop("Ref", True))
+        axis = spec.pop("Axis", None)
+        ratio = spec.pop("Ratio", None)
+        order = spec.pop("SHord", None)
+        coefs = spec.pop("SHcoef", None) or {}
+        sym = spec.pop("SHsym", None)
+        if sym not in (None, "cylindrical"):
+            warnings.warn(
+                f"SHsym='{sym}' ignored: the GSAS-II HAP spherical-harmonics "
+                "correction always assumes cylindrical sample symmetry."
+            )
+        if spec:
+            warnings.warn(f"Ignoring unknown Pref.Ori. keys: {sorted(spec)}")
+
+        if model == "MD":
+            po[0] = "MD"
+            if ratio is not None:
+                po[1] = float(ratio)
+            if axis is not None:
+                axis = [int(n) for n in axis]
+                if len(axis) != 3 or not any(axis):
+                    raise ValueError(f"March-Dollase axis must be a non-zero [h, k, l], got {axis}")
+                po[3] = axis
+        elif model == "SH":
+            if axis is not None:
+                warnings.warn("Axis ignored for the spherical-harmonics model.")
+            order = int(order if order is not None else (po[4] or 4))
+            if order < 2 or order % 2:
+                raise ValueError(f"SHord must be an even integer >= 2, got {order}")
+            laue = ph.data["General"]["SGData"]["SGLaue"]
+            names = G2lat.GenSHCoeff(laue, "0", order, False)
+            new = dict.fromkeys(names, 0.0)
+            new.update({k: v for k, v in po[5].items() if k in new})
+            unknown = set(coefs) - set(new)
+            if unknown:
+                warnings.warn(f"Ignoring unknown SH coefficients {sorted(unknown)}; valid: {names}")
+            new.update({k: float(v) for k, v in coefs.items() if k in new})
+            po[0] = "SH"
+            po[4] = order
+            po[5] = new
+        else:
+            raise ValueError(f"Unknown Pref.Ori. model '{model}'. Valid options are 'MD' and 'SH'.")
+        po[2] = refine
+        return refine
+
+    def _apply_hap_model(self, ph, hap_model: dict) -> None:
+        """Re-apply a recorded ``"hap_model"`` step entry to ``ph`` (see :meth:`apply_step_refinements`)."""
+        for key, spec in hap_model.items():
+            if key == "Pref.Ori.":
+                self._configure_pref_ori(ph, spec)
+            else:
+                self._configure_broadening_model(ph, key, spec)
+
     def refine_preferential_orientation(
         self,
         model: str = "MD",
@@ -1666,135 +1891,90 @@ class BaseRefinement(Scan):
                 See model descriptions below.
             phase (str, list of str, or None, optional): Phase name(s) to apply the refinement to.
                 ``None`` (default) applies to all phases in the project.
-            parsMD (dict, optional): Full parameter dictionary for the March-Dollase model.
-                Default is ``MD_DICT`` from ``refine_dict``.  You must supply the complete dict
-                when overriding any value — partial updates are not merged automatically.
-            parsSH (dict, optional): Full parameter dictionary for the spherical-harmonics model.
-                Default is ``SH_DICT`` from ``refine_dict``.  Same caveat as ``parsMD``.
+            parsMD (dict, optional): Parameter dictionary for the March-Dollase model,
+                ``{"Pref.Ori.": {...}}``.  Default is ``MD_DICT`` from ``refine_dict``.
+                Keys that are omitted keep their current value in the project.
+            parsSH (dict, optional): Parameter dictionary for the spherical-harmonics model,
+                ``{"Pref.Ori.": {...}}``.  Default is ``SH_DICT`` from ``refine_dict``.
+                Keys that are omitted keep their current value in the project.
 
         **Models:**
 
         **March-Dollase** (``"MD"``)
-            Single-parameter phenomenological model.  It assumes a
-            cylindrically symmetric texture (fibre or rolling texture) about
-            one preferred direction and models the orientation distribution
-            function as a March-Dollase ellipsoid.
+            Single-parameter model of a cylindrically symmetric (fibre-like)
+            texture about one crystallographic direction.  For a reflection
+            with symmetry-equivalent set {h} of size m::
+
+                P = (1/m) Σ_{h} (r² cos²α_h + sin²α_h / r)^(-3/2)
+
+            where α_h is the angle between h and the axis.  The correction is
+            normalised, so r redistributes intensity between reflections
+            without changing the phase scale.
 
             - Simple, fast to converge, robust for weak-to-moderate texture.
             - Poor choice when the texture is strong or genuinely multi-axial.
 
             ``parsMD`` keys (wrap inside ``{"Pref.Ori.": {...}}``):
 
-            ``"Model"`` — must be ``"MD"``.
+            ``"Model"`` — ``"MD"``.
 
-            ``"Axis"`` — preferred-orientation axis in *direct-space* Miller
-            indices ``[h, k, l]``.  Physically this is the crystallographic
-            direction that aligns preferentially with the sample's fibre or
-            compression axis.  Example: ``[0, 0, 1]`` for basal-plane texture
-            in a hexagonal phase.
+            ``"Axis"`` — March-Dollase axis as ``[h, k, l]``.  GSAS-II uses it
+            as a reciprocal-lattice vector, i.e. the normal to the (hkl)
+            planes.  Example: ``[0, 0, 1]`` for basal-plane texture of
+            hexagonal platelets.
 
             ``"Ratio"`` — March-Dollase parameter *r* (dimensionless).
-            ``r = 1`` means no texture; ``r < 1`` means crystallites with
-            ``Axis`` perpendicular to the beam are depleted (needle texture);
-            ``r > 1`` means they are enriched (plate texture).
+            ``r = 1`` means no texture; values far from 1 indicate the
+            sample has been compressed (r < 1) or elongated (r > 1) along
+            the axis.
 
             ``"Ref"`` — boolean, whether to refine ``Ratio``.
 
             Default::
 
-                MD_DICT = {
-                    "Pref.Ori.": {
-                        "Model": "MD",
-                        "Axis": [1, 1, 1],
-                        "Ratio": 1.0,
-                        "Ref": True,
-                    }
-                }
+                MD_DICT = {"Pref.Ori.": {"Model": "MD", "Axis": [1, 1, 1], "Ref": True}}
 
         **Spherical harmonics** (``"SH"``)
-            Expands the orientation distribution function (ODF) in a
-            symmetry-adapted spherical-harmonic series.  More flexible than
-            March-Dollase: captures complex multi-component textures but
-            introduces many parameters that require good counting statistics.
+            Expands the texture correction in symmetrised spherical harmonics
+            up to an even order L.  In the GSAS-II HAP correction the sample
+            symmetry is always cylindrical; the number of coefficients depends
+            on L and the Laue class.  More flexible than March-Dollase but a
+            single integrated pattern does not determine the coefficients
+            uniquely — treat it as an empirical intensity correction.
 
             ``parsSH`` keys (wrap inside ``{"Pref.Ori.": {...}}``):
 
-            ``"Model"`` — must be ``"SH"``.
+            ``"Model"`` — ``"SH"``.
 
-            ``"SHord"`` — maximum spherical-harmonic order *L* (even integer,
-            typically 2–16).  Higher orders capture sharper texture features
-            but add more parameters.  Number of terms grows as
-            (L/2 + 1)² for cylindrical symmetry.
+            ``"SHord"`` — harmonic order L (even integer, typically 2–8).
 
-            ``"SHsym"`` — assumed *sample* symmetry.  Choose the highest
-            symmetry consistent with the sample fabrication history:
-
-            * ``"cylindrical"``  — rotation symmetry about one axis
-              (fibre texture, wire drawing, uniaxial pressing).  Fewest
-              parameters.
-            * ``"orthorhombic"`` — three mutually perpendicular symmetry
-              axes (cold-rolled sheet, extruded bar).
-            * ``"monoclinic"``   — one symmetry axis only.
-            * ``"triclinic"``    — no sample symmetry assumed.  Maximum
-              flexibility, most parameters.  Use only with high-quality,
-              well-statistics data.
-
-            ``"Axis"`` — fibre/symmetry axis in *direct-space* Miller
-            indices ``[h, k, l]``.  For cylindrical symmetry this is the
-            unique axis of the ODF.
-
-            ``"SHcoef"`` — dict of spherical-harmonic coefficients, keyed
-            by GSAS-II internal labels.  Leave as ``{}``; GSAS-II populates
-            and refines these automatically based on ``SHord`` and ``SHsym``.
+            ``"SHcoef"`` — optional starting values keyed by GSAS-II
+            coefficient name ``"C(L,N)"``.  Coefficients not given
+            keep their current value, or start at 0.
 
             ``"Ref"`` — boolean, whether to refine the SH coefficients.
 
             Default::
 
-                SH_DICT = {
-                    "Pref.Ori.": {
-                        "Model": "SH",
-                        "SHord": 4,
-                        "SHsym": "cylindrical",
-                        "Axis": [0, 0, 1],
-                        "SHcoef": {},
-                        "Ref": True,
-                    }
-                }
+                SH_DICT = {"Pref.Ori.": {"Model": "SH", "SHord": 4, "Ref": True}}
         """
         if model not in ("MD", "SH"):
             raise ValueError(
                 f"Unknown model '{model}'. Valid options are 'MD' and 'SH'."
             )
 
-        available = {ph.name: ph for ph in self.gpx.phases()}
-        if phase is None:
-            targets = list(available.values())
-        else:
-            names = [phase] if isinstance(phase, str) else list(phase)
-            for name in names:
-                if name not in available:
-                    raise ValueError(
-                        f"Phase '{name}' not found. "
-                        f"Available phases: {list(available)}"
-                    )
-            targets = [available[n] for n in names]
-
         pars = parsMD if model == "MD" else parsSH
-        for ph in targets:
-            ph.set_HAP_refinements(pars, histograms=[self.hist])
+        spec = dict(pars.get("Pref.Ori.", pars))
+        spec["Model"] = model
+        for ph in self._target_phases(phase):
+            refine = self._configure_pref_ori(ph, spec)
             self.gpx.save()
             self._run_refinement(
                 step={
-                    "set": pars,
+                    "set": {"Pref.Ori.": refine},
                     "phases": [ph.name],
                     "histograms": [self.hist.name],
-                    "note": (
-                        f"Pref.Ori. model '{model}' recorded as passed to set_HAP_refinements "
-                        "(parsMD_DICT/parsSH_DICT shape). GSAS-II's do_refinements tutorial "
-                        "examples use a differently-shaped dict for some phase-level models — "
-                        "verify this replays correctly before relying on it."
-                    ),
+                    "hap_model": {"Pref.Ori.": spec},
                 }
             )
             print(f"Preferred orientation ({model}) refined for phase '{ph.name}'")
@@ -2125,13 +2305,105 @@ class BaseRefinement(Scan):
             step: dict = {}
             if i == 0:
                 step["clear"] = {"Sample Parameters": ["Scale"]}
-            if hap.get("LeBail", False):
+            if not hap.get("LeBail", False):
                 ph.set_HAP_refinements({"Scale": True}, histograms=[self.hist])
                 step.setdefault("set", {})["Scale"] = True
                 step["phases"] = [ph.name]
                 step["histograms"] = [self.hist.name]
             self.gpx.save()
             self._run_refinement(step=step or None)
+
+    def weight_fractions(self, verbose: bool = True) -> dict[str, tuple[float, float | None]]:
+        """
+        Compute the weight fraction of every Rietveld phase in the current histogram.
+
+        Uses the Hill–Howard relation as implemented in GSAS-II, where the HAP
+        phase fraction already carries the cell-volume normalisation::
+
+            w_i = S_i * M_i / sum_j(S_j * M_j)
+
+        with ``S`` the HAP ``Scale`` and ``M`` the unit-cell mass
+        (``General['Mass']``).  Phases in LeBail mode are excluded: their
+        scale is degenerate with the freely extracted intensities and carries
+        no quantitative information.  The returned fractions therefore sum to
+        1 over the *crystalline, structurally modelled* phases only — any
+        amorphous or unmodelled content requires an internal/external standard.
+
+        Esds are propagated from the covariance of the HAP scale variables of
+        the last refinement cycle in which they were free (cross-correlations
+        included when they were refined together; otherwise the individual
+        esds recorded in ``self._ever_refined`` are used).  Phases whose scale
+        was never refined contribute no uncertainty.
+
+        Args:
+            verbose (bool, optional): Print a summary table (default ``True``).
+
+        Returns:
+            dict: ``{phase_name: (weight_fraction, esd_or_None)}``.
+        """
+        names, scales, masses, var_names = [], [], [], []
+        skipped = []
+        for ph in self.gpx.phases():
+            hap = ph.data["Histograms"].get(self.hist.name, {})
+            if not hap or not hap.get("Use", True):
+                continue
+            if hap.get("LeBail", False):
+                skipped.append(ph.name)
+                continue
+            names.append(ph.name)
+            scales.append(hap["Scale"][0])
+            masses.append(ph.data["General"]["Mass"])
+            var_names.append(f"{ph.id}:{self.hist.id}:Scale")
+
+        if not names:
+            print("No Rietveld (non-LeBail) phases in this histogram.")
+            return {}
+
+        S = np.asarray(scales, dtype=float)
+        M = np.asarray(masses, dtype=float)
+        a = S * M
+        total = a.sum()
+        w = a / total
+
+        # Covariance of the scales: prefer the most recent cycle in which all
+        # free scales were refined together, fall back to independent esds.
+        n = len(names)
+        cov = np.zeros((n, n))
+        have_cov = False
+        refined = [k for k, v in enumerate(var_names) if v in self._ever_refined]
+        for snap in reversed(self._covariance_history):
+            vl = snap["vary_list"]
+            if refined and all(var_names[k] in vl for k in refined):
+                cm = np.asarray(snap["cov_matrix"])
+                idx = [vl.index(var_names[k]) for k in refined]
+                cov[np.ix_(refined, refined)] = cm[np.ix_(idx, idx)]
+                have_cov = True
+                break
+        if not have_cov:
+            for k, v in enumerate(var_names):
+                sig = self._ever_refined.get(v, {}).get("esd")
+                if sig is not None:
+                    cov[k, k] = sig**2
+                    have_cov = True
+
+        esds: list[float | None] = [None] * n
+        if have_cov:
+            # dw_i/dS_k = M_k * (delta_ik * total - a_i) / total**2
+            J = (np.eye(n) * total - a[:, None]) * M[None, :] / total**2
+            var_w = np.einsum("ik,kl,il->i", J, cov, J)
+            esds = [float(np.sqrt(max(v, 0.0))) for v in var_w]
+
+        result = {nm: (float(w[k]), esds[k]) for k, nm in enumerate(names)}
+
+        if verbose:
+            print(f"Weight fractions — histogram '{self.hist.name}'")
+            print(f"  {'Phase':<24} {'Scale':>12} {'Cell mass':>12} {'Wt. frac.':>10} {'Esd':>10}")
+            for k, nm in enumerate(names):
+                esd_str = f"{esds[k]:.4f}" if esds[k] is not None else "n/a"
+                print(f"  {nm:<24} {S[k]:>12.5g} {M[k]:>12.5g} {w[k]:>10.4f} {esd_str:>10}")
+            if skipped:
+                print(f"  Excluded (LeBail): {', '.join(skipped)}")
+        return result
 
     def refine_crystallite_size(
         self,
@@ -2144,59 +2416,66 @@ class BaseRefinement(Scan):
 
         Crystallite size broadening arises when coherently diffracting domains
         are small enough that diffraction peaks are broadened beyond the
-        instrumental resolution.  It contributes to the Lorentzian width of
-        the peak profile as 1/cosθ (Scherrer broadening).  The three models
-        below correspond to different assumptions about the shape of the
-        size distribution.
+        instrumental resolution.  It contributes a width proportional to
+        1/cosθ (Scherrer broadening), split between the Lorentzian and
+        Gaussian components by the ``LGmix`` coefficient (default 1, fully
+        Lorentzian).  GSAS-II reports an apparent size D in µm (Scherrer
+        constant K = 1), with the width in centidegrees::
+
+            Γ = 1.8 λ / (π D cosθ)
 
         Args:
-            refine_type (``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional):
-                Size broadening model (default ``"isotropic"``).  Ignored when
-                ``refine_dict`` is supplied.
+            refine_type (``"isotropic"`` | ``"uniaxial"`` | ``"ellipsoidal"``, optional):
+                Size broadening model (default ``"isotropic"``).  ``"generalized"`` is
+                accepted as an alias of ``"ellipsoidal"``.  Ignored when ``refine_dict``
+                is supplied.
             refine_dict (dict or None, optional): Custom parameter dictionary following the same
                 structure as the predefined ``SIZE_*_DICT`` constants (i.e. the top-level key must
-                be ``"Size"``).  When provided, ``refine_type`` is ignored.
+                be ``"Size"``).  Recognised keys: ``type``, ``refine``, ``value``,
+                ``equatorial``, ``axial``, ``axis`` (or ``direction``), ``LGmix``, and
+                ``terms`` (ellipsoidal only: which of ``S11`` … ``S23`` to refine).  Values not
+                given keep their current value in the project.  When provided,
+                ``refine_type`` is ignored.
             phase (str, list of str, or None, optional): Phase name(s) to refine.
                 ``None`` (default) refines all phases.
 
         **Models:**
 
         **isotropic** (default)
-            Single size parameter *p* (µm) that scales the Lorentzian
-            contribution uniformly in all directions.  The Scherrer formula
-            gives an apparent crystallite size L = Kλ / (β cosθ), where β is
-            the Lorentzian FWHM and K ≈ 0.9 is the Scherrer constant.  Use
-            when there is no reason to expect shape anisotropy::
+            Single size D for all reflections.  Use when there is no reason
+            to expect shape anisotropy::
 
-                SIZE_ISO_DICT = {
-                    "Size": {"type": "isotropic", "refine": True, "value": 1.0}
-                }
+                SIZE_ISO_DICT = {"Size": {"type": "isotropic", "refine": True}}
 
         **uniaxial**
-            Two size parameters — ``equatorial`` (perpendicular to the unique
-            axis) and ``axial`` (along the unique axis) — plus the unique
-            ``axis`` direction in direct-space Miller indices.  Use for
-            needle-shaped or plate-shaped crystallites whose long or short
-            dimension is known::
+            Two sizes, ``equatorial`` (perpendicular to the unique axis) and
+            ``axial`` (along it).  For a reflection at angle φ to the axis::
 
-                SIZE_UNI_DICT = {
-                    "Size": {
-                        "type": "uniaxial",
-                        "refine": True,
-                        "equatorial": 1.0,
-                        "axial": 1.0,
-                        "axis": [0, 0, 1],
-                    }
-                }
+                1/D(φ) = sqrt(sin²φ / D_eq² + cos²φ / D_ax²)
 
-        **generalized**
-            Full symmetry-constrained size tensor.  GSAS-II generates the
-            symmetry-allowed terms automatically from the space group and
-            refines all of them simultaneously.  Provides the most complete
-            description of anisotropic size broadening but requires high-
-            quality data with sufficient angular range::
+            The axis ``[h, k, l]`` is used as a reciprocal-lattice vector (the
+            normal to the (hkl) planes).  Use for needle- or plate-shaped
+            crystallites.  When switching from another model both sizes
+            start at the current isotropic value::
 
-                SIZE_GEN_DICT = {"Size": {"type": "generalized", "refine": True}}
+                SIZE_UNI_DICT = {"Size": {"type": "uniaxial", "refine": True, "axis": [0, 0, 1]}}
+
+        **ellipsoidal**
+            Size along the unit scattering vector ĥ (Cartesian crystal
+            frame) given by a symmetric tensor S with six components
+            S11, S22, S33, S12, S13, S23 (in µm⁻²)::
+
+                D(ĥ) = (ĥᵀ S ĥ)^(-1/2)
+
+            S is initialised to a sphere of the current isotropic size
+            (S = I / D²).  GSAS-II does **not** constrain S by the crystal
+            symmetry, so only the diagonal terms are refined by default; pass
+            ``"terms": [...]`` in ``refine_dict`` to choose others.  For
+            cubic phases the isotropic model is the symmetry-consistent
+            choice, and for hexagonal/tetragonal phases the uniaxial model.
+            Requires high-quality data with sufficient angular range::
+
+                SIZE_ELL_DICT = {"Size": {"type": "ellipsoidal", "refine": True}}
 
         Note:
             Crystallite size broadening and microstrain broadening both contribute
@@ -2207,59 +2486,36 @@ class BaseRefinement(Scan):
             Rietveld refinement.
         """
         if isinstance(refine_dict, dict):
-            refine_type = "personalized"
-
-        if refine_type.lower() not in (
-            "isotropic",
-            "uniaxial",
-            "generalized",
-            "personalized",
-        ):
-            raise ValueError(
-                f"Unknown size model '{refine_type}'. "
-                "Valid options: 'isotropic', 'uniaxial', 'generalized'."
-            )
-
-        match refine_type:
-            case "isotropic":
-                ref_dict = SIZE_ISO_DICT
-            case "uniaxial":
-                ref_dict = SIZE_UNI_DICT
-            case "generalized":
-                ref_dict = SIZE_GEN_DICT
-            case "personalized":
-                ref_dict = refine_dict
-
-        available = {ph.name: ph for ph in self.gpx.phases()}
-        if phase is None:
-            targets = list(available.values())
+            if "Size" not in refine_dict:
+                raise ValueError("refine_dict for crystallite size must have a top-level 'Size' key.")
+            spec = refine_dict["Size"]
         else:
-            names = [phase] if isinstance(phase, str) else list(phase)
-            for name in names:
-                if name not in available:
-                    raise ValueError(
-                        f"Phase '{name}' not found. "
-                        f"Available phases: {list(available)}"
-                    )
-            targets = [available[n] for n in names]
+            templates = {
+                "isotropic": SIZE_ISO_DICT,
+                "uniaxial": SIZE_UNI_DICT,
+                "ellipsoidal": SIZE_ELL_DICT,
+                "generalized": SIZE_ELL_DICT,
+            }
+            if refine_type.lower() not in templates:
+                raise ValueError(
+                    f"Unknown size model '{refine_type}'. "
+                    "Valid options: 'isotropic', 'uniaxial', 'ellipsoidal'."
+                )
+            spec = templates[refine_type.lower()]["Size"]
 
-        for ph in targets:
-            ph.set_HAP_refinements(ref_dict, histograms=[self.hist])
+        for ph in self._target_phases(phase):
+            g2_dict = self._configure_broadening_model(ph, "Size", spec)
             self.gpx.save()
             self._run_refinement(
                 step={
-                    "set": ref_dict,
+                    "set": {"Size": g2_dict} if g2_dict else {},
                     "phases": [ph.name],
                     "histograms": [self.hist.name],
-                    "note": (
-                        f"Size model '{refine_type}' recorded as passed to set_HAP_refinements "
-                        "(SIZE_*_DICT shape). GSAS-II's do_refinements tutorial examples use a "
-                        "differently-shaped dict for some phase-level models — verify this "
-                        "replays correctly before relying on it."
-                    ),
+                    "hap_model": {"Size": dict(spec)},
                 }
             )
-            print(f"Crystallite size ({refine_type}) refined for phase '{ph.name}'")
+            model = ph.data["Histograms"][self.hist.name]["Size"][0]
+            print(f"Crystallite size ({model}) refined for phase '{ph.name}'")
 
     def refine_mustrain(
         self,
@@ -2273,9 +2529,14 @@ class BaseRefinement(Scan):
         Microstrain broadening arises from heterogeneous lattice distortions
         within crystallites — local variations in d-spacing caused by defects,
         dislocations, composition gradients, or residual stress.  It
-        contributes to the Lorentzian width of the peak profile as tanθ
-        (Williamson-Hall slope), in contrast to size broadening which goes as
-        1/cosθ.
+        contributes a width proportional to tanθ (Williamson-Hall slope), in
+        contrast to size broadening which goes as 1/cosθ, split between the
+        Lorentzian and Gaussian components by ``LGmix`` (default 1).  GSAS-II
+        reports microstrain in µε, with the width in centidegrees::
+
+            Γ = 0.018 µε tanθ / π
+
+        i.e. 10⁻⁶·µε equals twice the FWHM of the Δd/d distribution.
 
         Args:
             refine_type (``"isotropic"`` | ``"uniaxial"`` | ``"generalized"``, optional):
@@ -2283,45 +2544,44 @@ class BaseRefinement(Scan):
                 is supplied.
             refine_dict (dict or None, optional): Custom parameter dictionary following the same
                 structure as the predefined ``MUSTRAIN_*_DICT`` constants (i.e. no top-level
-                ``"Mustrain"`` key — the inner dict is passed directly).  When provided,
-                ``refine_type`` is ignored.
+                ``"Mustrain"`` key — the inner dict is passed directly).  Recognised keys:
+                ``type``, ``refine``, ``value``, ``equatorial``, ``axial``, ``axis`` (or
+                ``direction``), ``LGmix``.  Values not given keep their current value in the
+                project.  When provided, ``refine_type`` is ignored.
             phase (str, list of str, or None, optional): Phase name(s) to refine.
                 ``None`` (default) refines all phases.
 
         **Models:**
 
         **isotropic** (default)
-            Single microstrain parameter *e* (µstrain) applied uniformly
-            in all directions.  The Williamson-Hall relationship gives
-            βₗ cosθ = Kλ/L + 4e sinθ, where βₗ is the Lorentzian FWHM.
-            Use when there is no reason to expect directional strain
-            anisotropy::
+            Single microstrain applied uniformly in all directions.  Use when
+            there is no reason to expect directional strain anisotropy::
 
-                MUSTRAIN_ISO_DICT = {
-                    "type": "isotropic", "refine": True, "value": 1000.0
-                }
+                MUSTRAIN_ISO_DICT = {"type": "isotropic", "refine": True}
 
         **uniaxial**
-            Two strain parameters — ``equatorial`` (perpendicular to the
-            unique axis) and ``axial`` (along the unique axis) — plus the
-            ``axis`` direction in direct-space Miller indices.  Use when
-            the dominant source of strain has a well-defined axis (e.g.
-            uniaxial stress, rolled sheet, wire-drawn material)::
+            Two strains, ``equatorial`` (perpendicular to the unique axis)
+            and ``axial`` (along it).  For a reflection at angle φ to the
+            axis::
 
-                MUSTRAIN_UNI_DICT = {
-                    "type": "uniaxial",
-                    "refine": True,
-                    "equatorial": 1000.0,
-                    "axial": 1000.0,
-                    "axis": [0, 0, 1],
-                }
+                µε(φ) = µε_eq µε_ax / sqrt(µε_eq² cos²φ + µε_ax² sin²φ)
+
+            Use when the dominant source of strain has a well-defined axis
+            (layered structures, uniaxial loading).  When switching from
+            another model both values start at the current isotropic value::
+
+                MUSTRAIN_UNI_DICT = {"type": "uniaxial", "refine": True, "axis": [0, 0, 1]}
 
         **generalized** (Stephens model)
-            Full symmetry-constrained anisotropic strain tensor, expanded in
-            a basis of symmetry-allowed S_hkl coefficients.  Captures
-            complex hkl-dependent line broadening (e.g. due to stacking
-            faults, anisotropic microstress, or plastic deformation).  GSAS-II
-            generates the allowed terms from the space group automatically.
+            The variance of 1/d² is a fourth-order polynomial in h, k, l
+            whose coefficients S_HKL are constrained by the Laue symmetry
+            (2 for cubic up to 15 for triclinic)::
+
+                Γ = 0.018 / π · tanθ · d² · sqrt(Σ S_HKL h^H k^K l^L)
+
+            Captures hkl-dependent broadening from dislocations, stacking
+            faults or anisotropic microstress.  The S_HKL are initialised
+            from the current isotropic value (as GSAS-II's GUI does).
             Requires high-quality data and good angular coverage::
 
                 MUSTRAIN_GEN_DICT = {"type": "generalized", "refine": True}
@@ -2335,63 +2595,32 @@ class BaseRefinement(Scan):
             support it.
         """
         if isinstance(refine_dict, dict):
-            refine_type = "personalized"
-
-        if refine_type.lower() not in (
-            "isotropic",
-            "uniaxial",
-            "generalized",
-            "personalized",
-        ):
-            raise ValueError(
-                f"Unknown mustrain model '{refine_type}'. "
-                "Valid options: 'isotropic', 'uniaxial', 'generalized'."
-            )
-
-        match refine_type:
-            case "isotropic":
-                ref_dict = MUSTRAIN_ISO_DICT
-            case "uniaxial":
-                ref_dict = MUSTRAIN_UNI_DICT
-            case "generalized":
-                ref_dict = MUSTRAIN_GEN_DICT
-            case "personalized":
-                ref_dict = refine_dict
-
-        available = {ph.name: ph for ph in self.gpx.phases()}
-        if phase is None:
-            targets = list(available.values())
+            spec = refine_dict
         else:
-            names = [phase] if isinstance(phase, str) else list(phase)
-            for name in names:
-                if name not in available:
-                    raise ValueError(
-                        f"Phase '{name}' not found. "
-                        f"Available phases: {list(available)}"
-                    )
-            targets = [available[n] for n in names]
+            templates = {
+                "isotropic": MUSTRAIN_ISO_DICT,
+                "uniaxial": MUSTRAIN_UNI_DICT,
+                "generalized": MUSTRAIN_GEN_DICT,
+            }
+            if refine_type.lower() not in templates:
+                raise ValueError(
+                    f"Unknown mustrain model '{refine_type}'. "
+                    "Valid options: 'isotropic', 'uniaxial', 'generalized'."
+                )
+            spec = templates[refine_type.lower()]
 
-        for ph in targets:
-            ph.set_HAP_refinements(
-                {"Mustrain": ref_dict},
-                histograms=[self.hist],
-            )
+        for ph in self._target_phases(phase):
+            g2_dict = self._configure_broadening_model(ph, "Mustrain", spec)
             self.gpx.save()
             self._run_refinement(
                 step={
-                    "set": {"Mustrain": ref_dict},
+                    "set": {"Mustrain": g2_dict},
                     "phases": [ph.name],
                     "histograms": [self.hist.name],
-                    "note": (
-                        f"Mustrain model '{refine_type}' recorded as passed to "
-                        "set_HAP_refinements (MUSTRAIN_*_DICT shape). GSAS-II's do_refinements "
-                        "tutorial examples use a differently-shaped dict ('refine' as a string, "
-                        "'direction' instead of 'axis') for this key — verify this replays "
-                        "correctly before relying on it."
-                    ),
+                    "hap_model": {"Mustrain": dict(spec)},
                 }
             )
-            print(f"Microstrain ({refine_type}) refined for phase '{ph.name}'")
+            print(f"Microstrain ({g2_dict['type']}) refined for phase '{ph.name}'")
 
     def refine_hstrain(self, phase: str | list[str] | None = None) -> None:
         """
@@ -2404,19 +2633,26 @@ class BaseRefinement(Scan):
         the reflection direction, reproducing the effect of a bulk elastic
         strain state on the diffraction pattern.
 
-        The strain tensor is parametrised by symmetry-independent D_ij
-        components whose number depends on the crystal system:
+        The D_ij terms are added to the reciprocal metric tensor, i.e. to
+        1/d², and their number depends on the Laue class (names as returned
+        by GSAS-II's ``HStrainNames``):
 
-        ============== ========= ================================
-        Crystal system  # params  Independent components
-        ============== ========= ================================
-        Cubic                  1  D11 (= D22 = D33)
-        Hexagonal / Trigonal   2  D11 (= D22), D33
-        Tetragonal             2  D11 (= D22), D33
-        Orthorhombic           3  D11, D22, D33
-        Monoclinic             4  D11, D22, D33, D13
-        Triclinic              6  D11, D22, D33, D12, D13, D23
-        ============== ========= ================================
+        ===================== ========= ==========================================
+        Laue class             # params  Terms
+        ===================== ========= ==========================================
+        Cubic                         2  D11, eA  (eA ∝ (h²k²+h²l²+k²l²)/(h²+k²+l²)²)
+        Hexagonal / Trigonal          2  D11, D33
+        Rhombohedral axes             2  D11, D12
+        Tetragonal                    2  D11, D33
+        Orthorhombic                  3  D11, D22, D33
+        Monoclinic                    4  D11, D22, D33 + D12, D13 or D23
+        Triclinic                     6  D11, D22, D33, D12, D13, D23
+        ===================== ========= ==========================================
+
+        Except for the cubic ``eA`` term, these have exactly the form of a
+        cell change, so in a single histogram they are fully correlated with
+        the cell.  They are useful when the cell is shared between
+        histograms or fixed to a reference value.
 
         Args:
             phase (str, list of str, or None, optional): Phase name(s) to refine.
@@ -2467,13 +2703,18 @@ class BaseRefinement(Scan):
         large, nearly perfect crystallites and for low-angle, high-intensity
         reflections where the structure factor is large.
 
-        GSAS-II models primary extinction with a single scalar parameter *x*
-        (the extinction coefficient).  The corrected intensity is:
+        GSAS-II uses the Sabine model for powders, with one refined
+        parameter E_x per phase and histogram.  For each reflection::
 
-            I_corr = I_kin / (1 + x · F²)
+            x   = E_x · F² · (λ / V)² · K_pol
+            E   = E_B · sin²θ + E_L · cos²θ
+            E_B = 1 / sqrt(1 + x)
+            E_L = 1 − x/2 + x²/4 − 5x³/48 + 7x⁴/192 − …      (x ≤ 1)
+            E_L = sqrt(2 / (π x)) · (1 − 1/(8x))              (x > 1)
 
-        where F² is the squared structure factor for that reflection.  When
-        *x* = 0 there is no extinction correction.
+        where F² is the squared structure factor, V the cell volume and
+        K_pol a polarization factor.  The calculated intensity is multiplied
+        by E; E_x = 0 means no extinction correction.
 
         Args:
             phase (str, list of str, or None, optional): Phase name(s) to refine.
@@ -2526,24 +2767,23 @@ class BaseRefinement(Scan):
         """
         Refine Babinet complementary scattering parameters for one or more phases.
 
-        The Babinet principle models the contribution of a diffuse, disordered
-        component (e.g. amorphous matrix, disordered solvent, void space) that
-        is complementary to the crystalline phase.  It modifies the calculated
-        structure factors as:
+        The Babinet principle models a disordered, roughly uniform electron
+        density (solvent, disordered guests) filling the voids of a porous
+        or macromolecular crystal, which cancels part of the low-angle
+        scattering.  GSAS-II subtracts a smooth term from every atomic
+        scattering factor:
 
-            F²_corr = F²_cryst · exp(−BabU · Q²) + BabA · exp(−BabU · Q²)
+            f_j → f_j − BabA · exp(−8π² · BabU · sin²θ / λ²)
 
-        where Q = 4π sinθ / λ.  The two parameters are:
+        The two parameters are:
 
-        ``BabA`` — Babinet amplitude.  Scales the complementary scattering
-        contribution relative to the crystalline phase.  Physically represents
-        the amount of disordered material surrounding or interpenetrating the
-        crystalline domains.  Start with ``BabA`` alone; ``BabU`` is strongly
-        correlated with it.
+        ``BabA`` — Babinet amplitude (solvent contrast).  Start with
+        ``BabA`` alone; ``BabU`` is strongly correlated with it.
 
-        ``BabU`` — Babinet U parameter (Å²).  Controls the Q-dependence
-        (angular fall-off) of the complementary scattering, analogous to an
-        isotropic displacement parameter for the disordered component.
+        ``BabU`` — Babinet U parameter (Å²).  Controls how fast the
+        correction fades with angle, like a displacement parameter for the
+        disordered component; typically a few Å², so only the first
+        reflections are affected.
 
         Args:
             refine (str or list of str, optional): Parameter(s) to refine: ``"BabA"``, ``"BabU"``,
@@ -2553,11 +2793,11 @@ class BaseRefinement(Scan):
                 ``None`` (default) applies to all phases.
 
         Note:
-            Babinet parameters are most useful when there is clear diffuse
-            scattering beneath the Bragg peaks that cannot be accounted for by
-            the background function alone.  They are strongly correlated with the
-            overall scale factor and with the background coefficients — converge
-            both before introducing Babinet terms.
+            Babinet parameters are only meaningful when the lowest-angle
+            reflections are clearly over-calculated after scale and background
+            have converged.  They are correlated with the overall scale factor
+            and with the background coefficients — converge both before
+            introducing Babinet terms.
         """
         params = [refine] if isinstance(refine, str) else list(refine)
         valid = {"BabA", "BabU"}
@@ -2712,8 +2952,8 @@ class BaseRefinement(Scan):
                     vals = hs[0]
                     flags = hs[1]
                     dij_str = "  ".join(
-                        f"D{i}={v:.4g}({'R' if f else 'F'})"
-                        for i, (v, f) in enumerate(zip(vals, flags))
+                        f"{name}={v:.4g}({'R' if f else 'F'})"
+                        for name, v, f in zip(self._hstrain_names(ph), vals, flags)
                     )
                     print(f"  HStrain       : {dij_str}")
 
@@ -2963,12 +3203,12 @@ class BaseRefinement(Scan):
         Size
             Apparent crystallite size parameters in µm.  Model is one of
             ``isotropic`` (one scalar), ``uniaxial`` (equatorial + axial along
-            a specified crystallographic axis), or ``generalized`` (full
-            symmetry-adapted harmonic expansion).
+            a specified crystallographic axis), or ``ellipsoidal``
+            (symmetry-constrained size tensor).
         Mustrain
-            Microstrain parameters in µε (parts per million).  Same three
-            models as Size.  The Lorentzian peak broadening from microstrain
-            is proportional to tan θ.
+            Microstrain parameters in µε (parts per million).  Model is
+            ``isotropic``, ``uniaxial`` or ``generalized`` (Stephens).  The
+            peak broadening from microstrain is proportional to tan θ.
         Pref.Ori.
             Preferred orientation.  Either ``MD`` (March–Dollase scalar
             distribution) or ``SH`` (spherical harmonics expansion).
@@ -3013,10 +3253,9 @@ class BaseRefinement(Scan):
             hs = hap.get("HStrain")
             if hs:
                 vals, flags = hs[0], hs[1]
-                dij_labels = ["D11", "D22", "D33", "D12", "D13", "D23"]
                 dij_parts = [
-                    f"{dij_labels[i]}={v:.4g}({'R' if f else 'F'})"
-                    for i, (v, f) in enumerate(zip(vals, flags))
+                    f"{name}={v:.4g}({'R' if f else 'F'})"
+                    for name, v, f in zip(self._hstrain_names(ph), vals, flags)
                 ]
                 print(f"  HStrain    : {', '.join(dij_parts)}")
 
@@ -3074,9 +3313,8 @@ class BaseRefinement(Scan):
             bab = hap.get("Babinet", {})
             if bab:
                 for key in ("BabA", "BabU"):
-                    entry = bab.get(key, {})
-                    val = entry.get("BabVal", 0.0)
-                    ref = entry.get("refine", False)
+                    # GSAS-II stores each Babinet term as [value, refine]
+                    val, ref = bab.get(key, [0.0, False])[:2]
                     print(f"  Babinet {key[-1]}  : {val:.4g}  (refine={ref})")
 
     def set_HAP_parameter(
@@ -3098,8 +3336,9 @@ class BaseRefinement(Scan):
         +--------------+-------------------------------------------------------+
         | ``"Extinction"`` | Extinction coefficient ``hap["Extinction"][0]``   |
         +--------------+-------------------------------------------------------+
-        | ``"D11"`` … ``"D33"``, ``"D12"``, ``"D13"``, ``"D23"``             |
-        |              | Individual HStrain tensor components                  |
+        | ``"D11"`` … ``"D33"``, ``"D12"``, ``"D13"``, ``"D23"``, ``"eA"``   |
+        |              | Individual HStrain terms (only those allowed by the   |
+        |              | phase's Laue class, see :meth:`refine_hstrain`)       |
         +--------------+-------------------------------------------------------+
         | ``"Size"``   | Isotropic crystallite size value (µm)                 |
         +--------------+-------------------------------------------------------+
@@ -3130,7 +3369,7 @@ class BaseRefinement(Scan):
                 parameter (e.g. ``"Size"`` in uniaxial/generalized mode) cannot be
                 set as a single scalar.
         """
-        _DIJ = {"D11": 0, "D22": 1, "D33": 2, "D12": 3, "D13": 4, "D23": 5}
+        _DIJ = {"D11", "D22", "D33", "D12", "D13", "D23", "eA"}
         _VALID = {
             "Scale",
             "Extinction",
@@ -3139,7 +3378,7 @@ class BaseRefinement(Scan):
             "MD",
             "BabA",
             "BabU",
-        } | _DIJ.keys()
+        } | _DIJ
 
         if parameter not in _VALID:
             raise ValueError(
@@ -3179,13 +3418,21 @@ class BaseRefinement(Scan):
                     hap["Extinction"][1] = False
 
             elif parameter in _DIJ:
-                idx = _DIJ[parameter]
                 hs = hap.get("HStrain")
                 if hs is None:
                     raise ValueError(
                         f"Phase '{ph.name}' has no HStrain entry. "
                         "Enable HStrain first."
                     )
+                # The storage order depends on the Laue class (e.g. hexagonal
+                # stores [D11, D33]), so look the index up by name.
+                dij_names = self._hstrain_names(ph)
+                if parameter not in dij_names:
+                    raise ValueError(
+                        f"'{parameter}' is not an HStrain term of phase '{ph.name}'. "
+                        f"Its terms are: {dij_names}"
+                    )
+                idx = dij_names.index(parameter)
                 hs[0][idx] = value
                 if freeze:
                     hs[1][idx] = False
@@ -3234,9 +3481,10 @@ class BaseRefinement(Scan):
                     raise ValueError(
                         f"Phase '{ph.name}' has no Babinet '{parameter}' entry."
                     )
-                bab[parameter]["BabVal"] = value
+                # GSAS-II stores each Babinet term as [value, refine]
+                bab[parameter][0] = value
                 if freeze:
-                    bab[parameter]["refine"] = False
+                    bab[parameter][1] = False
 
             frozen_info = " and frozen" if freeze else ""
             print(
@@ -3378,7 +3626,41 @@ class BaseRefinement(Scan):
                     n += 1
         return n
 
-    def _compute_gof_chi2(self) -> tuple[float, float]:
+    def _esd_on_hist_grid(self, tth: np.ndarray) -> np.ndarray | None:
+        """
+        Return ``self.esd`` resampled onto the histogram's 2θ points ``tth``,
+        or ``None`` if there is no usable esd.
+
+        GSAS-II may hold only part of the raw ``.xy`` file (trimmed to
+        ``tth_lims``/excluded regions), so the esd is matched to each
+        histogram point by 2θ position rather than by index. A point counts
+        as matched if a raw-file point lies within a quarter of the raw step
+        from it. If any histogram point has no match (e.g. the data were
+        rebinned), or any matched esd is non-positive/non-finite, ``None``
+        is returned.
+        """
+        esd = getattr(self, "esd", None)
+        raw_tth = getattr(self, "tth", None)
+        if esd is None or raw_tth is None or len(esd) != len(raw_tth) or len(raw_tth) < 2:
+            return None
+        raw_tth = np.asarray(raw_tth, dtype=float)
+        esd = np.asarray(esd, dtype=float)
+        order = np.argsort(raw_tth)
+        raw_tth, esd = raw_tth[order], esd[order]
+
+        tth = np.asarray(tth, dtype=float)
+        idx = np.clip(np.searchsorted(raw_tth, tth), 1, len(raw_tth) - 1)
+        left_closer = np.abs(tth - raw_tth[idx - 1]) <= np.abs(raw_tth[idx] - tth)
+        idx = np.where(left_closer, idx - 1, idx)
+        tol = 0.25 * np.min(np.diff(raw_tth)[np.diff(raw_tth) > 0], initial=np.inf)
+        if not np.all(np.abs(raw_tth[idx] - tth) <= tol):
+            return None
+        matched = esd[idx]
+        if not np.all(np.isfinite(matched) & (matched > 0)):
+            return None
+        return matched
+
+    def _compute_gof_chi2(self) -> tuple[float, float, float, bool]:
         """
         Compute GOF and χ² directly from the histogram's current
         ``yobs``/``ycalc`` rather than from GSAS-II's own
@@ -3393,14 +3675,15 @@ class BaseRefinement(Scan):
 
         Weights use real per-point uncertainty (``w = 1/esd**2``) from
         ``self.esd`` when the ``.xy`` file had a third ("Sigma") column (see
-        ``save_xy_file``/``__init__``) *and* it lines up one-to-one with
-        GSAS-II's current ``yobs`` (same length — GSAS-II may have trimmed
-        the raw file to ``tth_lims``/excluded regions, in which case a
-        mismatch is expected, not a bug). Otherwise falls back to a Poisson
-        approximation (``w = 1/yobs``) — only a rough proxy, since ``yobs``
-        here is typically not raw photon counts (e.g. it's often already
-        monitor-normalized upstream), so treat a Poisson-fallback GOF as
-        indicative at best.
+        ``save_xy_file``/``__init__``), matched to GSAS-II's current points
+        by 2θ (see :meth:`_esd_on_hist_grid`), so a histogram trimmed to
+        ``tth_lims``/excluded regions still uses the real esd. Otherwise
+        falls back to a Poisson approximation (``w = 1/yobs``) and warns —
+        GOF and χ² scale with the absolute size of ``w``, and ``yobs`` here
+        is typically not raw photon counts (e.g. it's often already
+        monitor-normalized upstream), so a Poisson-fallback GOF can be
+        inflated by orders of magnitude even for a good fit. Rwp is
+        insensitive to that scale; compare it with Rexp instead.
 
         N_vars = ``max(len(self._ever_refined), self._count_free_parameters())``,
         i.e. every variable ever free this session (or currently free, if
@@ -3408,23 +3691,41 @@ class BaseRefinement(Scan):
         plotted pattern currently shows.
 
         Returns:
-            tuple: ``(gof, chi2)``.
+            tuple: ``(gof, chi2, rexp, poisson)`` where ``rexp`` is the
+            expected R-factor in percent,
+            ``100·√[(N_obs − N_vars) / Σ w·yobs²]`` (so GOF = Rwp/Rexp with
+            these weights), and ``poisson`` is ``True`` when the Poisson
+            fallback weights were used.
         """
+        tth = self.hist.getdata("x")
         yobs = self.hist.getdata("yobs")
         ycalc = self.hist.getdata("ycalc")
         diff = yobs - ycalc
         n_vars = max(len(self._ever_refined), self._count_free_parameters())
         dof = max(len(yobs) - n_vars, 1)
 
-        esd = getattr(self, "esd", None)
-        if esd is not None and len(esd) == len(yobs) and np.all(esd > 0):
-            w = 1.0 / np.asarray(esd) ** 2
-        else:
+        esd = self._esd_on_hist_grid(tth)
+        poisson = esd is None
+        if poisson:
             w = 1.0 / np.clip(yobs, 1.0, None)
+            reason = (
+                "no esd column in the .xy file"
+                if getattr(self, "esd", None) is None
+                else "esd could not be matched to the histogram's 2θ points"
+            )
+            warnings.warn(
+                f"GOF/χ² use Poisson weights w = 1/yobs ({reason}). Unless "
+                "yobs are raw counts, GOF is not meaningful in absolute terms; "
+                "judge the fit by Rwp vs Rexp and the difference curve.",
+                stacklevel=2,
+            )
+        else:
+            w = 1.0 / esd**2
 
         chi2 = float(np.sum(w * diff**2))
         gof = float(np.sqrt(chi2 / dof))
-        return gof, chi2
+        rexp = float(100.0 * np.sqrt(dof / np.sum(w * yobs**2)))
+        return gof, chi2, rexp, poisson
 
     def _recompute_pattern(self) -> None:
         """
@@ -3764,9 +4065,9 @@ class BaseRefinement(Scan):
 
             hs = hap.get("HStrain")
             if hs:
-                for i, (v, f) in enumerate(zip(hs[0], hs[1])):
+                for name, v, f in zip(self._hstrain_names(ph), hs[0], hs[1]):
                     if f:
-                        add(f"Phase '{ph.name}' HStrain D{i}", v, "Å⁻²")
+                        add(f"Phase '{ph.name}' HStrain {name}", v, "Å⁻²")
 
             sz = hap.get("Size")
             if sz:
@@ -3964,18 +4265,21 @@ class BaseRefinement(Scan):
           (not nested under the phase name) — ``"phases"`` is what scopes
           them.
         * ``"histograms"`` — list of histogram names the step applies to.
+        * ``"hap_model"`` — nrxrdct extension carrying the full Size/
+          Mustrain/Pref.Ori. *model definition* (uniaxial values and axis,
+          ellipsoidal/generalized coefficients, March–Dollase ratio and axis,
+          SH order, LGmix), which GSAS-II's ``set``/``once``/``clear`` schema
+          cannot express. :meth:`apply_step_refinements` applies it before
+          the step; strip it before passing steps to GSAS-II's own
+          ``do_refinements``, which only replays the refine flags.
         * ``"note"`` — present when a step can't be captured this way at
-          all: background Debye terms and generalized Size/Mustrain/
-          Pref.Ori. *model definitions* (as opposed to their refine flags)
-          aren't covered by the documented ``set``/``once``/``clear`` keys —
-          such a step carries no ``"set"``/``"once"``/``"clear"`` key;
-          recreate it manually on the target project (e.g. via
-          :meth:`refine_background` with ``debye_terms``) before replaying.
+          all, e.g. background Debye terms; recreate it manually on the
+          target project (e.g. via :meth:`refine_background` with
+          ``debye_terms``) before replaying.
 
-        The whole ``"steps"`` list can be passed directly to GSAS-II's own
-        ``target_gpx.do_refinements(steps)``, or to :meth:`apply_step_refinements`
-        for a version that also reports/skips the non-replayable ``"note"``-only
-        entries.
+        Pass the ``"steps"`` list to :meth:`apply_step_refinements`, which
+        also applies ``"hap_model"`` entries and reports/skips the
+        non-replayable ``"note"``-only entries.
 
         Returns:
             dict: ``{"steps": [...], "wavelength": <Å>, "phases": [<names>]}``.
@@ -4010,10 +4314,11 @@ class BaseRefinement(Scan):
         Replay a step-refinement recipe (:meth:`get_step_refinements`) onto
         *this* project via GSAS-II's own ``do_refinements``.
 
-        ``"note"``-only steps (no ``"set"``/``"once"``/``"clear"`` key —
-        Debye terms, generalized Size/Mustrain/Pref.Ori. model definitions)
-        are reported and skipped rather than guessed at; see
-        :meth:`get_step_refinements` for why.
+        Steps carrying a ``"hap_model"`` entry have their Size/Mustrain/
+        Pref.Ori. model definition applied to the step's phases (on this
+        project's histogram) before the cycle.  ``"note"``-only steps (no
+        ``"set"``/``"once"``/``"clear"`` key, e.g. Debye terms) are reported
+        and skipped rather than guessed at; see :meth:`get_step_refinements`.
 
         Args:
             steps (list of dict, or dict): Either a ``"steps"`` list directly,
@@ -4026,11 +4331,12 @@ class BaseRefinement(Scan):
         if isinstance(steps, dict) and "steps" in steps:
             steps = steps["steps"]
 
-        replayable = []
+        applied = 0
         skipped = 0
         for i, step in enumerate(steps):
             note = step.get("note")
-            payload = {k: v for k, v in step.items() if k != "note"}
+            hap_model = step.get("hap_model")
+            payload = {k: v for k, v in step.items() if k not in ("note", "hap_model")}
             if not any(k in payload for k in ("set", "once", "clear")):
                 skipped += 1
                 if note:
@@ -4038,14 +4344,19 @@ class BaseRefinement(Scan):
                 continue
             if note:
                 print(f"  [step {i}] note: {note}")
+            if hap_model:
+                # Size/Mustrain/Pref.Ori. model definitions that GSAS-II's
+                # do_refinements cannot express are applied here first.
+                for ph in self._target_phases(payload.get("phases")):
+                    self._apply_hap_model(ph, hap_model)
             if not run:
                 payload["skip"] = True
-            replayable.append(payload)
+            self.gpx.do_refinements([payload])
+            applied += 1
 
-        if replayable:
-            self.gpx.do_refinements(replayable)
+        if applied:
             self.gpx.save()
-        print(f"Applied {len(replayable)} step(s), skipped {skipped} (not auto-replayable).")
+        print(f"Applied {applied} step(s), skipped {skipped} (not auto-replayable).")
 
     def _resolve_covariance(
         self, cycle: int | None
@@ -4653,8 +4964,8 @@ class BaseRefinement(Scan):
                     vals = hs[0]
                     flags = hs[1]
                     dij_str = "  ".join(
-                        f"D{i}={v:.4g}({'R' if f else 'F'})"
-                        for i, (v, f) in enumerate(zip(vals, flags))
+                        f"{name}={v:.4g}({'R' if f else 'F'})"
+                        for name, v, f in zip(self._hstrain_names(ph), vals, flags)
                     )
                     print(f"    HStrain    : {dij_str if dij_str else 'none'}")
 
@@ -4764,12 +5075,13 @@ class BaseRefinement(Scan):
 
         ax_main.set_ylabel("Intensity")
         wR = self.hist.get_wR()
-        gof, chi2 = self._compute_gof_chi2()
+        gof, chi2, rexp, poisson = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        stat_parts.append(f"GOF = {gof:.4f}")
-        stat_parts.append(f"χ² = {chi2:.4f}")
+        stat_parts.append(f"Rexp = {rexp:.3g} %")
+        stat_parts.append(f"GOF = {gof:.4g}" + (" (Poisson w)" if poisson else ""))
+        stat_parts.append(f"χ² = {chi2:.4g}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"
@@ -4934,7 +5246,7 @@ class BaseRefinement(Scan):
         """
         path = Path(path)
         wR = self.get_Rwp()
-        gof, chi2 = self._compute_gof_chi2()
+        gof, chi2, rexp, poisson = self._compute_gof_chi2()
 
         with PdfPages(str(path)) as pdf:
             # --- Title / summary page ---
@@ -4952,7 +5264,8 @@ class BaseRefinement(Scan):
                 f"Histogram    : {self.hist.name}",
                 f"Phases       : {', '.join(ph.name for ph in self.gpx.phases())}",
                 f"Rwp          : {wR:.4f} %" if wR is not None else "Rwp          : n/a",
-                f"GOF          : {gof:.4f}",
+                f"Rexp         : {rexp:.4g} %",
+                f"GOF          : {gof:.4f}" + ("  (Poisson weights)" if poisson else ""),
                 f"chi2         : {chi2:.4f}",
                 f"2theta range : [{self.low_lim:.3f}, {self.high_lim:.3f}] deg",
                 f"Refinement steps run this session: {len(self._step_refinements)}",
@@ -5503,12 +5816,13 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
-        gof, chi2 = self._compute_gof_chi2()
+        gof, chi2, rexp, poisson = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
-        stat_parts.append(f"GOF = {gof:.4f}")
-        stat_parts.append(f"χ² = {chi2:.4f}")
+        stat_parts.append(f"Rexp = {rexp:.3g} %")
+        stat_parts.append(f"GOF = {gof:.4g}" + (" (Poisson w)" if poisson else ""))
+        stat_parts.append(f"χ² = {chi2:.4g}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
             f"{self.calibrant_composition}\n{stats_str}"

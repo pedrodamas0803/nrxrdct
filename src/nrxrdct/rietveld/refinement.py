@@ -93,6 +93,7 @@ class BaseRefinement(Scan):
         xy_file: Path = Path("integrated_data.xy"),
         param_file: Path = Path("calibrated_instrument.instprm"),
         polarization: float = 0.99,
+        intensity_scale: float | None = None,
     ) -> None:
         """
         Args:
@@ -110,6 +111,9 @@ class BaseRefinement(Scan):
             param_file (Path, optional): Calibrated ``.instprm`` file (default ``"calibrated_instrument.instprm"``).
             polarization (float, optional): Beam polarization fraction used when writing the starting
                 instrument parameter file (default 0.99).
+            intensity_scale (float or None, optional): Gain ``k`` with ``σ² = k·I`` (i.e.
+                ``I = counts·k``), used for GOF/χ² when the ``.xy`` file has no esd column.
+                ``None`` (default) estimates it from the pattern's point-to-point scatter.
         """
         super().__init__(
             acquisition_file,
@@ -129,9 +133,10 @@ class BaseRefinement(Scan):
         self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
         # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
         # .xy file has a third column — see save_xy_file(). None for older
-        # 2-column files; _compute_gof_chi2() falls back to a Poisson
-        # approximation in that case.
+        # 2-column files; _compute_gof_chi2() then uses σ² = k·I weights, with
+        # k = intensity_scale or estimated from the data.
         self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
+        self.intensity_scale = intensity_scale
         self.phases = []
         # Accumulates every GSAS-II variable name that has been free in at
         # least one refinement cycle run so far this session, keyed by its
@@ -3674,7 +3679,122 @@ class BaseRefinement(Scan):
             return None
         return matched
 
-    def _compute_gof_chi2(self) -> tuple[float, float, float, bool]:
+    @staticmethod
+    def _estimate_intensity_gain(
+        tth: np.ndarray, yobs: np.ndarray, ycalc: np.ndarray
+    ) -> float | None:
+        """
+        Estimate the gain ``k`` in the noise model ``σ² = k·yobs`` from the
+        point-to-point scatter of the fit residual ``e = yobs − ycalc``.
+
+        Second differences ``d_i = e_{i+1} − 2·e_i + e_{i−1}`` remove any
+        slowly varying misfit, and each ``d_i`` is normalized by ``√ȳ_i``
+        (``ȳ_i`` = local mean of ``yobs``), making it stationary under
+        ``σ² = k·y``. Only points where the *model* is locally smooth are
+        used — its normalized curvature below 5 % of the noise level in
+        ``d`` (background, broad tails) — since misfit there is smooth too
+        and drops out of ``d``, whereas on sharp peaks even a small misfit
+        dominates ``d``. A loose 5σ clip removes remaining outliers.
+
+        Neighbouring bins are often correlated (e.g. pyFAI pixel splitting),
+        which suppresses ``d`` and would make ``k`` an underestimate. With
+        noise autocovariances ``γ_0 = k, γ_1, γ_2`` (zero beyond 2 bins), the
+        lag-0/1/2 autocovariances ``c_0, c_1, c_2`` of the normalized ``d``
+        are a linear function of ``γ_0, γ_1, γ_2``; inverting it gives
+        ``k = γ_0 = (13·c_0 + 20·c_1 + 9·c_2) / 7``. For uncorrelated noise
+        this reduces to ``k = c_0 / 6``.
+
+        Only equally-spaced consecutive points are used, so gaps from
+        excluded regions are skipped. On simulated patterns (Poisson noise,
+        with and without 3-bin smoothing, 5 % peak misfit) ``k`` comes out
+        within ~0.9–1.4× of the truth, i.e. GOF within ~0.85–1.05×, as long
+        as some background is visible between peaks.
+
+        If ``yobs`` were raw counts, ``k ≈ 1``; for normalized data
+        (``yobs = counts·s``), ``k ≈ s``.
+
+        Returns:
+            float or None: ``k``, or ``None`` if too few usable points.
+        """
+        min_points = 50
+        tth = np.asarray(tth, dtype=float)
+        y = np.asarray(yobs, dtype=float)
+        yc = np.asarray(ycalc, dtype=float)
+        e = y - yc
+        if len(y) < min_points:
+            return None
+        h = np.diff(tth)
+        step = np.median(h)
+        # regular[i]: points i and i+1 are adjacent on the regular grid.
+        regular = np.abs(h - step) < 0.01 * step
+
+        d = e[2:] - 2.0 * e[1:-1] + e[:-2]
+        d_model = yc[2:] - 2.0 * yc[1:-1] + yc[:-2]
+        ybar = (y[:-2] + 4.0 * y[1:-1] + y[2:]) / 6.0
+        valid = (
+            regular[:-1] & regular[1:]
+            & (np.minimum(y[:-2], np.minimum(y[1:-1], y[2:])) > 0)
+            & np.isfinite(d) & np.isfinite(d_model)
+        )
+        if valid.sum() < min_points:
+            return None
+        norm = np.sqrt(np.where(valid, ybar, 1.0))
+        u = np.where(valid, d / norm, 0.0)
+        u_model = np.where(valid, np.abs(d_model) / norm, np.inf)
+
+        c0 = float(np.median(u[valid] ** 2) / 0.4549)
+        for _ in range(100):
+            kept = valid & (u_model < 0.05 * np.sqrt(c0)) & (u**2 < 25.0 * c0)
+            if kept.sum() < min_points:
+                return None
+            c0_new = float(np.mean(u[kept] ** 2))
+            done = abs(c0_new - c0) <= 1e-5 * c0
+            c0 = c0_new
+            if done:
+                break
+
+        def lag_cov(m: int) -> float:
+            # For m <= 2 the triplets behind d_i and d_{i+m} overlap, so both
+            # being valid already rules out a gap between them.
+            pair = kept[:-m] & kept[m:]
+            if pair.sum() < min_points:
+                return 0.0
+            return float(np.mean(u[:-m][pair] * u[m:][pair]))
+
+        c1, c2 = lag_cov(1), lag_cov(2)
+        k = (13.0 * c0 + 20.0 * c1 + 9.0 * c2) / 7.0
+        # A correction that lowers k below the uncorrelated estimate, or
+        # inflates it absurdly, means the ≤2-bin correlation model does not
+        # fit this residual (e.g. structured misfit); fall back to it.
+        k_uncorr = c0 / 6.0
+        if not np.isfinite(k) or k < k_uncorr or k > 20.0 * k_uncorr:
+            k = k_uncorr
+        return k if np.isfinite(k) and k > 0 else None
+
+    def _noise_gain(self) -> tuple[float, str]:
+        """
+        Return ``(k, source)`` for the noise model ``σ² = k·yobs`` used when
+        there is no esd: ``self.intensity_scale`` if set (``source="set"``),
+        else :meth:`_estimate_intensity_gain` on the current fit (``"est."``),
+        else ``k = 1`` (``"assumed"``, with a warning).
+        """
+        k = getattr(self, "intensity_scale", None)
+        if k is not None:
+            return float(k), "set"
+        k = self._estimate_intensity_gain(
+            self.hist.getdata("x"), self.hist.getdata("yobs"), self.hist.getdata("ycalc")
+        )
+        if k is not None:
+            return k, "est."
+        warnings.warn(
+            "Could not estimate the noise level from the data; GOF/χ² "
+            "assume yobs are raw counts (σ² = I), which inflates GOF "
+            "for normalized data. Pass intensity_scale to override.",
+            stacklevel=3,
+        )
+        return 1.0, "assumed"
+
+    def _compute_gof_chi2(self) -> tuple[float, float, float, str]:
         """
         Compute GOF and χ² directly from the histogram's current
         ``yobs``/``ycalc`` rather than from GSAS-II's own
@@ -3691,13 +3811,17 @@ class BaseRefinement(Scan):
         ``self.esd`` when the ``.xy`` file had a third ("Sigma") column (see
         ``save_xy_file``/``__init__``), matched to GSAS-II's current points
         by 2θ (see :meth:`_esd_on_hist_grid`), so a histogram trimmed to
-        ``tth_lims``/excluded regions still uses the real esd. Otherwise
-        falls back to a Poisson approximation (``w = 1/yobs``) and warns —
-        GOF and χ² scale with the absolute size of ``w``, and ``yobs`` here
-        is typically not raw photon counts (e.g. it's often already
-        monitor-normalized upstream), so a Poisson-fallback GOF can be
-        inflated by orders of magnitude even for a good fit. Rwp is
-        insensitive to that scale; compare it with Rexp instead.
+        ``tth_lims``/excluded regions still uses the real esd.
+
+        Without a usable esd, Poisson-shaped noise ``σ² = k·yobs`` is
+        assumed (``w = 1/(k·yobs)``). Plain ``w = 1/yobs`` (``k = 1``) is
+        only right for raw photon counts; ``yobs`` here is typically
+        normalized, and since GOF and χ² scale with the absolute size of
+        ``w``, that alone can inflate GOF by orders of magnitude for a good
+        fit. ``k`` is ``self.intensity_scale`` when set, otherwise estimated
+        from the data's own point-to-point scatter (see
+        :meth:`_estimate_intensity_gain`), falling back to ``k = 1`` with a
+        warning if that fails. Rwp is independent of ``k``.
 
         N_vars = ``max(len(self._ever_refined), self._count_free_parameters())``,
         i.e. every variable ever free this session (or currently free, if
@@ -3705,11 +3829,12 @@ class BaseRefinement(Scan):
         plotted pattern currently shows.
 
         Returns:
-            tuple: ``(gof, chi2, rexp, poisson)`` where ``rexp`` is the
+            tuple: ``(gof, chi2, rexp, weighting)`` where ``rexp`` is the
             expected R-factor in percent,
             ``100·√[(N_obs − N_vars) / Σ w·yobs²]`` (so GOF = Rwp/Rexp with
-            these weights), and ``poisson`` is ``True`` when the Poisson
-            fallback weights were used.
+            these weights), and ``weighting`` is a short label of where the
+            weights came from: ``""`` for the file's esd column, otherwise
+            e.g. ``"σ²=k·I, k=3.1e+05 est."`` — meant to be shown next to GOF.
         """
         tth = self.hist.getdata("x")
         yobs = self.hist.getdata("yobs")
@@ -3719,27 +3844,24 @@ class BaseRefinement(Scan):
         dof = max(len(yobs) - n_vars, 1)
 
         esd = self._esd_on_hist_grid(tth)
-        poisson = esd is None
-        if poisson:
-            w = 1.0 / np.clip(yobs, 1.0, None)
-            reason = (
-                "no esd column in the .xy file"
-                if getattr(self, "esd", None) is None
-                else "esd could not be matched to the histogram's 2θ points"
-            )
-            warnings.warn(
-                f"GOF/χ² use Poisson weights w = 1/yobs ({reason}). Unless "
-                "yobs are raw counts, GOF is not meaningful in absolute terms; "
-                "judge the fit by Rwp vs Rexp and the difference curve.",
-                stacklevel=2,
-            )
-        else:
+        if esd is not None:
             w = 1.0 / esd**2
+            weighting = ""
+        else:
+            if getattr(self, "esd", None) is not None:
+                warnings.warn(
+                    "The .xy esd column could not be matched to the histogram's "
+                    "2θ points; GOF/χ² use σ² = k·I weights instead.",
+                    stacklevel=2,
+                )
+            k, source = self._noise_gain()
+            w = 1.0 / (k * np.clip(yobs, 1.0, None))
+            weighting = f"σ²=k·I, k={k:.2g} {source}"
 
         chi2 = float(np.sum(w * diff**2))
         gof = float(np.sqrt(chi2 / dof))
         rexp = float(100.0 * np.sqrt(dof / np.sum(w * yobs**2)))
-        return gof, chi2, rexp, poisson
+        return gof, chi2, rexp, weighting
 
     def _recompute_pattern(self) -> None:
         """
@@ -5189,12 +5311,12 @@ class BaseRefinement(Scan):
 
         ax_main.set_ylabel("Intensity")
         wR = self.hist.get_wR()
-        gof, chi2, rexp, poisson = self._compute_gof_chi2()
+        gof, chi2, rexp, weighting = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
         stat_parts.append(f"Rexp = {rexp:.3g} %")
-        stat_parts.append(f"GOF = {gof:.4g}" + (" (Poisson w)" if poisson else ""))
+        stat_parts.append(f"GOF = {gof:.4g}" + (f" ({weighting})" if weighting else ""))
         stat_parts.append(f"χ² = {chi2:.4g}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(
@@ -5267,11 +5389,20 @@ class BaseRefinement(Scan):
         ax_r = container.add_subplot(gs[0, :])
         rwp = np.array([np.nan if e["Rwp"] is None else e["Rwp"] for e in history], dtype=float)
         gof = np.array([np.nan if e["GOF"] is None else e["GOF"] for e in history], dtype=float)
+        gof_label = "GOF"
+        if getattr(self, "esd", None) is None:
+            # GSAS-II weighted a 2-column file with w = 1/yobs, so its GOF is
+            # √k too large for normalized data — rescale to the same σ² = k·I
+            # weights as _compute_gof_chi2 (k, a property of the data's noise,
+            # is taken from the current, best fit for every cycle).
+            k, _ = self._noise_gain()
+            gof = gof / np.sqrt(k)
+            gof_label = f"GOF (σ²=k·I, k={k:.2g})"
         line_r, = ax_r.plot(x, rwp, "o-", color="tab:red", ms=4, lw=1.2, label="Rwp")
         ax_r.set_ylabel("Rwp (%)", color="tab:red", fontsize=8)
         ax_g = ax_r.twinx()
         line_g, = ax_g.plot(
-            x, gof, "s:", color="tab:blue", ms=3, mfc="none", lw=1, label="GOF"
+            x, gof, "s:", color="tab:blue", ms=3, mfc="none", lw=1, label=gof_label
         )
         ax_g.set_ylabel("GOF", color="tab:blue", fontsize=8)
         ax_r.legend(handles=[line_r, line_g], fontsize=7, loc="upper right")
@@ -5508,7 +5639,7 @@ class BaseRefinement(Scan):
         """
         path = Path(path)
         wR = self.get_Rwp()
-        gof, chi2, rexp, poisson = self._compute_gof_chi2()
+        gof, chi2, rexp, weighting = self._compute_gof_chi2()
 
         with PdfPages(str(path)) as pdf:
             # --- Title / summary page ---
@@ -5527,7 +5658,7 @@ class BaseRefinement(Scan):
                 f"Phases       : {', '.join(ph.name for ph in self.gpx.phases())}",
                 f"Rwp          : {wR:.4f} %" if wR is not None else "Rwp          : n/a",
                 f"Rexp         : {rexp:.4g} %",
-                f"GOF          : {gof:.4f}" + ("  (Poisson weights)" if poisson else ""),
+                f"GOF          : {gof:.4f}" + (f"  ({weighting})" if weighting else ""),
                 f"chi2         : {chi2:.4f}",
                 f"2theta range : [{self.low_lim:.3f}, {self.high_lim:.3f}] deg",
                 f"Refinement steps run this session: {len(self._step_refinements)}",
@@ -5654,6 +5785,7 @@ class InstrumentCalibration(BaseRefinement):
         param_file=Path("calibrated_instrument.instprm"),
         polarization=0.99,
         image_file: Path = Path("calibration_results.png"),
+        intensity_scale: float | None = None,
     ) -> None:
         """
         Args:
@@ -5672,6 +5804,7 @@ class InstrumentCalibration(BaseRefinement):
             polarization (float, optional): Beam polarization fraction (default 0.99).
             image_file (Path, optional): Base name for the calibration plot inside ``calibration/``
                 (default ``"calibration_results.png"``).
+            intensity_scale (float or None, optional): See :class:`BaseRefinement`.
         """
         super().__init__(
             acquisition_file,
@@ -5686,6 +5819,7 @@ class InstrumentCalibration(BaseRefinement):
             xy_file,
             param_file,
             polarization,
+            intensity_scale,
         )
 
         os.makedirs("calibration", exist_ok=True)
@@ -5697,8 +5831,7 @@ class InstrumentCalibration(BaseRefinement):
         self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
         # Real per-point uncertainty (e.g. pyFAI's propagated sigma), when the
         # .xy file has a third column — see save_xy_file(). None for older
-        # 2-column files; _compute_gof_chi2() falls back to a Poisson
-        # approximation in that case.
+        # 2-column files; _compute_gof_chi2() then uses σ² = k·I weights.
         self.esd = _xy_cols[2] if len(_xy_cols) >= 3 else None
         self.phases = []
 
@@ -6078,12 +6211,12 @@ class InstrumentCalibration(BaseRefinement):
                 pass
 
         ax_main.set_ylabel("Intensity")
-        gof, chi2, rexp, poisson = self._compute_gof_chi2()
+        gof, chi2, rexp, weighting = self._compute_gof_chi2()
         stat_parts = []
         if wR is not None:
             stat_parts.append(f"Rwp = {wR:.2f} %")
         stat_parts.append(f"Rexp = {rexp:.3g} %")
-        stat_parts.append(f"GOF = {gof:.4g}" + (" (Poisson w)" if poisson else ""))
+        stat_parts.append(f"GOF = {gof:.4g}" + (f" ({weighting})" if weighting else ""))
         stat_parts.append(f"χ² = {chi2:.4g}")
         stats_str = "   ".join(stat_parts)
         ax_main.set_title(

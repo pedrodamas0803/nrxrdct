@@ -150,6 +150,10 @@ class BaseRefinement(Scan):
         # print_covariance_matrix/plot_covariance_matrix(cycle=...) look
         # back at any prior cycle. See _record_vary_list().
         self._covariance_history: list[dict] = []
+        # One snapshot per refinement cycle (and per restored backup) of the
+        # value/esd of every parameter refined so far, plus Rwp and GOF. See
+        # _snapshot_history() and get_parameter_history().
+        self._param_history: list[dict] = []
 
         if self.low_lim == None:
             self.low_lim = self.tth.min()
@@ -190,6 +194,7 @@ class BaseRefinement(Scan):
         self._ever_refined = {}
         self._step_refinements = []
         self._covariance_history = []
+        self._param_history = []
         self._record_vary_list()
         if self.phases:
             self.phase = self.phases[-1]
@@ -288,7 +293,16 @@ class BaseRefinement(Scan):
 
         shutil.copy2(src, gpx_path)
         print(f"Restored backup '{bkp_dir.name}' → '{gpx_path}'")
+        # Keep the parameter history across the reload and mark the restore
+        # in it, so plot_results(history=True) shows the jump back.
+        history = getattr(self, "_param_history", [])
         self.load_model(gpx_path)
+        self._param_history = history
+        if history:
+            # "YYYYMMDD_HHMMSS_<label>" -> "<label>" when a label was given
+            parts = bkp_dir.name.split("_", 2)
+            short = parts[2] if len(parts) == 3 else bkp_dir.name
+            self._snapshot_history(f"restore {short}")
 
     def list_backups(self) -> list[str]:
         """
@@ -2311,7 +2325,7 @@ class BaseRefinement(Scan):
                 step["phases"] = [ph.name]
                 step["histograms"] = [self.hist.name]
             self.gpx.save()
-            self._run_refinement(step=step or None)
+            self._run_refinement(step=step or None, label=f"phase content [{ph.name}]")
 
     def weight_fractions(self, verbose: bool = True) -> dict[str, tuple[float, float | None]]:
         """
@@ -3829,7 +3843,7 @@ class BaseRefinement(Scan):
         "X": 1e2, "Y": 1e2,
     }
 
-    def _run_refinement(self, step: dict | None = None) -> None:
+    def _run_refinement(self, step: dict | None = None, label: str | None = None) -> None:
         """
         Run one GSAS-II least-squares cycle and record every variable that was varied.
 
@@ -3854,11 +3868,106 @@ class BaseRefinement(Scan):
                 Flags must already be set live on ``self.hist``/the phase
                 objects *before* calling this — ``step`` is recorded for
                 later replay, it does not itself apply anything.
+            label (str, optional): Name of this cycle in the parameter
+                history (:meth:`plot_results` with ``history=True``).
+                Derived from ``step`` when omitted.
         """
         self.gpx.do_refinements([{}])
         if step is not None:
             self._step_refinements.append(step)
         self._record_vary_list()
+        self._snapshot_history(label or self._step_label(step))
+
+    @staticmethod
+    def _step_label(step: dict | None) -> str:
+        """Short human-readable label for a recorded step, used on history plots."""
+        if not step:
+            return "cycle"
+        payload = step.get("set") or step.get("once") or step.get("clear") or {}
+        parts = []
+        for key, val in payload.items():
+            if key in ("Instrument Parameters", "Sample Parameters") and isinstance(val, list):
+                parts.extend(str(v) for v in val)
+            elif key == "Background":
+                parts.append("Bkg")
+            elif key == "Atoms" and isinstance(val, dict):
+                flags = sorted(set(val.values()))
+                parts.append("Atoms " + "/".join(f for f in flags if f.strip()))
+            else:
+                parts.append(key)
+        if not parts and "hap_model" in step:
+            parts = list(step["hap_model"])
+        label = ", ".join(parts) or "cycle"
+        phases = step.get("phases")
+        if phases and len(phases) == 1:
+            label += f" [{phases[0]}]"
+        return label
+
+    def _snapshot_history(self, label: str) -> None:
+        """
+        Append the current value/esd of every tracked parameter, plus Rwp and
+        GOF, to ``self._param_history``.
+
+        Tracked parameters are everything refined so far this session
+        (``self._ever_refined``) or present in an earlier snapshot. Values
+        come from GSAS-II's ``Covariance.parmDict``, which holds the current
+        value of every parameter after a cycle — so parameters fixed in this
+        cycle are recorded too (with ``esd=None`` and ``varied=False``).
+        """
+        cov = self.gpx["Covariance"]["data"]
+        parm = cov.get("parmDict", {})
+        esds = dict(zip(cov.get("varyList", []), cov.get("sig", [])))
+        names = list(self._ever_refined)
+        for entry in self._param_history:
+            names.extend(n for n in entry["values"] if n not in names)
+        values = {}
+        for name in dict.fromkeys(names):
+            if name in parm:
+                val = parm[name]
+            elif name in self._ever_refined:
+                val = self._ever_refined[name]["value"]
+            else:
+                continue
+            try:
+                val = float(val)
+            except (TypeError, ValueError):
+                continue
+            esd = esds.get(name)
+            values[name] = {
+                "value": val,
+                "esd": None if esd is None else float(esd),
+                "varied": name in esds,
+            }
+        self._param_history.append(
+            {
+                "label": label,
+                "Rwp": self.hist.get_wR(),
+                "GOF": cov.get("Rvals", {}).get("GOF"),
+                "values": values,
+            }
+        )
+
+    def get_parameter_history(self) -> list[dict]:
+        """
+        Return the per-cycle parameter history recorded this session.
+
+        One entry per refinement cycle run through this object (and one per
+        :meth:`restore_backup`), in order::
+
+            {"label": "W", "Rwp": 8.31, "GOF": 2.4,
+             "values": {"0:0:Size;i": {"value": 0.42, "esd": 0.01, "varied": True}, ...}}
+
+        Values are in GSAS-II's native units (e.g. U/V/W in centideg²).
+        The history is reset by :meth:`load_model`, but kept across
+        :meth:`restore_backup`.
+
+        Returns:
+            list of dict: A copy of the history.
+        """
+        return [
+            {**e, "values": {k: dict(v) for k, v in e["values"].items()}}
+            for e in self._param_history
+        ]
 
     def _record_vary_list(self) -> None:
         """
@@ -4240,7 +4349,7 @@ class BaseRefinement(Scan):
             print("\nNothing to refine — no eligible variables were freed.")
             return
 
-        self._run_refinement()
+        self._run_refinement(label="joint (all refined)")
         print("\nJoint refinement cycle complete.")
 
     def get_step_refinements(self) -> dict:
@@ -4352,6 +4461,9 @@ class BaseRefinement(Scan):
             if not run:
                 payload["skip"] = True
             self.gpx.do_refinements([payload])
+            if run:
+                self._record_vary_list()
+                self._snapshot_history(self._step_label(step))
             applied += 1
 
         if applied:
@@ -5012,7 +5124,7 @@ class BaseRefinement(Scan):
                             f"    Pref.Ori.  : SH  ord={po[4]}  axis={po[3]}  refine={refine}"
                         )
 
-    def _build_fit_figure(self, figsize: tuple = (9, 6)):
+    def _build_fit_figure(self, figsize: tuple = (9, 6), fig=None):
         """
         Build the observed/calculated/difference Rietveld fit figure.
 
@@ -5027,16 +5139,18 @@ class BaseRefinement(Scan):
 
         Args:
             figsize (tuple of (float, float), optional): Figure size in inches as
-                ``(width, height)`` (default ``(9, 6)``).
+                ``(width, height)`` (default ``(9, 6)``).  Ignored when ``fig`` is given.
+            fig (Figure or SubFigure, optional): Draw into this (sub)figure instead
+                of creating a new figure.
 
         Returns:
             tuple: ``(fig, ax_main, ax_diff)`` — the assembled figure and its two axes,
             so callers can add further overlays (e.g. shaded regions) before display/save.
         """
-        fig = plt.figure(figsize=figsize)
-        gs = gridspec.GridSpec(
-            2, 1, figure=fig, height_ratios=[3, 1], hspace=0.08, wspace=0.35
-        )
+        standalone = fig is None
+        if standalone:
+            fig = plt.figure(figsize=figsize)
+        gs = fig.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.08, wspace=0.35)
 
         ax_main = fig.add_subplot(gs[0, 0])
         ax_diff = fig.add_subplot(gs[1, 0], sharex=ax_main)
@@ -5100,30 +5214,178 @@ class BaseRefinement(Scan):
             f"Refinement results of {self.sample_name}.",
             fontsize=12,
             fontweight="bold",
-            y=1.01,
+            **({"y": 1.01} if standalone else {}),
         )
         return fig, ax_main, ax_diff
+
+    def _select_history_params(
+        self, history_params: list[str] | None, max_params: int
+    ) -> list[str]:
+        """
+        Pick which recorded parameters to plot, in order of first appearance.
+
+        ``history_params`` entries are matched as substrings of the GSAS-II
+        variable name (e.g. ``"Size"``, ``":W"``, ``"0:0:Mustrain;i"``).
+        Without it, every parameter except background coefficients and
+        Debye terms is used.
+        """
+        names: list[str] = []
+        for entry in self._param_history:
+            names.extend(n for n in entry["values"] if n not in names)
+        if history_params:
+            names = [n for n in names if any(p in n for p in history_params)]
+        else:
+            names = [n for n in names if "Back;" not in n and "Debye" not in n]
+        if len(names) > max_params:
+            print(
+                f"Parameter history: showing {max_params} of {len(names)} parameters "
+                "(use history_params= to choose, or raise max_history_params)."
+            )
+            names = names[:max_params]
+        return names
+
+    def _draw_history(self, container, params: list[str], ncols: int) -> None:
+        """
+        Draw the refinement history into ``container`` (Figure or SubFigure).
+
+        Top panel: Rwp and GOF per cycle, labelled with each cycle's step.
+        Below: one small panel per parameter, value vs cycle.  Filled
+        markers with error bars are cycles in which the parameter was
+        refined; open markers are cycles in which it was fixed.  U/V/W/X/Y/Z
+        are converted from centidegrees to degrees.
+        """
+        history = self._param_history
+        x = np.arange(len(history))
+        n_param_rows = int(np.ceil(len(params) / ncols))
+        # Row 0: Rwp/GOF; row 1: spacer for the rotated step labels.
+        gs = container.add_gridspec(
+            2 + n_param_rows, ncols,
+            height_ratios=[1.3, 0.12] + [1.0] * n_param_rows,
+            hspace=0.85, wspace=0.5, top=0.93, bottom=0.07,
+        )
+
+        ax_r = container.add_subplot(gs[0, :])
+        rwp = np.array([np.nan if e["Rwp"] is None else e["Rwp"] for e in history], dtype=float)
+        gof = np.array([np.nan if e["GOF"] is None else e["GOF"] for e in history], dtype=float)
+        line_r, = ax_r.plot(x, rwp, "o-", color="tab:red", ms=4, lw=1.2, label="Rwp")
+        ax_r.set_ylabel("Rwp (%)", color="tab:red", fontsize=8)
+        ax_g = ax_r.twinx()
+        line_g, = ax_g.plot(
+            x, gof, "s:", color="tab:blue", ms=3, mfc="none", lw=1, label="GOF"
+        )
+        ax_g.set_ylabel("GOF", color="tab:blue", fontsize=8)
+        ax_r.legend(handles=[line_r, line_g], fontsize=7, loc="upper right")
+        ax_r.tick_params(labelsize=7)
+        ax_g.tick_params(labelsize=7)
+
+        def _short(text: str, n: int = 26) -> str:
+            return text if len(text) <= n else text[: n - 1] + "…"
+
+        step = max(1, int(np.ceil(len(x) / 40)))
+        ax_r.set_xticks(x[::step])
+        ax_r.set_xticklabels(
+            [f"{i}: {_short(history[i]['label'])}" for i in x[::step]],
+            rotation=35, ha="right", fontsize=6,
+        )
+        ax_r.set_xlim(-0.5, len(x) - 0.5)
+        ax_r.set_title("Refinement history", fontsize=9)
+        nrows = 1 + n_param_rows  # for the "cycle" x-label on the last row below
+
+        for k, name in enumerate(params):
+            ax = container.add_subplot(gs[2 + k // ncols, k % ncols])
+            token = name.split(":")[2] if name.count(":") >= 2 else name
+            conv = self._VAR_DEG_CONVERSION.get(token, 1.0)
+            val = np.full(len(x), np.nan)
+            err = np.zeros(len(x))
+            varied = np.zeros(len(x), dtype=bool)
+            for i, entry in enumerate(history):
+                rec = entry["values"].get(name)
+                if rec is None:
+                    continue
+                val[i] = rec["value"] / conv
+                varied[i] = rec["varied"]
+                if rec["esd"] is not None:
+                    err[i] = rec["esd"] / conv
+            fixed = ~varied & np.isfinite(val)
+            ax.plot(x, val, "-", color="0.65", lw=0.8)
+            ax.errorbar(
+                x[varied], val[varied], yerr=err[varied], fmt="o",
+                ms=3, color="C0", capsize=2, lw=0.8,
+            )
+            ax.plot(x[fixed], val[fixed], "o", ms=3, mfc="none", color="C0")
+            ax.set_title(f"{name} ({self._var_units(token)})", fontsize=7)
+            ax.tick_params(labelsize=6)
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            ax.set_xlim(-0.5, len(x) - 0.5)
+            ax.ticklabel_format(axis="y", style="sci", scilimits=(-3, 4), useOffset=False)
+            ax.yaxis.get_offset_text().set_fontsize(6)
+            if k // ncols == nrows - 2:
+                ax.set_xlabel("cycle", fontsize=7)
 
     def plot_results(
         self,
         image_path: Path = "calibration_plot.png",
         show: bool = True,
         figsize: tuple = (9, 6),
+        history: bool = False,
+        history_params: list[str] | None = None,
+        max_history_params: int = 12,
+        history_ncols: int = 4,
     ) -> None:
         """
         Plot the Rietveld fit (observed / calculated / difference) and save to disk.
 
+        With ``history=True`` a refinement-history panel is added below the
+        fit: Rwp and GOF after each cycle (labelled with the refinement step,
+        e.g. ``"W"`` or ``"Size [ferrite]"``), and one small plot per
+        parameter showing how its value evolved.  Filled markers with error
+        bars mark cycles in which the parameter was refined; open markers
+        mark cycles in which it was fixed.  The history is recorded for every
+        cycle run through this object since it was created or since the last
+        :meth:`load_model` (it survives :meth:`restore_backup`, which appears
+        as its own entry); see :meth:`get_parameter_history`.
+
         Args:
             image_path (Path, optional): Output image file (default ``"calibration_plot.png"``).
             show (bool, optional): If ``True``, call ``plt.show()`` after saving (default ``True``).
-            figsize (tuple of (float, float), optional): Figure size in inches as
-                ``(width, height)`` (default ``(12, 9)``).
+            figsize (tuple of (float, float), optional): Size in inches of the fit
+                part, as ``(width, height)`` (default ``(9, 6)``).  The history
+                panel adds to the height.
+            history (bool, optional): Add the parameter-history panel (default ``False``).
+            history_params (list of str, optional): Parameters to show, matched as
+                substrings of the GSAS-II variable names (e.g. ``["Size", "Mustrain",
+                ":W"]``).  ``None`` (default) shows every refined parameter except
+                background coefficients and Debye terms.
+            max_history_params (int, optional): Maximum number of parameter plots
+                (default 12).
+            history_ncols (int, optional): Parameter plots per row (default 4).
         """
         print("\n" + "=" * 60)
         print("Generating calibration plot")
         print("=" * 60)
 
-        fig, _, _ = self._build_fit_figure(figsize=figsize)
+        params = []
+        if history:
+            if not self._param_history:
+                print("No refinement history recorded yet — plotting the fit only.")
+                history = False
+            else:
+                params = self._select_history_params(history_params, max_history_params)
+
+        if not history:
+            fig, _, _ = self._build_fit_figure(figsize=figsize)
+        else:
+            ncols = max(1, min(history_ncols, len(params) or 1))
+            n_param_rows = int(np.ceil(len(params) / ncols))
+            hist_height = 2.7 + 1.9 * n_param_rows
+            width = max(figsize[0], 2.8 * ncols)
+            fig = plt.figure(figsize=(width, figsize[1] + hist_height))
+            fit_fig, hist_fig = fig.subfigures(
+                2, 1, height_ratios=[figsize[1], hist_height], hspace=0.0
+            )
+            self._build_fit_figure(fig=fit_fig)
+            self._draw_history(hist_fig, params, ncols)
+
         fig.savefig(str(image_path), dpi=150, bbox_inches="tight")
         if show:
             plt.show()

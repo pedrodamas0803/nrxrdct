@@ -1113,7 +1113,28 @@ print(f"GOF  = {ref.get_chi2():.3f}")       # = sqrt(reduced χ²)
 ref.print_refinement_results()
 ref.print_HAP_parameters()
 ref.plot_results(image_path="steel_fit.png")
+
+# Same plot plus the refinement history
+ref.plot_results(image_path="steel_fit.png", history=True)
+ref.plot_results(image_path="steel_fit.png", history=True,
+                 history_params=["Size", "Mustrain", "Scale"])
 ```
+
+With `history=True` a panel is added below the fit. It shows $R_{wp}$ and
+GOF after every refinement cycle, labelled with the step that was run (e.g.
+`W`, `Cell [ferrite]`, `restore after_cell`). Below that is one small plot
+per parameter showing how its value changed from cycle to cycle. Filled
+markers with error bars are cycles in which the parameter was refined; open
+markers are cycles in which it was fixed. This makes it easy to spot a step
+that made the fit worse, a parameter that drifts instead of converging, or
+two correlated parameters trading values.
+
+By default every refined parameter is shown except background
+coefficients, up to `max_history_params` (12). `history_params` selects
+parameters by substring of their GSAS-II name. The history covers every
+cycle run since the object was created or since the last `load_model`. It
+survives `restore_backup`, which appears as its own entry. The raw numbers
+are available from `ref.get_parameter_history()`.
 
 ---
 

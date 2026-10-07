@@ -6083,7 +6083,8 @@ class InstrumentCalibration(BaseRefinement):
                 parameters to refine.  Refined sequentially, one per GSAS-II cycle.  Must be valid
                 for the chosen ``profile``.  Default ``["W", "X", "Y"]`` is the recommended starting
                 set for synchrotron data with a 2-D integrating detector (``U``, ``V``, and ``SH/L``
-                are typically fixed at 0/0/0.0001 for such data).
+                are typically fixed at 0/0/0.002 for such data; 0.002 is the smallest SH/L
+                GSAS-II's CW profile actually uses).
             profile (str, optional): Peak-profile model passed to :meth:`refine_peak_profile`.
                 One of ``"FCJVoigt"`` (default), ``"ExpFCJVoigt"``, ``"EpsVoigt"``.
             n_background_coeff (int, optional): Number of background polynomial coefficients (default 12).
@@ -6183,7 +6184,7 @@ class InstrumentCalibration(BaseRefinement):
         print("  - Use this file as INST_PARAMS")
         print("  - Fix Zero, W, X, Y (carry from calibration)")
         print(
-            "  - U, V, SH/L remain fixed at 0 / 0.0001 for synchrotron and 2D detectors"
+            "  - U, V, SH/L remain fixed at 0 / 0 / 0.002 for synchrotron and 2D detectors"
         )
 
     def plot_calibration_results(
@@ -6251,7 +6252,8 @@ class InstrumentCalibration(BaseRefinement):
             * **Y** — Lorentzian width, tanθ term (deg).  Related to
               microstrain and other angle-dependent broadening.
             * **SH/L** — axial-divergence asymmetry parameter, typically
-              fixed near 0.0001 for a 2-D detector.
+              fixed at 0.002 for a 2-D detector (GSAS-II's CW profile
+              uses ``max(SH/L, 0.002)``, so smaller values have no effect).
 
         **Bottom-right — FWHM model** (``ax_fw``)
             Predicted peak FWHM as a function of 2θ, decomposed into its

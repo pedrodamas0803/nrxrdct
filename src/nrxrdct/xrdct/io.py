@@ -263,7 +263,10 @@ def write_starting_instrument_pars(
         "X": 0.0,
         "Y": 5.0,
         "Z": 0.0,
-        "SH/L": 0.0001,
+        # GSAS-II's CW profile code uses max(SH/L, 0.002), and its refinement
+        # writes SH/L back clamped to >= 0.0005; start at the effective floor
+        # so the stored value is the one actually used.
+        "SH/L": 0.002,
     }
     if overrides:
         unknown = set(overrides) - set(values)
@@ -345,4 +348,4 @@ def write_calibrated_intrument_pars(
     print("\nIn your sample refinements:")
     print("  - Use this file as INST_PARAMS")
     print("  - Fix Zero, W, X, Y (carry from calibration)")
-    print("  - U, V, SH/L remain fixed at 0 / 0.0001")
+    print("  - U, V, SH/L remain fixed at 0 / 0 / 0.002")

@@ -343,7 +343,10 @@ giving an asymmetric low-angle tail at small 2θ (and a high-angle tail
 above 90°). GSAS-II convolves the pseudo-Voigt with the
 Finger–Cox–Jephcoat (FCJ) asymmetry function, parametrised by
 $\text{SH/L} = (S + H)/L$. With a 2-D detector and a small beam, `SH/L` is
-usually fixed at a very small value (≈ 0.0001).
+usually fixed at a very small value. GSAS-II's CW profile calculation uses
+`max(SH/L, 0.002)`, and each refinement cycle writes `SH/L` back clamped to
+at least 0.0005, so anything below 0.002 has no effect on the fit. The
+starting `.instprm` therefore uses 0.002.
 
 **Pink-beam profiles.** `ExpFCJVoigt` and `EpsVoigt` additionally convolve
 the profile with back-to-back exponentials,
@@ -1217,7 +1220,7 @@ ref.refine_peak_profile(profile="ExpFCJVoigt")   # pink beam
 
 # Inspect / set values directly
 ref.print_instrument_parameters()
-ref.set_instrument_parameter("SH/L", 0.0001, freeze=True)
+ref.set_instrument_parameter("SH/L", 0.002, freeze=True)
 ```
 
 ### Unit cell and strain

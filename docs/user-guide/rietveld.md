@@ -1060,6 +1060,30 @@ only when it is genuinely uncertain, and only with the calibrant cell fixed.
 The calibrated `.instprm` file is consumed by all subsequent sample and
 per-voxel refinements, with `Zero`, `W`, `X`, `Y` kept fixed.
 
+### Starting values inferred from the data
+
+By default (`infer_instrument_pars=True`) the starting instrument parameters
+are estimated from the calibrant pattern rather than taken from generic
+defaults, and written to `calibration/instrument_init.instprm`, which
+`create_model` builds the project from:
+
+- **Peak widths** (at construction): isolated peaks within `tth_lims` are
+  fitted one by one with a pseudo-Voigt. Each FWHM/η is split into Gaussian and
+  Lorentzian widths (Thompson-Cox-Hastings, as in GSAS-II), and
+  $\sigma^2 = U\tan^2\theta + V\tan\theta + W$ and
+  $\gamma = X/\cos\theta + Y\tan\theta + Z$ are fitted to them. Only the terms
+  in `inferred_profile_params` (default `["W", "X", "Y"]`) are estimated; the
+  other terms of each width law start at 0, so match this list to the
+  parameters you will refine.
+- **Zero** (in `add_phase`): the fitted peak centres are matched to the
+  calibrant's calculated reflections (from its cell, space group and the
+  wavelength), searching within ±0.3°.
+
+The per-peak fits are printed and kept in `cal.inferred_peaks`. Both steps
+can be rerun by hand with `cal.infer_profile_parameters(...)` and
+`cal.infer_zero(max_shift=...)`. Pass `infer_instrument_pars=False` to start
+from the generic defaults (`W=1`, `Y=5`, `Zero=0`) instead.
+
 ---
 
 ## 12. Sample refinement

@@ -50,6 +50,11 @@ from ..xrdct.io import (
     write_starting_instrument_pars,
 )
 from ..xrdct.parameters import Scan
+from .instrument_estimate import (
+    estimate_profile_parameters,
+    estimate_zero,
+    fit_isolated_peaks,
+)
 from .refine_dict import *
 
 COLORS = ["magenta", "darkgreen", "blue", "red"]
@@ -133,6 +138,9 @@ class BaseRefinement(Scan):
 
         self.xy_file = xy_file
         self.param_file = param_file
+        # .instprm read when building the project (create_model). Subclasses
+        # whose param_file is an *output* (InstrumentCalibration) repoint it.
+        self.input_param_file = param_file
         self.low_lim, self.high_lim = tth_lims
         _xy_cols = read_xy_file(str(self.xy_file))
         self.tth, self.intensity = _xy_cols[0], _xy_cols[1]
@@ -373,7 +381,7 @@ class BaseRefinement(Scan):
                 )
 
         self.hist = self.gpx.add_powder_histogram(
-            datafile=str(datafile), iparams=self.param_file, phases="all"
+            datafile=str(datafile), iparams=self.input_param_file, phases="all"
         )
         self.hist["data"][0]["Limits"] = [self.low_lim, self.high_lim]
         self.gpx.save()
@@ -694,7 +702,7 @@ class BaseRefinement(Scan):
             fmt="%.6f",
         )
         bkg_hist = self.gpx.add_powder_histogram(
-            datafile=str(bkg_file), iparams=self.param_file, phases=[]
+            datafile=str(bkg_file), iparams=self.input_param_file, phases=[]
         )
         self.gpx.save()
         return bkg_hist.name
@@ -5794,8 +5802,16 @@ class InstrumentCalibration(BaseRefinement):
         polarization=0.99,
         image_file: Path = Path("calibration_results.png"),
         intensity_scale: float | None = None,
+        infer_instrument_pars: bool = True,
+        inferred_profile_params: list[str] = ["W", "X", "Y"],
     ) -> None:
         """
+        The starting ``.instprm`` (``calibration/instrument_init.instprm``) is
+        rewritten on every instantiation. With ``infer_instrument_pars=True``
+        its peak-width parameters are estimated from the calibrant pattern
+        (see :meth:`infer_profile_parameters`) and ``Zero`` is estimated in
+        :meth:`add_phase` once the calibrant reflections are known.
+
         Args:
             acquisition_file (Path): Raw acquisition data file.
             sample_name (str): Sample / calibrant identifier.
@@ -5813,6 +5829,12 @@ class InstrumentCalibration(BaseRefinement):
             image_file (Path, optional): Base name for the calibration plot inside ``calibration/``
                 (default ``"calibration_results.png"``).
             intensity_scale (float or None, optional): See :class:`BaseRefinement`.
+            infer_instrument_pars (bool, optional): Estimate the starting profile parameters
+                and ``Zero`` from the data (default ``True``). ``False`` writes GSAS-II-style
+                generic defaults (``W=1``, ``Y=5``, ``Zero=0``).
+            inferred_profile_params (list of str, optional): Width-law terms to estimate, among
+                ``U, V, W, X, Y, Z`` (default ``["W", "X", "Y"]``). Match it to the parameters
+                you will refine: the other terms of each width law are started at 0.
         """
         super().__init__(
             acquisition_file,
@@ -5851,12 +5873,131 @@ class InstrumentCalibration(BaseRefinement):
         if self.high_lim == None:
             self.high_lim = self.tth.max()
 
+        self.infer_instrument_pars = infer_instrument_pars
+        self.inferred_peaks: list[dict] = []
+        overrides = None
+        if infer_instrument_pars:
+            overrides = self.infer_profile_parameters(inferred_profile_params)
         self.param_file_init = write_starting_instrument_pars(
-            polarization=polarization, wavelength=self.wavelength
+            output_file=Path("calibration") / "instrument_init.instprm",
+            polarization=polarization,
+            wavelength=self.wavelength,
+            overrides=overrides,
+            overwrite=True,
         )
+        # param_file names the calibrated *output*; the project is built
+        # from the starting file.
+        self.input_param_file = self.param_file_init
 
         self.calibration_file = Path("calibration") / self.param_file
         self.calibration_image = Path("calibration") / image_file
+
+    def infer_profile_parameters(
+        self, params: list[str] = ["W", "X", "Y"], min_snr: float = 10.0
+    ) -> dict[str, float]:
+        """
+        Estimate starting peak-width parameters from the calibrant pattern.
+
+        Isolated peaks inside the 2θ limits are fitted one by one with a
+        pseudo-Voigt; each FWHM/η is split into Gaussian and Lorentzian
+        widths (Thompson-Cox-Hastings, as in GSAS-II), and the width laws
+        ``σ² = U·tan²θ + V·tanθ + W`` and ``γ = X/cosθ + Y·tanθ + Z`` are
+        fitted to them. The accepted peaks are kept in ``self.inferred_peaks``
+        (also used by :meth:`infer_zero`). See
+        :mod:`nrxrdct.rietveld.instrument_estimate`.
+
+        Args:
+            params (list of str, optional): Terms to estimate (default ``["W", "X", "Y"]``);
+                the other terms of each estimated width law are set to 0.
+            min_snr (float, optional): Minimum peak prominence in noise units (default 10).
+
+        Returns:
+            dict: Parameter name → value in GSAS-II units, ready for
+            :func:`~nrxrdct.xrdct.io.write_starting_instrument_pars`'s ``overrides``.
+            Empty when no usable peak was found (generic defaults are kept).
+        """
+        sel = (self.tth >= self.low_lim) & (self.tth <= self.high_lim)
+        self.inferred_peaks = fit_isolated_peaks(
+            self.tth[sel], self.intensity[sel], min_snr=min_snr
+        )
+        estimates = estimate_profile_parameters(self.inferred_peaks, params)
+
+        print(f"Starting profile inferred from {len(self.inferred_peaks)} isolated peak(s):")
+        if self.inferred_peaks:
+            print(f"  {'2θ (°)':>9}  {'FWHM (°)':>9}  {'η':>5}  {'FWHM_G':>8}  {'FWHM_L':>8}")
+            for p in self.inferred_peaks:
+                print(
+                    f"  {p['tth']:>9.4f}  {p['fwhm']:>9.5f}  {p['eta']:>5.2f}"
+                    f"  {p['fwhm_G']:>8.5f}  {p['fwhm_L']:>8.5f}"
+                )
+        for key, val in estimates.items():
+            print(f"  {key} = {val:.6g}")
+        return estimates
+
+    def _reflection_tth(self, phase, margin: float = 1.0) -> np.ndarray:
+        """
+        Calculated 2θ (degrees, no zero shift) of the allowed reflections of
+        ``phase`` up to ``high_lim + margin``, from its cell, space group and
+        the histogram wavelength.
+        """
+        ip = self.hist["Instrument Parameters"][0]
+        lam = ip["Lam1"][1] if "Lam1" in ip else ip["Lam"][1]
+        general = phase.data["General"]
+        sg_data = general["SGData"]
+        A = G2lat.cell2A(general["Cell"][1:7])
+        theta_max = np.radians(min(self.high_lim + margin, 179.0) / 2.0)
+        dmin = lam / (2.0 * np.sin(theta_max))
+        tth = []
+        for ref in G2lat.GenHLaue(dmin, sg_data, A):
+            h, k, l, d = ref[:4]
+            if G2spc.GenHKLf([h, k, l], sg_data)[0]:  # systematically absent
+                continue
+            tth.append(2.0 * np.degrees(np.arcsin(lam / (2.0 * d))))
+        return np.array(tth)
+
+    def infer_zero(
+        self, phase: str | None = None, max_shift: float = 0.3, apply: bool = True
+    ) -> float | None:
+        """
+        Estimate the 2θ zero shift by matching the peaks found by
+        :meth:`infer_profile_parameters` to the calibrant's calculated
+        reflection positions (see
+        :func:`~nrxrdct.rietveld.instrument_estimate.estimate_zero`).
+
+        Args:
+            phase (str or None, optional): Calibrant phase name. ``None`` (default) uses the
+                most recently added phase.
+            max_shift (float, optional): Search range in degrees (default 0.3). Must stay below
+                half the spacing between neighbouring reflections.
+            apply (bool, optional): Write the estimate into the histogram's ``Zero``
+                (refinement flag unchanged). Default ``True``.
+
+        Returns:
+            float or None: Zero shift in degrees, or ``None`` if it could not be estimated.
+        """
+        ph = self.phase if phase is None else self._target_phases(phase)[0]
+        if not self.inferred_peaks:
+            print("Zero not estimated: no fitted peaks (see infer_profile_parameters).")
+            return None
+        try:
+            tth_calc = self._reflection_tth(ph, margin=max_shift)
+        except Exception as exc:
+            print(f"Zero not estimated: could not generate reflections for '{ph.name}' ({exc}).")
+            return None
+
+        tth_obs = np.array([p["tth"] for p in self.inferred_peaks])
+        tolerance = float(np.median([p["fwhm"] for p in self.inferred_peaks]))
+        zero = estimate_zero(tth_obs, tth_calc, tolerance=tolerance, max_shift=max_shift)
+        if zero is None:
+            print(
+                f"Zero not estimated: fewer than 2 observed peaks match '{ph.name}' "
+                f"reflections within ±{max_shift}° — check wavelength and cell."
+            )
+            return None
+        print(f"Zero inferred from {len(tth_obs)} peak(s): {zero:.5f}°")
+        if apply:
+            self.set_instrument_parameter("Zero", zero)
+        return zero
 
     def add_phase(
         self,
@@ -5880,6 +6021,10 @@ class InstrumentCalibration(BaseRefinement):
         values contributing negligible broadening and frozen, so all
         observed broadening goes into the instrument parameters.
 
+        With ``infer_instrument_pars=True`` (see :meth:`__init__`), the
+        starting ``Zero`` is then estimated from the calibrant reflections
+        via :meth:`infer_zero`.
+
         Args:
             cif_file (Path, optional): Path to the calibrant CIF file.
             phase_name (str, optional): Name to assign the phase (default ``"LaB6"``).
@@ -5896,6 +6041,8 @@ class InstrumentCalibration(BaseRefinement):
         phase = super().add_phase(cif_file, phase_name, block_cell)
         self.set_HAP_parameter("Size", size, phase=phase.name, freeze=True)
         self.set_HAP_parameter("Mustrain", mustrain, phase=phase.name, freeze=True)
+        if self.infer_instrument_pars:
+            self.infer_zero(phase.name)
         return phase
 
     def refine_instrument_parameters(

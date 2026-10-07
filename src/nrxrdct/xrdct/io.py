@@ -229,12 +229,14 @@ def write_starting_instrument_pars(
     output_file: Path = Path("instrument_init.instprm"),
     polarization: float = 0.99,
     wavelength: float = 1.5418,
+    overrides: dict | None = None,
+    overwrite: bool = False,
 ) -> Path:
     """
     Write a minimal GSAS-II instrument parameter file with starting (unfitted) values.
 
-    The file is skipped without error if it already exists, so this function is
-    safe to call at the start of a workflow.
+    Unless ``overwrite=True``, the file is skipped without error if it already
+    exists, so this function is safe to call at the start of a workflow.
 
     Args:
         output_file (Path, optional): Destination ``.instprm`` file
@@ -242,27 +244,38 @@ def write_starting_instrument_pars(
         polarization (float, optional): Beam polarization fraction (default 0.99).
         wavelength (float, optional): Incident wavelength in angstrom
             (default 1.5418 Å, Cu Kα).
+        overrides (dict, optional): Parameter name → value replacing the
+            defaults (e.g. ``{"W": 12.3, "X": 0.4}`` from
+            :func:`~nrxrdct.rietveld.instrument_estimate.estimate_profile_parameters`).
+        overwrite (bool, optional): Rewrite the file even if it exists (default ``False``).
 
     Returns:
         Path: Path to the (existing or newly created) instrument parameter file.
     """
+    values = {
+        "Lam": wavelength,
+        "Zero": 0.0,
+        "Polariz.": polarization,
+        "Azimuth": 0.0,
+        "U": 0.0,
+        "V": 0.0,
+        "W": 1.0,
+        "X": 0.0,
+        "Y": 5.0,
+        "Z": 0.0,
+        "SH/L": 0.0001,
+    }
+    if overrides:
+        unknown = set(overrides) - set(values)
+        if unknown:
+            raise KeyError(f"Unknown instrument parameter(s): {sorted(unknown)}")
+        values.update(overrides)
     lines = [
         "#GSAS-II instrument parameter file\n",
         "Type:PXC\n",
         "Bank:1\n",
-        f"Lam:{wavelength}\n",
-        "Zero:0.0\n",
-        f"Polariz.:{polarization}\n",
-        "Azimuth:0.0\n",
-        "U:0.0\n",
-        "V:0.0\n",
-        "W:1.0\n",
-        "X:0.0\n",
-        "Y:5.0\n",
-        "Z:0.0\n",
-        "SH/L:0.0001\n",
-    ]
-    if os.path.exists(str(output_file)):
+    ] + [f"{key}:{val}\n" for key, val in values.items()]
+    if os.path.exists(str(output_file)) and not overwrite:
         return output_file
     with open(str(output_file), "w") as f:
         f.writelines(lines)

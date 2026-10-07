@@ -202,9 +202,10 @@ def estimate_profile_parameters(
 
     Only the parameters in ``params`` are fitted; the other terms of a width
     law that has at least one fitted term are returned as ``0.0``, so the
-    starting profile is exactly the fitted one (e.g. the default ``Y = 5``
-    must not add on top of a fitted ``X``). A width law with no term in
-    ``params`` is left out of the result entirely.
+    starting profile is exactly the fitted one. A width law with no term in
+    ``params`` is left out of the result entirely, i.e. it keeps the
+    defaults of :func:`~nrxrdct.xrdct.io.write_starting_instrument_pars`
+    (``W = 1``, all other width terms 0).
 
     When there are fewer usable peaks than terms to fit in a width law, only
     a single term is fitted for it (``W`` for the Gaussian if requested,

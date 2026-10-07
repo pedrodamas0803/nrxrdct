@@ -3481,7 +3481,16 @@ class BaseRefinement(Scan):
                         f"Phase '{ph.name}' Size model is '{sz[0]}'. "
                         "set_HAP_parameter only supports isotropic Size."
                     )
-                sz[1][0] = value
+                # GSAS-II writes Size back clamped to [0.001, 10] µm after
+                # every cycle, refined or not; clamp here so the stored value
+                # is the one actually used from the start.
+                clamped = min(10.0, max(0.001, value))
+                if clamped != value:
+                    warnings.warn(
+                        f"Size {value} µm is outside GSAS-II's [0.001, 10] µm range; "
+                        f"using {clamped} µm."
+                    )
+                sz[1][0] = clamped
                 if freeze:
                     sz[2][0] = False
 
@@ -5831,7 +5840,7 @@ class InstrumentCalibration(BaseRefinement):
             intensity_scale (float or None, optional): See :class:`BaseRefinement`.
             infer_instrument_pars (bool, optional): Estimate the starting profile parameters
                 and ``Zero`` from the data (default ``True``). ``False`` writes GSAS-II-style
-                generic defaults (``W=1``, ``Y=5``, ``Zero=0``).
+                generic defaults (``W=1``, all other width terms 0, ``Zero=0``).
             inferred_profile_params (list of str, optional): Width-law terms to estimate, among
                 ``U, V, W, X, Y, Z`` (default ``["W", "X", "Y"]``). Match it to the parameters
                 you will refine: the other terms of each width law are started at 0.
@@ -6030,7 +6039,8 @@ class InstrumentCalibration(BaseRefinement):
             phase_name (str, optional): Name to assign the phase (default ``"LaB6"``).
             block_cell (bool, optional): Fix atom positions and unit cell (default ``True``).
             size (float, optional): Isotropic crystallite size in µm (default 10.0,
-                i.e. negligible). Use the certified value for a standard such as
+                i.e. negligible, and the largest value GSAS-II accepts — larger values
+                are clamped to 10). Use the certified value for a standard such as
                 NIST SRM 660c if its size broadening should be kept out of the
                 instrument profile.
             mustrain (float, optional): Isotropic microstrain in µε (default 0.0).

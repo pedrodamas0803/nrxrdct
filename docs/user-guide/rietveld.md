@@ -1085,7 +1085,9 @@ defaults, and written to `calibration/instrument_init.instprm`, which
 The per-peak fits are printed and kept in `cal.inferred_peaks`. Both steps
 can be rerun by hand with `cal.infer_profile_parameters(...)` and
 `cal.infer_zero(max_shift=...)`. Pass `infer_instrument_pars=False` to start
-from the generic defaults (`W=1`, `Y=5`, `Zero=0`) instead.
+from the generic defaults (`W=1`, all other width terms 0, `Zero=0`) instead.
+Width terms that are neither inferred nor refined stay at these defaults, so
+they add no broadening.
 
 ---
 

@@ -261,7 +261,9 @@ def write_starting_instrument_pars(
         "V": 0.0,
         "W": 1.0,
         "X": 0.0,
-        "Y": 5.0,
+        # Lorentzian terms start at 0 so a term that is neither inferred nor
+        # refined adds no broadening; W alone gives a finite Gaussian width.
+        "Y": 0.0,
         "Z": 0.0,
         # GSAS-II's CW profile code uses max(SH/L, 0.002), and its refinement
         # writes SH/L back clamped to >= 0.0005; start at the effective floor

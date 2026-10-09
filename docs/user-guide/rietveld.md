@@ -553,21 +553,83 @@ Brindley correction addresses this.
 
 ### 6.7 Le Bail extraction
 
-In Le Bail mode (`set_LeBail`), the structure factors are not calculated
-from atoms. Instead, at each cycle, the observed intensity under each peak
-is partitioned between overlapping reflections in proportion to their
-current calculated intensities, and these partitioned values become the new
-$\lvert F_{hkl}\rvert^2$. Only cell, profile, background and zero are
-refined. Le Bail fits are useful to:
+The Le Bail method (Le Bail, Duroy & Fourquet, 1988) fits the whole pattern
+with the same peak positions, profile and background as a Rietveld
+refinement, but without a structural model. In the Rietveld equation of
+section [1](#1-the-rietveld-method), the product
+$S_\phi\,L\,\lvert F\rvert^2\,m\,P\,A\,E$ of each reflection is replaced by a
+single intensity $I_k$ per reflection.
 
-* calibrate the instrument without depending on a structural model;
-* check the cell and space group before Rietveld refinement;
-* fit an unknown or poorly described phase alongside phases refined by
-  Rietveld.
+**How the intensities are obtained.** The $I_k$ are *not* least-squares
+variables: with hundreds of overlapping reflections that would be
+ill-conditioned. Instead, after each least-squares cycle, the observed
+intensity is partitioned between the reflections in proportion to their
+current calculated contribution at every point:
 
-Because the intensities are free, a Le Bail fit always gives a lower
-$R_{wp}$ than the corresponding Rietveld fit. The difference between the two
-measures how much the structural model is limiting the fit.
+$$
+I_k^{\text{new}} = I_k^{\text{old}}
+\sum_i \Phi_k(2\theta_i)\,\frac{y_i^{\text{obs}} - y_{b,i}}{y_i^{\text{calc}} - y_{b,i}}
+$$
+
+where $\Phi_k$ is the normalised profile of reflection $k$. This is the same
+partition used to compute "observed" structure factors $F_{\text{obs}}^2$ in
+a Rietveld refinement (and hence $R_B$). Here the result is fed back as the
+next calculated intensity. Three consequences follow:
+
+* **Intensities converge iteratively.** Each partition moves them only
+  part of the way, so several *extraction cycles* (partitions with all
+  other parameters fixed; GSAS-II's "Le Bail fit") are needed before and
+  between least-squares steps.
+* **Starting values.** GSAS-II initialises the intensities either at the
+  phase scale times a random factor between 0.5 and 1.5, or from the
+  current calculated intensities. For example, the Rietveld structure
+  factors of an earlier cycle are a much better starting point.
+* **Positions and widths must be roughly right first.** The partition
+  divides observed by calculated intensity point by point, so a calculated
+  peak that is misplaced, or much narrower than the observed one, extracts
+  intensities that pull the next least-squares step the wrong way. Cell
+  and zero are refined (and iterated with extraction) before peak widths,
+  and widths are refined one at a time before jointly.
+
+**Which parameters remain.** Cell, zero/displacement, background, the
+instrument profile and size/microstrain (all of which control peak
+*positions and shapes*) are refined normally. Everything that only
+changes *intensities* is either absorbed by the free $I_k$ or undefined:
+atomic coordinates, $U_{\text{iso}}$, occupancies, phase scale, preferred
+orientation, extinction, absorption and Babinet. Refining them makes the
+least-squares matrix singular. If every phase of a histogram is in Le Bail
+mode, the histogram scale is also fully redundant with the intensities and
+drifts without bound when refined.
+
+**Uses.**
+
+* Calibrate the instrument without depending on a structural model. Errors
+  in the calibrant's $U_{\text{iso}}$, absorption or texture cannot leak
+  into the profile parameters (`InstrumentCalibration` does this by
+  default).
+* Check the cell and space group before Rietveld refinement: a good Le Bail
+  fit with a given space group shows that it indexes every peak, and
+  missing or extra calculated peaks point to the wrong symmetry.
+* Determine size and microstrain without a reliable structure model.
+* Extract $\lvert F_{hkl}\rvert^2$ for structure solution (direct methods,
+  charge flipping, simulated annealing).
+* Fit an unknown or poorly described phase alongside phases refined by
+  Rietveld, e.g. an impurity whose structure is unknown.
+
+**Limitations.** Intensities of exactly overlapping reflections are split
+in proportion to their starting values. Examples are reflections with the
+same $d$-spacing that are not related by symmetry, such as $300$ and $221$
+in a cubic phase ($3^2 = 2^2 + 2^2 + 1^2$), or $hkl$ and $khl$ in Laue
+classes $4/m$ and $\bar{3}$. The split is therefore arbitrary, and only their
+sum is determined. Le Bail phases carry no information on phase fractions
+(section [6.6](#66-scale-factors-and-quantitative-phase-analysis)).
+
+Because the intensities are free, a Le Bail fit always gives an $R_{wp}$ at
+least as low as the corresponding Rietveld fit. It is the best $R_{wp}$
+achievable with the current profile and background. The difference between
+the Rietveld and Le Bail $R_{wp}$ therefore measures how much the
+structural model limits the fit. If the Le Bail fit itself is poor, the
+problem lies in the cell, profile or background, not in the structure.
 
 ---
 
@@ -1051,10 +1113,12 @@ available as a single call:
 cal.refine_instrument_parameters(profile_params=["W", "X", "Y"], use_lebail=True)
 ```
 
-With `use_lebail=True` the calibrant intensities are extracted Le Bail-style
-(section [6.7](#67-le-bail-extraction)), so errors in the calibrant structure
-model (e.g. $U_{\text{iso}}$, absorption) cannot leak into the profile
-parameters.
+With `use_lebail=True` the calibrant is switched to Le Bail mode and its
+intensities are extracted before the scale and profile are refined (section
+[6.7](#67-le-bail-extraction)). Errors in the calibrant structure model
+(e.g. $U_{\text{iso}}$, absorption) therefore cannot leak into the profile
+parameters. `cal.refine_lebail(profile=[...])` is the more robust variant
+when the starting profile is far off (section [13](#13-key-methods-reference)).
 
 For a laboratory source, also refine `U` and `V`, and `SH/L` if the low-angle
 peaks are visibly asymmetric. Refine the wavelength (`refine_wavelength`)
@@ -1323,10 +1387,80 @@ ref.refine_babinet(["BabA", "BabU"], phase="zeolite")
 
 ### Le Bail
 
+See section [6.7](#67-le-bail-extraction) for how Le Bail intensities are
+obtained and why the order of steps matters.
+
+**One call.** `refine_lebail` runs a robust standard sequence and returns the
+final $R_{wp}$:
+
 ```python
-ref.set_LeBail(phase="unknown_phase", enable=True)
-ref.set_LeBail(enable=False)          # back to Rietveld for all phases
+ref.refine_lebail(
+    phase="ferrite",                     # None: all phases
+    background_coeff=6,                  # refine a 6-term Chebyshev background
+    refine_cell=True,                    # cell, iterated with extraction
+    microstructure=["Size", "Mustrain"], # sample broadening (instrument fixed)
+)
+
+# For a calibrant: refine instrument profile terms instead
+cal.refine_lebail(background_coeff=8, profile=["W", "X", "Y"])
 ```
+
+The sequence is:
+
+| Step | What | Why |
+|---|---|---|
+| 1 | `set_LeBail` and freeze intensity-only parameters | they are singular in a Le Bail fit |
+| 2 | freeze the histogram scale if every phase is Le Bail | redundant with the intensities |
+| 3 | extraction cycles | converge intensities at the starting model |
+| 4 | background, optional zero | |
+| 5 | cell ⇄ extraction, until $R_{wp}$ improves by < 0.5 % | positions must be right before widths |
+| 6 | each `profile` / `microstructure` term alone, each followed by extraction | brings widths into the capture range |
+| 7 | all width terms jointly ⇄ extraction, until $R_{wp}$ improves by < 0.5 % | correlated terms converge faster jointly |
+
+On a simulated Fe pattern started from a 0.09 % wrong cell and peaks 7×
+too narrow, this recovers the cell, crystallite size and microstrain
+to within 1 %. The extracted $\lvert F\rvert^2$ match the true structure
+factors to 0.3 %. Refining the same parameters in a single step diverges.
+
+**Step by step.**
+
+```python
+# Switch phases to Le Bail mode. Intensity-only flags (atoms, phase scale,
+# preferred orientation, extinction, Babinet) are frozen; reset_intensities=None
+# re-initialises them only if the phase has no reflection list yet, otherwise the
+# current calculated intensities (e.g. Rietveld |F|²) are the starting point.
+ref.set_LeBail(phase="unknown_phase")
+ref.set_LeBail(phase="unknown_phase", reset_intensities=True)   # force a fresh start
+
+# Extraction-only cycles (no parameter refined) — after enabling Le Bail and
+# after any large change of cell or widths
+ref.extract_lebail_intensities(cycles=10)
+
+ref.free_and_refine_cell(phase="unknown_phase")
+ref.extract_lebail_intensities()
+
+# Extracted intensities, e.g. for structure solution
+data = ref.get_lebail_intensities("unknown_phase")   # dict of h, k, l, multiplicity, d, tth, Fobs2, Fcalc2
+ref.export_lebail_intensities("unknown_phase")        # CSV next to the .gpx
+
+# Back to Rietveld: structure factors are recalculated from the atoms on the
+# next cycle; re-refine the phase scale, since the extracted intensities had
+# their own scale
+ref.set_LeBail(phase="unknown_phase", enable=False)
+ref.refine_phase_scale("unknown_phase")
+```
+
+Notes:
+
+* Extraction cycles appear in the refinement history
+  (`plot_results(history=True)`) as `Le Bail extraction ×10`.
+* GSAS-II replaces the project's covariance data with an empty one after an
+  extraction run, so `print_covariance_matrix()` has nothing to show until
+  the next refinement cycle. Earlier matrices remain available through
+  `cycle=`.
+* A Rietveld phase and a Le Bail phase can share a histogram. Fix the
+  histogram scale and refine the Rietveld phase scale; the Le Bail phase is
+  excluded from `refine_phase_content` and `weight_fractions`.
 
 ---
 
@@ -1498,6 +1632,11 @@ GSAS-II parameter names are documented at
 
 * H. M. Rietveld, "A profile refinement method for nuclear and magnetic
   structures", *J. Appl. Cryst.* **2**, 65–71 (1969).
+* A. Le Bail, H. Duroy, J. L. Fourquet, "Ab-initio structure determination
+  of LiSbWO₆ by X-ray powder diffraction", *Mat. Res. Bull.* **23**, 447–452
+  (1988).
+* A. Le Bail, "Whole powder pattern decomposition methods and applications:
+  a retrospection", *Powder Diffraction* **20**, 316–326 (2005).
 * B. H. Toby, R. B. Von Dreele, "GSAS-II: the genesis of a modern
   open-source all purpose crystallography software package", *J. Appl. Cryst.*
   **46**, 544–549 (2013).

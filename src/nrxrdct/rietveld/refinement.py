@@ -28,10 +28,12 @@ try:
     from GSASII import GSASIIlattice as G2lat  # type: ignore
     from GSASII import GSASIIscriptable as G2sc  # type: ignore
     from GSASII import GSASIIspc as G2spc  # type: ignore
+    from GSASII import GSASIIstrMain as G2strMain  # type: ignore
     _GSASII_AVAILABLE = True
 except ImportError:
     G2lat = None  # type: ignore[assignment]
     G2sc = None  # type: ignore[assignment]
+    G2strMain = None  # type: ignore[assignment]
     G2spc = None  # type: ignore[assignment]
     _GSASII_AVAILABLE = False
 
@@ -175,6 +177,9 @@ class BaseRefinement(Scan):
         # value/esd of every parameter refined so far, plus Rwp and GOF. See
         # _snapshot_history() and get_parameter_history().
         self._param_history: list[dict] = []
+        # Set by set_LeBail(reset_intensities=...): the next GSAS-II call
+        # re-initialises the Le Bail intensities (GSAS-II's "newLeBail").
+        self._new_lebail = False
 
         if self.low_lim == None:
             self.low_lim = self.tth.min()
@@ -632,48 +637,424 @@ class BaseRefinement(Scan):
         self,
         phase: str | list[str] | None = None,
         enable: bool = True,
+        reset_intensities: bool | None = None,
+        freeze_structural: bool = True,
     ) -> None:
         """
-        Activate or deactivate LeBail extraction for one or more phases.
+        Activate or deactivate Le Bail extraction for one or more phases.
 
-        In LeBail mode the integrated intensities of all reflections are
-        treated as free parameters and refined to best match the observed
-        pattern, without any structural model.  This is useful for:
+        In Le Bail mode the reflection intensities of a phase are not
+        calculated from its atoms.  After every least-squares cycle GSAS-II
+        re-partitions the observed intensity under each peak between the
+        overlapping reflections, in proportion to their current calculated
+        intensities, and uses the result as the new |F|² (Le Bail, Duroy &
+        Fourquet, 1988)::
 
-        * Checking the unit cell and space group before a full Rietveld
-          refinement.
-        * Extracting intensities for structure solution.
-        * Fitting patterns where the structure of one phase is unknown
-          while the others are refined by Rietveld.
+            I_k(new) = I_k(old) · Σ_i Φ_k(2θ_i) (y_obs,i − y_bkg,i) / (y_calc,i − y_bkg,i)
 
-        When LeBail is active for a phase, the HAP scale factor for that
-        phase is refined instead of the structural scale, and atomic
-        structure factors are not used.
+        The intensities are therefore *not* least-squares variables: they
+        are updated between cycles, and need several cycles to converge
+        (see :meth:`extract_lebail_intensities`).  Cell, zero, profile,
+        background and size/strain parameters are refined normally.  This
+        is useful for:
+
+        * Calibrating the instrument independently of a structural model.
+        * Checking the unit cell and space group before a Rietveld refinement.
+        * Extracting intensities for structure solution
+          (:meth:`get_lebail_intensities`).
+        * Fitting a phase whose structure is unknown or poorly described
+          alongside phases refined by Rietveld.
 
         Args:
             phase (str, list of str, or None, optional): Phase name(s) to change.  ``None``
-                (default) applies to all phases.
-            enable (bool, optional): ``True`` (default) activates LeBail; ``False`` switches back
-                to Rietveld mode.
+                (default) applies to all phases.  Only the current histogram is affected.
+            enable (bool, optional): ``True`` (default) activates Le Bail; ``False`` switches back
+                to Rietveld mode (structure factors are recalculated from the atoms on the next
+                cycle; re-refine the phase scale afterwards, since the extracted intensities had
+                their own scale).
+            reset_intensities (bool or None, optional): Re-initialise the Le Bail intensities on
+                the next GSAS-II call (GSAS-II starts them at the phase scale × a random factor
+                between 0.5 and 1.5).  ``None`` (default) resets only when the phase has no
+                reflection list yet; otherwise the current calculated intensities — e.g. the
+                Rietveld structure factors of an earlier cycle — are the starting point, which
+                usually converges faster.  Ignored when ``enable=False``.
+            freeze_structural (bool, optional): If ``True`` (default), clear the refinement flags
+                that a Le Bail fit cannot determine — atom coordinates/U/occupancy (only when the
+                phase is in Le Bail mode in every histogram), HAP scale, preferred orientation,
+                extinction and Babinet — because they would make the least-squares matrix
+                singular.
         """
-        available = {ph.name: ph for ph in self.gpx.phases()}
-        if phase is None:
-            targets = list(available.values())
-        else:
-            names = [phase] if isinstance(phase, str) else list(phase)
-            for name in names:
-                if name not in available:
-                    raise ValueError(
-                        f"Phase '{name}' not found. "
-                        f"Available phases: {list(available)}"
-                    )
-            targets = [available[n] for n in names]
+        for ph in self._target_phases(phase):
+            hap = ph.data["Histograms"].get(self.hist.name)
+            if hap is None:
+                print(f"  Skipping phase '{ph.name}': not linked to '{self.hist.name}'.")
+                continue
+            hap["LeBail"] = bool(enable)
+            if not enable:
+                print(f"Phase '{ph.name}' set to Rietveld mode")
+                continue
 
-        for ph in targets:
-            ph.set_refinements({"LeBail": enable})
-            mode = "LeBail" if enable else "Rietveld"
-            print(f"Phase '{ph.name}' set to {mode} mode")
+            reset = reset_intensities
+            if reset is None:
+                # GSAS-II creates an empty entry when a phase is added; the
+                # list itself only exists after a first calculation.
+                reset = not self._has_reflection_list(ph.name)
+            if reset:
+                self._new_lebail = True
+
+            frozen = self._freeze_lebail_undetermined(ph) if freeze_structural else []
+            print(
+                f"Phase '{ph.name}' set to Le Bail mode"
+                + (" (intensities will be re-initialised)" if reset else "")
+            )
+            if frozen:
+                print(f"  Frozen (not determined by a Le Bail fit): {', '.join(frozen)}")
         self.gpx.save()
+
+    def _freeze_lebail_undetermined(self, ph) -> list[str]:
+        """Clear the refine flags of ``ph`` that have no effect on a Le Bail fit; return their names."""
+        hap = ph.data["Histograms"][self.hist.name]
+        frozen = []
+        if hap.get("Scale", [0, False])[1]:
+            hap["Scale"][1] = False
+            frozen.append("HAP Scale")
+        po = hap.get("Pref.Ori.")
+        if po and po[2]:
+            po[2] = False
+            frozen.append("Pref.Ori.")
+        ext = hap.get("Extinction")
+        if ext and ext[1]:
+            ext[1] = False
+            frozen.append("Extinction")
+        for key, entry in hap.get("Babinet", {}).items():
+            if entry[1]:
+                entry[1] = False
+                frozen.append(key)
+        # Atom parameters are phase-level: only clear them when no histogram
+        # still uses this phase in Rietveld mode.
+        rietveld_elsewhere = any(
+            not h.get("LeBail", False) for h in ph.data["Histograms"].values()
+        )
+        if not rietveld_elsewhere:
+            flagged = [a for a in ph.atoms() if a.refinement_flags.strip()]
+            for atom in flagged:
+                atom.refinement_flags = ""
+            if flagged:
+                frozen.append(f"atom flags ({len(flagged)} atoms)")
+        return frozen
+
+    def _has_reflection_list(self, phase_name: str) -> bool:
+        """True when GSAS-II has computed a reflection list for the phase in this histogram."""
+        try:
+            refl = self.hist.reflections().get(phase_name)
+        except Exception:
+            return False
+        return bool(refl) and "RefList" in refl and len(refl["RefList"]) > 0
+
+    def _lebail_phases(self) -> list:
+        """Phases in Le Bail mode for the current histogram."""
+        return [
+            ph for ph in self.gpx.phases()
+            if ph.data["Histograms"].get(self.hist.name, {}).get("LeBail", False)
+        ]
+
+    def _refine_with_new_lebail(self) -> None:
+        """
+        One refinement cycle with GSAS-II's ``newLeBail`` set, so the Le Bail
+        intensities are re-initialised. ``G2Project.refine``/``do_refinements``
+        always pass ``newLeBail=False``, so this mirrors ``G2Project.refine``
+        but calls ``GSASIIstrMain.Refine`` directly.
+        """
+        self.gpx.index_ids()  # also saves the project
+        try:
+            G2strMain.Refine(self.gpx.filename, makeBack=False, newLeBail=True)
+        except TypeError:
+            warnings.warn(
+                "This GSAS-II version does not support newLeBail; "
+                "Le Bail intensities were not re-initialised."
+            )
+            G2strMain.Refine(self.gpx.filename, makeBack=False)
+        self.gpx.reload()
+
+    def extract_lebail_intensities(self, cycles: int = 10) -> float | None:
+        """
+        Run Le Bail intensity-extraction cycles without refining any parameter.
+
+        Wraps GSAS-II's ``DoLeBail``: each cycle recalculates the pattern and
+        re-partitions the observed intensities (see :meth:`set_LeBail`),
+        with cell, profile, background etc. held at their current values.
+        Run this after enabling Le Bail mode and before refining cell or
+        profile parameters, so the least squares starts from converged
+        intensities, and again after large parameter changes.
+
+        Note:
+            GSAS-II replaces the project's covariance data with an empty
+            one (no varied parameters) after an extraction run, so
+            :meth:`print_covariance_matrix` has nothing to show until the
+            next refinement cycle; earlier matrices remain available via
+            ``cycle=``.
+
+        Args:
+            cycles (int, optional): Number of extraction cycles (default 10).
+
+        Returns:
+            float or None: Rwp (%) after the extraction.
+
+        Raises:
+            ValueError: If no phase is in Le Bail mode for the current histogram.
+            RuntimeError: If GSAS-II reports an error.
+        """
+        if not self._lebail_phases():
+            raise ValueError(
+                "No phase is in Le Bail mode for this histogram — call set_LeBail() first."
+            )
+        if not hasattr(G2strMain, "DoLeBail"):
+            raise RuntimeError("This GSAS-II version has no DoLeBail routine.")
+        if self._new_lebail:
+            # DoLeBail reads newLeBail from the project Controls (GSAS-II
+            # resets it to False when it saves the result).
+            self.gpx.data["Controls"]["data"]["newLeBail"] = True
+            self._new_lebail = False
+        self.gpx.save()
+        ok, rvals = G2strMain.DoLeBail(self.gpx.filename, cycles=int(cycles))
+        self.gpx.reload()
+        if not ok:
+            raise RuntimeError(f"Le Bail extraction failed: {rvals.get('msg', rvals)}")
+        self._snapshot_history(f"Le Bail extraction ×{int(cycles)}")
+        rwp = rvals.get("Rwp")
+        print(f"Le Bail extraction: {int(cycles)} cycle(s), Rwp = {rwp:.3f} %")
+        return rwp
+
+    def refine_lebail(
+        self,
+        phase: str | list[str] | None = None,
+        extraction_cycles: int = 10,
+        reset_intensities: bool | None = None,
+        background_coeff: int | None = None,
+        refine_zero: bool = False,
+        refine_cell: bool = True,
+        profile: list[str] | None = None,
+        microstructure: list[str] | None = None,
+        rounds: int = 3,
+        max_cell_iterations: int = 5,
+    ) -> float | None:
+        """
+        Run a standard Le Bail fit for one or more phases.
+
+        Le Bail intensities are only re-partitioned between least-squares
+        calls, so positions, widths and intensities are refined in
+        alternation with extractions.  Refining all widths at once against
+        misplaced peaks or intensities extracted with very wrong widths
+        easily diverges, so the cell is converged first, each width term is
+        then refined once on its own, and only then are they refined
+        jointly.
+
+        Sequence:
+
+        1. :meth:`set_LeBail` for the phase(s) (structural flags frozen).  If
+           every phase of the histogram is then in Le Bail mode, the
+           histogram scale is frozen too: it is fully redundant with the
+           extracted intensities and would drift without bound.
+        2. :meth:`extract_lebail_intensities` — converge the intensities at
+           the current cell and profile.
+        3. Background (if ``background_coeff`` is given).
+        4. Zero shift (if ``refine_zero``) — only when the instrument is
+           not already calibrated; never together with a free wavelength.
+        5. Unit cell (if ``refine_cell``) alternated with extraction until
+           Rwp improves by less than 0.5 % (at most ``max_cell_iterations``
+           times).  Peak positions must be right before widths are refined.
+        6. Each ``profile`` parameter, then each ``microstructure`` term,
+           refined on its own (the others fixed), each followed by an
+           extraction.
+        7. Joint cycles with all of them free, each followed by an
+           extraction, until Rwp improves by less than 0.5 % (at most
+           ``rounds`` times).
+
+        Parameters freed by earlier calls (e.g. the histogram scale) stay
+        free.  For a calibrant, :meth:`InstrumentCalibration.refine_instrument_parameters`
+        with ``use_lebail=True`` is the ready-made equivalent.
+
+        Args:
+            phase (str, list of str, or None, optional): Phase(s) to fit in Le Bail mode.
+                ``None`` (default) uses all phases.  Other phases stay in Rietveld mode.
+            extraction_cycles (int, optional): Cycles per intensity extraction (default 10).
+            reset_intensities (bool or None, optional): Passed to :meth:`set_LeBail`.
+            background_coeff (int or None, optional): If given, refine a Chebyshev background
+                with this many coefficients.
+            refine_zero (bool, optional): Refine the zero shift (default ``False``).
+            refine_cell (bool, optional): Refine the unit cell of the Le Bail phase(s)
+                (default ``True``).
+            profile (list of str, optional): Instrument profile parameters to refine, e.g.
+                ``["W", "X", "Y"]`` (see :meth:`refine_peak_profile`).
+            microstructure (list of str, optional): Sample broadening to refine for the Le Bail
+                phase(s): any of ``"Size"``, ``"Mustrain"`` (isotropic models; call
+                :meth:`refine_crystallite_size` / :meth:`refine_mustrain` afterwards for
+                anisotropic ones).
+            rounds (int, optional): Maximum joint width/extraction cycles in step 7
+                (default 3).
+            max_cell_iterations (int, optional): Maximum cell/extraction iterations in
+                step 5 (default 5).
+
+        Returns:
+            float or None: Final Rwp (%).
+        """
+        microstructure = list(microstructure or [])
+        profile = list(profile or [])
+        unknown = set(microstructure) - {"Size", "Mustrain"}
+        if unknown:
+            raise ValueError(f"Unknown microstructure term(s) {sorted(unknown)}; use 'Size', 'Mustrain'.")
+        names = [ph.name for ph in self._target_phases(phase)]
+        ip = self.hist["Instrument Parameters"][0]
+
+        def free_only(term: str | None) -> None:
+            """Fix every width term of this fit except ``term`` (None: fix all)."""
+            for p in profile:
+                if p in ip:
+                    ip[p][2] = p == term
+            for m in microstructure:
+                if m != term:
+                    self.freeze_HAP_parameter(m, phase=names)
+
+        def refine_term(term: str) -> None:
+            if term in microstructure:
+                if term == "Size":
+                    self.refine_crystallite_size(refine_type="isotropic", phase=names)
+                else:
+                    self.refine_mustrain(refine_type="isotropic", phase=names)
+            else:
+                self.refine_peak_profile(parameters=[term])
+
+        print("\n" + "=" * 60)
+        print(f"LE BAIL FIT: {', '.join(names)}")
+        print("=" * 60)
+        self.set_LeBail(phase=names, enable=True, reset_intensities=reset_intensities)
+        all_lebail = all(
+            hap.get("LeBail", False)
+            for ph in self.gpx.phases()
+            if (hap := ph.data["Histograms"].get(self.hist.name))
+        )
+        if all_lebail and self.hist.SampleParameters["Scale"][1]:
+            # With only Le Bail phases the histogram scale is fully redundant
+            # with the extracted intensities and drifts without bound.
+            self.hist.SampleParameters["Scale"][1] = False
+            self.gpx.save()
+            print("Histogram scale frozen (redundant with Le Bail intensities).")
+        self.extract_lebail_intensities(extraction_cycles)
+        if background_coeff:
+            self.refine_background(number_coeff=background_coeff)
+        if refine_zero:
+            self.refine_zero_shift()
+        if refine_cell:
+            # Iterate cell and extraction until Rwp stops improving: with
+            # narrow starting peaks one least-squares call only moves part of
+            # the way, and refining widths against misplaced peaks diverges.
+            previous = None
+            for _ in range(max(1, int(max_cell_iterations))):
+                self.free_and_refine_cell(phase=names)
+                rwp = self.extract_lebail_intensities(extraction_cycles)
+                if previous is not None and rwp is not None and previous - rwp < 0.005 * previous:
+                    break
+                previous = rwp
+
+        terms = profile + microstructure
+        rwp = None
+        if terms:
+            # One pass with each width term alone brings the widths into the
+            # capture range; correlated terms (Size/Mustrain, X/Y) then
+            # converge much faster refined jointly.
+            for term in terms:
+                free_only(term)
+                self.gpx.save()
+                refine_term(term)
+                self.extract_lebail_intensities(extraction_cycles)
+            for term in terms:
+                if term in microstructure:
+                    for ph in self._target_phases(names):
+                        ph.data["Histograms"][self.hist.name][term][2][0] = True
+                elif term in ip:
+                    ip[term][2] = True
+            self.gpx.save()
+            previous = None
+            for _ in range(max(1, int(rounds))):
+                self._run_refinement(label="Le Bail joint")
+                rwp = self.extract_lebail_intensities(extraction_cycles)
+                if previous is not None and rwp is not None and previous - rwp < 0.005 * previous:
+                    break
+                previous = rwp
+        if rwp is None:
+            rwp = self.extract_lebail_intensities(extraction_cycles)
+        print(f"Le Bail fit complete: Rwp = {rwp:.3f} %")
+        return rwp
+
+    def get_lebail_intensities(self, phase: str) -> dict[str, np.ndarray]:
+        """
+        Return the reflection intensities extracted for a phase.
+
+        For a phase in Le Bail mode these are the partitioned observed
+        intensities; for a Rietveld phase they are GSAS-II's Fobs²
+        (observed intensities partitioned with the Rietveld model).
+
+        Args:
+            phase (str): Phase name.
+
+        Returns:
+            dict of arrays: ``h``, ``k``, ``l``, ``multiplicity``, ``d`` (Å),
+            ``tth`` (degrees), ``Fobs2`` and ``Fcalc2``.  Reflections outside
+            the 2θ limits or excluded by GSAS-II are not included.
+        """
+        if not self._has_reflection_list(phase):
+            raise ValueError(
+                f"No reflection list for phase '{phase}' — run a refinement or "
+                "extraction cycle first."
+            )
+        refl = self.hist.reflections()[phase]
+        rl = np.asarray(refl["RefList"], dtype=float)
+        im = 1 if refl.get("Super") else 0  # modulated phases carry an extra m index
+        keep = rl[:, 3 + im] > 0  # GSAS-II negates the multiplicity of excluded reflections
+        rl = rl[keep]
+        return {
+            "h": rl[:, 0].astype(int),
+            "k": rl[:, 1].astype(int),
+            "l": rl[:, 2].astype(int),
+            "multiplicity": rl[:, 3 + im].astype(int),
+            "d": rl[:, 4 + im],
+            "tth": rl[:, 5 + im],
+            "Fobs2": rl[:, 8 + im],
+            "Fcalc2": rl[:, 9 + im],
+        }
+
+    def export_lebail_intensities(self, phase: str, path: str | Path | None = None) -> Path:
+        """
+        Write the extracted reflection intensities of a phase to a CSV file.
+
+        Columns: ``h, k, l, multiplicity, d, 2theta, Fobs2, Fcalc2`` (see
+        :meth:`get_lebail_intensities`), one reflection per line, with a
+        one-line header.
+
+        Args:
+            phase (str): Phase name.
+            path (str, Path or None, optional): Output file.  ``None`` (default) writes
+                ``<project>_<phase>_lebail.csv`` next to the ``.gpx`` file.
+
+        Returns:
+            Path: The file written.
+        """
+        data = self.get_lebail_intensities(phase)
+        if path is None:
+            gpx = Path(self.gpx.filename)
+            path = gpx.with_name(f"{gpx.stem}_{phase}_lebail.csv")
+        path = Path(path)
+        cols = ["h", "k", "l", "multiplicity", "d", "tth", "Fobs2", "Fcalc2"]
+        np.savetxt(
+            str(path),
+            np.column_stack([data[c] for c in cols]),
+            delimiter=",",
+            header="h,k,l,multiplicity,d,2theta,Fobs2,Fcalc2",
+            comments="",
+            fmt=["%d", "%d", "%d", "%d", "%.6f", "%.5f", "%.6g", "%.6g"],
+        )
+        print(f"Wrote {len(data['h'])} reflections for '{phase}' to {path}")
+        return path
 
     def _add_background_pwdr_histogram(self, user_background: list | np.ndarray) -> str:
         """
@@ -4019,7 +4400,11 @@ class BaseRefinement(Scan):
                 history (:meth:`plot_results` with ``history=True``).
                 Derived from ``step`` when omitted.
         """
-        self.gpx.do_refinements([{}])
+        if self._new_lebail and self._lebail_phases():
+            self._refine_with_new_lebail()
+            self._new_lebail = False
+        else:
+            self.gpx.do_refinements([{}])
         if step is not None:
             self._step_refinements.append(step)
         self._record_vary_list()
@@ -6100,10 +6485,11 @@ class InstrumentCalibration(BaseRefinement):
             n_background_coeff (int, optional): Number of background polynomial coefficients (default 12).
             background_function (str, optional): Background function type passed to
                 :meth:`refine_background` (default ``"chebyschev"``).
-            use_lebail (bool, optional): If ``True`` (default), activate LeBail extraction for the
-                calibrant phase before refining the scale, so that the integrated intensities are free
-                parameters rather than structure-factor predictions.  Recommended for calibrants whose
-                exact structure is well-known and whose scale should not contaminate the profile fit.
+            use_lebail (bool, optional): If ``True`` (default), switch the calibrant phase to Le Bail
+                extraction (:meth:`set_LeBail`) and run :meth:`extract_lebail_intensities` before
+                refining the scale, so the reflection intensities come from the data rather than
+                from the structure model.  Errors in the calibrant's U\\ :sub:`iso`, absorption or
+                texture then cannot leak into the profile parameters.
         """
         print("\n" + "=" * 60)
         print("INSTRUMENT CALIBRATION REFINEMENT SEQUENCE")
@@ -6120,6 +6506,7 @@ class InstrumentCalibration(BaseRefinement):
         print("\n--- Step 2: Scale ---")
         if use_lebail:
             self.set_LeBail(enable=True)
+            self.extract_lebail_intensities()
             self.refine_histogram_scale()
         else:
             self.refine_histogram_scale()
